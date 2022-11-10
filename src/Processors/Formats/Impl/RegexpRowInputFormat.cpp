@@ -70,7 +70,7 @@ RegexpRowInputFormat::RegexpRowInputFormat(
 
 RegexpRowInputFormat::RegexpRowInputFormat(
     std::unique_ptr<PeekableReadBuffer> buf_, const Block & header_, Params params_, const FormatSettings & format_settings_)
-    : IRowInputFormat(header_, *buf_, std::move(params_))
+    : IRowInputFormat(header_, *buf_, std::move(params_), ProcessorID::RegexpRowInputFormatID)
     , buf(std::move(buf_))
     , format_settings(format_settings_)
     , escaping_rule(format_settings_.regexp.escaping_rule)

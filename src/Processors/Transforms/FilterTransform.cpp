@@ -52,7 +52,7 @@ FilterTransform::FilterTransform(
     : ISimpleTransform(
             header_,
             transformHeader(header_, expression_->getActionsDAG(), filter_column_name_, remove_filter_column_),
-            true)
+            true, ProcessorID::FilterTransformID)
     , expression(std::move(expression_))
     , filter_column_name(std::move(filter_column_name_))
     , remove_filter_column(remove_filter_column_)
@@ -226,6 +226,4 @@ void FilterTransform::transform(Chunk & chunk)
     chunk.setColumns(std::move(columns), num_filtered_rows);
     removeFilterIfNeed(chunk);
 }
-
-
 }

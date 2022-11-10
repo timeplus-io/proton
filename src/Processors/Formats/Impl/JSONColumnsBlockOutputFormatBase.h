@@ -15,7 +15,7 @@ class WriteBuffer;
 class JSONColumnsBlockOutputFormatBase : public IOutputFormat
 {
 public:
-    JSONColumnsBlockOutputFormatBase(WriteBuffer & out_, const Block & header_, const FormatSettings & format_settings_);
+    JSONColumnsBlockOutputFormatBase(WriteBuffer & out_, const Block & header_, const FormatSettings & format_settings_, ProcessorID pid_ = ProcessorID::JSONColumnsBlockOutputFormatBaseID);
 
     String getName() const override { return "JSONColumnsBlockOutputFormatBase"; }
 

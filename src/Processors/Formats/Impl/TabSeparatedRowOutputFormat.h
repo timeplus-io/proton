@@ -25,7 +25,8 @@ public:
         bool with_types_,
         bool is_raw_,
         const RowOutputFormatParams & params_,
-        const FormatSettings & format_settings_);
+        const FormatSettings & format_settings_,
+        ProcessorID pid_ = ProcessorID::TabSeparatedRowOutputFormatID);
 
     String getName() const override { return "TabSeparatedRowOutputFormat"; }
 

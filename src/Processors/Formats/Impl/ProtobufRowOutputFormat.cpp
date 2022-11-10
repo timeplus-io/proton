@@ -25,7 +25,7 @@ ProtobufRowOutputFormat::ProtobufRowOutputFormat(
     const FormatSchemaInfo & schema_info_,
     const FormatSettings & settings_,
     bool with_length_delimiter_)
-    : IRowOutputFormat(header_, out_, params_)
+    : IRowOutputFormat(header_, out_, params_, ProcessorID::ProtobufRowOutputFormatID)
     , writer(std::make_unique<ProtobufWriter>(out))
     , serializer(ProtobufSerializer::create(
           header_.getNames(),

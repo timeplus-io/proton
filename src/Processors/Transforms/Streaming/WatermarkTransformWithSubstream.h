@@ -34,15 +34,16 @@ public:
     String getName() const override { return watermark_name + "TransformWithSubstream"; }
     Status prepare() override;
     void work() override;
+    void checkpoint(CheckpointContextPtr) override;
+    void recover(CheckpointContextPtr) override;
+
 
 private:
     void initWatermark(
         ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, FunctionDescriptionPtr desc, bool proc_time);
 
-    std::pair<Int64, Int64> calcMinMaxEventTime(const Block & block) const;
-    Watermark & getOrCreateSubstreamWatermark(const SubstreamID & id);
-
-    Poco::Logger * log;
+    inline std::pair<Int64, Int64> calcMinMaxEventTime(const Block & block) const;
+    inline Watermark & getOrCreateSubstreamWatermark(const SubstreamID & id);
 
     Block header;
     Chunk input_chunk;
@@ -58,6 +59,8 @@ private:
     bool emit_min_max_event_time = false;
     bool time_col_is_datetime64 = true;
     size_t time_col_pos = 0;
+
+    Poco::Logger * log;
 };
 }
 }

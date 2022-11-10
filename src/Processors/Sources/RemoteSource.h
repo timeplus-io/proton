@@ -14,7 +14,7 @@ using RemoteQueryExecutorPtr = std::shared_ptr<RemoteQueryExecutor>;
 class RemoteQueryExecutorReadContext;
 
 /// Source from RemoteQueryExecutor. Executes remote query and returns query result chunks.
-class RemoteSource : public SourceWithProgress
+class RemoteSource final : public SourceWithProgress
 {
 public:
     /// Flag add_aggregation_info tells if AggregatedChunkInfo should be added to result chunk.
@@ -51,7 +51,7 @@ private:
 };
 
 /// Totals source from RemoteQueryExecutor.
-class RemoteTotalsSource : public ISource
+class RemoteTotalsSource final : public ISource
 {
 public:
     explicit RemoteTotalsSource(RemoteQueryExecutorPtr executor);
@@ -67,7 +67,7 @@ private:
 };
 
 /// Extremes source from RemoteQueryExecutor.
-class RemoteExtremesSource : public ISource
+class RemoteExtremesSource final : public ISource
 {
 public:
     explicit RemoteExtremesSource(RemoteQueryExecutorPtr executor);

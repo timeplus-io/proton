@@ -114,6 +114,11 @@ public:
         std::swap(siz, rhs.siz);
     }
 
+    std::string_view stringView() const
+    {
+        return std::string_view(mem.get(), siz);
+    }
+
 private:
     using MemPtr = std::unique_ptr<char, void (*)(void *)>;
 

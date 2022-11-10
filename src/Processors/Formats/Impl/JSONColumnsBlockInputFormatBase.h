@@ -41,7 +41,7 @@ protected:
 /// JSONColumnsReaderBase interface.
 /// To implement new Columnar JSON format you need to implement new JSONColumnsReaderBase
 /// interface and provide it to JSONColumnsBlockInputFormatBase.
-class JSONColumnsBlockInputFormatBase : public IInputFormat
+class JSONColumnsBlockInputFormatBase final : public IInputFormat
 {
 public:
     JSONColumnsBlockInputFormatBase(ReadBuffer & in_, const Block & header_, const FormatSettings & format_settings_, std::unique_ptr<JSONColumnsReaderBase> reader_);

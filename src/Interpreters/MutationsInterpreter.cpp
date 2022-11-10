@@ -928,7 +928,7 @@ QueryPipelineBuilderPtr MutationsInterpreter::addStreamsForLaterStages(const std
 
     auto pipeline = plan.buildQueryPipeline(
         do_not_optimize_plan,
-        BuildQueryPipelineSettings::fromContext(context));
+        BuildQueryPipelineSettings::fromContext(context), context);
 
     pipeline->addSimpleTransform([&](const Block & header)
     {

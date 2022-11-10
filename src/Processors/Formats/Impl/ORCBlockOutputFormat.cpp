@@ -49,7 +49,7 @@ void ORCOutputStream::write(const void* buf, size_t length)
 }
 
 ORCBlockOutputFormat::ORCBlockOutputFormat(WriteBuffer & out_, const Block & header_, const FormatSettings & format_settings_)
-    : IOutputFormat(header_, out_), format_settings{format_settings_}, output_stream(out_)
+    : IOutputFormat(header_, out_, ProcessorID::ORCBlockOutputFormatID), format_settings{format_settings_}, output_stream(out_)
 {
     for (const auto & type : header_.getDataTypes())
         data_types.push_back(recursiveRemoveLowCardinality(type));

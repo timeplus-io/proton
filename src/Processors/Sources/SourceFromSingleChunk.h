@@ -5,7 +5,7 @@
 namespace DB
 {
 
-class SourceFromSingleChunk : public SourceWithProgress
+class SourceFromSingleChunk final : public SourceWithProgress
 {
 public:
     explicit SourceFromSingleChunk(Block header, Chunk chunk_);

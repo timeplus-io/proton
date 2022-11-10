@@ -38,6 +38,9 @@ struct BlockInfo
 
 #undef DECLARE_FIELD
 
+    bool hasBucketNum() const { return bucket_num >= 0; }
+    bool hasOverflows() const { return is_overflows; }
+
     /// proton: starts
     /// watermark = 0 => no watermark setup
     /// watermark = -1 => force flush
@@ -47,21 +50,24 @@ struct BlockInfo
     /// watermark_start is `watermark - window_size`
     Int64 watermark_lower_bound = 0;
 
-    /// Milliseconds since UTC
-    Int64 append_time = 0;
+    /// any_field is reused for different non-conflicting / non-overlapped purposes / scenarios
+    /// 1. act as append_time
+    /// 2. act as block id
+    Int64 any_field = 0;
 
     /// Here we try to reuse existing data members for different purposes
     /// since they work at different stage, it shall be fine
     /// We shall fix it.
 
-    void setBlockId(Int64 block_id)
-    {
-        append_time = block_id;
-    }
-    Int64 blockId() const
-    {
-        return append_time;
-    }
+    void setAppendTime(Int64 append_time) { any_field = append_time; }
+
+    Int64 appendTime() const { return any_field; }
+
+    void setBlockID(Int64 block_id) { any_field = block_id; }
+
+    Int64 blockID() const { return any_field; }
+
+    bool hasWatermark() const { return watermark != 0 || watermark_lower_bound != 0; }
     /// proton: ends
 
     /// Write the values in binary form. NOTE: You could use protobuf, but it would be overkill for this case.
@@ -70,6 +76,12 @@ struct BlockInfo
     /// Read the values in binary form.
     void read(ReadBuffer & in);
 };
+
+inline bool operator==(const BlockInfo & lhs, const BlockInfo & rhs)
+{
+    return lhs.is_overflows == rhs.is_overflows && lhs.bucket_num == rhs.bucket_num && lhs.watermark == rhs.watermark
+        && lhs.watermark_lower_bound == rhs.watermark_lower_bound && lhs.any_field == rhs.any_field;
+}
 
 /// Block extension to support delayed defaults. AddingDefaultsBlockInputStream uses it to replace missing values with column defaults.
 class BlockMissingValues

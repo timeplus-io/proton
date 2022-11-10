@@ -13,7 +13,7 @@ class Block;
 class StorageMergeTree;
 
 
-class MergeTreeSink : public SinkToStorage
+class MergeTreeSink final : public SinkToStorage
 {
 public:
     MergeTreeSink(
@@ -21,7 +21,7 @@ public:
         const StorageMetadataPtr metadata_snapshot_,
         size_t max_parts_per_block_,
         ContextPtr context_)
-        : SinkToStorage(metadata_snapshot_->getSampleBlock())
+        : SinkToStorage(metadata_snapshot_->getSampleBlock(), ProcessorID::MergeTreeSinkID)
         , storage(storage_)
         , metadata_snapshot(metadata_snapshot_)
         , max_parts_per_block(max_parts_per_block_)

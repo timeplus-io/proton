@@ -15,7 +15,7 @@ class CountingTransform final : public ExceptionKeepingTransform
 {
 public:
     explicit CountingTransform(const Block & header, ThreadStatus * thread_status_ = nullptr)
-        : ExceptionKeepingTransform(header, header), thread_status(thread_status_) {}
+        : ExceptionKeepingTransform(header, header, true, ProcessorID::CountingTransformID), thread_status(thread_status_) {}
 
     String getName() const override { return "CountingTransform"; }
 

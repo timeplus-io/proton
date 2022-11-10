@@ -13,6 +13,7 @@ public:
     HopWatermark(const HopWatermark &) = default;
     ~HopWatermark() override = default;
 
+    String getName() const override { return "HopWatermark"; }
     WatermarkPtr clone() const override { return std::make_unique<HopWatermark>(*this); }
 
 private:

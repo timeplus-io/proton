@@ -21,7 +21,8 @@ public:
         const Block & header,
         const RowOutputFormatParams & params_,
         const FormatSettings & settings_,
-        bool yield_strings_);
+        bool yield_strings_,
+        ProcessorID pid_ = ProcessorID::JSONRowOutputFormatID);
 
     String getName() const override { return "JSONRowOutputFormat"; }
 

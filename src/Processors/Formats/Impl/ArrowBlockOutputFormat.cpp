@@ -18,7 +18,7 @@ namespace ErrorCodes
 }
 
 ArrowBlockOutputFormat::ArrowBlockOutputFormat(WriteBuffer & out_, const Block & header_, bool stream_, const FormatSettings & format_settings_)
-    : IOutputFormat(header_, out_)
+    : IOutputFormat(header_, out_, ProcessorID::ArrowBlockOutputFormatID)
     , stream{stream_}
     , format_settings{format_settings_}
     , arrow_ostream{std::make_shared<ArrowBufferedOutputStream>(out_)}

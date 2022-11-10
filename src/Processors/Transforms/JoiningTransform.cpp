@@ -29,7 +29,7 @@ JoiningTransform::JoiningTransform(
     bool on_totals_,
     bool default_totals_,
     FinishCounterPtr finish_counter_)
-    : IProcessor({input_header}, {transformHeader(input_header, join_)})
+    : IProcessor({input_header}, {transformHeader(input_header, join_)}, ProcessorID::JoiningTransformID)
     , join(std::move(join_))
     , on_totals(on_totals_)
     , default_totals(default_totals_)
@@ -211,7 +211,7 @@ Block JoiningTransform::readExecute(Chunk & chunk)
 }
 
 FillingRightJoinSideTransform::FillingRightJoinSideTransform(Block input_header, JoinPtr join_)
-    : IProcessor({input_header}, {Block()})
+    : IProcessor({input_header}, {Block()}, ProcessorID::FillingRightJoinSideTransformID)
     , join(std::move(join_))
 {}
 

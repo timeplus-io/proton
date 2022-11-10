@@ -5,7 +5,7 @@ namespace DB
 {
 
 /// Converts columns-constants to full columns ("materializes" them).
-class MaterializingTransform : public ISimpleTransform
+class MaterializingTransform final : public ISimpleTransform
 {
 public:
     explicit MaterializingTransform(const Block & header);

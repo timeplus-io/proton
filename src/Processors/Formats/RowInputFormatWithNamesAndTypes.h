@@ -34,7 +34,8 @@ protected:
         bool with_names_,
         bool with_types_,
         const FormatSettings & format_settings_,
-        std::unique_ptr<FormatWithNamesAndTypesReader> format_reader_);
+        std::unique_ptr<FormatWithNamesAndTypesReader> format_reader_,
+        ProcessorID pid_);
 
     void resetParser() override;
     bool isGarbageAfterField(size_t index, ReadBuffer::Position pos) override;

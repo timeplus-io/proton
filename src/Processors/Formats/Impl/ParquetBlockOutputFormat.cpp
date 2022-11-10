@@ -17,7 +17,7 @@ namespace ErrorCodes
 }
 
 ParquetBlockOutputFormat::ParquetBlockOutputFormat(WriteBuffer & out_, const Block & header_, const FormatSettings & format_settings_)
-    : IOutputFormat(header_, out_), format_settings{format_settings_}
+    : IOutputFormat(header_, out_, ProcessorID::ParquetBlockOutputFormatID), format_settings{format_settings_}
 {
 }
 

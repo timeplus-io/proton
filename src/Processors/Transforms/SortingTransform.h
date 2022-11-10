@@ -46,7 +46,7 @@ class MergeSorterSource : public ISource
 {
 public:
     MergeSorterSource(Block header, Chunks chunks, SortDescription & description, size_t max_merged_block_size, UInt64 limit)
-        : ISource(std::move(header)), merge_sorter(std::move(chunks), description, max_merged_block_size, limit) {}
+        : ISource(std::move(header), ProcessorID::MergeSorterSourceID), merge_sorter(std::move(chunks), description, max_merged_block_size, limit) {}
 
     String getName() const override { return "MergeSorterSource"; }
 
@@ -66,7 +66,7 @@ public:
     /// limit - if not 0, allowed to return just first 'limit' rows in sorted order.
     SortingTransform(const Block & header,
         const SortDescription & description_,
-        size_t max_merged_block_size_, UInt64 limit_);
+        size_t max_merged_block_size_, UInt64 limit_, ProcessorID pid_);
 
     ~SortingTransform() override;
 

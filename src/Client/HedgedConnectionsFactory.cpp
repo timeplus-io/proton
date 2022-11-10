@@ -402,9 +402,10 @@ HedgedConnectionsFactory::State HedgedConnectionsFactory::setBestUsableReplica(C
     return State::READY;
 }
 
-bool HedgedConnectionsFactory::isTwoLevelAggregationIncompatible(Connection * connection)
+bool HedgedConnectionsFactory::isTwoLevelAggregationIncompatible(Connection * /*connection*/)
 {
-    return connection->getServerRevision(timeouts) < DBMS_MIN_REVISION_WITH_CURRENT_AGGREGATION_VARIANT_SELECTION_METHOD;
+    /// return connection->getServerRevision(timeouts) < DBMS_MIN_REVISION_WITH_CURRENT_AGGREGATION_VARIANT_SELECTION_METHOD;
+    return false;
 }
 
 }

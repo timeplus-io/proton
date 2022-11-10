@@ -40,7 +40,7 @@ protected:
 #pragma GCC diagnostic pop
 
 public:
-    IInputFormat(Block header, ReadBuffer & in_);
+    IInputFormat(Block header, ReadBuffer & in_, ProcessorID pid_);
 
     /** In some usecase (hello Kafka) we need to read a lot of tiny streams in exactly the same format.
      * The recreating of parser for each small stream takes too long, so we introduce a method

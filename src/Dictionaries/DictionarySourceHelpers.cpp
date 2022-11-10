@@ -100,7 +100,7 @@ static Block transformHeader(Block header, Block block_to_add)
 
 TransformWithAdditionalColumns::TransformWithAdditionalColumns(
     Block block_to_add_, const Block & header)
-    : ISimpleTransform(header, transformHeader(header, block_to_add_), true)
+    : ISimpleTransform(header, transformHeader(header, block_to_add_), true, ProcessorID::TransformWithAdditionalColumnsID)
     , block_to_add(std::move(block_to_add_))
 {
 }

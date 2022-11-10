@@ -18,7 +18,7 @@ MergingSortedTransform::MergingSortedTransform(
     bool use_average_block_sizes,
     bool have_all_inputs_)
     : IMergingTransform(
-        num_inputs, header, header, have_all_inputs_, limit_,
+        num_inputs, header, header, have_all_inputs_, limit_, ProcessorID::MergingSortedTransformID,
         header,
         num_inputs,
         std::move(description_),

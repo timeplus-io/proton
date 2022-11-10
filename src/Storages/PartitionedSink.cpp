@@ -26,8 +26,9 @@ namespace ErrorCodes
 PartitionedSink::PartitionedSink(
     const ASTPtr & partition_by,
     ContextPtr context_,
-    const Block & sample_block_)
-    : SinkToStorage(sample_block_)
+    const Block & sample_block_,
+    ProcessorID pid_)
+    : SinkToStorage(sample_block_, pid_)
     , context(context_)
     , sample_block(sample_block_)
 {

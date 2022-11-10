@@ -194,7 +194,7 @@ WindowTransform::WindowTransform(const Block & input_header_,
         const Block & output_header_,
         const WindowDescription & window_description_,
         const std::vector<WindowFunctionDescription> & functions)
-    : IProcessor({input_header_}, {output_header_})
+    : IProcessor({input_header_}, {output_header_}, ProcessorID::WindowTransformID)
     , input(inputs.front())
     , output(outputs.front())
     , input_header(input_header_)

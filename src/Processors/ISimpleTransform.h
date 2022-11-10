@@ -34,6 +34,12 @@ protected:
 
     virtual void transform(Chunk & input_chunk, Chunk & output_chunk)
     {
+        /// proton : starts. Call default checkpoint routine.
+        /// If subclass likes to have a different checkpoint strategy, it needs
+        /// override `void transform(Chunk & input_chunk, Chunk & output_chunk)`
+        if (input_chunk.requestCheckpoint())
+            checkpoint(input_chunk.getCheckpointContext());
+
         transform(input_chunk);
         output_chunk.swap(input_chunk);
     }
@@ -42,7 +48,7 @@ protected:
     void stopReading() { no_more_data_needed = true; }
 
 public:
-    ISimpleTransform(Block input_header_, Block output_header_, bool skip_empty_chunks_);
+    ISimpleTransform(Block input_header_, Block output_header_, bool skip_empty_chunks_, ProcessorID pid_);
 
     virtual void transform(Chunk &)
     {

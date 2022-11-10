@@ -214,7 +214,6 @@ void StreamShard::backgroundPollNativeLog()
 
     StreamingBlockReaderNativeLog block_reader(
         shared_from_this(),
-        shard,
         snLoaded(),
         /*max_wait_ms*/ 1000,
         /*read_buf_size*/ 4 * 1024 * 1024,

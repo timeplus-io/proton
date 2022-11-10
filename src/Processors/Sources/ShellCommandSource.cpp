@@ -264,7 +264,7 @@ namespace
             const ShellCommandSourceConfiguration & configuration_ = {},
             std::unique_ptr<ShellCommandHolder> && command_holder_ = nullptr,
             std::shared_ptr<ProcessPool> process_pool_ = nullptr)
-            : SourceWithProgress(sample_block_)
+            : SourceWithProgress(sample_block_, ProcessorID::ShellCommandSourceID)
             , context(context_)
             , format(format_)
             , sample_block(sample_block_)
@@ -435,7 +435,7 @@ namespace
     {
     public:
         SendingChunkHeaderTransform(const Block & header, std::shared_ptr<TimeoutWriteBufferFromFileDescriptor> buffer_)
-            : ISimpleTransform(header, header, false)
+            : ISimpleTransform(header, header, false, ProcessorID::SendingChunkHeaderTransformID)
             , buffer(buffer_)
         {
         }

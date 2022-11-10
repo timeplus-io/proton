@@ -13,8 +13,8 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
 }
 
-ISource::ISource(Block header)
-    : IProcessor({}, {std::move(header)}), output(outputs.front())
+ISource::ISource(Block header, ProcessorID pid_)
+    : IProcessor({}, {std::move(header)}, pid_), output(outputs.front())
 {
 }
 

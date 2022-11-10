@@ -27,7 +27,7 @@ public:
     using Params = RowOutputFormatParams;
 
 protected:
-    IRowOutputFormat(const Block & header, WriteBuffer & out_, const Params & params_);
+    IRowOutputFormat(const Block & header, WriteBuffer & out_, const Params & params_, ProcessorID pid_);
     void consume(Chunk chunk) override;
     void consumeTotals(Chunk chunk) override;
     void consumeExtremes(Chunk chunk) override;

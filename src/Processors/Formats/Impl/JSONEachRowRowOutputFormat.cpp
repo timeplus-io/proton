@@ -12,8 +12,9 @@ JSONEachRowRowOutputFormat::JSONEachRowRowOutputFormat(
     WriteBuffer & out_,
     const Block & header_,
     const RowOutputFormatParams & params_,
-    const FormatSettings & settings_)
-        : IRowOutputFormat(header_, out_, params_),
+    const FormatSettings & settings_,
+    ProcessorID pid_)
+        : IRowOutputFormat(header_, out_, params_, pid_),
             settings(settings_)
 {
     const auto & sample = getPort(PortKind::Main).getHeader();

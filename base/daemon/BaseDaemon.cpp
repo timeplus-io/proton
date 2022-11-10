@@ -45,7 +45,7 @@
 #include <Common/PipeFDs.h>
 #include <Common/StackTrace.h>
 #include <Common/getMultipleKeysFromConfig.h>
-#include <Common/ClickHouseRevision.h>
+#include <Common/VersionRevision.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/SymbolIndex.h>
 #include <Common/getExecutablePath.h>
@@ -882,7 +882,7 @@ void BaseDaemon::initializeTerminationAndSignalProcessing()
 void BaseDaemon::logRevision() const
 {
     Poco::Logger::root().information("Starting " + std::string{VERSION_FULL}
-        + " with revision " + std::to_string(ClickHouseRevision::getVersionRevision())
+        + " with revision " + std::to_string(ProtonRevision::getVersionRevision())
         + ", " + build_id_info
         + ", PID " + std::to_string(getpid()));
 }

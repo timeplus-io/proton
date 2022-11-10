@@ -161,7 +161,9 @@ public:
     static QueryPipeline getPipeline(QueryPipelineBuilder builder);
 
     /// proton: starts.
-    static void setStreaming(QueryPipelineBuilder & builder, bool is_streaming);
+    void setStreaming(bool is_streaming_);
+    void setExecuteMode(ExecuteMode exec_mode_) { exec_mode = exec_mode_; }
+    ExecuteMode getExecuteMode() const { return exec_mode; }
 
     /// Join two streaming pipelines together using JoinPtr.
     /// If collector is used, it will collect only newly-added processors, but not processors from pipelines.
@@ -186,6 +188,10 @@ private:
     size_t max_threads = 0;
 
     QueryStatus * process_list_element = nullptr;
+
+    /// proton : starts
+    ExecuteMode exec_mode = ExecuteMode::NORMAL;
+    /// proton : ends
 
     void checkInitialized();
     void checkInitializedAndNotCompleted();

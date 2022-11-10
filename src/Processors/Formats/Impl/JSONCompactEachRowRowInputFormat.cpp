@@ -31,7 +31,8 @@ JSONCompactEachRowRowInputFormat::JSONCompactEachRowRowInputFormat(
         with_names_,
         with_types_,
         format_settings_,
-        std::make_unique<JSONCompactEachRowFormatReader>(in_, yield_strings_, format_settings_))
+        std::make_unique<JSONCompactEachRowFormatReader>(in_, yield_strings_, format_settings_),
+        ProcessorID::JSONCompactEachRowRowInputFormatID)
 {
 }
 

@@ -24,7 +24,6 @@ class StreamingBlockReaderNativeLog final : nlog::SchemaProvider
 public:
     StreamingBlockReaderNativeLog(
         std::shared_ptr<StreamShard> stream_shard_,
-        Int32 shard_,
         Int64 sn,
         Int64 max_wait_ms,
         Int64 read_buf_size_,
@@ -36,6 +35,11 @@ public:
     const Block & getSchema(UInt16 /*schema_version*/) const override { return schema; }
 
     nlog::RecordPtrs read();
+
+    std::pair<String, Int32> getStreamShard() const;
+
+    /// Call this function only before read()
+    void resetSequenceNumber(UInt64 sn);
 
 private:
     nlog::RecordPtrs processCached(nlog::RecordPtrs records);

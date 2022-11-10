@@ -41,12 +41,10 @@ public:
     void shutdown();
 
 private:
-    void init();
-    void init(const std::string & key);
+    void init(DB::ContextPtr global_context);
+    void init(const std::string & key, DB::ContextPtr global_context);
 
 private:
-    DB::ContextPtr global_context;
-
     std::atomic_flag inited;
     std::atomic_flag stopped;
 

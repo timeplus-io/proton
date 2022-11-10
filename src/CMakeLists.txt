@@ -179,6 +179,8 @@ set(ENABLE_NATIVE_LOG ON)
 if (ENABLE_NATIVE_LOG)
     add_subdirectory (NativeLog)
 endif()
+
+add_subdirectory(Checkpoint)
 # proton: ends
 
 set (all_modules)
@@ -223,6 +225,9 @@ add_object_library(clickhouse_server Server)
 add_object_library(clickhouse_server_http Server/HTTP)
 add_object_library(clickhouse_formats Formats)
 add_object_library(clickhouse_processors Processors)
+# proton : starts
+add_object_library(clickhouse_processors_streaming Processors/Streaming)
+# proton : ends
 add_object_library(clickhouse_processors_executors Processors/Executors)
 add_object_library(clickhouse_processors_formats Processors/Formats)
 add_object_library(clickhouse_processors_formats_impl Processors/Formats/Impl)
@@ -279,6 +284,7 @@ if (USE_STATIC_LIBRARIES OR NOT SPLIT_SHARED_LIBRARIES)
 
     target_link_libraries (dbms PRIVATE klog)
     target_link_libraries (dbms PRIVATE external_stream)
+    target_link_libraries (dbms PRIVATE checkpoint)
 
     set (all_modules dbms)
 else()
@@ -295,6 +301,7 @@ else()
 
     target_link_libraries (dbms PRIVATE klog)
     target_link_libraries (dbms PRIVATE external_stream)
+    target_link_libraries (dbms PRIVATE checkpoint)
 
     list (APPEND all_modules dbms)
     # force all split libs to be linked
@@ -340,6 +347,7 @@ target_link_libraries (clickhouse_common_io
             common
             ch_contrib::double_conversion
             ch_contrib::dragonbox_to_chars
+            ch_contrib::muduo_net
 )
 
 # Use X86 AVX2/AVX512 instructions to accelerate filter operations
@@ -394,8 +402,24 @@ endif()
 
 # proton: starts
 if (TARGET ch_contrib::liburing)
-    dbms_target_link_libraries(PRIVATE ${LIBURING_LIBRARY})
+    dbms_target_link_libraries(PRIVATE ch_contrib::liburing)
 endif()
+
+if (TARGET ch_contrib::muduo_base)
+    dbms_target_link_libraries(PUBLIC ch_contrib::muduo_base)
+endif()
+
+if (TARGET ch_contrib::muduo_net)
+    dbms_target_link_libraries(PUBLIC ch_contrib::muduo_net)
+endif()
+
+#if (TARGET ch_contrib::muduo_http)
+#    dbms_target_link_libraries(PRIVATE ch_contrib::muduo_http)
+#endif()
+#
+#if (TARGET ch_contrib::muduo_inspect)
+#    dbms_target_link_libraries(PRIVATE ch_contrib::muduo_inspect)
+#endif()
 # proton: ends
 
 dbms_target_link_libraries (

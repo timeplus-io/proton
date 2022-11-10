@@ -25,18 +25,19 @@ SessionAggregatingTransform::SessionAggregatingTransform(
     Block header,
     AggregatingTransformParamsPtr params_,
     SubstraemManyAggregatedDataPtr substream_many_data_,
-    size_t current_aggregating_index_,
+    size_t current_variant_,
     size_t max_threads_,
     size_t temporary_data_merge_threads_)
     : AggregatingTransformWithSubstream(
         std::move(header),
         std::move(params_),
         std::move(substream_many_data_),
-        current_aggregating_index_,
+        current_variant_,
         max_threads_,
         temporary_data_merge_threads_,
-        "SessionAggregatingTransform")
-    , session_map(*(substream_many_data->sessions_maps[current_aggregating_index] = std::make_shared<SubstreamHashMap<SessionInfoPtr>>()))
+        "SessionAggregatingTransform",
+        ProcessorID::SessionAggregatingTransformID)
+    , session_map(*(substream_many_data->sessions_maps[current_variant] = std::make_shared<SubstreamHashMap<SessionInfoPtr>>()))
 {
     assert(params->params.group_by == Aggregator::Params::GroupBy::SESSION);
 }
@@ -57,8 +58,7 @@ void SessionAggregatingTransform::consume(Chunk chunk)
         ColumnPtr session_end_column = columns.at(params->params.session_end_pos)->convertToFullColumnIfConst();
 
         /// Get session info
-        SubstreamID substream_id = chunk.hasChunkInfo() ? chunk.getChunkInfo()->ctx.id : INVALID_SUBSTREAM_ID;
-        SessionInfo & session_info = getOrCreateSessionInfo(substream_id);
+        SessionInfo & session_info = getOrCreateSessionInfo(chunk.getSubStreamID());
 
         /// Prepare sessions to emit / process
         std::vector<IColumn::Filter> session_filters;
@@ -109,10 +109,7 @@ void SessionAggregatingTransform::consume(Chunk chunk)
     emitGlobalOversizeSessionsIfPossible(chunk, merged_block);
 
     if (merged_block.rows() > 0)
-    {
-        ChunkInfoPtr info = std::make_shared<ChunkInfo>();
-        setCurrentChunk(convertToChunk(merged_block), info);
-    }
+        setCurrentChunk(convertToChunk(merged_block), nullptr);
 }
 
 /// Finalize what we have in memory and produce a finalized Block
@@ -141,7 +138,7 @@ void SessionAggregatingTransform::finalizeSession(const SessionInfo & info, Bloc
         first_pool.emplace_back(std::make_shared<Arena>());
 
     assert(!prepared_data_ptr->at(0)->isTwoLevel());
-    mergeSingleLevel(prepared_data_ptr, info, merged_block);
+    convertSingleLevel(prepared_data_ptr, info, merged_block);
 
     auto end = MonotonicMilliseconds::now();
     LOG_INFO(
@@ -160,11 +157,11 @@ void SessionAggregatingTransform::finalizeSession(const SessionInfo & info, Bloc
         variants->init(variants->type);
         variants->aggregates_pools = Arenas(1, std::make_shared<Arena>());
         variants->aggregates_pool = variants->aggregates_pools.back().get();
-        params->aggregator.initStatesWithoutKey(*variants);
+        params->aggregator.initStatesForWithoutKeyOrOverflow(*variants);
     }
 }
 
-void SessionAggregatingTransform::mergeSingleLevel(ManyAggregatedDataVariantsPtr & data, const SessionInfo & info, Block & final_block)
+void SessionAggregatingTransform::convertSingleLevel(ManyAggregatedDataVariantsPtr & data, const SessionInfo & info, Block & final_block)
 {
     /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
     /// one project window for streaming processing
@@ -180,9 +177,9 @@ void SessionAggregatingTransform::mergeSingleLevel(ManyAggregatedDataVariantsPtr
     Block merged_block;
     if (first->without_key)
         merged_block = params->aggregator.prepareBlockAndFillWithoutKey(
-            *first, params->final, first->type != AggregatedDataVariants::Type::without_key);
+            *first, params->final, first->type != AggregatedDataVariants::Type::without_key, ConvertAction::STREAMING_EMIT);
     else
-        merged_block = params->aggregator.prepareBlockAndFillSingleLevel(*first, params->final);
+        merged_block = params->aggregator.prepareBlockAndFillSingleLevel(*first, params->final, ConvertAction::STREAMING_EMIT);
 
     /// NOTE: In case no aggregate key and no aggregate function, the merged_block shall be empty.
     /// e.g. `select window_start, window_end, date_diff('second', window_start, window_end) from session(test_session, 5s, [location='ca', location='sh')) group by window_start, window_end`
@@ -205,6 +202,7 @@ void SessionAggregatingTransform::mergeSingleLevel(ManyAggregatedDataVariantsPtr
     }
 
     /// fill session info columns, i.e. 'window_start', 'window_end'
+    /// FIXME, this looks pretty hacky as we need align the column positions / header here with Aggregator::Params::getHeader(...)
     merged_block.insert(0, {std::move(window_end_col_ptr), window_end_col.type, window_end_col.name});
     merged_block.insert(0, {std::move(window_start_col_ptr), window_start_col.type, window_start_col.name});
 
@@ -383,7 +381,7 @@ void SessionAggregatingTransform::emitGlobalOversizeSessionsIfPossible(const Chu
 {
     if (chunk.hasWatermark())
     {
-        auto max_ts = chunk.getChunkInfo()->ctx.getWatermark().watermark;
+        auto max_ts = chunk.getChunkContext()->getWatermark().watermark;
         if (max_ts >= max_event_ts)
         {
             for (auto & [_, session_info] : session_map)

@@ -9,7 +9,7 @@ namespace ErrorCodes
 }
 
 CopyTransform::CopyTransform(const Block & header, size_t num_outputs)
-    : IProcessor(InputPorts(1, header), OutputPorts(num_outputs, header))
+    : IProcessor(InputPorts(1, header), OutputPorts(num_outputs, header), ProcessorID::CopyTransformID)
 {
     if (num_outputs <= 1)
         throw Exception("CopyTransform expects more than 1 outputs, got " + std::to_string(num_outputs), ErrorCodes::LOGICAL_ERROR);

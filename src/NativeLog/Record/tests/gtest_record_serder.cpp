@@ -11,13 +11,11 @@
 
 #include <gtest/gtest.h>
 
-
 using namespace DB;
 using namespace nlog;
-using namespace std;
 
-extern Block createBlockBig(size_t rows);
-extern Block createBlockForCompress(size_t rows, bool only_string);
+extern DB::Block createBlockBig(size_t rows);
+extern DB::Block createBlockForCompress(size_t rows, bool only_string);
 
 namespace
 {
@@ -25,10 +23,10 @@ std::unique_ptr<Record> createRecord()
 {
     Block block;
 
-    auto uint64_type = make_shared<DataTypeUInt64>();
-    auto float64_type = make_shared<DataTypeFloat64>();
-    auto datetime64_type = make_shared<DataTypeDateTime64>(3);
-    auto string_type = make_shared<DataTypeString>();
+    auto uint64_type = std::make_shared<DataTypeUInt64>();
+    auto float64_type = std::make_shared<DataTypeFloat64>();
+    auto datetime64_type = std::make_shared<DataTypeDateTime64>(3);
+    auto string_type = std::make_shared<DataTypeString>();
 
     auto id_col = uint64_type->createColumn();
     /// auto id_col = make_shared<ColumnInt64>();
@@ -68,13 +66,13 @@ std::unique_ptr<Record> createRecord()
     ColumnWithTypeAndName time_col_with_type(std::move(time_col), datetime64_type, "_tp_time");
     block.insert(time_col_with_type);
 
-    return std::make_unique<Record>(OpCode::ADD_DATA_BLOCK, move(block), nlog::NO_SCHEMA);
+    return std::make_unique<Record>(OpCode::ADD_DATA_BLOCK, std::move(block), nlog::NO_SCHEMA);
 }
 
 std::unique_ptr<Record> createRecordBig(size_t rows)
 {
     Block block(createBlockBig(rows));
-    return std::make_unique<Record>(OpCode::ADD_DATA_BLOCK, move(block), nlog::NO_SCHEMA);
+    return std::make_unique<Record>(OpCode::ADD_DATA_BLOCK, std::move(block), nlog::NO_SCHEMA);
 }
 
 struct TestSchemaProvider : public nlog::SchemaProvider
@@ -686,7 +684,7 @@ TEST(RecordSerde, Summary)
 std::unique_ptr<Record> createRecordForCompress(size_t rows, bool only_string)
 {
     Block block(createBlockForCompress(rows, only_string));
-    return std::make_unique<Record>(OpCode::ADD_DATA_BLOCK, move(block), nlog::NO_SCHEMA);
+    return std::make_unique<Record>(OpCode::ADD_DATA_BLOCK, std::move(block), nlog::NO_SCHEMA);
 }
 
 void compressTest(size_t rows, size_t n, bool only_string)

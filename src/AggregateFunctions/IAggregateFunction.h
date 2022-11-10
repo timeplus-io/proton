@@ -128,6 +128,12 @@ public:
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method negate is not supported for {}", getName());
     }
+
+    /// Move state from rhs to target place
+    virtual void move(AggregateDataPtr __restrict place, AggregateDataPtr rhs, Arena * arena) const
+    {
+        merge(place, rhs, arena);
+    }
     /// proton : ends
 
     /// Merges state (on which place points to) with other state of current aggregation function.

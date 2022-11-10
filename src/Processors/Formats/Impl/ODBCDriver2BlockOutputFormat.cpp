@@ -13,7 +13,7 @@ namespace DB
 {
 ODBCDriver2BlockOutputFormat::ODBCDriver2BlockOutputFormat(
     WriteBuffer & out_, const Block & header_, const FormatSettings & format_settings_)
-    : IOutputFormat(header_, out_), format_settings(format_settings_), serializations(header_.getSerializations())
+    : IOutputFormat(header_, out_, ProcessorID::ODBCDriver2BlockOutputFormatID), format_settings(format_settings_), serializations(header_.getSerializations())
 {
 }
 

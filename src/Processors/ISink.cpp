@@ -8,8 +8,8 @@
 namespace DB
 {
 
-ISink::ISink(Block header)
-    : IProcessor({std::move(header)}, {}), input(inputs.front())
+ISink::ISink(Block header, ProcessorID pid_)
+    : IProcessor({std::move(header)}, {}, pid_), input(inputs.front())
 {
 }
 

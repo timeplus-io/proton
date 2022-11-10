@@ -7,7 +7,7 @@
 namespace DB
 {
 
-class DistinctTransform : public ISimpleTransform
+class DistinctTransform final : public ISimpleTransform
 {
 public:
     DistinctTransform(

@@ -13,13 +13,12 @@
 #include <Poco/Util/HelpFormatter.h>
 #include <Poco/Environment.h>
 #include <base/scope_guard_safe.h>
-#include <base/logger_useful.h>
 #include <base/phdr_cache.h>
 #include <base/ErrorHandlers.h>
 #include <base/getMemoryAmount.h>
 #include <base/errnoToString.h>
 #include <base/coverage.h>
-#include <Common/ClickHouseRevision.h>
+#include <Common/VersionRevision.h>
 #include <Common/DNSResolver.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Macros.h>
@@ -81,6 +80,7 @@
 #include "Common/config_version.h"
 
 /// proton: starts
+#include <Checkpoint/CheckpointCoordinator.h>
 #include <Common/Config/ExternalGrokPatterns.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DistributedMetadata/CatalogService.h>
@@ -273,8 +273,11 @@ int waitServersToFinish(std::vector<DB::ProtocolServerAdapter> & servers, size_t
 ///     -> Catalog
 ///     -> Placement
 ///     -> Task
-void initDistributedMetadataServices(DB::ContextMutablePtr & global_context)
+void initGlobalServices(DB::ContextMutablePtr & global_context)
 {
+    auto & ckpt_coordinator = DB::CheckpointCoordinator::instance(global_context);
+    ckpt_coordinator.startup();
+
     auto & native_log = nlog::NativeLog::instance(global_context);
     native_log.startup();
 
@@ -299,13 +302,13 @@ void initDistributedMetadataServices(DB::ContextMutablePtr & global_context)
 /// There is still a race condition: when http/tcp services are inited, but DDLService init is not done yet
 /// and at this very time, a table creation request sneaks in which will try to append the request to DDL WAL
 /// but the wal is not init yet. We will check if DDLService is ready in DDLService::append
-void initDistributedMetadataServicesPost(DB::ContextMutablePtr global_context)
+void initGlobalServicePost(DB::ContextMutablePtr global_context)
 {
     auto & ddl_service = DB::DDLService::instance(global_context);
     ddl_service.startup();
 }
 
-/// The shutdown sequence is like
+/// The shutdown sequence is
 /// 1) Stop TCP/HTTP etc servers to close all outstanding external TCP/HTTP connections
 /// 2) Kill all unfinished queries
 /// 3) Shutdown distributed metadata service:
@@ -341,8 +344,9 @@ void initDistributedMetadataServicesPost(DB::ContextMutablePtr global_context)
 ///    - They construction order can be manually ordered
 /// 6) Global singletons / variables dtor
 ///    - These global variables are dtored in the reverse order of their construction
-///    - C++ basically can't guarantee the construction order hence we can't guarantee their dtor order.
-///      We need avoid these kind of global variables as much as possible
+///    - C++ basically can't guarantee the construction order unless we init them in a control way
+///      otherwise we can't guarantee their dtor order. We need avoid these kind of global variables
+///      as much as possible
 void deinitDistributedMetadataServices(DB::ContextMutablePtr global_context)
 {
     auto & ddl_service = DB::DDLService::instance(global_context);
@@ -653,8 +657,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerDisks();
     registerFormats();
 
-    CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::getVersionRevision());
-    CurrentMetrics::set(CurrentMetrics::VersionInteger, ClickHouseRevision::getVersionInteger());
+    CurrentMetrics::set(CurrentMetrics::Revision, ProtonRevision::getVersionRevision());
+    CurrentMetrics::set(CurrentMetrics::VersionInteger, ProtonRevision::getVersionInteger());
 
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases, ...
@@ -1390,7 +1394,7 @@ if (ThreadFuzzer::instance().isEffective())
     initGlobalSingletons();
     global_context->setupNodeIdentity();
     global_context->setConfigPath(config_path);
-    initDistributedMetadataServices(global_context);
+    initGlobalServices(global_context);
     ExternalGrokPatterns::instance(global_context);
     /// proton: end.
 
@@ -1610,7 +1614,7 @@ if (ThreadFuzzer::instance().isEffective())
         }
 
         /// proton: starts
-        initDistributedMetadataServicesPost(global_context);
+        initGlobalServicePost(global_context);
         auto & task_status_service = DB::TaskStatusService::instance(global_context);
         task_status_service.createTaskTableIfNotExists();
         /// proton: ends

@@ -42,8 +42,8 @@ bool isParseError(int code)
         || code == ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING;
 }
 
-IRowInputFormat::IRowInputFormat(Block header, ReadBuffer & in_, Params params_)
-    : IInputFormat(std::move(header), in_), serializations(getPort().getHeader().getSerializations()), params(params_)
+IRowInputFormat::IRowInputFormat(Block header, ReadBuffer & in_, Params params_, ProcessorID pid_)
+    : IInputFormat(std::move(header), in_, pid_), serializations(getPort().getHeader().getSerializations()), params(params_)
 {
 }
 

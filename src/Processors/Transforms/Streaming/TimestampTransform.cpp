@@ -17,7 +17,7 @@ namespace Streaming
 {
 TimestampTransform::TimestampTransform(
     const Block & input_header, const Block & output_header, FunctionDescriptionPtr timestamp_func_desc_, bool backfill_)
-    : ISimpleTransform(input_header, output_header, false)
+    : ISimpleTransform(input_header, output_header, false, ProcessorID::TimestampTransformID)
     , timestamp_func_desc(std::move(timestamp_func_desc_))
     , backfill(backfill_)
     , chunk_header(output_header.getColumns(), 0)
@@ -87,10 +87,10 @@ void TimestampTransform::assignProcTimestamp(Chunk & chunk)
     {
         /// When we are backfilling, we use log append time as proc time until we catch up to the latest stream
         /// We assume the timestamp is in sync between streaming store server and proton server
-        const auto & chunk_info = chunk.getChunkInfo();
-        if (chunk_info && chunk_info->ctx.hasAppendTime())
+        auto chunk_ctx = chunk.getChunkContext();
+        if (chunk_ctx && chunk_ctx->hasAppendTime())
         {
-            auto append_time = chunk_info->ctx.getAppendTime();
+            auto append_time = chunk_ctx->getAppendTime();
             auto delta = UTCMilliseconds::now() - append_time;
             // Heuristic
             if (delta < 1000)

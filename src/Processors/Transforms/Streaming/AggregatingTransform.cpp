@@ -4,6 +4,7 @@
 #include <Formats/NativeReader.h>
 #include <Processors/ISource.h>
 /// #include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
+#include <Checkpoint/CheckpointCoordinator.h>
 #include <Compression/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Processors/Transforms/convertToChunk.h>
@@ -19,8 +20,9 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_AGGREGATED_DATA_VARIANT;
-    extern const int LOGICAL_ERROR;
+extern const int UNKNOWN_AGGREGATED_DATA_VARIANT;
+extern const int LOGICAL_ERROR;
+extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 namespace Streaming
@@ -41,11 +43,11 @@ const AggregatedChunkInfo * getInfoFromChunk(const Chunk & chunk)
 }
 
 /// Reads chunks from file in native format. Provide chunks with aggregation info.
-class SourceFromNativeStream : public ISource
+class SourceFromNativeStream final : public ISource
 {
 public:
     SourceFromNativeStream(const Block & header, const std::string & path)
-        : ISource(header)
+        : ISource(header, ProcessorID::StreamingSourceFromNativeStreamID)
         , file_in(path)
         , compressed_in(file_in)
         , block_in(std::make_unique<NativeReader>(compressed_in, DBMS_TCP_PROTOCOL_VERSION))
@@ -78,7 +80,7 @@ private:
 
 /// Worker which merges buckets for two-level aggregation.
 /// Atomically increments bucket counter and returns merged result.
-class StreamingConvertingAggregatedToChunksSource : public ISource
+class StreamingConvertingAggregatedToChunksSource final : public ISource
 {
 public:
     static constexpr UInt32 NUM_BUCKETS = 256;
@@ -99,11 +101,8 @@ public:
     using SharedDataPtr = std::shared_ptr<SharedData>;
 
     StreamingConvertingAggregatedToChunksSource(
-        AggregatingTransformParamsPtr params_,
-        ManyAggregatedDataVariantsPtr data_,
-        SharedDataPtr shared_data_,
-        Arena * arena_)
-        : ISource(params_->getHeader())
+        AggregatingTransformParamsPtr params_, ManyAggregatedDataVariantsPtr data_, SharedDataPtr shared_data_, Arena * arena_)
+        : ISource(params_->getHeader(), ProcessorID::StreamingConvertingAggregatedToChunksSourceID)
         , params(std::move(params_))
         , data(std::move(data_))
         , shared_data(std::move(shared_data_))
@@ -122,7 +121,7 @@ protected:
             return {};
 
         Block block
-            = params->aggregator.mergeAndConvertOneBucketToBlock(*data, arena, params->final, bucket_num, &shared_data->is_cancelled);
+            = params->aggregator.mergeAndConvertOneBucketToBlock(*data, arena, params->final, ConvertAction::DISTRIBUTED_MERGE, bucket_num, &shared_data->is_cancelled);
         Chunk chunk = convertToChunk(block);
 
         shared_data->is_bucket_processed[bucket_num] = true;
@@ -146,12 +145,15 @@ private:
 /// StreamingConvertingAggregatedToChunksSource ->
 ///
 /// Result chunks guaranteed to be sorted by bucket number.
-class StreamingConvertingAggregatedToChunksTransform : public IProcessor
+class StreamingConvertingAggregatedToChunksTransform final : public IProcessor
 {
 public:
     StreamingConvertingAggregatedToChunksTransform(
         AggregatingTransformParamsPtr params_, ManyAggregatedDataVariantsPtr data_, size_t num_threads_)
-        : IProcessor({}, {params_->getHeader()}), params(std::move(params_)), data(std::move(data_)), num_threads(num_threads_)
+        : IProcessor({}, {params_->getHeader()}, ProcessorID::StreamingConvertingAggregatedToChunksTransformID)
+        , params(std::move(params_))
+        , data(std::move(data_))
+        , num_threads(num_threads_)
     {
     }
 
@@ -339,7 +341,7 @@ private:
         {
             params->aggregator.mergeWithoutKeyDataImpl(*data);
             auto block = params->aggregator.prepareBlockAndFillWithoutKey(
-                *first, params->final, first->type != AggregatedDataVariants::Type::without_key);
+                *first, params->final, first->type != AggregatedDataVariants::Type::without_key, ConvertAction::DISTRIBUTED_MERGE);
 
             setCurrentChunk(convertToChunk(block));
         }
@@ -359,7 +361,7 @@ private:
 
 #define M(NAME) \
     else if (first->type == AggregatedDataVariants::Type::NAME) \
-        params->aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(*data);
+        params->aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(*data, ConvertAction::DISTRIBUTED_MERGE);
         if (false)
         {
         } // NOLINT
@@ -367,7 +369,7 @@ private:
 #undef M
         else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 
-        auto block = params->aggregator.prepareBlockAndFillSingleLevel(*first, params->final);
+        auto block = params->aggregator.prepareBlockAndFillSingleLevel(*first, params->final, ConvertAction::DISTRIBUTED_MERGE);
 
         setCurrentChunk(convertToChunk(block));
         finished = true;
@@ -389,10 +391,8 @@ private:
     }
 };
 
-AggregatingTransform::AggregatingTransform(
-    Block header, AggregatingTransformParamsPtr params_, const String & log_name)
-    : AggregatingTransform(
-        std::move(header), std::move(params_), std::make_unique<ManyAggregatedData>(1), 0, 1, 1, log_name)
+AggregatingTransform::AggregatingTransform(Block header, AggregatingTransformParamsPtr params_, const String & log_name, ProcessorID pid_)
+    : AggregatingTransform(std::move(header), std::move(params_), std::make_unique<ManyAggregatedData>(1), 0, 1, 1, log_name, pid_)
 {
 }
 
@@ -400,22 +400,28 @@ AggregatingTransform::AggregatingTransform(
     Block header,
     AggregatingTransformParamsPtr params_,
     ManyAggregatedDataPtr many_data_,
-    size_t current_variant,
+    size_t current_variant_,
     size_t max_threads_,
     size_t temporary_data_merge_threads_,
-    const String & log_name)
-    : IProcessor({std::move(header)}, {params_->getHeader()})
+    const String & log_name,
+    ProcessorID pid_)
+    : IProcessor({std::move(header)}, {params_->getHeader()}, pid_)
     , params(std::move(params_))
     , log(&Poco::Logger::get(log_name))
     , key_columns(params->params.keys_size)
     , aggregate_columns(params->params.aggregates_size)
     , many_data(std::move(many_data_))
-    , variants(*many_data->variants[current_variant])
-    , watermark_bound(many_data->watermarks[current_variant])
+    , variants(*many_data->variants[current_variant_])
+    , watermark_bound(many_data->watermarks[current_variant_])
+    , ckpt_epoch(many_data->ckpt_epochs[current_variant_])
+    , current_variant(current_variant_)
     , max_threads(std::min(many_data->variants.size(), max_threads_))
     , temporary_data_merge_threads(temporary_data_merge_threads_)
 {
     (void)temporary_data_merge_threads;
+
+    /// Register itself in the many aggregated data
+    many_data->aggregating_transforms[current_variant] = this;
 }
 
 AggregatingTransform::~AggregatingTransform() = default;
@@ -515,8 +521,7 @@ void AggregatingTransform::work()
         src_rows += num_rows;
         src_bytes += current_chunk.bytes();
 
-        if (num_rows > 0 || !params->params.empty_result_for_aggregation_by_empty_set)
-            consume(std::move(current_chunk));
+        consume(std::move(current_chunk));
 
         read_current_chunk = false;
     }
@@ -535,8 +540,7 @@ Processors AggregatingTransform::expandPipeline()
 
 void AggregatingTransform::consume(Chunk chunk)
 {
-    const UInt64 num_rows = chunk.getNumRows();
-
+    auto num_rows = chunk.getNumRows();
     if (num_rows > 0)
     {
         Columns columns = chunk.detachColumns();
@@ -555,8 +559,12 @@ void AggregatingTransform::consume(Chunk chunk)
         }
     }
 
+    /// Since checkpoint barrier is always standalone, it can't coexist with watermark,
+    /// we handle watermark and checkpoint barrier separately
     if (chunk.hasWatermark())
-        finalize(chunk.getChunkInfo());
+        finalize(chunk.getChunkContext());
+    else if (chunk.requestCheckpoint())
+        checkpointAlignment(chunk);
 }
 
 void AggregatingTransform::initGenerate()
@@ -604,8 +612,9 @@ void AggregatingTransform::initGenerate()
 
     /// All aggregation streams are done
     /// Disable streaming mode to release all in-memory states since
-    /// we are finalizing the aggregation result
-    params->aggregator.params.keep_state = false;
+    /// we are done with all inputs (nput streams are drained),
+    /// we are going to finalize the final aggregation result
+    params->params.keep_state = false;
 
     if (!params->aggregator.hasTemporaryFiles())
     {
@@ -670,7 +679,7 @@ void AggregatingTransform::emitVersion(Block & block)
          ProtonConsts::RESERVED_EMIT_VERSION});
 }
 
-void AggregatingTransform::setCurrentChunk(Chunk chunk, ChunkInfoPtr & chunk_Info)
+void AggregatingTransform::setCurrentChunk(Chunk chunk, ChunkContextPtr chunk_ctx)
 {
     if (has_input)
         throw Exception("Current chunk was already set.", ErrorCodes::LOGICAL_ERROR);
@@ -678,8 +687,21 @@ void AggregatingTransform::setCurrentChunk(Chunk chunk, ChunkInfoPtr & chunk_Inf
     has_input = true;
     current_chunk_aggregated = std::move(chunk);
 
-    if (params->params.group_by == Aggregator::Params::GroupBy::OTHER)
-        current_chunk_aggregated.setChunkInfo(std::move(chunk_Info));
+    if (chunk_ctx)
+    {
+        /// Aggregation is a stop operator, down stream will and shall establish its own watermark
+        /// according to a new timestamp column emitted by the aggregator transform, so we will
+        /// need clear watermark here and then propagate the chunk context to down stream.
+        /// Then downstream will not be confused with upstream (processed) watermark
+        /// FIXME, for global aggregation, we rely on periodic upstream timer to emit watermark,
+        /// so we should not clear its watermark (watermark act as a timer). This shall be fixed
+        /// by install a timer in down stream of the global aggregation instead of relying on
+        /// downstream watermark as timer
+        if (params->params.group_by != Aggregator::Params::GroupBy::OTHER)
+            chunk_ctx->clearWatermark();
+
+        current_chunk_aggregated.setChunkContext(std::move(chunk_ctx));
+    }
 }
 
 IProcessor::Status AggregatingTransform::preparePushToOutput()
@@ -689,6 +711,77 @@ IProcessor::Status AggregatingTransform::preparePushToOutput()
     has_input = false;
 
     return Status::PortFull;
+}
+
+void AggregatingTransform::checkpointAlignment(Chunk & chunk)
+{
+    auto ckpt_ctx = chunk.getCheckpointContext();
+
+    ckpt_epoch = ckpt_ctx->epoch;
+
+    if (many_data->ckpt_requested.fetch_add(1) + 1 == many_data->variants.size())
+    {
+        /// Validate all ckpt epochs are the same
+        auto same_epochs
+            = std::all_of(many_data->ckpt_epochs.begin(), many_data->ckpt_epochs.end(), [this](auto epoch) { return epoch == ckpt_epoch; });
+        if (!same_epochs)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Required same checkpoint epochs, but seen different ones");
+
+        checkpoint(std::move(ckpt_ctx));
+
+        many_data->ckpt_requested.store(0);
+        many_data->ckpted.notify_all();
+
+        /// Propagate the checkpoint barrier to all down stream output ports
+        for (auto * transform : many_data->aggregating_transforms)
+            transform->setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0}, chunk.getChunkContext());
+    }
+    else
+    {
+        /// Condition wait for last aggr thread to finish the checkpoint
+        auto start = MonotonicMilliseconds::now();
+
+        std::unique_lock<std::mutex> lk(many_data->ckpt_mutex);
+        many_data->ckpted.wait(lk);
+
+        auto end = MonotonicMilliseconds::now();
+        LOG_INFO(log, "Took {} milliseconds to wait for checkpointing {} shard aggregation", end - start, many_data->variants.size());
+    }
+}
+
+void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+{
+    /// FIXME, concurrency
+    UInt16 num_variants = many_data->variants.size();
+    for (size_t current_aggr = 0; const auto & data_variant : many_data->variants)
+    {
+        auto logic_id = many_data->aggregating_transforms[current_aggr++]->getLogicID();
+        ckpt_ctx->coordinator->checkpoint(getVersion(), logic_id, ckpt_ctx, [num_variants, data_variant, this](WriteBuffer & wb) {
+            DB::writeIntBinary(num_variants, wb);
+            params->aggregator.checkpoint(*data_variant, wb);
+        });
+    }
+}
+
+void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
+{
+    /// FIXME, concurrency
+    for (size_t current_aggr = 0; auto & data_variant : many_data->variants)
+    {
+        auto logic_id = many_data->aggregating_transforms[current_aggr++]->getLogicID();
+        ckpt_ctx->coordinator->recover(logic_id, ckpt_ctx, [&data_variant, this](VersionType /*version*/, ReadBuffer & rb) {
+            UInt16 num_variants = 0;
+            DB::readIntBinary(num_variants, rb);
+            if (num_variants != many_data->variants.size())
+                throw Exception(
+                    ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                    "Failed to recover aggregation checkpoint. Number of data variants are not the same, checkpointed={}, current={}",
+                    num_variants,
+                    many_data->variants.size());
+
+            params->aggregator.recover(*data_variant, rb);
+        });
+    }
 }
 }
 }

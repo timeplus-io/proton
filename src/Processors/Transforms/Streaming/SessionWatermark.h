@@ -8,7 +8,7 @@ namespace DB
 {
 namespace Streaming
 {
-class SessionWatermark : public HopTumbleBaseWatermark
+class SessionWatermark final : public HopTumbleBaseWatermark
 {
 public:
     explicit SessionWatermark(
@@ -20,6 +20,7 @@ public:
     SessionWatermark(const SessionWatermark &) = default;
     ~SessionWatermark() override = default;
 
+    String getName() const override { return "SessionWatermark"; }
     WatermarkPtr clone() const override { return std::make_unique<SessionWatermark>(*this); }
 
 private:

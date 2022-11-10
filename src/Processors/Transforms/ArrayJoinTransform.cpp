@@ -19,7 +19,7 @@ ArrayJoinTransform::ArrayJoinTransform(
     const Block & header_,
     ArrayJoinActionPtr array_join_,
     bool /*on_totals_*/)
-    : ISimpleTransform(header_, transformHeader(header_, array_join_), false)
+    : ISimpleTransform(header_, transformHeader(header_, array_join_), false, ProcessorID::ArrayJoinTransformID)
     , array_join(std::move(array_join_))
 {
     /// TODO

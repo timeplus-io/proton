@@ -1,9 +1,7 @@
 #include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
 #include <Processors/ISimpleTransform.h>
-#include <Processors/ResizeProcessor.h>
 #include <Processors/Transforms/AggregatingInOrderTransform.h>
 #include <QueryPipeline/Pipe.h>
-#include <Interpreters/Aggregator.h>
 
 namespace DB
 {
@@ -14,7 +12,7 @@ namespace ErrorCodes
 
 GroupingAggregatedTransform::GroupingAggregatedTransform(
     const Block & header_, size_t num_inputs_, AggregatingTransformParamsPtr params_)
-    : IProcessor(InputPorts(num_inputs_, header_), { Block() })
+    : IProcessor(InputPorts(num_inputs_, header_), { Block() }, ProcessorID::GroupingAggregatedTransformID)
     , num_inputs(num_inputs_)
     , params(std::move(params_))
     , last_bucket_number(num_inputs, -1)
@@ -295,14 +293,14 @@ void GroupingAggregatedTransform::work()
             Int32 bucket = cur_block.info.bucket_num;
             auto chunk_info = std::make_shared<AggregatedChunkInfo>();
             chunk_info->bucket_num = bucket;
-            chunks_map[bucket].emplace_back(Chunk(cur_block.getColumns(), cur_block.rows(), std::move(chunk_info)));
+            chunks_map[bucket].emplace_back(Chunk(cur_block.getColumns(), cur_block.rows(), std::move(chunk_info), nullptr));
         }
     }
 }
 
 
 MergingAggregatedBucketTransform::MergingAggregatedBucketTransform(AggregatingTransformParamsPtr params_)
-    : ISimpleTransform({}, params_->getHeader(), false), params(std::move(params_))
+    : ISimpleTransform({}, params_->getHeader(), false, ProcessorID::MergingAggregatedBucketTransformID), params(std::move(params_))
 {
     setInputNotNeededAfterRead(true);
 }
@@ -361,7 +359,7 @@ void MergingAggregatedBucketTransform::transform(Chunk & chunk)
 
 
 SortingAggregatedTransform::SortingAggregatedTransform(size_t num_inputs_, AggregatingTransformParamsPtr params_)
-    : IProcessor(InputPorts(num_inputs_, params_->getHeader()), {params_->getHeader()})
+    : IProcessor(InputPorts(num_inputs_, params_->getHeader()), {params_->getHeader()}, ProcessorID::SortingAggregatedTransformID)
     , num_inputs(num_inputs_)
     , params(std::move(params_))
     , last_bucket_number(num_inputs, -1)

@@ -10,8 +10,8 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-IRowOutputFormat::IRowOutputFormat(const Block & header, WriteBuffer & out_, const Params & params_)
-    : IOutputFormat(header, out_)
+IRowOutputFormat::IRowOutputFormat(const Block & header, WriteBuffer & out_, const Params & params_, ProcessorID pid_)
+    : IOutputFormat(header, out_, pid_)
     , types(header.getDataTypes())
     , serializations(header.getSerializations())
     , params(params_)

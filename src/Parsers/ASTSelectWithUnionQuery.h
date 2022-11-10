@@ -3,6 +3,10 @@
 #include <Parsers/ASTQueryWithOutput.h>
 #include <Parsers/SelectUnionMode.h>
 
+/// proton : starts
+#include <Parsers/Streaming/SelectExecuteMode.h>
+/// proton : ends
+
 namespace DB
 {
 /** Single SELECT query or multiple SELECT queries with UNION
@@ -28,6 +32,10 @@ public:
     ASTPtr list_of_selects;
 
     SelectUnionModesSet set_of_modes;
+
+    /// proton : starts
+    Streaming::SelectExecuteMode exec_mode = Streaming::SelectExecuteMode::NORMAL;
+    /// proton : ends
 
     /// Consider any mode other than ALL as non-default.
     bool hasNonDefaultUnionMode() const;

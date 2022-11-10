@@ -68,7 +68,9 @@
 #include <DistributedMetadata/CatalogService.h>
 
 /// proton: starts
+#include <Checkpoint/CheckpointCoordinator.h>
 #include <Parsers/ASTRenameQuery.h>
+#include <Parsers/Streaming/ASTRecoverQuery.h>
 #include <Parsers/parseQueryPipe.h>
 #include <Storages/Streaming/StorageStream.h>
 /// proton: ends
@@ -93,6 +95,7 @@ namespace ErrorCodes
     extern const int QUERY_WAS_CANCELLED;
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
+    extern const int SYNTAX_ERROR;
 }
 
 namespace
@@ -113,6 +116,33 @@ void broadcastCatalogIfNecessary(const ASTPtr & ast, ContextPtr & context)
 
     if (ast->as<ASTDropQuery>() || ast->as<ASTAlterQuery>() || ast->as<ASTRenameQuery>())
         CatalogService::instance(context->getGlobalContext()).broadcast();
+}
+
+/// 1. Get the underlying select query from checkpoint coordinator
+/// 2. Re-parse that select query and return the parsed select query ast
+std::pair<String, ASTPtr> handleRecoverQuery(const Streaming::ASTRecoverQuery * recover_query, ContextMutablePtr context)
+{
+    auto * literal = recover_query->query_id->as<ASTLiteral>();
+    if (!literal)
+        throw Exception(ErrorCodes::SYNTAX_ERROR, "Recovery query requires a string query ID, for example, RECOVER FROM 'my-query-id'");
+
+    auto query_id = literal->value.get<String>();
+    auto query = CheckpointCoordinator::instance(context->getGlobalContext()).getQuery(query_id);
+
+    const char * begin = query.data();
+    const char * end = query.data() + query.size();
+
+    const auto & settings = context->getSettingsRef();
+
+    /// Reset query ID with the recovered one since we will use this as ckpt
+    context->setCurrentQueryId(query_id);
+
+    /// Setup the correct query execution mode
+    context->setSetting("exec_mode", String("recover"));
+
+    ParserQuery parser(end);
+    auto ast = parseQuery(parser, begin, end, "", settings.max_query_size, settings.max_parser_depth);
+    return {query, ast};
 }
 /// proton: ends
 }
@@ -396,6 +426,30 @@ static void setQuerySpecificSettings(ASTPtr & ast, ContextMutablePtr context)
         if (ast_insert_into->watch)
             context->setSetting("output_format_enable_streaming", 1);
     }
+    /// proton : starts
+    else if (auto * select_ast = ast->as<ASTSelectWithUnionQuery>())
+    {
+        const auto & settings = context->getSettingsRef();
+        if (settings.exec_mode.value != ExecuteMode::NORMAL)
+            /// exec_mode is already handled
+            return;
+
+        switch (select_ast->exec_mode)
+        {
+            case Streaming::SelectExecuteMode::NORMAL:
+                context->setSetting("exec_mode", String("normal"));
+                break;
+            case Streaming::SelectExecuteMode::SUBSCRIBE:
+                context->setSetting("exec_mode", String("subscribe"));
+                break;
+            case Streaming::SelectExecuteMode::RECOVER:
+                context->setSetting("exec_mode", String("recover"));
+                break;
+            case Streaming::SelectExecuteMode::UNSUBSCRIBE:
+                context->setSetting("exec_mode", String("unsubscribe"));
+        }
+    }
+    /// proton : ends
 }
 
 static void applySettingsFromSelectWithUnion(const ASTSelectWithUnionQuery & select_with_union, ContextMutablePtr context)
@@ -449,6 +503,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     size_t max_query_size = 0;
     if (!internal) max_query_size = settings.max_query_size;
 
+    String recovered_query;
     String query_database;
     String query_table;
     try
@@ -461,6 +516,14 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             ast = parseQueryPipe(parser, begin, end, max_query_size, settings.max_parser_depth);
         else
             ast = parseQuery(parser, begin, end, "", max_query_size, settings.max_parser_depth);
+
+        if (const auto * recover_query = ast->as<Streaming::ASTRecoverQuery>())
+        {
+            std::tie(recovered_query, ast) = handleRecoverQuery(recover_query, context);
+            /// Re-init begin / end for later logging etc
+            begin = recovered_query.data();
+            end = recovered_query.data() + recovered_query.size();
+        }
         /// proton: ends
 
         /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),

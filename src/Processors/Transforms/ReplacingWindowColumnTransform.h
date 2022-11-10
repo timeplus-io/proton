@@ -1,5 +1,7 @@
 #pragma once
 
+#include "convertToChunk.h"
+
 #include <Processors/ISimpleTransform.h>
 #include <Columns/ColumnTuple.h>
 #include <DataTypes/DataTypeDateTime.h>
@@ -18,7 +20,7 @@ public:
         size_t window_id_column_pos_,
         const NameAndTypePair & window_column_name_and_type_,
         Tuple window_value_)
-        : ISimpleTransform(header_, getResultHeader(header_, window_id_column_pos_), false)
+        : ISimpleTransform(header_, getResultHeader(header_, window_id_column_pos_), false, ProcessorID::ReplacingWindowColumnTransformID)
         , window_id_column_pos(window_id_column_pos_)
         , window_column_name_and_type(window_column_name_and_type_)
         , window_value(window_value_)

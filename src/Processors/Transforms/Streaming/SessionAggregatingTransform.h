@@ -16,9 +16,10 @@ public:
         Block header,
         AggregatingTransformParamsPtr params_,
         SubstraemManyAggregatedDataPtr substream_many_data,
-        size_t current_aggregating_index_,
+        size_t current_variant_,
         size_t max_threads,
         size_t temporary_data_merge_threads);
+
     ~SessionAggregatingTransform() override = default;
 
     String getName() const override { return "SessionAggregatingTransform"; }
@@ -26,7 +27,7 @@ public:
 private:
     void consume(Chunk chunk) override;
     void finalizeSession(const SessionInfo & info, Block & merged_block);
-    void mergeSingleLevel(ManyAggregatedDataVariantsPtr & data, const SessionInfo & info, Block & merged_block);
+    void convertSingleLevel(ManyAggregatedDataVariantsPtr & data, const SessionInfo & info, Block & merged_block);
     SessionInfo & getOrCreateSessionInfo(const SessionID & session_id);
     SessionInfo & getSessionInfo(const SessionID & session_id);
     void resetSessionInfo(SessionInfo & info);

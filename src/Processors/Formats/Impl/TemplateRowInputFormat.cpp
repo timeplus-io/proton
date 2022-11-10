@@ -43,7 +43,7 @@ TemplateRowInputFormat::TemplateRowInputFormat(const Block & header_, std::uniqu
                                                FormatSettings settings_, bool ignore_spaces_,
                                                ParsedTemplateFormatString format_, ParsedTemplateFormatString row_format_,
                                                std::string row_between_delimiter_)
-    : RowInputFormatWithDiagnosticInfo(header_, *buf_, params_), buf(std::move(buf_)), data_types(header_.getDataTypes()),
+    : RowInputFormatWithDiagnosticInfo(header_, *buf_, params_, ProcessorID::TemplateRowInputFormatID), buf(std::move(buf_)), data_types(header_.getDataTypes()),
       settings(std::move(settings_)), ignore_spaces(ignore_spaces_),
       format(std::move(format_)), row_format(std::move(row_format_)),
       default_csv_delimiter(settings.csv.delimiter), row_between_delimiter(row_between_delimiter_),

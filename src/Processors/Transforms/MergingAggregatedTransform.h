@@ -9,7 +9,7 @@ namespace DB
 /** A pre-aggregate stream of blocks in which each block is already aggregated.
   * Aggregate functions in blocks should not be finalized so that their states can be merged.
   */
-class MergingAggregatedTransform : public IAccumulatingTransform
+class MergingAggregatedTransform final : public IAccumulatingTransform
 {
 public:
     MergingAggregatedTransform(Block header_, AggregatingTransformParamsPtr params_, size_t max_threads_);

@@ -3,9 +3,10 @@
 #include "SessionWatermark.h"
 #include "TumbleWatermark.h"
 
+#include <Checkpoint/CheckpointContext.h>
+#include <Checkpoint/CheckpointCoordinator.h>
 #include <Common/ProtonCommon.h>
 
-/// FIXME: Week / Month / Quarter / Year cases don't work yet
 namespace DB
 {
 namespace ErrorCodes
@@ -23,7 +24,7 @@ WatermarkTransform::WatermarkTransform(
     const Block & header,
     const Block & output_header,
     Poco::Logger * log)
-    : ISimpleTransform(header, output_header, false)
+    : ISimpleTransform(header, output_header, false, ProcessorID::WatermarkTransformID)
 {
     initWatermark(query, syntax_analyzer_result, desc, proc_time, log);
     assert(watermark);
@@ -32,23 +33,32 @@ WatermarkTransform::WatermarkTransform(
 
 void WatermarkTransform::transform(Chunk & chunk)
 {
+    if (auto ckpt_ctx = chunk.getCheckpointContext(); ckpt_ctx)
+    {
+        checkpoint(std::move(ckpt_ctx));
+        /// Checkpoint barrier is always standalone
+        /// Directly return automatically propagate the checkpoint barrier to down stream
+        return;
+    }
+
     auto block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
     watermark->process(block);
     chunk.setColumns(block.getColumns(), block.rows());
-    if (block.info.watermark != 0)
+
+    if (block.hasWatermark())
     {
-        auto chunk_info = chunk.getChunkInfo();
-        if (!chunk_info)
+        auto chunk_ctx = chunk.getChunkContext();
+        if (!chunk_ctx)
         {
-            chunk.setChunkInfo(std::make_shared<ChunkInfo>());
-            chunk_info = chunk.getChunkInfo();
+            chunk_ctx = std::make_shared<ChunkContext>();
+            chunk.setChunkContext(chunk_ctx);
         }
-        const_cast<ChunkInfo *>(chunk_info.get())->ctx.setWatermark(WatermarkBound{INVALID_SUBSTREAM_ID, block.info.watermark, block.info.watermark_lower_bound});
+        chunk_ctx->setWatermark(WatermarkBound{INVALID_SUBSTREAM_ID, block.info.watermark, block.info.watermark_lower_bound});
     }
 }
 
 void WatermarkTransform::initWatermark(
-     ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, FunctionDescriptionPtr desc, bool proc_time, Poco::Logger * log)
+    ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, FunctionDescriptionPtr desc, bool proc_time, Poco::Logger * log)
 {
     WatermarkSettings watermark_settings(query, syntax_analyzer_result, desc);
     if (watermark_settings.func_name == ProtonConsts::TUMBLE_FUNC_NAME)
@@ -58,7 +68,6 @@ void WatermarkTransform::initWatermark(
             throw Exception("Streaming window functions only support watermark based emit", ErrorCodes::INVALID_EMIT_MODE);
 
         watermark = std::make_unique<TumbleWatermark>(std::move(watermark_settings), proc_time, log);
-        watermark_name = "TumbleWatermark";
     }
     else if (watermark_settings.func_name == ProtonConsts::HOP_FUNC_NAME)
     {
@@ -67,7 +76,6 @@ void WatermarkTransform::initWatermark(
             throw Exception("Streaming window functions only support watermark based emit", ErrorCodes::INVALID_EMIT_MODE);
 
         watermark = std::make_unique<HopWatermark>(std::move(watermark_settings), proc_time, log);
-        watermark_name = "HopWatermark";
     }
     else if (watermark_settings.func_name == ProtonConsts::SESSION_FUNC_NAME)
     {
@@ -77,13 +85,22 @@ void WatermarkTransform::initWatermark(
 
         watermark
             = std::make_unique<SessionWatermark>(std::move(watermark_settings), proc_time, desc->session_start, desc->session_end, log);
-        watermark_name = "SessionWatermark";
     }
     else
     {
         watermark = std::make_unique<Watermark>(std::move(watermark_settings), proc_time, log);
-        watermark_name = "Watermark";
     }
 }
+
+void WatermarkTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+{
+    ckpt_ctx->coordinator->checkpoint(getVersion(), logic_pid, ckpt_ctx, [this](WriteBuffer & wb) { watermark->serialize(wb); });
+}
+
+void WatermarkTransform::recover(CheckpointContextPtr ckpt_ctx)
+{
+    ckpt_ctx->coordinator->recover(logic_pid, ckpt_ctx, [this](VersionType, ReadBuffer & rb) { watermark->deserialize(rb); });
+}
+
 }
 }

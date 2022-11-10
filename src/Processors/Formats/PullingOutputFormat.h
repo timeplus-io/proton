@@ -6,11 +6,11 @@ namespace DB
 {
 
 /// Output format which is used in PullingPipelineExecutor.
-class PullingOutputFormat : public IOutputFormat
+class PullingOutputFormat final : public IOutputFormat
 {
 public:
     explicit PullingOutputFormat(const Block & header, std::atomic_bool & consume_data_flag_)
-        : IOutputFormat(header, out)
+        : IOutputFormat(header, out, ProcessorID::PullingOutputFormatID)
         , has_data_flag(consume_data_flag_)
     {}
 

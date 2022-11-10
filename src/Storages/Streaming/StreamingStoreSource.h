@@ -16,22 +16,24 @@ public:
         const Block & header,
         const StorageSnapshotPtr & storage_snapshot_,
         ContextPtr context_,
-        Int32 shard_,
         Int64 sn,
         Poco::Logger * log_);
 
+    StreamingStoreSource();
+
     ~StreamingStoreSource() override = default;
 
+    void recover(CheckpointContextPtr ckpt_ctx_) override;
+
     String getName() const override { return "StreamingStoreSource"; }
+
+    std::pair<String, Int32> getStreamShard() const override;
 
 private:
     inline nlog::RecordPtrs read();
     void readAndProcess() override;
 
 private:
-    Int32 shard;
-    Poco::Logger * log;
-
     std::unique_ptr<StreamingBlockReaderKafka> kafka_reader;
 
     std::unique_ptr<StreamingBlockReaderNativeLog> nativelog_reader;

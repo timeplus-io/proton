@@ -41,17 +41,19 @@ struct ID
         {
             materialized = true;
             auto & str_ref = std::get<StringRef>(key);
-            assert(str_ref.size > 0);
             key = StringRef(pool->insert(str_ref.data, str_ref.size), str_ref.size);
         }
         return *this;
     }
 
-    const ID materialize() const
+    ID materialize() const
     {
         ID id{*this};
         return id.materialize();
     }
+
+    void serialize(WriteBuffer & wb) const;
+    void deserialize(ReadBuffer & rb);
 };
 using IDs = std::vector<ID>;
 }

@@ -1,6 +1,5 @@
 #include <Interpreters/TextLog.h>
 
-#include <Common/ClickHouseRevision.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
@@ -9,6 +8,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <base/logger_useful.h>
+#include <Common/VersionRevision.h>
 
 #include <array>
 
@@ -70,7 +70,7 @@ void TextLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(logger_name);
     columns[i++]->insert(message);
 
-    columns[i++]->insert(ClickHouseRevision::getVersionRevision());
+    columns[i++]->insert(ProtonRevision::getVersionRevision());
 
     columns[i++]->insert(source_file);
     columns[i++]->insert(source_line);

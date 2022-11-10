@@ -438,7 +438,7 @@ public:
         FilesInfoPtr files_info_,
         ColumnsDescription columns_description_,
         std::unique_ptr<ReadBuffer> read_buf_)
-        : SourceWithProgress(getBlockForSource(storage_, storage_snapshot_, columns_description_, files_info_))
+        : SourceWithProgress(getBlockForSource(storage_, storage_snapshot_, columns_description_, files_info_), ProcessorID::StorageFileSourceID)
         , storage(std::move(storage_))
         , storage_snapshot(storage_snapshot_)
         , files_info(std::move(files_info_))
@@ -661,7 +661,7 @@ public:
         const String format_name_,
         ContextPtr context_,
         int flags_)
-        : SinkToStorage(metadata_snapshot_->getSampleBlock())
+        : SinkToStorage(metadata_snapshot_->getSampleBlock(), ProcessorID::StorageFileSinkID)
         , metadata_snapshot(metadata_snapshot_)
         , table_name_for_log(table_name_for_log_)
         , table_fd(table_fd_)
@@ -690,7 +690,7 @@ public:
         const String format_name_,
         ContextPtr context_,
         int flags_)
-        : SinkToStorage(metadata_snapshot_->getSampleBlock())
+        : SinkToStorage(metadata_snapshot_->getSampleBlock(), ProcessorID::StorageFileSinkID)
         , metadata_snapshot(metadata_snapshot_)
         , table_name_for_log(table_name_for_log_)
         , table_fd(table_fd_)
@@ -784,7 +784,7 @@ public:
         const String format_name_,
         ContextPtr context_,
         int flags_)
-        : PartitionedSink(partition_by, context_, metadata_snapshot_->getSampleBlock())
+        : PartitionedSink(partition_by, context_, metadata_snapshot_->getSampleBlock(), ProcessorID::PartitionedStorageFileSinkID)
         , path(path_)
         , metadata_snapshot(metadata_snapshot_)
         , table_name_for_log(table_name_for_log_)

@@ -5,10 +5,19 @@
 namespace DB
 {
 
-class JSONEachRowWithProgressRowOutputFormat : public JSONEachRowRowOutputFormat
+class JSONEachRowWithProgressRowOutputFormat final : public JSONEachRowRowOutputFormat
 {
 public:
     using JSONEachRowRowOutputFormat::JSONEachRowRowOutputFormat;
+
+    JSONEachRowWithProgressRowOutputFormat(
+        WriteBuffer & out_,
+        const Block & header_,
+        const RowOutputFormatParams & params_,
+        const FormatSettings & settings_)
+        : JSONEachRowRowOutputFormat(out_, header_, params_, settings_, ProcessorID::JSONEachRowWithProgressRowOutputFormatID)
+    {
+    }
 
     void onProgress(const Progress & value) override;
     void flush() override;

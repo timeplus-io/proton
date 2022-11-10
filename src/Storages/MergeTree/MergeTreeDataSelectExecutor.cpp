@@ -248,7 +248,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::doRead(
         }
 
         projection_pipe = projection_plan->convertToPipe(
-            QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
+            QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context), context);
     }
 
     if (query_info.projection->merge_tree_normal_select_result_ptr)
@@ -278,7 +278,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::doRead(
         }
 
         ordinary_pipe = ordinary_query_plan.convertToPipe(
-            QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
+            QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context), context);
     }
 
     if (query_info.projection->desc->type == ProjectionDescription::Type::Aggregate)

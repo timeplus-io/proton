@@ -3,6 +3,10 @@
 #include <Common/Stopwatch.h>
 
 /// proton: starts.
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <Processors/PlaceholdProcessor.h>
+
 #include <Poco/JSON/Object.h>
 #include <Poco/JSON/Array.h>
 /// proton: ends.
@@ -13,6 +17,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 ExecutingGraph::ExecutingGraph(Processors & processors_) : processors(processors_)
@@ -369,6 +374,125 @@ void ExecutingGraph::cancel()
 }
 
 /// proton: starts.
+void ExecutingGraph::serialize(WriteBuffer & wb) const
+{
+    /// Graph layout
+    /// [num_processors][processor][processor]...
+    UInt16 num_processors = processors.size();
+    DB::writeIntBinary(num_processors, wb);
+    for (const auto & processor : processors)
+        processor->marshal(wb);
+}
+
+void ExecutingGraph::deserialize(ReadBuffer & rb) const
+{
+    /// Graph layout
+    /// [num_processors][processor][processor]...
+    UInt16 num_processors = 0;
+    DB::readIntBinary(num_processors, rb);
+
+    if (num_processors != processors.size())
+        throw Exception(
+            ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+            "Checkpointed number of processors doesn't match: checkpointed={}, current={}",
+            num_processors,
+            processors.size());
+
+    Processors recovered_processors;
+    recovered_processors.reserve(num_processors);
+    for (UInt16 i = 0; i < num_processors; ++i)
+    {
+        auto processor = std::make_shared<PlaceholdProcessor>();
+        processor->setName(processor->unmarshal(rb));
+        recovered_processors.push_back(std::move(processor));
+    }
+
+    /// Validate the recovered processors and new-planed processors
+    for (size_t i = 0; const auto & recovered_processor : recovered_processors)
+    {
+        if (recovered_processor->getID() != processors[i]->getID())
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Recovered processor logic_id={} is not the same type as the new planned processor: checkpointed={}, current={}",
+                recovered_processor->getLogicID(),
+                recovered_processor->getName(),
+                processors[i]->getName());
+
+        auto compare_ports = [&](const auto & recovered_ports, const auto & new_ports) {
+            if (recovered_ports.size() != new_ports.size())
+                throw Exception(
+                    ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                    "Recovered processor logic_id={} name={} doesn't have same number of inputs as the new planned processor: checkpointed={}, "
+                    "current={} current_name={}",
+                    recovered_processor->getLogicID(),
+                    recovered_processor->getName(),
+                    recovered_ports.size(),
+                    new_ports.size(),
+                    processors[i]->getName());
+
+            auto recovered_ports_iter = recovered_ports.begin();
+            auto new_ports_iter = new_ports.begin();
+
+            for (; recovered_ports_iter != recovered_ports.end();)
+            {
+                if (!blocksHaveEqualStructure(recovered_ports_iter->getHeader(), new_ports_iter->getHeader()))
+                    throw Exception(
+                        ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                        "Recovered processor logic_id={} name={} doesn't have same input structure as the new planned processor.",
+                        recovered_processor->getLogicID(),
+                        recovered_processor->getName());
+
+                ++recovered_ports_iter;
+                ++new_ports_iter;
+            }
+        };
+
+        /// Compare inputs
+        compare_ports(recovered_processor->getInputs(), processors[i]->getInputs());
+        /// Compare outputs
+        compare_ports(recovered_processor->getOutputs(), processors[i]->getOutputs());
+
+        ++i;
+    }
+
+    /// FIXME, check the graph shape
+}
+
+void ExecutingGraph::recover(CheckpointContextPtr ckpt_ctx)
+{
+    for (auto & processor : processors)
+        processor->recover(ckpt_ctx);
+}
+
+void ExecutingGraph::initCheckpointNodes()
+{
+    if (!checkpoint_ack_nodes.empty())
+        return;
+
+    for (auto & node : nodes)
+    {
+        node->processor->setLogicID(node->processors_id);
+
+        if (node->back_edges.empty())
+        {
+            checkpoint_trigger_nodes.push_back(node.get());
+            assert(node->processor->isSource());
+        }
+
+        if (node->direct_edges.empty())
+        {
+            checkpoint_ack_nodes.push_back(node.get());
+            assert(node->processor->isSink());
+        }
+    }
+}
+
+void ExecutingGraph::triggerCheckpoint(CheckpointContextPtr ckpt_ctx)
+{
+    for (auto * node : checkpoint_trigger_nodes)
+        node->processor->checkpoint(ckpt_ctx);
+}
+
 String ExecutingGraph::getStats() const
 {
     Poco::JSON::Object status;

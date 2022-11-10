@@ -2,7 +2,6 @@
 #include <Storages/MergeTree/MergeTreeReaderWide.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
 #include <Storages/MergeTree/IMergeTreeDataPartWriter.h>
-#include <DataTypes/NestedUtils.h>
 #include <Core/NamesAndTypes.h>
 
 

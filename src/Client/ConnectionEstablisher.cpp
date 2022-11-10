@@ -37,11 +37,11 @@ void ConnectionEstablisher::run(ConnectionEstablisher::TryResult & result, std::
         result.entry = pool->get(*timeouts, settings, /* force_connected = */ false);
         AsyncCallbackSetter async_setter(&*result.entry, std::move(async_callback));
 
-        UInt64 server_revision = 0;
-        if (table_to_check)
-            server_revision = result.entry->getServerRevision(*timeouts);
+        /// UInt64 server_revision = 0;
+        /// if (table_to_check)
+        ///    server_revision = result.entry->getServerRevision(*timeouts);
 
-        if (!table_to_check || server_revision < DBMS_MIN_REVISION_WITH_TABLES_STATUS)
+        if (!table_to_check) /// || server_revision < DBMS_MIN_REVISION_WITH_TABLES_STATUS)
         {
             result.entry->forceConnected(*timeouts);
             result.is_usable = true;

@@ -3,16 +3,16 @@
 #include <Interpreters/Context.h>
 #include <base/logger_useful.h>
 
-#include <Poco/Util/AbstractConfiguration.h>
 #include <boost/algorithm/string/predicate.hpp>
+#include <Poco/Util/AbstractConfiguration.h>
 
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
-    extern const int TOO_MANY_SIMULTANEOUS_QUERIES;
+extern const int BAD_ARGUMENTS;
+extern const int TOO_MANY_SIMULTANEOUS_QUERIES;
 }
 }
 
@@ -20,9 +20,9 @@ namespace klog
 {
 namespace
 {
-    /// Globals
-    const std::string SYSTEM_WALS_KEY = "cluster_settings.logstore";
-    const std::string SYSTEM_WALS_KEY_PREFIX = SYSTEM_WALS_KEY + ".";
+/// Globals
+const std::string SYSTEM_WALS_KEY = "cluster_settings.logstore";
+const std::string SYSTEM_WALS_KEY_PREFIX = SYSTEM_WALS_KEY + ".";
 }
 
 KafkaWALPool & KafkaWALPool::instance(const DB::ContextPtr & global_context)
@@ -31,9 +31,9 @@ KafkaWALPool & KafkaWALPool::instance(const DB::ContextPtr & global_context)
     return pool;
 }
 
-KafkaWALPool::KafkaWALPool(DB::ContextPtr global_context_) : global_context(global_context_), log(&Poco::Logger::get("KafkaWALPool"))
+KafkaWALPool::KafkaWALPool(DB::ContextPtr global_context) : log(&Poco::Logger::get("KafkaWALPool"))
 {
-    init();
+    init(global_context);
 }
 
 KafkaWALPool::~KafkaWALPool()
@@ -96,7 +96,7 @@ void KafkaWALPool::shutdown()
     LOG_INFO(log, "Stopped");
 }
 
-void KafkaWALPool::init()
+void KafkaWALPool::init(DB::ContextPtr global_context)
 {
     const auto & config = global_context->getConfigRef();
 
@@ -104,10 +104,10 @@ void KafkaWALPool::init()
     config.keys(SYSTEM_WALS_KEY, sys_wal_keys);
 
     for (const auto & key : sys_wal_keys)
-        init(key);
+        init(key, global_context);
 }
 
-void KafkaWALPool::init(const std::string & key)
+void KafkaWALPool::init(const std::string & key, DB::ContextPtr global_context)
 {
     if (!key.starts_with("kafka"))
         return;
@@ -205,8 +205,12 @@ void KafkaWALPool::init(const std::string & key)
     if (wals.contains(kafka_settings.cluster_id))
         throw DB::Exception("Duplicated Kafka cluster id " + kafka_settings.cluster_id, DB::ErrorCodes::BAD_ARGUMENTS);
 
-    if (!boost::iequals(kafka_settings.auth.security_protocol, "plaintext") && !boost::iequals(kafka_settings.auth.security_protocol, "sasl_ssl"))
-        throw DB::Exception(DB::ErrorCodes::NOT_IMPLEMENTED, "Invalid logstore kafka settings security_protocol: {}. Only plaintext or sasl_ssl are supported",  kafka_settings.auth.security_protocol);
+    if (!boost::iequals(kafka_settings.auth.security_protocol, "plaintext")
+        && !boost::iequals(kafka_settings.auth.security_protocol, "sasl_ssl"))
+        throw DB::Exception(
+            DB::ErrorCodes::NOT_IMPLEMENTED,
+            "Invalid logstore kafka settings security_protocol: {}. Only plaintext or sasl_ssl are supported",
+            kafka_settings.auth.security_protocol);
 
     /// Create WALs
     LOG_INFO(log, "Creating KafkaLog with settings: {}", kafka_settings.string());
@@ -387,7 +391,10 @@ KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const Strin
     if (consumers.second.size() < consumers.first)
     {
         if (!boost::iequals(auth.security_protocol, "plaintext") && !boost::iequals(auth.security_protocol, "sasl_ssl"))
-            throw DB::Exception(DB::ErrorCodes::NOT_IMPLEMENTED, "Invalid logstore kafka settings security_protocol: {}. Only plaintext or sasl_ssl are supported", auth.security_protocol);
+            throw DB::Exception(
+                DB::ErrorCodes::NOT_IMPLEMENTED,
+                "Invalid logstore kafka settings security_protocol: {}. Only plaintext or sasl_ssl are supported",
+                auth.security_protocol);
         /// Create one
         auto ksettings = std::make_unique<KafkaWALSettings>();
 

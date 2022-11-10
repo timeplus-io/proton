@@ -9,12 +9,11 @@ namespace DB::Streaming::Substream
 {
 
 template <typename T>
-concept HasGetName = requires(T && a)
-{
-    {
-        a.getName()
-        } -> std::convertible_to<std::string>;
-};
+concept HasGetName = requires(T && a) {
+                         {
+                             a.getName()
+                             } -> std::convertible_to<std::string>;
+                     };
 
 template <typename T, typename Data>
 concept HasCreateSubstream = (std::is_void_v<Data> && requires(T && a, ID && id, char * place) { a.createSubstream(id); })
@@ -80,7 +79,6 @@ public:
     template <typename... Fn>
     void execute(const Columns & cols, size_t rows, Fn &&... fn)
     {
-        assert(impl);
         impl->execute(cols, rows, substream_creator, std::forward<Fn>(fn)...);
     }
 
@@ -88,17 +86,14 @@ public:
     template <typename... Fn>
     bool call(const ID & id, Fn &&... fn)
     {
-        assert(impl);
         return impl->executeOne(id, std::forward<Fn>(fn)...);
     }
 
     template <typename... Fn>
     void forEachValue(Fn &&... fn)
     {
-        assert(impl);
         impl->executeForEachValue(std::forward<Fn>(fn)...);
     }
-
 
 protected:
     std::unique_ptr<ExecutorImpl<Data>> impl;

@@ -1,12 +1,12 @@
-#include <Interpreters/CrashLog.h>
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
-#include <Common/ClickHouseRevision.h>
-#include <Common/SymbolIndex.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Interpreters/CrashLog.h>
 #include <Common/Stopwatch.h>
+#include <Common/SymbolIndex.h>
+#include <Common/VersionRevision.h>
 
 #include <Common/config_version.h>
 
@@ -48,7 +48,7 @@ void CrashLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(trace);
     columns[i++]->insert(trace_full);
     columns[i++]->insert(VERSION_FULL);
-    columns[i++]->insert(ClickHouseRevision::getVersionRevision());
+    columns[i++]->insert(ProtonRevision::getVersionRevision());
 
     String build_id_hex;
 #if defined(__ELF__) && !defined(__FreeBSD__)

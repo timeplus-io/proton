@@ -38,7 +38,7 @@ public:
         std::shared_ptr<const Blocks> data_,
         std::shared_ptr<std::atomic<size_t>> parallel_execution_index_,
         InitializerFunc initializer_func_ = {})
-        : SourceWithProgress(storage_snapshot->getSampleBlockForColumns(column_names_))
+        : SourceWithProgress(storage_snapshot->getSampleBlockForColumns(column_names_), ProcessorID::MemorySourceID)
         , column_names_and_types(storage_snapshot->getColumnsByNames(
             GetColumnsOptions(GetColumnsOptions::All).withSubcolumns(), column_names_))
         , data(data_)
@@ -105,13 +105,13 @@ private:
 };
 
 
-class MemorySink : public SinkToStorage
+class MemorySink final : public SinkToStorage
 {
 public:
     MemorySink(
         StorageMemory & storage_,
         const StorageMetadataPtr & metadata_snapshot_)
-        : SinkToStorage(metadata_snapshot_->getSampleBlock())
+        : SinkToStorage(metadata_snapshot_->getSampleBlock(), ProcessorID::MemorySinkID)
         , storage(storage_)
         , storage_snapshot(storage_.getStorageSnapshot(metadata_snapshot_))
     {

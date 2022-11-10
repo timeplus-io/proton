@@ -260,14 +260,14 @@ void Connection::receiveHello()
         readVarUInt(server_version_major, *in);
         readVarUInt(server_version_minor, *in);
         readVarUInt(server_revision, *in);
-        if (server_revision >= DBMS_MIN_REVISION_WITH_SERVER_TIMEZONE)
-            readStringBinary(server_timezone, *in);
-        if (server_revision >= DBMS_MIN_REVISION_WITH_SERVER_DISPLAY_NAME)
-            readStringBinary(server_display_name, *in);
-        if (server_revision >= DBMS_MIN_REVISION_WITH_VERSION_PATCH)
-            readVarUInt(server_version_patch, *in);
-        else
-            server_version_patch = server_revision;
+        /// if (server_revision >= DBMS_MIN_REVISION_WITH_SERVER_TIMEZONE)
+        readStringBinary(server_timezone, *in);
+        /// if (server_revision >= DBMS_MIN_REVISION_WITH_SERVER_DISPLAY_NAME)
+        readStringBinary(server_display_name, *in);
+        /// if (server_revision >= DBMS_MIN_REVISION_WITH_VERSION_PATCH)
+        readVarUInt(server_version_patch, *in);
+        /// else
+        ///    server_version_patch = server_revision;
     }
     else if (packet_type == Protocol::Server::Exception)
         receiveException()->rethrow();
@@ -476,7 +476,7 @@ void Connection::sendQuery(
     writeStringBinary(query_id, *out);
 
     /// Client info.
-    if (server_revision >= DBMS_MIN_REVISION_WITH_CLIENT_INFO)
+    /// if (server_revision >= DBMS_MIN_REVISION_WITH_CLIENT_INFO)
     {
         if (client_info && !client_info->empty())
             client_info->write(*out, server_revision);
@@ -487,15 +487,17 @@ void Connection::sendQuery(
     /// Per query settings.
     if (settings)
     {
-        auto settings_format = (server_revision >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS) ? SettingsWriteFormat::STRINGS_WITH_FLAGS
-                                                                                                          : SettingsWriteFormat::BINARY;
+        /// auto settings_format = (server_revision >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS) ? SettingsWriteFormat::STRINGS_WITH_FLAGS
+        ///                                                                                                  : SettingsWriteFormat::BINARY;
+        auto settings_format = SettingsWriteFormat::STRINGS_WITH_FLAGS;
+
         settings->write(*out, settings_format);
     }
     else
         writeStringBinary("" /* empty string is a marker of the end of settings */, *out);
 
     /// Interserver secret
-    if (server_revision >= DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET)
+    /// if (server_revision >= DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET)
     {
         /// Hash
         ///
@@ -566,7 +568,7 @@ void Connection::sendData(const Block & block, const String & name, bool scalar)
         else
             maybe_compressed_out = out;
 
-        block_out = std::make_unique<NativeWriter>(*maybe_compressed_out, server_revision, block.cloneEmpty());
+        block_out = std::make_unique<NativeWriter>(*maybe_compressed_out, block.cloneEmpty(), server_revision);
     }
 
     if (scalar)
@@ -632,8 +634,8 @@ void Connection::sendScalarsData(Scalars & data)
     /// Avoid sending scalars to old servers. Note that this isn't a full fix. We didn't introduce a
     /// dedicated revision after introducing scalars, so this will still break some versions with
     /// revision 54428.
-    if (server_revision < DBMS_MIN_REVISION_WITH_SCALARS)
-        return;
+    /// if (server_revision < DBMS_MIN_REVISION_WITH_SCALARS)
+    ///    return;
 
     if (data.empty())
         return;
@@ -677,13 +679,13 @@ void Connection::sendScalarsData(Scalars & data)
 namespace
 {
 /// Sink which sends data for external table.
-class ExternalTableDataSink : public ISink
+class ExternalTableDataSink final : public ISink
 {
 public:
     using OnCancell = std::function<void()>;
 
     ExternalTableDataSink(Block header, Connection & connection_, ExternalTableData & table_data_, OnCancell callback)
-            : ISink(std::move(header)), connection(connection_), table_data(table_data_),
+            : ISink(std::move(header), ProcessorID::ExternalTableDataSinkID), connection(connection_), table_data(table_data_),
               on_cancell(std::move(callback))
     {}
 

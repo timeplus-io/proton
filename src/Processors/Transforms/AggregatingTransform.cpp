@@ -39,11 +39,11 @@ namespace
     }
 
     /// Reads chunks from file in native format. Provide chunks with aggregation info.
-    class SourceFromNativeStream : public ISource
+    class SourceFromNativeStream final : public ISource
     {
     public:
         SourceFromNativeStream(const Block & header, const std::string & path)
-                : ISource(header), file_in(path), compressed_in(file_in),
+                : ISource(header, ProcessorID::SourceFromNativeStreamID), file_in(path), compressed_in(file_in),
                   block_in(std::make_unique<NativeReader>(compressed_in, DBMS_TCP_PROTOCOL_VERSION))
         {
         }
@@ -74,7 +74,7 @@ namespace
 
 /// Worker which merges buckets for two-level aggregation.
 /// Atomically increments bucket counter and returns merged result.
-class ConvertingAggregatedToChunksSource : public ISource
+class ConvertingAggregatedToChunksSource final : public ISource
 {
 public:
     static constexpr UInt32 NUM_BUCKETS = 256;
@@ -99,7 +99,7 @@ public:
         ManyAggregatedDataVariantsPtr data_,
         SharedDataPtr shared_data_,
         Arena * arena_)
-        : ISource(params_->getHeader())
+        : ISource(params_->getHeader(), ProcessorID::ConvertingAggregatedToChunksSourceID)
         , params(std::move(params_))
         , data(std::move(data_))
         , shared_data(std::move(shared_data_))
@@ -140,11 +140,11 @@ private:
 /// ConvertingAggregatedToChunksSource ->
 ///
 /// Result chunks guaranteed to be sorted by bucket number.
-class ConvertingAggregatedToChunksTransform : public IProcessor
+class ConvertingAggregatedToChunksTransform final : public IProcessor
 {
 public:
     ConvertingAggregatedToChunksTransform(AggregatingTransformParamsPtr params_, ManyAggregatedDataVariantsPtr data_, size_t num_threads_)
-        : IProcessor({}, {params_->getHeader()})
+        : IProcessor({}, {params_->getHeader()}, ProcessorID::ConvertingAggregatedToChunksTransformID)
         , params(std::move(params_)), data(std::move(data_)), num_threads(num_threads_) {}
 
     String getName() const override { return "ConvertingAggregatedToChunksTransform"; }
@@ -388,7 +388,7 @@ AggregatingTransform::AggregatingTransform(
     size_t current_variant,
     size_t max_threads_,
     size_t temporary_data_merge_threads_)
-    : IProcessor({std::move(header)}, {params_->getHeader()})
+    : IProcessor({std::move(header)}, {params_->getHeader()}, ProcessorID::AggregatingTransformID)
     , params(std::move(params_))
     , key_columns(params->params.keys_size)
     , aggregate_columns(params->params.aggregates_size)

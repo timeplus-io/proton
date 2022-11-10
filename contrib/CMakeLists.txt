@@ -141,7 +141,9 @@ add_contrib (s2geometry-cmake s2geometry)
 add_contrib (c-ares-cmake c-ares)
 
 # proton: starts
+option(ENABLE_MUDUO "Enable muduo lib" YES)
 add_contrib (liburing-cmake liburing)
+add_contrib (muduo-cmake muduo)
 # proton: ends
 
 # Put all targets defined here and in subdirectories under "contrib/<immediate-subdir>" folders in GUI-based IDEs.

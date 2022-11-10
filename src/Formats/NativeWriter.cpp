@@ -12,7 +12,6 @@
 
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeLowCardinality.h>
-#include <DataTypes/NestedUtils.h>
 #include <Columns/ColumnSparse.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 
@@ -26,10 +25,10 @@ namespace ErrorCodes
 
 
 NativeWriter::NativeWriter(
-    WriteBuffer & ostr_, UInt64 client_revision_, const Block & header_, bool remove_low_cardinality_,
+    WriteBuffer & ostr_, const Block & header_, UInt64 client_revision_,
     IndexForNativeFormat * index_, size_t initial_size_of_file_)
-    : ostr(ostr_), client_revision(client_revision_), header(header_),
-      index(index_), initial_size_of_file(initial_size_of_file_), remove_low_cardinality(remove_low_cardinality_)
+    : ostr(ostr_), header(header_), client_revision(client_revision_),
+      index(index_), initial_size_of_file(initial_size_of_file_)
 {
     if (index)
     {
@@ -105,41 +104,20 @@ void NativeWriter::write(const Block & block)
 
         ColumnWithTypeAndName column = block.safeGetByPosition(i);
 
-        /// Send data to old clients without low cardinality type.
-        if (remove_low_cardinality || (client_revision && client_revision < DBMS_MIN_REVISION_WITH_LOW_CARDINALITY_TYPE))
-        {
-            column.column = recursiveRemoveLowCardinality(column.column);
-            column.type = recursiveRemoveLowCardinality(column.type);
-        }
-
         /// Name
         writeStringBinary(column.name, ostr);
-
-        bool include_version = client_revision >= DBMS_MIN_REVISION_WITH_AGGREGATE_FUNCTIONS_VERSIONING;
-        const auto * aggregate_function_data_type = typeid_cast<const DataTypeAggregateFunction *>(column.type.get());
-        if (aggregate_function_data_type && aggregate_function_data_type->isVersioned())
-        {
-            if (include_version)
-            {
-                auto version = aggregate_function_data_type->getVersionFromRevision(client_revision);
-                aggregate_function_data_type->setVersion(version, /* if_empty */true);
-            }
-            else
-            {
-                aggregate_function_data_type->setVersion(0, /* if_empty */false);
-            }
-        }
 
         /// Type
         String type_name = column.type->getName();
 
-        /// For compatibility, we will not send explicit timezone parameter in DateTime data type
-        ///  to older clients, that cannot understand it.
-        if (client_revision < DBMS_MIN_REVISION_WITH_TIME_ZONE_PARAMETER_IN_DATETIME_DATA_TYPE
-            && startsWith(type_name, "datetime("))
-            type_name = "datetime";
-
         writeStringBinary(type_name, ostr);
+
+        const auto * aggregate_function_data_type = typeid_cast<const DataTypeAggregateFunction *>(column.type.get());
+        if (aggregate_function_data_type && aggregate_function_data_type->isVersioned())
+        {
+            auto version = aggregate_function_data_type->getVersionFromRevision(client_revision);
+            aggregate_function_data_type->setVersion(version, /* if_empty */true);
+        }
 
         /// Serialization. Dynamic, if client supports it.
         SerializationPtr serialization;

@@ -39,7 +39,7 @@ ByteVector Record::serialize() const
     DB::writeIntBinary(sn, wb);
 
     /// Write append time
-    DB::writeIntBinary(block.info.append_time, wb);
+    DB::writeIntBinary(block.info.appendTime(), wb);
 
     /// Write schema version
     DB::writeIntBinary(schema_version, wb);
@@ -79,14 +79,14 @@ void Record::serializeData(DB::WriteBuffer & wb) const
         auto compression_codec = codec();
         if (likely(compression_codec == DB::CompressionMethodByte::NONE))
         {
-            DB::NativeWriter writer(wb, DBMS_MIN_REVISION_WITH_CUSTOM_SERIALIZATION, DB::Block{});
+            DB::NativeWriter writer(wb, DB::Block{}, DBMS_TCP_PROTOCOL_VERSION);
             writer.write(block);
         }
         else
         {
             DB::CompressedWriteBuffer compressed_out = DB::CompressedWriteBuffer(
-                wb, DB::CompressionCodecFactory::instance().get(static_cast<uint8_t>(compression_codec)), DBMS_DEFAULT_BUFFER_SIZE);
-            DB::NativeWriter writer(compressed_out, DBMS_MIN_REVISION_WITH_CUSTOM_SERIALIZATION, DB::Block{});
+                wb, DB::CompressionCodecFactory::instance().get(static_cast<uint8_t>(compression_codec)));
+            DB::NativeWriter writer(compressed_out, DB::Block{}, DBMS_TCP_PROTOCOL_VERSION);
             writer.write(block);
         }
     }
@@ -134,13 +134,13 @@ RecordPtr Record::deserialize(const char * data, size_t size, const SchemaContex
     {
         if (likely(record->codec() == DB::CompressionMethodByte::NONE))
         {
-            DB::NativeReader reader(rb, DBMS_MIN_REVISION_WITH_CUSTOM_SERIALIZATION);
+            DB::NativeReader reader(rb, DBMS_TCP_PROTOCOL_VERSION);
             record->setBlock(reader.read());
         }
         else
         {
             DB::CompressedReadBuffer compressed_in = DB::CompressedReadBuffer(rb);
-            DB::NativeReader reader(compressed_in, DBMS_MIN_REVISION_WITH_CUSTOM_SERIALIZATION);
+            DB::NativeReader reader(compressed_in, DBMS_TCP_PROTOCOL_VERSION);
             record->setBlock(reader.read());
         }
     }
@@ -169,7 +169,9 @@ RecordPtr Record::doDeserializeCommonMetadata(DB::ReadBuffer & rb)
     DB::readIntBinary(record->sn, rb);
 
     /// Read append time
-    DB::readIntBinary(record->block.info.append_time, rb);
+    Int64 append_time;
+    DB::readIntBinary(append_time, rb);
+    record->setAppendTime(append_time);
 
     /// Read schema version
     DB::readIntBinary(record->schema_version, rb);
@@ -300,11 +302,11 @@ void Record::deltaSerialize(ByteVector & byte_vec) const
 {
     assert(byte_vec.size() >= commonMetadataBytes());
 
-    auto sliced{byte_vec.slice(sizeof(prefix_length) + sizeof(crc) + sizeof(flags), sizeof(sn) + sizeof(block.info.append_time))};
+    auto sliced{byte_vec.slice(sizeof(prefix_length) + sizeof(crc) + sizeof(flags), sizeof(sn) + sizeof(block.info.appendTime()))};
 
     DB::WriteBufferFromVector wb{sliced};
     DB::writeIntBinary(sn, wb);
-    DB::writeIntBinary(block.info.append_time, wb);
+    DB::writeIntBinary(block.info.appendTime(), wb);
 
     /// FIXME, recalculate CRC
 }

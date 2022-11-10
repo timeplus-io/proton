@@ -33,7 +33,7 @@ namespace ErrorCodes
     } while (false)
 
 ParquetBlockInputFormat::ParquetBlockInputFormat(ReadBuffer & in_, Block header_, const FormatSettings & format_settings_)
-    : IInputFormat(std::move(header_), in_), format_settings(format_settings_)
+    : IInputFormat(std::move(header_), in_, ProcessorID::ParquetBlockInputFormatID), format_settings(format_settings_)
 {
 }
 

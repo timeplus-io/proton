@@ -16,7 +16,7 @@ JSONCompactEachRowRowOutputFormat::JSONCompactEachRowRowOutputFormat(WriteBuffer
         bool with_names_,
         bool with_types_,
         bool yield_strings_)
-        : IRowOutputFormat(header_, out_, params_), settings(settings_), with_names(with_names_), with_types(with_types_), yield_strings(yield_strings_)
+        : IRowOutputFormat(header_, out_, params_, ProcessorID::JSONCompactEachRowRowOutputFormatID), settings(settings_), with_names(with_names_), with_types(with_types_), yield_strings(yield_strings_)
 {
 }
 

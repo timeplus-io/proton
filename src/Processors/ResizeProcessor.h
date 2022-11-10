@@ -18,12 +18,12 @@ namespace DB
   * - union data from multiple inputs to single output - to serialize data that was processed in parallel.
   * - split data from single input to multiple outputs - to allow further parallel processing.
   */
-class ResizeProcessor : public IProcessor
+class ResizeProcessor final : public IProcessor
 {
 public:
     /// TODO Check that there is non zero number of inputs and outputs.
     ResizeProcessor(const Block & header, size_t num_inputs, size_t num_outputs)
-        : IProcessor(InputPorts(num_inputs, header), OutputPorts(num_outputs, header))
+        : IProcessor(InputPorts(num_inputs, header), OutputPorts(num_outputs, header), ProcessorID::ResizeProcessorID)
         , current_input(inputs.begin())
         , current_output(outputs.begin())
     {
@@ -74,12 +74,12 @@ private:
     std::vector<OutputPortWithStatus> output_ports;
 };
 
-class StrictResizeProcessor : public IProcessor
+class StrictResizeProcessor final : public IProcessor
 {
 public:
     /// TODO Check that there is non zero number of inputs and outputs.
     StrictResizeProcessor(const Block & header, size_t num_inputs, size_t num_outputs)
-        : IProcessor(InputPorts(num_inputs, header), OutputPorts(num_outputs, header))
+        : IProcessor(InputPorts(num_inputs, header), OutputPorts(num_outputs, header), ProcessorID::StrictResizeProcessorID)
         , current_input(inputs.begin())
         , current_output(outputs.begin())
     {

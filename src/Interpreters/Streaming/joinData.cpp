@@ -149,7 +149,7 @@ void LeftStreamData::insertBlock(Block && block)
     assert(current_join_blocks);
 
     std::scoped_lock lock(mutex);
-    block.info.setBlockId(block_id++);
+    block.info.setBlockID(block_id++);
     current_join_blocks->insertBlock(std::move(block));
     setHasNewData(true);
 }
@@ -174,7 +174,7 @@ void LeftStreamData::insertBlockToTimeBucket(Block && block)
             }
 
             /// assign block ID
-            bucket_block.second.info.setBlockId(block_id++);
+            bucket_block.second.info.setBlockID(block_id++);
 
             auto iter = blocks.find(bucket_block.first);
             if (iter != blocks.end())

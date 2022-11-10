@@ -14,7 +14,7 @@
 namespace DB
 {
 ProtobufRowInputFormat::ProtobufRowInputFormat(ReadBuffer & in_, const Block & header_, const Params & params_, const FormatSchemaInfo & schema_info_, bool with_length_delimiter_)
-    : IRowInputFormat(header_, in_, params_)
+    : IRowInputFormat(header_, in_, params_, ProcessorID::ProtobufRowInputFormatID)
     , reader(std::make_unique<ProtobufReader>(in_))
     , serializer(ProtobufSerializer::create(
           header_.getNames(),

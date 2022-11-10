@@ -31,7 +31,7 @@ KafkaSource::KafkaSource(
     Int64 offset,
     size_t max_block_size_,
     Poco::Logger * log_)
-    : SourceWithProgress(header_)
+    : SourceWithProgress(header_, ProcessorID::KafkaSourceID)
     , storage_snapshot(storage_snapshot_)
     , query_context(std::move(query_context_))
     , max_block_size(max_block_size_)

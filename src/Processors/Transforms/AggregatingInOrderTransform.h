@@ -17,7 +17,7 @@ struct ChunkInfoWithAllocatedBytes : public ChunkInfo
     Int64 allocated_bytes;
 };
 
-class AggregatingInOrderTransform : public IProcessor
+class AggregatingInOrderTransform final : public IProcessor
 {
 public:
     AggregatingInOrderTransform(Block header, AggregatingTransformParamsPtr params,
@@ -76,11 +76,11 @@ private:
 };
 
 
-class FinalizeAggregatedTransform : public ISimpleTransform
+class FinalizeAggregatedTransform final : public ISimpleTransform
 {
 public:
     FinalizeAggregatedTransform(Block header, AggregatingTransformParamsPtr params_)
-        : ISimpleTransform({std::move(header)}, {params_->getHeader()}, true)
+        : ISimpleTransform({std::move(header)}, {params_->getHeader()}, true, ProcessorID::FinalizeAggregatedTransformID)
         , params(params_) {}
 
     void transform(Chunk & chunk) override

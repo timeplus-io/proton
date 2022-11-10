@@ -1,12 +1,18 @@
 #pragma once
 
-#include <Core/Streaming/WatermarkInfo.h>
 #include <Columns/IColumn.h>
+
+/// proton : starts
+#include <Core/Streaming/WatermarkInfo.h>
+#include <Checkpoint/CheckpointContextFwd.h>
+/// proton : ends
+
 #include <unordered_map>
 
 namespace DB
 {
 
+/// proton : starts
 struct ChunkContext
 {
     static constexpr UInt64 WATERMARK_FLAG = 0x1;
@@ -15,17 +21,18 @@ struct ChunkContext
     static constexpr UInt64 HISTORICAL_DATA_END_FLAG = 0x8;
 
     /// A pair of Int64, flags represent what they mean
-    SubstreamID id = INVALID_SUBSTREAM_ID;
+    SubstreamID id = Streaming::INVALID_SUBSTREAM_ID;
     Int64 ts_1 = 0;
     Int64 ts_2 = 0;
     UInt64 flags = 0;
+    CheckpointContextPtr ckpt_ctx;
 
     ALWAYS_INLINE Int64 isHistoricalDataStart() const { return flags & HISTORICAL_DATA_START_FLAG; }
     ALWAYS_INLINE Int64 isHistoricalDataEnd() const { return flags & HISTORICAL_DATA_END_FLAG; }
 
     ALWAYS_INLINE void setMark(UInt64 mark) { flags |= mark; }
 
-    ALWAYS_INLINE bool hasMark() const { return flags != 0; }
+    ALWAYS_INLINE operator bool () const { return flags != 0 || id != Streaming::INVALID_SUBSTREAM_ID || ckpt_ctx != nullptr; }
 
     ALWAYS_INLINE bool hasWatermark() const { return flags & WATERMARK_FLAG; }
     ALWAYS_INLINE void setWatermark(const WatermarkBound & wb)
@@ -47,6 +54,16 @@ struct ChunkContext
         return WatermarkBound{id, ts_1, ts_2};
     }
 
+    ALWAYS_INLINE void clearWatermark()
+    {
+        if (hasWatermark())
+        {
+            flags &= ~WATERMARK_FLAG;
+            ts_1 = 0;
+            ts_2 = 0;
+        }
+    }
+
     ALWAYS_INLINE bool hasAppendTime() const { return flags & APPEND_TIME_FLAG; }
     ALWAYS_INLINE void setAppendTime(Int64 append_time)
     {
@@ -58,15 +75,21 @@ struct ChunkContext
     }
 
     ALWAYS_INLINE Int64 getAppendTime() const { assert(hasAppendTime()); return ts_1; }
+
+    void setCheckpointContext(CheckpointContextPtr ckpt_ctx_) { ckpt_ctx = std::move(ckpt_ctx_); }
+
+    CheckpointContextPtr getCheckpointContext() const { return ckpt_ctx; }
+
+    const SubstreamID & getSubStreamID() const { return id; }
 };
+using ChunkContextPtr = std::shared_ptr<ChunkContext>;
+/// proton : ends
 
 class ChunkInfo
 {
 public:
     virtual ~ChunkInfo() = default;
     ChunkInfo() = default;
-
-    ChunkContext ctx;
 };
 
 using ChunkInfoPtr = std::shared_ptr<const ChunkInfo>;
@@ -94,20 +117,22 @@ public:
         : columns(std::move(other.columns))
         , num_rows(other.num_rows)
         , chunk_info(std::move(other.chunk_info))
+        , chunk_ctx(std::move(other.chunk_ctx))
     {
         other.num_rows = 0;
     }
 
     Chunk(Columns columns_, UInt64 num_rows_);
-    Chunk(Columns columns_, UInt64 num_rows_, ChunkInfoPtr chunk_info_);
+    Chunk(Columns columns_, UInt64 num_rows_, ChunkInfoPtr chunk_info_, ChunkContextPtr chunk_ctx_);
     Chunk(MutableColumns columns_, UInt64 num_rows_);
-    Chunk(MutableColumns columns_, UInt64 num_rows_, ChunkInfoPtr chunk_info_);
+    Chunk(MutableColumns columns_, UInt64 num_rows_, ChunkInfoPtr chunk_info_, ChunkContextPtr chunk_ctx);
 
     Chunk & operator=(const Chunk & other) = delete;
     Chunk & operator=(Chunk && other) noexcept
     {
         columns = std::move(other.columns);
         chunk_info = std::move(other.chunk_info);
+        chunk_ctx = std::move(other.chunk_ctx);
         num_rows = other.num_rows;
         other.num_rows = 0;
         return *this;
@@ -119,6 +144,7 @@ public:
     {
         columns.swap(other.columns);
         chunk_info.swap(other.chunk_info);
+        chunk_ctx.swap(other.chunk_ctx);
         std::swap(num_rows, other.num_rows);
     }
 
@@ -127,6 +153,7 @@ public:
         num_rows = 0;
         columns.clear();
         chunk_info.reset();
+        chunk_ctx.reset();
     }
 
     const Columns & getColumns() const { return columns; }
@@ -160,14 +187,30 @@ public:
     void append(const Chunk & chunk);
 
     /// proton : starts
-    bool hasWatermark() const
+    bool hasWatermark() const { return chunk_ctx && chunk_ctx->hasWatermark(); }
+
+    bool hasChunkContext() const { return chunk_ctx && chunk_ctx->operator bool(); }
+
+    bool requestCheckpoint() const { return chunk_ctx && chunk_ctx->getCheckpointContext(); }
+
+    void setChunkContext(ChunkContextPtr chunk_ctx_) { chunk_ctx = std::move(chunk_ctx_); }
+
+    ChunkContextPtr getChunkContext() const { return chunk_ctx; }
+
+    CheckpointContextPtr getCheckpointContext() const
     {
-        return chunk_info && chunk_info->ctx.hasWatermark();
+        if (chunk_ctx)
+            return chunk_ctx->getCheckpointContext();
+
+        return nullptr;
     }
 
-    bool hasMark() const
+    const SubstreamID & getSubStreamID() const
     {
-        return chunk_info && chunk_info->ctx.hasMark();
+        if (chunk_ctx)
+            return chunk_ctx->getSubStreamID();
+
+        return Streaming::INVALID_SUBSTREAM_ID;
     }
     /// proton : ends
 
@@ -175,6 +218,7 @@ private:
     Columns columns;
     UInt64 num_rows = 0;
     ChunkInfoPtr chunk_info;
+    ChunkContextPtr chunk_ctx;
 
     void checkNumRowsIsConsistent();
 };

@@ -1,21 +1,24 @@
 #include "StreamingStoreSourceBase.h"
 
-#include <Common/ProtonCommon.h>
+#include <Checkpoint/CheckpointContext.h>
+#include <Checkpoint/CheckpointCoordinator.h>
 #include <DataTypes/ObjectUtils.h>
-#include <base/ClockUtils.h>
+#include <base/logger_useful.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_COLUMN;
+extern const int ILLEGAL_COLUMN;
+extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 StreamingStoreSourceBase::StreamingStoreSourceBase(
-    const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr query_context_)
-    : SourceWithProgress(header)
+    const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr query_context_, Poco::Logger * log_, ProcessorID pid_)
+    : SourceWithProgress(header, pid_)
     , storage_snapshot(*storage_snapshot_)
     , query_context(std::move(query_context_))
+    , log(log_)
     , header_chunk(header.getColumns(), 0)
     , columns_desc(
           storage_snapshot.getColumnsByNames(GetColumnsOptions(GetColumnsOptions::All).withSubcolumns().withVirtuals(), header.getNames()),
@@ -98,7 +101,9 @@ Chunk StreamingStoreSourceBase::generate()
     if (isCancelled())
         return {};
 
-    /// std::unique_lock lock(result_blocks_mutex);
+    if (auto * current = ckpt_ctx.exchange(nullptr, std::memory_order_relaxed); current)
+        return doCheckpoint(CheckpointContextPtr{current});
+
     if (result_chunks.empty() || iter == result_chunks.end())
     {
         readAndProcess();
@@ -124,6 +129,78 @@ Chunk StreamingStoreSourceBase::generate()
     }
 
     return std::move(*iter++);
+}
+
+/// It basically initiate a checkpoint
+/// Since the checkpoint method is called in a different thread (CheckpointCoordinator)
+/// We nee make sure it is thread safe
+void StreamingStoreSourceBase::checkpoint(CheckpointContextPtr ckpt_ctx_)
+{
+    /// We assume the previous ckpt is already done
+    /// Use std::atomic<std::shared_ptr<CheckpointContext>>
+    assert(!ckpt_ctx.load(std::memory_order_relaxed));
+    ckpt_ctx = new CheckpointContext(*ckpt_ctx_);
+}
+
+/// 1) Generate a checkpoint barrier
+/// 2) Checkpoint the sequence number just before the barrier
+Chunk StreamingStoreSourceBase::doCheckpoint(CheckpointContextPtr current_ckpt_ctx)
+{
+    assert(current_ckpt_ctx->epoch > last_epoch);
+
+    /// Prepare checkpoint barrier chunk
+    auto result = header_chunk.clone();
+    auto chunk_ctx = std::make_shared<ChunkContext>();
+    chunk_ctx->setCheckpointContext(current_ckpt_ctx);
+    result.setChunkContext(std::move(chunk_ctx));
+
+    /// Commit the checkpoint : shard
+    auto stream_shard = getStreamShard();
+    auto processor_id = static_cast<UInt32>(pid);
+
+    /// FIXME : async checkpointing
+    current_ckpt_ctx->coordinator->checkpoint(getVersion(), logic_pid, current_ckpt_ctx, [&](WriteBuffer & wb) {
+        writeIntBinary(processor_id, wb);
+        writeStringBinary(stream_shard.first, wb);
+        writeIntBinary(stream_shard.second, wb);
+        writeIntBinary(last_sn, wb);
+    });
+
+    /// FIXME, if commit failed ?
+    /// Propagate checkpoint barriers
+    return result;
+}
+
+void StreamingStoreSourceBase::recover(CheckpointContextPtr ckpt_ctx_)
+{
+    ckpt_ctx_->coordinator->recover(logic_pid, ckpt_ctx_, [&](VersionType /*version*/, ReadBuffer & rb) {
+        UInt32 recovered_pid = 0;
+        readIntBinary(recovered_pid, rb);
+        if (recovered_pid != static_cast<UInt32>(pid))
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Found mismatched processor ID. Recovered={}, new={}",
+                recovered_pid,
+                static_cast<UInt32>(pid));
+
+        std::pair<String, Int32> recovered_stream_shard;
+        readStringBinary(recovered_stream_shard.first, rb);
+        readIntBinary(recovered_stream_shard.second, rb);
+
+        auto current_stream_shard = getStreamShard();
+        if (recovered_stream_shard != current_stream_shard)
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Found mismatched stream shard. recovered={}-{}, current={}-{}",
+                recovered_stream_shard.first,
+                recovered_stream_shard.second,
+                current_stream_shard.first,
+                current_stream_shard.second);
+
+        readIntBinary(last_sn, rb);
+    });
+
+    LOG_INFO(log, "Recovered last_sn={}", last_sn);
 }
 
 }

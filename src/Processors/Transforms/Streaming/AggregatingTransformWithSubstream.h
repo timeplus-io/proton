@@ -64,10 +64,11 @@ public:
         Block header,
         AggregatingTransformParamsPtr params_,
         SubstraemManyAggregatedDataPtr substream_many_data,
-        size_t current_aggregating_index_,
+        size_t current_variant_,
         size_t max_threads,
         size_t temporary_data_merge_threads,
-        const String & log_name);
+        const String & log_name,
+        ProcessorID pid_);
 
     ~AggregatingTransformWithSubstream() override = default;
 
@@ -82,7 +83,6 @@ protected:
 
     SubstraemManyAggregatedDataPtr substream_many_data;
     size_t many_aggregating_size;
-    size_t current_aggregating_index;
     boost::dynamic_bitset<> all_finalized_mark;
 };
 

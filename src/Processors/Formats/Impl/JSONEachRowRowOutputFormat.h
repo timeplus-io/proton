@@ -19,7 +19,8 @@ public:
         WriteBuffer & out_,
         const Block & header_,
         const RowOutputFormatParams & params_,
-        const FormatSettings & settings_);
+        const FormatSettings & settings_,
+        ProcessorID pid_ = ProcessorID::JSONEachRowRowOutputFormatID);
 
     String getName() const override { return "JSONEachRowRowOutputFormat"; }
 

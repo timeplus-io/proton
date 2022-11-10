@@ -11,7 +11,7 @@ namespace ErrorCodes
 
 OffsetTransform::OffsetTransform(
     const Block & header_, UInt64 offset_, size_t num_streams)
-    : IProcessor(InputPorts(num_streams, header_), OutputPorts(num_streams, header_))
+    : IProcessor(InputPorts(num_streams, header_), OutputPorts(num_streams, header_), ProcessorID::OffsetTransformID)
     , offset(offset_)
 {
     ports_data.resize(num_streams);

@@ -13,7 +13,7 @@ namespace ErrorCodes
 }
 
 JSONColumnsWithMetadataBlockOutputFormat::JSONColumnsWithMetadataBlockOutputFormat(WriteBuffer & out_, const Block & header_, const FormatSettings & format_settings_)
-    : JSONColumnsBlockOutputFormat(out_, header_, format_settings_, 1)
+    : JSONColumnsBlockOutputFormat(out_, header_, format_settings_, 1, ProcessorID::JSONColumnsWithMetadataBlockOutputFormatID)
 {
     bool need_validate_utf8 = false;
     JSONUtils::makeNamesAndTypesWithValidUTF8(fields, format_settings, need_validate_utf8);

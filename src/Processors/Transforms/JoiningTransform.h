@@ -15,7 +15,7 @@ class NotJoinedBlocks;
 /// First input is for data from left table.
 /// Second input has empty header and is connected with FillingRightJoinSide.
 /// We can process left table only when Join is filled. Second input is used to signal that FillingRightJoinSide is finished.
-class JoiningTransform : public IProcessor
+class JoiningTransform final : public IProcessor
 {
 public:
 

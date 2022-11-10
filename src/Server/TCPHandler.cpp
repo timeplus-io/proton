@@ -1003,9 +1003,8 @@ void TCPHandler::sendProfileEvents()
 
     MutableColumns logs_columns;
     Block curr_block;
-    size_t rows = 0;
 
-    for (; state.profile_queue->tryPop(curr_block); ++rows)
+    for (; state.profile_queue->tryPop(curr_block); )
     {
         auto curr_columns = curr_block.getColumns();
         for (size_t j = 0; j < curr_columns.size(); ++j)
@@ -1215,10 +1214,13 @@ void TCPHandler::sendHello()
     writeVarUInt(DBMS_TCP_PROTOCOL_VERSION, *out);
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_TIMEZONE)
         writeStringBinary(DateLUT::instance().getTimeZone(), *out);
+
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_DISPLAY_NAME)
         writeStringBinary(server_display_name, *out);
+
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_VERSION_PATCH)
         writeVarUInt(DBMS_VERSION_PATCH, *out);
+
     out->next();
 }
 
@@ -1411,9 +1413,10 @@ void TCPHandler::receiveQuery()
 
     /// Per query settings are also passed via TCP.
     /// We need to check them before applying due to they can violate the settings constraints.
-    auto settings_format = (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS)
+     auto settings_format = (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS)
         ? SettingsWriteFormat::STRINGS_WITH_FLAGS
         : SettingsWriteFormat::BINARY;
+
     Settings passed_settings;
     passed_settings.read(*in, settings_format);
 
@@ -1688,9 +1691,9 @@ void TCPHandler::initBlockOutput(const Block & block)
 
         state.block_out = std::make_unique<NativeWriter>(
             *state.maybe_compressed_out,
-            client_tcp_protocol_version,
             block.cloneEmpty(),
-            !query_settings.low_cardinality_allow_in_native_format);
+            client_tcp_protocol_version);
+            /// !query_settings.low_cardinality_allow_in_native_format);
     }
 }
 
@@ -1699,12 +1702,12 @@ void TCPHandler::initLogsBlockOutput(const Block & block)
     if (!state.logs_block_out)
     {
         /// Use uncompressed stream since log blocks usually contain only one row
-        const Settings & query_settings = query_context->getSettingsRef();
+        /// const Settings & query_settings = query_context->getSettingsRef();
         state.logs_block_out = std::make_unique<NativeWriter>(
             *out,
-            client_tcp_protocol_version,
             block.cloneEmpty(),
-            !query_settings.low_cardinality_allow_in_native_format);
+            client_tcp_protocol_version);
+            /// !query_settings.low_cardinality_allow_in_native_format);
     }
 }
 
@@ -1713,12 +1716,12 @@ void TCPHandler::initProfileEventsBlockOutput(const Block & block)
 {
     if (!state.profile_events_block_out)
     {
-        const Settings & query_settings = query_context->getSettingsRef();
+        /// const Settings & query_settings = query_context->getSettingsRef();
         state.profile_events_block_out = std::make_unique<NativeWriter>(
             *out,
-            client_tcp_protocol_version,
             block.cloneEmpty(),
-            !query_settings.low_cardinality_allow_in_native_format);
+            client_tcp_protocol_version);
+            /// !query_settings.low_cardinality_allow_in_native_format);
     }
 }
 

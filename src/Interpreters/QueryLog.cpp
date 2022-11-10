@@ -4,22 +4,22 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/ProfileEventsExt.h>
 #include <Interpreters/QueryLog.h>
 #include <Poco/Net/IPAddress.h>
-#include <Common/ClickHouseRevision.h>
 #include <Common/IPv6ToBinary.h>
 #include <Common/ProfileEvents.h>
+#include <Common/VersionRevision.h>
 #include <Common/typeid_cast.h>
 
 
@@ -190,7 +190,7 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
 
     appendClientInfo(client_info, columns, i);
 
-    columns[i++]->insert(ClickHouseRevision::getVersionRevision());
+    columns[i++]->insert(ProtonRevision::getVersionRevision());
 
     columns[i++]->insertData(log_comment.data(), log_comment.size());
 

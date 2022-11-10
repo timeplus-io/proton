@@ -11,7 +11,7 @@ namespace ErrorCodes
 
 AddingSelectorTransform::AddingSelectorTransform(
     const Block & header, size_t num_outputs_, ColumnNumbers key_columns_)
-    : ISimpleTransform(header, header, false)
+    : ISimpleTransform(header, header, false, ProcessorID::AddingSelectorTransformID)
     , num_outputs(num_outputs_)
     , key_columns(std::move(key_columns_))
     , hash(0)
@@ -68,6 +68,11 @@ void AddingSelectorTransform::transform(Chunk & input_chunk, Chunk & output_chun
 
     calculateWeakHash32(input_chunk, key_columns, hash);
     chunk_info->selector = fillSelector(hash, num_outputs);
+
+    /// proton : starts.
+    if (input_chunk.requestCheckpoint())
+        checkpoint(input_chunk.getCheckpointContext());
+    /// proton : ends
 
     input_chunk.swap(output_chunk);
     output_chunk.setChunkInfo(std::move(chunk_info));

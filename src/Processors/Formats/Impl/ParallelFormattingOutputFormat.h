@@ -51,7 +51,7 @@ namespace DB
  * To stop the execution, a fake Chunk is added (ProcessingUnitType = FINALIZE) and finalize()
  * function is blocked until the Collector thread is done.
 */
-class ParallelFormattingOutputFormat : public IOutputFormat
+class ParallelFormattingOutputFormat final : public IOutputFormat
 {
 public:
     /// Used to recreate formatter on every new data piece.
@@ -69,7 +69,7 @@ public:
     ParallelFormattingOutputFormat() = delete;
 
     explicit ParallelFormattingOutputFormat(Params params)
-        : IOutputFormat(params.header, params.out)
+        : IOutputFormat(params.header, params.out, ProcessorID::ParallelFormattingOutputFormatID)
         , internal_formatter_creator(params.internal_formatter_creator)
         , pool(params.max_threads_for_parallel_formatting)
 

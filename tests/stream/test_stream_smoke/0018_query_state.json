@@ -1,0 +1,244 @@
+{
+  "test_suite_name": "query_state",
+  "tag": "smoke",
+  "test_suite_config":{
+    "setup": {
+      "statements": [
+        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists state_stream"},
+        {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists state_stream(i int, s string)"},
+        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1900'"},
+        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1902'"},
+        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1903'"},
+        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1904'"}
+      ]
+    },
+    "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
+  },
+  "comments": "Tests covering query state checkpointing smoke test cases",
+  "tests": [
+    {
+      "id": 0,
+      "tags": ["query_state"],
+      "name": "tail",
+      "description": "tail state checkpoint",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1900", "depends_on_stream":"state_stream","query_end_timer":6, "query_type": "stream", "query":"subscribe to select i, s from state_stream settings seek_to='earliest', checkpoint_interval=1"},
+            {"client":"python", "query_type": "table","depends_on":1900,"depends_on_stream":"state_stream", "wait":1, "query": "insert into state_stream(i, s) values (1, 's1')"},
+            {"client":"python", "query_type": "table","depends_on":1900,"depends_on_stream":"state_stream", "wait":1, "query": "insert into state_stream(i, s) values (2, 's2')"},
+            {"client":"python", "query_type": "table","depends_on":1900,"depends_on_stream":"state_stream", "wait":1, "query": "select sleep(1)"},
+            {"client":"python", "query_type": "table","depends_on":1900,"depends_on_stream":"state_stream", "wait":1, "query": "kill query where query_id='1900' sync"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1900",
+          "expected_results":[
+            [1, "s1"], [2, "s2"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "tags": ["tail"],
+      "name": "recover-from",
+      "description": "recover tail query from a checkpoint",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1900", "depends_on_stream":"state_stream","query_end_timer":4, "query_type": "stream", "query":"recover from '1900'"},
+            {"client":"python", "query_type": "table","depends_on":1900,"depends_on_stream":"state_stream", "wait":1, "query": "insert into state_stream(i, s) values (3, 's3')"},
+            {"client":"python", "query_type": "table","depends_on":1900,"depends_on_stream":"state_stream", "wait":1, "query": "unsubscribe to '1900'"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1900",
+          "expected_results":[
+            [3, "s3"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "tags": ["tail"],
+      "name": "recover-from-unsubscribed",
+      "description": "recover from an unsubscribed query shall fail",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1900", "depends_on_stream":"state_stream","query_end_timer":2, "query_type": "stream", "query":"recover from '1900'"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1900",
+          "expected_results": []
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "tags": ["tail"],
+      "name": "recover-from-non-exists",
+      "description": "recover from a non-exists query shall fail",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1901", "depends_on_stream":"state_stream","query_end_timer":2, "query_type": "stream", "query":"recover from '19000'"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1901",
+          "expected_results": "error_code:2003"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "tags": ["query_state"],
+      "name": "global_aggr_without_group_by",
+      "description": "global aggregation state checkpoint without group by",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1902", "depends_on_stream":"state_stream","query_end_timer":5, "query_type": "stream", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from state_stream emit periodic 3s settings checkpoint_interval=1"},
+            {"client":"python", "query_type": "table","depends_on":1902,"depends_on_stream":"state_stream", "wait":1, "query": "insert into state_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
+            {"client":"python", "query_type": "table","depends_on":1902,"depends_on_stream":"state_stream", "wait":3, "query": "kill query where query_id='1902' sync"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1902",
+          "expected_results":[
+            [3, 6, 2, 1, 3, "s1", "s3"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "tags": ["query_state"],
+      "name": "recover_global_aggr_without_group_by",
+      "description": "recover global aggregation state checkpoint without group by",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1902", "depends_on_stream":"state_stream","query_end_timer":5, "query_type": "stream", "query":"recover from '1902'"},
+            {"client":"python", "query_type": "table","depends_on":1902,"depends_on_stream":"state_stream", "wait":1, "query": "insert into state_stream(i, s) values (6, 's4')"},
+            {"client":"python", "query_type": "table","depends_on":1902,"depends_on_stream":"state_stream", "wait":3, "query": "unsubscribe to '1902'"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1902",
+          "expected_results":[
+            [3, 6, 2, 1, 3, "s1", "s3"], [4, 12, 3, 1, 6, "s1", "s4"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "tags": ["query_state"],
+      "name": "global_aggr_with_group_by",
+      "description": "global aggregation state checkpoint with group by",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1903", "depends_on_stream":"state_stream","query_end_timer":5, "query_type": "stream", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from state_stream group by s emit periodic 3s settings checkpoint_interval=1"},
+            {"client":"python", "query_type": "table","depends_on":1903,"depends_on_stream":"state_stream", "wait":1, "query": "insert into state_stream(i, s) values (1, 's1'), (2, 's1'), (3, 's1')"},
+            {"client":"python", "query_type": "table","depends_on":1903,"depends_on_stream":"state_stream", "wait":3, "query": "kill query where query_id='1903' sync"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1903",
+          "expected_results":[
+            [3, 6, 2, 1, 3, "s1", "s1"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "tags": ["query_state"],
+      "name": "recover_global_aggr_with_group_by",
+      "description": "recover global aggregation state checkpoint with group by",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1903", "depends_on_stream":"state_stream","query_end_timer":5, "query_type": "stream", "query":"recover from '1903'"},
+            {"client":"python", "query_type": "table","depends_on":1903,"depends_on_stream":"state_stream", "wait":1, "query": "insert into state_stream(i, s) values (6, 's1')"},
+            {"client":"python", "query_type": "table","depends_on":1903,"depends_on_stream":"state_stream", "wait":3, "query": "unsubscribe to '1903'"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1903",
+          "expected_results":[
+            [3, 6, 2, 1, 3, "s1", "s1"], [4, 12, 3, 1, 6, "s1", "s1"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "tags": ["query_state"],
+      "name": "tumble_window_aggr",
+      "description": "tumble window aggregation state checkpoint",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1904", "depends_on_stream":"state_stream","query_end_timer":5, "query_type": "stream", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from tumble(state_stream, 2s) group by window_start settings checkpoint_interval=1"},
+            {"client":"python", "query_type": "table","depends_on":1904,"depends_on_stream":"state_stream", "wait":1, "query": "insert into state_stream(i, s, _tp_time) values (1, 's1', '2022-01-01 00:00:00'), (3, 's2', '2022-01-01 00:00:01'), (4, 's3', '2022-01-01 00:00:02')"},
+            {"client":"python", "query_type": "table","depends_on":1904,"depends_on_stream":"state_stream", "wait":2, "query": "kill query where query_id='1904' sync"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1904",
+          "expected_results":[
+            [2, 4, 2, 1, 3, "s1", "s2"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "tags": ["query_state"],
+      "name": "recover_tumble_window_aggr",
+      "description": "recover tumble window aggregation state checkpoint",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1904", "depends_on_stream":"state_stream","query_end_timer":5, "query_type": "stream", "query":"recover from '1904'"},
+            {"client":"python", "query_type": "table","depends_on":1904,"depends_on_stream":"state_stream", "wait":1, "query": "insert into state_stream(i, s, _tp_time) values (6, 's4', '2022-01-01 00:00:03'), (7, 'wont appear in result', '2022-01-01 00:00:04')"},
+            {"client":"python", "query_type": "table","depends_on":1904,"depends_on_stream":"state_stream", "wait":2, "query": "unsubscribe to '1904'"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1904",
+          "expected_results":[
+             [2, 10, 5, 4, 6, "s3", "s4"]
+          ]
+        }
+      ]
+    }
+  ]
+}

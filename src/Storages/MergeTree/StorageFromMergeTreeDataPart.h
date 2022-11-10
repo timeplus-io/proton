@@ -74,7 +74,7 @@ public:
                                                   analysis_result_ptr));
 
         return query_plan.convertToPipe(
-            QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
+            QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context), context);
     }
 
     bool supportsPrewhere() const override { return true; }

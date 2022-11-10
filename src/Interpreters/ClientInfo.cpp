@@ -19,10 +19,10 @@ namespace ErrorCodes
 }
 
 
-void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision) const
+void ClientInfo::write(WriteBuffer & out, const UInt64 /*server_protocol_revision*/) const
 {
-    if (server_protocol_revision < DBMS_MIN_REVISION_WITH_CLIENT_INFO)
-        throw Exception("Logical error: method ClientInfo::write is called for unsupported server revision", ErrorCodes::LOGICAL_ERROR);
+    /// if (server_protocol_revision < DBMS_MIN_REVISION_WITH_CLIENT_INFO)
+    ///    throw Exception("Logical error: method ClientInfo::write is called for unsupported server revision", ErrorCodes::LOGICAL_ERROR);
 
     writeBinary(UInt8(query_kind), out);
     if (empty())
@@ -32,8 +32,8 @@ void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision)
     writeBinary(initial_query_id, out);
     writeBinary(initial_address.toString(), out);
 
-    if (server_protocol_revision >= DBMS_MIN_PROTOCOL_VERSION_WITH_INITIAL_QUERY_START_TIME)
-        writeBinary(initial_query_start_time_microseconds, out);
+    /// if (server_protocol_revision >= DBMS_MIN_PROTOCOL_VERSION_WITH_INITIAL_QUERY_START_TIME)
+    writeBinary(initial_query_start_time_microseconds, out);
 
     writeBinary(UInt8(interface), out);
 
@@ -51,26 +51,26 @@ void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision)
         writeBinary(UInt8(http_method), out);
         writeBinary(http_user_agent, out);
 
-        if (server_protocol_revision >= DBMS_MIN_REVISION_WITH_X_FORWARDED_FOR_IN_CLIENT_INFO)
-            writeBinary(forwarded_for, out);
+        /// if (server_protocol_revision >= DBMS_MIN_REVISION_WITH_X_FORWARDED_FOR_IN_CLIENT_INFO)
+        writeBinary(forwarded_for, out);
 
-        if (server_protocol_revision >= DBMS_MIN_REVISION_WITH_REFERER_IN_CLIENT_INFO)
-            writeBinary(http_referer, out);
+        /// if (server_protocol_revision >= DBMS_MIN_REVISION_WITH_REFERER_IN_CLIENT_INFO)
+        writeBinary(http_referer, out);
     }
 
-    if (server_protocol_revision >= DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO)
-        writeBinary(quota_key, out);
+    /// if (server_protocol_revision >= DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO)
+    writeBinary(quota_key, out);
 
-    if (server_protocol_revision >= DBMS_MIN_PROTOCOL_VERSION_WITH_DISTRIBUTED_DEPTH)
-        writeVarUInt(distributed_depth, out);
+    /// if (server_protocol_revision >= DBMS_MIN_PROTOCOL_VERSION_WITH_DISTRIBUTED_DEPTH)
+    writeVarUInt(distributed_depth, out);
 
     if (interface == Interface::TCP)
     {
-        if (server_protocol_revision >= DBMS_MIN_REVISION_WITH_VERSION_PATCH)
-            writeVarUInt(client_version_patch, out);
+        //// if (server_protocol_revision >= DBMS_MIN_REVISION_WITH_VERSION_PATCH)
+        writeVarUInt(client_version_patch, out);
     }
 
-    if (server_protocol_revision >= DBMS_MIN_REVISION_WITH_OPENTELEMETRY)
+    /// if (server_protocol_revision >= DBMS_MIN_REVISION_WITH_OPENTELEMETRY)
     {
         if (client_trace_context.trace_id != UUID())
         {
@@ -90,7 +90,7 @@ void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision)
         }
     }
 
-    if (server_protocol_revision >= DBMS_MIN_REVISION_WITH_PARALLEL_REPLICAS)
+    /// if (server_protocol_revision >= DBMS_MIN_REVISION_WITH_PARALLEL_REPLICAS)
     {
         writeVarUInt(static_cast<UInt64>(collaborate_with_initiator), out);
         writeVarUInt(count_participating_replicas, out);
@@ -99,10 +99,10 @@ void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision)
 }
 
 
-void ClientInfo::read(ReadBuffer & in, const UInt64 client_protocol_revision)
+void ClientInfo::read(ReadBuffer & in, const UInt64 /*client_protocol_revision*/)
 {
-    if (client_protocol_revision < DBMS_MIN_REVISION_WITH_CLIENT_INFO)
-        throw Exception("Logical error: method ClientInfo::read is called for unsupported client revision", ErrorCodes::LOGICAL_ERROR);
+    /// if (client_protocol_revision < DBMS_MIN_REVISION_WITH_CLIENT_INFO)
+    ///    throw Exception("Logical error: method ClientInfo::read is called for unsupported client revision", ErrorCodes::LOGICAL_ERROR);
 
     UInt8 read_query_kind = 0;
     readBinary(read_query_kind, in);
@@ -117,7 +117,7 @@ void ClientInfo::read(ReadBuffer & in, const UInt64 client_protocol_revision)
     readBinary(initial_address_string, in);
     initial_address = Poco::Net::SocketAddress(initial_address_string);
 
-    if (client_protocol_revision >= DBMS_MIN_PROTOCOL_VERSION_WITH_INITIAL_QUERY_START_TIME)
+    /// if (client_protocol_revision >= DBMS_MIN_PROTOCOL_VERSION_WITH_INITIAL_QUERY_START_TIME)
     {
         readBinary(initial_query_start_time_microseconds, in);
         initial_query_start_time = initial_query_start_time_microseconds / 1000000;
@@ -144,28 +144,28 @@ void ClientInfo::read(ReadBuffer & in, const UInt64 client_protocol_revision)
 
         readBinary(http_user_agent, in);
 
-        if (client_protocol_revision >= DBMS_MIN_REVISION_WITH_X_FORWARDED_FOR_IN_CLIENT_INFO)
-            readBinary(forwarded_for, in);
+        /// if (client_protocol_revision >= DBMS_MIN_REVISION_WITH_X_FORWARDED_FOR_IN_CLIENT_INFO)
+        readBinary(forwarded_for, in);
 
-        if (client_protocol_revision >= DBMS_MIN_REVISION_WITH_REFERER_IN_CLIENT_INFO)
-            readBinary(http_referer, in);
+        //// if (client_protocol_revision >= DBMS_MIN_REVISION_WITH_REFERER_IN_CLIENT_INFO)
+        readBinary(http_referer, in);
     }
 
-    if (client_protocol_revision >= DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO)
-        readBinary(quota_key, in);
+    /// if (client_protocol_revision >= DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO)
+    readBinary(quota_key, in);
 
-    if (client_protocol_revision >= DBMS_MIN_PROTOCOL_VERSION_WITH_DISTRIBUTED_DEPTH)
-        readVarUInt(distributed_depth, in);
+    /// if (client_protocol_revision >= DBMS_MIN_PROTOCOL_VERSION_WITH_DISTRIBUTED_DEPTH)
+    readVarUInt(distributed_depth, in);
 
     if (interface == Interface::TCP)
     {
-        if (client_protocol_revision >= DBMS_MIN_REVISION_WITH_VERSION_PATCH)
-            readVarUInt(client_version_patch, in);
-        else
-            client_version_patch = client_tcp_protocol_version;
+        /// if (client_protocol_revision >= DBMS_MIN_REVISION_WITH_VERSION_PATCH)
+        readVarUInt(client_version_patch, in);
+        /// else
+        ///    client_version_patch = client_tcp_protocol_version;
     }
 
-    if (client_protocol_revision >= DBMS_MIN_REVISION_WITH_OPENTELEMETRY)
+    /// if (client_protocol_revision >= DBMS_MIN_REVISION_WITH_OPENTELEMETRY)
     {
         uint8_t have_trace_id = 0;
         readBinary(have_trace_id, in);
@@ -178,7 +178,7 @@ void ClientInfo::read(ReadBuffer & in, const UInt64 client_protocol_revision)
         }
     }
 
-    if (client_protocol_revision >= DBMS_MIN_REVISION_WITH_PARALLEL_REPLICAS)
+    /// if (client_protocol_revision >= DBMS_MIN_REVISION_WITH_PARALLEL_REPLICAS)
     {
         UInt64 value;
         readVarUInt(value, in);

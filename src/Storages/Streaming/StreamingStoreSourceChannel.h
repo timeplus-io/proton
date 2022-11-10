@@ -16,7 +16,8 @@ public:
         std::shared_ptr<StreamingStoreSourceMultiplexer> multiplexer_,
         Block header,
         StorageSnapshotPtr storage_snapshot_,
-        ContextPtr query_context_);
+        ContextPtr query_context_,
+        Poco::Logger * log_);
 
     ~StreamingStoreSourceChannel() override;
 
@@ -28,6 +29,7 @@ public:
 
 private:
     void readAndProcess() override;
+    std::pair<String, Int32> getStreamShard() const override;
 
 private:
     static std::atomic<uint32_t> sequence_id;

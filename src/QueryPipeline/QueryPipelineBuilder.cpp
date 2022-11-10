@@ -12,7 +12,6 @@
 #include <Processors/Transforms/PartialSortingTransform.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <IO/WriteHelpers.h>
-#include <Interpreters/ExpressionActions.h>
 #include <Common/typeid_cast.h>
 #include <Processors/DelayedPortsProcessor.h>
 #include <Processors/RowsBeforeLimitCounter.h>
@@ -563,6 +562,9 @@ QueryPipeline QueryPipelineBuilder::getPipeline(QueryPipelineBuilder builder)
     QueryPipeline res(std::move(builder.pipe));
     res.setNumThreads(builder.getNumThreads());
     res.setProcessListElement(builder.process_list_element);
+    /// proton : starts
+    res.setExecuteMode(builder.getExecuteMode());
+    /// proton : ends
     return res;
 }
 
@@ -593,10 +595,10 @@ Processors QueryPipelineProcessorsCollector::detachProcessors(size_t group)
 }
 
 /// proton: starts.
-void QueryPipelineBuilder::setStreaming(QueryPipelineBuilder & builder, bool is_streaming)
+void QueryPipelineBuilder::setStreaming(bool is_streaming_)
 {
-    for (const auto & processor : builder.pipe.processors)
-        processor->setStreaming(is_streaming);
+    for (const auto & processor : pipe.processors)
+        processor->setStreaming(is_streaming_);
 }
 
 std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreaming(

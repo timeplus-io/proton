@@ -5,7 +5,7 @@ namespace DB
 {
 
 MaterializingTransform::MaterializingTransform(const Block & header)
-    : ISimpleTransform(header, materializeBlock(header), false) {}
+    : ISimpleTransform(header, materializeBlock(header), false, ProcessorID::MaterializingTransformID) {}
 
 void MaterializingTransform::transform(Chunk & chunk)
 {

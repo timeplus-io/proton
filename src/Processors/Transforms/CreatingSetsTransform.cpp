@@ -26,7 +26,7 @@ CreatingSetsTransform::CreatingSetsTransform(
     SubqueryForSet subquery_for_set_,
     SizeLimits network_transfer_limits_,
     ContextPtr context_)
-    : IAccumulatingTransform(std::move(in_header_), std::move(out_header_))
+    : IAccumulatingTransform(std::move(in_header_), std::move(out_header_), ProcessorID::CreatingSetsTransformID)
     , WithContext(context_)
     , subquery(std::move(subquery_for_set_))
     , network_transfer_limits(std::move(network_transfer_limits_))

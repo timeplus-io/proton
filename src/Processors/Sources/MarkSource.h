@@ -5,15 +5,15 @@ namespace DB
 {
 
 /// Mark source generate an head chunk with mark flag set once
-class MarkSource : public ISource
+class MarkSource final : public ISource
 {
 public:
-    explicit MarkSource(Block header, UInt64 mark) : ISource(std::move(header)), chunk(output.getHeader().getColumns(), 0)
+    explicit MarkSource(Block header, UInt64 mark) : ISource(std::move(header), ProcessorID::MarkSourceID), chunk(output.getHeader().getColumns(), 0)
     {
-        auto chunk_info = std::make_shared<ChunkInfo>();
-        chunk_info->ctx.setMark(mark);
+        auto chunk_ctx = std::make_shared<ChunkContext>();
+        chunk_ctx->setMark(mark);
 
-        chunk.setChunkInfo(std::move(chunk_info));
+        chunk.setChunkContext(std::move(chunk_ctx));
     }
 
     String getName() const override { return "MarkSource"; }

@@ -660,7 +660,7 @@ Pipe StorageDistributed::read(
     read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
         QueryPlanOptimizationSettings::fromContext(local_context),
-        BuildQueryPipelineSettings::fromContext(local_context));
+        BuildQueryPipelineSettings::fromContext(local_context), local_context);
 }
 
 void StorageDistributed::read(

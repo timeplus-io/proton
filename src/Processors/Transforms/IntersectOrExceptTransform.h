@@ -9,7 +9,7 @@
 namespace DB
 {
 
-class IntersectOrExceptTransform : public IProcessor
+class IntersectOrExceptTransform final : public IProcessor
 {
 using Operator = ASTSelectIntersectExceptQuery::Operator;
 

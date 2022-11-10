@@ -181,7 +181,7 @@ void ReadFromRemote::addLazyPipe(Pipes & pipes, const ClusterProxy::IStreamFacto
 
             return QueryPipelineBuilder::getPipe(std::move(*plan->buildQueryPipeline(
                 QueryPlanOptimizationSettings::fromContext(context),
-                BuildQueryPipelineSettings::fromContext(context))));
+                BuildQueryPipelineSettings::fromContext(context), context)));
         }
         else
         {

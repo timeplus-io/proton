@@ -37,9 +37,10 @@ MergeTreeBaseSelectProcessor::MergeTreeBaseSelectProcessor(
     UInt64 preferred_max_column_in_block_size_bytes_,
     const MergeTreeReaderSettings & reader_settings_,
     bool use_uncompressed_cache_,
+    ProcessorID pid_,
     const Names & virt_column_names_,
     std::optional<ParallelReadingExtension> extension_)
-    : SourceWithProgress(transformHeader(std::move(header), prewhere_info_, storage_.getPartitionValueType(), virt_column_names_))
+    : SourceWithProgress(transformHeader(std::move(header), prewhere_info_, storage_.getPartitionValueType(), virt_column_names_), pid_)
     , storage(storage_)
     , storage_snapshot(storage_snapshot_)
     , prewhere_info(prewhere_info_)

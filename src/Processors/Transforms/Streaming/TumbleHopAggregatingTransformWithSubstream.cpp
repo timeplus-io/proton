@@ -16,17 +16,18 @@ TumbleHopAggregatingTransformWithSubstream::TumbleHopAggregatingTransformWithSub
     Block header,
     AggregatingTransformParamsPtr params_,
     SubstraemManyAggregatedDataPtr substream_many_data_,
-    size_t current_aggregating_index_,
+    size_t current_variant_,
     size_t max_threads_,
     size_t temporary_data_merge_threads_)
     : AggregatingTransformWithSubstream(
         std::move(header),
         std::move(params_),
         std::move(substream_many_data_),
-        current_aggregating_index_,
+        current_variant_,
         max_threads_,
         temporary_data_merge_threads_,
-        "TumbleHopAggregatingTransformWithSubstream")
+        "TumbleHopAggregatingTransformWithSubstream",
+        ProcessorID::TumbleHopAggregatingTransformWithSubstreamID)
 {
     assert(
         (params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START)
@@ -40,19 +41,19 @@ void TumbleHopAggregatingTransformWithSubstream::consume(Chunk chunk)
     if (num_rows > 0)
     {
         Columns columns = chunk.detachColumns();
-        assert(chunk.hasChunkInfo());
-        executeOrMergeColumns(columns, chunk.getChunkInfo()->ctx.id);
+        assert(chunk.hasChunkContext());
+        executeOrMergeColumns(columns, chunk.getChunkContext()->getSubStreamID());
     }
 
     if (chunk.hasWatermark())
-        finalize(chunk.getChunkInfo());
+        finalize(chunk.getChunkContext());
 }
 
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
-void TumbleHopAggregatingTransformWithSubstream::finalize(ChunkInfoPtr chunk_info)
+void TumbleHopAggregatingTransformWithSubstream::finalize(ChunkContextPtr chunk_ctx)
 {
-    auto watermark = chunk_info->ctx.getWatermark();
+    auto watermark = chunk_ctx->getWatermark();
     SubstreamContextPtr substream_ctx = getSubstreamContext(watermark.id);
     auto [min_watermark, max_watermark, arena_watermark] = finalizeAndGetWatermarks(substream_ctx, watermark);
 
@@ -74,7 +75,7 @@ void TumbleHopAggregatingTransformWithSubstream::finalize(ChunkInfoPtr chunk_inf
                 max_watermark.watermark);
 
         auto start = MonotonicMilliseconds::now();
-        doFinalize(min_watermark, chunk_info);
+        doFinalize(min_watermark, chunk_ctx);
         auto end = MonotonicMilliseconds::now();
 
         LOG_DEBUG(
@@ -99,7 +100,7 @@ void TumbleHopAggregatingTransformWithSubstream::finalize(ChunkInfoPtr chunk_inf
     }
 }
 
-void TumbleHopAggregatingTransformWithSubstream::doFinalize(const WatermarkBound & watermark, ChunkInfoPtr & chunk_info)
+void TumbleHopAggregatingTransformWithSubstream::doFinalize(const WatermarkBound & watermark, ChunkContextPtr & chunk_ctx)
 {
     /// FIXME spill to disk, overflow_row etc cases
     auto substream_ctx = getSubstreamContext(watermark.id);
@@ -113,7 +114,7 @@ void TumbleHopAggregatingTransformWithSubstream::doFinalize(const WatermarkBound
     initialize(prepared_data_ptr);
 
     assert(prepared_data_ptr->at(0)->isTwoLevel());
-    mergeTwoLevel(prepared_data_ptr, watermark, chunk_info);
+    convertTwoLevel(prepared_data_ptr, watermark, chunk_ctx);
 }
 
 void TumbleHopAggregatingTransformWithSubstream::initialize(ManyAggregatedDataVariantsPtr & data)
@@ -128,8 +129,8 @@ void TumbleHopAggregatingTransformWithSubstream::initialize(ManyAggregatedDataVa
         first_pool.emplace_back(std::make_shared<Arena>());
 }
 
-void TumbleHopAggregatingTransformWithSubstream::mergeTwoLevel(
-    ManyAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info)
+void TumbleHopAggregatingTransformWithSubstream::convertTwoLevel(
+    ManyAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkContextPtr & chunk_ctx)
 {
     /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
     /// one project window for streaming processing
@@ -149,7 +150,7 @@ void TumbleHopAggregatingTransformWithSubstream::mergeTwoLevel(
 
         for (auto bucket : buckets)
         {
-            Block block = params->aggregator.mergeAndConvertOneBucketToBlock(*data, arena, params->final, bucket, &is_cancelled);
+            Block block = params->aggregator.mergeAndConvertOneBucketToBlock(*data, arena, params->final, ConvertAction::STREAMING_EMIT, bucket, &is_cancelled);
             if (is_cancelled)
                 return;
 
@@ -173,13 +174,13 @@ void TumbleHopAggregatingTransformWithSubstream::mergeTwoLevel(
     }
 
     if (merged_block)
-        setCurrentChunk(convertToChunk(merged_block), chunk_info);
+        setCurrentChunk(convertToChunk(merged_block), chunk_ctx);
 }
 
 void TumbleHopAggregatingTransformWithSubstream::removeBuckets(SubstreamContextPtr substream_ctx, const WatermarkBound & watermark)
 {
     std::shared_lock lock(substream_ctx->variants_mutex);
-    params->aggregator.removeBucketsBefore(*(substream_ctx->many_variants[current_aggregating_index]), watermark);
+    params->aggregator.removeBucketsBefore(*(substream_ctx->many_variants[current_variant]), watermark);
 }
 
 std::tuple<WatermarkBound, WatermarkBound, WatermarkBound>
@@ -196,7 +197,7 @@ TumbleHopAggregatingTransformWithSubstream::finalizeAndGetWatermarks(SubstreamCo
 
     /// Set finalized status for one part of current substream,
     /// and return min/max watermark that requires finalizing
-    substream_ctx->finalized.set(current_aggregating_index);
+    substream_ctx->finalized.set(current_variant);
     if (substream_ctx->finalized == all_finalized_mark)
     {
         min_watermark = substream_ctx->min_watermark;

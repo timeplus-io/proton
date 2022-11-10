@@ -618,7 +618,7 @@ void AvroDeserializer::deserializeRow(MutableColumns & columns, avro::Decoder & 
 
 
 AvroRowInputFormat::AvroRowInputFormat(const Block & header_, ReadBuffer & in_, Params params_, const FormatSettings & format_settings_)
-    : IRowInputFormat(header_, in_, params_),
+    : IRowInputFormat(header_, in_, params_, ProcessorID::AvroRowInputFormatID),
       allow_missing_fields(format_settings_.avro.allow_missing_fields)
 {
 }
@@ -772,7 +772,7 @@ static uint32_t readConfluentSchemaId(ReadBuffer & in)
 
 AvroConfluentRowInputFormat::AvroConfluentRowInputFormat(
     const Block & header_, ReadBuffer & in_, Params params_, const FormatSettings & format_settings_)
-    : IRowInputFormat(header_, in_, params_)
+    : IRowInputFormat(header_, in_, params_, ProcessorID::AvroConfluentRowInputFormatID)
     , schema_registry(getConfluentSchemaRegistry(format_settings_))
     , input_stream(std::make_unique<InputStreamReadBufferAdapter>(*in))
     , decoder(avro::binaryDecoder())

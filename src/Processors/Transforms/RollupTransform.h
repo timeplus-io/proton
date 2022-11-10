@@ -7,7 +7,7 @@ namespace DB
 
 /// Takes blocks after grouping, with non-finalized aggregate functions.
 /// Calculates subtotals and grand totals values for a set of columns.
-class RollupTransform : public IAccumulatingTransform
+class RollupTransform final : public IAccumulatingTransform
 {
 public:
     RollupTransform(Block header, AggregatingTransformParamsPtr params);

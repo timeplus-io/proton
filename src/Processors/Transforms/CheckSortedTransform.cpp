@@ -15,7 +15,7 @@ extern const int LOGICAL_ERROR;
 CheckSortedTransform::CheckSortedTransform(
     const Block & header_,
     const SortDescription & sort_description_)
-    : ISimpleTransform(header_, header_, false)
+    : ISimpleTransform(header_, header_, false, ProcessorID::CheckSortedTransformID)
     , sort_description_map(addPositionsToSortDescriptions(sort_description_))
 {
 }

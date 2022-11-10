@@ -4,8 +4,6 @@
 
 #include <Processors/ISimpleTransform.h>
 
-class DateLUTImpl;
-
 namespace DB
 {
 /**
@@ -29,7 +27,10 @@ public:
 
     ~WatermarkTransform() override = default;
 
-    String getName() const override { return watermark_name + "Transform"; }
+    String getName() const override { return watermark->getName() + "Transform"; }
+
+    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
+    void recover(CheckpointContextPtr ckpt_ctx) override;
 
 private:
     void transform(Chunk & chunk) override;
@@ -42,7 +43,6 @@ private:
         bool proc_time,
         Poco::Logger * log);
 
-    String watermark_name;
     WatermarkPtr watermark;
 };
 }

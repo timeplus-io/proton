@@ -6,7 +6,7 @@ namespace DB
 {
 
 ExtremesTransform::ExtremesTransform(const Block & header)
-    : ISimpleTransform(header, header, true)
+    : ISimpleTransform(header, header, true, ProcessorID::ExtremesTransformID)
 {
     /// Port for Extremes.
     outputs.emplace_back(outputs.front().getHeader(), this);

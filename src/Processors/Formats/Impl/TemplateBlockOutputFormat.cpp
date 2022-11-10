@@ -16,7 +16,7 @@ namespace ErrorCodes
 TemplateBlockOutputFormat::TemplateBlockOutputFormat(const Block & header_, WriteBuffer & out_, const FormatSettings & settings_,
                                                      ParsedTemplateFormatString format_, ParsedTemplateFormatString row_format_,
                                                      std::string row_between_delimiter_)
-    : IOutputFormat(header_, out_), settings(settings_), serializations(header_.getSerializations()), format(std::move(format_))
+    : IOutputFormat(header_, out_, ProcessorID::TemplateBlockOutputFormatID), settings(settings_), serializations(header_.getSerializations()), format(std::move(format_))
     , row_format(std::move(row_format_)), row_between_delimiter(std::move(row_between_delimiter_))
 {
     /// Validate format string for whole output

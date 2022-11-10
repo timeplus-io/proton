@@ -14,7 +14,7 @@ namespace ErrorCodes
 }
 
 RawBLOBRowInputFormat::RawBLOBRowInputFormat(const Block & header_, ReadBuffer & in_, Params params_)
-    : IRowInputFormat(header_, in_, std::move(params_))
+    : IRowInputFormat(header_, in_, std::move(params_), ProcessorID::RawBLOBRowInputFormatID)
 {
     if (header_.columns() > 1)
         /// proton: starts

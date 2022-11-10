@@ -18,8 +18,8 @@ namespace ErrorCodes
     extern const int TOO_MANY_BYTES;
 }
 
-SourceWithProgress::SourceWithProgress(Block header, bool enable_auto_progress)
-    : ISourceWithProgress(header), auto_progress(enable_auto_progress)
+SourceWithProgress::SourceWithProgress(Block header, bool enable_auto_progress, ProcessorID pid_)
+    : ISourceWithProgress(header, pid_), auto_progress(enable_auto_progress)
 {
 }
 

@@ -25,6 +25,10 @@
 #include <Parsers/Access/ParserShowPrivilegesQuery.h>
 #include "Common/Exception.h"
 
+/// proton : starts
+#include <Parsers/Streaming/ParserSubscribeQuery.h>
+/// proton : ends
+
 
 namespace DB
 {
@@ -33,6 +37,9 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 {
     ParserShowTablesQuery show_tables_p;
     ParserSelectWithUnionQuery select_p;
+    Streaming::ParserSubscribeQuery subscribe_p;
+    Streaming::ParserUnsubscribeQuery unsubscribe_p;
+    Streaming::ParserRecoverQuery recover_p;
     ParserTablePropertiesQuery table_p;
     ParserDescribeTableQuery describe_table_p;
     ParserShowProcesslistQuery show_processlist_p;
@@ -56,6 +63,9 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     bool parsed =
            explain_p.parse(pos, query, expected)
         || select_p.parse(pos, query, expected)
+        || subscribe_p.parse(pos, query, expected)
+        || unsubscribe_p.parse(pos, query, expected)
+        || recover_p.parse(pos, query, expected)
         || show_create_access_entity_p.parse(pos, query, expected) /// should be before `show_tables_p`
         || show_tables_p.parse(pos, query, expected)
         || table_p.parse(pos, query, expected)

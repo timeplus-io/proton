@@ -4,7 +4,7 @@
 namespace DB
 {
 
-SinkToStorage::SinkToStorage(const Block & header) : ExceptionKeepingTransform(header, header, false) {}
+SinkToStorage::SinkToStorage(const Block & header, ProcessorID pid_) : ExceptionKeepingTransform(header, header, false, pid_) {}
 
 void SinkToStorage::onConsume(Chunk chunk)
 {

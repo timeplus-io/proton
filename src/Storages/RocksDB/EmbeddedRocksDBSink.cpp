@@ -16,7 +16,7 @@ namespace ErrorCodes
 EmbeddedRocksDBSink::EmbeddedRocksDBSink(
     StorageEmbeddedRocksDB & storage_,
     const StorageMetadataPtr & metadata_snapshot_)
-    : SinkToStorage(metadata_snapshot_->getSampleBlock())
+    : SinkToStorage(metadata_snapshot_->getSampleBlock(), ProcessorID::EmbeddedRocksDBSinkID)
     , storage(storage_)
     , metadata_snapshot(metadata_snapshot_)
 {

@@ -33,7 +33,7 @@ namespace ErrorCodes
 }
 
 CapnProtoRowInputFormat::CapnProtoRowInputFormat(ReadBuffer & in_, Block header, Params params_, const FormatSchemaInfo & info, const FormatSettings & format_settings_)
-    : IRowInputFormat(std::move(header), in_, std::move(params_))
+    : IRowInputFormat(std::move(header), in_, std::move(params_), ProcessorID::CapnProtoRowInputFormatID)
     , parser(std::make_shared<CapnProtoSchemaParser>())
     , format_settings(format_settings_)
     , column_types(getPort().getHeader().getDataTypes())

@@ -9,7 +9,7 @@
 
 namespace DB
 {
-void ProgressValues::read(ReadBuffer & in, UInt64 server_revision)
+void ProgressValues::read(ReadBuffer & in, UInt64 /*server_revision*/)
 {
     size_t new_read_rows = 0;
     size_t new_read_bytes = 0;
@@ -20,7 +20,7 @@ void ProgressValues::read(ReadBuffer & in, UInt64 server_revision)
     readVarUInt(new_read_rows, in);
     readVarUInt(new_read_bytes, in);
     readVarUInt(new_total_rows_to_read, in);
-    if (server_revision >= DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO)
+    /// if (server_revision >= DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO)
     {
         readVarUInt(new_written_rows, in);
         readVarUInt(new_written_bytes, in);
@@ -34,12 +34,12 @@ void ProgressValues::read(ReadBuffer & in, UInt64 server_revision)
 }
 
 
-void ProgressValues::write(WriteBuffer & out, UInt64 client_revision) const
+void ProgressValues::write(WriteBuffer & out, UInt64 /*client_revision*/) const
 {
     writeVarUInt(this->read_rows, out);
     writeVarUInt(this->read_bytes, out);
     writeVarUInt(this->total_rows_to_read, out);
-    if (client_revision >= DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO)
+    /// if (client_revision >= DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO)
     {
         writeVarUInt(this->written_rows, out);
         writeVarUInt(this->written_bytes, out);

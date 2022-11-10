@@ -8,7 +8,7 @@ namespace DB
 
 /// Takes blocks after grouping, with non-finalized aggregate functions.
 /// Calculates all subsets of columns and aggregates over them.
-class CubeTransform : public IAccumulatingTransform
+class CubeTransform final : public IAccumulatingTransform
 {
 public:
     CubeTransform(Block header, AggregatingTransformParamsPtr params);

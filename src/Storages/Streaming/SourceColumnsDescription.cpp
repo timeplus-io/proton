@@ -66,12 +66,12 @@ SourceColumnsDescription::SourceColumnsDescription(const NamesAndTypesList & col
     ///     Sub, @sub_pos: pos_in_subcolumns_to_read: 0,            /// the pos in @subcolumns_to_read
     ///     Virtual, @pos: pos_in_virtual_time_columns_calc: 2,
     /// ]
-    for (size_t pos = 0; const auto & column : columns_to_read)
+    for (const auto & column : columns_to_read)
     {
         if (column.name == ProtonConsts::RESERVED_APPEND_TIME)
         {
             ReadColumnPosition curr_column_pos(ReadColumnType::VIRTUAL, virtual_time_columns_calc.size());
-            virtual_time_columns_calc.push_back([](const BlockInfo & bi) { return bi.append_time; });
+            virtual_time_columns_calc.push_back([](const BlockInfo & bi) { return bi.appendTime(); });
             /// We are assuming all virtual timestamp columns have the same data type
             virtual_col_type = column.type;
             positions.emplace_back(std::move(curr_column_pos));
@@ -132,8 +132,6 @@ SourceColumnsDescription::SourceColumnsDescription(const NamesAndTypesList & col
                 read_all_subcolumns_positions.push_back(physical_pos_in_schema_to_read);  /// read all physical column.
             }
         }
-
-        ++pos;
     }
 
     /// Clear subcolumns if need to read all subcolumns.

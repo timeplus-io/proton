@@ -55,7 +55,7 @@ protected:
     virtual void onException() {}
 
 public:
-    ExceptionKeepingTransform(const Block & in_header, const Block & out_header, bool ignore_on_start_and_finish_ = true);
+    ExceptionKeepingTransform(const Block & in_header, const Block & out_header, bool ignore_on_start_and_finish_ = true,  ProcessorID pid_ = ProcessorID::ExceptionKeepingTransformID);
 
     Status prepare() override;
     void work() override;

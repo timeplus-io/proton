@@ -5,7 +5,7 @@ namespace DB
 {
 
 RollupTransform::RollupTransform(Block header, AggregatingTransformParamsPtr params_)
-    : IAccumulatingTransform(std::move(header), params_->getHeader())
+    : IAccumulatingTransform(std::move(header), params_->getHeader(), ProcessorID::RollupTransformID)
     , params(std::move(params_))
     , keys(params->params.keys)
 {

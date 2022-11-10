@@ -58,12 +58,14 @@ public:
 
     QueryPipelineBuilderPtr buildQueryPipeline(
         const QueryPlanOptimizationSettings & optimization_settings,
-        const BuildQueryPipelineSettings & build_pipeline_settings);
+        const BuildQueryPipelineSettings & build_pipeline_settings,
+        ContextPtr query_context);
 
     /// If initialized, build pipeline and convert to pipe. Otherwise, return empty pipe.
     Pipe convertToPipe(
         const QueryPlanOptimizationSettings & optimization_settings,
-        const BuildQueryPipelineSettings & build_pipeline_settings);
+        const BuildQueryPipelineSettings & build_pipeline_settings,
+        ContextPtr query_context);
 
     /// proton: starts.
     void setStreaming(bool is_streaming_) { is_streaming = is_streaming_; }

@@ -11,7 +11,7 @@ WindowTransform::WindowTransform(
     const Block & output_header_,
     const WindowDescription & window_description_,
     const std::vector<WindowFunctionDescription> & functions)
-    : ISimpleTransform(input_header_, output_header_, false)
+    : ISimpleTransform(input_header_, output_header_, false, ProcessorID::StreamingWindowTransformID)
 {
     // Initialize window function workspaces.
     std::vector<WindowFunctionWorkspace> workspaces;

@@ -32,7 +32,7 @@ StorageSystemDataSkippingIndices::StorageSystemDataSkippingIndices(const Storage
     setInMemoryMetadata(storage_metadata);
 }
 
-class DataSkippingIndicesSource : public SourceWithProgress
+class DataSkippingIndicesSource final : public SourceWithProgress
 {
 public:
     DataSkippingIndicesSource(
@@ -41,7 +41,7 @@ public:
         UInt64 max_block_size_,
         ColumnPtr databases_,
         ContextPtr context_)
-        : SourceWithProgress(header)
+        : SourceWithProgress(header, ProcessorID::DataSkippingIndicesSourceID)
         , column_mask(std::move(columns_mask_))
         , max_block_size(max_block_size_)
         , databases(std::move(databases_))

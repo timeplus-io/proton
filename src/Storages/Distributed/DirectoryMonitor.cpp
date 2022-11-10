@@ -932,7 +932,7 @@ public:
     }
 
     explicit DirectoryMonitorSource(Data data_)
-        : SourceWithProgress(data_.first_block.cloneEmpty())
+        : SourceWithProgress(data_.first_block.cloneEmpty(), ProcessorID::DirectoryMonitorSourceID)
         , data(std::move(data_))
     {
     }

@@ -6,7 +6,7 @@ namespace DB
 {
 
 LimitByTransform::LimitByTransform(const Block & header, UInt64 group_length_, UInt64 group_offset_, const Names & columns)
-    : ISimpleTransform(header, header, true)
+    : ISimpleTransform(header, header, true, ProcessorID::LimitByTransformID)
     , group_length(group_length_)
     , group_offset(group_offset_)
 {

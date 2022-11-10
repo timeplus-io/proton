@@ -14,11 +14,11 @@ namespace ErrorCodes
     extern const int INCORRECT_DATA;
 }
 
-JSONAsRowInputFormat::JSONAsRowInputFormat(const Block & header_, ReadBuffer & in_, Params params_)
-    : JSONAsRowInputFormat(header_, std::make_unique<PeekableReadBuffer>(in_), params_) {}
+JSONAsRowInputFormat::JSONAsRowInputFormat(const Block & header_, ReadBuffer & in_, Params params_, ProcessorID pid_)
+    : JSONAsRowInputFormat(header_, std::make_unique<PeekableReadBuffer>(in_), params_, pid_) {}
 
-JSONAsRowInputFormat::JSONAsRowInputFormat(const Block & header_, std::unique_ptr<PeekableReadBuffer> buf_, Params params_) :
-    IRowInputFormat(header_, *buf_, std::move(params_)), buf(std::move(buf_))
+JSONAsRowInputFormat::JSONAsRowInputFormat(const Block & header_, std::unique_ptr<PeekableReadBuffer> buf_, Params params_, ProcessorID pid_) :
+    IRowInputFormat(header_, *buf_, std::move(params_), pid_), buf(std::move(buf_))
 {
     if (header_.columns() > 1)
         /// proton: starts
@@ -195,7 +195,7 @@ void JSONAsStringRowInputFormat::readJSONObject(IColumn & column)
 
 JSONAsObjectRowInputFormat::JSONAsObjectRowInputFormat(
     const Block & header_, ReadBuffer & in_, Params params_, const FormatSettings & format_settings_)
-    : JSONAsRowInputFormat(header_, in_, params_)
+    : JSONAsRowInputFormat(header_, in_, params_, ProcessorID::JSONAsObjectRowInputFormatID)
     , format_settings(format_settings_)
 {
     if (!isObject(header_.getByPosition(0).type))

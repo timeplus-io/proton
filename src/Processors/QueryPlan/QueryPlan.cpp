@@ -3,7 +3,6 @@
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <IO/WriteBuffer.h>
 #include <IO/Operators.h>
-#include <Interpreters/ActionsDAG.h>
 #include <Interpreters/ArrayJoinAction.h>
 #include <stack>
 #include <Processors/QueryPlan/Optimizations/Optimizations.h>
@@ -11,6 +10,10 @@
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/ReadFromMergeTree.h>
 #include <Common/JSONBuilder.h>
+
+/// proton : starts
+#include "QueryExecuteMode.h"
+/// proton : ends
 
 namespace DB
 {
@@ -136,7 +139,8 @@ void QueryPlan::addStep(QueryPlanStepPtr step)
 
 QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
     const QueryPlanOptimizationSettings & optimization_settings,
-    const BuildQueryPipelineSettings & build_pipeline_settings)
+    const BuildQueryPipelineSettings & build_pipeline_settings,
+    ContextPtr query_context)
 {
     checkInitialized();
     optimize(optimization_settings);
@@ -183,16 +187,17 @@ QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
     last_pipeline->setProgressCallback(build_pipeline_settings.progress_callback);
     last_pipeline->setProcessListElement(build_pipeline_settings.process_list_element);
 
-    /// proton: starts.
-    QueryPipelineBuilder::setStreaming(*last_pipeline, is_streaming);
-    /// proton: ends.
+    /// proton : starts
+    last_pipeline->setExecuteMode(queryExecuteMode(is_streaming, query_context->getSettingsRef()));
+    /// proton : ends
 
     return last_pipeline;
 }
 
 Pipe QueryPlan::convertToPipe(
     const QueryPlanOptimizationSettings & optimization_settings,
-    const BuildQueryPipelineSettings & build_pipeline_settings)
+    const BuildQueryPipelineSettings & build_pipeline_settings,
+    ContextPtr query_context)
 {
     if (!isInitialized())
         return {};
@@ -200,7 +205,7 @@ Pipe QueryPlan::convertToPipe(
     if (isCompleted())
         throw Exception("Cannot convert completed QueryPlan to Pipe", ErrorCodes::LOGICAL_ERROR);
 
-    return QueryPipelineBuilder::getPipe(std::move(*buildQueryPipeline(optimization_settings, build_pipeline_settings)));
+    return QueryPipelineBuilder::getPipe(std::move(*buildQueryPipeline(optimization_settings, build_pipeline_settings, query_context)));
 }
 
 void QueryPlan::addInterpreterContext(ContextPtr context)

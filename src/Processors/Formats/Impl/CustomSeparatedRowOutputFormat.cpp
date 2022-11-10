@@ -9,7 +9,7 @@ namespace DB
 
 CustomSeparatedRowOutputFormat::CustomSeparatedRowOutputFormat(
     const Block & header_, WriteBuffer & out_, const RowOutputFormatParams & params_, const FormatSettings & format_settings_, bool with_names_, bool with_types_)
-    : IRowOutputFormat(header_, out_, params_)
+    : IRowOutputFormat(header_, out_, params_, ProcessorID::CustomSeparatedRowOutputFormatID)
     , with_names(with_names_)
     , with_types(with_types_)
     , format_settings(format_settings_)

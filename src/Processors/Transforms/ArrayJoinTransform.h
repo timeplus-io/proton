@@ -8,7 +8,7 @@ class ArrayJoinAction;
 using ArrayJoinActionPtr = std::shared_ptr<ArrayJoinAction>;
 
 /// Execute ARRAY JOIN
-class ArrayJoinTransform : public ISimpleTransform
+class ArrayJoinTransform final : public ISimpleTransform
 {
 public:
     ArrayJoinTransform(

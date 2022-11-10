@@ -21,7 +21,8 @@ public:
         const Block & input_header,
         const Block & output_header,
         bool have_all_inputs_,
-        UInt64 limit_hint_);
+        UInt64 limit_hint_,
+        ProcessorID pid_);
 
     OutputPort & getOutputPort() { return outputs.front(); }
 
@@ -88,8 +89,9 @@ public:
         const Block & output_header,
         bool have_all_inputs_,
         UInt64 limit_hint_,
+        ProcessorID pid_,
         Args && ... args)
-        : IMergingTransformBase(num_inputs, input_header, output_header, have_all_inputs_, limit_hint_)
+        : IMergingTransformBase(num_inputs, input_header, output_header, have_all_inputs_, limit_hint_, pid_)
         , algorithm(std::forward<Args>(args) ...)
     {
     }

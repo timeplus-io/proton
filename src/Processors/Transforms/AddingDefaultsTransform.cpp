@@ -137,7 +137,7 @@ AddingDefaultsTransform::AddingDefaultsTransform(
     const ColumnsDescription & columns_,
     IInputFormat & input_format_,
     ContextPtr context_)
-    : ISimpleTransform(header, header, true)
+    : ISimpleTransform(header, header, true, ProcessorID::AddingDefaultsTransformID)
     , columns(columns_)
     , column_defaults(columns.getDefaults())
     , input_format(input_format_)

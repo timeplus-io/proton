@@ -5,6 +5,8 @@
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/Streaming/FunctionsStreamingWindow.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <base/ClockUtils.h>
@@ -497,6 +499,20 @@ ALWAYS_INLINE std::pair<Int64, Int64> HopTumbleBaseWatermark::getWindow(Int64 ti
 #undef CASE_WINDOW_KIND
     }
     __builtin_unreachable();
+}
+
+void HopTumbleBaseWatermark::serialize(WriteBuffer & wb) const
+{
+    writeIntBinary(has_event_in_window, wb);
+
+    Watermark::serialize(wb);
+}
+
+void HopTumbleBaseWatermark::deserialize(ReadBuffer & rb)
+{
+    readIntBinary(has_event_in_window, rb);
+
+    Watermark::deserialize(rb);
 }
 }
 }

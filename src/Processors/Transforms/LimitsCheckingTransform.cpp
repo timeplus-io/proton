@@ -19,7 +19,7 @@ void ProcessorProfileInfo::update(const Chunk & block)
 }
 
 LimitsCheckingTransform::LimitsCheckingTransform(const Block & header_, StreamLocalLimits limits_)
-    : ISimpleTransform(header_, header_, false)
+    : ISimpleTransform(header_, header_, false, ProcessorID::LimitsCheckingTransformID)
     , limits(std::move(limits_))
 {
 }
@@ -73,5 +73,4 @@ void LimitsCheckingTransform::checkQuota(Chunk & chunk)
         }
     }
 }
-
 }

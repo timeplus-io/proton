@@ -16,7 +16,7 @@ class NativeInputFormat final : public IInputFormat
 {
 public:
     NativeInputFormat(ReadBuffer & buf, const Block & header_)
-        : IInputFormat(header_, buf)
+        : IInputFormat(header_, buf, ProcessorID::NativeInputFormatID)
         , reader(std::make_unique<NativeReader>(buf, header_, 0))
         , header(header_) {}
 
@@ -56,8 +56,8 @@ class NativeOutputFormat final : public IOutputFormat
 {
 public:
     NativeOutputFormat(WriteBuffer & buf, const Block & header)
-        : IOutputFormat(header, buf)
-        , writer(buf, 0, header)
+        : IOutputFormat(header, buf, ProcessorID::NativeOutputFormatID)
+        , writer(buf, header, 0)
     {
     }
 

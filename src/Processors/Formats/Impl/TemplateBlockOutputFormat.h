@@ -10,7 +10,7 @@
 namespace DB
 {
 
-class TemplateBlockOutputFormat : public IOutputFormat
+class TemplateBlockOutputFormat final : public IOutputFormat
 {
     using EscapingRule = FormatSettings::EscapingRule;
 public:

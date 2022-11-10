@@ -126,12 +126,12 @@ void MultiplexedConnections::sendQuery(
         if (!replica.connection)
             throw Exception("MultiplexedConnections: Internal error", ErrorCodes::LOGICAL_ERROR);
 
-        if (replica.connection->getServerRevision(timeouts) < DBMS_MIN_REVISION_WITH_CURRENT_AGGREGATION_VARIANT_SELECTION_METHOD)
-        {
-            /// Disable two-level aggregation due to version incompatibility.
-            modified_settings.group_by_two_level_threshold = 0;
-            modified_settings.group_by_two_level_threshold_bytes = 0;
-        }
+        /// if (replica.connection->getServerRevision(timeouts) < DBMS_MIN_REVISION_WITH_CURRENT_AGGREGATION_VARIANT_SELECTION_METHOD)
+        /// {
+        ///    /// Disable two-level aggregation due to version incompatibility.
+        ///    modified_settings.group_by_two_level_threshold = 0;
+        ///    modified_settings.group_by_two_level_threshold_bytes = 0;
+        /// }
 
         if (settings.allow_experimental_parallel_reading_from_replicas)
         {

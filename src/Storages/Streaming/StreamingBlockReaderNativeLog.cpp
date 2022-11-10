@@ -16,7 +16,6 @@ namespace ErrorCodes
 
 StreamingBlockReaderNativeLog::StreamingBlockReaderNativeLog(
     std::shared_ptr<StreamShard> stream_shard_,
-    Int32 shard_,
     Int64 sn,
     Int64 max_wait_ms,
     Int64 read_buf_size_,
@@ -36,7 +35,7 @@ StreamingBlockReaderNativeLog::StreamingBlockReaderNativeLog(
     auto storage_id{stream_shard->storageStream()->getStorageID()};
 
     ns = storage_id.getDatabaseName();
-    fetch_request.fetch_descs.emplace_back(storage_id.getTableName(), storage_id.uuid, shard_, sn, max_wait_ms, read_buf_size_);
+    fetch_request.fetch_descs.emplace_back(storage_id.getTableName(), storage_id.uuid, stream_shard->getShard(), sn, max_wait_ms, read_buf_size_);
 
     /// FIXME
     for (auto pos : schema_ctx.column_positions.positions)
@@ -169,5 +168,15 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::processCached(nlog::RecordPtrs r
     }
 
     return results;
+}
+
+std::pair<String, Int32> StreamingBlockReaderNativeLog::getStreamShard() const
+{
+    return stream_shard->getStreamShard();
+}
+
+void StreamingBlockReaderNativeLog::resetSequenceNumber(UInt64 sn)
+{
+    fetch_request.fetch_descs[0].sn = sn;
 }
 }

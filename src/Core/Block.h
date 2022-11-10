@@ -161,6 +161,8 @@ public:
 
     /// Deep clone, use cautiously. Most of time, we don't need deepClone
     Block deepClone() const;
+
+    bool hasWatermark() const { return info.hasWatermark(); }
     /// proton: ends
 
 private:

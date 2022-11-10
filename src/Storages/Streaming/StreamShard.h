@@ -5,8 +5,6 @@
 #include "StreamingStoreSourceMultiplexer.h"
 
 #include <base/ClockUtils.h>
-#include <pcg_random.hpp>
-
 #include <Interpreters/Streaming/FunctionDescription.h>
 #include <KafkaLog/KafkaWAL.h>
 #include <KafkaLog/KafkaWALConsumerMultiplexer.h>
@@ -14,6 +12,8 @@
 #include <Storages/MergeTree/MergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
 #include <Common/ThreadPool.h>
+
+#include <pcg_random.hpp>
 
 namespace DB
 {
@@ -66,6 +66,10 @@ public:
     void updateNativeLog();
 
     bool isInmemory() const;
+
+    Int32 getShard() const { return shard; }
+
+    std::pair<String, Int32> getStreamShard() const { return {toString(storage_stream->getStorageID().uuid), shard}; }
 
 private:
     void initLog();

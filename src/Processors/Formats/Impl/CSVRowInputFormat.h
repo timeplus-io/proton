@@ -15,7 +15,7 @@ namespace DB
 /** A stream for inputting data in csv format.
   * Does not conform with https://tools.ietf.org/html/rfc4180 because it skips spaces and tabs between values.
   */
-class CSVRowInputFormat : public RowInputFormatWithNamesAndTypes
+class CSVRowInputFormat final : public RowInputFormatWithNamesAndTypes
 {
 public:
     /** with_names - in the first line the header with column names

@@ -29,7 +29,7 @@ FileLogSource::FileLogSource(
     Int64 start_timestamp_,
     FileLogSource::FileContainer files_,
     Poco::Logger * log_)
-    : SourceWithProgress(header_)
+    : SourceWithProgress(header_, ProcessorID::FileLogSourceID)
     , file_log(file_log_)
     , query_context(query_context_)
     , column_type(header_.getByPosition(0).type)

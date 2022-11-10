@@ -12,17 +12,27 @@ namespace DB
 class StreamingStoreSourceBase : public SourceWithProgress
 {
 public:
-    StreamingStoreSourceBase(const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr context_);
+    StreamingStoreSourceBase(
+        const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr context_, Poco::Logger * log_, ProcessorID pid_);
 
     Chunk generate() override;
 
+    void checkpoint(CheckpointContextPtr ckpt_ctx_) override;
+
+    void recover(CheckpointContextPtr ckpt_ctx_) override;
+
 private:
     virtual void readAndProcess() = 0;
+    virtual std::pair<String, Int32> getStreamShard() const = 0;
+
+    Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx_);
 
 protected:
     StorageSnapshot storage_snapshot;
 
     ContextPtr query_context;
+
+    Poco::Logger * log;
 
     Chunk header_chunk;
 
@@ -36,6 +46,11 @@ protected:
 
     std::vector<Chunk> result_chunks;
     std::vector<Chunk>::iterator iter;
+
+    Int64 last_sn = -1;
+    Int64 last_epoch = -1;
+    /// FIXME, switch to llvm-15
+    std::atomic<CheckpointContext *> ckpt_ctx;
 
     /// watermark, only support periodical flush for now
     /// FIXME, late event etc, every second

@@ -36,7 +36,7 @@ JSONEachRowRowInputFormat::JSONEachRowRowInputFormat(
     Params params_,
     const FormatSettings & format_settings_,
     bool yield_strings_)
-    : IRowInputFormat(header_, in_, std::move(params_)), format_settings(format_settings_), name_map(header_.columns()), yield_strings(yield_strings_)
+    : IRowInputFormat(header_, in_, std::move(params_), ProcessorID::JSONEachRowRowInputFormatID), format_settings(format_settings_), name_map(header_.columns()), yield_strings(yield_strings_)
 {
     size_t num_columns = getPort().getHeader().columns();
     for (size_t i = 0; i < num_columns; ++i)

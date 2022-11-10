@@ -14,12 +14,12 @@ class BlocksListSource : public SourceWithProgress
 public:
     /// Acquires the ownership of the block list.
     explicit BlocksListSource(BlocksList && list_)
-        : SourceWithProgress(list_.empty() ? Block() : list_.front().cloneEmpty())
+        : SourceWithProgress(list_.empty() ? Block() : list_.front().cloneEmpty(), ProcessorID::BlockListSourceID)
         , list(std::move(list_)), it(list.begin()), end(list.end()) {}
 
     /// Uses a list of blocks lying somewhere else.
     BlocksListSource(BlocksList::iterator & begin_, BlocksList::iterator & end_)
-        : SourceWithProgress(begin_ == end_ ? Block() : begin_->cloneEmpty())
+        : SourceWithProgress(begin_ == end_ ? Block() : begin_->cloneEmpty(), ProcessorID::BlockListSourceID)
         , it(begin_), end(end_) {}
 
     String getName() const override { return "BlocksListSource"; }

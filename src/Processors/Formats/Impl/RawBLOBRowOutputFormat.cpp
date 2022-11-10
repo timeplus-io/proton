@@ -10,7 +10,7 @@ RawBLOBRowOutputFormat::RawBLOBRowOutputFormat(
     WriteBuffer & out_,
     const Block & header_,
     const RowOutputFormatParams & params_)
-    : IRowOutputFormat(header_, out_, params_)
+    : IRowOutputFormat(header_, out_, params_, ProcessorID::RawBLOBRowOutputFormatID)
 {
 }
 

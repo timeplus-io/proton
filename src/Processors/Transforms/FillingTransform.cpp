@@ -141,7 +141,7 @@ static bool tryConvertFields(FillColumnDescription & descr, const DataTypePtr & 
 
 FillingTransform::FillingTransform(
         const Block & header_, const SortDescription & sort_description_, bool on_totals_)
-        : ISimpleTransform(header_, transformHeader(header_, sort_description_), true)
+        : ISimpleTransform(header_, transformHeader(header_, sort_description_), true, ProcessorID::FillingTransformID)
         , sort_description(sort_description_)
         , on_totals(on_totals_)
         , filling_row(sort_description_)

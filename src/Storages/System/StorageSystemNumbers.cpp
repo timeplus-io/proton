@@ -14,11 +14,11 @@ namespace DB
 namespace
 {
 
-class NumbersSource : public SourceWithProgress
+class NumbersSource final : public SourceWithProgress
 {
 public:
     NumbersSource(UInt64 block_size_, UInt64 offset_, UInt64 step_)
-        : SourceWithProgress(createHeader()), block_size(block_size_), next(offset_), step(step_) {}
+        : SourceWithProgress(createHeader(), ProcessorID::NumbersSourceID), block_size(block_size_), next(offset_), step(step_) {}
 
     String getName() const override { return "Numbers"; }
 
@@ -61,11 +61,11 @@ struct NumbersMultiThreadedState
 
 using NumbersMultiThreadedStatePtr = std::shared_ptr<NumbersMultiThreadedState>;
 
-class NumbersMultiThreadedSource : public SourceWithProgress
+class NumbersMultiThreadedSource final : public SourceWithProgress
 {
 public:
     NumbersMultiThreadedSource(NumbersMultiThreadedStatePtr state_, UInt64 block_size_, UInt64 max_counter_)
-        : SourceWithProgress(createHeader())
+        : SourceWithProgress(createHeader(), ProcessorID::NumbersMultiThreadedSourceID)
         , state(std::move(state_))
         , block_size(block_size_)
         , max_counter(max_counter_) {}

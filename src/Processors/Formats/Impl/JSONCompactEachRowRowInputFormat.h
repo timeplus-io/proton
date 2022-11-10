@@ -19,7 +19,7 @@ class ReadBuffer;
  *  - JSONCompactStringsEachRowWithNamesAndTypes
  *
 */
-class JSONCompactEachRowRowInputFormat : public RowInputFormatWithNamesAndTypes
+class JSONCompactEachRowRowInputFormat final : public RowInputFormatWithNamesAndTypes
 {
 public:
     JSONCompactEachRowRowInputFormat(

@@ -399,7 +399,7 @@ static void logQueryViews(std::list<ViewRuntimeData> & views, ContextPtr context
 
 
 CopyingDataToViewsTransform::CopyingDataToViewsTransform(const Block & header, ViewsDataPtr data)
-    : IProcessor({header}, OutputPorts(data->views.size(), header))
+    : IProcessor({header}, OutputPorts(data->views.size(), header), ProcessorID::CopyingDataToViewsTransformID)
     , input(inputs.front())
     , views_data(std::move(data))
 {
@@ -460,7 +460,7 @@ ExecutingInnerQueryFromViewTransform::ExecutingInnerQueryFromViewTransform(
     const Block & header,
     ViewRuntimeData & view_,
     std::shared_ptr<ViewsData> views_data_)
-    : ExceptionKeepingTransform(header, view_.sample_block)
+    : ExceptionKeepingTransform(header, view_.sample_block, true, ProcessorID::ExecutingInnerQueryFromViewTransformID)
     , views_data(std::move(views_data_))
     , view(view_)
 {
@@ -494,7 +494,7 @@ ExecutingInnerQueryFromViewTransform::GenerateResult ExecutingInnerQueryFromView
 }
 
 FinalizingViewsTransform::FinalizingViewsTransform(std::vector<Block> headers, ViewsDataPtr data)
-    : IProcessor(initPorts(std::move(headers)), {Block()})
+    : IProcessor(initPorts(std::move(headers)), {Block()}, ProcessorID::FinalizingViewsTransformID)
     , output(outputs.front())
     , views_data(std::move(data))
 {

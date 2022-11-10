@@ -7,7 +7,7 @@ namespace DB
 
 struct TemporaryFileStream;
 
-class TemporaryFileLazySource : public ISource
+class TemporaryFileLazySource final : public ISource
 {
 public:
     TemporaryFileLazySource(const std::string & path_, const Block & header_);

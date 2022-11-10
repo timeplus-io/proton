@@ -109,7 +109,7 @@ Pipe ProxyStream::read(
 {
     QueryPlan plan;
     read(plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
-    return plan.convertToPipe(QueryPlanOptimizationSettings::fromContext(context_), BuildQueryPipelineSettings::fromContext(context_));
+    return plan.convertToPipe(QueryPlanOptimizationSettings::fromContext(context_), BuildQueryPipelineSettings::fromContext(context_), context_);
 }
 
 void ProxyStream::read(

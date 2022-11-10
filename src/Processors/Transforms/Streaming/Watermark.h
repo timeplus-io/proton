@@ -70,12 +70,20 @@ public:
 
     virtual std::unique_ptr<Watermark> clone() const { return std::make_unique<Watermark>(*this); }
 
+    virtual String getName() const { return "Watermark"; }
+
     void preProcess();
     void process(Block & block);
+
+    VersionType getVersion() const;
+
+    virtual void serialize(WriteBuffer & wb) const;
+    virtual void deserialize(ReadBuffer & rb);
 
 protected:
     virtual void doProcess(Block & /* block */) { }
     void assignWatermark(Block & block);
+    virtual VersionType getVersionFromRevision(UInt64 revision) const;
 
 private:
     /// EMIT STREAM AFTER WATERMARK
@@ -96,6 +104,8 @@ protected:
     bool proc_time = false;
 
     Poco::Logger * log;
+
+    mutable std::optional<VersionType> version;
 
     /// max event time observed so far
     Int64 max_event_ts = 0;

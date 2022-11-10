@@ -11,8 +11,8 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-IInflatingTransform::IInflatingTransform(Block input_header, Block output_header)
-    : IProcessor({std::move(input_header)}, {std::move(output_header)})
+IInflatingTransform::IInflatingTransform(Block input_header, Block output_header, ProcessorID pid_)
+    : IProcessor({std::move(input_header)}, {std::move(output_header)}, pid_)
     , input(inputs.front()), output(outputs.front())
 {
 

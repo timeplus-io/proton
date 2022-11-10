@@ -11,7 +11,7 @@ namespace ErrorCodes
 
 MergingAggregatedTransform::MergingAggregatedTransform(
     Block header_, AggregatingTransformParamsPtr params_, size_t max_threads_)
-    : IAccumulatingTransform(std::move(header_), params_->getHeader())
+    : IAccumulatingTransform(std::move(header_), params_->getHeader(), ProcessorID::MergingAggregatedTransformID)
     , params(std::move(params_)), max_threads(max_threads_)
 {
 }
@@ -74,19 +74,7 @@ Chunk MergingAggregatedTransform::generate()
     auto block = std::move(*next_block);
     ++next_block;
 
-    auto info = std::make_shared<AggregatedChunkInfo>();
-    info->bucket_num = block.info.bucket_num;
-    info->is_overflows = block.info.is_overflows;
-
-    /// proton: starts
-    info->ctx.setWatermark(WatermarkBound{INVALID_SUBSTREAM_ID, block.info.watermark, block.info.watermark_lower_bound});
-    /// proton: ends
-
-    UInt64 num_rows = block.rows();
-    Chunk chunk(block.getColumns(), num_rows);
-    chunk.setChunkInfo(std::move(info));
-
-    return chunk;
+    return convertToChunk(block);
 }
 
 }

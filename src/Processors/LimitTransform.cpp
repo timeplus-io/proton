@@ -13,7 +13,7 @@ LimitTransform::LimitTransform(
     const Block & header_, UInt64 limit_, UInt64 offset_, size_t num_streams,
     bool always_read_till_end_, bool with_ties_,
     SortDescription description_)
-    : IProcessor(InputPorts(num_streams, header_), OutputPorts(num_streams, header_))
+    : IProcessor(InputPorts(num_streams, header_), OutputPorts(num_streams, header_), ProcessorID::LimitTransformID)
     , limit(limit_), offset(offset_)
     , always_read_till_end(always_read_till_end_)
     , with_ties(with_ties_), description(std::move(description_))

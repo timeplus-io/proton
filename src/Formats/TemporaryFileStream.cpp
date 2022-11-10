@@ -2,7 +2,6 @@
 #include <Formats/NativeReader.h>
 #include <Formats/NativeWriter.h>
 #include <Processors/Executors/PullingPipelineExecutor.h>
-#include <Processors/ISource.h>
 #include <Compression/CompressedWriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Core/ProtocolDefines.h>
@@ -29,7 +28,7 @@ void TemporaryFileStream::write(const std::string & path, const Block & header, 
 {
     WriteBufferFromFile file_buf(path);
     CompressedWriteBuffer compressed_buf(file_buf, CompressionCodecFactory::instance().get(codec, {}));
-    NativeWriter output(compressed_buf, 0, header);
+    NativeWriter output(compressed_buf, header, 0);
 
     auto pipeline = QueryPipelineBuilder::getPipeline(std::move(builder));
     PullingPipelineExecutor executor(pipeline);

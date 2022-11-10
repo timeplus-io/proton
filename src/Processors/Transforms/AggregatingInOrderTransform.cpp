@@ -22,7 +22,7 @@ AggregatingInOrderTransform::AggregatingInOrderTransform(
     const SortDescription & group_by_description_,
     size_t max_block_size_, size_t max_block_bytes_,
     ManyAggregatedDataPtr many_data_, size_t current_variant)
-    : IProcessor({std::move(header)}, {params_->getCustomHeader(false)})
+    : IProcessor({std::move(header)}, {params_->getCustomHeader(false)}, ProcessorID::AggregatingInOrderTransformID)
     , max_block_size(max_block_size_)
     , max_block_bytes(max_block_bytes_)
     , params(std::move(params_))

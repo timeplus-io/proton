@@ -4,15 +4,15 @@
 #include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/ProfileEventsExt.h>
 #include <Interpreters/QueryLog.h>
-#include <Common/ClickHouseRevision.h>
+#include <Common/VersionRevision.h>
 
 
 namespace DB
@@ -111,7 +111,7 @@ void QueryThreadLogElement::appendToBlock(MutableColumns & columns) const
 
     QueryLogElement::appendClientInfo(client_info, columns, i);
 
-    columns[i++]->insert(ClickHouseRevision::getVersionRevision());
+    columns[i++]->insert(ProtonRevision::getVersionRevision());
 
     if (profile_counters)
     {

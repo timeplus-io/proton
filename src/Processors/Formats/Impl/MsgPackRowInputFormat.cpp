@@ -32,7 +32,7 @@ namespace ErrorCodes
 }
 
 MsgPackRowInputFormat::MsgPackRowInputFormat(const Block & header_, ReadBuffer & in_, Params params_)
-    : MsgPackRowInputFormat(header_, std::make_unique<PeekableReadBuffer>(in_), params_) {}
+    : MsgPackRowInputFormat(header_, std::make_unique<PeekableReadBuffer>(in_), params_, ProcessorID::MsgPackRowInputFormatID) {}
 
 MsgPackRowInputFormat::MsgPackRowInputFormat(const Block & header_, std::unique_ptr<PeekableReadBuffer> buf_, Params params_)
     : IRowInputFormat(header_, *buf_, std::move(params_)), buf(std::move(buf_)), parser(visitor), data_types(header_.getDataTypes())  {}

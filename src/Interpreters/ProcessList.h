@@ -175,6 +175,7 @@ public:
 
     /// proton: starts.
     String getPipelineMetric() const;
+    const String & getQuery() const { return query; }
     /// proton: ends.
 
     QueryStatusInfo getInfo(bool get_thread_list = false, bool get_profile_events = false, bool get_settings = false) const;

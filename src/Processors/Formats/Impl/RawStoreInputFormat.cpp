@@ -46,7 +46,7 @@ namespace
 
 RawStoreInputFormat::RawStoreInputFormat(
     ReadBuffer & in_, const Block & header_, Params params_, const FormatSettings & format_settings_, bool yield_strings_)
-    : IRowInputFormat(header_, in_, std::move(params_))
+    : IRowInputFormat(header_, in_, std::move(params_), ProcessorID::RawStoreInputFormatID)
     , format_settings(format_settings_)
     , name_map(header_.columns())
     , yield_strings(yield_strings_)

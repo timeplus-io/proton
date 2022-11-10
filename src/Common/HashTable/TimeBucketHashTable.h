@@ -9,7 +9,7 @@
 #include <Common/HashTable/HashTableKeyHolder.h>
 
 template <size_t initial_size_degree = 8>
-struct StreamingTwoLevelHashTableGrower : public HashTableGrower<initial_size_degree>
+struct TimeBucketHashTableGrower : public HashTableGrower<initial_size_degree>
 {
     /// Increase the size of the hash table.
     void increaseSize() { this->size_degree += this->size_degree >= 15 ? 1 : 2; }
@@ -22,15 +22,14 @@ template <
     typename Grower,
     typename Allocator,
     typename ImplTable = HashTable<Key, Cell, Hash, Grower, Allocator>>
-class StreamingTwoLevelHashTable : private boost::noncopyable,
-                                   protected Hash /// empty base optimization
+class TimeBucketHashTable : private boost::noncopyable, protected Hash /// empty base optimization
 {
 protected:
     friend class const_iterator;
     friend class iterator;
 
     using HashValue = size_t;
-    using Self = StreamingTwoLevelHashTable;
+    using Self = TimeBucketHashTable;
 
     size_t win_key_size;
 
@@ -116,7 +115,7 @@ public:
     std::map<size_t, Impl> impls;
     Impl sentinel;
 
-    StreamingTwoLevelHashTable() { }
+    TimeBucketHashTable() { }
 
     void setWinKeySize(size_t win_key_size_)
     {
@@ -126,7 +125,7 @@ public:
 
     /// Copy the data from another (normal) hash table. It should have the same hash function.
     template <typename Source>
-    StreamingTwoLevelHashTable(const Source & src)
+    TimeBucketHashTable(const Source & src)
     {
         typename Source::const_iterator it = src.begin();
 
@@ -178,8 +177,6 @@ public:
         Self * container{};
         size_t bucket{};
         typename Impl::const_iterator current_it{};
-
-        friend class StreamingTwoLevelHashTable;
 
         const_iterator(Self * container_, size_t bucket_, typename Impl::const_iterator current_it_)
             : container(container_), bucket(bucket_), current_it(current_it_)
@@ -439,15 +436,15 @@ public:
         return {removed + removed2, last_removed_watermark, new_size - removed2};
     }
 
-    std::vector<size_t> bucketsBefore(UInt64 watermark)
+    std::vector<size_t> bucketsBefore(UInt64 watermark) const
     {
         std::vector<size_t> buckets;
         buckets.reserve(10);
 
-        for (auto it = impls.begin(), it_end = impls.end(); it != it_end; ++it)
+        for (const auto & time_map : impls)
         {
-            if (it->first <= watermark)
-                buckets.push_back(it->first);
+            if (time_map.first <= watermark)
+                buckets.push_back(time_map.first);
             else
                 break;
         }
@@ -455,21 +452,23 @@ public:
         return buckets;
     }
 
-    std::vector<size_t> bucketsOfSession(size_t session_id)
+    std::vector<size_t> buckets() const
     {
         std::vector<size_t> buckets;
-        buckets.reserve(10);
+        buckets.reserve(impls.size());
 
-        for (auto it = impls.begin(), it_end = impls.end(); it != it_end; ++it)
-        {
-            if (it->first == session_id)
-            {
-                buckets.push_back(it->first);
-                break;
-            }
-        }
+        for (const auto & time_map : impls)
+            buckets.push_back(time_map.first);
 
         return buckets;
+    }
+
+    std::vector<size_t> bucketsOfSession(size_t session_id)
+    {
+        if (impls.contains(session_id))
+            return {session_id};
+
+        return {};
     }
 
     template <typename MappedDestroyFunc>
@@ -480,7 +479,7 @@ public:
 
         /// Step 1, remove very old windows
         auto it = impls.find(session_id);
-        if (it!=impls.end())
+        if (it != impls.end())
         {
             it->second.forEachMapped(mapped_destroy);
             it->second.clearAndShrink();

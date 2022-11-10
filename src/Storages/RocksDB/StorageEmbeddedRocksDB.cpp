@@ -180,7 +180,7 @@ static std::pair<FieldVectorPtr, bool> getFilterKeys(
 }
 
 
-class EmbeddedRocksDBSource : public SourceWithProgress
+class EmbeddedRocksDBSource final : public SourceWithProgress
 {
 public:
     EmbeddedRocksDBSource(
@@ -190,7 +190,7 @@ public:
         FieldVector::const_iterator begin_,
         FieldVector::const_iterator end_,
         const size_t max_block_size_)
-        : SourceWithProgress(header)
+        : SourceWithProgress(header, ProcessorID::EmbeddedRocksDBSourceID)
         , storage(storage_)
         , primary_key_pos(header.getPositionByName(storage.getPrimaryKey()))
         , keys(keys_)
@@ -206,7 +206,7 @@ public:
         const Block & header,
         std::unique_ptr<rocksdb::Iterator> iterator_,
         const size_t max_block_size_)
-        : SourceWithProgress(header)
+        : SourceWithProgress(header, ProcessorID::EmbeddedRocksDBSourceID)
         , storage(storage_)
         , primary_key_pos(header.getPositionByName(storage.getPrimaryKey()))
         , iterator(std::move(iterator_))

@@ -13,6 +13,8 @@ public:
     TumbleWatermark(const TumbleWatermark &) = default;
     ~TumbleWatermark() override = default;
 
+    String getName() const override { return "TumbleWatermark"; }
+
     WatermarkPtr clone() const override { return std::make_unique<TumbleWatermark>(*this); }
 };
 }

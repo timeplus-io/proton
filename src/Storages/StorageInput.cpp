@@ -28,7 +28,7 @@ StorageInput::StorageInput(const StorageID & table_id, const ColumnsDescription 
 class StorageInputSource : public SourceWithProgress, WithContext
 {
 public:
-    StorageInputSource(ContextPtr context_, Block sample_block) : SourceWithProgress(std::move(sample_block)), WithContext(context_) {}
+    StorageInputSource(ContextPtr context_, Block sample_block) : SourceWithProgress(std::move(sample_block), ProcessorID::StorageInputSourceID), WithContext(context_) {}
 
     Chunk generate() override
     {

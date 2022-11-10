@@ -211,6 +211,10 @@ protected:
     /// If update_info was set, will call update() for it in case port's state have changed.
     UpdateInfo * update_info = nullptr;
 
+    /// proton : starts
+    mutable std::optional<VersionType> version;
+    /// proton : ends
+
 public:
     using Data = State::Data;
 
@@ -248,12 +252,27 @@ public:
         return *processor;
     }
 
+    /// proton : starts
+    void setProcessor(IProcessor * processor_) { processor = processor_; }
+
+    uintptr_t getProcessorAddr() const { return reinterpret_cast<uintptr_t>(processor); }
+
+    VersionType getVersionFromRevision(UInt64 revision) const;
+
+    VersionType getVersion() const;
+    /// proton : ends
+
 protected:
     void inline ALWAYS_INLINE updateVersion()
     {
         if (likely(update_info))
             update_info->update();
     }
+
+    /// proton : starts, we choose avoiding virtual functions in Port base class
+    void doMarshal(WriteBuffer & wb) const;
+    void doUnmarshal(ReadBuffer & rb);
+    /// proton : ends
 };
 
 /// Invariants:
@@ -261,7 +280,7 @@ protected:
 ///   * If port isFinished(), you can do nothing with it.
 ///   * If port is not needed, you can only setNeeded() or close() it.
 ///   * You can pull only if port hasData().
-class InputPort : public Port
+class InputPort final : public Port
 {
     friend void connect(OutputPort &, InputPort &);
 
@@ -371,6 +390,15 @@ public:
         assumeConnected();
         return *output_port;
     }
+
+    /// proton : starts
+    uintptr_t getOutputPortAddr() const { return reinterpret_cast<uintptr_t>(output_port); }
+
+    void setOutputPort(OutputPort * output_port_) { output_port = output_port_; }
+
+    void marshal(WriteBuffer & wb) const;
+    void unmarshal(ReadBuffer & rb);
+    /// proton : ends
 };
 
 
@@ -379,7 +407,7 @@ public:
 ///   * If port isFinished(), you can do nothing with it.
 ///   * If port not isNeeded(), you can only finish() it.
 ///   * You can push only if port doesn't hasData().
-class OutputPort : public Port
+class OutputPort final : public Port
 {
     friend void connect(OutputPort &, InputPort &);
 
@@ -462,6 +490,15 @@ public:
         assumeConnected();
         return *input_port;
     }
+
+    /// proton : starts
+    uintptr_t getInputPortAddr() const { return reinterpret_cast<uintptr_t>(input_port); }
+
+    void setInputPort(InputPort * input_port_) { input_port = input_port_; }
+
+    void marshal(WriteBuffer & wb) const;
+    void unmarshal(ReadBuffer & rb);
+    /// proton : ends
 };
 
 

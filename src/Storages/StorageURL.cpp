@@ -166,7 +166,7 @@ namespace
             const String & compression_method,
             const ReadWriteBufferFromHTTP::HTTPHeaderEntries & headers_ = {},
             const URIParams & params = {})
-            : SourceWithProgress(sample_block), name(std::move(name_))
+            : SourceWithProgress(sample_block, ProcessorID::StorageURLSourceID), name(std::move(name_))
             , uri_info(uri_info_)
         {
             auto headers = getHeaders(headers_);
@@ -298,7 +298,7 @@ StorageURLSink::StorageURLSink(
     const ConnectionTimeouts & timeouts,
     const CompressionMethod compression_method,
     const String & http_method)
-    : SinkToStorage(sample_block)
+    : SinkToStorage(sample_block, ProcessorID::StorageURLSinkID)
 {
     std::string content_type = FormatFactory::instance().getContentType(format, context, format_settings);
 
@@ -322,7 +322,7 @@ void StorageURLSink::onFinish()
     write_buf->finalize();
 }
 
-class PartitionedStorageURLSink : public PartitionedSink
+class PartitionedStorageURLSink final : public PartitionedSink
 {
 public:
     PartitionedStorageURLSink(
@@ -335,7 +335,7 @@ public:
         const ConnectionTimeouts & timeouts_,
         const CompressionMethod compression_method_,
         const String & http_method_)
-            : PartitionedSink(partition_by, context_, sample_block_)
+            : PartitionedSink(partition_by, context_, sample_block_, ProcessorID::PartitionedStorageURLSinkID)
             , uri(uri_)
             , format(format_)
             , format_settings(format_settings_)

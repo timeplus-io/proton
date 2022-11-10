@@ -2,6 +2,10 @@
 #include <QueryPipeline/PipelineResourcesHolder.h>
 #include <functional>
 
+/// proton : starts
+#include <Core/ExecuteMode.h>
+/// proton : ends
+
 namespace DB
 {
 
@@ -101,6 +105,10 @@ public:
 
     void reset();
 
+    /// proton : starts
+    void setExecuteMode(ExecuteMode exec_mode_) { exec_mode = exec_mode_; }
+    /// proton : ends
+
 private:
     PipelineResourcesHolder resources;
     Processors processors;
@@ -116,6 +124,10 @@ private:
     IOutputFormat * output_format = nullptr;
 
     size_t num_threads = 0;
+
+    /// proton : starts
+    ExecuteMode exec_mode = ExecuteMode::NORMAL;
+    /// proton : ends
 
     friend class PushingPipelineExecutor;
     friend class PullingPipelineExecutor;

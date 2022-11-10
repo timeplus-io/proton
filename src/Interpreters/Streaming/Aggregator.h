@@ -4,8 +4,6 @@
 #include <memory>
 #include <functional>
 
-#include <base/logger_useful.h>
-
 #include <base/StringRef.h>
 #include <Common/Arena.h>
 #include <Common/HashTable/FixedHashMap.h>
@@ -35,6 +33,8 @@
 #include <Columns/ColumnLowCardinality.h>
 
 /// proton: starts
+#include <Checkpoint/CheckpointContext.h>
+#include <Core/Streaming/WatermarkInfo.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/Streaming/FunctionDescription.h>
@@ -42,9 +42,8 @@
 #include <Interpreters/Streaming/WindowCommon.h>
 #include <Parsers/ASTFunction.h>
 #include <Common/HashTable/Hash.h>
-#include <Common/HashTable/StreamingTwoLevelHashMap.h>
+#include <Common/HashTable/TimeBucketHashMap.h>
 #include <Common/ProtonCommon.h>
-#include <Core/Streaming/WatermarkInfo.h>
 
 #include <numeric>
 /// proton: ends
@@ -55,6 +54,7 @@ namespace DB
 {
 class CompiledAggregateFunctionsHolder;
 class NativeWriter;
+class SimpleNativeWriter;
 
 namespace Streaming
 {
@@ -77,21 +77,30 @@ namespace Streaming
   *  best suited for different cases, and this approach is just one of them, chosen for a combination of reasons.
   */
 
-/// using StreamingAggregatedDataWithUInt16Key = StreamingTwoLevelHashMap<FixedImplicitZeroHashMap<UInt16, AggregateDataPtr>>;
-/// using StreamingAggregatedDataWithUInt32Key = StreamingTwoLevelHashMap<HashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>>;
-/// using StreamingAggregatedDataWithUInt64Key = StreamingTwoLevelHashMap<HashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>>;
-/// using StreamingAggregatedDataWithKeys128 = HashMap<UInt128, AggregateDataPtr, UInt128HashCRC32>;
-/// using StreamingAggregatedDataWithKeys256 = HashMap<UInt256, AggregateDataPtr, UInt256HashCRC32>;
+enum class ConvertAction : uint8_t
+{
+    UNKNOWN = 0,
+    DISTRIBUTED_MERGE = 1,
+    WRITE_TO_TEMP_FS = 2,
+    CHECKPOINT = 3,
+    STREAMING_EMIT = 4,
+};
+
+/// using TimeBucketAggregatedDataWithUInt16Key = TimeBucketHashMap<FixedImplicitZeroHashMap<UInt16, AggregateDataPtr>>;
+/// using TimeBucketAggregatedDataWithUInt32Key = TimeBucketHashMap<HashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>>;
+/// using TimeBucketAggregatedDataWithUInt64Key = TimeBucketHashMap<HashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>>;
+/// using TimeBucketAggregatedDataWithKeys128 = HashMap<UInt128, AggregateDataPtr, UInt128HashCRC32>;
+/// using TimeBucketAggregatedDataWithKeys256 = HashMap<UInt256, AggregateDataPtr, UInt256HashCRC32>;
 
 /// Single key
-using StreamingAggregatedDataWithUInt16KeyTwoLevel = StreamingTwoLevelHashMap<UInt16, AggregateDataPtr, HashCRC32<UInt16>>;
-using StreamingAggregatedDataWithUInt32KeyTwoLevel = StreamingTwoLevelHashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>;
-using StreamingAggregatedDataWithUInt64KeyTwoLevel = StreamingTwoLevelHashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
-using StreamingAggregatedDataWithStringKeyTwoLevel = StreamingTwoLevelHashMapWithSavedHash<StringRef, AggregateDataPtr>;
+using TimeBucketAggregatedDataWithUInt16KeyTwoLevel = TimeBucketHashMap<UInt16, AggregateDataPtr, HashCRC32<UInt16>>;
+using TimeBucketAggregatedDataWithUInt32KeyTwoLevel = TimeBucketHashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>;
+using TimeBucketAggregatedDataWithUInt64KeyTwoLevel = TimeBucketHashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
+using TimeBucketAggregatedDataWithStringKeyTwoLevel = TimeBucketHashMapWithSavedHash<StringRef, AggregateDataPtr>;
 
 /// Multiple keys
-using StreamingAggregatedDataWithKeys128TwoLevel = StreamingTwoLevelHashMap<UInt128, AggregateDataPtr, UInt128HashCRC32>;
-using StreamingAggregatedDataWithKeys256TwoLevel = StreamingTwoLevelHashMap<UInt256, AggregateDataPtr, UInt256HashCRC32>;
+using TimeBucketAggregatedDataWithKeys128TwoLevel = TimeBucketHashMap<UInt128, AggregateDataPtr, UInt128HashCRC32>;
+using TimeBucketAggregatedDataWithKeys256TwoLevel = TimeBucketHashMap<UInt256, AggregateDataPtr, UInt256HashCRC32>;
 
 class Aggregator;
 
@@ -186,19 +195,19 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     /// proton: starts
     /// Single key
-    std::unique_ptr<AggregationMethodOneNumber<UInt16, StreamingAggregatedDataWithUInt64KeyTwoLevel>> streaming_key16_two_level;
-    std::unique_ptr<AggregationMethodOneNumber<UInt32, StreamingAggregatedDataWithUInt64KeyTwoLevel>> streaming_key32_two_level;
-    std::unique_ptr<AggregationMethodOneNumber<UInt64, StreamingAggregatedDataWithUInt64KeyTwoLevel>> streaming_key64_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<UInt16, TimeBucketAggregatedDataWithUInt64KeyTwoLevel>> time_bucket_key16_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<UInt32, TimeBucketAggregatedDataWithUInt64KeyTwoLevel>> time_bucket_key32_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<UInt64, TimeBucketAggregatedDataWithUInt64KeyTwoLevel>> time_bucket_key64_two_level;
 
     /// Multiple keys
-    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithUInt32KeyTwoLevel>>  streaming_keys32_two_level;
-    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithUInt64KeyTwoLevel>>  streaming_keys64_two_level;
-    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithKeys128TwoLevel>>    streaming_keys128_two_level;
-    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithKeys256TwoLevel>>    streaming_keys256_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithUInt32KeyTwoLevel>>  time_bucket_keys32_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithUInt64KeyTwoLevel>>  time_bucket_keys64_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithKeys128TwoLevel>>    time_bucket_keys128_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithKeys256TwoLevel>>    time_bucket_keys256_two_level;
 
     /// Nullable
-    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithKeys128TwoLevel, true>>  streaming_nullable_keys128_two_level;
-    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithKeys256TwoLevel, true>>  streaming_nullable_keys256_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithKeys128TwoLevel, true>>  time_bucket_nullable_keys128_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithKeys256TwoLevel, true>>  time_bucket_nullable_keys256_two_level;
 
     /// Low cardinality
 //    std::unique_ptr<AggregationMethodSingleLowCardinalityColumn<AggregationMethodOneNumber<UInt32, StreamingAggregatedDataWithNullableUInt64KeyTwoLevel>>> streaming_low_cardinality_key32_two_level;
@@ -206,11 +215,11 @@ struct AggregatedDataVariants : private boost::noncopyable
 //    std::unique_ptr<AggregationMethodSingleLowCardinalityColumn<AggregationMethodString<StreamingAggregatedDataWithNullableStringKeyTwoLevel>>> streaming_low_cardinality_key_string_two_level;
 //    std::unique_ptr<AggregationMethodSingleLowCardinalityColumn<AggregationMethodFixedString<StreamingAggregatedDataWithNullableStringKeyTwoLevel>>> streaming_low_cardinality_key_fixed_string_two_level;
 
-    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithKeys128TwoLevel, false, true>> streaming_low_cardinality_keys128_two_level;
-    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithKeys256TwoLevel, false, true>> streaming_low_cardinality_keys256_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithKeys128TwoLevel, false, true>> time_bucket_low_cardinality_keys128_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithKeys256TwoLevel, false, true>> time_bucket_low_cardinality_keys256_two_level;
 
     /// Fallback
-    std::unique_ptr<AggregationMethodSerialized<StreamingAggregatedDataWithStringKeyTwoLevel>>  streaming_serialized_two_level;
+    std::unique_ptr<AggregationMethodSerialized<TimeBucketAggregatedDataWithStringKeyTwoLevel>>  time_bucket_serialized_two_level;
     /// proton: ends
 
     /// In this and similar macros, the option without_key is not considered.
@@ -261,19 +270,19 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(low_cardinality_key_string_two_level, true) \
         M(low_cardinality_key_fixed_string_two_level, true) \
         /* proton: starts */ \
-        /* two level */ \
-        M(streaming_key16_two_level, true) \
-        M(streaming_key32_two_level, true) \
-        M(streaming_key64_two_level, true) \
-        M(streaming_keys32_two_level, true) \
-        M(streaming_keys64_two_level, true) \
-        M(streaming_keys128_two_level, true) \
-        M(streaming_keys256_two_level, true) \
-        M(streaming_nullable_keys128_two_level, true) \
-        M(streaming_nullable_keys256_two_level, true) \
-        M(streaming_low_cardinality_keys128_two_level, true) \
-        M(streaming_low_cardinality_keys256_two_level, true) \
-        M(streaming_serialized_two_level, true) \
+        /* time bucket two level */ \
+        M(time_bucket_key16_two_level, true) \
+        M(time_bucket_key32_two_level, true) \
+        M(time_bucket_key64_two_level, true) \
+        M(time_bucket_keys32_two_level, true) \
+        M(time_bucket_keys64_two_level, true) \
+        M(time_bucket_keys128_two_level, true) \
+        M(time_bucket_keys256_two_level, true) \
+        M(time_bucket_nullable_keys128_two_level, true) \
+        M(time_bucket_nullable_keys256_two_level, true) \
+        M(time_bucket_low_cardinality_keys128_two_level, true) \
+        M(time_bucket_low_cardinality_keys256_two_level, true) \
+        M(time_bucket_serialized_two_level, true) \
         /* proton: ends. */
 
     enum class Type
@@ -293,19 +302,42 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     ~AggregatedDataVariants();
 
-    #define APPLY_FOR_AGGREGATED_VARIANTS_STREAMING_TWO_LEVEL(M) \
-        M(streaming_key16_two_level, true) \
-        M(streaming_key32_two_level, true) \
-        M(streaming_key64_two_level, true) \
-        M(streaming_keys32_two_level, true) \
-        M(streaming_keys64_two_level, true) \
-        M(streaming_keys128_two_level, true) \
-        M(streaming_keys256_two_level, true) \
-        M(streaming_nullable_keys128_two_level, true) \
-        M(streaming_nullable_keys256_two_level, true) \
-        M(streaming_low_cardinality_keys128_two_level, true) \
-        M(streaming_low_cardinality_keys256_two_level, true) \
-        M(streaming_serialized_two_level, true) \
+    #define APPLY_FOR_VARIANTS_STATIC_BUCKET_TWO_LEVEL(M) \
+        M(key32_two_level) \
+        M(key64_two_level) \
+        M(key_string_two_level) \
+        M(key_fixed_string_two_level) \
+        M(keys32_two_level) \
+        M(keys64_two_level) \
+        M(keys128_two_level) \
+        M(keys256_two_level) \
+        M(serialized_two_level) \
+        M(nullable_keys128_two_level) \
+        M(nullable_keys256_two_level) \
+        M(low_cardinality_key32_two_level) \
+        M(low_cardinality_key64_two_level) \
+        M(low_cardinality_keys128_two_level) \
+        M(low_cardinality_keys256_two_level) \
+        M(low_cardinality_key_string_two_level) \
+        M(low_cardinality_key_fixed_string_two_level) \
+
+    #define APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M) \
+        M(time_bucket_key16_two_level) \
+        M(time_bucket_key32_two_level) \
+        M(time_bucket_key64_two_level) \
+        M(time_bucket_keys32_two_level) \
+        M(time_bucket_keys64_two_level) \
+        M(time_bucket_keys128_two_level) \
+        M(time_bucket_keys256_two_level) \
+        M(time_bucket_nullable_keys128_two_level) \
+        M(time_bucket_nullable_keys256_two_level) \
+        M(time_bucket_low_cardinality_keys128_two_level) \
+        M(time_bucket_low_cardinality_keys256_two_level) \
+        M(time_bucket_serialized_two_level)
+
+    #define APPLY_FOR_VARIANTS_ALL_TWO_LEVEL(M) \
+        APPLY_FOR_VARIANTS_STATIC_BUCKET_TWO_LEVEL(M) \
+        APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M) \
 
     void init(Type type_)
     {
@@ -322,12 +354,13 @@ struct AggregatedDataVariants : private boost::noncopyable
 
         type = type_;
 
-        /// proton: start
+        /// proton: start. Setup window key size since we will need use the size to extract the window key value
+        /// and sort the window key in a sorted map for recycle
         switch (type)
         {
-        #define M(NAME, IS_TWO_LEVEL) \
+        #define M(NAME) \
             case Type::NAME: NAME->data.setWinKeySize(key_sizes[0]); break;
-            APPLY_FOR_AGGREGATED_VARIANTS_STREAMING_TWO_LEVEL(M)
+            APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
         #undef M
 
             default:
@@ -391,21 +424,34 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     bool isTwoLevel() const
     {
-        switch (type)
-        {
-            case Type::EMPTY:       return false;
-            case Type::without_key: return false;
-
-        #define M(NAME, IS_TWO_LEVEL) \
-            case Type::NAME: return IS_TWO_LEVEL;
-            APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
-        #undef M
-        }
-
-        __builtin_unreachable();
+        return isStaticBucketTwoLevel() || isTimeBucketTwoLevel();
     }
 
-    #define APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_STREAMING(M) \
+    bool isStaticBucketTwoLevel() const
+    {
+        switch (type)
+        {
+        #define M(NAME) \
+            case Type::NAME: return true;
+                APPLY_FOR_VARIANTS_STATIC_BUCKET_TWO_LEVEL(M)
+        #undef M
+            default: return false;
+        }
+    }
+
+    bool isTimeBucketTwoLevel() const
+    {
+        switch (type)
+        {
+        #define M(NAME) \
+            case Type::NAME: return true;
+                APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
+        #undef M
+            default: return false;
+        }
+    }
+
+    #define APPLY_FOR_VARIANTS_CONVERTIBLE_TO_STATIC_BUCKET_TWO_LEVEL(M) \
         M(key32)            \
         M(key64)            \
         M(key_string)       \
@@ -424,7 +470,7 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(low_cardinality_key_string) \
         M(low_cardinality_key_fixed_string) \
 
-    #define APPLY_FOR_VARIANTS_NOT_CONVERTIBLE_TO_TWO_LEVEL_STREAMING(M) \
+    #define APPLY_FOR_VARIANTS_NOT_CONVERTIBLE_TO_STATIC_BUCKET_TWO_LEVEL(M) \
         M(key8)             \
         M(key16)            \
         M(keys16)           \
@@ -438,8 +484,8 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(low_cardinality_key16) \
 
     #define APPLY_FOR_VARIANTS_SINGLE_LEVEL_STREAMING(M) \
-        APPLY_FOR_VARIANTS_NOT_CONVERTIBLE_TO_TWO_LEVEL_STREAMING(M) \
-        APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_STREAMING(M) \
+        APPLY_FOR_VARIANTS_NOT_CONVERTIBLE_TO_STATIC_BUCKET_TWO_LEVEL(M) \
+        APPLY_FOR_VARIANTS_CONVERTIBLE_TO_STATIC_BUCKET_TWO_LEVEL(M) \
 
     bool isConvertibleToTwoLevel() const
     {
@@ -448,7 +494,7 @@ struct AggregatedDataVariants : private boost::noncopyable
         #define M(NAME) \
             case Type::NAME: return true;
 
-            APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_STREAMING(M)
+            APPLY_FOR_VARIANTS_CONVERTIBLE_TO_STATIC_BUCKET_TWO_LEVEL(M)
 
         #undef M
             default:
@@ -459,56 +505,6 @@ struct AggregatedDataVariants : private boost::noncopyable
     void convertToTwoLevel();
 
     /// proton: starts
-    #define APPLY_FOR_VARIANTS_TWO_LEVEL_STREAMING(M) \
-        M(key32_two_level)            \
-        M(key64_two_level)            \
-        M(key_string_two_level)       \
-        M(key_fixed_string_two_level) \
-        M(keys32_two_level)           \
-        M(keys64_two_level)           \
-        M(keys128_two_level)          \
-        M(keys256_two_level)          \
-        M(serialized_two_level)       \
-        M(nullable_keys128_two_level) \
-        M(nullable_keys256_two_level) \
-        M(low_cardinality_key32_two_level) \
-        M(low_cardinality_key64_two_level) \
-        M(low_cardinality_keys128_two_level) \
-        M(low_cardinality_keys256_two_level) \
-        M(low_cardinality_key_string_two_level) \
-        M(low_cardinality_key_fixed_string_two_level) \
-
-    #define APPLY_FOR_VARIANTS_TWO_LEVEL_STREAMING_FULL(M) \
-        M(key32_two_level)            \
-        M(key64_two_level)            \
-        M(key_string_two_level)       \
-        M(key_fixed_string_two_level) \
-        M(keys32_two_level)           \
-        M(keys64_two_level)           \
-        M(keys128_two_level)          \
-        M(keys256_two_level)          \
-        M(serialized_two_level)       \
-        M(nullable_keys128_two_level) \
-        M(nullable_keys256_two_level) \
-        M(low_cardinality_key32_two_level) \
-        M(low_cardinality_key64_two_level) \
-        M(low_cardinality_keys128_two_level) \
-        M(low_cardinality_keys256_two_level) \
-        M(low_cardinality_key_string_two_level) \
-        M(low_cardinality_key_fixed_string_two_level) \
-        M(streaming_key16_two_level) \
-        M(streaming_key32_two_level) \
-        M(streaming_key64_two_level) \
-        M(streaming_keys32_two_level) \
-        M(streaming_keys64_two_level) \
-        M(streaming_keys128_two_level) \
-        M(streaming_keys256_two_level) \
-        M(streaming_nullable_keys128_two_level) \
-        M(streaming_nullable_keys256_two_level) \
-        M(streaming_low_cardinality_keys128_two_level) \
-        M(streaming_low_cardinality_keys256_two_level) \
-        M(streaming_serialized_two_level) \
-
     #define APPLY_FOR_LOW_CARDINALITY_VARIANTS_STREAMING(M) \
         M(low_cardinality_key8) \
         M(low_cardinality_key16) \
@@ -524,8 +520,8 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(low_cardinality_keys256_two_level) \
         M(low_cardinality_key_string_two_level) \
         M(low_cardinality_key_fixed_string_two_level) \
-        M(streaming_low_cardinality_keys128_two_level) \
-        M(streaming_low_cardinality_keys256_two_level) \
+        M(time_bucket_low_cardinality_keys128_two_level) \
+        M(time_bucket_low_cardinality_keys256_two_level) \
 
     /// proton ends
     bool isLowCardinality() const
@@ -629,6 +625,12 @@ public:
         bool compile_aggregate_expressions;
         size_t min_count_to_compile_aggregate_expression;
         /// proton: starts
+        /// `keep_state` tell Aggregator if it needs to hold state in-memory for streaming
+        /// processing. In normal case, it is true. However for global over global aggregation
+        /// etc cases, we don't want the outer global aggregation to accumulate states in-memory.
+        /// Actually things are complex when we support `EMIT CHANGELOG`, in which case `keep_state`
+        /// shall always be `true` as `EMIT CHANGELOG` is expected to retract the previous state.
+        /// There is another case we will set keep_state to false : when we cancel
         bool keep_state = true;
         /// How many streaming windows to keep from recycling
         size_t streaming_window_count = 0;
@@ -777,10 +779,26 @@ public:
       * If overflow_row = true, then aggregates for rows that are not included in max_rows_to_group_by are put in the first block.
       *
       * If final = false, then ColumnAggregateFunction is created as the aggregation columns with the state of the calculations,
-      *  which can then be combined with other states (for distributed query processing).
+      *  which can then be combined with other states (for distributed query processing or checkpoint).
       * If final = true, then columns with ready values are created as aggregate columns.
+      *
+      * For streaming processing, the internal aggregate state may be pruned or kept depending on different scenarios
+      * 1. During checkpointing, never prune the aggregate states, `keep_state = true` in this case
+      * 2. In `EMIT changelog` case, never prune the states. Examples
+      *    a. SELECT count(), avg(i), sum(k) FROM my_stream EMIT changelog;
+      *    b. SELECT count(), avg(i), sum(k) FROM (
+      *         SELECT avg(i) AS i, sum(k) AS k FROM my_stream GROUP BY device_id) EMIT changelog;
+      * 3. In `non emit changelog` and `non checkpoint` scenario
+      *    i. For first level global aggregation, never prune the aggregate states. Examples
+      *       a. SELECT count(), avg(i), sum(k) FROM my_stream; <-- first level global aggr
+      *       b. SELECT count(), avg(i), sum(k) FROM ( <-- first level global aggr
+      *            SELECT window_start, avg(i) AS i, sum(k) AS k FROM tumble(my_stream, 5s) GROUP BY window_start);
+      *    ii. For non-first level global aggregation, always prune the states. Examples
+      *       a. SELECT count(), avg(i), sum(k) FROM ( <-- second level global aggr, need prune its state at this level
+      *            SELECT avg(i) AS i, sum(k) AS k FROM my_stream GROUP BY device_id <-- first level global aggr, don't prune states
+      *          );
       */
-    BlocksList convertToBlocks(AggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
+    BlocksList convertToBlocks(AggregatedDataVariants & data_variants, bool final, ConvertAction action, size_t max_threads) const;
 
     ManyAggregatedDataVariantsPtr prepareVariantsToMerge(ManyAggregatedDataVariants & data_variants) const;
 
@@ -792,7 +810,7 @@ public:
     /// Precondition: for all blocks block.info.is_overflows flag must be the same.
     /// (either all blocks are from overflow data or none blocks are).
     /// The resulting block has the same value of is_overflows flag.
-    Block mergeBlocks(BlocksList & blocks, bool final);
+    Block mergeBlocks(BlocksList & blocks, bool final, ConvertAction action);
 
     /** Split block with partially-aggregated data to many blocks, as if two-level method of aggregation was used.
       * This is needed to simplify merging of that data with other results, that are already two-level.
@@ -824,6 +842,8 @@ public:
     /// Get data structure of the result.
     /// proton: starts
     Block getHeader(bool final, bool ignore_session_columns = false, bool emit_version = false) const;
+
+    Params & getParams() { return params; }
     /// proton: ends
 
 private:
@@ -841,6 +861,8 @@ private:
     friend class GlobalAggregatingTransform;
     friend class TumbleHopAggregatingTransform;
     friend class TumbleHopAggregatingTransformWithSubstream;
+
+    mutable std::optional<VersionType> version;
     /// proton: ends
 
     Params params;
@@ -885,7 +907,7 @@ private:
     /// How many RAM were used to process the query before processing the first block.
     Int64 memory_usage_before_aggregation = 0;
 
-    Poco::Logger * log = &Poco::Logger::get("StreamingAggregator");
+    Poco::Logger * log;
 
     /// For external aggregation.
     mutable TemporaryFiles temporary_files;
@@ -904,7 +926,7 @@ private:
     AggregatedDataVariants::Type chooseAggregationMethod();
 
     /// proton: starts
-    AggregatedDataVariants::Type chooseAggregationMethodStreaming(
+    AggregatedDataVariants::Type chooseAggregationMethodTimeBucketTwoLevel(
         const DataTypes & types_removed_nullable, bool has_nullable_key,
         bool has_low_cardinality, size_t num_fixed_contiguous_keys, size_t keys_bytes);
     /// proton: ends
@@ -968,14 +990,16 @@ private:
     void mergeDataNullKey(
             Table & table_dst,
             Table & table_src,
-            Arena * arena) const;
+            Arena * arena,
+            bool clear_states) const;
 
     /// Merge data from hash table `src` into `dst`.
     template <typename Method, bool use_compiled_functions, typename Table>
     void mergeDataImpl(
         Table & table_dst,
         Table & table_src,
-        Arena * arena) const;
+        Arena * arena,
+        bool clear_states) const;
 
     /// Merge data from hash table `src` into `dst`, but only for keys that already exist in dst. In other cases, merge the data into `overflows`.
     template <typename Method, typename Table>
@@ -983,21 +1007,23 @@ private:
         Table & table_dst,
         AggregatedDataWithoutKey & overflows,
         Table & table_src,
-        Arena * arena) const;
+        Arena * arena,
+        bool clear_states) const;
 
     /// Same, but ignores the rest of the keys.
     template <typename Method, typename Table>
     void mergeDataOnlyExistingKeysImpl(
         Table & table_dst,
         Table & table_src,
-        Arena * arena) const;
+        Arena * arena,
+        bool clear_states) const;
 
     void mergeWithoutKeyDataImpl(
         ManyAggregatedDataVariants & non_empty_data) const;
 
     template <typename Method>
     void mergeSingleLevelDataImpl(
-        ManyAggregatedDataVariants & non_empty_data) const;
+        ManyAggregatedDataVariants & non_empty_data, ConvertAction action) const;
 
     template <typename Method, typename Table>
     void convertToBlockImpl(
@@ -1007,7 +1033,8 @@ private:
         AggregateColumnsData & aggregate_columns,
         MutableColumns & final_aggregate_columns,
         Arena * arena,
-        bool final) const;
+        bool final,
+        ConvertAction action) const;
 
     template <typename Mapped>
     void insertAggregatesIntoColumns(
@@ -1021,7 +1048,8 @@ private:
         Table & data,
         std::vector<IColumn *> key_columns,
         MutableColumns & final_aggregate_columns,
-        Arena * arena) const;
+        Arena * arena,
+        ConvertAction action) const;
 
     template <typename Method, typename Table>
     void convertToBlockImplNotFinal(
@@ -1034,6 +1062,7 @@ private:
     Block prepareBlockAndFill(
         AggregatedDataVariants & data_variants,
         bool final,
+        ConvertAction action,
         size_t rows,
         Filler && filler) const;
 
@@ -1043,24 +1072,27 @@ private:
         Method & method,
         Arena * arena,
         bool final,
+        ConvertAction action,
         size_t bucket) const;
 
     Block mergeAndConvertOneBucketToBlock(
         ManyAggregatedDataVariants & variants,
         Arena * arena,
         bool final,
+        ConvertAction action,
         size_t bucket,
         std::atomic<bool> * is_cancelled = nullptr) const;
 
-    Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
-    Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
-    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const;
+    Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows, ConvertAction action) const;
+    Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final, ConvertAction action) const;
+    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, size_t max_threads, ConvertAction action) const;
 
     template <typename Method>
     BlocksList prepareBlocksAndFillTwoLevelImpl(
         AggregatedDataVariants & data_variants,
         Method & method,
         bool final,
+        ConvertAction action,
         ThreadPool * thread_pool) const;
 
     template <bool no_more_keys, typename Method, typename Table>
@@ -1086,7 +1118,7 @@ private:
 
     template <typename Method>
     void mergeBucketImpl(
-        ManyAggregatedDataVariants & data, size_t bucket, Arena * arena, std::atomic<bool> * is_cancelled = nullptr) const;
+        ManyAggregatedDataVariants & data, bool final, ConvertAction action, size_t bucket, Arena * arena, std::atomic<bool> * is_cancelled = nullptr) const;
 
     template <typename Method>
     void convertBlockToTwoLevelImpl(
@@ -1132,10 +1164,25 @@ private:
         MutableColumns & final_key_columns) const;
 
     /// proton: starts
-    void initStatesWithoutKey(AggregatedDataVariants & data_variants) const;
-    void setupAggregatesPoolTimestamps(UInt64 num_rows, const ColumnRawPtrs & key_columns, AggregatedDataVariants & result) const;
+    void initStatesForWithoutKeyOrOverflow(AggregatedDataVariants & data_variants) const;
+    void setupAggregatesPoolTimestamps(UInt64 num_rows, const ColumnRawPtrs & key_columns, Arena * aggregates_pool) const;
     void removeBucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const;
     std::vector<size_t> bucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const;
+
+    inline bool shouldClearStates(ConvertAction action, bool final_) const;
+
+    VersionType getVersionFromRevision(UInt64 revision) const;
+    VersionType getVersion() const;
+
+    void checkpoint(AggregatedDataVariants & data_variants, WriteBuffer & wb);
+    void recover(AggregatedDataVariants & data_variants, ReadBuffer & rb);
+    void recoverStates(AggregatedDataVariants & data_variants, BlocksList & blocks);
+    void recoverStatesWithoutKey(AggregatedDataVariants & data_variants, BlocksList & blocks);
+    void recoverStatesSingleLevel(AggregatedDataVariants & data_variants, BlocksList & blocks);
+    void recoverStatesTwoLevel(AggregatedDataVariants & data_variants, BlocksList & blocks);
+
+    template <typename Method>
+    void doRecoverStates(Method & method, Arena * aggregates_pool, Block & block);
     /// proton: ends
 };
 

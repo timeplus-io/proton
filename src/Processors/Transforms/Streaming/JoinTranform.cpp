@@ -38,7 +38,7 @@ JoinTransform::JoinTransform(
     UInt64 join_max_wait_rows_,
     UInt64 join_max_cached_bytes_,
     FinishCounterPtr finish_counter_)
-    : IProcessor({left_input_header, right_input_header}, {transformHeader(left_input_header, join_)})
+    : IProcessor({left_input_header, right_input_header}, {transformHeader(left_input_header, join_)}, ProcessorID::StreamingJoinTransformID)
     , insert_funcs({&HashJoin::insertLeftBlock, &HashJoin::insertRightBlock})
     , port_can_have_more_data{true, true}
     , header_chunk(outputs.front().getHeader().getColumns(), 0)
@@ -154,7 +154,7 @@ void JoinTransform::work()
                 if (port_ctx.input_chunk.hasWatermark())
                     /// We will use one of the watermark if both of them are present at port
                     /// FIXME
-                    header_chunk.setChunkInfo(port_ctx.input_chunk.getChunkInfo());
+                    header_chunk.setChunkContext(port_ctx.input_chunk.getChunkContext());
 
                 port_ctx.has_input = false;
             }
@@ -178,8 +178,9 @@ void JoinTransform::work()
             {
                 std::scoped_lock lock(mutex);
                 /// Piggy-back watermark in header's chunk info if there is
-                output_chunks.emplace_back(blocks[0].getColumns(), blocks[0].rows(), header_chunk.getChunkInfo());
+                output_chunks.emplace_back(blocks[0].getColumns(), blocks[0].rows(), header_chunk.getChunkInfo(), header_chunk.getChunkContext());
                 header_chunk.setChunkInfo(nullptr);
+                header_chunk.setChunkContext(nullptr);
             }
         }
     }
@@ -216,8 +217,9 @@ void JoinTransform::bufferDataAndJoin(std::vector<Block> && blocks)
         {
             std::scoped_lock lock(mutex);
             /// Piggy-back watermark in header's chunk info if there is
-            output_chunks.emplace_back(block.getColumns(), block.rows(), header_chunk.getChunkInfo());
+            output_chunks.emplace_back(block.getColumns(), block.rows(), header_chunk.getChunkInfo(), header_chunk.getChunkContext());
             header_chunk.setChunkInfo(nullptr);
+            header_chunk.setChunkContext(nullptr);
         }
 
         /// Join may trigger data recycling
@@ -234,7 +236,7 @@ void JoinTransform::bufferDataAndJoin(std::vector<Block> && blocks)
             /// FIXME, when high performance timer is ready, we probably don't need pass along the empty timer block
             /// in the pipeline
             output_chunks.emplace_back(header_chunk.clone());
-            header_chunk.setChunkInfo(nullptr);
+            header_chunk.setChunkContext(nullptr);
         }
     }
 

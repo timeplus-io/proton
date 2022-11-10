@@ -140,19 +140,19 @@ void HedgedConnections::sendQuery(
     if (sent_query)
         throw Exception("Query already sent.", ErrorCodes::LOGICAL_ERROR);
 
-    for (auto & offset_state : offset_states)
-    {
-        for (auto & replica : offset_state.replicas)
-        {
-            if (replica.connection->getServerRevision(timeouts) < DBMS_MIN_REVISION_WITH_CURRENT_AGGREGATION_VARIANT_SELECTION_METHOD)
-            {
-                disable_two_level_aggregation = true;
-                break;
-            }
-        }
-        if (disable_two_level_aggregation)
-            break;
-    }
+    /// for (auto & offset_state : offset_states)
+    /// {
+    ///    for (auto & replica : offset_state.replicas)
+    ///    {
+    ///        if (replica.connection->getServerRevision(timeouts) < DBMS_MIN_REVISION_WITH_CURRENT_AGGREGATION_VARIANT_SELECTION_METHOD)
+    ///        {
+    ///            disable_two_level_aggregation = true;
+    ///            break;
+    ///        }
+    ///    }
+    ///    if (disable_two_level_aggregation)
+    ///        break;
+    /// }
 
     if (!disable_two_level_aggregation)
     {

@@ -10,21 +10,22 @@ AggregatingTransformWithSubstream::AggregatingTransformWithSubstream(
     Block header,
     AggregatingTransformParamsPtr params_,
     SubstraemManyAggregatedDataPtr substream_many_data_,
-    size_t current_aggregating_index_,
+    size_t current_variant_,
     size_t max_threads_,
     size_t temporary_data_merge_threads_,
-    const String & log_name)
+    const String & log_name,
+    ProcessorID pid_)
     : AggregatingTransform(
         std::move(header),
         std::move(params_),
         substream_many_data_,
-        current_aggregating_index_,
+        current_variant_,
         max_threads_,
         temporary_data_merge_threads_,
-        log_name)
+        log_name,
+        pid_)
     , substream_many_data(std::move(substream_many_data_))
     , many_aggregating_size(substream_many_data->variants.size())
-    , current_aggregating_index(current_aggregating_index_)
     , all_finalized_mark(many_aggregating_size, 1)
 {
 }
@@ -40,6 +41,8 @@ void AggregatingTransformWithSubstream::emitVersion(Block & block, const Substre
 
 bool AggregatingTransformWithSubstream::executeOrMergeColumns(const Columns & columns, const SubstreamID & id)
 {
+    /// When the workflow reaches here, the upstream (WatermarkTransformWithSubstream) already splits data
+    /// according to partition keys
     const UInt64 num_rows = columns.at(0)->size();
 
     /// TODO: support merge
@@ -49,7 +52,7 @@ bool AggregatingTransformWithSubstream::executeOrMergeColumns(const Columns & co
     /// Shared variants of current substream for aggregating parallel, which use different variants.
     std::shared_lock lock(ctx->variants_mutex);
     if (!params->aggregator.executeOnBlock(
-            columns, num_rows, *(ctx->many_variants[current_aggregating_index]), key_columns, aggregate_columns, no_more_keys))
+            columns, num_rows, *(ctx->many_variants[current_variant]), key_columns, aggregate_columns, no_more_keys))
         return false;
     return true;
 }

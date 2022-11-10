@@ -10,8 +10,9 @@ StreamingStoreSourceChannel::StreamingStoreSourceChannel(
     std::shared_ptr<StreamingStoreSourceMultiplexer> multiplexer_,
     Block header,
     StorageSnapshotPtr storage_snapshot_,
-    ContextPtr query_context_)
-    : StreamingStoreSourceBase(header, std::move(storage_snapshot_), std::move(query_context_))
+    ContextPtr query_context_,
+    Poco::Logger * log_)
+    : StreamingStoreSourceBase(header, std::move(storage_snapshot_), std::move(query_context_), log_, ProcessorID::StreamingStoreSourceChannelID)
     , id(sequence_id++)
     , multiplexer(std::move(multiplexer_))
     , records_queue(1000)
@@ -92,11 +93,11 @@ void StreamingStoreSourceChannel::readAndProcess()
         }
 
         result_chunks.emplace_back(std::move(columns), rows);
-        if (likely(block.info.append_time > 0))
+        if (likely(block.info.appendTime() > 0))
         {
-            auto chunk_info = std::make_shared<ChunkInfo>();
-            chunk_info->ctx.setAppendTime(block.info.append_time);
-            result_chunks.back().setChunkInfo(std::move(chunk_info));
+            auto chunk_ctx = std::make_shared<ChunkContext>();
+            chunk_ctx->setAppendTime(block.info.appendTime());
+            result_chunks.back().setChunkContext(std::move(chunk_ctx));
         }
     }
     iter = result_chunks.begin();
@@ -104,8 +105,12 @@ void StreamingStoreSourceChannel::readAndProcess()
 
 void StreamingStoreSourceChannel::add(nlog::RecordPtrs records)
 {
-    auto added = records_queue.emplace(std::move(records));
+    [[maybe_unused]] auto added = records_queue.emplace(std::move(records));
     assert(added);
-    (void)added;
+}
+
+std::pair<String, Int32> StreamingStoreSourceChannel::getStreamShard() const
+{
+    return multiplexer->getStreamShard();
 }
 }

@@ -27,13 +27,13 @@ namespace ErrorCodes
 }
 
 
-class BufferingToFileTransform : public IAccumulatingTransform
+class BufferingToFileTransform final : public IAccumulatingTransform
 {
 public:
     BufferingToFileTransform(const Block & header, Poco::Logger * log_, std::string path_)
-        : IAccumulatingTransform(header, header), log(log_)
+        : IAccumulatingTransform(header, header, ProcessorID::BufferingToFileTransformID), log(log_)
         , path(std::move(path_)), file_buf_out(path), compressed_buf_out(file_buf_out)
-        , out_stream(std::make_unique<NativeWriter>(compressed_buf_out, 0, header))
+        , out_stream(std::make_unique<NativeWriter>(compressed_buf_out, header, 0))
     {
         LOG_INFO(log, "Sorting and writing part of data into temporary file {}", path);
         ProfileEvents::increment(ProfileEvents::ExternalSortWritePart);
@@ -95,7 +95,7 @@ MergeSortingTransform::MergeSortingTransform(
     double remerge_lowered_memory_bytes_ratio_,
     size_t max_bytes_before_external_sort_, VolumePtr tmp_volume_,
     size_t min_free_disk_space_)
-    : SortingTransform(header, description_, max_merged_block_size_, limit_)
+    : SortingTransform(header, description_, max_merged_block_size_, limit_, ProcessorID::MergeSortingTransformID)
     , max_bytes_before_remerge(max_bytes_before_remerge_)
     , remerge_lowered_memory_bytes_ratio(remerge_lowered_memory_bytes_ratio_)
     , max_bytes_before_external_sort(max_bytes_before_external_sort_), tmp_volume(tmp_volume_)

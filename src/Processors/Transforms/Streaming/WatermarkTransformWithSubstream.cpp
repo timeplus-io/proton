@@ -3,10 +3,11 @@
 #include "SessionWatermark.h"
 #include "TumbleWatermark.h"
 
+#include <Checkpoint/CheckpointContext.h>
+#include <Checkpoint/CheckpointCoordinator.h>
 #include <Columns/ColumnDecimal.h>
 #include <Common/ProtonCommon.h>
 
-/// FIXME: Week / Month / Quarter / Year cases don't work yet
 namespace DB
 {
 namespace ErrorCodes
@@ -26,12 +27,13 @@ WatermarkTransformWithSubstream::WatermarkTransformWithSubstream(
     const Block & input_header,
     const Block & output_header,
     Poco::Logger * log_)
-    : IProcessor({input_header}, {std::move(output_header)})
-    , log(log_)
+    : IProcessor({input_header}, {std::move(output_header)}, ProcessorID::WatermarkTransformWithSubstreamID)
     , header(input_header)
     , substream_splitter(std::move(input_header), substream_keys)
+    , log(log_)
 {
     initWatermark(query, syntax_analyzer_result, desc, proc_time);
+
     assert(watermark_template);
     watermark_template->preProcess();
 
@@ -113,15 +115,17 @@ void WatermarkTransformWithSubstream::work()
     assert(output_iter == output_chunks.end());
     output_chunks.clear();
     output_chunks.reserve(splitted_blocks.size());
+
     for (auto & [id, sub_block] : splitted_blocks)
     {
         auto & watermark = getOrCreateSubstreamWatermark(id);
         watermark.process(sub_block);
 
         /// Keep substream id for per sub-block, used for downstream processors
-        auto chunk_info = std::make_shared<ChunkInfo>();
-        chunk_info->ctx.setWatermark(WatermarkBound{id, sub_block.info.watermark, sub_block.info.watermark_lower_bound});
-        Chunk chunk(sub_block.getColumns(), sub_block.rows(), std::move(chunk_info));
+        Chunk chunk(sub_block.getColumns(), sub_block.rows());
+        auto chunk_ctx = std::make_shared<ChunkContext>();
+        chunk_ctx->setWatermark(WatermarkBound{id, sub_block.info.watermark, sub_block.info.watermark_lower_bound});
+        chunk.setChunkContext(std::move(chunk_ctx));
         output_chunks.emplace_back(std::move(chunk));
     }
 
@@ -130,9 +134,12 @@ void WatermarkTransformWithSubstream::work()
     if (emit_min_max_event_time && block.rows() > 0)
     {
         auto min_max_ts = calcMinMaxEventTime(block);
-        auto chunk_info = std::make_shared<ChunkInfo>();
-        chunk_info->ctx.setWatermark(WatermarkBound{INVALID_SUBSTREAM_ID, min_max_ts.second, min_max_ts.first});
-        Chunk chunk(getOutputs().front().getHeader().getColumns(), 0, std::move(chunk_info));
+
+        auto chunk_ctx = std::make_shared<ChunkContext>();
+        chunk_ctx->setWatermark(WatermarkBound{INVALID_SUBSTREAM_ID, min_max_ts.second, min_max_ts.first});
+
+        Chunk chunk(getOutputs().front().getHeader().getColumns(), 0);
+        chunk.setChunkContext(std::move(chunk_ctx));
         output_chunks.emplace_back(std::move(chunk));
     }
 
@@ -176,7 +183,8 @@ void WatermarkTransformWithSubstream::initWatermark(
             && watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY)
             throw Exception("Streaming window functions only support watermark based emit", ErrorCodes::INVALID_EMIT_MODE);
 
-        watermark_template = std::make_unique<SessionWatermark>(std::move(watermark_settings), proc_time, desc->session_start, desc->session_end, log);
+        watermark_template
+            = std::make_unique<SessionWatermark>(std::move(watermark_settings), proc_time, desc->session_start, desc->session_end, log);
         watermark_name = "SessionWatermark";
     }
     else
@@ -184,6 +192,38 @@ void WatermarkTransformWithSubstream::initWatermark(
         watermark_template = std::make_unique<Watermark>(std::move(watermark_settings), proc_time, log);
         watermark_name = "Watermark";
     }
+}
+
+void WatermarkTransformWithSubstream::checkpoint(CheckpointContextPtr ckpt_ctx)
+{
+    ckpt_ctx->coordinator->checkpoint(getVersion(), logic_pid, ckpt_ctx, [this](WriteBuffer & wb) {
+        writeIntBinary(substream_watermarks.size(), wb);
+
+        for (const auto & [id, watermark] : substream_watermarks)
+        {
+            id.serialize(wb);
+            watermark->serialize(wb);
+        }
+    });
+}
+
+void WatermarkTransformWithSubstream::recover(CheckpointContextPtr ckpt_ctx)
+{
+    ckpt_ctx->coordinator->recover(logic_pid, ckpt_ctx, [this](VersionType, ReadBuffer & rb) {
+        size_t size = 0;
+        readIntBinary(size, rb);
+
+        substream_watermarks.reserve(size);
+        for (size_t i = 0; i < size; ++i)
+        {
+            SubstreamID substream_id;
+            substream_id.deserialize(rb);
+
+            auto watermark = watermark_template->clone();
+            watermark->deserialize(rb);
+            substream_watermarks.emplace(std::move(substream_id), std::move(watermark));
+        }
+    });
 }
 }
 }

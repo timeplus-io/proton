@@ -13,7 +13,7 @@ class WaitForAsyncInsertSource : public ISource, WithContext
 public:
     WaitForAsyncInsertSource(
         const String & query_id_, size_t timeout_ms_, AsynchronousInsertQueue & queue_)
-        : ISource(Block())
+        : ISource(Block(), ProcessorID::WaitForAsyncInsertSourceID)
         , query_id(query_id_)
         , timeout_ms(timeout_ms_)
         , queue(queue_)

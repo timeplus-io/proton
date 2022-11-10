@@ -329,8 +329,7 @@ private:
     /// A flag, used to distinguish between user query and internal query to a database engine (MaterializedPostgreSQL).
     bool is_internal_query = false;
 
-
-    /// proton: begin
+    /// proton : starts
     /// (database, table, is_view, column name, column type) tuple
     using RequiredColumnTuple = std::tuple<std::string, std::string, bool, std::string, std::string>;
     /// We don't need hold a lock to access required_columns as the required column

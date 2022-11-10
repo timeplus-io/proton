@@ -12,7 +12,7 @@ namespace DB
 class RowInputFormatWithDiagnosticInfo : public IRowInputFormat
 {
 public:
-    RowInputFormatWithDiagnosticInfo(const Block & header_, ReadBuffer & in_, const Params & params_);
+    RowInputFormatWithDiagnosticInfo(const Block & header_, ReadBuffer & in_, const Params & params_, ProcessorID pid_);
 
     String getDiagnosticInfo() override;
 

@@ -13,8 +13,9 @@ TabSeparatedRowOutputFormat::TabSeparatedRowOutputFormat(
     bool with_types_,
     bool is_raw_,
     const RowOutputFormatParams & params_,
-    const FormatSettings & format_settings_)
-    : IRowOutputFormat(header_, out_, params_), with_names(with_names_), with_types(with_types_), is_raw(is_raw_), format_settings(format_settings_)
+    const FormatSettings & format_settings_,
+    ProcessorID pid_)
+    : IRowOutputFormat(header_, out_, params_, pid_), with_names(with_names_), with_types(with_types_), is_raw(is_raw_), format_settings(format_settings_)
 {
 }
 

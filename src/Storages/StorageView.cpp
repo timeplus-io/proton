@@ -124,7 +124,7 @@ Pipe StorageView::read(
     read(plan, column_names, storage_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
         QueryPlanOptimizationSettings::fromContext(context),
-        BuildQueryPipelineSettings::fromContext(context));
+        BuildQueryPipelineSettings::fromContext(context), context);
 }
 
 void StorageView::read(

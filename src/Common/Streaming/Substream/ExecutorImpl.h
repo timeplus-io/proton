@@ -20,7 +20,7 @@
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/HashTable/HashTableKeyHolder.h>
-#include <Common/HashTable/StreamingTwoLevelHashMap.h>
+#include <Common/HashTable/TimeBucketHashMap.h>
 #include <Common/ProtonCommon.h>
 
 #include <functional>
@@ -60,7 +60,7 @@ struct DataIDRows
 
 struct IDRows
 {
-    const ID id;
+    ID id;
     size_t rows;
 };
 
@@ -152,14 +152,14 @@ struct ExecutorImpl
 
     /// Two level
     /// (Single key)
-    using DataWithUInt16KeyTwoLevel = StreamingTwoLevelHashMap<UInt16, DataPtr, HashCRC32<UInt16>>;
-    using DataWithUInt32KeyTwoLevel = StreamingTwoLevelHashMap<UInt32, DataPtr, HashCRC32<UInt32>>;
-    using DataWithUInt64KeyTwoLevel = StreamingTwoLevelHashMap<UInt64, DataPtr, HashCRC32<UInt64>>;
+    using DataWithUInt16KeyTwoLevel = TimeBucketHashMap<UInt16, DataPtr, HashCRC32<UInt16>>;
+    using DataWithUInt32KeyTwoLevel = TimeBucketHashMap<UInt32, DataPtr, HashCRC32<UInt32>>;
+    using DataWithUInt64KeyTwoLevel = TimeBucketHashMap<UInt64, DataPtr, HashCRC32<UInt64>>;
     /// (Multiple keys)
-    using DataWithKeys128TwoLevel = StreamingTwoLevelHashMap<UInt128, DataPtr, UInt128HashCRC32>;
-    using DataWithKeys256TwoLevel = StreamingTwoLevelHashMap<UInt256, DataPtr, UInt256HashCRC32>;
+    using DataWithKeys128TwoLevel = TimeBucketHashMap<UInt128, DataPtr, UInt128HashCRC32>;
+    using DataWithKeys256TwoLevel = TimeBucketHashMap<UInt256, DataPtr, UInt256HashCRC32>;
     /// (Generic key)
-    using DataWithStringKeyTwoLevel = StreamingTwoLevelHashMapWithSavedHash<StringRef, DataPtr>;
+    using DataWithStringKeyTwoLevel = TimeBucketHashMapWithSavedHash<StringRef, DataPtr>;
 
 
     // Disable consecutive key optimization for Uint8/16, because they use a FixedHashMap

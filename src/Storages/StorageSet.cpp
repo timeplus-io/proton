@@ -11,7 +11,6 @@
 #include <Common/formatReadable.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Interpreters/Set.h>
-#include <Interpreters/Context.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <filesystem>
@@ -34,7 +33,7 @@ namespace ErrorCodes
 }
 
 
-class SetOrJoinSink : public SinkToStorage, WithContext
+class SetOrJoinSink final : public SinkToStorage, WithContext
 {
 public:
     SetOrJoinSink(
@@ -67,7 +66,7 @@ SetOrJoinSink::SetOrJoinSink(
     const String & backup_tmp_path_,
     const String & backup_file_name_,
     bool persistent_)
-    : SinkToStorage(metadata_snapshot_->getSampleBlock())
+    : SinkToStorage(metadata_snapshot_->getSampleBlock(), ProcessorID::SetOrJoinSinkID)
     , WithContext(ctx)
     , table(table_)
     , metadata_snapshot(metadata_snapshot_)
@@ -76,7 +75,7 @@ SetOrJoinSink::SetOrJoinSink(
     , backup_file_name(backup_file_name_)
     , backup_buf(table_.disk->writeFile(fs::path(backup_tmp_path) / backup_file_name))
     , compressed_backup_buf(*backup_buf)
-    , backup_stream(compressed_backup_buf, 0, metadata_snapshot->getSampleBlock())
+    , backup_stream(compressed_backup_buf, metadata_snapshot->getSampleBlock(), 0)
     , persistent(persistent_)
 {
 }

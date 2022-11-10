@@ -322,7 +322,7 @@ QueryPipeline InterpreterExplainQuery::executeImpl()
                 interpreter.buildQueryPlan(plan);
                 auto pipeline = plan.buildQueryPipeline(
                     QueryPlanOptimizationSettings::fromContext(getContext()),
-                    BuildQueryPipelineSettings::fromContext(getContext()));
+                    BuildQueryPipelineSettings::fromContext(getContext()), getContext());
 
                 if (settings.graph)
                 {
@@ -363,7 +363,7 @@ QueryPipeline InterpreterExplainQuery::executeImpl()
             // collect the selected marks, rows, parts during build query pipeline.
             plan.buildQueryPipeline(
                 QueryPlanOptimizationSettings::fromContext(getContext()),
-                BuildQueryPipelineSettings::fromContext(getContext()));
+                BuildQueryPipelineSettings::fromContext(getContext()), getContext());
 
             if (settings.optimize)
                 plan.optimize(QueryPlanOptimizationSettings::fromContext(getContext()));

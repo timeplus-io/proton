@@ -98,7 +98,7 @@ private:
     virtual Block getHeaderBlock(const Names & column_names, const StorageSnapshotPtr & storage_snapshot) const = 0;
 };
 
-class StorageURLSink : public SinkToStorage
+class StorageURLSink final : public SinkToStorage
 {
 public:
     StorageURLSink(

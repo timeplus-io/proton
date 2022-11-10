@@ -3,11 +3,9 @@
 #include <Core/SortDescription.h>
 #include <Core/SortCursor.h>
 
-#include <Common/formatReadable.h>
 #include <Common/ProfileEvents.h>
 
 #include <IO/WriteBufferFromFile.h>
-#include <Compression/CompressedWriteBuffer.h>
 
 #include <Formats/NativeReader.h>
 #include <Formats/NativeWriter.h>
@@ -131,8 +129,8 @@ Chunk MergeSorter::mergeImpl(TSortingHeap & queue)
 SortingTransform::SortingTransform(
     const Block & header,
     const SortDescription & description_,
-    size_t max_merged_block_size_, UInt64 limit_)
-    : IProcessor({header}, {header})
+    size_t max_merged_block_size_, UInt64 limit_, ProcessorID pid_)
+    : IProcessor({header}, {header}, pid_)
     , description(description_)
     , max_merged_block_size(max_merged_block_size_)
     , limit(limit_)

@@ -10,7 +10,7 @@ namespace DB
 /** Sorts each block individually by the values of the specified columns.
   * At the moment, not very optimal algorithm is used.
   */
-class PartialSortingTransform : public ISimpleTransform
+class PartialSortingTransform final : public ISimpleTransform
 {
 public:
     /// limit - if not 0, then you can sort each block not completely, but only `limit` first rows by order.

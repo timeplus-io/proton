@@ -14,7 +14,7 @@ public:
         Block header,
         AggregatingTransformParamsPtr params_,
         ManyAggregatedDataPtr many_data,
-        size_t current_variant,
+        size_t current_variant_,
         size_t max_threads,
         size_t temporary_data_merge_threads);
 
@@ -23,15 +23,15 @@ public:
     String getName() const override { return "GlobalAggregatingTransform"; }
 
 private:
-    void finalize(ChunkInfoPtr chunk_info) override;
+    void finalize(ChunkContextPtr chunk_ctx) override;
 
-    inline void doFinalize(ChunkInfoPtr & chunk_info);
+    inline void doFinalize(ChunkContextPtr & chunk_ctx);
 
-    inline bool initialize(ManyAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
+    inline bool initialize(ManyAggregatedDataVariantsPtr & data, ChunkContextPtr & chunk_ctx);
 
-    void mergeSingleLevel(ManyAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
+    void convertSingleLevel(ManyAggregatedDataVariantsPtr & data, ChunkContextPtr & chunk_ctx);
 
-    void mergeTwoLevel(ManyAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
+    void convertTwoLevel(ManyAggregatedDataVariantsPtr & data, ChunkContextPtr & chunk_ctx);
 };
 
 }

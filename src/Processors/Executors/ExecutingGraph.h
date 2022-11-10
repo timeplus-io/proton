@@ -6,6 +6,10 @@
 #include <queue>
 #include <stack>
 
+/// proton : starts
+#include <Checkpoint/CheckpointContextFwd.h>
+/// proton : ends
+
 namespace DB
 {
 
@@ -114,10 +118,27 @@ public:
         }
     };
 
+    /// proton : starts
+    struct NodeDescription
+    {
+        uint32_t logic_pid;
+        String name;
+
+        String string() const { return fmt::format("{}-{}", logic_pid, name); }
+    };
+    /// proton : ends
+
     using Queue = std::queue<Node *>;
     using NodePtr = std::unique_ptr<Node>;
     using Nodes = std::vector<NodePtr>;
     Nodes nodes;
+
+    /// proton : starts
+    //// Trigger nodes are source nodes which emit checkpoint barriers
+    std::vector<Node *> checkpoint_trigger_nodes;
+    /// Ack nodes are sink nodes which ack completion of a checkpoint
+    std::vector<Node *> checkpoint_ack_nodes;
+    /// proton : ends
 
     /// IProcessor * -> processors_id (position in graph)
     using ProcessorsMap = std::unordered_map<const IProcessor *, uint64_t>;
@@ -139,6 +160,30 @@ public:
 
     /// proton: start.
     String getStats() const;
+
+    /// Serialize the graph
+    void serialize(WriteBuffer & wb) const;
+    /// Deserialize the graph
+    void deserialize(ReadBuffer & rb) const;
+    /// Recover query states from checkpoint
+    void recover(CheckpointContextPtr ckpt_ctx);
+
+    /// Init Checkpoint trigger nodes and ack nodes
+    void initCheckpointNodes();
+
+    void triggerCheckpoint(CheckpointContextPtr ckpt_ctx);
+
+    template<typename Iterator>
+    std::vector<NodeDescription> nodeDescriptions(Iterator begin_id_iter, Iterator end_id_iter, size_t size)
+    {
+        std::vector<NodeDescription> descs;
+        descs.reserve(size);
+
+        for (; begin_id_iter != end_id_iter; ++begin_id_iter)
+            descs.emplace_back(NodeDescription{*begin_id_iter, nodes[*begin_id_iter]->processor->getName()});
+
+        return descs;
+    }
     /// proton: ends.
 
 private:

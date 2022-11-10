@@ -7,8 +7,8 @@ namespace DB
 {
 
 JSONColumnsBlockOutputFormatBase::JSONColumnsBlockOutputFormatBase(
-    WriteBuffer & out_, const Block & header_, const FormatSettings & format_settings_)
-    : IOutputFormat(header_, out_)
+    WriteBuffer & out_, const Block & header_, const FormatSettings & format_settings_, ProcessorID pid_)
+    : IOutputFormat(header_, out_, pid_)
     , format_settings(format_settings_)
     , serializations(header_.getSerializations())
     , ostr(&out)

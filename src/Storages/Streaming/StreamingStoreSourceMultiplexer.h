@@ -24,7 +24,7 @@ class StreamingStoreSourceMultiplexer final : public std::enable_shared_from_thi
 {
 public:
     StreamingStoreSourceMultiplexer(
-        UInt32 id_, Int32 shard, std::shared_ptr<StreamShard> storage_, ContextPtr global_context, Poco::Logger * log_);
+        UInt32 id_, std::shared_ptr<StreamShard> storage_, ContextPtr global_context, Poco::Logger * log_);
     ~StreamingStoreSourceMultiplexer();
 
     StreamingStoreSourceChannelPtr
@@ -36,6 +36,8 @@ public:
 
     bool isShutdown() const { return shutdown; }
 
+    std::pair<String, Int32> getStreamShard() const;
+
 private:
     void backgroundPoll();
     void fanOut(nlog::RecordPtrs records);
@@ -43,7 +45,6 @@ private:
 
 private:
     UInt32 id;
-    Int32 shard;
     std::shared_ptr<StreamShard> stream_shard;
     std::shared_ptr<StreamingBlockReaderKafka> reader;
 

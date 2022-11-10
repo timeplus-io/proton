@@ -11,13 +11,12 @@ namespace ErrorCodes
     extern const int NO_SUCH_COLUMN_IN_STREAM;
 }
 
-class DictionarySource : public SourceWithProgress
+class DictionarySource final : public SourceWithProgress
 {
 public:
 
     explicit DictionarySource(std::shared_ptr<DictionarySourceCoordinator> coordinator_)
-        : SourceWithProgress(coordinator_->getHeader()), coordinator(std::move(coordinator_))
-    {
+        : SourceWithProgress(coordinator_->getHeader(), ProcessorID::DictionarySourceID), coordinator(std::move(coordinator_)) {
     }
 
 private:

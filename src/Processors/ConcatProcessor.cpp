@@ -5,7 +5,7 @@ namespace DB
 {
 
 ConcatProcessor::ConcatProcessor(const Block & header, size_t num_inputs)
-    : IProcessor(InputPorts(num_inputs, header), OutputPorts{header}), current_input(inputs.begin())
+    : IProcessor(InputPorts(num_inputs, header), OutputPorts{header}, ProcessorID::ConcatProcessorID), current_input(inputs.begin())
 {
 }
 

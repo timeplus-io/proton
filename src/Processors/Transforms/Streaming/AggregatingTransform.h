@@ -2,40 +2,26 @@
 
 #include <Interpreters/Streaming/Aggregator.h>
 /// #include <Processors/IAccumulatingTransform.h>
+#include <Core/Streaming/WatermarkInfo.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <Processors/IProcessor.h>
 #include <Common/Stopwatch.h>
-#include <DataTypes/DataTypeFactory.h>
-#include <Core/Streaming/WatermarkInfo.h>
 
 namespace DB
 {
 namespace Streaming
 {
-using AggregatorList = std::list<Aggregator>;
-using AggregatorListPtr = std::shared_ptr<AggregatorList>;
-
 struct AggregatingTransformParams
 {
-    Aggregator::Params params;
-
-    /// Each params holds a list of aggregators which are used in query. It's needed because we need
-    /// to use a pointer of aggregator to proper destroy complex aggregation states on exception
-    /// (See comments in AggregatedDataVariants). However, this pointer might not be valid because
-    /// we can have two different aggregators at the same time due to mixed pipeline of aggregate
-    /// projections, and one of them might gets destroyed before used.
-    AggregatorListPtr aggregator_list_ptr;
-    Aggregator & aggregator;
+    Aggregator aggregator;
+    Aggregator::Params & params;
     bool final;
     bool only_merge = false;
     bool emit_version = false;
     DataTypePtr version_type;
 
     AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool emit_version_)
-        : params(params_)
-        , aggregator_list_ptr(std::make_shared<AggregatorList>())
-        , aggregator(*aggregator_list_ptr->emplace(aggregator_list_ptr->end(), params))
-        , final(final_)
-        , emit_version(emit_version_)
+        : aggregator(params_), params(aggregator.getParams()), final(final_), emit_version(emit_version_)
     {
         if (emit_version)
             version_type = DataTypeFactory::instance().get("int64");
@@ -44,9 +30,14 @@ struct AggregatingTransformParams
     Block getHeader() const { return aggregator.getHeader(final, false, emit_version); }
 };
 
+class AggregatingTransform;
+
 struct ManyAggregatedData
 {
     ManyAggregatedDataVariants variants;
+
+    /// Reference to all transforms
+    std::vector<AggregatingTransform*> aggregating_transforms;
 
     /// Watermarks for all variants
     std::vector<WatermarkBound> watermarks;
@@ -58,10 +49,17 @@ struct ManyAggregatedData
     std::mutex finalizing_mutex;
     WatermarkBound arena_watermark;
 
-    explicit ManyAggregatedData(size_t num_threads = 0) : variants(num_threads), watermarks(num_threads)
+    std::condition_variable ckpted;
+    std::mutex ckpt_mutex;
+    std::vector<Int64> ckpt_epochs;
+    std::atomic<UInt32> ckpt_requested = 0;
+
+    explicit ManyAggregatedData(size_t num_threads) : variants(num_threads), watermarks(num_threads), ckpt_epochs(num_threads)
     {
         for (auto & elem : variants)
             elem = std::make_shared<AggregatedDataVariants>();
+
+        aggregating_transforms.resize(variants.size());
     }
 };
 
@@ -75,17 +73,18 @@ using AggregatingTransformParamsPtr = std::shared_ptr<AggregatingTransformParams
 class AggregatingTransform : public IProcessor
 {
 public:
-    AggregatingTransform(Block header, AggregatingTransformParamsPtr params_, const String & log_name);
+    AggregatingTransform(Block header, AggregatingTransformParamsPtr params_, const String & log_name, ProcessorID pid_);
 
     /// For Parallel aggregating.
     AggregatingTransform(
         Block header,
         AggregatingTransformParamsPtr params_,
         ManyAggregatedDataPtr many_data,
-        size_t current_variant,
+        size_t current_variant_,
         size_t max_threads,
         size_t temporary_data_merge_threads,
-        const String & log_name);
+        const String & log_name,
+        ProcessorID pid_);
 
     ~AggregatingTransform() override;
 
@@ -93,17 +92,21 @@ public:
     void work() override;
     Processors expandPipeline() override;
 
+    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
+    void recover(CheckpointContextPtr ckpt_ctx) override;
+
 private:
     virtual void consume(Chunk chunk);
 
-    virtual void finalize(ChunkInfoPtr) { }
+    virtual void finalize(ChunkContextPtr) { }
 
     inline IProcessor::Status preparePushToOutput();
     void initGenerate();
+    void checkpointAlignment(Chunk & chunk);
 
 protected:
     void emitVersion(Block & block);
-    void setCurrentChunk(Chunk chunk, ChunkInfoPtr & chunk_info);
+    void setCurrentChunk(Chunk chunk, ChunkContextPtr chunk_ctx);
 
 protected:
     /// To read the data that was flushed into the temporary data file.
@@ -125,6 +128,8 @@ protected:
     ManyAggregatedDataPtr many_data;
     AggregatedDataVariants & variants;
     WatermarkBound & watermark_bound;
+    Int64 & ckpt_epoch;
+    size_t current_variant;
 
     size_t max_threads = 1;
     size_t temporary_data_merge_threads = 1;

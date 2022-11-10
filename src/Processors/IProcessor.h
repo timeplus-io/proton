@@ -4,12 +4,13 @@
 #include <Processors/Port.h>
 
 /// proton: starts.
+#include "ProcessorID.h"
+
 #include <Common/ProfileEvents.h>
+#include <Checkpoint/CheckpointContextFwd.h>
+
 #include <map>
 /// proton: ends.
-
-class EventCounter;
-
 
 namespace DB
 {
@@ -128,8 +129,8 @@ protected:
 public:
     IProcessor() = default;
 
-    IProcessor(InputPorts inputs_, OutputPorts outputs_)
-        : inputs(std::move(inputs_)), outputs(std::move(outputs_))
+    IProcessor(InputPorts inputs_, OutputPorts outputs_, ProcessorID pid_)
+        : inputs(std::move(inputs_)), outputs(std::move(outputs_)), pid(pid_)
     {
         for (auto & port : inputs)
             port.processor = this;
@@ -315,7 +316,32 @@ public:
     void setStreaming(bool is_streaming_) { is_streaming = is_streaming_; }
     bool isStreaming() const { return is_streaming; }
 
+    /// Serialize processor
+    void marshal(WriteBuffer & wb) const;
+
+    /// Deserialize processor.
+    /// @return : returns input port and output port addresses. The addresses are used
+    /// to reconstruct the graph / dependency
+    String unmarshal(ReadBuffer & rb);
+
     ProcessorMetrics getMetrics() const { return metrics; }
+
+    void setLogicID(UInt32 logic_id_) { logic_pid = logic_id_; }
+    UInt32 getLogicID() const { return logic_pid; }
+
+    ProcessorID getID() const { return pid; }
+
+    /// Source processors have only output ports like ISource processors
+    bool isSource() const { return inputs.empty() && !outputs.empty(); }
+
+    /// Output processors have only inputs ports like IOutputFormat processors
+    bool isSink() const { return !inputs.empty() && outputs.empty(); }
+
+    virtual void checkpoint(CheckpointContextPtr);
+
+    virtual void recover(CheckpointContextPtr) { }
+
+    VersionType getVersion() const;
 
 protected:
     bool is_streaming = false;
@@ -325,7 +351,14 @@ protected:
     virtual void onCancel() {}
 
     /// proton: starts.
+    virtual VersionType getVersionFromRevision(UInt64 revision) const;
+
     ProcessorMetrics metrics;
+
+    ProcessorID pid = ProcessorID::InvalidID;
+    /// Logic ID is the ID sequence in a DAG. Logic ID starts from 0
+    UInt32 logic_pid = std::numeric_limits<UInt32>::max();
+    mutable std::optional<VersionType> version;
     /// proton: ends.
 
 private:

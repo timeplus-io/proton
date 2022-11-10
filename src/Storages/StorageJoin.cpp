@@ -118,7 +118,7 @@ void StorageJoin::mutate(const MutationCommands & commands, ContextPtr context)
 
     auto backup_buf = disk->writeFile(path + tmp_backup_file_name);
     auto compressed_backup_buf = CompressedWriteBuffer(*backup_buf);
-    auto backup_stream = NativeWriter(compressed_backup_buf, 0, metadata_snapshot->getSampleBlock());
+    auto backup_stream = NativeWriter(compressed_backup_buf, metadata_snapshot->getSampleBlock(), 0);
 
     auto new_data = std::make_shared<HashJoin>(table_join, metadata_snapshot->getSampleBlock().sortColumns(), overwrite);
 
@@ -382,11 +382,11 @@ size_t rawSize(const StringRef & t)
     return t.size;
 }
 
-class JoinSource : public SourceWithProgress
+class JoinSource final : public SourceWithProgress
 {
 public:
     JoinSource(HashJoinPtr join_, TableLockHolder lock_holder_, UInt64 max_block_size_, Block sample_block_)
-        : SourceWithProgress(sample_block_)
+        : SourceWithProgress(sample_block_, ProcessorID::JoinSourceID)
         , join(join_)
         , lock_holder(lock_holder_)
         , max_block_size(max_block_size_)

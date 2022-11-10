@@ -23,7 +23,7 @@ TTLTransform::TTLTransform(
     const MergeTreeData::MutableDataPartPtr & data_part_,
     time_t current_time_,
     bool force_)
-    : IAccumulatingTransform(header_, header_)
+    : IAccumulatingTransform(header_, header_, ProcessorID::TTLTransformID)
     , data_part(data_part_)
     , log(&Poco::Logger::get(storage_.getLogName() + " (TTLTransform)"))
 {

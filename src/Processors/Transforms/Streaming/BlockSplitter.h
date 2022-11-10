@@ -15,9 +15,11 @@ public:
 
     String getName() const { return "BlockSplitter"; }
 
-    std::vector<std::pair<const SubstreamID, Block>> operator()(const Block & block)
+    std::vector<std::pair<SubstreamID, Block>> operator()(const Block & block) { return split(block); }
+
+    std::vector<std::pair<SubstreamID, Block>> split(const Block & block)
     {
-        std::vector<std::pair<const SubstreamID, Block>> result;
+        std::vector<std::pair<SubstreamID, Block>> result;
         Executor::execute(block, [&](DataWithIDRows & data, const Columns & columns) {
             /// NOTICE: We must save materialized id.
             result.emplace_back(data.id.materialize(), table().header.cloneWithColumns(columns));

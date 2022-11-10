@@ -11,7 +11,7 @@ namespace DB
 {
 
 BinaryRowOutputFormat::BinaryRowOutputFormat(WriteBuffer & out_, const Block & header, bool with_names_, bool with_types_, const RowOutputFormatParams & params_)
-    : IRowOutputFormat(header, out_, params_), with_names(with_names_), with_types(with_types_)
+    : IRowOutputFormat(header, out_, params_, ProcessorID::BinaryRowOutputFormatID), with_names(with_names_), with_types(with_types_)
 {
 }
 

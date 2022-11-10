@@ -147,7 +147,7 @@ class BufferSource : public SourceWithProgress
 {
 public:
     BufferSource(const Names & column_names_, StorageBuffer::Buffer & buffer_, const StorageSnapshotPtr & storage_snapshot)
-        : SourceWithProgress(storage_snapshot->getSampleBlockForColumns(column_names_))
+        : SourceWithProgress(storage_snapshot->getSampleBlockForColumns(column_names_), ProcessorID::BufferSourceID)
         , column_names_and_types(storage_snapshot->getColumnsByNames(
             GetColumnsOptions(GetColumnsOptions::All).withSubcolumns(), column_names_))
         , buffer(buffer_) {}
@@ -225,7 +225,7 @@ Pipe StorageBuffer::read(
     read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
         QueryPlanOptimizationSettings::fromContext(local_context),
-        BuildQueryPipelineSettings::fromContext(local_context));
+        BuildQueryPipelineSettings::fromContext(local_context), local_context);
 }
 
 void StorageBuffer::read(
@@ -537,13 +537,13 @@ static void appendBlock(const Block & from, Block & to)
 }
 
 
-class BufferSink : public SinkToStorage
+class BufferSink final : public SinkToStorage
 {
 public:
     explicit BufferSink(
         StorageBuffer & storage_,
         const StorageMetadataPtr & metadata_snapshot_)
-        : SinkToStorage(metadata_snapshot_->getSampleBlock())
+        : SinkToStorage(metadata_snapshot_->getSampleBlock(), ProcessorID::BufferSinkID)
         , storage(storage_)
         , metadata_snapshot(metadata_snapshot_)
     {

@@ -12,7 +12,7 @@ class SinkToStorage : public ExceptionKeepingTransform
 friend class PartitionedSink;
 
 public:
-    explicit SinkToStorage(const Block & header);
+    explicit SinkToStorage(const Block & header, ProcessorID pid_);
 
     const Block & getHeader() const { return inputs.front().getHeader(); }
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
@@ -33,10 +33,10 @@ private:
 using SinkToStoragePtr = std::shared_ptr<SinkToStorage>;
 
 
-class NullSinkToStorage : public SinkToStorage
+class NullSinkToStorage final : public SinkToStorage
 {
 public:
-    using SinkToStorage::SinkToStorage;
+    explicit NullSinkToStorage(const Block & header) : SinkToStorage(header, ProcessorID::NullSinkToStorageID) { }
     std::string getName() const override { return "NullSinkToStorage"; }
     void consume(Chunk) override {}
 };

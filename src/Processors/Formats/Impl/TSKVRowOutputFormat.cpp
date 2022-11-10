@@ -8,7 +8,7 @@ namespace DB
 {
 
 TSKVRowOutputFormat::TSKVRowOutputFormat(WriteBuffer & out_, const Block & header, const RowOutputFormatParams & params_, const FormatSettings & format_settings_)
-    : TabSeparatedRowOutputFormat(out_, header, false, false, false, params_, format_settings_), fields(header.getNamesAndTypes())
+    : TabSeparatedRowOutputFormat(out_, header, false, false, false, params_, format_settings_, ProcessorID::TSKVRowOutputFormatID), fields(header.getNamesAndTypes())
 {
     for (auto & field : fields)
     {

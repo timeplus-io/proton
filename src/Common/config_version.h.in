@@ -23,9 +23,9 @@
 #define DBMS_VERSION_MAJOR VERSION_MAJOR
 #else
 /// proton: starts.
-#define VERSION_MAJOR 0
+#define VERSION_MAJOR 1
 /// proton: ends.
-#define DBMS_VERSION_MAJOR 0
+#define DBMS_VERSION_MAJOR VERSION_MAJOR
 #endif
 
 #if defined(VERSION_MINOR)
@@ -34,7 +34,7 @@
 /// proton: starts.
 #define VERSION_MINOR 0
 /// proton: ends.
-#define DBMS_VERSION_MINOR 0
+#define DBMS_VERSION_MINOR VERSION_MINOR
 #endif
 
 #if defined(VERSION_PATCH)
@@ -43,7 +43,16 @@
 /// proton: starts.
 #define VERSION_PATCH 0
 /// proton: ends.
-#define DBMS_VERSION_PATCH 0
+#define DBMS_VERSION_PATCH VERSION_PATCH
+#endif
+
+#if defined(VERSION_REVISION)
+#define DBMS_VERSION_REVISION VERSION_REVISION
+#else
+/// proton: starts.
+#define VERSION_REVISION 1
+/// proton: ends.
+#define DBMS_VERSION_REVISION VERSION_REVISION
 #endif
 
 #if !defined(VERSION_OFFICIAL)

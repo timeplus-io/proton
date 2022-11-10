@@ -28,7 +28,7 @@ namespace ErrorCodes
 }
 
 MsgPackRowOutputFormat::MsgPackRowOutputFormat(WriteBuffer & out_, const Block & header_, const RowOutputFormatParams & params_)
-    : IRowOutputFormat(header_, out_, params_), packer(out_) {}
+    : IRowOutputFormat(header_, out_, params_, ProcessorID::MsgPackRowOutputFormatID), packer(out_) {}
 
 void MsgPackRowOutputFormat::serializeField(const IColumn & column, DataTypePtr data_type, size_t row_num)
 {

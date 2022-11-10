@@ -7,7 +7,7 @@ namespace DB
 
 PartialSortingTransform::PartialSortingTransform(
     const Block & header_, SortDescription & description_, UInt64 limit_)
-    : ISimpleTransform(header_, header_, false)
+    : ISimpleTransform(header_, header_, false, ProcessorID::PartialSortingTransformID)
     , description(description_), limit(limit_)
 {
     // Sorting by no columns doesn't make sense.

@@ -9,8 +9,8 @@
 namespace DB
 {
 
-IOutputFormat::IOutputFormat(const Block & header_, WriteBuffer & out_)
-    : IProcessor({header_, header_, header_}, {}), out(out_)
+IOutputFormat::IOutputFormat(const Block & header_, WriteBuffer & out_, ProcessorID pid_)
+    : IProcessor({header_, header_, header_}, {}, pid_), out(out_)
 {
 }
 
@@ -83,6 +83,9 @@ void IOutputFormat::work()
 
     /// proton: starts.
     auto start_ns = MonotonicNanoseconds::now();
+
+    if (current_chunk.requestCheckpoint())
+        IProcessor::checkpoint(current_chunk.getCheckpointContext());
     /// proton: ends.
 
     switch (current_block_kind)

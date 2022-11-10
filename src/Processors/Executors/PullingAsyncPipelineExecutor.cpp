@@ -24,6 +24,7 @@ struct PullingAsyncPipelineExecutor::Data
     LazyOutputFormat * lazy_format = nullptr;
     std::atomic_bool is_finished = false;
     std::atomic_bool has_exception = false;
+    ExecuteMode exec_mode = ExecuteMode::NORMAL;
     ThreadFromGlobalPool thread;
     Poco::Event finish_event;
 
@@ -78,7 +79,7 @@ static void threadFunction(PullingAsyncPipelineExecutor::Data & data, ThreadGrou
         if (thread_group)
             CurrentThread::attachTo(thread_group);
 
-        data.executor->execute(num_threads);
+        data.executor->execute(num_threads, data.exec_mode);
     }
     catch (...)
     {
@@ -102,6 +103,7 @@ bool PullingAsyncPipelineExecutor::pull(Chunk & chunk, uint64_t milliseconds)
         data = std::make_unique<Data>();
         data->executor = std::make_shared<PipelineExecutor>(pipeline.processors, pipeline.process_list_element);
         data->lazy_format = lazy_format.get();
+        data->exec_mode = pipeline.exec_mode;
 
         auto func = [&, thread_group = CurrentThread::getGroup()]()
         {
@@ -171,9 +173,13 @@ bool PullingAsyncPipelineExecutor::pull(Block & block, uint64_t milliseconds)
 
 void PullingAsyncPipelineExecutor::cancel()
 {
-    /// Cancel execution if it wasn't finished.
-    if (data && !data->is_finished && data->executor)
-        data->executor->cancel();
+    if (data && data->executor)
+    {
+        /// For streaming processing which enables checkpoint, we will need explicit cancel
+        /// to deregister executor from CheckpointCoordinator
+        if (!data->is_finished || data->executor->requireExplicitCancel())
+            data->executor->cancel();
+    }
 
     /// The following code is needed to rethrow exception from PipelineExecutor.
     /// It could have been thrown from pull(), but we will not likely call it again.

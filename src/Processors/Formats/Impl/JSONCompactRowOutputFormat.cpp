@@ -14,7 +14,7 @@ JSONCompactRowOutputFormat::JSONCompactRowOutputFormat(
     const RowOutputFormatParams & params_,
     const FormatSettings & settings_,
     bool yield_strings_)
-    : JSONRowOutputFormat(out_, header, params_, settings_, yield_strings_)
+    : JSONRowOutputFormat(out_, header, params_, settings_, yield_strings_, ProcessorID::JSONCompactRowOutputFormatID)
 {
 }
 

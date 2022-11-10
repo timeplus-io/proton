@@ -66,7 +66,7 @@ namespace
 
 WindowAssignmentTransform::WindowAssignmentTransform(
     const Block & input_header, const Block & output_header, FunctionDescriptionPtr desc)
-    : ISimpleTransform(input_header, output_header, false), func_desc(std::move(desc)), chunk_header(output_header.getColumns(), 0)
+    : ISimpleTransform(input_header, output_header, false, ProcessorID::WindowAssignmentTransformID), func_desc(std::move(desc)), chunk_header(output_header.getColumns(), 0)
 {
     assert(func_desc);
 

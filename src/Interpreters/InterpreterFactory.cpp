@@ -84,6 +84,10 @@
 #include <Common/ProfileEvents.h>
 #include <Common/typeid_cast.h>
 
+/// proton : starts
+#include <Parsers/Streaming/ASTUnsubscribeQuery.h>
+#include <Interpreters/Streaming/InterpreterUnsubscribeQuery.h>
+/// proton : ends
 
 namespace ProfileEvents
 {
@@ -135,6 +139,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTDropQuery>())
     {
         return std::make_unique<InterpreterDropQuery>(query, context);
+    }
+    else if (query->as<Streaming::ASTUnsubscribeQuery>())
+    {
+        return std::make_unique<Streaming::InterpreterUnsubscribeQuery>(query, context);
     }
     else if (query->as<ASTRenameQuery>())
     {

@@ -50,7 +50,8 @@ CustomSeparatedRowInputFormat::CustomSeparatedRowInputFormat(
         with_names_,
         with_types_,
         format_settings_,
-        std::make_unique<CustomSeparatedFormatReader>(*buf_, ignore_spaces_, format_settings_))
+        std::make_unique<CustomSeparatedFormatReader>(*buf_, ignore_spaces_, format_settings_),
+        ProcessorID::CustomSeparatedRowInputFormatID)
     , buf(std::move(buf_))
 {
     /// In case of CustomSeparatedWithNames(AndTypes) formats and enabled setting input_format_with_names_use_header we don't know

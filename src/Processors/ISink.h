@@ -20,7 +20,7 @@ protected:
     virtual void onFinish() {}
 
 public:
-    explicit ISink(Block header);
+    explicit ISink(Block header, ProcessorID pid_);
 
     Status prepare() override;
     void work() override;

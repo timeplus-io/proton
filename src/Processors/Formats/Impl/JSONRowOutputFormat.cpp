@@ -13,8 +13,9 @@ JSONRowOutputFormat::JSONRowOutputFormat(
     const Block & header,
     const RowOutputFormatParams & params_,
     const FormatSettings & settings_,
-    bool yield_strings_)
-    : IRowOutputFormat(header, out_, params_), settings(settings_), yield_strings(yield_strings_)
+    bool yield_strings_,
+    ProcessorID pid_)
+    : IRowOutputFormat(header, out_, params_, pid_), settings(settings_), yield_strings(yield_strings_)
 {
     bool need_validate_utf8 = false;
     fields = header.getNamesAndTypes();

@@ -12,11 +12,11 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-class PushingSource : public ISource
+class PushingSource final : public ISource
 {
 public:
     explicit PushingSource(const Block & header, std::atomic_bool & need_data_flag_)
-        : ISource(header)
+        : ISource(header, ProcessorID::PushingSourceID)
         , need_data_flag(need_data_flag_)
     {}
 

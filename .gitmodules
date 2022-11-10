@@ -239,3 +239,6 @@
 [submodule "contrib/libhdfs3"]
 	path = contrib/libhdfs3
 	url = https://github.com/ClickHouse/libhdfs3.git
+[submodule "contrib/muduo"]
+	path = contrib/muduo
+	url = https://github.com/chenshuo/muduo.git

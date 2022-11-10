@@ -6,6 +6,10 @@
 #include <Core/Defines.h>
 #include <IO/ReadSettings.h>
 
+/// proton : starts
+#include <Core/ExecuteMode.h>
+/// proton : ends
+
 
 namespace Poco::Util
 {
@@ -699,6 +703,8 @@ class IColumn;
     M(Bool, enforce_append_only, false, "For changelog storage, enforce query it as append only storage", 0) \
     M(UInt64, retract_max, 10000, "Control how many more values to keep around for changelog processing to workaround retract scenarios in min/max etc aggr", 0) \
     M(UInt64, retract_k_multiplier, 2, "Control how many more values to keep around for changelog processing to workaround retract scenarios in min_k/max_k etc aggr", 0) \
+    M(ExecuteMode, exec_mode, ExecuteMode::NORMAL, "Control query execute mode", 0) \
+    M(UInt64, checkpoint_interval, 0, "Checkpoint interval in seconds", 0) \
     /** proton: ends. */
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

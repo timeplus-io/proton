@@ -231,7 +231,7 @@ StorageS3Source::StorageS3Source(
     const std::shared_ptr<Aws::S3::S3Client> & client_,
     const String & bucket_,
     std::shared_ptr<IteratorWrapper> file_iterator_)
-    : SourceWithProgress(getHeader(sample_block_, need_path, need_file))
+    : SourceWithProgress(getHeader(sample_block_, need_path, need_file), ProcessorID::StorageS3SourceID)
     , WithContext(context_)
     , name(std::move(name_))
     , bucket(bucket_)
@@ -363,7 +363,7 @@ static bool checkIfObjectExists(const std::shared_ptr<Aws::S3::S3Client> & clien
     return false;
 }
 
-class StorageS3Sink : public SinkToStorage
+class StorageS3Sink final : public SinkToStorage
 {
 public:
     StorageS3Sink(
@@ -377,7 +377,7 @@ public:
         const String & key,
         size_t min_upload_part_size,
         size_t max_single_part_upload_size)
-        : SinkToStorage(sample_block_)
+        : SinkToStorage(sample_block_, ProcessorID::StorageS3SinkID)
         , sample_block(sample_block_)
         , format_settings(format_settings_)
     {

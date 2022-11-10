@@ -52,7 +52,7 @@ extern const int UNSUPPORTED_PARAMETER;
 
 namespace ActionLocks
 {
-    extern const StorageActionBlockType StreamConsume;
+extern const StorageActionBlockType StreamConsume;
 }
 
 namespace
@@ -382,7 +382,7 @@ void StorageStream::readConcat(
                 LOG_INFO(log, "Fused read fallbacks to seek stream for shard={} since there are no historical data", stream_shard->shard);
 
                 return std::make_shared<StreamingStoreSource>(
-                    stream_shard, header, storage_snapshot, context_, stream_shard->shard, offsets[stream_shard->shard], log);
+                    stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log);
             }
 
             auto committed = stream_shard->storage->inMemoryCommittedSN();
@@ -414,8 +414,7 @@ void StorageStream::readConcat(
                     max_sn_in_parts,
                     committed);
 
-                return std::make_shared<StreamingStoreSource>(
-                    stream_shard, header, storage_snapshot, context_, stream_shard->shard, max_sn_in_parts + 1, log);
+                return std::make_shared<StreamingStoreSource>(stream_shard, header, storage_snapshot, context_, max_sn_in_parts + 1, log);
             }
             else
             {
@@ -432,7 +431,7 @@ void StorageStream::readConcat(
                 /// We need reset max_sn_in_parts to tell caller that we are seeking streaming store directly
                 max_sn_in_parts = -1;
                 return std::make_shared<StreamingStoreSource>(
-                    stream_shard, header, storage_snapshot, context_, stream_shard->shard, offsets[stream_shard->shard], log);
+                    stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log);
             }
         };
 
@@ -461,8 +460,11 @@ void StorageStream::readStreaming(
     pipes.reserve(shards);
 
     const auto & settings_ref = context_->getSettingsRef();
+    /// 1) Checkpointed queries shall not be multiplexed
+    /// 2) Queries which seek to a specific timestamp shall not be multiplexed
     auto share_resource_group = (settings_ref.query_resource_group.value == "shared")
-        && (settings_ref.seek_to.value == "latest" || settings_ref.seek_to.value.empty());
+        && (settings_ref.seek_to.value == "latest" || settings_ref.seek_to.value.empty())
+        && (settings_ref.exec_mode == ExecuteMode::NORMAL);
 
     std::vector<std::pair<std::shared_ptr<StreamShard>, Int32>> shard_info;
     if (requireDistributedQuery(context_))
@@ -504,14 +506,14 @@ void StorageStream::readStreaming(
 
         auto offsets = stream_shards.back()->getOffsets(settings_ref.seek_to.value);
 
-        for (auto & [stream_shard, shard] : shard_info)
+        for (auto & [stream_shard, _] : shard_info)
             pipes.emplace_back(std::make_shared<StreamingStoreSource>(
-                stream_shard, header, storage_snapshot, context_, shard, offsets[stream_shard->shard], log));
+                stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log));
     }
 
     LOG_INFO(
         log,
-        "Starting reading {} streams by seeking to {} in {} resource group",
+        "Starting reading {} streams by seeking to '{}' in {} resource group",
         pipes.size(),
         settings_ref.seek_to.value,
         share_resource_group ? "shared" : "dedicated");
@@ -519,7 +521,7 @@ void StorageStream::readStreaming(
     auto pipe = Pipe::unitePipes(std::move(pipes));
     /// In cluster deployment, if there are multiple souces, there will be multiple thread conducting aggregation which cannot finalize
     /// the aggregated result correctly. To avoid multi-thread aggregation, resize the source to 1 stream here.
-    pipe.resize(1);
+    /// pipe.resize(1);
     auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName());
     query_plan.addStep(std::move(read_step));
 }
@@ -598,10 +600,18 @@ void StorageStream::readHistory(
             input_streams.reserve(plans.size());
 
             for (auto & plan : plans)
-                input_streams.emplace_back(plan->getCurrentDataStream());
+            {
+                /// If shard has no data skip it or we can create emtpy source like
+                /// InterpreterSelectQuery::addEmptySourceToQueryPlan(...) does
+                if (plan->isInitialized())
+                    input_streams.emplace_back(plan->getCurrentDataStream());
+            }
 
-            auto union_step = std::make_unique<UnionStep>(std::move(input_streams));
-            query_plan.unitePlans(std::move(union_step), std::move(plans));
+            if (!input_streams.empty())
+            {
+                auto union_step = std::make_unique<UnionStep>(std::move(input_streams));
+                query_plan.unitePlans(std::move(union_step), std::move(plans));
+            }
         }
     }
 }
@@ -617,7 +627,8 @@ Pipe StorageStream::read(
 {
     QueryPlan plan;
     read(plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
-    return plan.convertToPipe(QueryPlanOptimizationSettings::fromContext(context_), BuildQueryPipelineSettings::fromContext(context_));
+    return plan.convertToPipe(
+        QueryPlanOptimizationSettings::fromContext(context_), BuildQueryPipelineSettings::fromContext(context_), context_);
 }
 
 void StorageStream::startup()
@@ -1490,7 +1501,7 @@ void StorageStream::reInit()
     if (!isMaintain())
         return;
 
-    for(auto & shard : stream_shards)
+    for (auto & shard : stream_shards)
         if (shard->storage)
             shard->storage->reInit();
 }

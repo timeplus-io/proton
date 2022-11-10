@@ -67,7 +67,7 @@ class Context;
  *  4) repeat until it encounters unit that is marked as "past_the_end"
  * All threads must also check for cancel/eof/exception flags.
  */
-class ParallelParsingInputFormat : public IInputFormat
+class ParallelParsingInputFormat final : public IInputFormat
 {
 public:
     /* Used to recreate parser on every new data piece.*/
@@ -86,7 +86,7 @@ public:
     };
 
     explicit ParallelParsingInputFormat(Params params)
-        : IInputFormat(std::move(params.header), params.in)
+        : IInputFormat(std::move(params.header), params.in, ProcessorID::ParallelParsingInputFormatID)
         , internal_parser_creator(params.internal_parser_creator)
         , file_segmentation_engine(params.file_segmentation_engine)
         , format_name(params.format_name)

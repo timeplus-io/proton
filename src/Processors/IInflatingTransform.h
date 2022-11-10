@@ -34,7 +34,7 @@ protected:
     virtual Chunk generate() = 0;
 
 public:
-    IInflatingTransform(Block input_header, Block output_header);
+    IInflatingTransform(Block input_header, Block output_header, ProcessorID pid_);
 
     Status prepare() override;
     void work() override;

@@ -124,7 +124,7 @@ static bool needLockStructure(const DatabasePtr & database, const Block & header
     return false;
 }
 
-class TablesBlockSource : public SourceWithProgress
+class TablesBlockSource final : public SourceWithProgress
 {
 public:
     TablesBlockSource(
@@ -134,7 +134,7 @@ public:
         ColumnPtr databases_,
         ColumnPtr tables_,
         ContextPtr context_)
-        : SourceWithProgress(std::move(header))
+        : SourceWithProgress(std::move(header), ProcessorID::TablesBlockSourceID)
         , columns_mask(std::move(columns_mask_))
         , max_block_size(max_block_size_)
         , databases(std::move(databases_))

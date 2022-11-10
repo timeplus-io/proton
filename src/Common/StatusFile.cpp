@@ -4,10 +4,10 @@
 #include <fcntl.h>
 #include <errno.h>
 
-#include <base/logger_useful.h>
 #include <base/errnoToString.h>
-#include <Common/ClickHouseRevision.h>
+#include <base/logger_useful.h>
 #include <Common/LocalDateTime.h>
+#include <Common/VersionRevision.h>
 
 #include <IO/ReadBufferFromFile.h>
 #include <IO/LimitReadBuffer.h>
@@ -38,7 +38,7 @@ StatusFile::FillFunction StatusFile::write_full_info = [](WriteBuffer & out)
 {
     out << "PID: " << getpid() << "\n"
         << "Started at: " << LocalDateTime(time(nullptr)) << "\n"
-        << "Revision: " << ClickHouseRevision::getVersionRevision() << "\n";
+        << "Revision: " << ProtonRevision::getVersionRevision() << "\n";
 };
 
 

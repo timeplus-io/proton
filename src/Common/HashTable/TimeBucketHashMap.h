@@ -1,24 +1,23 @@
 #pragma once
 
 #include <Common/HashTable/HashMap.h>
-#include <Common/HashTable/StreamingTwoLevelHashTable.h>
+#include <Common/HashTable/TimeBucketHashTable.h>
 
 template <
     typename Key,
     typename Cell,
     typename Hash = DefaultHash<Key>,
-    typename Grower = StreamingTwoLevelHashTableGrower<>,
+    typename Grower = TimeBucketHashTableGrower<>,
     typename Allocator = HashTableAllocator,
     template <typename...> typename ImplTable = HashMapTable>
-class StreamingTwoLevelHashMapTable
-    : public StreamingTwoLevelHashTable<Key, Cell, Hash, Grower, Allocator, ImplTable<Key, Cell, Hash, Grower, Allocator>>
+class TimeBucketHashMapTable
+    : public TimeBucketHashTable<Key, Cell, Hash, Grower, Allocator, ImplTable<Key, Cell, Hash, Grower, Allocator>>
 {
 public:
     using Impl = ImplTable<Key, Cell, Hash, Grower, Allocator>;
     using LookupResult = typename Impl::LookupResult;
 
-    using StreamingTwoLevelHashTable<Key, Cell, Hash, Grower, Allocator, ImplTable<Key, Cell, Hash, Grower, Allocator>>::
-        StreamingTwoLevelHashTable;
+    using TimeBucketHashTable<Key, Cell, Hash, Grower, Allocator, ImplTable<Key, Cell, Hash, Grower, Allocator>>::TimeBucketHashTable;
 
     template <typename Func>
     void ALWAYS_INLINE forEachMapped(Func && func)
@@ -51,17 +50,17 @@ template <
     typename Key,
     typename Mapped,
     typename Hash = DefaultHash<Key>,
-    typename Grower = StreamingTwoLevelHashTableGrower<>,
+    typename Grower = TimeBucketHashTableGrower<>,
     typename Allocator = HashTableAllocator,
     template <typename...> typename ImplTable = HashMapTable>
-using StreamingTwoLevelHashMap = StreamingTwoLevelHashMapTable<Key, HashMapCell<Key, Mapped, Hash>, Hash, Grower, Allocator, ImplTable>;
+using TimeBucketHashMap = TimeBucketHashMapTable<Key, HashMapCell<Key, Mapped, Hash>, Hash, Grower, Allocator, ImplTable>;
 
 template <
     typename Key,
     typename Mapped,
     typename Hash = DefaultHash<Key>,
-    typename Grower = StreamingTwoLevelHashTableGrower<>,
+    typename Grower = TimeBucketHashTableGrower<>,
     typename Allocator = HashTableAllocator,
     template <typename...> typename ImplTable = HashMapTable>
-using StreamingTwoLevelHashMapWithSavedHash
-    = StreamingTwoLevelHashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped, Hash>, Hash, Grower, Allocator, ImplTable>;
+using TimeBucketHashMapWithSavedHash
+    = TimeBucketHashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped, Hash>, Hash, Grower, Allocator, ImplTable>;

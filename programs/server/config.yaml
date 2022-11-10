@@ -290,6 +290,20 @@ path: /var/lib/proton/
 # Path to temporary data for processing hard queries.
 tmp_path: /var/lib/proton/tmp/
 
+checkpoint:
+    # Checkpoint storage type
+    storage_type : local_file_system
+    # Path to state checkpoint
+    path: /var/lib/proton/checkpoint/
+    # State checkpoint interval in seconds
+    interval: 900
+    # Checkpoint expired if not accessed after `ttl` seconds
+    last_access_ttl: 604800 # 7 days
+    # Periodical last access check interval
+    last_access_check_interval: 7200
+    # When unsubscribe a query, wait grace interval to delete its checkpoints
+    delete_grace_interval: 60
+
 # Policy from the <storage_configuration> for the temporary files.
 # If not set <tmp_path> is used, otherwise <tmp_path> is ignored.
 

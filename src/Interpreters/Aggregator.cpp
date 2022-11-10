@@ -25,10 +25,10 @@
 #include <IO/Operators.h>
 #include <Interpreters/JIT/compileFunction.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
-#include <Core/ProtocolDefines.h>
 
 /// proton: starts
 #include <Interpreters/CompiledAggregateFunctionsHolder.h>
+#include <Common/VersionRevision.h>
 /// proton: ends
 
 namespace ProfileEvents
@@ -283,7 +283,7 @@ void Aggregator::compileAggregateFunctionsIfNeeded()
         return;
 
     std::vector<AggregateFunctionWithOffset> functions_to_compile;
-    size_t aggregate_instructions_size = 0;
+    /// size_t aggregate_instructions_size = 0;
     String functions_description;
 
     is_aggregate_function_compiled.resize(aggregate_functions.size());
@@ -311,7 +311,7 @@ void Aggregator::compileAggregateFunctionsIfNeeded()
             functions_description += ' ';
         }
 
-        ++aggregate_instructions_size;
+        /// ++aggregate_instructions_size;
         is_aggregate_function_compiled[i] = function->isCompilable();
     }
 
@@ -1063,7 +1063,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     const std::string & path = file->path();
     WriteBufferFromFile file_buf(path);
     CompressedWriteBuffer compressed_buf(file_buf);
-    NativeWriter block_out(compressed_buf, DBMS_TCP_PROTOCOL_VERSION, getHeader(false));
+    NativeWriter block_out(compressed_buf, getHeader(false), ProtonRevision::getVersionRevision());
 
     LOG_DEBUG(log, "Writing part of aggregation data into temporary file {}.", path);
     ProfileEvents::increment(ProfileEvents::ExternalAggregationWritePart);

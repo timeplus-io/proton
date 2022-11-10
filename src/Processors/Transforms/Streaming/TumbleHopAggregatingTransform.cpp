@@ -15,17 +15,18 @@ TumbleHopAggregatingTransform::TumbleHopAggregatingTransform(
     Block header,
     AggregatingTransformParamsPtr params_,
     ManyAggregatedDataPtr many_data_,
-    size_t current_variant,
+    size_t current_variant_,
     size_t max_threads_,
     size_t temporary_data_merge_threads_)
     : AggregatingTransform(
         std::move(header),
         std::move(params_),
         std::move(many_data_),
-        current_variant,
+        current_variant_,
         max_threads_,
         temporary_data_merge_threads_,
-        "TumbleHopAggregatingTransform")
+        "TumbleHopAggregatingTransform",
+        ProcessorID::TumbleHopAggregatingTransformID)
 {
     assert(
         (params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START)
@@ -34,9 +35,11 @@ TumbleHopAggregatingTransform::TumbleHopAggregatingTransform(
 
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
-void TumbleHopAggregatingTransform::finalize(ChunkInfoPtr chunk_info)
+void TumbleHopAggregatingTransform::finalize(ChunkContextPtr chunk_ctx)
 {
-    watermark_bound = chunk_info->ctx.getWatermark();
+    assert(chunk_ctx);
+
+    watermark_bound = chunk_ctx->getWatermark();
     assert(watermark_bound.id == INVALID_SUBSTREAM_ID);
     if (many_data->finalizations.fetch_add(1) + 1 == many_data->variants.size())
     {
@@ -64,7 +67,7 @@ void TumbleHopAggregatingTransform::finalize(ChunkInfoPtr chunk_info)
             LOG_INFO(log, "Found watermark skew. min_watermark={}, max_watermark={}", min_watermark.watermark, min_watermark.watermark);
 
         auto start = MonotonicMilliseconds::now();
-        doFinalize(min_watermark, chunk_info);
+        doFinalize(min_watermark, chunk_ctx);
         auto end = MonotonicMilliseconds::now();
 
         LOG_INFO(log, "Took {} milliseconds to finalize {} shard aggregation", end - start, many_data->variants.size());
@@ -100,7 +103,7 @@ void TumbleHopAggregatingTransform::finalize(ChunkInfoPtr chunk_info)
     }
 }
 
-void TumbleHopAggregatingTransform::doFinalize(const WatermarkBound & watermark, ChunkInfoPtr & chunk_info)
+void TumbleHopAggregatingTransform::doFinalize(const WatermarkBound & watermark, ChunkContextPtr & chunk_ctx)
 {
     /// FIXME spill to disk, overflow_row etc cases
     auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(many_data->variants);
@@ -110,7 +113,7 @@ void TumbleHopAggregatingTransform::doFinalize(const WatermarkBound & watermark,
     initialize(prepared_data_ptr);
 
     assert(prepared_data_ptr->at(0)->isTwoLevel());
-    mergeTwoLevel(prepared_data_ptr, watermark, chunk_info);
+    convertTwoLevel(prepared_data_ptr, watermark, chunk_ctx);
 
     rows_since_last_finalization = 0;
 }
@@ -127,8 +130,8 @@ void TumbleHopAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & d
         first_pool.emplace_back(std::make_shared<Arena>());
 }
 
-void TumbleHopAggregatingTransform::mergeTwoLevel(
-    ManyAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info)
+void TumbleHopAggregatingTransform::convertTwoLevel(
+    ManyAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkContextPtr & chunk_ctx)
 {
     /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
     /// one project window for streaming processing
@@ -148,7 +151,7 @@ void TumbleHopAggregatingTransform::mergeTwoLevel(
 
         for (auto bucket : buckets)
         {
-            Block block = params->aggregator.mergeAndConvertOneBucketToBlock(*data, arena, params->final, bucket, &is_cancelled);
+            Block block = params->aggregator.mergeAndConvertOneBucketToBlock(*data, arena, params->final, ConvertAction::STREAMING_EMIT, bucket, &is_cancelled);
             if (is_cancelled)
                 return;
 
@@ -172,7 +175,7 @@ void TumbleHopAggregatingTransform::mergeTwoLevel(
     }
 
     if (merged_block)
-        setCurrentChunk(convertToChunk(merged_block), chunk_info);
+        setCurrentChunk(convertToChunk(merged_block), chunk_ctx);
 
     /// Tell other variants to clean up memory arena
     many_data->arena_watermark = watermark;

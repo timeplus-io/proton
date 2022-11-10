@@ -7,7 +7,7 @@ namespace DB
 namespace Streaming
 {
 DedupTransform::DedupTransform(const Block & input_header, const Block & output_header, FunctionDescriptionPtr dedup_func_desc_)
-    : ISimpleTransform(input_header, output_header, false)
+    : ISimpleTransform(input_header, output_header, false, ProcessorID::DedupTransformID)
     , dedup_func_desc(std::move(dedup_func_desc_))
     , chunk_header(output_header.getColumns(), 0)
 {

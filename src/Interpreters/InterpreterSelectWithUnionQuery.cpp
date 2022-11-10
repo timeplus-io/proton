@@ -1,11 +1,9 @@
 #include <Columns/getLeastSuperColumn.h>
-#include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterSelectIntersectExceptQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Parsers/ASTSelectIntersectExceptQuery.h>
 #include <Parsers/queryToString.h>
 #include <Processors/QueryPlan/DistinctStep.h>
 #include <Processors/QueryPlan/ExpressionStep.h>
@@ -23,6 +21,7 @@
 
 /// proton: starts.
 #include <DataTypes/ObjectUtils.h>
+#include <Processors/QueryPlan/QueryExecuteMode.h>
 /// proton: ends.
 
 namespace DB
@@ -446,9 +445,13 @@ BlockIO InterpreterSelectWithUnionQuery::execute()
 
     auto pipeline_builder = query_plan.buildQueryPipeline(
         QueryPlanOptimizationSettings::fromContext(context),
-        BuildQueryPipelineSettings::fromContext(context));
+        BuildQueryPipelineSettings::fromContext(context), context);
 
     pipeline_builder->addInterpreterContext(context);
+
+    /// proton : starts, setup execute mode
+    pipeline_builder->setExecuteMode(queryExecuteMode(query_plan.isStreaming(), context->getSettingsRef()));
+    /// proton : ends
 
     res.pipeline = QueryPipelineBuilder::getPipeline(std::move(*pipeline_builder));
     return res;

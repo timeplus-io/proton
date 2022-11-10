@@ -45,7 +45,7 @@ CapnProtoRowOutputFormat::CapnProtoRowOutputFormat(
     const RowOutputFormatParams & params_,
     const FormatSchemaInfo & info,
     const FormatSettings & format_settings_)
-    : IRowOutputFormat(header_, out_, params_), column_names(header_.getNames()), column_types(header_.getDataTypes()), output_stream(std::make_unique<CapnProtoOutputStream>(out_)), format_settings(format_settings_)
+    : IRowOutputFormat(header_, out_, params_, ProcessorID::CapnProtoRowOutputFormatID), column_names(header_.getNames()), column_types(header_.getDataTypes()), output_stream(std::make_unique<CapnProtoOutputStream>(out_)), format_settings(format_settings_)
 {
     schema = schema_parser.getMessageSchema(info);
     checkCapnProtoSchemaStructure(schema, getPort(PortKind::Main).getHeader(), format_settings.capn_proto.enum_comparing_mode);

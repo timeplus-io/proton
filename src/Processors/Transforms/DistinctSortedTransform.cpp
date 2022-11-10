@@ -10,7 +10,7 @@ namespace ErrorCodes
 
 DistinctSortedTransform::DistinctSortedTransform(
     const Block & header, SortDescription sort_description, const SizeLimits & set_size_limits_, UInt64 limit_hint_, const Names & columns)
-    : ISimpleTransform(header, header, true)
+    : ISimpleTransform(header, header, true, ProcessorID::DistinctSortedTransformID)
     , description(std::move(sort_description))
     , columns_names(columns)
     , limit_hint(limit_hint_)

@@ -134,12 +134,12 @@ BlockIO InterpreterSelectIntersectExceptQuery::execute()
 
     auto pipeline = query_plan.buildQueryPipeline(
         QueryPlanOptimizationSettings::fromContext(context),
-        BuildQueryPipelineSettings::fromContext(context));
+        BuildQueryPipelineSettings::fromContext(context), context);
 
     pipeline->addInterpreterContext(context);
 
     res.pipeline = QueryPipelineBuilder::getPipeline(std::move(*query_plan.buildQueryPipeline(
-    QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context))));
+    QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context), context)));
 
     return res;
 }

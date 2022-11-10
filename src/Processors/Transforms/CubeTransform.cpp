@@ -9,7 +9,7 @@ namespace ErrorCodes
 }
 
 CubeTransform::CubeTransform(Block header, AggregatingTransformParamsPtr params_)
-    : IAccumulatingTransform(std::move(header), params_->getHeader())
+    : IAccumulatingTransform(std::move(header), params_->getHeader(), ProcessorID::CubeTransformID)
     , params(std::move(params_))
     , keys(params->params.keys)
 {

@@ -14,11 +14,11 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-class PushingAsyncSource : public ISource
+class PushingAsyncSource final : public ISource
 {
 public:
     explicit PushingAsyncSource(const Block & header)
-        : ISource(header)
+        : ISource(header, ProcessorID::PushingAsyncSourceID)
     {}
 
     String getName() const override { return "PushingAsyncSource"; }

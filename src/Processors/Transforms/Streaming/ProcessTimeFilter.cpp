@@ -51,7 +51,7 @@ namespace
 }
 
 ProcessTimeFilter::ProcessTimeFilter(const String & column_name_, BaseScaleInterval interval_bs_, const Block & header)
-    : ISimpleTransform(header, header, false), column_name(column_name_), interval_bs(interval_bs_)
+    : ISimpleTransform(header, header, false, ProcessorID::ProcessTimeFilterID), column_name(column_name_), interval_bs(interval_bs_)
 {
     const auto * column_with_type = header.findByName(column_name);
     if (!column_with_type)

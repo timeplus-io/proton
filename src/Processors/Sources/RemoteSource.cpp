@@ -8,7 +8,7 @@ namespace DB
 {
 
 RemoteSource::RemoteSource(RemoteQueryExecutorPtr executor, bool add_aggregation_info_, bool async_read_)
-    : SourceWithProgress(executor->getHeader(), false)
+    : SourceWithProgress(executor->getHeader(), false, ProcessorID::RemoteSourceID)
     , add_aggregation_info(add_aggregation_info_), query_executor(std::move(executor))
     , async_read(async_read_)
 {
@@ -95,15 +95,20 @@ std::optional<Chunk> RemoteSource::tryGenerate()
     UInt64 num_rows = block.rows();
     Chunk chunk(block.getColumns(), num_rows);
 
-    /// proton: starts
-    if (add_aggregation_info || block.info.watermark != 0)
+    if (add_aggregation_info)
     {
         auto info = std::make_shared<AggregatedChunkInfo>();
         info->bucket_num = block.info.bucket_num;
         info->is_overflows = block.info.is_overflows;
-
-        info->ctx.setWatermark(WatermarkBound{INVALID_SUBSTREAM_ID, block.info.watermark, block.info.watermark_lower_bound});
         chunk.setChunkInfo(std::move(info));
+    }
+
+    /// proton: starts
+    if (block.hasWatermark())
+    {
+        auto chunk_ctx = std::make_shared<ChunkContext>();
+        chunk_ctx->setWatermark(WatermarkBound{Streaming::INVALID_SUBSTREAM_ID, block.info.watermark, block.info.watermark_lower_bound});
+        chunk.setChunkContext(std::move(chunk_ctx));
     }
     /// proton: ends
 
@@ -128,7 +133,7 @@ void RemoteSource::onUpdatePorts()
 
 
 RemoteTotalsSource::RemoteTotalsSource(RemoteQueryExecutorPtr executor)
-    : ISource(executor->getHeader())
+    : ISource(executor->getHeader(), ProcessorID::RemoteTotalsSourceID)
     , query_executor(std::move(executor))
 {
 }
@@ -148,7 +153,7 @@ Chunk RemoteTotalsSource::generate()
 
 
 RemoteExtremesSource::RemoteExtremesSource(RemoteQueryExecutorPtr executor)
-    : ISource(executor->getHeader())
+    : ISource(executor->getHeader(), ProcessorID::RemoteExtremesSourceID)
     , query_executor(std::move(executor))
 {
 }

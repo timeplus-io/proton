@@ -2,6 +2,8 @@
 
 #include <Core/Block.h>
 #include <Functions/Streaming/FunctionsStreamingWindow.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Streaming/FunctionDescription.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -9,6 +11,7 @@
 #include <Storages/SelectQueryInfo.h>
 #include <base/ClockUtils.h>
 #include <base/logger_useful.h>
+#include <Common/VersionRevision.h>
 
 namespace DB
 {
@@ -212,6 +215,52 @@ void Watermark::handleIdleness(Block & block)
             handleIdlenessWatermarkWithDelay(block);
             break;
     }
+}
+
+VersionType Watermark::getVersionFromRevision(UInt64 revision) const
+{
+    if (version)
+        return *version;
+
+    return revision;
+}
+
+VersionType Watermark::getVersion() const
+{
+    auto ver = getVersionFromRevision(ProtonRevision::getVersionRevision());
+
+    if (!version)
+        version = ver;
+
+    return ver;
+}
+
+void Watermark::serialize(WriteBuffer & wb) const
+{
+    /// Watermark has its own version than WatermarkTransform
+    writeIntBinary(getVersion(), wb);
+
+    writeIntBinary(max_event_ts, wb);
+    writeIntBinary(watermark_ts, wb);
+    writeIntBinary(last_projected_watermark_ts, wb);
+    writeIntBinary(last_event_seen_ts, wb);
+    writeIntBinary(late_events, wb);
+    writeIntBinary(last_logged_late_events, wb);
+    writeIntBinary(last_logged_late_events_ts, wb);
+}
+
+void Watermark::deserialize(ReadBuffer & rb)
+{
+    version = 0;
+
+    readIntBinary(*version, rb);
+    readIntBinary(max_event_ts, rb);
+    readIntBinary(watermark_ts, rb);
+    readIntBinary(last_projected_watermark_ts, rb);
+    readIntBinary(last_event_seen_ts, rb);
+    readIntBinary(late_events, rb);
+    readIntBinary(last_logged_late_events, rb);
+    readIntBinary(last_logged_late_events_ts, rb);
 }
 }
 }

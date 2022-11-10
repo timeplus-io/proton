@@ -51,11 +51,11 @@ namespace
     }
 }
 
-class CheckMaterializedViewValidTransform : public ISimpleTransform
+class CheckMaterializedViewValidTransform final : public ISimpleTransform
 {
 public:
     CheckMaterializedViewValidTransform(const Block & header_, const StorageMaterializedView & view_)
-        : ISimpleTransform(header_, header_, false), view(view_)
+        : ISimpleTransform(header_, header_, false, ProcessorID::CheckMaterializedViewValidTransformID), view(view_)
     {
     }
 
@@ -77,7 +77,7 @@ private:
 public:
     PushingToMaterializedViewMemorySink(
         const Block & in_header, const Block & out_header, const StorageMaterializedView::VirtualColumns & to_calc_virtual_columns_)
-        : ExceptionKeepingTransform(in_header, out_header)
+        : ExceptionKeepingTransform(in_header, out_header, true, ProcessorID::PushingToMaterializedViewMemorySinkID)
         , to_calc_virtual_columns(to_calc_virtual_columns_)
         , expected_virtual_num(out_header.columns() - in_header.columns())
     {
@@ -281,7 +281,7 @@ Pipe StorageMaterializedView::read(
     QueryPlan plan;
     read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
-        QueryPlanOptimizationSettings::fromContext(local_context), BuildQueryPipelineSettings::fromContext(local_context));
+        QueryPlanOptimizationSettings::fromContext(local_context), BuildQueryPipelineSettings::fromContext(local_context), local_context);
 }
 
 void StorageMaterializedView::read(

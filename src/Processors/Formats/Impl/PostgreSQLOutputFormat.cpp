@@ -5,7 +5,7 @@ namespace DB
 {
 
 PostgreSQLOutputFormat::PostgreSQLOutputFormat(WriteBuffer & out_, const Block & header_, const FormatSettings & settings_)
-    : IOutputFormat(header_, out_)
+    : IOutputFormat(header_, out_, ProcessorID::PostgreSQLOutputFormatID)
     , format_settings(settings_)
     , message_transport(&out)
 {

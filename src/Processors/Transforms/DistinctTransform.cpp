@@ -13,7 +13,7 @@ DistinctTransform::DistinctTransform(
     const SizeLimits & set_size_limits_,
     UInt64 limit_hint_,
     const Names & columns_)
-    : ISimpleTransform(header_, header_, true)
+    : ISimpleTransform(header_, header_, true, ProcessorID::DistinctTransformID)
     , limit_hint(limit_hint_)
     , set_size_limits(set_size_limits_)
 {

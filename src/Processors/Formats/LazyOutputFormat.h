@@ -10,12 +10,12 @@ namespace DB
 /// LazyOutputFormat is used to retrieve ready data from executing pipeline.
 /// You can periodically call `getChunk` from separate thread.
 /// Used in PullingAsyncPipelineExecutor.
-class LazyOutputFormat : public IOutputFormat
+class LazyOutputFormat final : public IOutputFormat
 {
 
 public:
     explicit LazyOutputFormat(const Block & header)
-        : IOutputFormat(header, out), queue(2) {}
+        : IOutputFormat(header, out, ProcessorID::LazyOutputFormatID), queue(2) {}
 
     String getName() const override { return "LazyOutputFormat"; }
 

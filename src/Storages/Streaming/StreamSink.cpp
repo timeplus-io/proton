@@ -17,7 +17,7 @@ namespace ErrorCodes
 }
 
 StreamSink::StreamSink(StorageStream & storage_, const StorageMetadataPtr metadata_snapshot_, ContextPtr query_context_)
-    : SinkToStorage(metadata_snapshot_->getSampleBlockNonMaterialized())
+    : SinkToStorage(metadata_snapshot_->getSampleBlockNonMaterialized(), ProcessorID::StreamSinkID)
     , storage(storage_)
     , metadata_snapshot(metadata_snapshot_)
     , query_context(query_context_)

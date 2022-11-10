@@ -7,8 +7,8 @@
 namespace DB
 {
 
-ISimpleTransform::ISimpleTransform(Block input_header_, Block output_header_, bool skip_empty_chunks_)
-    : IProcessor({std::move(input_header_)}, {std::move(output_header_)})
+ISimpleTransform::ISimpleTransform(Block input_header_, Block output_header_, bool skip_empty_chunks_, ProcessorID pid_)
+    : IProcessor({std::move(input_header_)}, {std::move(output_header_)}, pid_)
     , input(inputs.front())
     , output(outputs.front())
     , skip_empty_chunks(skip_empty_chunks_)
@@ -94,7 +94,7 @@ void ISimpleTransform::work()
     try
     {
         transform(input_data.chunk, output_data.chunk);
-        /// proton: starts.
+
         metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
         /// proton: ends.
     }
@@ -110,14 +110,19 @@ void ISimpleTransform::work()
 
     /// proton: starts. For case like SELECT count(*) FROM table WHERE expression EMIT STREAM PERIODIC INTERVAL 2 SECOND
     /// the output.header is empty. So we need explicitly check watermark chunk info here to propagate empty chunk
-    /// with watermark
-    if (!skip_empty_chunks || output_data.chunk || output_data.chunk.hasMark())
+    /// with watermark.
+    /// P.S. need propagate other chunk context like checkpoint context etc as well
+    if (!skip_empty_chunks || output_data.chunk || output_data.chunk.hasChunkContext())
         has_output = true;
     /// proton: ends
 
     if (has_output && !output_data.chunk && getOutputPort().getHeader())
         /// Support invariant that chunks must have the same number of columns as header.
-        output_data.chunk = Chunk(getOutputPort().getHeader().cloneEmpty().getColumns(), 0);
+        output_data.chunk = Chunk(
+            getOutputPort().getHeader().cloneEmpty().getColumns(),
+            0,
+            output_data.chunk.getChunkInfo(),
+            output_data.chunk.getChunkContext());
 }
 
 }

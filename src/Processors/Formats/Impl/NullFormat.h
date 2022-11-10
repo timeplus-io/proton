@@ -7,7 +7,7 @@ namespace DB
 class NullOutputFormat final : public IOutputFormat
 {
 public:
-    explicit NullOutputFormat(const Block & header) : IOutputFormat(header, empty_buffer) {}
+    explicit NullOutputFormat(const Block & header) : IOutputFormat(header, empty_buffer, ProcessorID::NullOutputFormatID) {}
 
     String getName() const override { return "Null"; }
 

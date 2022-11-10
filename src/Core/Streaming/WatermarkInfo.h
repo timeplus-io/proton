@@ -2,14 +2,15 @@
 
 #include <Common/Streaming/Substream/Common.h>
 
-#include <unordered_map>
 #include <base/types.h>
+
+#include <absl/container/flat_hash_map.h>
 
 namespace DB
 {
-const Streaming::Substream::ID INVALID_SUBSTREAM_ID{};
 namespace Streaming
 {
+const Substream::ID INVALID_SUBSTREAM_ID{};
 
 struct WatermarkBound
 {
@@ -29,6 +30,7 @@ struct WatermarkBound
 using SubstreamID = Streaming::Substream::ID;
 using WatermarkBound = Streaming::WatermarkBound;
 using WatermarkBounds = std::vector<WatermarkBound>;
+
 template <typename T>
-using SubstreamHashMap = std::unordered_map<SubstreamID, T>;
+using SubstreamHashMap = absl::flat_hash_map<SubstreamID, T>;
 }

@@ -15,7 +15,7 @@ namespace DB
 class JSONColumnsBlockOutputFormat : public JSONColumnsBlockOutputFormatBase
 {
 public:
-    JSONColumnsBlockOutputFormat(WriteBuffer & out_, const Block & header_, const FormatSettings & format_settings_, size_t indent_ = 0);
+    JSONColumnsBlockOutputFormat(WriteBuffer & out_, const Block & header_, const FormatSettings & format_settings_, size_t indent_ = 0, ProcessorID pid_ = ProcessorID::JSONColumnsBlockOutputFormatID);
 
     String getName() const override { return "JSONColumnsBlockOutputFormat"; }
 

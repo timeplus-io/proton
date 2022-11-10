@@ -30,7 +30,7 @@ namespace DB
 
 class PullingPipelineExecutor;
 class StorageS3SequentialSource;
-class StorageS3Source : public SourceWithProgress, WithContext
+class StorageS3Source final : public SourceWithProgress, WithContext
 {
 public:
     class DisclosedGlobIterator

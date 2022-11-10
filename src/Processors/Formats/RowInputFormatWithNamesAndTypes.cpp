@@ -21,8 +21,9 @@ RowInputFormatWithNamesAndTypes::RowInputFormatWithNamesAndTypes(
     bool with_names_,
     bool with_types_,
     const FormatSettings & format_settings_,
-    std::unique_ptr<FormatWithNamesAndTypesReader> format_reader_)
-    : RowInputFormatWithDiagnosticInfo(header_, in_, params_)
+    std::unique_ptr<FormatWithNamesAndTypesReader> format_reader_,
+    ProcessorID pid_)
+    : RowInputFormatWithDiagnosticInfo(header_, in_, params_, pid_)
     , format_settings(format_settings_)
     , with_names(with_names_)
     , with_types(with_types_)

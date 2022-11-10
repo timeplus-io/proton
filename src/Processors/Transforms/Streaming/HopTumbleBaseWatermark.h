@@ -13,6 +13,9 @@ public:
     HopTumbleBaseWatermark(const HopTumbleBaseWatermark &) = default;
     ~HopTumbleBaseWatermark() override = default;
 
+    void serialize(WriteBuffer & wb) const override;
+    void deserialize(ReadBuffer & rb) override;
+
 protected:
     void init(Int64 & interval);
     void initTimezone(size_t timezone_pos);

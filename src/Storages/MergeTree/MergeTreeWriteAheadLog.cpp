@@ -57,7 +57,7 @@ void MergeTreeWriteAheadLog::init()
 
     /// Small hack: in NativeBlockOutputStream header is used only in `getHeader` method.
     /// To avoid complex logic of changing it during ALTERs we leave it empty.
-    block_out = std::make_unique<NativeWriter>(*out, 0, Block{});
+    block_out = std::make_unique<NativeWriter>(*out, Block{}, 0);
     min_block_number = std::numeric_limits<Int64>::max();
     max_block_number = -1;
     bytes_at_last_sync = 0;

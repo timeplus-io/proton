@@ -50,7 +50,7 @@ class SourceWithProgress : public ISourceWithProgress
 public:
     using ISourceWithProgress::ISourceWithProgress;
     /// If enable_auto_progress flag is set, progress() will be automatically called on each generated chunk.
-    SourceWithProgress(Block header, bool enable_auto_progress);
+    SourceWithProgress(Block header, bool enable_auto_progress, ProcessorID pid_);
 
     void setLimits(const StreamLocalLimits & limits_) final { limits = limits_; }
     void setLeafLimits(const SizeLimits & leaf_limits_) final {leaf_limits = leaf_limits_; }

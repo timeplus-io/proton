@@ -194,7 +194,7 @@ public:
         , rows_to_add(block.rows())
         , joined_rows(joined_rows_)
         , range_join_ctx(range_join_ctx_)
-        , src_block_id(block.info.blockId())
+        , src_block_id(block.info.blockID())
         , buffer_left_stream(join.needBufferLeftStream())
         , asof_type(join.getAsofType())
         , asof_inequality(join.getAsofInequality())

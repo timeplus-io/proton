@@ -129,9 +129,9 @@ public:
     void setBlock(DB::Block block_)
     {
         /// FIXME
-        auto append_time = block.info.append_time;
+        auto append_time = block.info.appendTime();
         block.swap(block_);
-        block.info.append_time = append_time;
+        block.info.setAppendTime(append_time);
     }
     DB::Block & getBlock() { return block; }
     const DB::Block & getBlock() const { return block; }
@@ -139,8 +139,8 @@ public:
     uint64_t getFlags() const { return flags; }
     const std::vector<uint16_t> & getColumnPositions() const { return column_positions; }
 
-    int64_t getAppendTime() const { return block.info.append_time; }
-    void setAppendTime(int64_t append_time) { block.info.append_time = append_time; }
+    int64_t getAppendTime() const { return block.info.appendTime(); }
+    void setAppendTime(int64_t append_time) { block.info.setAppendTime(append_time); }
 
     std::pair<int64_t, int64_t> minMaxEventTime() const;
 
@@ -253,10 +253,10 @@ public:
 
     static constexpr size_t commonMetadataBytes()
     {
-        /// prefix_length + crc + flags + sn +  append_time + schema_version + block_format
+        /// prefix_length + crc + flags + sn + append_time + schema_version + block_format
         /// return 4 + 4 + 8 + 8 + 2 + 1 + 8;
         return sizeof(Record::prefix_length) + sizeof(Record::crc) + sizeof(Record::flags) + sizeof(Record::sn)
-            + sizeof(DB::BlockInfo::append_time) + sizeof(Record::schema_version) + sizeof(Record::block_format);
+            + sizeof(DB::BlockInfo::any_field) + sizeof(Record::schema_version) + sizeof(Record::block_format);
     }
 
 private:

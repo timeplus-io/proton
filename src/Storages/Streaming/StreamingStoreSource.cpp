@@ -3,7 +3,6 @@
 #include "StreamingBlockReaderKafka.h"
 #include "StreamingBlockReaderNativeLog.h"
 
-#include <Interpreters/Context.h>
 #include <Interpreters/inplaceBlockConversions.h>
 #include <KafkaLog/KafkaWALPool.h>
 #include <base/logger_useful.h>
@@ -15,10 +14,9 @@ StreamingStoreSource::StreamingStoreSource(
     const Block & header,
     const StorageSnapshotPtr & storage_snapshot_,
     ContextPtr context_,
-    Int32 shard_,
     Int64 sn,
     Poco::Logger * log_)
-    : StreamingStoreSourceBase(header, storage_snapshot_, std::move(context_)), shard(shard_), log(log_)
+    : StreamingStoreSourceBase(header, storage_snapshot_, std::move(context_), log_, ProcessorID::StreamingStoreSourceID)
 {
     if (query_context->getSettingsRef().record_consume_batch_count != 0)
         record_consume_batch_count = query_context->getSettingsRef().record_consume_batch_count;
@@ -33,7 +31,7 @@ StreamingStoreSource::StreamingStoreSource(
         auto consumer = kpool.getOrCreateStreaming(stream_shard_->logStoreClusterId());
         assert(consumer);
         kafka_reader = std::make_unique<StreamingBlockReaderKafka>(
-            std::move(stream_shard_), shard, sn, columns_desc.physical_column_positions_to_read, std::move(consumer), log);
+            std::move(stream_shard_), sn, columns_desc.physical_column_positions_to_read, std::move(consumer), log);
     }
     else
     {
@@ -41,7 +39,6 @@ StreamingStoreSource::StreamingStoreSource(
         fetch_buffer_size = std::min<UInt64>(64 * 1024 * 1024, fetch_buffer_size);
         nativelog_reader = std::make_unique<StreamingBlockReaderNativeLog>(
             std::move(stream_shard_),
-            shard_,
             sn,
             record_consume_timeout,
             fetch_buffer_size,
@@ -73,6 +70,8 @@ void StreamingStoreSource::readAndProcess()
     {
         if (record->empty())
             continue;
+
+        last_sn = record->getSN();
 
         Columns columns;
         columns.reserve(header_chunk.getNumColumns());
@@ -109,13 +108,34 @@ void StreamingStoreSource::readAndProcess()
         }
 
         result_chunks.emplace_back(std::move(columns), rows);
-        if (likely(block.info.append_time > 0))
+        if (likely(block.info.appendTime() > 0))
         {
-            auto chunk_info = std::make_shared<ChunkInfo>();
-            chunk_info->ctx.setAppendTime(block.info.append_time);
-            result_chunks.back().setChunkInfo(std::move(chunk_info));
+            auto chunk_ctx = std::make_shared<ChunkContext>();
+            chunk_ctx->setAppendTime(block.info.appendTime());
+            result_chunks.back().setChunkContext(std::move(chunk_ctx));
         }
     }
     iter = result_chunks.begin();
+}
+
+std::pair<String, Int32> StreamingStoreSource::getStreamShard() const
+{
+    if (nativelog_reader)
+        return nativelog_reader->getStreamShard();
+    else
+        return kafka_reader->getStreamShard();
+}
+
+void StreamingStoreSource::recover(CheckpointContextPtr ckpt_ctx_)
+{
+    StreamingStoreSourceBase::recover(std::move(ckpt_ctx_));
+
+    if (last_sn >= 0)
+    {
+        if (nativelog_reader)
+            nativelog_reader->resetSequenceNumber(last_sn + 1);
+        else
+            kafka_reader->resetOffset(last_sn + 1);
+    }
 }
 }

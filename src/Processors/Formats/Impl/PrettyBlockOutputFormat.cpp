@@ -22,7 +22,7 @@ namespace ErrorCodes
 
 PrettyBlockOutputFormat::PrettyBlockOutputFormat(
     WriteBuffer & out_, const Block & header_, const FormatSettings & format_settings_)
-     : IOutputFormat(header_, out_), format_settings(format_settings_), serializations(header_.getSerializations())
+     : IOutputFormat(header_, out_, ProcessorID::PrettyBlockOutputFormatID), format_settings(format_settings_), serializations(header_.getSerializations())
 {
     struct winsize w;
     if (0 == ioctl(STDOUT_FILENO, TIOCGWINSZ, &w))

@@ -2,7 +2,6 @@
 
 #include <Processors/IProcessor.h>
 
-
 namespace DB
 {
 
@@ -19,7 +18,7 @@ protected:
     virtual std::optional<Chunk> tryGenerate();
 
 public:
-    explicit ISource(Block header);
+    explicit ISource(Block header, ProcessorID pid_);
 
     Status prepare() override;
     void work() override;

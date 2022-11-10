@@ -19,7 +19,7 @@ class ReadBuffer;
   * Fields can be listed in any order (including, in different lines there may be different order),
   *  and some fields may be missing.
   */
-class RawStoreInputFormat : public IRowInputFormat
+class RawStoreInputFormat final : public IRowInputFormat
 {
 public:
     RawStoreInputFormat(

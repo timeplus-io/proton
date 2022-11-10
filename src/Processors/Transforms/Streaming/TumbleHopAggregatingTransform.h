@@ -13,23 +13,23 @@ public:
     TumbleHopAggregatingTransform(
         Block header,
         AggregatingTransformParamsPtr params_,
-        ManyAggregatedDataPtr many_data,
-        size_t current_variant,
-        size_t max_threads,
-        size_t temporary_data_merge_threads);
+        ManyAggregatedDataPtr many_data_,
+        size_t current_variant_,
+        size_t max_threads_,
+        size_t temporary_data_merge_threads_);
 
     ~TumbleHopAggregatingTransform() override = default;
 
     String getName() const override { return "TumbleHopAggregatingTransform"; }
 
 private:
-    void finalize(ChunkInfoPtr chunk_info) override;
+    void finalize(ChunkContextPtr chunk_ctx) override;
 
-    inline void doFinalize(const WatermarkBound & watermark, ChunkInfoPtr & chunk_info);
+    inline void doFinalize(const WatermarkBound & watermark, ChunkContextPtr & chunk_ctx);
 
     inline void initialize(ManyAggregatedDataVariantsPtr & data);
 
-    void mergeTwoLevel(ManyAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info);
+    void convertTwoLevel(ManyAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkContextPtr & chunk_ctx);
 
     inline void removeBuckets();
 };

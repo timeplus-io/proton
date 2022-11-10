@@ -12,7 +12,7 @@ namespace ErrorCodes
 }
 
 LineAsStringRowInputFormat::LineAsStringRowInputFormat(const Block & header_, ReadBuffer & in_, Params params_) :
-    IRowInputFormat(header_, in_, std::move(params_))
+    IRowInputFormat(header_, in_, std::move(params_), ProcessorID::LineAsStringRowInputFormatID)
 {
     if (header_.columns() > 1 || header_.getDataTypes()[0]->getTypeId() != TypeIndex::String)
     {

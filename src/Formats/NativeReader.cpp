@@ -1,6 +1,4 @@
-#include <Core/Defines.h>
 #include <Core/ProtocolDefines.h>
-
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
 #include <Compression/CompressedReadBufferFromFile.h>
@@ -94,8 +92,6 @@ Block NativeReader::read()
 {
     Block res;
 
-    const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
-
     if (use_index && index_block_it == index_block_end)
         return res;
 
@@ -126,6 +122,8 @@ Block NativeReader::read()
         rows = index_block_it->num_rows;
     }
 
+    const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
+
     for (size_t i = 0; i < columns; ++i)
     {
         if (use_index)
@@ -141,7 +139,7 @@ Block NativeReader::read()
 
         /// Type
         String type_name;
-        readBinary(type_name, istr);
+        readStringBinary(type_name, istr);
         column.type = data_type_factory.get(type_name);
 
         const auto * aggregate_function_data_type = typeid_cast<const DataTypeAggregateFunction *>(column.type.get());
@@ -185,17 +183,6 @@ Block NativeReader::read()
             readData(*serialization, read_column, istr, rows, avg_value_size_hint);
 
         column.column = std::move(read_column);
-
-        if (header)
-        {
-            /// Support insert from old clients without low cardinality type.
-            auto & header_column = header.getByName(column.name);
-            if (!header_column.type->equals(*column.type))
-            {
-                column.column = recursiveTypeConversion(column.column, column.type, header.safeGetByPosition(i).type);
-                column.type = header.safeGetByPosition(i).type;
-            }
-        }
 
         res.insert(std::move(column));
 

@@ -15,7 +15,6 @@ namespace ErrorCodes
 
 StreamingBlockReaderKafka::StreamingBlockReaderKafka(
     std::shared_ptr<StreamShard> stream_shard_,
-    Int32 shard_,
     Int64 offset,
     SourceColumnsDescription::PhysicalColumnPositions column_positions,
     klog::KafkaWALSimpleConsumerPtr consumer_,
@@ -23,7 +22,7 @@ StreamingBlockReaderKafka::StreamingBlockReaderKafka(
     : stream_shard(std::move(stream_shard_))
     , schema(stream_shard->storageStream()->getInMemoryMetadataPtr()->getSampleBlock())
     , consumer(std::move(consumer_))
-    , consume_ctx(toString(stream_shard->storageStream()->getStorageID().uuid), shard_, offset)
+    , consume_ctx(toString(stream_shard->storageStream()->getStorageID().uuid), stream_shard->getShard(), offset)
     , log(log_)
 {
     if (offset == nlog::LATEST_SN)
@@ -43,7 +42,7 @@ StreamingBlockReaderKafka::StreamingBlockReaderKafka(
         log,
         "Start streaming reading from topic={} shard={} offset={} column_positions={}",
         consume_ctx.topic,
-        shard_,
+        stream_shard->getShard(),
         offset,
         fmt::join(positions.begin(), positions.end(), ","));
 }
@@ -71,4 +70,15 @@ nlog::RecordPtrs StreamingBlockReaderKafka::read(UInt32 count, Int32 timeout_ms)
 
     return std::move(result.records);
 }
+
+std::pair<String, Int32> StreamingBlockReaderKafka::getStreamShard() const
+{
+    return stream_shard->getStreamShard();
+}
+
+void StreamingBlockReaderKafka::resetOffset(Int64 offset)
+{
+    consume_ctx.offset = offset;
+}
+
 }
