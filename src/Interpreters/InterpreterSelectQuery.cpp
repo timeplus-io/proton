@@ -176,7 +176,7 @@ namespace
                 }
             }
             else if (streaming_only_func.count(func.name))
-                throw Exception(ErrorCodes::FUNCTION_NOT_ALLOWED, "{} function can be used only in streaming query", func.name);
+                throw Exception(ErrorCodes::FUNCTION_NOT_ALLOWED, "{} function is private and is not supposed to be used directly in a query", func.name);
         }
 
         bool emit_version = false;
@@ -212,6 +212,7 @@ namespace
            "__streaming_row_number",
            "__streaming_now64",
            "__streaming_now",
+           "__dedup",
            /// changelog_only
            "__count_retract",
            "__sum_retract",
