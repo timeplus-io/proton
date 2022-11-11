@@ -3371,9 +3371,6 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
 {
     if (isStreaming())
     {
-        if (analysis_result.hasLimitBy())
-            throw Exception("Streaming query doesn't support LIMIT BY", ErrorCodes::NOT_IMPLEMENTED);
-
         /// Does not allow window func over a global aggregation
         if (hasStreamingWindowFunc())
         {
