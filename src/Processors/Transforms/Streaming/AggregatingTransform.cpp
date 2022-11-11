@@ -120,8 +120,8 @@ protected:
         if (bucket_num >= NUM_BUCKETS)
             return {};
 
-        Block block
-            = params->aggregator.mergeAndConvertOneBucketToBlock(*data, arena, params->final, ConvertAction::DISTRIBUTED_MERGE, bucket_num, &shared_data->is_cancelled);
+        Block block = params->aggregator.mergeAndConvertOneBucketToBlock(
+            *data, arena, params->final, ConvertAction::DISTRIBUTED_MERGE, bucket_num, &shared_data->is_cancelled);
         Chunk chunk = convertToChunk(block);
 
         shared_data->is_bucket_processed[bucket_num] = true;
@@ -510,20 +510,23 @@ void AggregatingTransform::work()
     Int64 start_ns = MonotonicNanoseconds::now();
     metrics.processed_bytes += current_chunk.bytes();
 
-    if (is_consume_finished)
-    {
-        initGenerate();
-    }
-    else
+    if (!is_consume_finished)
     {
         auto num_rows = current_chunk.getNumRows();
-        rows_since_last_finalization += num_rows;
-        src_rows += num_rows;
-        src_bytes += current_chunk.bytes();
+        if (num_rows > 0)
+        {
+            many_data->addRowCount(num_rows, current_variant);
+            src_rows += num_rows;
+            src_bytes += current_chunk.bytes();
+        }
 
         consume(std::move(current_chunk));
 
         read_current_chunk = false;
+    }
+    else
+    {
+        initGenerate();
     }
 
     metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
@@ -755,11 +758,15 @@ void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
     UInt16 num_variants = many_data->variants.size();
     for (size_t current_aggr = 0; const auto & data_variant : many_data->variants)
     {
-        auto logic_id = many_data->aggregating_transforms[current_aggr++]->getLogicID();
-        ckpt_ctx->coordinator->checkpoint(getVersion(), logic_id, ckpt_ctx, [num_variants, data_variant, this](WriteBuffer & wb) {
+        auto logic_id = many_data->aggregating_transforms[current_aggr]->getLogicID();
+        UInt64 last_rows = *many_data->rows_since_last_finalizations[current_aggr];
+        ckpt_ctx->coordinator->checkpoint(getVersion(), logic_id, ckpt_ctx, [num_variants, last_rows, data_variant, this](WriteBuffer & wb) {
             DB::writeIntBinary(num_variants, wb);
+            DB::writeIntBinary(last_rows, wb);
             params->aggregator.checkpoint(*data_variant, wb);
         });
+
+        ++current_aggr;
     }
 }
 
@@ -768,8 +775,8 @@ void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
     /// FIXME, concurrency
     for (size_t current_aggr = 0; auto & data_variant : many_data->variants)
     {
-        auto logic_id = many_data->aggregating_transforms[current_aggr++]->getLogicID();
-        ckpt_ctx->coordinator->recover(logic_id, ckpt_ctx, [&data_variant, this](VersionType /*version*/, ReadBuffer & rb) {
+        auto logic_id = many_data->aggregating_transforms[current_aggr]->getLogicID();
+        ckpt_ctx->coordinator->recover(logic_id, ckpt_ctx, [&data_variant, current_aggr, this](VersionType /*version*/, ReadBuffer & rb) {
             UInt16 num_variants = 0;
             DB::readIntBinary(num_variants, rb);
             if (num_variants != many_data->variants.size())
@@ -779,8 +786,14 @@ void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
                     num_variants,
                     many_data->variants.size());
 
+            UInt64 last_rows = 0;
+            DB::readIntBinary(last_rows, rb);
+            *many_data->rows_since_last_finalizations[current_aggr] = last_rows;
+
             params->aggregator.recover(*data_variant, rb);
         });
+
+        ++current_aggr;
     }
 }
 }

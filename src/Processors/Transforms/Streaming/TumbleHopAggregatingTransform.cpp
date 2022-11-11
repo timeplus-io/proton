@@ -110,12 +110,12 @@ void TumbleHopAggregatingTransform::doFinalize(const WatermarkBound & watermark,
     if (prepared_data_ptr->empty())
         return;
 
+    SCOPE_EXIT({ many_data->resetRowCounts(); });
+
     initialize(prepared_data_ptr);
 
     assert(prepared_data_ptr->at(0)->isTwoLevel());
     convertTwoLevel(prepared_data_ptr, watermark, chunk_ctx);
-
-    rows_since_last_finalization = 0;
 }
 
 void TumbleHopAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & data)

@@ -35,6 +35,10 @@ GlobalAggregatingTransform::GlobalAggregatingTransform(
 /// and push the block to downstream pipe
 void GlobalAggregatingTransform::finalize(ChunkContextPtr chunk_ctx)
 {
+    /// If there is no new data, don't emit aggr result
+    if (!many_data->hasNewData())
+        return;
+
     if (many_data->finalizations.fetch_add(1) + 1 == many_data->variants.size())
     {
         auto start = MonotonicMilliseconds::now();
@@ -69,7 +73,7 @@ void GlobalAggregatingTransform::doFinalize(ChunkContextPtr & chunk_ctx)
     if (prepared_data_ptr->empty())
         return;
 
-    SCOPE_EXIT({ rows_since_last_finalization = 0; });
+    SCOPE_EXIT({ many_data->resetRowCounts(); });
 
     if (initialize(prepared_data_ptr, chunk_ctx))
         /// Processed

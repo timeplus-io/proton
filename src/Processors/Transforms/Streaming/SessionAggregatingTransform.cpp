@@ -121,6 +121,8 @@ void SessionAggregatingTransform::finalizeSession(const SessionInfo & info, Bloc
     if (many_aggregating_size != 1)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented parallel processing session window");
 
+    SCOPE_EXIT({ many_data->resetRowCounts(); });
+
     auto start = MonotonicMilliseconds::now();
 
     auto substream_ctx = getSubstreamContext(info.id);
@@ -148,8 +150,6 @@ void SessionAggregatingTransform::finalizeSession(const SessionInfo & info, Bloc
         many_aggregating_size,
         info.id,
         info.toString());
-
-    rows_since_last_finalization = 0;
 
     /// Clear and reuse current session variants
     for (auto variants : substream_ctx->many_variants)

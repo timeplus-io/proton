@@ -37,7 +37,7 @@ struct ManyAggregatedData
     ManyAggregatedDataVariants variants;
 
     /// Reference to all transforms
-    std::vector<AggregatingTransform*> aggregating_transforms;
+    std::vector<AggregatingTransform *> aggregating_transforms;
 
     /// Watermarks for all variants
     std::vector<WatermarkBound> watermarks;
@@ -54,10 +54,32 @@ struct ManyAggregatedData
     std::vector<Int64> ckpt_epochs;
     std::atomic<UInt32> ckpt_requested = 0;
 
+    std::vector<std::unique_ptr<std::atomic<UInt64>>> rows_since_last_finalizations;
+
+    bool hasNewData() const
+    {
+        return std::any_of(
+            rows_since_last_finalizations.begin(), rows_since_last_finalizations.end(), [](const auto & rows) { return *rows > 0; });
+    }
+
+    void resetRowCounts()
+    {
+        for (auto & rows : rows_since_last_finalizations)
+            *rows = 0;
+    }
+
+    void addRowCount(size_t rows, size_t current_variant)
+    {
+        *rows_since_last_finalizations[current_variant] += rows;
+    }
+
     explicit ManyAggregatedData(size_t num_threads) : variants(num_threads), watermarks(num_threads), ckpt_epochs(num_threads)
     {
         for (auto & elem : variants)
             elem = std::make_shared<AggregatedDataVariants>();
+
+        for (size_t i = 0; i < num_threads; ++i)
+            rows_since_last_finalizations.emplace_back(std::make_unique<std::atomic<UInt64>>(0));
 
         aggregating_transforms.resize(variants.size());
     }
@@ -149,7 +171,6 @@ protected:
 
     /// Aggregated result which is pushed to downstream output
     Chunk current_chunk_aggregated;
-    UInt64 rows_since_last_finalization = 0;
     bool has_input = false;
 };
 }
