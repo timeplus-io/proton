@@ -46,6 +46,14 @@ BlockIO InterpreterRenameQuery::execute()
         descriptions.emplace_back(elem, current_database);
         const auto & description = descriptions.back();
 
+        /// proton: starts
+        if (description.from_database_name != description.to_database_name)
+        {
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED, "Rename stream between different databases is not supported");
+        }
+        /// proton: ends
+
         UniqueTableName from(description.from_database_name, description.from_table_name);
         UniqueTableName to(description.to_database_name, description.to_table_name);
 
