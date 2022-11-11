@@ -3495,7 +3495,9 @@ void InterpreterSelectQuery::analyzeStreamingMode()
         else if (storage->as<StorageView>())
         {
             auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
-            streaming = InterpreterSelectWithUnionQuery(select, context, SelectQueryOptions().analyze()).isStreaming();
+            auto ctx = Context::createCopy(context);
+            ctx->setCollectRequiredColumns(false);
+            streaming = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().analyze()).isStreaming();
         }
         else if (storage->as<StorageStream>())
             streaming = true;
@@ -3523,7 +3525,9 @@ void InterpreterSelectQuery::analyzeChangelogMode()
         if (storage->as<StorageView>())
         {
             auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
-            is_changelog = InterpreterSelectWithUnionQuery(select, context, SelectQueryOptions().analyze()).isChangelog();
+            auto ctx = Context::createCopy(context);
+            ctx->setCollectRequiredColumns(false);
+            is_changelog = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().analyze()).isChangelog();
         }
         else
             is_changelog = storage->isChangelogKvMode() || storage->isChangelogMode();
