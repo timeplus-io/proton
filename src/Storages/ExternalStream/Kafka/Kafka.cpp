@@ -15,12 +15,12 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int INVALID_SETTING_VALUE;
-    extern const int OK;
-    extern const int RESOURCE_NOT_FOUND;
+extern const int INVALID_SETTING_VALUE;
+extern const int OK;
+extern const int RESOURCE_NOT_FOUND;
 }
 
-Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_)
+Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, bool attach)
     : storage_id(storage->getStorageID())
     , settings(std::move(settings_))
     , data_format(settings->data_format.value)
@@ -38,19 +38,9 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
 
     cacheVirtualColumnNamesAndTypes();
 
-    /// Check if topic exists
-    klog::KafkaWALAuth auth = {
-        .security_protocol = settings->security_protocol.value,
-        .username = settings->username.value,
-        .password = settings->password.value
-    };
-
-    auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
-    auto result = consumer->describe(settings->topic.value);
-    if (result.err != ErrorCodes::OK)
-        throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "{} topic doesn't exist", settings->topic.value);
-
-    shards = result.partitions;
+    if (!attach)
+        /// Only validate cluster / topic for external stream creation
+        validate();
 }
 
 Pipe Kafka::read(
@@ -62,6 +52,8 @@ Pipe Kafka::read(
     size_t max_block_size,
     unsigned /*num_streams*/)
 {
+    validate();
+
     Pipes pipes;
     pipes.reserve(shards);
 
@@ -119,11 +111,7 @@ std::vector<Int64> Kafka::getOffsets(const String & seek_to) const
         return std::vector<Int64>(shards, utc_ms);
     else
     {
-        klog::KafkaWALAuth auth = {
-            .security_protocol = securityProtocol(),
-            .username = username(),
-            .password = password()
-        };
+        klog::KafkaWALAuth auth = {.security_protocol = securityProtocol(), .username = username(), .password = password()};
         auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
         return consumer->offsetsForTimestamps(settings->topic.value, utc_ms, shards);
     }
@@ -152,5 +140,23 @@ void Kafka::calculateDataFormat(const IStorage * storage)
     else
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED, "Automatically converting Kafka message to {} type is not supported yet", type->getName());
+}
+
+void Kafka::validate()
+{
+    if (shards > 0)
+        /// Already validated
+        return;
+
+    klog::KafkaWALAuth auth = {
+        .security_protocol = settings->security_protocol.value, .username = settings->username.value, .password = settings->password.value};
+
+    auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
+
+    auto result = consumer->describe(settings->topic.value);
+    if (result.err != ErrorCodes::OK)
+        throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "{} topic doesn't exist", settings->topic.value);
+
+    shards = result.partitions;
 }
 }

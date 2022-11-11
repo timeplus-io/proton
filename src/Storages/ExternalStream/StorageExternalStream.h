@@ -52,7 +52,8 @@ protected:
         const StorageID & table_id_,
         ContextPtr context_,
         const ColumnsDescription & columns_,
-        std::unique_ptr<ExternalStreamSettings> external_stream_settings_);
+        std::unique_ptr<ExternalStreamSettings> external_stream_settings_,
+        bool attach);
 
 private:
     std::unique_ptr<StorageExternalStreamImpl> external_stream;

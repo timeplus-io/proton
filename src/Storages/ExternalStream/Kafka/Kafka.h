@@ -11,7 +11,7 @@ class IStorage;
 class Kafka final : public StorageExternalStreamImpl
 {
 public:
-    Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_);
+    Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, bool attach);
     ~Kafka() override = default;
 
     void startup() override { }
@@ -40,6 +40,7 @@ private:
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
     std::vector<Int64> getOffsets(const String & seek_to) const;
+    void validate();
 
 private:
     StorageID storage_id;
@@ -50,6 +51,6 @@ private:
 
     NamesAndTypesList virtual_column_names_and_types;
 
-    Int32 shards;
+    Int32 shards = -1;
 };
 }

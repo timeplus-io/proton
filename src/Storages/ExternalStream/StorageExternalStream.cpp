@@ -6,7 +6,7 @@
 /// External stream storages
 #include <Storages/ExternalStream/Kafka/Kafka.h>
 #ifdef OS_LINUX
-#include <Storages/ExternalStream/Log/FileLog.h>
+#    include <Storages/ExternalStream/Log/FileLog.h>
 #endif
 
 #include <Interpreters/Context.h>
@@ -21,27 +21,27 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int NOT_IMPLEMENTED;
-    extern const int BAD_ARGUMENTS;
+extern const int NOT_IMPLEMENTED;
+extern const int BAD_ARGUMENTS;
 }
 
 namespace
 {
-    std::unique_ptr<StorageExternalStreamImpl>
-    createExternalStream(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr & context [[maybe_unused]])
-    {
-        if (settings->type.value == "")
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream type is required in settings");
+std::unique_ptr<StorageExternalStreamImpl> createExternalStream(
+    IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr & context [[maybe_unused]], bool attach)
+{
+    if (settings->type.value == "")
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream type is required in settings");
 
-        if (settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA)
-            return std::make_unique<Kafka>(storage, std::move(settings));
+    if (settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA)
+        return std::make_unique<Kafka>(storage, std::move(settings), attach);
 #ifdef OS_LINUX
-        else if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
-            return std::make_unique<FileLog>(storage, std::move(settings));
-        else
+    else if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
+        return std::make_unique<FileLog>(storage, std::move(settings));
+    else
 #endif
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} external stream is not supported yet", settings->type.value);
-    }
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} external stream is not supported yet", settings->type.value);
+}
 }
 
 void StorageExternalStream::startup()
@@ -102,16 +102,15 @@ StorageExternalStream::StorageExternalStream(
     const StorageID & table_id_,
     ContextPtr context_,
     const ColumnsDescription & columns_,
-    std::unique_ptr<ExternalStreamSettings> external_stream_settings_)
-    : IStorage(table_id_)
-    , WithContext(context_->getGlobalContext())
+    std::unique_ptr<ExternalStreamSettings> external_stream_settings_,
+    bool attach)
+    : IStorage(table_id_), WithContext(context_->getGlobalContext())
 {
-
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
     setInMemoryMetadata(storage_metadata);
 
-    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_);
+    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, attach);
     external_stream.swap(stream);
 }
 
@@ -125,7 +124,8 @@ void registerStorageExternalStream(StorageFactory & factory)
         {
             auto external_stream_settings = std::make_unique<ExternalStreamSettings>();
             external_stream_settings->loadFromQuery(*args.storage_def);
-            return StorageExternalStream::create(args.table_id, args.getContext(), args.columns, std::move(external_stream_settings));
+            return StorageExternalStream::create(
+                args.table_id, args.getContext(), args.columns, std::move(external_stream_settings), args.attach);
         }
         else
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream requires correct settings setup");
