@@ -75,9 +75,9 @@ void StreamingStoreSourceChannel::readAndProcess()
                 case SourceColumnsDescription::ReadColumnType::VIRTUAL:
                 {
                     /// The current column to return is a virtual column which needs be calculated lively
-                    assert(columns_desc.virtual_time_columns_calc[pos.virtualPosition()]);
-                    auto ts = columns_desc.virtual_time_columns_calc[pos.virtualPosition()](block.info);
-                    auto time_column = columns_desc.virtual_col_type->createColumnConst(rows, ts);
+                    assert(columns_desc.virtual_col_calcs[pos.virtualPosition()]);
+                    auto ts = columns_desc.virtual_col_calcs[pos.virtualPosition()](record);
+                    auto time_column = columns_desc.virtual_col_types[pos.virtualPosition()]->createColumnConst(rows, ts);
                     columns.push_back(std::move(time_column));
                     break;
                 }

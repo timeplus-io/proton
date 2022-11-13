@@ -36,6 +36,7 @@ const String RESERVED_EMIT_TIME = "_tp_emit_time";
 const String RESERVED_INDEX_TIME = "_tp_index_time";
 const String RESERVED_EVENT_SEQUENCE_ID = "_tp_sn";
 const String RESERVED_DELTA_FLAG = "_tp_delta";
+const String RESERVED_SHARD = "_tp_shard";
 const String RESERVED_EVENT_TIME_API_NAME = "event_time_column";
 const std::vector<String> RESERVED_COLUMN_NAMES = {RESERVED_EVENT_TIME, RESERVED_INDEX_TIME};
 const String DEFAULT_EVENT_TIME = "now64(3, 'UTC')";

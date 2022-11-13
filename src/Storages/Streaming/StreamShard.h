@@ -106,7 +106,7 @@ private:
     void progressSequencesWithoutLock(const SequencePair & seq);
     Int64 maxCommittedSN() const;
 
-    std::vector<Int64> sequencesForTimestamps(Int64 ts, bool append_time = false) const;
+    std::vector<Int64> sequencesForTimestamps(std::vector<Int64> timestamps, bool append_time = false) const;
 
     std::vector<Int64> getOffsets(const String & seek_to) const;
 

@@ -3455,21 +3455,25 @@ void InterpreterSelectQuery::checkEmitVersion()
 void InterpreterSelectQuery::handleSnapshotSeekTo()
 {
     /// For snapshot query, if seek_to is empty, we use 'earliest' by default.
-    auto seek_to = context->getSettingsRef().seek_to.value;
-    auto utc_ms = parseSeekTo((seek_to.empty() ? "earliest" : seek_to), true);
-    if (utc_ms == nlog::EARLIEST_SN)
+    const auto & seek_to = context->getSettingsRef().seek_to.value;
+    auto [time_based_seek, utc_ms] = parseSeekTo(seek_to.empty() ? "earliest" : seek_to, 1, true);
+
+    if (utc_ms[0] == nlog::EARLIEST_SN)
     {
         /// Do nothing for earliest
     }
-    else if (utc_ms == nlog::LATEST_SN)
+    else if (utc_ms[0] == nlog::LATEST_SN)
     {
         /// Filter by now() for latest
         addEventTimeFilter(getSelectQuery(), UTCMilliseconds::now());
     }
     else
     {
+        if (!time_based_seek)
+            throw Exception(ErrorCodes::UNSUPPORTED, "Sequence number based seek to is not supported");
+
         /// Filter by the specified timestamp
-        addEventTimeFilter(getSelectQuery(), utc_ms);
+        addEventTimeFilter(getSelectQuery(), utc_ms[0]);
     }
 }
 

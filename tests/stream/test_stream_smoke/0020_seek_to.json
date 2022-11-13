@@ -1,0 +1,81 @@
+{
+  "test_suite_name": "seek_to",
+  "tag": "smoke",
+  "test_suite_config":{
+    "setup": {
+      "statements": [
+        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists seek_to_stream"},
+        {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists seek_to_stream(i int, s string)"},
+        {"client":"python", "query_type": "table","depends_on_stream":"seek_to_stream", "wait":1, "query": "insert into seek_to_stream(i, s) values (1, 's1')"},
+        {"client":"python", "query_type": "table", "wait":1, "query": "insert into seek_to_stream(i, s) values (2, 's2')"},
+        {"client":"python", "query_type": "table", "wait":1, "query": "insert into seek_to_stream(i, s) values (3, 's3')"},
+        {"client":"python", "query_type": "table", "wait":1, "query": "insert into seek_to_stream(i, s) values (4, 's4')"}
+      ]
+    },
+    "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
+  },
+  "comments": "Tests covering seek_to by sequence number",
+  "tests": [
+    {
+      "id": 0,
+      "tags": ["seek_to"],
+      "name": "seek_to",
+      "description": "seek to sequene number",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"2100", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from seek_to_stream settings seek_to='0'"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"2100",
+          "expected_results":[
+            [1, "s1"], [2, "s2"], [3, "s3"], [4, "s4"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "tags": ["seek_to"],
+      "name": "seek_to",
+      "description": "seek to sequene number",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"2101", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from seek_to_stream settings seek_to='1'"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"2101",
+          "expected_results":[
+            [2, "s2"], [3, "s3"], [4, "s4"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "tags": ["seek_to"],
+      "name": "seek_to",
+      "description": "seek to sequene number",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"2102", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from seek_to_stream settings seek_to='5'"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"2102",
+          "expected_results":[]
+        }
+      ]
+    }
+  ]
+}

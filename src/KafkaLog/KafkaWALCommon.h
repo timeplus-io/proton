@@ -38,7 +38,7 @@ nlog::RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, const nlog::SchemaCon
 
 DescribeResult describeTopic(const String & name, struct rd_kafka_s * rk, Poco::Logger * log);
 
-std::vector<int64_t> getOffsetsForTimestamps(struct rd_kafka_s * rd_handle, const std::string & topic, int64_t timestamp, int32_t shards, int32_t timeout_ms);
+std::vector<int64_t> getOffsetsForTimestamps(struct rd_kafka_s * rd_handle, const std::string & topic, const std::vector<int64_t> & timestamps, int32_t timeout_ms);
 
 std::string boolToString(bool val);
 }

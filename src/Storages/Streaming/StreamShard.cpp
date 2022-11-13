@@ -954,22 +954,17 @@ Int64 StreamShard::maxCommittedSN() const
 
 std::vector<Int64> StreamShard::getOffsets(const String & seek_to) const
 {
-    auto utc_ms = parseSeekTo(seek_to, true);
+    auto [time_based_seek, timestamps_or_sns] = parseSeekTo(seek_to, shards, true);
+    if (!time_based_seek)
+        return timestamps_or_sns;
 
-    if (utc_ms == nlog::LATEST_SN || utc_ms == nlog::EARLIEST_SN)
-    {
-        return std::vector<Int64>(shards, utc_ms);
-    }
+    if (kafka)
+        return kafka->log->offsetsForTimestamps(kafka->topic(), timestamps_or_sns, shards);
     else
-    {
-        if (kafka)
-            return kafka->log->offsetsForTimestamps(kafka->topic(), utc_ms, shards);
-        else
-            return sequencesForTimestamps(utc_ms);
-    }
+        return sequencesForTimestamps(std::move(timestamps_or_sns));
 }
 
-std::vector<Int64> StreamShard::sequencesForTimestamps(Int64 ts, bool append_time) const
+std::vector<Int64> StreamShard::sequencesForTimestamps(std::vector<Int64> timestamps, bool append_time) const
 {
     const auto & storage_id = storage_stream->getStorageID();
 
@@ -980,7 +975,7 @@ std::vector<Int64> StreamShard::sequencesForTimestamps(Int64 ts, bool append_tim
         shard_ids.push_back(i);
 
     nlog::TranslateTimestampsRequest request{
-        nlog::Stream{storage_id.getTableName(), storage_id.uuid}, std::move(shard_ids), ts, append_time};
+        nlog::Stream{storage_id.getTableName(), storage_id.uuid}, std::move(shard_ids), std::move(timestamps), append_time};
     auto & native_log = nlog::NativeLog::instance(storage_stream->getContext());
     auto response{native_log.translateTimestamps(storage_id.getDatabaseName(), request)};
     if (response.hasError())

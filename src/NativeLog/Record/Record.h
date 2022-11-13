@@ -104,8 +104,8 @@ public:
     void setStream(std::string stream_) { stream = std::move(stream_); }
     const std::string & getStream() const { return stream; }
 
-    void setShard(int16_t shard_) { shard = shard_; }
-    int16_t getShard() const { return shard; }
+    void setShard(int32_t shard_) { shard = shard_; }
+    int32_t getShard() const { return shard; }
 
     void setKey(std::string key_) { key = std::move(key_); }
     const std::string & getKey() const { return key; }
@@ -274,7 +274,7 @@ private:
 
     /// When producing, shard indicates the target shard for this record to be appended to
     /// When consuming, shard indicates the source shard of this record
-    int16_t shard = -1;
+    int32_t shard = -1;
 
     mutable uint32_t ballpark_size = 0;
 

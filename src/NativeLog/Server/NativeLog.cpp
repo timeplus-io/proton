@@ -380,7 +380,7 @@ TranslateTimestampsResponse NativeLog::translateTimestamps(const std::string & n
     timestamps.reserve(request.shards.size());
 
     TranslateTimestampsResponse response(request.stream);
-    for (auto shard: request.shards)
+    for (size_t i = 0; auto shard: request.shards)
     {
         auto log = log_manager->getLog(ns, StreamShard{request.stream, shard});
         if (!log)
@@ -390,7 +390,9 @@ TranslateTimestampsResponse NativeLog::translateTimestamps(const std::string & n
             response.sequences.push_back(EARLIEST_SN);
         }
         else
-            response.sequences.push_back(log->sequenceForTimestamp(request.timestamp, request.append_time));
+            response.sequences.push_back(log->sequenceForTimestamp(request.timestamps[i], request.append_time));
+
+        ++i;
     }
 
     return response;

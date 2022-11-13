@@ -91,7 +91,7 @@ Pipe FileLog::read(
     size_t max_block_size,
     unsigned /*num_streams*/)
 {
-    start_timestamp = parseSeekTo(context->getSettingsRef().seek_to.value, false);
+    auto [time_based, start_timestamps] = parseSeekTo(context->getSettingsRef().seek_to.value, 1, false);
 
     Block header;
 
@@ -104,7 +104,7 @@ Pipe FileLog::read(
         header.insert({any_one_column.type->createColumn(), any_one_column.type, any_one_column.name});
     }
 
-    auto saved_start_timestamp = start_timestamp;
+    auto saved_start_timestamp = start_timestamps[0];
 
     return Pipe(std::make_shared<FileLogSource>(
         this,

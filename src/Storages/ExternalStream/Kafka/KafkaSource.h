@@ -66,9 +66,9 @@ private:
     ReadBufferFromMemory read_buffer;
 
     std::vector<std::function<Int64(const rd_kafka_message_s *)>> virtual_time_columns_calc;
+    std::vector<DataTypePtr> virtual_col_types;
 
-    /// These virtual columns have the same Int64 type
-    DataTypePtr virtual_col_type;
+    bool request_virtual_columns = false;
 
     std::vector<Chunk> result_chunks;
     std::vector<Chunk>::iterator iter;

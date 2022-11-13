@@ -48,6 +48,12 @@ StreamingBlockReaderNativeLog::StreamingBlockReaderNativeLog(
 
 nlog::RecordPtrs StreamingBlockReaderNativeLog::read()
 {
+    auto setup_sn = [this](auto & records) {
+        /// Setup the shard in case down stream likes to access to it
+        for (auto & record : records)
+            record->setShard(stream_shard->getShard());
+    };
+
     /// Try read from cache
     auto & fetch_desc = fetch_request.fetch_descs[0];
     {
@@ -56,7 +62,9 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::read()
         {
             fetch_desc.sn = records.back()->getSN() + 1;
             fetch_desc.position = -1;
-            return processCached(std::move(records));
+            auto results = processCached(std::move(records));
+            setup_sn(results);
+            return results;
         }
         else
         {
@@ -92,6 +100,8 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::read()
 
                 /// Update the next file position for next sn
                 fetch_desc.position = fetched_desc.data.eof ? 0 : fetched_desc.data.records->endPosition();
+
+                setup_sn(records);
 
                 return records;
             }

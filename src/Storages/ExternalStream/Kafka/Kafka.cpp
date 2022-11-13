@@ -100,20 +100,23 @@ void Kafka::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_APPEND_TIME, std::make_shared<DataTypeInt64>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_TIME, std::make_shared<DataTypeInt64>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, std::make_shared<DataTypeInt64>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_SHARD, std::make_shared<DataTypeInt32>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()));
 }
 
 std::vector<Int64> Kafka::getOffsets(const String & seek_to) const
 {
-    auto utc_ms = parseSeekTo(seek_to, true);
+    auto [time_based, timestamps_or_sns] = parseSeekTo(seek_to, shards, true);
 
-    /// -1 latest, -2 earliest
-    if (utc_ms == nlog::LATEST_SN || utc_ms == nlog::EARLIEST_SN)
-        return std::vector<Int64>(shards, utc_ms);
+    if (!time_based)
+    {
+        return timestamps_or_sns;
+    }
     else
     {
         klog::KafkaWALAuth auth = {.security_protocol = securityProtocol(), .username = username(), .password = password()};
         auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
-        return consumer->offsetsForTimestamps(settings->topic.value, utc_ms, shards);
+        return consumer->offsetsForTimestamps(settings->topic.value, timestamps_or_sns);
     }
 }
 

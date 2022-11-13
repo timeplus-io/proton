@@ -2,11 +2,16 @@
 
 #include <Core/NamesAndTypes.h>
 
+namespace nlog
+{
+struct Record;
+using RecordPtr = std::shared_ptr<Record>;
+}
+
 namespace DB
 {
 
 class Block;
-struct BlockInfo;
 
 /// We calculate these column positions and lambda vector for simplify the logic and
 /// fast processing in readAndProcess since we don't need index by column name any more
@@ -82,10 +87,8 @@ struct SourceColumnsDescription
     /// <Column position, <is_all_read, subcolumns_to_read> >
     PhysicalColumnPositions physical_column_positions_to_read;
 
-    std::vector<std::function<Int64(const BlockInfo &)>> virtual_time_columns_calc;
-
-    /// These virtual columns have the same Int64 type
-    DataTypePtr virtual_col_type;
+    std::vector<std::function<Int64(const nlog::RecordPtr &)>> virtual_col_calcs;
+    std::vector<DataTypePtr> virtual_col_types;
 
     NamesAndTypes subcolumns_to_read;
 

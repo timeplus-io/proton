@@ -530,8 +530,8 @@ DescribeResult KafkaWALSimpleConsumer::describe(const String & name) const
     return describeTopic(name, consumer_handle.get(), log);
 }
 
-std::vector<int64_t> KafkaWALSimpleConsumer::offsetsForTimestamps(const std::string & topic, int64_t timestamp, int32_t shards, int32_t timeout_ms) const
+std::vector<int64_t> KafkaWALSimpleConsumer::offsetsForTimestamps(const std::string & topic, const std::vector<int64_t> & timestamps, int32_t timeout_ms) const
 {
-    return getOffsetsForTimestamps(consumer_handle.get(), topic, timestamp, shards, timeout_ms);
+    return getOffsetsForTimestamps(consumer_handle.get(), topic, timestamps, timeout_ms);
 }
 }

@@ -18,8 +18,8 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int OK;
+extern const int LOGICAL_ERROR;
+extern const int OK;
 }
 
 KafkaSource::KafkaSource(
@@ -40,6 +40,7 @@ KafkaSource::KafkaSource(
     , consume_ctx(kafka->topic(), shard, offset)
     , read_buffer("", 0)
     , virtual_time_columns_calc(header.columns(), nullptr)
+    , virtual_col_types(header.columns(), nullptr)
 {
     calculateColumnPositions();
     initConsumer(kafka);
@@ -126,7 +127,7 @@ void KafkaSource::doParseMessage(const rd_kafka_message_t * kmessage, size_t /*t
 
 void KafkaSource::parseRaw(const rd_kafka_message_t * kmessage)
 {
-    if (!virtual_col_type)
+    if (!request_virtual_columns)
     {
         /// fast path
         assert(physical_header.columns() == 1);
@@ -161,7 +162,7 @@ void KafkaSource::parseRaw(const rd_kafka_message_t * kmessage)
                 }
                 else
                 {
-                    auto column = virtual_col_type->createColumn();
+                    auto column = virtual_col_types[i]->createColumn();
                     column->insertMany(virtual_time_columns_calc[i](kmessage), 1);
                     current_batch.push_back(std::move(column));
                 }
@@ -179,7 +180,7 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
     if (!new_rows)
         return;
 
-    if (!virtual_col_type)
+    if (!request_virtual_columns)
     {
         if (!current_batch.empty())
         {
@@ -230,7 +231,7 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
                 }
                 else
                 {
-                    auto column = virtual_col_type->createColumn();
+                    auto column = virtual_col_types[i]->createColumn();
                     column->insertMany(virtual_time_columns_calc[i](kmessage), new_rows);
                     current_batch.push_back(std::move(column));
                 }
@@ -247,11 +248,8 @@ void KafkaSource::initConsumer(const Kafka * kafka)
         consume_ctx.auto_offset_reset = "earliest";
 
     consume_ctx.enforce_offset = true;
-    klog::KafkaWALAuth auth = {
-        .security_protocol = kafka->securityProtocol(),
-        .username = kafka->username(),
-        .password = kafka->password()
-    };
+    klog::KafkaWALAuth auth
+        = {.security_protocol = kafka->securityProtocol(), .username = kafka->username(), .password = kafka->password()};
     consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(kafka->brokers(), auth);
     consumer->initTopicHandle(consume_ctx);
 
@@ -284,12 +282,12 @@ void KafkaSource::calculateColumnPositions()
             virtual_time_columns_calc[pos]
                 = [](const rd_kafka_message_t * kmessage) { return rd_kafka_message_timestamp(kmessage, nullptr); };
             /// We are assuming all virtual timestamp columns have the same data type
-            virtual_col_type = column.type;
+            virtual_col_types[pos] = column.type;
         }
         else if (column.name == ProtonConsts::RESERVED_PROCESS_TIME)
         {
             virtual_time_columns_calc[pos] = [](const rd_kafka_message_t *) { return UTCMilliseconds::now(); };
-            virtual_col_type = column.type;
+            virtual_col_types[pos] = column.type;
         }
         else if (column.name == ProtonConsts::RESERVED_EVENT_TIME)
         {
@@ -317,7 +315,17 @@ void KafkaSource::calculateColumnPositions()
                 }
                 return 0;
             };
-            virtual_col_type = column.type;
+            virtual_col_types[pos] = column.type;
+        }
+        else if (column.name == ProtonConsts::RESERVED_SHARD)
+        {
+            virtual_time_columns_calc[pos] = [](const rd_kafka_message_t * kmessage) -> Int64 { return kmessage->partition; };
+            virtual_col_types[pos] = column.type;
+        }
+        else if (column.name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID)
+        {
+            virtual_time_columns_calc[pos] = [](const rd_kafka_message_t * kmessage) -> Int64 { return kmessage->offset; };
+            virtual_col_types[pos] = column.type;
         }
         else
         {
@@ -326,6 +334,8 @@ void KafkaSource::calculateColumnPositions()
 
         ++pos;
     }
+
+    request_virtual_columns = std::any_of(virtual_col_types.begin(), virtual_col_types.end(), [](auto type) { return type != nullptr; });
 
     /// Clients like to read virtual columns only, add the first physical column, then we know how many rows
     if (physical_header.columns() == 0)

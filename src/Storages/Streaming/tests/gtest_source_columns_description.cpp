@@ -52,8 +52,8 @@ TEST(SourceColumnsDescription, AllPhysical)
     ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
     /// Virtual columns description
-    ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 0);
-    ASSERT_EQ(columns_desc.virtual_col_type, nullptr);
+    ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 0);
+    ASSERT_EQ(columns_desc.virtual_col_types.size(), 0);
 
     /// Sub-columns description
     ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
@@ -82,8 +82,8 @@ TEST(SourceColumnsDescription, AllPhysicalWithJSON)
     ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
     /// Virtual columns description
-    ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 0);
-    ASSERT_EQ(columns_desc.virtual_col_type, nullptr);
+    ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 0);
+    ASSERT_EQ(columns_desc.virtual_col_types.size(), 0);
 
     /// Sub-columns description
     ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
@@ -113,8 +113,8 @@ TEST(SourceColumnsDescription, AllPhysicalAndAllJson)
     ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
     /// Virtual columns description
-    ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 0);
-    ASSERT_EQ(columns_desc.virtual_col_type, nullptr);
+    ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 0);
+    ASSERT_EQ(columns_desc.virtual_col_types.size(), 0);
 
     /// Sub-columns description
     ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
@@ -145,8 +145,9 @@ TEST(SourceColumnsDescription, AllVirtual)
     ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
     /// Virtual columns description
-    ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 2);
-    ASSERT_TRUE(columns_desc.virtual_col_type->equals(*getType("int64")));
+    ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 2);
+    ASSERT_TRUE(columns_desc.virtual_col_types[0]->equals(*getType("int64")));
+    ASSERT_TRUE(columns_desc.virtual_col_types[1]->equals(*getType("int64")));
 
     /// Sub-columns description
     ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
@@ -179,8 +180,8 @@ TEST(SourceColumnsDescription, AllSubcolumn)
     EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[0], std::vector<std::string>({"y", "x"}));
 
     /// Virtual columns description
-    ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 0);
-    ASSERT_EQ(columns_desc.virtual_col_type, nullptr);
+    ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 0);
+    ASSERT_EQ(columns_desc.virtual_col_types.size(), 0);
 
     /// Sub-columns description
     ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 2);
@@ -227,8 +228,8 @@ TEST(SourceColumnsDescription, AllSubcolumnWithJson)
     EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[1], std::vector<std::string>({"abc"}));
 
     /// Virtual columns description
-    ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 0);
-    ASSERT_EQ(columns_desc.virtual_col_type, nullptr);
+    ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 0);
+    ASSERT_EQ(columns_desc.virtual_col_types.size(), 0);
 
     /// Sub-columns description
     ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 2);
@@ -270,8 +271,9 @@ TEST(SourceColumnsDescription, PhysicalAndVirtual)
         ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
         /// Virtual columns description
-        ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 1);
-        ASSERT_TRUE(columns_desc.virtual_col_type->equals(*getType("int64")));
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 1);
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), columns_desc.virtual_col_types.size());
+        ASSERT_TRUE(columns_desc.virtual_col_types[0]->equals(*getType("int64")));
 
         /// Sub-columns description
         ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
@@ -296,8 +298,8 @@ TEST(SourceColumnsDescription, PhysicalAndVirtual)
         ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
         /// Virtual columns description
-        ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 1);
-        ASSERT_TRUE(columns_desc.virtual_col_type->equals(*getType("int64")));
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 1);
+        ASSERT_TRUE(columns_desc.virtual_col_types[0]->equals(*getType("int64")));
 
         /// Sub-columns description
         ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
@@ -323,8 +325,9 @@ TEST(SourceColumnsDescription, PhysicalAndVirtual)
         ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
         /// Virtual columns description
-        ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 1);
-        ASSERT_TRUE(columns_desc.virtual_col_type->equals(*getType("int64")));
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 1);
+        ASSERT_EQ(columns_desc.virtual_col_types.size(), columns_desc.virtual_col_calcs.size());
+        ASSERT_TRUE(columns_desc.virtual_col_types[0]->equals(*getType("int64")));
 
         /// Sub-columns description
         ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
@@ -349,8 +352,9 @@ TEST(SourceColumnsDescription, PhysicalAndVirtual)
         ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
         /// Virtual columns description
-        ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 1);
-        ASSERT_TRUE(columns_desc.virtual_col_type->equals(*getType("int64")));
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 1);
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), columns_desc.virtual_col_types.size());
+        ASSERT_TRUE(columns_desc.virtual_col_types[0]->equals(*getType("int64")));
 
         /// Sub-columns description
         ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
@@ -388,7 +392,7 @@ TEST(SourceColumnsDescription, PhysicalAndSubcolumn)
         EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[1], std::vector<std::string>({"y"}));
 
         /// Virtual columns description
-        ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 0);
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 0);
 
         /// Sub-columns description
         ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 1);
@@ -423,7 +427,7 @@ TEST(SourceColumnsDescription, PhysicalAndSubcolumn)
         EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[0], std::vector<std::string>({"abc"}));
 
         /// Virtual columns description
-        ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 0);
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 0);
 
         /// Sub-columns description
         ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 1);
@@ -467,8 +471,9 @@ TEST(SourceColumnsDescription, VirtualAndSubcolumn)
         EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[0], std::vector<std::string>({"y"}));
 
         /// Virtual columns description
-        ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 1);
-        ASSERT_TRUE(columns_desc.virtual_col_type->equals(*getType("int64")));
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 1);
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), columns_desc.virtual_col_types.size());
+        ASSERT_TRUE(columns_desc.virtual_col_types[0]->equals(*getType("int64")));
 
         /// Sub-columns description
         ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 1);
@@ -503,8 +508,9 @@ TEST(SourceColumnsDescription, VirtualAndSubcolumn)
         EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[0], std::vector<std::string>({"abc"}));
 
         /// Virtual columns description
-        ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 1);
-        ASSERT_TRUE(columns_desc.virtual_col_type->equals(*getType("int64")));
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 1);
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), columns_desc.virtual_col_types.size());
+        ASSERT_TRUE(columns_desc.virtual_col_types[0]->equals(*getType("int64")));
 
         /// Sub-columns description
         ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 1);
@@ -556,8 +562,9 @@ TEST(SourceColumnsDescription, PhysicalAndVirtualAndSubcolumn)
         EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[2], std::vector<std::string>({"abc"}));
 
         /// Virtual columns description
-        ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 1);
-        ASSERT_TRUE(columns_desc.virtual_col_type->equals(*getType("int64")));
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 1);
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), columns_desc.virtual_col_types.size());
+        ASSERT_TRUE(columns_desc.virtual_col_types[0]->equals(*getType("int64")));
 
         /// Sub-columns description
         ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 2);
@@ -626,8 +633,10 @@ TEST(SourceColumnsDescription, PhysicalAndVirtualAndSubcolumn)
         EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[0], std::vector<std::string>({"y"}));
 
         /// Virtual columns description
-        ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 2);
-        ASSERT_TRUE(columns_desc.virtual_col_type->equals(*getType("int64")));
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 2);
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), columns_desc.virtual_col_types.size());
+        ASSERT_TRUE(columns_desc.virtual_col_types[0]->equals(*getType("int64")));
+        ASSERT_TRUE(columns_desc.virtual_col_types[1]->equals(*getType("int64")));
 
         /// Sub-columns description
         ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 3);

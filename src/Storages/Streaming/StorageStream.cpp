@@ -1542,6 +1542,8 @@ void StorageStream::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_APPEND_TIME, std::make_shared<DataTypeInt64>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_INGEST_TIME, std::make_shared<DataTypeInt64>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, std::make_shared<DataTypeInt64>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_SHARD, std::make_shared<DataTypeInt32>()));
 }
 
 void StorageStream::updateLogStoreCodec(const String & settings_codec)

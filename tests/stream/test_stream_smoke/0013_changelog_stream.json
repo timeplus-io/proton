@@ -26,8 +26,8 @@
         {
           "statements": [
             {"client":"python","query_id":"1400", "depends_on_stream":"changelog_stream","query_end_timer":7, "query_type": "stream", "query":"select i, _tp_delta from changelog_stream;"},
-            {"client":"python", "query_type": "table","depends_on":1400,"depends_on_stream":"changelog_stream", "wait":3, "query": "insert into changelog_stream(i) values (1)"},
-            {"client":"python", "query_type": "table","depends_on":1400,"depends_on_stream":"changelog_stream", "wait":1, "query": "insert into changelog_stream(i, _tp_delta) values (1, -1)"}
+            {"client":"python", "query_type": "table","depends_on":1400, "wait":3, "query": "insert into changelog_stream(i) values (1)"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_stream(i, _tp_delta) values (1, -1)"}
           ]
         }
       ],

@@ -229,33 +229,36 @@ DescribeResult describeTopic(const String & name, struct rd_kafka_s * rk, Poco::
 }
 
 std::vector<int64_t>
-getOffsetsForTimestamps(struct rd_kafka_s * rd_handle, const std::string & topic, int64_t timestamp, int32_t shards, int32_t timeout_ms)
+getOffsetsForTimestamps(struct rd_kafka_s * rd_handle, const std::string & topic, const std::vector<int64_t> & timestamps, int32_t timeout_ms)
 {
+    int32_t partitions = timestamps.size();
+
     assert(rd_handle);
 
     using RdKafkaTopicPartitionListPtr
         = std::unique_ptr<rd_kafka_topic_partition_list_t, decltype(rd_kafka_topic_partition_list_destroy) *>;
-    RdKafkaTopicPartitionListPtr offsets{rd_kafka_topic_partition_list_new(shards), rd_kafka_topic_partition_list_destroy};
+    RdKafkaTopicPartitionListPtr offsets{rd_kafka_topic_partition_list_new(timestamps.size()), rd_kafka_topic_partition_list_destroy};
 
-    for (int32_t i = 0; i < shards; ++i)
+    for (int32_t partition = 0; auto timestamp : timestamps)
     {
-        memset(&offsets->elems[i], 0, sizeof(offsets->elems[i]));
+        memset(&offsets->elems[partition], 0, sizeof(offsets->elems[partition]));
 
         /// We will need duplicate the topic string since destroy function will free it
-        offsets->elems[i].topic = strdup(topic.c_str());
-        offsets->elems[i].partition = i;
-        offsets->elems[i].offset = timestamp;
+        offsets->elems[partition].topic = strdup(topic.c_str());
+        offsets->elems[partition].partition = partition;
+        offsets->elems[partition].offset = timestamp;
+        ++partition;
     }
 
-    offsets->cnt = shards;
+    offsets->cnt = partitions;
 
     auto err = rd_kafka_offsets_for_times(rd_handle, offsets.get(), timeout_ms);
     if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
         throw DB::Exception("Failed to fetch offsets for timestamps", mapErrorCode(err));
 
-    std::vector<int64_t> results{shards};
+    std::vector<int64_t> results(partitions, 0);
 
-    for (int32_t i = 0; i < shards; ++i)
+    for (int32_t i = 0; i < partitions; ++i)
     {
         if (offsets->elems[i].err != RD_KAFKA_RESP_ERR_NO_ERROR)
             throw DB::Exception("Failed to fetch offsets for timestamps", mapErrorCode(err));

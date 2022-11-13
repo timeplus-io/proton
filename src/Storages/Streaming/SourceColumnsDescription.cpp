@@ -1,6 +1,7 @@
 #include "SourceColumnsDescription.h"
 
 #include <Core/Block.h>
+#include <NativeLog/Record/Record.h>
 #include <base/ClockUtils.h>
 #include <Common/ProtonCommon.h>
 
@@ -66,22 +67,31 @@ SourceColumnsDescription::SourceColumnsDescription(const NamesAndTypesList & col
     ///     Sub, @sub_pos: pos_in_subcolumns_to_read: 0,            /// the pos in @subcolumns_to_read
     ///     Virtual, @pos: pos_in_virtual_time_columns_calc: 2,
     /// ]
+
+    auto add_virtual_col = [this](const auto & column, std::function<Int64(const nlog::RecordPtr & record)> func) {
+        ReadColumnPosition curr_column_pos(ReadColumnType::VIRTUAL, virtual_col_calcs.size());
+        virtual_col_calcs.push_back(std::move(func));
+        virtual_col_types.push_back(column.type);
+        positions.emplace_back(std::move(curr_column_pos));
+    };
+
     for (const auto & column : columns_to_read)
     {
         if (column.name == ProtonConsts::RESERVED_APPEND_TIME)
         {
-            ReadColumnPosition curr_column_pos(ReadColumnType::VIRTUAL, virtual_time_columns_calc.size());
-            virtual_time_columns_calc.push_back([](const BlockInfo & bi) { return bi.appendTime(); });
-            /// We are assuming all virtual timestamp columns have the same data type
-            virtual_col_type = column.type;
-            positions.emplace_back(std::move(curr_column_pos));
+            add_virtual_col(column, [](const nlog::RecordPtr & record) { return record->getBlock().info.appendTime(); });
         }
         else if (column.name == ProtonConsts::RESERVED_PROCESS_TIME)
         {
-            ReadColumnPosition curr_column_pos(ReadColumnType::VIRTUAL, virtual_time_columns_calc.size());
-            virtual_time_columns_calc.push_back([](const BlockInfo &) { return UTCMilliseconds::now(); });
-            virtual_col_type = column.type;
-            positions.emplace_back(std::move(curr_column_pos));
+            add_virtual_col(column, [](const nlog::RecordPtr &) { return UTCMilliseconds::now(); });
+        }
+        else if (column.name == ProtonConsts::RESERVED_SHARD)
+        {
+            add_virtual_col(column, [](const nlog::RecordPtr  & record) { return record->getShard(); });
+        }
+        else if (column.name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID)
+        {
+            add_virtual_col(column, [](const nlog::RecordPtr & record) { return record->getSN(); });
         }
         else
         {
@@ -129,7 +139,7 @@ SourceColumnsDescription::SourceColumnsDescription(const NamesAndTypesList & col
                 ReadColumnPosition curr_column_pos(ReadColumnType::PHYSICAL, physical_pos_in_schema_to_read);
                 positions.emplace_back(std::move(curr_column_pos));
 
-                read_all_subcolumns_positions.push_back(physical_pos_in_schema_to_read);  /// read all physical column.
+                read_all_subcolumns_positions.push_back(physical_pos_in_schema_to_read); /// read all physical column.
             }
         }
     }
