@@ -26,6 +26,7 @@ def pytest_generate_tests(metafunc):
     else:
         logging_level = "DEBUG"
     if "test_set" in metafunc.fixturenames:
+        print(f"pytest_generate_tests: config_file_path = {config_file_path}")
         rockets_context = rockets.rockets_context(
             config_file_path, tests_file_path, docker_compose_file_path #todo: read docker_compose_file_path from config and support start different docker envs for different config
         )

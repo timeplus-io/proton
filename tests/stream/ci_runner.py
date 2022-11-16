@@ -122,12 +122,14 @@ def proton_python_driver_install():
 
 def ci_runner(
     local_all_results_folder_path,
+    setting_config,
     run_mode="local",
     pr_number="0",
     commit_sha="0",
     setting="default",
     logging_level="INFO",
 ):
+    
     timestamp = str(datetime.datetime.now())
     report_file_name = f"report_{setting}_{timestamp}.html"
     report_file_path = f"{local_all_results_folder_path}/{report_file_name}"
@@ -135,56 +137,43 @@ def ci_runner(
     pytest_logging_level_set = f"--log-cli-level={logging_level}"
     s3_helper = S3Helper("https://s3.amazonaws.com")
 
-    if setting == "default":
-        os.environ["PROTON_SETTING"] = "default"
-        proton_log_in_container = (
-            "proton-server:/var/log/proton-server/proton-server.log"
-        )
-        proton_err_log_in_container = (
-            "proton-server:/var/log/proton-server/proton-server.err.log"
-        )
-        retcode = pytest.main(
-            [
-                "-s",
-                "-v",
-                pytest_logging_level_set,
-                "--log-cli-format=%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)",
-                "--log-cli-date-format=%Y-%m-%d %H:%M:%S",
-                f"--html={report_file_path}",
-                "--self-contained-html",
-            ]
-        )
-
-    else:
-        os.environ["PROTON_SETTING"] = setting
-        print(f'os.environ["PROTON_SETTING] = {setting}')
-        if (
-            setting == "nativelog"
-        ):  # todo: find container name for different settings from config file and use
-            container_name = "proton-server"
-        elif setting == "redp":
-            container_name = "proton-redp"
-        elif "cluster" in setting:
-            container_name = (
-                "proton-cluster-node1"  # todo: support multiple nodes log collection
-            )
-        proton_log_in_container = (
-            f"{container_name}:/var/log/proton-server/proton-server.log"
-        )
-        proton_err_log_in_container = (
-            f"{container_name}:/var/log/proton-server/proton-server.err.log"
-        )
-        retcode = pytest.main(
-            [
-                "-s",
-                "-v",
-                pytest_logging_level_set,
-                "--log-cli-format=%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)",
-                "--log-cli-date-format=%Y-%m-%d %H:%M:%S",
-                f"--html={report_file_path}",
-                "--self-contained-html",
-            ]
-        )
+    proton_server_container_name_str = setting_config.get("proton_server_container_name")
+    if proton_server_container_name_str is None:
+        raise Exception(f"proton_server_container_name of setting = {setting} is not found in setting_config")
+    proton_server_container_name_list = proton_server_container_name_str.split(',') #for multi containers in clustering settings
+    proton_server_container_name = proton_server_container_name_list[0] #todo: handle multi containers in clustering scenario
+    ci_runner_params_from_config = setting_config.get("ci_runner_params")
+    print(f"ci_runner: ci_runner_params_from_config = {ci_runner_params_from_config}")
+    os.environ["PROTON_SETTING"] = setting # set the env virable to setting for rockets_run() based on settings gotten from cmdline
+    #set env vars for rockets_run based on the other ci_runner parameters gotten from config
+    if ci_runner_params_from_config is not None and len(ci_runner_params_from_config) > 0:
+        for param in ci_runner_params_from_config:
+            print(f"ci_runner: setting = {setting}, param = {param}")
+            for key, value in param.items():
+                os.environ[key] = value
+                env_setting = os.getenv(key)
+                print(f"os.getenv({key}) = {env_setting}")
+                
+    
+    #set proton log container path therefore log files could be retrieved later.
+    proton_log_in_container = (
+        f"{proton_server_container_name}:/var/log/proton-server/proton-server.log"
+    )
+    proton_err_log_in_container = (
+        f"{proton_server_container_name}:/var/log/proton-server/proton-server.err.log"
+    )
+   
+    retcode = pytest.main(
+        [
+            "-s",
+            "-v",
+            pytest_logging_level_set,
+            "--log-cli-format=%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)",
+            "--log-cli-date-format=%Y-%m-%d %H:%M:%S",
+            f"--html={report_file_path}",
+            "--self-contained-html",
+        ]
+    )
 
     with open(".status", "a+") as status_result:
         # status_result.writelines(f"{setting}:"+str(retcode)+"\n")
@@ -234,7 +223,8 @@ def ci_runner(
 
 if __name__ == "__main__":
     # logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-    cur_dir = cur_dir = os.path.dirname(os.path.abspath(__file__))
+    # cur_dir = os.path.dirname(os.path.abspath(__file__))
+    # config_file_path = f"{cur_dir}/test_stream_smoke/configs/config.json"
     parser = argparse.ArgumentParser(description="Run CI in local mode")
     run_mode = "github"
     loop = 1
@@ -338,11 +328,19 @@ if __name__ == "__main__":
         ci_runner(cur_dir, run_mode, logging_level=logging_level)
     else:
         procs = []
+        with open(config_file_path) as f:
+            configs = json.load(f)
+      
         for setting in settings:
-            args = (cur_dir, run_mode, "0", "0", setting, logging_level)
+            logger.debug(f"setting = {setting}, get config...")
+            setting_config = configs.get(setting)
+            if setting_config is None:
+                raise Exception(f"no config for setting = {setting} found in {config_file_path}")
+            logger.debug(f"ci_runner: setting_config for setting = {setting} = {setting_config}")
+            args = (cur_dir, setting_config, run_mode, "0", "0", setting, logging_level)
             proc = mp.Process(target=ci_runner, args=args)
             proc.start()
-            logger.debug(f"args = {args}, ci_runner proc starts...")
+            #logger.debug(f"args = {args}, ci_runner proc starts...")
             procs.append(proc)
             time.sleep(5)
         for proc in procs:

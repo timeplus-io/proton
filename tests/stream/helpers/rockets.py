@@ -198,7 +198,7 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     if config == None:
         with open(config_file) as f:
             configs = json.load(f)
-        logger.debug(f"rockets_context: config reading from config files: {config}")
+        logger.debug(f"rockets_context: configs reading from config file: {configs}")
         config = configs.get(proton_setting)
         logger.debug(f"setting = {proton_setting},config = {config}")
 
@@ -2477,18 +2477,6 @@ def create_table_rest(config, table_schema, retry=3):
     return res
 
 
-"""
-def compose_up(compose_file_path):
-    logger.debug(f"compose_up: compose_file_path = {compose_file_path}")
-    try:
-        cmd = f"docker-compose -f {compose_file_path} up -d"
-        logger.debug(f"compose_up: cmd = {cmd}")
-        res = subprocess.check_output(cmd.split(), stderr=subprocess.STDOUT)
-        return True
-    except (subprocess.CalledProcessError) as Error:
-        return False
-"""
-
 
 def env_health_check(health_check_url):
     try:
@@ -2497,8 +2485,29 @@ def env_health_check(health_check_url):
         if res.status_code == 200:
             return True
         else:
+            print(f"requests.get({health_check_url}, status_code = {res.status_code}) ")
             return False
-    except (BaseException):
+    except (BaseException) as error:
+        print(f"requests.get({health_check_url} exception: {error}")
+        command = "docker ps"
+        res = subprocess.run(
+            command,
+            shell=True,
+            encoding="utf-8",
+            timeout=5,
+            capture_output=True,
+        )
+        print(f"docker ps result: #######\n {res}")
+        command = "docker logs redpanda-1"
+        res = subprocess.run(
+            command,
+            shell=True,
+            encoding="utf-8",
+            timeout=5,
+            capture_output=True,
+        )
+        print(f"docker logs redpanda-1 result: #######\n {res}")        
+
         return False
 
 
@@ -2691,7 +2700,7 @@ def env_setup(
     """
     env_health_check_res = env_health_check(health_url)
     logger.info(f"env_setup: env_health_check_res: {env_health_check_res}")
-    retry = 10
+    retry = 20
     while env_health_check_res == False and retry > 0:
         time.sleep(2)
         env_health_check_res = env_health_check(health_url)
