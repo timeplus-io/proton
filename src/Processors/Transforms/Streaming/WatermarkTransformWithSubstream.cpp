@@ -6,7 +6,11 @@
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
 #include <Columns/ColumnDecimal.h>
+#include <Columns/ColumnsNumber.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Common/ProtonCommon.h>
+#include <Common/assert_cast.h>
 
 namespace DB
 {
@@ -23,13 +27,13 @@ WatermarkTransformWithSubstream::WatermarkTransformWithSubstream(
     TreeRewriterResultPtr syntax_analyzer_result,
     FunctionDescriptionPtr desc,
     bool proc_time,
-    const std::vector<size_t> & substream_keys,
+    std::vector<size_t> key_column_positions,
     const Block & input_header,
     const Block & output_header,
     Poco::Logger * log_)
     : IProcessor({input_header}, {std::move(output_header)}, ProcessorID::WatermarkTransformWithSubstreamID)
     , header(input_header)
-    , substream_splitter(std::move(input_header), substream_keys)
+    , substream_splitter(std::move(key_column_positions))
     , log(log_)
 {
     initWatermark(query, syntax_analyzer_result, desc, proc_time);
@@ -89,19 +93,19 @@ IProcessor::Status WatermarkTransformWithSubstream::prepare()
     return Status::Ready;
 }
 
-std::pair<Int64, Int64> WatermarkTransformWithSubstream::calcMinMaxEventTime(const Block & block) const
+std::pair<Int64, Int64> WatermarkTransformWithSubstream::calcMinMaxEventTime(const Chunk & chunk) const
 {
     if (time_col_is_datetime64)
     {
-        const auto & time_col = block.getByPosition(time_col_pos);
-        auto col = assert_cast<ColumnDecimal<DateTime64> *>(time_col.column->assumeMutable().get());
+        const auto & time_col = chunk.getColumns()[time_col_pos];
+        auto col = assert_cast<ColumnDecimal<DateTime64> *>(time_col->assumeMutable().get());
         auto min_max_ts{std::minmax_element(col->getData().begin(), col->getData().end())};
         return {min_max_ts.first->value, min_max_ts.second->value};
     }
     else
     {
-        const auto & time_col = block.getByPosition(time_col_pos);
-        auto col = assert_cast<ColumnVector<UInt32> *>(time_col.column->assumeMutable().get());
+        const auto & time_col = chunk.getColumns()[time_col_pos];
+        auto col = assert_cast<ColumnVector<UInt32> *>(time_col->assumeMutable().get());
         auto min_max_ts{std::minmax_element(col->getData().begin(), col->getData().end())};
         return {*min_max_ts.first, *min_max_ts.second};
     }
@@ -109,39 +113,50 @@ std::pair<Int64, Int64> WatermarkTransformWithSubstream::calcMinMaxEventTime(con
 
 void WatermarkTransformWithSubstream::work()
 {
-    auto block = header.cloneWithColumns(input_chunk.detachColumns());
-    auto splitted_blocks{substream_splitter(block)};
-
-    assert(output_iter == output_chunks.end());
-    output_chunks.clear();
-    output_chunks.reserve(splitted_blocks.size());
-
-    for (auto & [id, sub_block] : splitted_blocks)
-    {
-        auto & watermark = getOrCreateSubstreamWatermark(id);
-        watermark.process(sub_block);
-
-        /// Keep substream id for per sub-block, used for downstream processors
-        Chunk chunk(sub_block.getColumns(), sub_block.rows());
-        auto chunk_ctx = std::make_shared<ChunkContext>();
-        chunk_ctx->setWatermark(WatermarkBound{id, sub_block.info.watermark, sub_block.info.watermark_lower_bound});
-        chunk.setChunkContext(std::move(chunk_ctx));
-        output_chunks.emplace_back(std::move(chunk));
-    }
-
     /// Only for session watermark, the SessionAggregatingTransform need current event time bound to check oversize session
     /// So we add an empty chunk with min/max event time
-    if (emit_min_max_event_time && block.rows() > 0)
+    /// We will need clear input_chunk for next run
+    Chunk process_chunk;
+    process_chunk.swap(input_chunk);
+
+    Chunk min_max_chunk;
+    if (emit_min_max_event_time && process_chunk.hasRows())
     {
-        auto min_max_ts = calcMinMaxEventTime(block);
+        auto min_max_ts = calcMinMaxEventTime(process_chunk);
 
         auto chunk_ctx = std::make_shared<ChunkContext>();
         chunk_ctx->setWatermark(WatermarkBound{INVALID_SUBSTREAM_ID, min_max_ts.second, min_max_ts.first});
 
         Chunk chunk(getOutputs().front().getHeader().getColumns(), 0);
         chunk.setChunkContext(std::move(chunk_ctx));
-        output_chunks.emplace_back(std::move(chunk));
+        min_max_chunk.swap(chunk);
     }
+
+    auto split_chunks{substream_splitter.split(process_chunk)};
+
+    assert(output_iter == output_chunks.end());
+    output_chunks.clear();
+    output_chunks.reserve(split_chunks.size());
+
+    for (auto & chunk_with_id : split_chunks)
+    {
+        auto & watermark = getOrCreateSubstreamWatermark(chunk_with_id.id);
+
+        /// FIXME, watermark shall accept a chunk instead of a block
+        Block sub_block = header.cloneWithColumns(chunk_with_id.chunk.detachColumns());
+        watermark.process(sub_block);
+
+        /// Keep substream id for per sub-block, used for downstream processors
+        Chunk sub_chunk(sub_block.getColumns(), sub_block.rows());
+        auto chunk_ctx = std::make_shared<ChunkContext>();
+        chunk_ctx->setWatermark(
+            WatermarkBound{std::move(chunk_with_id.id), sub_block.info.watermark, sub_block.info.watermark_lower_bound});
+        sub_chunk.setChunkContext(std::move(chunk_ctx));
+        output_chunks.emplace_back(std::move(sub_chunk));
+    }
+
+    if (min_max_chunk)
+        output_chunks.emplace_back(std::move(min_max_chunk));
 
     output_iter = output_chunks.begin(); /// need to output chunks
 }
@@ -201,7 +216,7 @@ void WatermarkTransformWithSubstream::checkpoint(CheckpointContextPtr ckpt_ctx)
 
         for (const auto & [id, watermark] : substream_watermarks)
         {
-            id.serialize(wb);
+            serialize(id, wb);
             watermark->serialize(wb);
         }
     });
@@ -216,8 +231,7 @@ void WatermarkTransformWithSubstream::recover(CheckpointContextPtr ckpt_ctx)
         substream_watermarks.reserve(size);
         for (size_t i = 0; i < size; ++i)
         {
-            SubstreamID substream_id;
-            substream_id.deserialize(rb);
+            SubstreamID substream_id{deserialize(rb)};
 
             auto watermark = watermark_template->clone();
             watermark->deserialize(rb);

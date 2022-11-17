@@ -1,4 +1,4 @@
-#include "SplitBlock.h"
+#include "BlockRangeSplitter.h"
 
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnVector.h>

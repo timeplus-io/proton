@@ -1,11 +1,9 @@
 #pragma once
 
-#include "BlockSplitter.h"
 #include "Watermark.h"
 
+#include <Processors/Streaming/ChunkSplitter.h>
 #include <Processors/IProcessor.h>
-
-class DateLUTImpl;
 
 namespace DB
 {
@@ -24,7 +22,7 @@ public:
         TreeRewriterResultPtr syntax_analyzer_result,
         FunctionDescriptionPtr desc,
         bool proc_time,
-        const std::vector<size_t> & substream_keys,
+        std::vector<size_t> key_column_posistions,
         const Block & input_header,
         const Block & output_header,
         Poco::Logger * log);
@@ -42,7 +40,7 @@ private:
     void initWatermark(
         ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, FunctionDescriptionPtr desc, bool proc_time);
 
-    inline std::pair<Int64, Int64> calcMinMaxEventTime(const Block & block) const;
+    inline std::pair<Int64, Int64> calcMinMaxEventTime(const Chunk & chunk) const;
     inline Watermark & getOrCreateSubstreamWatermark(const SubstreamID & id);
 
     Block header;
@@ -50,7 +48,8 @@ private:
     Chunks output_chunks;
     typename Chunks::iterator output_iter{output_chunks.begin()};
 
-    Substream::BlockSplitter substream_splitter;
+    ChunkSplitter substream_splitter;
+
     String watermark_name;
     WatermarkPtr watermark_template;
     SubstreamHashMap<WatermarkPtr> substream_watermarks;

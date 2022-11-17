@@ -65,12 +65,11 @@ void TumbleHopAggregatingTransformWithSubstream::finalize(ChunkContextPtr chunk_
     if (min_watermark.valid())
     {
         assert(max_watermark.valid());
-        String substream_msg = min_watermark.id.empty() ? "" : fmt::format(" in substream id={}", min_watermark.id);
         if (min_watermark.watermark != max_watermark.watermark)
             LOG_WARNING(
                 log,
-                "Found watermark skew{}. min_watermark={}, max_watermark={}",
-                substream_msg,
+                "Found watermark skew in substream id={}. min_watermark={}, max_watermark={}",
+                min_watermark.id,
                 min_watermark.watermark,
                 max_watermark.watermark);
 
@@ -80,10 +79,10 @@ void TumbleHopAggregatingTransformWithSubstream::finalize(ChunkContextPtr chunk_
 
         LOG_DEBUG(
             log,
-            "Took {} milliseconds to finalize {} shard aggregation{}. watermark={}",
+            "Took {} milliseconds to finalize {} shard aggregation in substream id={}. watermark={}",
             end - start,
             many_aggregating_size,
-            substream_msg,
+            min_watermark.id,
             min_watermark.watermark);
 
         // Clear the finalizing count and set arena recycle watermark

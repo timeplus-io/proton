@@ -21,7 +21,7 @@ struct ChunkContext
     static constexpr UInt64 HISTORICAL_DATA_END_FLAG = 0x8;
 
     /// A pair of Int64, flags represent what they mean
-    SubstreamID id = Streaming::INVALID_SUBSTREAM_ID;
+    Streaming::SubstreamID id = Streaming::INVALID_SUBSTREAM_ID;
     Int64 ts_1 = 0;
     Int64 ts_2 = 0;
     UInt64 flags = 0;
@@ -35,7 +35,7 @@ struct ChunkContext
     ALWAYS_INLINE operator bool () const { return flags != 0 || id != Streaming::INVALID_SUBSTREAM_ID || ckpt_ctx != nullptr; }
 
     ALWAYS_INLINE bool hasWatermark() const { return flags & WATERMARK_FLAG; }
-    ALWAYS_INLINE void setWatermark(const WatermarkBound & wb)
+    ALWAYS_INLINE void setWatermark(const Streaming::WatermarkBound & wb)
     {
         /// Whether there is a watermark or not, we need id to mark which substream the chunk belongs to.
         id = wb.id;
@@ -47,11 +47,11 @@ struct ChunkContext
         }
     }
 
-    ALWAYS_INLINE WatermarkBound getWatermark() const
+    ALWAYS_INLINE Streaming::WatermarkBound getWatermark() const
     {
         assert(hasWatermark());
 
-        return WatermarkBound{id, ts_1, ts_2};
+        return Streaming::WatermarkBound{id, ts_1, ts_2};
     }
 
     ALWAYS_INLINE void clearWatermark()
@@ -80,7 +80,7 @@ struct ChunkContext
 
     CheckpointContextPtr getCheckpointContext() const { return ckpt_ctx; }
 
-    const SubstreamID & getSubStreamID() const { return id; }
+    const Streaming::SubstreamID & getSubStreamID() const { return id; }
 };
 using ChunkContextPtr = std::shared_ptr<ChunkContext>;
 /// proton : ends
@@ -205,12 +205,17 @@ public:
         return nullptr;
     }
 
-    const SubstreamID & getSubStreamID() const
+    const Streaming::SubstreamID & getSubStreamID() const
     {
         if (chunk_ctx)
             return chunk_ctx->getSubStreamID();
 
         return Streaming::INVALID_SUBSTREAM_ID;
+    }
+
+    void reserve(size_t num_columns)
+    {
+        columns.reserve(num_columns);
     }
     /// proton : ends
 

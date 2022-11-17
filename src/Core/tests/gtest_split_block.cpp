@@ -6,7 +6,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 
-#include <Core/SplitBlock.h>
+#include <Core/BlockRangeSplitter.h>
 
 #include <gtest/gtest.h>
 

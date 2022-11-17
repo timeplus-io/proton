@@ -1,12 +1,12 @@
 #pragma once
 
-#include <Common/Streaming/Substream/Common.h>
+#include <Core/Streaming/WatermarkInfo.h>
 
 namespace DB
 {
 namespace Streaming
 {
-using SessionID = Substream::ID;
+using SessionID = SubstreamID;
 using SessionIDs = std::vector<SessionID>;
 
 struct SessionInfo

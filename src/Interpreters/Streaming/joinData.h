@@ -9,7 +9,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
 #include <Core/Block.h>
-#include <Core/SplitBlock.h>
+#include <Core/BlockRangeSplitter.h>
 #include <Common/Arena.h>
 
 #include <deque>
