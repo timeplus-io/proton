@@ -50,7 +50,7 @@
         {
           "statements": [
             {"client":"python","query_id":"1900", "depends_on_stream":"state_stream", "terminate": "manual", "query_type": "stream", "query":"recover from '1900'"},
-            {"client":"python", "query_type": "table","depends_on":1900,"depends_on_stream":"state_stream", "wait":1, "query": "insert into state_stream(i, s) values (3, 's3')"},
+            {"client":"python", "query_type": "table","depends_on":1900,"depends_on_stream":"state_stream", "wait":3, "query": "insert into state_stream(i, s) values (3, 's3')"},
             {"client":"python", "query_type": "table","depends_on":1900,"depends_on_stream":"state_stream", "wait":1, "query": "unsubscribe to '1900'"}
           ]
         }
@@ -134,7 +134,7 @@
         {
           "statements": [
             {"client":"python","query_id":"1902", "depends_on_stream":"state_stream", "terminate": "manual", "query_type": "stream", "query":"recover from '1902'"},
-            {"client":"python", "query_type": "table","depends_on":1902,"depends_on_stream":"state_stream", "wait":1, "query": "insert into state_stream(i, s) values (6, 's4')"},
+            {"client":"python", "query_type": "table","depends_on":1902,"depends_on_stream":"state_stream", "wait":3, "query": "insert into state_stream(i, s) values (6, 's4')"},
             {"client":"python", "query_type": "table","depends_on":1902,"depends_on_stream":"state_stream", "wait":3, "query": "unsubscribe to '1902'"}
           ]
         }
@@ -180,7 +180,7 @@
         {
           "statements": [
             {"client":"python","query_id":"1903", "depends_on_stream":"state_stream", "terminate": "manual", "query_type": "stream", "query":"recover from '1903'"},
-            {"client":"python", "query_type": "table","depends_on":1903,"depends_on_stream":"state_stream", "wait":1, "query": "insert into state_stream(i, s) values (6, 's1')"},
+            {"client":"python", "query_type": "table","depends_on":1903,"depends_on_stream":"state_stream", "wait":3, "query": "insert into state_stream(i, s) values (6, 's1')"},
             {"client":"python", "query_type": "table","depends_on":1903,"depends_on_stream":"state_stream", "wait":3, "query": "unsubscribe to '1903'"}
           ]
         }
@@ -204,7 +204,7 @@
           "statements": [
             {"client":"python","query_id":"1904", "depends_on_stream":"state_stream", "terminate":"manual", "query_type": "stream", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from tumble(state_stream, 2s) group by window_start settings checkpoint_interval=1"},
             {"client":"python", "query_type": "table","depends_on":1904,"depends_on_stream":"state_stream", "wait":2, "query": "insert into state_stream(i, s, _tp_time) values (1, 's1', '2022-01-01 00:00:00'), (3, 's2', '2022-01-01 00:00:01'), (4, 's3', '2022-01-01 00:00:02')"},
-            {"client":"python", "query_type": "table","depends_on":1904,"depends_on_stream":"state_stream", "wait":7, "query": "kill query where query_id='1904' sync"}
+            {"client":"python", "query_type": "table","depends_on":1904,"depends_on_stream":"state_stream", "wait":10, "query": "kill query where query_id='1904' sync"}
           ]
         }
       ],
@@ -226,8 +226,8 @@
         {
           "statements": [
             {"client":"python","query_id":"1904", "depends_on_stream":"state_stream", "terminate": "manual", "query_type": "stream", "query":"recover from '1904'"},
-            {"client":"python", "query_type": "table","depends_on":1904,"depends_on_stream":"state_stream", "wait":2, "query": "insert into state_stream(i, s, _tp_time) values (6, 's4', '2022-01-01 00:00:03'), (7, 'wont appear in result', '2022-01-01 00:00:04')"},
-            {"client":"python", "query_type": "table","depends_on":1904,"depends_on_stream":"state_stream", "wait":7, "query": "unsubscribe to '1904'"}
+            {"client":"python", "query_type": "table","depends_on":1904,"depends_on_stream":"state_stream", "wait":3, "query": "insert into state_stream(i, s, _tp_time) values (6, 's4', '2022-01-01 00:00:03'), (7, 'wont appear in result', '2022-01-01 00:00:04')"},
+            {"client":"python", "query_type": "table","depends_on":1904,"depends_on_stream":"state_stream", "wait":10, "query": "unsubscribe to '1904'"}
           ]
         }
       ],

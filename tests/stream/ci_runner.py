@@ -136,7 +136,6 @@ def ci_runner(
     proton_log_folder = f"{local_all_results_folder_path}/proton"
     pytest_logging_level_set = f"--log-cli-level={logging_level}"
     s3_helper = S3Helper("https://s3.amazonaws.com")
-
     proton_server_container_name_str = setting_config.get("proton_server_container_name")
     if proton_server_container_name_str is None:
         raise Exception(f"proton_server_container_name of setting = {setting} is not found in setting_config")
@@ -323,28 +322,26 @@ if __name__ == "__main__":
 
     if not env_docker_compose_res:
         raise Exception("Env docker compose up failure.")
-
+    
     if settings == []:
-        ci_runner(cur_dir, run_mode, logging_level=logging_level)
-    else:
-        procs = []
+        settings = ["nativelog"] 
+    procs = []
+    for setting in settings:
+        logger.debug(f"setting = {setting}, get config...")
         with open(config_file_path) as f:
-            configs = json.load(f)
-      
-        for setting in settings:
-            logger.debug(f"setting = {setting}, get config...")
-            setting_config = configs.get(setting)
-            if setting_config is None:
-                raise Exception(f"no config for setting = {setting} found in {config_file_path}")
-            logger.debug(f"ci_runner: setting_config for setting = {setting} = {setting_config}")
-            args = (cur_dir, setting_config, run_mode, "0", "0", setting, logging_level)
-            proc = mp.Process(target=ci_runner, args=args)
-            proc.start()
-            #logger.debug(f"args = {args}, ci_runner proc starts...")
-            procs.append(proc)
-            time.sleep(5)
-        for proc in procs:
-            proc.join()
+            configs = json.load(f)          
+        setting_config = configs.get(setting) #if settings is not null, then read different setting config and start processes
+        if setting_config is None:
+            raise Exception(f"no config for setting = {setting} found in {config_file_path}")  
+        logger.debug(f"ci_runner: setting_config for setting = {setting} = {setting_config}")
+        args = (cur_dir, setting_config, run_mode, "0", "0", setting, logging_level)
+        proc = mp.Process(target=ci_runner, args=args)
+        proc.start()
+        #logger.debug(f"args = {args}, ci_runner proc starts...")
+        procs.append(proc)
+        time.sleep(5)
+    for proc in procs:
+        proc.join()
 
     # while i < loop:
     #    ci_runner(cur_dir, run_mode, logging_level = logging_level)

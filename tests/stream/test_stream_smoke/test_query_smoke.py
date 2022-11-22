@@ -79,8 +79,8 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
             query_results_dict != None
         )  # if no statement_results_query_id matches expected_result_query_id, case failed
         query_result = query_results_dict.get("query_result")
-        logging.info(f"\n test_run: expected_result = {expected_result}")
-        logging.info(f"\n test_run: query_result = {query_result}")
+        #logging.info(f"\n test_run: expected_result = {expected_result}")
+        #logging.info(f"\n test_run: query_result = {query_result}")
         query_result_column_types = query_results_dict.get("query_result_column_types")
         if query_result != 'error_code:159': #error_code:159 means Wait 2100 milliseconds for DDL operation timeout. the timeout is 2000 milliseconds, known issue of redpenda as external stream storage mode, skip result check.
             assert type(expected_result) == type(
@@ -176,7 +176,7 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
                                         _expected_field_itmes = expected_result_field.split(",")
                                         _query_field_items = query_result_field.split(",")
                                         for (_expected_item, _result_item)  in zip(_expected_field_itmes, _query_field_items):
-                                            logging.debug(f"_expected_item = {_expected_item}, _result_item = {_result_item}")
+                                            #logging.debug(f"_expected_item = {_expected_item}, _result_item = {_result_item}")
                                             if _expected_item == 'any_value' or _expected_item == _result_item:
                                                 _match *= 1
                                             else:

@@ -67,7 +67,7 @@ services:
       - stream-store
 
   stream-store:
-    image: docker.vectorized.io/vectorized/redpanda:v22.1.9
+    image: vectorized/redpanda:v21.11.19-amd64
     ports:
       - "9093:9092"
       - "29092:29092"

@@ -198,7 +198,7 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     if config == None:
         with open(config_file) as f:
             configs = json.load(f)
-        logger.debug(f"rockets_context: configs reading from config file: {configs}")
+        #logger.debug(f"rockets_context: configs reading from config file: {configs}")
         config = configs.get(proton_setting)
         logger.debug(f"setting = {proton_setting},config = {config}")
 
@@ -2453,7 +2453,11 @@ def create_table_rest(config, table_schema, retry=3):
                 time.sleep(1)
                 continue
         except (BaseException) as error:
-            logging.debug(f"exception: error = {error}")
+            logging.debug(f"exception: Error = {error}")
+            retry -= 1
+            if retry <= 0:
+                return res
+            time.sleep(1)             
 
     create_table_time_out = 1000  # set how many times wait and list table to check if table creation completed.
     while create_table_time_out > 0:
@@ -3021,13 +3025,29 @@ def test_suite_run(
         test_run_list = test_case_collect(
             test_suite, tests_2_run, test_ids_set, proton_setting
         )
+
+        test_suite_run_status = []
         test_run_list_len = len(test_run_list)
+        client = None
         if test_run_list_len == 0:
-            logger.debug(
+            logger.info(
                 f"test_suite_name = {test_suite_name}, test_run_list = {test_run_list}, 0 case collected, bypass."
             )
-            pass
+            test_suite_result_summary = {
+                "test_suite_name": test_suite_name,
+                "test_run_list_len": 0,
+                "test_sets": [],
+                "test_list": [],
+                "proton_setting": proton_setting,
+                "test_suite_run_status": [],                
+            }
+            test_suite_run_ctl_queue.get()
+            test_suite_run_ctl_queue.task_done()                      
+        
         else:
+            for test in test_run_list:
+                test_id = test.get("id")
+                test_suite_run_status.append({"test_id": test_id, "status":"not_run"}) #list for test suite running status, not_run or done           
             try:
                 client = Client(host=proton_server, port=proton_server_native_port)
                 if test_suite_config != None:
@@ -3148,27 +3168,35 @@ def test_suite_run(
                             "statements_results": statements_results,
                         }
                     )
+                    logger.debug(f"proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, expected_results = {expected_results}, statements_results = {statements_results}")
+                    test_suite_run_status[i]['status'] = 'done'
+                    
                     i += 1
                     test_id_run += 1
 
+                test_suite_result_summary = {
+                    "test_suite_name": test_suite_name,
+                    "test_run_list_len": test_run_list_len,
+                    "test_sets": test_sets,
+                    "test_list": test_run_list,
+                    "proton_setting": proton_setting,
+                    "test_suite_run_status": test_suite_run_status,
+                }                
             except (BaseException) as error:
                 logger.info(f"exception: {error}")
 
             finally:
+                
                 test_suite_run_ctl_queue.get()
                 test_suite_run_ctl_queue.task_done()
 
             logger.info(f"test_suite_name = {test_suite_name} running ends")
-        test_suite_result_summary = {
-            "test_suite_name": test_suite_name,
-            "test_run_list_len": test_run_list_len,
-            "test_sets": test_sets,
-            "test_list": test_run_list,
-        }
-
+            logger.info(f"test_suite_name = {test_suite_name}, test_suite_run_status = {test_suite_run_status} ")
+        
         test_suite_result_done_queue.put(test_suite_result_summary)
         test_suite_result_done_queue.join()
-
+        
+    
     TESTS_QUERY_RESULTS = test_sets
     query_conn.send("tear_down")
     message_recv = query_conn.recv()
@@ -3179,7 +3207,8 @@ def test_suite_run(
     # q_exec_client.terminate()
     query_exe_client.join()
     del alive
-    client.disconnect()
+    if client is not None:
+        client.disconnect()
     logger.debug(f"TABLE_CREATE_RECORDS = {TABLE_CREATE_RECORDS}")
     logger.debug(f"TABLE_DROP_RECORDS = {TABLE_DROP_RECORDS}")
     count = 0
@@ -3269,11 +3298,15 @@ def rockets_run(test_context):
         test_suite_count += 1
 
     try:
+        print(f"rockets_run:test_suite_run_ctl_queue.join() to be run ")
         test_suite_run_ctl_queue.join()
+        print(f"rockets_run:test_suite_run_ctl_queue.join() done ")
         test_suite_result_collect_done = 0
         test_run_list_len_total = 0
+        test_suite_result_summary_list = []
         while test_suite_result_collect_done < len(test_suites_selected_sets):
             test_suite_result_summary = test_suite_result_done_queue.get()
+            test_suite_result_summary_list.append(test_suite_result_summary)
             test_suite_name_recvd = test_suite_result_summary.get("test_suite_name")
             test_run_list_len_recvd = test_suite_result_summary.get("test_run_list_len")
             test_run_list_recvd = test_suite_result_summary.get("test_run_list")
@@ -3306,6 +3339,16 @@ def rockets_run(test_context):
     logger.debug(
         f"test_run_list_len_total = {test_run_list_len_total}, len(test_sets) = {len(test_sets)}"
     )
+    
+    for test_suite_summary in test_suite_result_summary_list:
+        test_suite_name = test_suite_summary.get("test_suite_name")
+        test_suite_proton_setting = test_suite_summary.get("proton_setting")
+        test_suite_run_status = test_suite_summary.get("test_suite_run_status")
+        print(f"proton_setting = {test_suite_proton_setting}, test_suite_name = {test_suite_name}")
+        for status in test_suite_run_status:
+            print(status)
+    
+
     return (test_run_list_len_total, test_run_list_total, test_sets)
 
 
