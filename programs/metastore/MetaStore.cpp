@@ -3,7 +3,9 @@
 #include <sys/stat.h>
 #include <pwd.h>
 #include <Access/AccessControl.h>
-#include <Common/ClickHouseRevision.h>
+/// proton starts
+#include <Common/VersionRevision.h>
+/// proton ends
 #include <Server/ProtocolServerAdapter.h>
 #include <Common/DNSResolver.h>
 #include <Interpreters/DNSCacheUpdater.h>
@@ -313,7 +315,7 @@ int MetaStore::main(const std::vector<std::string> & /*args*/)
         }
         else
         {
-            LOG_WARNING(log, message);
+            LOG_WARNING(log, fmt::runtime(message));
         }
     }
 
@@ -324,7 +326,7 @@ int MetaStore::main(const std::vector<std::string> & /*args*/)
     auto & access_control = global_context->getAccessControl();
 
     /// Initialize access storages.
-    access_control.addStoragesFromMainConfig(config(), config_path, [&] { return global_context->getZooKeeper(); });
+    access_control.addStoragesFromMainConfig(config(), config_path);
 
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]()
@@ -376,7 +378,9 @@ int MetaStore::main(const std::vector<std::string> & /*args*/)
             socket.setReceiveTimeout(settings.receive_timeout);
             socket.setSendTimeout(settings.send_timeout);
             servers->emplace_back(
+                listen_host,
                 port_name,
+                "MetaStoreServer (http): http://" + address.toString(),
                 std::make_unique<HTTPServer>(
                     context(), createMetaStoreHandlerFactory(*this, "MetaStoreHTTPHandler-factory"), server_pool, socket, http_params));
 
@@ -446,10 +450,12 @@ int MetaStore::main(const std::vector<std::string> & /*args*/)
 
 void MetaStore::logRevision() const
 {
-    Poco::Logger::root().information("Starting proton MetaStore " + std::string{VERSION_STRING}
-        + " with revision " + std::to_string(ClickHouseRevision::getVersionRevision())
-        + ", " + build_id_info
-        + ", PID " + std::to_string(getpid()));
+    Poco::Logger::root().information(fmt::format(
+        "Starting proton MetaStore {} with revision {}, {}, PID {}",
+        std::string{VERSION_STRING},
+        std::to_string(ProtonRevision::getVersionRevision()),
+        build_id_info,
+        std::to_string(getpid())));
 }
 
 

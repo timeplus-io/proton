@@ -18,7 +18,6 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <map>
 #include <base/logger_useful.h>
-#include <Common/ClickHouseRevision.h>
 
 
 namespace DB

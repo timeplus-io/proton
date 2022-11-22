@@ -1,6 +1,8 @@
 #include "Keeper.h"
 
-#include <Common/ClickHouseRevision.h>
+/// proton starts
+#include <Common/VersionRevision.h>
+/// proton ends
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/DNSResolver.h>
 #include <Interpreters/DNSCacheUpdater.h>
@@ -488,7 +490,7 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
 void Keeper::logRevision() const
 {
     Poco::Logger::root().information("Starting proton Keeper " + std::string{VERSION_STRING}
-        + " with revision " + std::to_string(ClickHouseRevision::getVersionRevision())
+        + " with revision " + std::to_string(ProtonRevision::getVersionRevision())
         + ", " + build_id_info
         + ", PID " + std::to_string(getpid()));
 }
