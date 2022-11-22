@@ -62,6 +62,7 @@ struct FunctionDescription
     bool is_now_func = false;
 };
 
+/// FIXME, move this to forward header file
 using FunctionDescriptionPtr = std::shared_ptr<FunctionDescription>;
 using FunctionDescriptionPtrs = std::vector<FunctionDescriptionPtr>;
 

@@ -17,7 +17,7 @@ class Logger;
 namespace DB
 {
 struct SelectQueryInfo;
-class Block;
+class Chunk;
 
 namespace Streaming
 {
@@ -36,8 +36,6 @@ public:
         WATERMARK_WITH_DELAY,
     };
 
-    String func_name;
-
     const DateLUTImpl * timezone = nullptr;
 
     EmitMode mode = EmitMode::NONE;
@@ -50,6 +48,9 @@ public:
 
     Int64 emit_timeout_interval = 0;
     IntervalKind::Kind emit_timeout_interval_kind = IntervalKind::Second;
+
+    bool isTumbleWindowAggr() const { return window_desc && window_desc->type == WindowType::TUMBLE && mode != EmitMode::TAIL; }
+    bool isHopWindowAggr() const { return window_desc && window_desc->type == WindowType::HOP && mode != EmitMode::TAIL;}
 
     /// privates
     FunctionDescriptionPtr window_desc;
@@ -73,7 +74,7 @@ public:
     virtual String getName() const { return "Watermark"; }
 
     void preProcess();
-    void process(Block & block);
+    void process(Chunk & chunk);
 
     VersionType getVersion() const;
 
@@ -81,22 +82,22 @@ public:
     virtual void deserialize(ReadBuffer & rb);
 
 protected:
-    virtual void doProcess(Block & /* block */) { }
-    void assignWatermark(Block & block);
+    virtual void doProcess(Chunk & /* chunk*/) { }
+    void assignWatermark(Chunk & chunk);
     virtual VersionType getVersionFromRevision(UInt64 revision) const;
 
 private:
     /// EMIT STREAM AFTER WATERMARK
-    virtual void processWatermarkWithDelay(Block & /* block */) { }
+    virtual void processWatermarkWithDelay(Chunk & /* chunk */) { }
 
     /// EMIT STREAM AFTER WATERMARK AND DELAY INTERVAL <n> <UNIT>
-    virtual void processWatermark(Block & /* block */) { }
+    virtual void processWatermark(Chunk & /* chunk */) { }
 
-    void handleIdleness(Block & block);
+    void handleIdleness(Chunk & chunk);
 
-    virtual void handleIdlenessWatermark(Block & /* block */) { }
+    virtual void handleIdlenessWatermark(Chunk & /* chunk */) { }
 
-    virtual void handleIdlenessWatermarkWithDelay(Block & /* block */) { }
+    virtual void handleIdlenessWatermarkWithDelay(Chunk & /* chunk */) { }
 
 protected:
     WatermarkSettings watermark_settings;

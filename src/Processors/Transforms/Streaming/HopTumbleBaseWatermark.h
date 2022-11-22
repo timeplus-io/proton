@@ -9,7 +9,7 @@ namespace Streaming
 class HopTumbleBaseWatermark : public Watermark
 {
 public:
-    explicit HopTumbleBaseWatermark(WatermarkSettings && watermark_settings_, bool proc_time_, Poco::Logger * log_);
+    explicit HopTumbleBaseWatermark(WatermarkSettings && watermark_settings_, size_t time_col_position_, bool proc_time_, Poco::Logger * log_);
     HopTumbleBaseWatermark(const HopTumbleBaseWatermark &) = default;
     ~HopTumbleBaseWatermark() override = default;
 
@@ -21,43 +21,43 @@ protected:
     void initTimezone(size_t timezone_pos);
 
 private:
-    void doProcess(Block & block) override;
+    void doProcess(Chunk & chunk) override;
 
     /// EMIT STREAM AFTER WATERMARK
-    void processWatermark(Block & block) override;
+    void processWatermark(Chunk & chunk) override;
 
     /// EMIT STREAM AFTER WATERMARK AND DELAY INTERVAL <n> <UNIT>
-    void processWatermarkWithDelay(Block & block) override;
+    void processWatermarkWithDelay(Chunk & chunk) override;
 
-    void handleIdlenessWatermark(Block & block) override;
+    void handleIdlenessWatermark(Chunk & chunk) override;
 
-    void handleIdlenessWatermarkWithDelay(Block & block) override;
+    void handleIdlenessWatermarkWithDelay(Chunk & chunk) override;
 
     virtual Int64 getProgressingInterval() const { return window_interval; }
 
-    std::pair<Int64, Int64> initFirstWindow(Block & block, bool delay = false) const;
-    std::pair<Int64, Int64> initFirstWindowWithAutoScale(Block & block, bool delay = false) const;
-    std::pair<Int64, Int64> doInitFirstWindow(Block & block, bool delay = false) const;
+    std::pair<Int64, Int64> initFirstWindow(Chunk & chunk, bool delay = false) const;
+    std::pair<Int64, Int64> initFirstWindowWithAutoScale(Chunk & chunk, bool delay = false) const;
+    std::pair<Int64, Int64> doInitFirstWindow(Chunk & chunk, bool delay = false) const;
 
     std::pair<Int64, Int64> getWindow(Int64 time_sec) const;
 
     Int64 addTimeWithAutoScale(Int64 datetime64, IntervalKind::Kind kind, Int64 interval);
 
-    void processWatermarkWithAutoScale(Block & block);
-    void doProcessWatermark(Block & block);
+    void processWatermarkWithAutoScale(Chunk & chunk);
+    void doProcessWatermark(Chunk & chunk);
 
-    void processWatermarkWithDelayAndWithAutoScale(Block & block);
-    void doProcessWatermarkWithDelay(Block & block);
+    void processWatermarkWithDelayAndWithAutoScale(Chunk & chunk);
+    void doProcessWatermarkWithDelay(Chunk & chunk);
 
 protected:
     Int64 window_interval = 0;
     IntervalKind::Kind window_interval_kind = IntervalKind::Second;
 
-    Int32 scale = 0;
-    Int64 multiplier = 1;
+    UInt16 time_col_position;
     bool time_col_is_datetime64 = false;
 
-    String time_col_name;
+    Int32 scale = 0;
+    Int64 multiplier = 1;
 
     const DateLUTImpl * timezone = nullptr;
 

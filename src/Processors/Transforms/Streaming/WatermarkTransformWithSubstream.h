@@ -2,14 +2,14 @@
 
 #include "Watermark.h"
 
-#include <Processors/Streaming/ChunkSplitter.h>
 #include <Processors/IProcessor.h>
+#include <Processors/Streaming/ChunkSplitter.h>
 
 namespace DB
 {
 /**
- * WatermarkTransform projects watermark according to watermark strategies
- * by observing the events in its input.
+ * WatermarkTransformWithSubstream partitions data according to substream key columns and then
+ * projects watermark according to watermark strategies by observing the events in each substream.
  */
 
 namespace Streaming
@@ -22,7 +22,7 @@ public:
         TreeRewriterResultPtr syntax_analyzer_result,
         FunctionDescriptionPtr desc,
         bool proc_time,
-        std::vector<size_t> key_column_posistions,
+        std::vector<size_t> key_column_positions,
         const Block & input_header,
         const Block & output_header,
         Poco::Logger * log);
@@ -38,7 +38,11 @@ public:
 
 private:
     void initWatermark(
-        ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, FunctionDescriptionPtr desc, bool proc_time);
+        const Block & input_header,
+        ASTPtr query,
+        TreeRewriterResultPtr syntax_analyzer_result,
+        FunctionDescriptionPtr desc,
+        bool proc_time);
 
     inline std::pair<Int64, Int64> calcMinMaxEventTime(const Chunk & chunk) const;
     inline Watermark & getOrCreateSubstreamWatermark(const SubstreamID & id);
@@ -53,11 +57,6 @@ private:
     String watermark_name;
     WatermarkPtr watermark_template;
     SubstreamHashMap<WatermarkPtr> substream_watermarks;
-
-    /// For SessionWatermark
-    bool emit_min_max_event_time = false;
-    bool time_col_is_datetime64 = true;
-    size_t time_col_pos = 0;
 
     Poco::Logger * log;
 };

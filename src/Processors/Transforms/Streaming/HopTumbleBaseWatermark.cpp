@@ -9,6 +9,7 @@
 #include <IO/WriteHelpers.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
+#include <Processors/Chunk.h>
 #include <base/ClockUtils.h>
 #include <base/logger_useful.h>
 #include <Common/DateLUT.h>
@@ -24,75 +25,63 @@ using ColumnDateTime64 = ColumnDecimal<DateTime64>;
 using ColumnDateTime32 = ColumnVector<UInt32>;
 
 template <typename TargetColumnType>
-ALWAYS_INLINE void doProcessBlock(
-    Block & block, const ColumnWithTypeAndName & time_col, Int64 last_project_watermark_ts, Int64 & max_event_ts, UInt64 & late_events)
+ALWAYS_INLINE void
+doProcessChunk(Chunk & chunk, UInt16 time_col_position, Int64 last_project_watermark_ts, Int64 & max_event_ts, UInt64 & late_events)
 {
+    auto columns = chunk.detachColumns();
+
     /// FIXME, use simple FilterTransform to do this ?
-    const typename TargetColumnType::Container & time_vec = checkAndGetColumn<TargetColumnType>(time_col.column.get())->getData();
+    const typename TargetColumnType::Container & time_vec
+        = checkAndGetColumn<TargetColumnType>(columns[time_col_position].get())->getData();
     auto rows = time_vec.size();
     IColumn::Filter filt(rows, 1);
 
-    UInt64 late_events_in_block = 0;
+    UInt64 late_events_in_chunk = 0;
     for (size_t i = 0; i < rows; ++i)
     {
         if (time_vec[i] > max_event_ts)
             max_event_ts = time_vec[i];
+
         if (time_vec[i] < last_project_watermark_ts)
         {
             filt[i] = 0;
-            late_events_in_block += 1;
+            late_events_in_chunk += 1;
         }
     }
 
-    if (late_events_in_block > 0)
+    if (late_events_in_chunk > 0)
     {
-        late_events += late_events_in_block;
-        for (auto & col_with_name_type : block)
-        {
-            col_with_name_type.column = col_with_name_type.column->filter(filt, rows - late_events_in_block);
-        }
+        late_events += late_events_in_chunk;
+        for (auto & column : columns)
+            column = column->filter(filt, rows - late_events_in_chunk);
     }
-}
 
-template <typename TargetColumnType>
-Int64 minEventTimestampForBlock(const ColumnWithTypeAndName & time_col)
-{
-    const typename TargetColumnType::Container & time_vec = checkAndGetColumn<TargetColumnType>(time_col.column.get())->getData();
-
-    Int64 min_event_ts = std::numeric_limits<Int64>::max();
-    for (size_t i = 0; i < time_vec.size(); ++i)
-    {
-        if (time_vec[i] < min_event_ts)
-            min_event_ts = time_vec[i];
-    }
-    return min_event_ts;
+    chunk.setColumns(columns, columns[0]->size());
 }
 }
 
-HopTumbleBaseWatermark::HopTumbleBaseWatermark(WatermarkSettings && watermark_settings_, bool proc_time_, Poco::Logger * log_)
-    : Watermark(std::move(watermark_settings_), proc_time_, log_)
-{
-    if (watermark_settings.mode == WatermarkSettings::EmitMode::NONE)
-        watermark_settings.mode = WatermarkSettings::EmitMode::WATERMARK;
-}
-
-void HopTumbleBaseWatermark::init(Int64 & interval)
+HopTumbleBaseWatermark::HopTumbleBaseWatermark(
+    WatermarkSettings && watermark_settings_, size_t time_col_position_, bool proc_time_, Poco::Logger * log_)
+    : Watermark(std::move(watermark_settings_), proc_time_, log_), time_col_position(time_col_position_)
 {
     assert(watermark_settings.window_desc);
     assert(!watermark_settings.window_desc->argument_names.empty());
 
+    if (watermark_settings.mode == WatermarkSettings::EmitMode::NONE)
+        watermark_settings.mode = WatermarkSettings::EmitMode::WATERMARK;
+
     const auto & desc = *watermark_settings.window_desc;
-    time_col_name = desc.argument_names[0];
     time_col_is_datetime64 = isDateTime64(desc.argument_types[0]);
 
     if (time_col_is_datetime64)
-    {
         scale = checkAndGetDataType<DataTypeDateTime64>(desc.argument_types[0].get())->getScale();
-    }
 
     multiplier = intExp10(std::abs(scale - 3));
+}
 
-    auto * func_ast = desc.func_ast->as<ASTFunction>();
+void HopTumbleBaseWatermark::init(Int64 & interval)
+{
+    auto * func_ast = watermark_settings.window_desc->func_ast->as<ASTFunction>();
     extractInterval(func_ast->arguments->children[1]->as<ASTFunction>(), interval, window_interval_kind);
 }
 
@@ -114,21 +103,19 @@ void HopTumbleBaseWatermark::initTimezone(size_t timezone_pos)
     }
 }
 
-void HopTumbleBaseWatermark::doProcess(Block & block)
+void HopTumbleBaseWatermark::doProcess(Chunk & chunk)
 {
-    const auto & time_col = block.getByName(time_col_name);
-
     /// We don't support column type changes in the middle of a streaming query
     if (time_col_is_datetime64)
     {
         /// const auto & datetime64_col = static_cast<const ColumnDateTime64 &>(*time_col.column);
         /// const ColumnDateTime64::Container & time_vec = datetime64_col.getData();
         /// auto scale = datetime64_col.getScale();
-        doProcessBlock<ColumnDateTime64>(block, time_col, last_projected_watermark_ts, max_event_ts, late_events);
+        doProcessChunk<ColumnDateTime64>(chunk, time_col_position, last_projected_watermark_ts, max_event_ts, late_events);
     }
     else
     {
-        doProcessBlock<ColumnDateTime32>(block, time_col, last_projected_watermark_ts, max_event_ts, late_events);
+        doProcessChunk<ColumnDateTime32>(chunk, time_col_position, last_projected_watermark_ts, max_event_ts, late_events);
     }
 
     if (late_events > last_logged_late_events)
@@ -141,51 +128,55 @@ void HopTumbleBaseWatermark::doProcess(Block & block)
         }
     }
 
-    if (block.rows())
+    if (chunk.hasRows())
     {
         has_event_in_window = true;
         last_event_seen_ts = UTCSeconds::now();
-        assignWatermark(block);
+        assignWatermark(chunk);
     }
 }
 
-void HopTumbleBaseWatermark::processWatermark(Block & block)
+void HopTumbleBaseWatermark::processWatermark(Chunk & chunk)
 {
     if (scale != 0)
-        processWatermarkWithAutoScale(block);
+        processWatermarkWithAutoScale(chunk);
     else
-        doProcessWatermark(block);
+        doProcessWatermark(chunk);
 }
 
-ALWAYS_INLINE void HopTumbleBaseWatermark::processWatermarkWithAutoScale(Block & block)
+ALWAYS_INLINE void HopTumbleBaseWatermark::processWatermarkWithAutoScale(Chunk & chunk)
 {
     assert(scale != 0);
 
     if (likely(watermark_ts != 0))
     {
         auto interval = getProgressingInterval();
+
         /// FIXME, use multiply for optimization instead of loop ?
         /// Multiply only has advantage when max_event_ts is way bigger than current watermark_ts
         /// which causes quite a few loops. But this is time skew and abnormal
+        Int64 final_watermark = 0;
         while (watermark_ts <= max_event_ts)
         {
             /// emit the max watermark
             last_projected_watermark_ts = watermark_ts;
-            block.info.watermark = watermark_ts;
+            final_watermark = watermark_ts;
             watermark_ts = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
         }
 
-        if (block.info.watermark > 0)
+        if (final_watermark > 0)
         {
-            block.info.watermark_lower_bound = addTimeWithAutoScale(block.info.watermark, window_interval_kind, -1 * window_interval);
-            LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", block.info.watermark, block.info.watermark_lower_bound);
+            auto watermark_lower_bound = addTimeWithAutoScale(final_watermark, window_interval_kind, -1 * window_interval);
+            auto chunk_ctx = chunk.getOrCreateChunkContext();
+            chunk_ctx->setWatermark(final_watermark, watermark_lower_bound);
+            LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", final_watermark, watermark_lower_bound);
         }
     }
     else
-        std::tie(last_projected_watermark_ts, watermark_ts) = initFirstWindow(block);
+        std::tie(last_projected_watermark_ts, watermark_ts) = initFirstWindow(chunk);
 }
 
-ALWAYS_INLINE void HopTumbleBaseWatermark::doProcessWatermark(Block & block)
+ALWAYS_INLINE void HopTumbleBaseWatermark::doProcessWatermark(Chunk & chunk)
 {
     assert(scale == 0);
 
@@ -193,33 +184,36 @@ ALWAYS_INLINE void HopTumbleBaseWatermark::doProcessWatermark(Block & block)
     {
         auto interval = getProgressingInterval();
         /// FIXME, use multiply for optimization instead of loop
+        Int64 final_watermark = 0;
         while (watermark_ts <= max_event_ts)
         {
             /// emit the max watermark
             last_projected_watermark_ts = watermark_ts;
-            block.info.watermark = watermark_ts;
+            final_watermark = watermark_ts;
             watermark_ts = addTime(watermark_ts, window_interval_kind, interval, *timezone);
         }
 
-        if (block.info.watermark > 0)
+        if (final_watermark > 0)
         {
-            block.info.watermark_lower_bound = addTime(block.info.watermark, window_interval_kind, -1 * window_interval, *timezone);
-            LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", block.info.watermark, block.info.watermark_lower_bound);
+            auto watermark_lower_bound = addTime(final_watermark, window_interval_kind, -1 * window_interval, *timezone);
+            auto chunk_ctx = chunk.getOrCreateChunkContext();
+            chunk_ctx->setWatermark(final_watermark, watermark_lower_bound);
+            LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", final_watermark, watermark_lower_bound);
         }
     }
     else
-        std::tie(last_projected_watermark_ts, watermark_ts) = initFirstWindow(block);
+        std::tie(last_projected_watermark_ts, watermark_ts) = initFirstWindow(chunk);
 }
 
-void HopTumbleBaseWatermark::processWatermarkWithDelay(Block & block)
+void HopTumbleBaseWatermark::processWatermarkWithDelay(Chunk & chunk)
 {
     if (scale != 0)
-        processWatermarkWithDelayAndWithAutoScale(block);
+        processWatermarkWithDelayAndWithAutoScale(chunk);
     else
-        doProcessWatermarkWithDelay(block);
+        doProcessWatermarkWithDelay(chunk);
 }
 
-ALWAYS_INLINE void HopTumbleBaseWatermark::processWatermarkWithDelayAndWithAutoScale(Block & block)
+ALWAYS_INLINE void HopTumbleBaseWatermark::processWatermarkWithDelayAndWithAutoScale(Chunk & chunk)
 {
     assert(scale != 0);
     if (likely(watermark_ts != 0))
@@ -228,10 +222,11 @@ ALWAYS_INLINE void HopTumbleBaseWatermark::processWatermarkWithDelayAndWithAutoS
             = addTimeWithAutoScale(watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval);
 
         auto interval = getProgressingInterval();
+        Int64 final_watermark = 0;
         while (watermark_ts_bias <= max_event_ts)
         {
             last_projected_watermark_ts = watermark_ts;
-            block.info.watermark = watermark_ts;
+            final_watermark = watermark_ts;
 
             watermark_ts = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
             watermark_ts_bias
@@ -246,22 +241,24 @@ ALWAYS_INLINE void HopTumbleBaseWatermark::processWatermarkWithDelayAndWithAutoS
                 watermark_ts_lower_bound, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval);
             if (max_event_ts >= watermark_ts_bias)
             {
-                block.info.watermark = watermark_ts_lower_bound;
+                final_watermark = watermark_ts_lower_bound;
                 last_projected_watermark_ts = watermark_ts_lower_bound;
             }
         }
 
-        if (block.info.watermark > 0)
+        if (final_watermark > 0)
         {
-            block.info.watermark_lower_bound = addTimeWithAutoScale(block.info.watermark, window_interval_kind, -1 * window_interval);
-            LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", block.info.watermark, block.info.watermark_lower_bound);
+            auto watermark_lower_bound = addTimeWithAutoScale(final_watermark, window_interval_kind, -1 * window_interval);
+            auto chunk_ctx = chunk.getOrCreateChunkContext();
+            chunk_ctx->setWatermark(final_watermark, watermark_lower_bound);
+            LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", final_watermark, watermark_lower_bound);
         }
     }
     else
-        std::tie(last_projected_watermark_ts, watermark_ts) = initFirstWindow(block, true);
+        std::tie(last_projected_watermark_ts, watermark_ts) = initFirstWindow(chunk, true);
 }
 
-ALWAYS_INLINE void HopTumbleBaseWatermark::doProcessWatermarkWithDelay(Block & block)
+ALWAYS_INLINE void HopTumbleBaseWatermark::doProcessWatermarkWithDelay(Chunk & chunk)
 {
     assert(scale == 0);
     if (likely(watermark_ts != 0))
@@ -270,10 +267,11 @@ ALWAYS_INLINE void HopTumbleBaseWatermark::doProcessWatermarkWithDelay(Block & b
             = addTime(watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, *timezone);
 
         auto interval = getProgressingInterval();
+        Int64 final_watermark = 0;
         while (watermark_ts_bias <= max_event_ts)
         {
             last_projected_watermark_ts = watermark_ts;
-            block.info.watermark = watermark_ts;
+            final_watermark = watermark_ts;
 
             watermark_ts = addTime(watermark_ts, window_interval_kind, interval, *timezone);
             watermark_ts_bias
@@ -288,22 +286,24 @@ ALWAYS_INLINE void HopTumbleBaseWatermark::doProcessWatermarkWithDelay(Block & b
                 watermark_ts_lower_bound, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, *timezone);
             if (max_event_ts >= watermark_ts_bias)
             {
-                block.info.watermark = watermark_ts_lower_bound;
+                final_watermark = watermark_ts_lower_bound;
                 last_projected_watermark_ts = watermark_ts_lower_bound;
             }
         }
 
-        if (block.info.watermark > 0)
+        if (final_watermark > 0)
         {
-            block.info.watermark_lower_bound = addTime(block.info.watermark, window_interval_kind, -1 * window_interval, *timezone);
-            LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", block.info.watermark, block.info.watermark_lower_bound);
+            auto watermark_lower_bound = addTime(final_watermark, window_interval_kind, -1 * window_interval, *timezone);
+            auto chunk_ctx = chunk.getOrCreateChunkContext();
+            chunk_ctx->setWatermark(final_watermark, watermark_lower_bound);
+            LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", final_watermark, watermark_lower_bound);
         }
     }
     else
-        std::tie(last_projected_watermark_ts, watermark_ts) = initFirstWindow(block, true);
+        std::tie(last_projected_watermark_ts, watermark_ts) = initFirstWindow(chunk, true);
 }
 
-void HopTumbleBaseWatermark::handleIdlenessWatermark(Block & block)
+void HopTumbleBaseWatermark::handleIdlenessWatermark(Chunk & chunk)
 {
     if (proc_time && watermark_ts > 0)
     {
@@ -318,10 +318,11 @@ void HopTumbleBaseWatermark::handleIdlenessWatermark(Block & block)
 
             if (now >= watermark_ts)
             {
-                block.info.watermark = watermark_ts;
-                last_projected_watermark_ts = watermark_ts;
+                auto watermark_lower_bound = addTimeWithAutoScale(watermark_ts, window_interval_kind, -1 * window_interval);
+                auto chunk_ctx = chunk.getOrCreateChunkContext();
+                chunk_ctx->setWatermark(watermark_ts, watermark_lower_bound);
 
-                block.info.watermark_lower_bound = addTimeWithAutoScale(block.info.watermark, window_interval_kind, -1 * window_interval);
+                last_projected_watermark_ts = watermark_ts;
                 watermark_ts = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
             }
         }
@@ -329,10 +330,11 @@ void HopTumbleBaseWatermark::handleIdlenessWatermark(Block & block)
         {
             if (UTCSeconds::now() >= watermark_ts)
             {
-                block.info.watermark = watermark_ts;
-                last_projected_watermark_ts = watermark_ts;
+                auto watermark_lower_bound = addTime(watermark_ts, window_interval_kind, -1 * window_interval, *timezone);
+                auto chunk_ctx = chunk.getOrCreateChunkContext();
+                chunk_ctx->setWatermark(watermark_ts, watermark_lower_bound);
 
-                block.info.watermark_lower_bound = addTime(block.info.watermark, window_interval_kind, -1 * window_interval, *timezone);
+                last_projected_watermark_ts = watermark_ts;
                 watermark_ts = addTime(watermark_ts, window_interval_kind, interval, *timezone);
             }
         }
@@ -351,49 +353,52 @@ void HopTumbleBaseWatermark::handleIdlenessWatermark(Block & block)
 
             if (scale != 0)
             {
-                block.info.watermark = watermark_ts;
-                last_projected_watermark_ts = watermark_ts;
+                auto watermark_lower_bound = addTimeWithAutoScale(watermark_ts, window_interval_kind, -1 * window_interval);
+                auto chunk_ctx = chunk.getOrCreateChunkContext();
+                chunk_ctx->setWatermark(watermark_ts, watermark_lower_bound);
 
-                block.info.watermark_lower_bound = addTimeWithAutoScale(block.info.watermark, window_interval_kind, -1 * window_interval);
+                last_projected_watermark_ts = watermark_ts;
                 watermark_ts = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
             }
             else
             {
-                block.info.watermark = watermark_ts;
-                last_projected_watermark_ts = watermark_ts;
+                auto watermark_lower_bound = addTime(watermark_ts, window_interval_kind, -1 * window_interval, *timezone);
+                auto chunk_ctx = chunk.getOrCreateChunkContext();
+                chunk_ctx->setWatermark(watermark_ts, watermark_lower_bound);
 
-                block.info.watermark_lower_bound = addTime(block.info.watermark, window_interval_kind, -1 * window_interval, *timezone);
+                last_projected_watermark_ts = watermark_ts;
                 watermark_ts = addTime(watermark_ts, window_interval_kind, interval, *timezone);
             }
         }
     }
 }
 
-void HopTumbleBaseWatermark::handleIdlenessWatermarkWithDelay(Block & block)
+void HopTumbleBaseWatermark::handleIdlenessWatermarkWithDelay(Chunk & chunk)
 {
-    handleIdlenessWatermark(block);
+    handleIdlenessWatermark(chunk);
 }
 
-std::pair<Int64, Int64> HopTumbleBaseWatermark::initFirstWindow(Block & block, bool delay) const
+std::pair<Int64, Int64> HopTumbleBaseWatermark::initFirstWindow(Chunk & chunk, bool delay) const
 {
     if (max_event_ts > 0)
     {
         if (scale != 0)
-            return initFirstWindowWithAutoScale(block, delay);
+            return initFirstWindowWithAutoScale(chunk, delay);
         else
-            return doInitFirstWindow(block, delay);
+            return doInitFirstWindow(chunk, delay);
     }
 
     return {watermark_ts, watermark_ts};
 }
 
-std::pair<Int64, Int64> HopTumbleBaseWatermark::initFirstWindowWithAutoScale(Block & block, bool delay) const
+std::pair<Int64, Int64> HopTumbleBaseWatermark::initFirstWindowWithAutoScale(Chunk & chunk, bool delay) const
 {
     assert(time_col_is_datetime64);
     assert(scale != 0);
 
-    const auto & time_col = block.getByName(time_col_name);
-    auto min_event_ts = minEventTimestampForBlock<ColumnDateTime64>(time_col);
+    const auto & time_col = chunk.getColumns()[time_col_position];
+    const auto & time_vec = checkAndGetColumn<ColumnDateTime64>(time_col.get())->getData();
+    auto min_event_ts = std::min_element(time_vec.begin(), time_vec.end());
 
     /// Scale in and scale out, if it is a DateTime64 as addTime doesn't supports scale yet. FIXME
     auto scaled_watermark_ts_secs = DecimalUtils::getWholePart(DateTime64(max_event_ts), scale);
@@ -403,7 +408,7 @@ std::pair<Int64, Int64> HopTumbleBaseWatermark::initFirstWindowWithAutoScale(Blo
         = {DecimalUtils::decimalFromComponents<DateTime64>(window.first, 0, scale),
            DecimalUtils::decimalFromComponents<DateTime64>(window.second, 0, scale)};
 
-    if (result.first > min_event_ts)
+    if (result.first > *min_event_ts)
     {
         bool emit_watermark = true;
 
@@ -419,10 +424,11 @@ std::pair<Int64, Int64> HopTumbleBaseWatermark::initFirstWindowWithAutoScale(Blo
 
         if (emit_watermark)
         {
-            /// The first block contains at least a full window. Emit the watermark
+            /// The first chunk contains at least a full window. Emit the watermark
             auto watermark_lower_bound_prev = addTime(window.first, window_interval_kind, -1 * getProgressingInterval(), *timezone);
-            block.info.watermark = result.first;
-            block.info.watermark_lower_bound = DecimalUtils::decimalFromComponents<DateTime64>(watermark_lower_bound_prev, 0, scale);
+            auto watermark_lower_bound = DecimalUtils::decimalFromComponents<DateTime64>(watermark_lower_bound_prev, 0, scale);
+            auto chunk_ctx = chunk.getOrCreateChunkContext();
+            chunk_ctx->setWatermark(result.first, watermark_lower_bound);
             return result;
         }
     }
@@ -430,16 +436,22 @@ std::pair<Int64, Int64> HopTumbleBaseWatermark::initFirstWindowWithAutoScale(Blo
     return {0, result.second};
 }
 
-std::pair<Int64, Int64> HopTumbleBaseWatermark::doInitFirstWindow(Block & block, bool delay) const
+std::pair<Int64, Int64> HopTumbleBaseWatermark::doInitFirstWindow(Chunk & chunk, bool delay) const
 {
     assert(scale == 0);
 
     Int64 min_event_ts = 0;
-    const auto & time_col = block.getByName(time_col_name);
+    const auto & time_col = chunk.getColumns()[time_col_position];
     if (time_col_is_datetime64)
-        min_event_ts = minEventTimestampForBlock<ColumnDateTime64>(time_col);
+    {
+        const auto & time_vec = checkAndGetColumn<ColumnDateTime64>(time_col.get())->getData();
+        min_event_ts = *std::min_element(time_vec.begin(), time_vec.end());
+    }
     else
-        min_event_ts = minEventTimestampForBlock<ColumnDateTime32>(time_col);
+    {
+        const auto & time_vec = checkAndGetColumn<ColumnDateTime32>(time_col.get())->getData();
+        min_event_ts = *std::min_element(time_vec.begin(), time_vec.end());
+    }
 
     auto result = getWindow(max_event_ts);
 
@@ -457,8 +469,9 @@ std::pair<Int64, Int64> HopTumbleBaseWatermark::doInitFirstWindow(Block & block,
 
         if (emit_watermark)
         {
-            block.info.watermark = result.first;
-            block.info.watermark_lower_bound = addTime(result.first, window_interval_kind, -1 * getProgressingInterval(), *timezone);
+            auto watermark_lower_bound = addTime(result.first, window_interval_kind, -1 * getProgressingInterval(), *timezone);
+            auto chunk_ctx = chunk.getOrCreateChunkContext();
+            chunk_ctx->setWatermark(result.first, watermark_lower_bound);
             return result;
         }
     }

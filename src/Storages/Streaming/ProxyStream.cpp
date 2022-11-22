@@ -7,6 +7,7 @@
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/Streaming/DedupTransformStep.h>
+#include <Processors/QueryPlan/Streaming/SessionStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
 #include <Processors/QueryPlan/Streaming/WindowAssignmentStep.h>
@@ -15,9 +16,8 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageView.h>
 #include <Storages/Streaming/StorageMaterializedView.h>
-#include <Common/ProtonCommon.h>
-
 #include <base/logger_useful.h>
+#include <Common/ProtonCommon.h>
 
 namespace DB
 {
@@ -26,13 +26,13 @@ namespace Streaming
 
 namespace
 {
-std::vector<size_t> keyIndecesForSubstreams(const Block & header, const SelectQueryInfo & query_info)
+std::vector<size_t> keyPositionsForSubstreams(const Block & header, const SelectQueryInfo & query_info)
 {
-    std::vector<size_t> substream_key_indices;
-    substream_key_indices.reserve(query_info.substream_keys.size());
+    std::vector<size_t> substream_key_positions;
+    substream_key_positions.reserve(query_info.substream_keys.size());
     for (const auto & key : query_info.substream_keys)
-        substream_key_indices.emplace_back(header.getPositionByName(key));
-    return substream_key_indices;
+        substream_key_positions.emplace_back(header.getPositionByName(key));
+    return substream_key_positions;
 }
 }
 
@@ -109,7 +109,8 @@ Pipe ProxyStream::read(
 {
     QueryPlan plan;
     read(plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
-    return plan.convertToPipe(QueryPlanOptimizationSettings::fromContext(context_), BuildQueryPipelineSettings::fromContext(context_), context_);
+    return plan.convertToPipe(
+        QueryPlanOptimizationSettings::fromContext(context_), BuildQueryPipelineSettings::fromContext(context_), context_);
 }
 
 void ProxyStream::read(
@@ -134,8 +135,8 @@ void ProxyStream::read(
     {
         if (windowType() != WindowType::NONE
             && (column_name == ProtonConsts::STREAMING_WINDOW_START || column_name == ProtonConsts::STREAMING_WINDOW_END
-                || column_name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS
-                || column_name == ProtonConsts::STREAMING_SESSION_START || column_name == ProtonConsts::STREAMING_SESSION_END))
+                || column_name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS || column_name == ProtonConsts::STREAMING_SESSION_START
+                || column_name == ProtonConsts::STREAMING_SESSION_END))
             continue;
 
         updated_column_names.push_back(column_name);
@@ -162,44 +163,16 @@ void ProxyStream::read(
 
     if (auto * view = storage->as<StorageView>())
         return view->read(
-            query_plan,
-            updated_column_names,
-            storage_snapshot,
-            query_info,
-            context_,
-            processed_stage,
-            max_block_size,
-            num_streams);
+            query_plan, updated_column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     else if (auto * materialized_view = storage->as<StorageMaterializedView>())
         return materialized_view->read(
-            query_plan,
-            updated_column_names,
-            storage_snapshot,
-            query_info,
-            context_,
-            processed_stage,
-            max_block_size,
-            num_streams);
+            query_plan, updated_column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     else if (auto * external_stream = storage->as<StorageExternalStream>())
         return external_stream->read(
-            query_plan,
-            updated_column_names,
-            storage_snapshot,
-            query_info,
-            context_,
-            processed_stage,
-            max_block_size,
-            num_streams);
+            query_plan, updated_column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     else if (nested_proxy_storage)
         return nested_proxy_storage->read(
-            query_plan,
-            updated_column_names,
-            storage_snapshot,
-            query_info,
-            context_,
-            processed_stage,
-            max_block_size,
-            num_streams);
+            query_plan, updated_column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 
     auto * distributed = storage->as<StorageStream>();
     assert(distributed);
@@ -208,14 +181,7 @@ void ProxyStream::read(
         distributed->readStreaming(query_plan, query_info, updated_column_names, storage_snapshot, context_);
     else
         distributed->readHistory(
-            query_plan,
-            updated_column_names,
-            storage_snapshot,
-            query_info,
-            context_,
-            processed_stage,
-            max_block_size,
-            num_streams);
+            query_plan, updated_column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 }
 
 NamesAndTypesList ProxyStream::getVirtuals() const
@@ -362,27 +328,46 @@ void ProxyStream::processWatermarkStep(QueryPlan & query_plan, const SelectQuery
 {
     assert(streaming_func_desc && (streaming_func_desc->type != WindowType::NONE));
 
-    Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
     if (streaming_func_desc->type == WindowType::SESSION)
     {
-        size_t insert_pos = 0;
-        auto session_start_type = std::make_shared<DataTypeBool>();
-        output_header.insert(insert_pos++, {session_start_type, ProtonConsts::STREAMING_SESSION_START});
-
-        auto session_end_type = std::make_shared<DataTypeBool>();
-        output_header.insert(insert_pos++, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
+        processSessionStep(query_plan, query_info);
     }
+    else
+    {
+        Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
 
-    std::vector<size_t> substream_key_indices = keyIndecesForSubstreams(query_plan.getCurrentDataStream().header, query_info);
-    query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(
-        query_plan.getCurrentDataStream(),
-        std::move(output_header),
-        query_info.query,
-        query_info.syntax_analyzer_result,
-        streaming_func_desc,
-        proc_time,
-        std::move(substream_key_indices),
-        log));
+        std::vector<size_t> substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
+
+        query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(
+            query_plan.getCurrentDataStream(),
+            std::move(output_header),
+            query_info.query,
+            query_info.syntax_analyzer_result,
+            streaming_func_desc,
+            proc_time,
+            std::move(substream_key_positions),
+            log));
+    }
+}
+
+void ProxyStream::processSessionStep(QueryPlan & query_plan, const SelectQueryInfo & query_info) const
+{
+    assert(streaming_func_desc->type == WindowType::SESSION);
+
+    Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
+
+    /// Same FIXME as in InterpreterSelectQuery::buildStreamingProcessingQueryPlanForSessionWindow
+    size_t insert_pos = 0;
+    auto session_start_type = std::make_shared<DataTypeBool>();
+    output_header.insert(insert_pos++, {session_start_type, ProtonConsts::STREAMING_SESSION_START});
+
+    auto session_end_type = std::make_shared<DataTypeBool>();
+    output_header.insert(insert_pos++, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
+
+    std::vector<size_t> substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
+
+    query_plan.addStep(std::make_unique<Streaming::SessionStep>(
+        query_plan.getCurrentDataStream(), std::move(output_header), streaming_func_desc, substream_key_positions));
 }
 
 void ProxyStream::processWindowAssignmentStep(

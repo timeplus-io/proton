@@ -47,6 +47,16 @@ struct ChunkContext
         }
     }
 
+    ALWAYS_INLINE void setSubstreamID(Streaming::SubstreamID id_) { id = std::move(id_); }
+
+    ALWAYS_INLINE void setWatermark(Int64 watermark, Int64 watermark_lower_bound)
+    {
+        assert(watermark);
+        flags |= WATERMARK_FLAG;
+        ts_1 = watermark;
+        ts_2 = watermark_lower_bound;
+    }
+
     ALWAYS_INLINE Streaming::WatermarkBound getWatermark() const
     {
         assert(hasWatermark());
@@ -196,6 +206,16 @@ public:
     void setChunkContext(ChunkContextPtr chunk_ctx_) { chunk_ctx = std::move(chunk_ctx_); }
 
     ChunkContextPtr getChunkContext() const { return chunk_ctx; }
+
+    ChunkContextPtr getOrCreateChunkContext()
+    {
+        if (chunk_ctx)
+            return chunk_ctx;
+
+        setChunkContext(std::make_shared<ChunkContext>());
+
+        return chunk_ctx;
+    }
 
     CheckpointContextPtr getCheckpointContext() const
     {

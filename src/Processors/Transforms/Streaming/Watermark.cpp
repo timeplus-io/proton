@@ -1,6 +1,5 @@
 #include "Watermark.h"
 
-#include <Core/Block.h>
 #include <Functions/Streaming/FunctionsStreamingWindow.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -8,6 +7,7 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/Streaming/ASTEmitQuery.h>
+#include <Processors/Chunk.h>
 #include <Storages/SelectQueryInfo.h>
 #include <base/ClockUtils.h>
 #include <base/logger_useful.h>
@@ -99,8 +99,6 @@ WatermarkSettings::WatermarkSettings(ASTPtr query, TreeRewriterResultPtr syntax_
     {
         if (window_desc)
         {
-            func_name = window_desc->func_ast->as<ASTFunction>()->name;
-
             if (mode == WatermarkSettings::EmitMode::NONE)
                 mode = WatermarkSettings::EmitMode::WATERMARK;
         }
@@ -114,7 +112,6 @@ WatermarkSettings::WatermarkSettings(ASTPtr query, TreeRewriterResultPtr syntax_
 
 void WatermarkSettings::initWatermarkForGlobalAggr()
 {
-    func_name = "GlobalAggr";
     global_aggr = true;
 
     if (mode == EmitMode::NONE)
@@ -132,7 +129,7 @@ void Watermark::preProcess()
         watermark_ts = UTCSeconds::now();
 }
 
-void Watermark::process(Block & block)
+void Watermark::process(Chunk & chunk)
 {
     if (watermark_settings.mode == WatermarkSettings::EmitMode::TAIL)
         return;
@@ -142,19 +139,19 @@ void Watermark::process(Block & block)
         /// global aggr emitted by using wall clock time of the current server
         last_event_seen_ts = UTCSeconds::now();
         max_event_ts = UTCSeconds::now();
-        assignWatermark(block);
+        assignWatermark(chunk);
         return;
     }
 
-    if (block.rows())
-        doProcess(block);
+    if (chunk.hasRows())
+        doProcess(chunk);
 
     /// If after filtering, block is empty, we handle idleness
-    if (!block.rows())
-        handleIdleness(block);
+    if (!chunk.hasRows())
+        handleIdleness(chunk);
 }
 
-void Watermark::assignWatermark(Block & block)
+void Watermark::assignWatermark(Chunk & chunk)
 {
     switch (watermark_settings.mode)
     {
@@ -170,11 +167,13 @@ void Watermark::assignWatermark(Block & block)
                 watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, DateLUT::instance());
             if (now >= next_watermark_ts)
             {
-                block.info.watermark_lower_bound = last_projected_watermark_ts;
-                block.info.watermark = max_event_ts;
+                auto chunk_ctx = chunk.getOrCreateChunkContext();
+                chunk_ctx->setWatermark(max_event_ts, last_projected_watermark_ts);
+                chunk.setChunkContext(std::move(chunk_ctx));
+
                 last_projected_watermark_ts = max_event_ts;
                 watermark_ts = now;
-                LOG_DEBUG(log, "Periodic time={}, rows={}", block.info.watermark, block.rows());
+                LOG_DEBUG(log, "Periodic time={}, rows={}", max_event_ts, chunk.getNumRows());
             }
             break;
         }
@@ -182,16 +181,16 @@ void Watermark::assignWatermark(Block & block)
             throw Exception("DELAY emit doesn't implement yet", ErrorCodes::NOT_IMPLEMENTED);
         }
         case WatermarkSettings::EmitMode::WATERMARK:
-            processWatermark(block);
+            processWatermark(chunk);
             break;
 
         case WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY:
-            processWatermarkWithDelay(block);
+            processWatermarkWithDelay(chunk);
             break;
     }
 }
 
-void Watermark::handleIdleness(Block & block)
+void Watermark::handleIdleness(Chunk & chunk)
 {
     switch (watermark_settings.mode)
     {
@@ -209,10 +208,10 @@ void Watermark::handleIdleness(Block & block)
             throw Exception("DELAY emit doesn't implement yet", ErrorCodes::NOT_IMPLEMENTED);
         }
         case WatermarkSettings::EmitMode::WATERMARK:
-            handleIdlenessWatermark(block);
+            handleIdlenessWatermark(chunk);
             break;
         case WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY:
-            handleIdlenessWatermarkWithDelay(block);
+            handleIdlenessWatermarkWithDelay(chunk);
             break;
     }
 }

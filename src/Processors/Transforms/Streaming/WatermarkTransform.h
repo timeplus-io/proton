@@ -21,7 +21,7 @@ public:
         TreeRewriterResultPtr syntax_analyzer_result,
         FunctionDescriptionPtr desc,
         bool proc_time,
-        const Block & header,
+        const Block & input_header,
         const Block & output_header,
         Poco::Logger * log);
 
@@ -37,6 +37,7 @@ private:
 
 private:
     void initWatermark(
+        const Block & input_header,
         ASTPtr query,
         TreeRewriterResultPtr syntax_analyzer_result,
         FunctionDescriptionPtr desc,

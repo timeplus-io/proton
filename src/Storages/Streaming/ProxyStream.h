@@ -90,6 +90,8 @@ private:
 
     void processWatermarkStep(QueryPlan & query_plan, const SelectQueryInfo & query_info, bool proc_time) const;
 
+    void processSessionStep(QueryPlan & query_plan, const SelectQueryInfo & query_info) const;
+
     void processWindowAssignmentStep(
         QueryPlan & query_plan, const Names & required_columns_after_streaming_window, const StorageSnapshotPtr & storage_snapshot) const;
 

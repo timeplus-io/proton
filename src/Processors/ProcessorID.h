@@ -93,6 +93,8 @@ enum class ProcessorID : UInt32
     NullSinkToStorageID = 81,
     PartitionedStorageFileSinkID = 82,
     ReplacingWindowColumnTransformID = 83,
+    SessionTransformID = 84,
+    SessionTransformWithSubstreamID = 85,
 
     /// Aggregating transform
     AggregatingInOrderTransformID = 1'000,

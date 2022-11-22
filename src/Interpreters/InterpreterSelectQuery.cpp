@@ -94,6 +94,7 @@
 #include <Processors/QueryPlan/Streaming/AggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/JoinStep.h>
 #include <Processors/QueryPlan/Streaming/ProcessTimeFilterStep.h>
+#include <Processors/QueryPlan/Streaming/SessionStep.h>
 #include <Processors/QueryPlan/Streaming/SortingStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
@@ -272,13 +273,13 @@ namespace
             select.setExpression(ASTSelectQuery::Expression::WHERE, where_ast);
     }
 
-    std::vector<size_t> keyIndecesForSubstreams(const Block & header, const SelectQueryInfo & query_info)
+    std::vector<size_t> keyPositionsForSubstreams(const Block & header, const SelectQueryInfo & query_info)
     {
-        std::vector<size_t> substream_key_indices;
-        substream_key_indices.reserve(query_info.substream_keys.size());
+        std::vector<size_t> substream_key_positions;
+        substream_key_positions.reserve(query_info.substream_keys.size());
         for (const auto & key : query_info.substream_keys)
-            substream_key_indices.emplace_back(header.getPositionByName(key));
-        return substream_key_indices;
+            substream_key_positions.emplace_back(header.getPositionByName(key));
+        return substream_key_positions;
     }
 }
 /// proton: ends.
@@ -3144,14 +3145,14 @@ void InterpreterSelectQuery::executeStreamingAggregation(
                 descr.arguments.push_back(header_before_aggregation.getPositionByName(name));
 
     /// Prepare substream key indices for only tumble/hop
-    std::vector<size_t> substream_key_indices;
+    std::vector<size_t> substream_key_positions;
     if (query_info.has_aggregate_over)
     {
         if (streaming_group_by == Streaming::Aggregator::Params::GroupBy::WINDOW_START
             || streaming_group_by == Streaming::Aggregator::Params::GroupBy::WINDOW_END
             || streaming_group_by == Streaming::Aggregator::Params::GroupBy::SESSION)
         {
-            substream_key_indices = keyIndecesForSubstreams(header_before_aggregation, query_info);
+            substream_key_positions = keyPositionsForSubstreams(header_before_aggregation, query_info);
         }
     }
 
@@ -3183,7 +3184,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         session_start_pos,
         session_end_pos,
         delta_col_pos,
-        std::move(substream_key_indices),
+        std::move(substream_key_positions),
         getStreamingFunctionDescription());
 
     auto merge_threads = max_streams;
@@ -3409,23 +3410,21 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
 
 void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const
 {
-    if (shouldApplyWatermark())
+    if (!shouldApplyWatermark())
+        return;
+
+    if (windowType() == Streaming::WindowType::SESSION)
+    {
+        buildStreamingProcessingQueryPlanForSessionWindow(query_plan);
+    }
+    else
     {
         Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
-        if (windowType() == Streaming::WindowType::SESSION)
-        {
-            size_t insert_pos = 0;
-            auto session_start_type = std::make_shared<DataTypeBool>();
-            output_header.insert(insert_pos++, {session_start_type, ProtonConsts::STREAMING_SESSION_START});
-
-            auto session_end_type = std::make_shared<DataTypeBool>();
-            output_header.insert(insert_pos++, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
-        }
 
         /// Prepare substream key indices for only tumble/hop
-        std::vector<size_t> substream_key_indices;
+        std::vector<size_t> substream_key_positions;
         if (!hasGlobalAggregation())
-            substream_key_indices = keyIndecesForSubstreams(query_plan.getCurrentDataStream().header, query_info);
+            substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
 
         query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(
             query_plan.getCurrentDataStream(),
@@ -3434,9 +3433,39 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
             query_info.syntax_analyzer_result,
             getStreamingFunctionDescription(),
             false,
-            std::move(substream_key_indices),
+            std::move(substream_key_positions),
             log));
     }
+}
+
+void InterpreterSelectQuery::buildStreamingProcessingQueryPlanForSessionWindow(QueryPlan & query_plan) const
+{
+    assert(windowType() == Streaming::WindowType::SESSION);
+
+    /// FIXME, 1) it is a bad idea to insert the internal columns at the beginning of the output block
+    /// 2) For session window without start / end exprs, we can skip this step
+
+    Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
+
+    size_t insert_pos = 0;
+    auto session_start_type = std::make_shared<DataTypeBool>();
+    output_header.insert(insert_pos++, {session_start_type, ProtonConsts::STREAMING_SESSION_START});
+
+    auto session_end_type = std::make_shared<DataTypeBool>();
+    output_header.insert(insert_pos++, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
+
+    /// Prepare substream key indices for only tumble/hop
+    std::vector<size_t> substream_key_positions;
+    if (!hasGlobalAggregation())
+        substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
+
+
+    query_plan.addStep(std::make_unique<Streaming::SessionStep>(
+        query_plan.getCurrentDataStream(),
+        std::move(output_header),
+        getStreamingFunctionDescription(),
+        substream_key_positions
+        ));
 }
 
 void InterpreterSelectQuery::checkEmitVersion()

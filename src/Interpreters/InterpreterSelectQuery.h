@@ -176,6 +176,7 @@ private:
     bool shouldApplyWatermark() const;
     bool shouldKeepState() const;
     void buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const;
+    void buildStreamingProcessingQueryPlanForSessionWindow(QueryPlan & query_plan) const;
     void checkEmitVersion();
     void handleSnapshotSeekTo();
     void handleStreamingWindowOverSubstream();

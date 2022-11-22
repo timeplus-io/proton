@@ -9,7 +9,7 @@ namespace Streaming
 class TumbleWatermark : public HopTumbleBaseWatermark
 {
 public:
-    explicit TumbleWatermark(WatermarkSettings && watermark_settings_, bool proc_time_, Poco::Logger * log);
+    explicit TumbleWatermark(WatermarkSettings && watermark_settings_, size_t time_col_position_, bool proc_time_, Poco::Logger * log_);
     TumbleWatermark(const TumbleWatermark &) = default;
     ~TumbleWatermark() override = default;
 
