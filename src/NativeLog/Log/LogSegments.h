@@ -57,6 +57,8 @@ public:
 
     std::vector<int64_t> baseSequences() const;
 
+    std::pair<int64_t, int64_t> sequenceRange() const;
+
     /// @return a list of segments beginning with the segment that includes `from`
     ///         and ending with the segment that includes up to `to - 1` or the end of the log
     ///         if to > end of the log

@@ -144,6 +144,20 @@ std::vector<int64_t> LogSegments::baseSequences() const
     return base_sns;
 }
 
+std::pair<int64_t, int64_t> LogSegments::sequenceRange() const
+{
+    std::pair<int64_t, int64_t> sn_range{-1, -1};
+
+    std::shared_lock guard{mlock};
+    if (segments.empty())
+        return sn_range;
+
+    sn_range.first = segments.begin()->second->baseSequence();
+    sn_range.second = segments.rbegin()->second->baseSequence();
+
+    return sn_range;
+}
+
 /// @return a list of segments beginning with the segment that includes `from`
 ///         and ending with the segment that includes up to `to - 1` or the end of the log
 ///         if to > end of the log

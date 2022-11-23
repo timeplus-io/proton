@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Interpreters/Streaming/Aggregator.h>
-/// #include <Processors/IAccumulatingTransform.h>
 #include <Core/Streaming/WatermarkInfo.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Processors/IProcessor.h>
@@ -112,7 +111,6 @@ public:
 
     Status prepare() override;
     void work() override;
-    Processors expandPipeline() override;
 
     void checkpoint(CheckpointContextPtr ckpt_ctx) override;
     void recover(CheckpointContextPtr ckpt_ctx) override;
@@ -123,7 +121,6 @@ private:
     virtual void finalize(ChunkContextPtr) { }
 
     inline IProcessor::Status preparePushToOutput();
-    void initGenerate();
     void checkpointAlignment(Chunk & chunk);
 
 protected:
@@ -162,9 +159,7 @@ protected:
     UInt64 src_rows = 0;
     UInt64 src_bytes = 0;
 
-    bool is_generate_initialized = false;
     bool is_consume_finished = false;
-    bool is_pipeline_created = false;
 
     Chunk current_chunk;
     bool read_current_chunk = false;

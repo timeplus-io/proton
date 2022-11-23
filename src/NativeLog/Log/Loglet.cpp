@@ -10,11 +10,11 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    const extern int SEQUENCE_OUT_OF_RANGE;
-    const extern int BAD_FILE_NAME;
-    const extern int FILE_CANNOT_READ;
-    const extern int INVALID_STATE;
-    const extern int LOG_DIR_UNAVAILABLE;
+const extern int SEQUENCE_OUT_OF_RANGE;
+const extern int BAD_FILE_NAME;
+const extern int FILE_CANNOT_READ;
+const extern int INVALID_STATE;
+const extern int LOG_DIR_UNAVAILABLE;
 }
 }
 
@@ -67,7 +67,15 @@ Loglet::fetch(int64_t sn, uint64_t max_size, const LogSequenceMetadata & max_sn_
 
     auto segment = segments->floorSegment(sn);
     if (!segment)
-        throw DB::Exception(DB::ErrorCodes::SEQUENCE_OUT_OF_RANGE, "Data at sequence {} doesn't exist or gets pruned", sn);
+    {
+        auto sn_range = segments->sequenceRange();
+        throw DB::Exception(
+            DB::ErrorCodes::SEQUENCE_OUT_OF_RANGE,
+            "Data at sequence {} doesn't exist or gets pruned, valid sequence range=({}, {})",
+            sn,
+            sn_range.first,
+            sn_range.second);
+    }
 
     /// Do the read on the segment with a base sn less than the target sn
     /// bug if that segment doesn't contain any messages with an sn greater than that
@@ -218,7 +226,7 @@ void Loglet::close()
 void Loglet::updateConfig(const std::map<String, int32_t> & flush_settings, const std::map<String, int64_t> & retention_settings)
 {
     /// flush settings
-    for(const auto & [k, v] : flush_settings)
+    for (const auto & [k, v] : flush_settings)
     {
         if (k == "flush_messages")
             log_config->flush_interval_records = v;
@@ -227,7 +235,7 @@ void Loglet::updateConfig(const std::map<String, int32_t> & flush_settings, cons
     }
 
     /// retention settings
-    for(const auto & [k, v] : retention_settings)
+    for (const auto & [k, v] : retention_settings)
     {
         if (k == "retention_bytes")
             log_config->retention_size = v;
