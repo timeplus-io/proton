@@ -14,7 +14,7 @@ extern const int RECOVER_CHECKPOINT_FAILED;
 namespace Streaming
 {
 AggregatingTransform::AggregatingTransform(Block header, AggregatingTransformParamsPtr params_, const String & log_name, ProcessorID pid_)
-    : AggregatingTransform(std::move(header), std::move(params_), std::make_unique<ManyAggregatedData>(1), 0, 1, 1, log_name, pid_)
+    : AggregatingTransform(std::move(header), std::move(params_), std::make_shared<ManyAggregatedData>(1), 0, 1, 1, log_name, pid_)
 {
 }
 

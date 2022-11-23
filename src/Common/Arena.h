@@ -462,6 +462,7 @@ public:
         Stats stats;
 
         /// `head` points to the largest timestamp
+        /// Walk through the chunk list to find the first chunk which has timestamp less than argument `timestamp`
         auto * prev_p = head;
         auto * p = head;
         while (p)
@@ -475,8 +476,10 @@ public:
                 break;
         }
 
-        if (p)
+        /// If p is head, only recycle head when its size reaches 2 pages
+        if (p && ((p != head) || (p == head && p->size() > page_size * 2)))
         {
+            /// Free all chunks starting from the first chunk which has timestamp less than argument `timestamp`
             auto * pp = p;
             while (pp)
             {
@@ -486,7 +489,12 @@ public:
             }
 
             prev_p->prev = nullptr;
+
+            if (p == head)
+                head = new MemoryChunk(page_size, nullptr, 0, 0);
         }
+
+        assert(head);
 
         stats.head_chunk_size = head->size();
         stats.bytes = size_in_bytes;

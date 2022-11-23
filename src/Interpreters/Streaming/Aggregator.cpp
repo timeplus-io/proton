@@ -3222,7 +3222,7 @@ void Aggregator::checkpoint(AggregatedDataVariants & data_variants, WriteBuffer 
     /// FIXME, set a good max_threads
     auto blocks = convertToBlocks(data_variants, false, ConvertAction::CHECKPOINT, 8);
 
-    assert(!blocks.empty());
+    /// assert(!blocks.empty());
 
     UInt32 num_blocks = blocks.size();
     writeIntBinary(num_blocks, wb);
@@ -3273,6 +3273,9 @@ void Aggregator::recoverStates(AggregatedDataVariants & data_variants, BlocksLis
         data_variants.key_sizes = key_sizes;
         data_variants.init(method_chosen);
     }
+
+    if (blocks.empty())
+        return;
 
     if (data_variants.type == AggregatedDataVariants::Type::without_key)
     {

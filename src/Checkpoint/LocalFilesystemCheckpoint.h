@@ -5,7 +5,8 @@ namespace DB
 /// Checkpoint filesystem layout
 /// /var/lib/proton/checkpoint <-- base_dir
 ///     |-- /{query_id}/
-///     |        |-- meta.ckpt
+///     |        |-- query.ckpt
+///     |        |-- dag.ckpt
 ///     |        |-- <epoch1>
 ///     |        |      |-- committed.ckpt
 ///     |        |      |-- <processor-1.ckpt>
@@ -21,7 +22,7 @@ namespace DB
 ///     |               |-- ...
 ///     |-- /{query_id}/
 ///     | ...
-//// For a specific query, when epic progress, we can delete checkpoints in old epics
+//// For a specific query, when epoch progress, we can delete checkpoints in old epochs
 class LocalFileSystemCheckpoint final : public CheckpointStorage
 {
 public:
