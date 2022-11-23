@@ -424,6 +424,7 @@ def query_run_exec(statement_2_run, config):
     )
     query_results = {}
     query_id = str(statement_2_run.get("query_id"))
+    query_id_type = statement_2_run.get("query_id_type")
     query_type = statement_2_run.get("query_type")
     query = statement_2_run.get("query")
     query_client = statement_2_run.get("client")
@@ -488,6 +489,7 @@ def query_run_exec(statement_2_run, config):
             "query_end": query_end_time_str,
             "query_result_column_types": query_result_column_types,
             "query_result": query_result_str,
+            "query_id_type": query_id_type,
         }
     except (BaseException) as error:
         logger.debug(f"exception, error = {error}")
@@ -502,9 +504,10 @@ def query_run_exec(statement_2_run, config):
             "query_start": query_start_time_str,
             "query_end": query_end_time_str,
             "query_result": f"error_code:{error.code}",
+            "query_id_type": query_id_type,
         }
         logger.debug(
-            "db exception, none-cancel query_results: {}".format(query_results)
+            "query_run_exec, db exception, none-cancel query_results: {}".format(query_results)
         )
     finally:
         logger.debug(f"query_results = {query_results}")
@@ -518,6 +521,7 @@ def query_run_rest(rest_setting, statement_2_run):
     )
     query_results = {}
     query_id = str(statement_2_run.get("query_id"))
+    query_id_type = statement_2_run.get("query_id_type")
     query_type = statement_2_run.get("query_type")
     query = statement_2_run.get("query")
     depends_on_stream = statement_2_run.get("depends_on_stream")
@@ -616,6 +620,7 @@ def query_run_rest(rest_setting, statement_2_run):
             "query_end": query_end_time_str,
             "query_result_column_types": query_result_column_types,
             "query_result": query_result,
+            "query_id_type": query_id_type,
         }
 
     except (BaseException) as error:
@@ -631,9 +636,10 @@ def query_run_rest(rest_setting, statement_2_run):
             "query_start": query_start_time_str,
             "query_end": query_end_time_str,
             "query_result": f"error_code:{error.code}",
+            "query_id_type": query_id_type,
         }
         logger.debug(
-            "db exception, none-cancel query_results: {}".format(query_results)
+            "query_run_rest, db exception, none-cancel query_results: {}".format(query_results)
         )
     finally:
         logger.debug(f"query_results = {query_results}")
@@ -985,6 +991,7 @@ def query_run_py(
         table_ddl_url = rest_setting.get("table_ddl_url")
         query = statement_2_run.get("query")
         query_id = str(statement_2_run.get("query_id"))
+        query_id_type = statement_2_run.get("query_id_type")
         query_type = statement_2_run.get("query_type")
         iter_wait = statement_2_run.get(
             "iter_wait"
@@ -1275,6 +1282,7 @@ def query_run_py(
             "query_end": query_end_time_str,
             "query_result_column_types": query_result_column_types,
             "query_result": query_result_list,
+            "query_id_type": query_id_type,
         }
         logger.info(f"query_run_py: query_results of query={query} = {query_results}")
 
@@ -1299,7 +1307,7 @@ def query_run_py(
             pyclient.disconnect()
 
     except (BaseException, errors.ServerException) as error:
-        logger.debug(f"exception, query_id={query_id}, query={query}, error = {error}")
+        logger.debug(f"query_run_py, exception, query_id={query_id}, query={query}, error = {error}")
         if isinstance(error, errors.ServerException):
             if (
                 error.code == 394
@@ -1315,6 +1323,7 @@ def query_run_py(
                     "query_end": query_end_time_str,
                     "query_result_column_types": query_result_column_types,
                     "query_result": query_result_list,
+                    "query_id_type": query_id_type,
                 }
                 logger.debug(
                     "query_run_py: query_results: {} collected from query_result_iter at {}".format(
@@ -1338,6 +1347,7 @@ def query_run_py(
                     "query_start": query_start_time_str,
                     "query_end": query_end_time_str,
                     "query_result": f"error_code:{error.code}",
+                    "query_id_type": query_id_type,
                 }
                 logger.debug(
                     "query_run_py: db exception, none-cancel query_results: {}".format(
@@ -1379,6 +1389,7 @@ def query_run_py(
                 "query_start": query_start_time_str,
                 "query_end": query_end_time_str,
                 "query_result": f"error_code:10000, error: {error}",
+                "query_id_type": query_id_type,
             }
             # if it's not db excelption, send 10000 as error_code
             message_2_send = json.dumps(query_results)
@@ -1768,7 +1779,7 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                     "query_state": "exception",
                     "query_start": query_start_time_str,
                     "query_end": query_end_time_str,
-                    "query_result": "error_code:10000",
+                    "query_result": f"error_code:10000, error: {error}",
                 }  # if it's not db excelption, send 10000 as error_code
 
             message_2_send = json.dumps(query_results)
@@ -1848,6 +1859,8 @@ def query_walk_through(statements, query_conn):
             #    1, 10000
             # )  # unique query id, if no query_id specified in tests.json
             statement["query_id"] = query_id
+        else:
+            statement["query_id_type"] = "designated" #mark the query_id_type, when query_result_check, only show the "designated" satement result to make the troule shooting easy
 
         if query_type == "stream" and terminate == None:
             statement[
@@ -1938,7 +1951,7 @@ def query_id_exists_py(py_client, query_id, query_exist_check_sql=None):
             logger.debug(f"query_id_list is None or not a list")
             return False
     except (BaseException) as error:
-        logger.debug(f"exception, error = {error}")
+        logger.debug(f"query_id_exists_py, exception, Error = {error}")
     return False
 
 
@@ -1971,7 +1984,7 @@ def query_id_exists_rest(query_url, query_id, query_body=None):
                     return True
             return False
     except (BaseException) as error:
-        logger.info(f"exception, error = {error}")
+        logger.info(f"query_id_exists_rest, exception, Error = {error}")
         return False
 
 
@@ -2394,8 +2407,9 @@ def create_table_rest(config, table_schema, retry=3):
     table_ddl_url = rest_setting.get("table_ddl_url")
     proton_create_stream_shards = config.get("proton_create_stream_shards")
     proton_create_stream_replicas = config.get("proton_create_stream_replicas")
+    exception_retry = retry #set the retry times of exception catching, if continuous exception hits exception_retry, raise exceiption and let env_setup() to wrap and notify test_suite_run()
 
-    while retry > 0:
+    while retry > 0 and exception_retry > 0:
         res = None
         try:
             logger.debug(f"create_table_rest starts...")
@@ -2454,30 +2468,41 @@ def create_table_rest(config, table_schema, retry=3):
                 continue
         except (BaseException) as error:
             logging.debug(f"exception: Error = {error}")
-            retry -= 1
-            if retry <= 0:
-                return res
-            time.sleep(1)             
+            exception_retry -= 1
+            if exception_retry <= 0:
+                raise Exception(f"create_table_rest, rest api exception: {error}")
+            time.sleep(1)            
 
+
+    exception_retry = retry #reset exception_retry for table_exit check
     create_table_time_out = 1000  # set how many times wait and list table to check if table creation completed.
-    while create_table_time_out > 0:
-        if table_exist(table_ddl_url, table_name):
-            logger.info(f"table {table_name} is created successfully.")
-            create_complete_time = datetime.datetime.now()
-            time_spent = create_complete_time - create_start_time
-            time_spent_ms = time_spent.total_seconds() * 1000
-            # time_spent_ms = (1000-create_table_time_out) * 10
-            logger.info(f"{time_spent_ms} ms spent on table {table_name} creating")
-            global TABLE_CREATE_RECORDS
-            TABLE_CREATE_RECORDS.append(
-                {"table_name": table_name, "time_spent": time_spent_ms}
-            )
-            break
-        else:
-            time.sleep(0.01)
-            # res = requests.post(table_ddl_url, data=json.dumps(table_schema)) #currently the health check rest is not accurate, retry here and remove later
-        create_table_time_out -= 1
-    # time.sleep(1) # wait the table creation completed
+    
+    while create_table_time_out > 0 and exception_retry >0:
+        try:
+            if table_exist(table_ddl_url, table_name):
+                logger.info(f"table {table_name} is created successfully.")
+                create_complete_time = datetime.datetime.now()
+                time_spent = create_complete_time - create_start_time
+                time_spent_ms = time_spent.total_seconds() * 1000
+                # time_spent_ms = (1000-create_table_time_out) * 10
+                logger.info(f"{time_spent_ms} ms spent on table {table_name} creating")
+                global TABLE_CREATE_RECORDS
+                TABLE_CREATE_RECORDS.append(
+                    {"table_name": table_name, "time_spent": time_spent_ms}
+                )
+                break
+            else:
+                time.sleep(0.01)
+                # res = requests.post(table_ddl_url, data=json.dumps(table_schema)) #currently the health check rest is not accurate, retry here and remove later
+            create_table_time_out -= 1
+        # time.sleep(1) # wait the table creation completed
+        except (BaseException) as error:
+            logging.debug(f"exception: Error = {error}")
+            exception_retry -= 1
+            if exception_retry <= 0:
+                raise Exception(f"create_table_rest, rest api exception: {error}")
+            time.sleep(1) 
+
     return res
 
 
@@ -2553,27 +2578,31 @@ def drop_table_if_exist_pylient(client, table_schema):
 
 
 def drop_view_if_exist_py(client, table_name):
-    if table_exist_py(client, table_name):
-        sql_2_run = f"drop view {table_name}"
-        res_drop = client.execute(sql_2_run)
-        logger.debug(f"drop view {table_name} is executed, res_drop = {res_drop}")
-        retry = 100
-        while retry < 100 and table_exist_py(client, table_name):
-            time.sleep(0.2)
-            count -= 1
+    try:
         if table_exist_py(client, table_name):
-            logger.debug(
-                f"drop view {table_name} is failed, table_exist_py({table_name}) = True"
-            )
-            return False
+            sql_2_run = f"drop view {table_name}"
+            res_drop = client.execute(sql_2_run)
+            logger.debug(f"drop view {table_name} is executed, res_drop = {res_drop}")
+            retry = 100
+            while retry < 100 and table_exist_py(client, table_name):
+                time.sleep(0.2)
+                count -= 1
+            if table_exist_py(client, table_name):
+                logger.debug(
+                    f"drop view {table_name} is failed, table_exist_py({table_name}) = True"
+                )
+                return False
+            else:
+                logger.debug(
+                    f"drop view {table_name} is succesfully, table_exist_py({table_name}) = False"
+                )
+                return True
         else:
-            logger.debug(
-                f"drop view {table_name} is succesfully, table_exist_py({table_name}) = False"
-            )
-            return True
-    else:
-        logger.debug(f"view {table_name} does not exist, bypass drop")
-        return None
+            logger.debug(f"view {table_name} does not exist, bypass drop")
+            return None
+    except(BaseException) as error:
+        logger.info(f"drop_view_if_exist_py, exception, error = {error}")
+        raise Exception(f"drop_view_if_exist_py, exception, error = {error}")
 
 
 def test_suite_env_setup(client, config, test_suite_config):
@@ -2581,85 +2610,88 @@ def test_suite_env_setup(client, config, test_suite_config):
     rest_setting = config.get("rest_setting")
     proton_create_stream_shards = config.get("proton_create_stream_shards")
     proton_create_stream_replicas = config.get("proton_create_stream_replicas")
+    try:
+        if test_suite_config == None:
+            return []
+        tables_setup = []
+        table_ddl_url = rest_setting.get("table_ddl_url")
+        params = rest_setting.get("params")
+        table_schemas = test_suite_config.get("table_schemas")
+        if table_schemas == None:
+            table_schemas = []
+        for table_schema in table_schemas:
+            table_name = table_schema.get("name")
+            reset = table_schema.get("reset")
+            logger.debug(f"env_setup: table_name = {table_name}, reset = {reset}")
 
-    if test_suite_config == None:
-        return []
-    tables_setup = []
-    table_ddl_url = rest_setting.get("table_ddl_url")
-    params = rest_setting.get("params")
-    table_schemas = test_suite_config.get("table_schemas")
-    if table_schemas == None:
-        table_schemas = []
-    for table_schema in table_schemas:
-        table_name = table_schema.get("name")
-        reset = table_schema.get("reset")
-        logger.debug(f"env_setup: table_name = {table_name}, reset = {reset}")
+            table_type = table_schema.get("type")
 
-        table_type = table_schema.get("type")
+            if reset != None and reset == "False":
+                pass
+            else:
+                if table_type == "table":
+                    drop_table_res = drop_table_if_exist_rest(table_ddl_url, table_name)
+                    logger.debug(
+                        f"drop_table_if_exist_rest({table_ddl_url}, {table_name}) = {drop_table_res}"
+                    )
+                    tables_setup.append(table_name)
+                elif table_type == "view":
+                    # proton_setting = os.getenv("PROTON_SETTING", "default") #todo: get proton_setting from parameter
+                    drop_view_res = drop_view_if_exist_py(client, table_name)
+                    # drop_view_res = drop_table_if_exist_rest(table_ddl_url, table_name) #proton bug: https://github.com/timeplus-io/proton/issues/1178
+                    logger.debug(
+                        f"drop_view_if_exist_py(clieent, {table_name}) = {drop_view_res}"
+                    )
+                    tables_setup.append(table_name)
 
-        if reset != None and reset == "False":
-            pass
-        else:
-            if table_type == "table":
-                drop_table_res = drop_table_if_exist_rest(table_ddl_url, table_name)
-                logger.debug(
-                    f"drop_table_if_exist_rest({table_ddl_url}, {table_name}) = {drop_table_res}"
+        for table_schema in table_schemas:
+            table_type = table_schema.get("type")
+            table_name = table_schema.get("name")
+
+            # if table_exist_py(client, table_name):
+            if table_exist(table_ddl_url, table_name):
+                pass
+            else:
+                if table_type == "table":
+                    create_table_rest(config, table_schema)
+                elif table_type == "view":
+                    create_view_if_not_exit_py(client, table_schema)
+
+        setup = test_suite_config.get("setup")
+        logger.debug(f"setup = {setup}")
+        if setup != None:
+            setup_inputs = setup.get("inputs")
+            if setup_inputs != None:
+                logger.debug(f"input_walk_through_rest to be started.")
+                setup_input_res = input_walk_through_rest(
+                    config, setup_inputs, table_schemas
                 )
-                tables_setup.append(table_name)
-            elif table_type == "view":
-                # proton_setting = os.getenv("PROTON_SETTING", "default") #todo: get proton_setting from parameter
-                drop_view_res = drop_view_if_exist_py(client, table_name)
-                # drop_view_res = drop_table_if_exist_rest(table_ddl_url, table_name) #proton bug: https://github.com/timeplus-io/proton/issues/1178
-                logger.debug(
-                    f"drop_view_if_exist_py(clieent, {table_name}) = {drop_view_res}"
-                )
-                tables_setup.append(table_name)
+            setup_statements = setup.get(
+                "statements"
+            )  # only support table rightnow todo: optimize logic
+            if setup_statements != None:
+                for statement_2_run in setup_statements:
+                    settings = {"max_block_size": 100000}
+                    query_id = statement_2_run.get("query_id")
+                    query_id = statement_2_run.get("query_id")
+                    if query_id is None:
+                        query_id = str(uuid.uuid1())
+                        # query_id = random.randint(
+                        #    1, 10000
+                        # )  # unique query id, if no query_id specified in tests.json
+                    statement_2_run["query_id"] = query_id
+                    query_results = query_run_py(
+                        statement_2_run,
+                        settings,
+                        query_results_queue=None,
+                        config=config,
+                        pyclient=client,
+                    )
 
-    for table_schema in table_schemas:
-        table_type = table_schema.get("type")
-        table_name = table_schema.get("name")
-
-        # if table_exist_py(client, table_name):
-        if table_exist(table_ddl_url, table_name):
-            pass
-        else:
-            if table_type == "table":
-                create_table_rest(config, table_schema)
-            elif table_type == "view":
-                create_view_if_not_exit_py(client, table_schema)
-
-    setup = test_suite_config.get("setup")
-    logger.debug(f"setup = {setup}")
-    if setup != None:
-        setup_inputs = setup.get("inputs")
-        if setup_inputs != None:
-            logger.debug(f"input_walk_through_rest to be started.")
-            setup_input_res = input_walk_through_rest(
-                config, setup_inputs, table_schemas
-            )
-        setup_statements = setup.get(
-            "statements"
-        )  # only support table rightnow todo: optimize logic
-        if setup_statements != None:
-            for statement_2_run in setup_statements:
-                settings = {"max_block_size": 100000}
-                query_id = statement_2_run.get("query_id")
-                query_id = statement_2_run.get("query_id")
-                if query_id is None:
-                    query_id = str(uuid.uuid1())
-                    # query_id = random.randint(
-                    #    1, 10000
-                    # )  # unique query id, if no query_id specified in tests.json
-                statement_2_run["query_id"] = query_id
-                query_results = query_run_py(
-                    statement_2_run,
-                    settings,
-                    query_results_queue=None,
-                    config=config,
-                    pyclient=client,
-                )
-
-                logger.debug(f"query_id = {query_id}, query_run_py is called")
+                    logger.debug(f"query_id = {query_id}, query_run_py is called")
+    except (BaseException) as error:
+        logger.info(f"test_suite_env_setup exception, error = {error}") #todo: define private exception
+        raise Exception(f"test_suite_env_setup, exception: {error}")
 
     return tables_setup
 
@@ -3021,12 +3053,15 @@ def test_suite_run(
         tests_2_run = test_suite_config.get("tests_2_run")
         test_run_list = []
         test_run_id_list = []
+        test_suite_run_status = []
+        test_sets_2_run = []
         logger.debug("test_case_collect is to be started......")
         test_run_list = test_case_collect(
             test_suite, tests_2_run, test_ids_set, proton_setting
         )
 
-        test_suite_run_status = []
+        
+        
         test_run_list_len = len(test_run_list)
         client = None
         if test_run_list_len == 0:
@@ -3047,14 +3082,29 @@ def test_suite_run(
         else:
             for test in test_run_list:
                 test_id = test.get("id")
-                test_suite_run_status.append({"test_id": test_id, "status":"not_run"}) #list for test suite running status, not_run or done           
+                test_name = test.get("name")
+                steps = test.get("steps")
+                expected_results = test.get("expected_results")
+                test_suite_run_status.append({"test_id": test_id, "status":"not_run"}) #list for test suite running status, not_run or done
+                test_run_id_list.append(test_id)
+                test_sets_2_run.append(
+                    {
+                        "test_suite_name": test_suite_name,
+                        "test_id_run": 0,
+                        "test_id": test_id,
+                        "test_name": test_name,
+                        "steps": steps,
+                        "expected_results": expected_results,
+                        "statements_results": ["aborted"],                        
+                    }
+                )          
             try:
                 client = Client(host=proton_server, port=proton_server_native_port)
                 if test_suite_config != None:
                     logger.debug(f"test_suite_env_setup is to be started......")
                     tables_setup = test_suite_env_setup(
                         client, config, test_suite_config
-                    )
+                    ) #setup env for test suite running
                     logger.info(
                         f"test_suite_name = {test_suite_name}, tables_setup = {tables_setup} done."
                     )
@@ -3157,33 +3207,53 @@ def test_suite_run(
                         query_results = json.loads(message_recv)
                         statements_results.append(query_results)
 
-                    test_sets.append(
-                        {
-                            "test_suite_name": test_suite_name,
-                            "test_id_run": test_id_run,
-                            "test_id": test_id,
-                            "test_name": test_name,
-                            "steps": steps,
-                            "expected_results": expected_results,
-                            "statements_results": statements_results,
-                        }
-                    )
+                    # test_set = {
+                    #         "test_suite_name": test_suite_name,
+                    #         "test_id_run": test_id_run,
+                    #         "test_id": test_id,
+                    #         "test_name": test_name,
+                    #         "steps": steps,
+                    #         "expected_results": expected_results,
+                    #         "statements_results": statements_results,
+                    #     }
+
+                    # test_sets.append(
+                    #     test_set
+                    # )
+                    
+                    # logger.debug(f"test_set = {test_set}")
+                    for test in test_sets_2_run:
+                        test_2_run_id = test.get("test_id")
+                        if test_2_run_id == test_id:
+                            test['test_id_run'] = test_id_run
+                            test['expected_results'] = expected_results
+                            test['statements_results'] = statements_results
+
                     logger.debug(f"proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, expected_results = {expected_results}, statements_results = {statements_results}")
                     test_suite_run_status[i]['status'] = 'done'
                     
                     i += 1
                     test_id_run += 1
 
+                
                 test_suite_result_summary = {
                     "test_suite_name": test_suite_name,
                     "test_run_list_len": test_run_list_len,
-                    "test_sets": test_sets,
+                    "test_sets": test_sets_2_run,
                     "test_list": test_run_list,
                     "proton_setting": proton_setting,
                     "test_suite_run_status": test_suite_run_status,
                 }                
             except (BaseException) as error:
                 logger.info(f"exception: {error}")
+                test_suite_result_summary = {
+                    "test_suite_name": test_suite_name,
+                    "test_run_list_len": test_run_list_len,
+                    "test_sets": test_sets_2_run,
+                    "test_list": test_run_list,
+                    "proton_setting": proton_setting,
+                    "test_suite_run_status": test_suite_run_status,
+                } 
 
             finally:
                 

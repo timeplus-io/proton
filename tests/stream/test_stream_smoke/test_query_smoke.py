@@ -65,13 +65,29 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
     expected_results = test_set.get("expected_results")
     logging.info(f"\n test run: expected_results: {expected_results}")
     statements_results = test_set.get("statements_results")
-    logging.info(f"test run: statemetns_results: {statements_results}")
+    #logging.info(f"test run: statemetns_results: {statements_results}")
+
+    statements_results_designed = [] #list for the query results for designated query_id
+    for result in statements_results:
+        query_id_type = result.get("query_id_type")
+        query_result_column_types = result.get('query_result_column_types')
+
+        if query_id_type is not None:
+            statement_result = {
+                'query_id': result['query_id'], 
+                'query_result': result['query_result'],
+                'query_result_column_types': query_result_column_types,
+            }
+            statements_results_designed.append(statement_result)
+    logging.info(f"\n test run: statements_results_designated: {statements_results_designed}")
+
+
     for i in range(len(expected_results)):  # for each query_results
         expected_result = expected_results[i].get("expected_results")
         expected_result_query_id = expected_results[i].get("query_id")
         query_results_dict = None
         for statement_results in statements_results:
-
+            assert statement_results != "aborted" and isinstance(statement_results, dict), f"aborted or interruppted case"
             statement_results_query_id = statement_results.get("query_id")
             if statement_results_query_id == str(expected_result_query_id):
                 query_results_dict = statement_results
