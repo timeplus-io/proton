@@ -69,6 +69,7 @@ public:
     /// proton: starts.
     bool is_materialized_view{false};
     bool is_virtual{false};
+    bool is_random{false};
     /// proton: ends.
     bool replace_view{false}; /// CREATE OR REPLACE VIEW
 

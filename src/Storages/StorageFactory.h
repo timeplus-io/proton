@@ -46,6 +46,7 @@ public:
         bool attach;
         /// proton: starts. 'is_virtual' is true when it is a virtual materialized view.
         bool is_virtual;
+        bool is_random;
         /// proton: ends
         bool has_force_restore_data_flag;
         const String & comment;

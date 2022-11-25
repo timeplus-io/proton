@@ -86,6 +86,10 @@ StoragePtr StorageFactory::get(
 
         name = "Dictionary";
     }
+    else if (query.is_random)
+    {
+        name = "Random";
+    }
     else
     {
         /// Check for some special types, that are not allowed to be stored in tables. Example: NULL data type.
@@ -194,6 +198,7 @@ StoragePtr StorageFactory::get(
         .attach = query.attach,
         /// proton: starts
         .is_virtual = query.is_virtual,
+        .is_random = query.is_random,
         /// proton: ends
         .has_force_restore_data_flag = has_force_restore_data_flag,
         .comment = comment};

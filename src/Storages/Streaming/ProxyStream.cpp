@@ -16,6 +16,9 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageView.h>
 #include <Storages/Streaming/StorageMaterializedView.h>
+#include <Storages/Streaming/StorageRandom.h>
+#include <Common/ProtonCommon.h>
+
 #include <base/logger_useful.h>
 #include <Common/ProtonCommon.h>
 
@@ -170,6 +173,16 @@ void ProxyStream::read(
     else if (auto * external_stream = storage->as<StorageExternalStream>())
         return external_stream->read(
             query_plan, updated_column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+    else if (auto * random_stream = storage->as<StorageRandom>())
+        return random_stream->read(
+            query_plan,
+            updated_column_names,
+            storage_snapshot,
+            query_info,
+            context_,
+            processed_stage,
+            max_block_size,
+            num_streams);
     else if (nested_proxy_storage)
         return nested_proxy_storage->read(
             query_plan, updated_column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);

@@ -453,6 +453,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     /// proton: starts
     ParserKeyword s_external("EXTERNAL");
     ParserKeyword s_stream("STREAM");
+    ParserKeyword s_random("RANDOM");
     /// proton: ends
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
     ParserCompoundIdentifier table_name_p(true, true);
@@ -486,6 +487,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     bool is_temporary = false;
     /// proton: starts
     bool is_external = false;
+    bool is_random = false;
     /// proton: ends
 
     if (s_create.ignore(pos, expected))
@@ -507,6 +509,10 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
     if (s_external.ignore(pos, expected))
         is_external = true;
+    /// proton: starts
+    else if (s_random.ignore(pos, expected))
+        is_random = true;
+    /// proton: ends
 
     if (!s_stream.ignore(pos, expected))
         return false;
@@ -636,6 +642,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
     /// proton: starts
     query->is_external = is_external;
+    query->is_random = is_random;
     /// proton: ends
 
     query->database = table_id->getDatabase();

@@ -22,6 +22,7 @@ void registerStorageView(StorageFactory & factory);
 void registerStorageStream(StorageFactory & factory);
 void registerStorageMaterializedView(StorageFactory & factory);
 void registerStorageExternalStream(StorageFactory & factory);
+void registerStorageRandom(StorageFactory & factory);
 /// proton: ends.
 void registerStorageGenerateRandom(StorageFactory & factory);
 void registerStorageExecutable(StorageFactory & factory);
@@ -60,6 +61,7 @@ void registerStorages()
     registerStorageStream(factory);
     registerStorageMaterializedView(factory);
     registerStorageExternalStream(factory);
+    registerStorageRandom(factory);
     /// proton: ends.
     registerStorageGenerateRandom(factory);
     registerStorageExecutable(factory);

@@ -220,6 +220,6 @@ std::pair<bool, std::vector<int64_t>> parseSeekTo(const String & seek_to, Int32 
 bool supportStreamingQuery(const StoragePtr & storage)
 {
     const auto & name = storage->getName();
-    return (name == "ProxyStream" || name == "Stream" || name == "View" || name == "MaterializedView" || name == "ExternalStream");
+    return (name == "ProxyStream" || name == "Stream" || name == "View" || name == "MaterializedView" || name == "ExternalStream" || name == "Random");
 }
 }

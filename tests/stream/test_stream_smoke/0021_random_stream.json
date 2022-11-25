@@ -1,0 +1,48 @@
+{
+    "test_suite_name": "random_stream",
+    "tag": "smoke",
+  
+    "test_suite_config":{
+      "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
+    },
+    "comments": "Tests covering random stream.",
+    "tests": [
+        {
+            "id": 0,
+            "tags": ["create random"],
+            "name": "#1410",
+            "description": "create random stream with default generating function, BUG :for query like with cte as (select * from create_random limit 1000) select count(*) from cte where id <4it produces no output because the lower query ends when reaches limit while upper query hasnt emitted yet;",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int default rand()%4)"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"with cte as (select * from create_random ) select max(id) from cte where id<4 limit 1 settings max_threads=1"},
+                  {"client":"python", "query_type": "table", "query_id":"2201", "wait":2, "query":"with cte as (select id from tumble(create_random,2s) group by id,window_start limit 10) select max(id) from cte limit 1 settings max_threads=1"},
+                  {"client":"python", "query_type": "table", "query_id":"2202", "wait":2, "query":"select count(distinct id) from create_random limit 1 settings max_threads=1"},
+                  {"client":"python", "query_type": "table", "query_id":"2203", "wait":2, "query":"select count(distinct id) from tumble(create_random,2s) group by window_start limit 1 settings max_threads=1"},
+                  {"client":"python", "query_type": "table", "query_id":"2204", "wait":2, "query":"with cte as (select * from table(create_random) limit 1000) select count(*) from cte where id<4"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"2200", "expected_results":[
+                ["3"]
+              ]},
+              {"query_id":"2201", "expected_results":[
+                ["3"]
+              ]},
+              {"query_id":"2202", "expected_results":[
+                ["4"]
+              ]},
+              {"query_id":"2203", "expected_results":[
+                ["4"]
+              ]},
+              {"query_id":"2204", "expected_results":[
+                ["1000"]
+              ]}
+            ]
+          }
+    
+    ]
+  }

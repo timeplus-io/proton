@@ -870,7 +870,7 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
 {
     auto ctx = getContext();
 
-    if (create.isView() || create.is_dictionary || create.is_external)
+    if (create.isView() || create.is_dictionary || create.is_external || create.is_random )
         return false;
 
     if (!create.storage || !create.storage->engine)
@@ -1053,6 +1053,9 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         return {};
 
     handleExternalStreamCreation(create);
+
+    if (create.is_random)
+        Streaming::checkAndPrepareColumns(create);
     /// proton: end
 
     // If this is a stub ATTACH query, read the query definition from the database

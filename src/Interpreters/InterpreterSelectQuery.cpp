@@ -105,6 +105,7 @@
 #include <Storages/Streaming/StorageStream.h>
 #include <Storages/Streaming/storageUtil.h>
 #include <Common/ProtonCommon.h>
+#include <Storages/Streaming/StorageRandom.h>
 /// proton: ends
 
 namespace DB
@@ -3534,6 +3535,8 @@ void InterpreterSelectQuery::analyzeStreamingMode()
         else if (storage->as<StorageMaterializedView>())
             streaming = true;
         else if (storage->as<StorageExternalStream>())
+            streaming = true;
+        else if (storage->as<StorageRandom>())
             streaming = true;
     }
     else if (interpreter_subquery)

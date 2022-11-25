@@ -276,6 +276,8 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
             what = "VIEW";
         else if (is_materialized_view)
             what = "MATERIALIZED VIEW";
+        else if (is_random)
+            what = "RANDOM STREAM";
         /// proton: ends.
 
         settings.ostr

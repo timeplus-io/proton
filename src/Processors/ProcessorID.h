@@ -217,6 +217,9 @@ enum class ProcessorID : UInt32
     TablesBlockSourceID = 10'042,
     ZerosSourceID = 10'043,
     StorageS3SourceID = 10'044,
+    //proton: starts
+    GenerateRandomSourceID = 10'045,
+    //proton: ends
 
     /// Sink Processors
     EmptySinkID = 20'000,
@@ -806,6 +809,9 @@ inline ProcessorID toProcessID(UInt32 v)
             break;
         case 10'044:
             pid = ProcessorID::StorageS3SourceID;
+            break;
+        case 10'045:
+            pid = ProcessorID::GenerateRandomSourceID;
             break;
 
         /// Sink Processors

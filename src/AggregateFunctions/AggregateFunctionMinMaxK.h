@@ -14,7 +14,7 @@
 
 #include <any>
 
-/// min_k/max_k(k)(compare_column(s) [,context_1, context_2 ...])
+/// min_k/max_k(compare_column(s), k, [,context_1, context_2 ...])
 /// NOTE:
 /// arguments:
 ///   - Compare: first argument is the compare column(s), which supports: single-column or multi-columns(tuple)
@@ -25,18 +25,18 @@
 ///     1, 20, 'hhh'
 ///     1, 10, 'mmm'
 ///     2, 15, 'tp'
-///     3. 18, 'bbb'
+///     3, 18, 'bbb'
 ///
 /// [query]
 /// Only output compare columns:
-/// 1) min_k(3)(id)                             ->  result: [1, 1, 2]
-/// 2) min_k(3)(tuple(id, value))               ->  result: [(1,10), (1,20), (2,15)]
+/// 1) min_k(id, 3)                             ->  result: [1, 1, 2]
+/// 2) min_k(tuple(id, value),3)               ->  result: [(1,10), (1,20), (2,15)]
 ///
 /// output compare + context columns:
-/// 3) min_k(3)(id, value)                      ->  result: [(1,20), (1,10), (2,15)]
-/// 4) min_k(3)(id, value, name)                ->  result: [(1,20,'hhh'), (1,10,'mmm'), (2,15,'tp')]
-/// 5) min_k(3)(tuple(id, value), name)         ->  result: [(1,10,'mmm'), (1,20,'hhh'), (2,15,'tp')]
-/// 6) min_k(3)(id, *)                          ->  result: [(1,1,20,'hhh'), (1,1,10,'mmm'), (2,2,15,'tp')]
+/// 3) min_k(id,3,value)                      ->  result: [(1,20), (1,10), (2,15)]
+/// 4) min_k(id,3,value, name)                ->  result: [(1,20,'hhh'), (1,10,'mmm'), (2,15,'tp')]
+/// 5) min_k(tuple(id, value),3, name)         ->  result: [(1,10,'mmm'), (1,20,'hhh'), (2,15,'tp')]
+/// 6) min_k(id,3, *)                          ->  result: [(1,20,'hhh'), (1,10,'mmm'), (2,15,'tp')]
 
 namespace DB
 {
