@@ -91,7 +91,7 @@
         {
           "statements": [
             {"client":"python","query_id":"1003","terminate":"manuel", "wait":1, "query_type": "stream","depends_on_stream":"left_stream,right_stream", "query":"select s, ss from left_stream left join right_stream on i=ii and date_diff_within(10s, ts, tts)"},
-            {"client":"python", "query_type": "table","depends_on":1003, "wait":1, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table","depends_on":1003, "wait":3, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
               "query": "insert into right_stream(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:45:10'),
@@ -484,7 +484,7 @@
         {
           "statements": [
             {"client":"python","query_id":"1014", "terminate":"manuel","wait":1, "query_type": "stream","depends_on_stream":"left_stream,right_stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', ts, tts) > -10 and date_diff('second', ts, tts) < 0"},
-            {"client":"python", "query_type": "table","depends_on":1014, "wait":1,
+            {"client":"python", "query_type": "table","depends_on":1014, "wait":3,
               "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table", "wait":1,
               "query": "insert into right_stream(ii, ss, tts) values
@@ -998,7 +998,7 @@
         {
           "statements": [
             {"client":"python","query_id":"1034", "terminate":"manuel", "wait":1,"query_type": "stream","depends_on_stream":"left_stream,right_stream", "query":"select s, ss from (select * from left_stream) as left_stream inner join (select * from right_stream) as right_stream on i=ii and date_diff_within(10s, ts, tts)"},
-            {"client":"python", "query_type": "table","depends_on":1034, "wait":1, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table","depends_on":1034, "wait":3, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
               "query": "insert into right_stream(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),

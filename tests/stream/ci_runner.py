@@ -29,19 +29,23 @@ def compress_logs(self, dir, relpaths, result_path):
     )  # STYLE_CHECK_ALLOW_SUBPROCESS_CHECK_CALL
 
 
-def container_file_download(dir="./", setting="default", *files_in_container):
+def container_file_download(dir="./", setting="nativelog", *files_in_container):
+    print(files_in_container)
     if len(files_in_container) != 0:
         files_downloaded = []
         for file in files_in_container:
             try:
-                file_name = f"{setting}-" + file.rsplit("/", 1)[1]
-                cmd = f"docker cp {file} {dir}/{file_name}"
-                logging.info(f"Copying {file}, command = {cmd}")
+                print(f"file = {file}")
+                file_name = file.split("/")[-1]
+                file_name = f"{setting}-" + file_name
+                print(f"file_name = {file_name}")
+                cmd = f"docker cp {file} {dir}{file_name}"
+                print(f"Copying {file}, command = {cmd}")
                 subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
                 files_downloaded.append(f"{dir}/{file_name}")
             except Exception as ex:
                 # time.sleep(i * 3)
-                logging.info(f"Got execption copying file {ex} ")
+                print(f"Got execption copying file {ex} ")
         return tuple(files_downloaded)
     else:
         return ()
@@ -156,10 +160,10 @@ def ci_runner(
     
     #set proton log container path therefore log files could be retrieved later.
     proton_log_in_container = (
-        f"{proton_server_container_name}:/var/log/proton-server/proton-server.log"
+        f"{proton_server_container_name}://var/log/proton-server/proton-server.log"
     )
     proton_err_log_in_container = (
-        f"{proton_server_container_name}:/var/log/proton-server/proton-server.err.log"
+        f"{proton_server_container_name}://var/log/proton-server/proton-server.err.log"
     )
    
     retcode = pytest.main(
@@ -181,12 +185,13 @@ def ci_runner(
     # todo: download proton-logs based on setting
 
     downloaded_log_files_paths = container_file_download(
-        local_all_results_folder_path,
+        './',
+        setting,
         proton_log_in_container,
         proton_err_log_in_container,
     )
 
-    logging.debug(
+    print(
         f"ci_runner: downloaded_log_files_paths = {downloaded_log_files_paths}"
     )
 

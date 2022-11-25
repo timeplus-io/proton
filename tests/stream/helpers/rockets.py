@@ -164,9 +164,11 @@ def scan_tests_file_path(tests_file_path):
                         pass
     logger.info(f"test_suite_names_selected = {test_suite_names_selected}")
 
+    
     return {
         "test_suite_names_selected": test_suite_names_selected,
         "test_suites_selected": test_suites_selected,
+        "PROTON_TEST_SUITES": test_suites_set_env
     }
 
 
@@ -222,6 +224,7 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     test_suite_names_selected = res_scan_tests_file_path.get(
         "test_suite_names_selected"
     )
+
     test_suites_selected = res_scan_tests_file_path.get("test_suites_selected")
     logger.debug(f"test_suite_names_selected = {test_suite_names_selected}")
 
@@ -989,6 +992,8 @@ def query_run_py(
 
         rest_setting = config.get("rest_setting")
         table_ddl_url = rest_setting.get("table_ddl_url")
+        test_suite_name = statement_2_run.get("test_suite_name")
+        test_id = statement_2_run.get("test_id")
         query = statement_2_run.get("query")
         query_id = str(statement_2_run.get("query_id"))
         query_id_type = statement_2_run.get("query_id_type")
@@ -1008,11 +1013,11 @@ def query_run_py(
         query_result_list = []
 
         logger.debug(
-            f"default proton_server = {proton_server}, proton_server_native_port={proton_server_native_port}, query_run_py: query_id = {query_id}, query = {query} to be execute @ {str(datetime.datetime.now())}........."
+            f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, default proton_server = {proton_server}, proton_server_native_port={proton_server_native_port}, query_run_py: query_id = {query_id}, query = {query} to be execute @ {str(datetime.datetime.now())}........."
         )
 
         streams = pyclient.execute("show streams")
-        logger.debug(f"show streams = {streams}")
+        logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, show streams = {streams}")
 
         if depends_on_stream != None and isinstance(
             depends_on_stream, str
@@ -1043,7 +1048,7 @@ def query_run_py(
                 table_ddl_url, depends_on_stream_list, query_id
             )
             logger.debug(
-                f"proton_cluster_query_node = {proton_cluster_query_node},proton_cluster_query_route_mode= {proton_cluster_query_route_mode} "
+                f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, proton_cluster_query_node = {proton_cluster_query_node},proton_cluster_query_route_mode= {proton_cluster_query_route_mode} "
             )
 
             if "cluster" in proton_setting:
@@ -1103,7 +1108,7 @@ def query_run_py(
                             proton_server_native_port = item.get("port")
                     settings = {"max_block_size": 100000}
                     logger.debug(
-                        f"selected_nodes = {selected_nodes}, proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}"
+                        f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, selected_nodes = {selected_nodes}, proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}"
                     )
                     pyclient = Client(
                         host=proton_server, port=proton_server_native_port
@@ -1114,11 +1119,13 @@ def query_run_py(
             depends_on_exists = query_exists(depends_on, client=pyclient)
             if not depends_on_exists:
                 logger.debug(
-                    f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception"
+                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception"
                 )
                 raise Exception(
-                    f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception"
+                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception"
                 )
+            else:
+                logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} exists")
 
         if (
             proton_create_stream_shards is not None
@@ -1146,8 +1153,9 @@ def query_run_py(
 
         if wait != None:
             wait = int(wait)
-            print(f"query_execute: wait for {wait} to start run query = {query}")
+            logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, start wait for {wait} to start run query = {query}")
             time.sleep(wait)
+            logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, end wait for {wait} to start run query = {query}")
 
         # if query_type == "table" and not ("select" in query or "SELECT" in query):
         if query_type == "table":
@@ -1168,7 +1176,7 @@ def query_run_py(
                             host=proton_server, port=proton_server_native_port
                         )  # create python client
                         logger.debug(
-                            f"query = {query} run on proton_server={proton_server}, proton_server_native_port = {proton_server_native_port}"
+                            f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query = {query} run on proton_server={proton_server}, proton_server_native_port = {proton_server_native_port}"
                         )
                         res = pyclient.execute(
                             query,
@@ -1181,7 +1189,7 @@ def query_run_py(
                             for item in res[0]:
                                 query_result_iter.append(item)
                     logger.debug(
-                        f"query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}"
+                        f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}"
                     )
                     pyclient.disconnect()
             else:
@@ -1193,7 +1201,7 @@ def query_run_py(
                     for item in res[0]:
                         query_result_iter.append(item)
                 logger.debug(
-                    f"query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}"
+                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}"
                 )
 
             # if 'cluster' not in proton_setting:
@@ -1242,7 +1250,7 @@ def query_run_py(
             )
 
         logger.debug(
-            f"proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}, query_run_py: query_run_py: query_id = {query_id}, executed @ {str(datetime.datetime.now())}, query = {query}......"
+            f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}, query_run_py: query_id = {query_id}, executed @ {str(datetime.datetime.now())}, query = {query}......"
         )
 
         if (query_type != None and query_type == "table") and (iter_wait != None):
@@ -1251,12 +1259,12 @@ def query_run_py(
                 iter_wait
             )  # sleep for materialized_view test_id = 61, the execute_iter is async way, if too quick to start to iter, wait for 1s until query is setup, need to observe
             logger.debug(
-                f"query_type = {query_type}, sleep for iter_wait = {iter_wait}s"
+                f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_type = {query_type}, sleep for iter_wait = {iter_wait}s"
             )
         i = 0
         for element in query_result_iter:
             logger.debug(
-                f"element got @ {str(datetime.datetime.now())} in query_result_iter in query_id: {query_id} = {element}"
+                f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, element got @ t{str(datetime.datetime.now())} in query_result_iter in query_id: {query_id} = {element}"
             )
 
             if isinstance(element, list) or isinstance(element, tuple):
@@ -1284,13 +1292,13 @@ def query_run_py(
             "query_result": query_result_list,
             "query_id_type": query_id_type,
         }
-        logger.info(f"query_run_py: query_results of query={query} = {query_results}")
+        logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_py: query_results of query={query} = {query_results}")
 
         if query_results_queue != None:
             message_2_send = json.dumps(query_results)
             query_results_queue.put(message_2_send)
 
-        logger.info(f"query_run_py: query_results_queue.put done.")
+        logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_py: query_results_queue.put done.")
 
         if run_mode == "process" or query_type == "stream":
             # logger.debug(f"query_run_py: query_id = {query_id}, query={query}, query_results = {query_results}")
@@ -1307,12 +1315,13 @@ def query_run_py(
             pyclient.disconnect()
 
     except (BaseException, errors.ServerException) as error:
-        logger.debug(f"query_run_py, exception, query_id={query_id}, query={query}, error = {error}")
+        logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_py, exception, query_id={query_id}, query={query}, error = {error}")
         if isinstance(error, errors.ServerException):
             if (
                 error.code == 394
             ):  # if the query is canceled '394' will be caught and compose the query_results and send to inputs_walk_through
                 # send the result
+                
                 query_end_time_str = str(datetime.datetime.now())
                 query_results = {
                     "query_id": query_id,
@@ -1325,16 +1334,16 @@ def query_run_py(
                     "query_result": query_result_list,
                     "query_id_type": query_id_type,
                 }
+               
                 logger.debug(
-                    "query_run_py: query_results: {} collected from query_result_iter at {}".format(
-                        query_results, datetime.datetime.now()
-                    )
+                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_id = {query_id}, query_results: {query_results} collected from query_result_iter at {datetime.datetime.now()}"
+                    
                 )
                 message_2_send = json.dumps(query_results)
                 if query_results_queue != None:
                     query_results_queue.put(message_2_send)
                     logger.info(
-                        f"query_run_py: query_results message_2_send = {message_2_send} was sent."
+                        f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_id = {query_id}, query_results message_2_send = {message_2_send} was sent."
                     )
 
             else:  # for other exception code, send the error_code as query_result back, some tests expect eception will use.
@@ -1350,9 +1359,7 @@ def query_run_py(
                     "query_id_type": query_id_type,
                 }
                 logger.debug(
-                    "query_run_py: db exception, none-cancel query_results: {}".format(
-                        query_results
-                    )
+                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, db exception, none-cancel query_results: {query_results}"
                 )
                 message_2_send = json.dumps(query_results)
                 if query_results_queue != None:
@@ -1363,7 +1370,7 @@ def query_run_py(
 
             if run_mode == "process" or query_type == "stream":
                 logger.debug(
-                    f"query_run_py: query_id = {query_id}, query={query}, query_results = {query_results}"
+                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id},  query_id = {query_id}, query={query}, query_results = {query_results}"
                 )
                 query_run_complete = datetime.datetime.now()
                 time_spent = query_run_complete - query_run_start
@@ -1398,7 +1405,7 @@ def query_run_py(
 
         if run_mode == "process" or query_type == "stream":
             logger.debug(
-                f"query_run_py: query_id = {query_id}, query={query}, query_results = {query_results}"
+                f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_id = {query_id}, query={query}, query_results = {query_results}"
             )
             query_run_complete = datetime.datetime.now()
             time_spent = query_run_complete - query_run_start
@@ -1834,7 +1841,7 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
     logger.info(f"query_execute: tear_down completed and end")
 
 
-def query_walk_through(statements, query_conn):
+def query_walk_through(proton_setting,test_suite_name, test_id, statements, query_conn):
     # logger.debug(f"query_walk_through: start..., statements = {statements}.")
     logger = mp.get_logger()
     statement_id_run = 0
@@ -1852,6 +1859,9 @@ def query_walk_through(statements, query_conn):
         query = statement.get("query")
         query_type = statement.get("query_type")
         terminate = statement.get("terminate")
+        statement["proton_setting"] = proton_setting
+        statement["test_id"] = test_id
+        statement["test_suite_name"] = test_suite_name
         if query_id == None:
             query_id = str(uuid.uuid1())
 
@@ -3150,8 +3160,8 @@ def test_suite_run(
                                 f"test_suite_name = {test_suite_name}, step_statements = {step_statements}"
                             )
                             query_walk_through_res = query_walk_through(
-                                step_statements, query_conn
-                            )
+                                proton_setting, test_suite_name, test_id, step_statements, query_conn
+                            ) # walk through statements, todo: optimize the statement context building up logic
                             statement_result_from_query_execute = query_walk_through_res
                             logger.debug(
                                 f"query_walk_through_res = {query_walk_through_res}"
@@ -3336,6 +3346,8 @@ def rockets_run(test_context):
         env_setup_res = env_setup(rest_setting, docker_compose_file, proton_ci_mode)
         logger.info(f"rockets_run env_etup done, env_setup_res = {env_setup_res}")
     else:
+        test_suites_set_env = os.getenv("PROTON_TEST_SUITES", None)
+        print(f'######\n Wrong Test Suite Name \nci_runner.py --test_suite={test_suites_set_env}, test suite name {test_suites_set_env} is not found in any test suite json file! \n######\n')
         sys.exit(1)
 
     test_suite_runners = []
@@ -3410,11 +3422,11 @@ def rockets_run(test_context):
         f"test_run_list_len_total = {test_run_list_len_total}, len(test_sets) = {len(test_sets)}"
     )
     
+    print(f"proton_setting = {proton_setting}, Test Suites Running_Statistics:\n")
     for test_suite_summary in test_suite_result_summary_list:
         test_suite_name = test_suite_summary.get("test_suite_name")
-        test_suite_proton_setting = test_suite_summary.get("proton_setting")
         test_suite_run_status = test_suite_summary.get("test_suite_run_status")
-        print(f"proton_setting = {test_suite_proton_setting}, test_suite_name = {test_suite_name}")
+        print(f"test_suite_name = {test_suite_name}")
         for status in test_suite_run_status:
             print(status)
     
