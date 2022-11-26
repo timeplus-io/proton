@@ -42,7 +42,7 @@ def container_file_download(dir="./", setting="nativelog", *files_in_container):
                 cmd = f"docker cp {file} {dir}{file_name}"
                 print(f"Copying {file}, command = {cmd}")
                 subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
-                files_downloaded.append(f"{dir}/{file_name}")
+                files_downloaded.append(f"{dir}{file_name}")
             except Exception as ex:
                 # time.sleep(i * 3)
                 print(f"Got execption copying file {ex} ")
@@ -62,21 +62,25 @@ def upload_results(
     if s3_report_name == None:
         s3_report_name = "report.html"
     s3_path_prefix = f"reports/proton/tests/CI/{pr_number}/{commit_sha}/"
+    report_urls = [] #list of report file and log files
     report_url = s3_client.upload_test_report_to_s3(
         report_file_path, s3_path_prefix + s3_report_name
     )
+    report_urls.append(report_url)
+    
     if len(additional_files_paths) > 0:
         for additional_file_path in additional_files_paths:
             logging.debug(
                 f"upload_results: additional_file_path = {additional_file_path}"
             )
             file_name = additional_file_path.rsplit("/", 1)[1]
-            s3_client.upload_test_report_to_s3(
+            url = s3_client.upload_test_report_to_s3(
                 additional_file_path, s3_path_prefix + file_name
             )
+            report_urls.append(url)
 
-    logging.info("Search result in url %s", report_url)
-    return report_url
+    logging.info("Search result in url %s", report_urls)
+    return report_urls
 
 
 def upload_proton_logs(s3_client, proton_log_folder, pr_number=0, commit_sha=""):
@@ -200,29 +204,41 @@ def ci_runner(
         commit_sha = os.getenv("GITHUB_SHA", commit_sha)
 
         # s3_helper = S3Helper("https://s3.amazonaws.com")
+        if retcode == 0:   
+            report_urls = upload_results(
+                s3_helper,
+                report_file_path,
+                report_file_name,
+                pr_number,
+                commit_sha
+            )
+        else:
+            report_urls = upload_results(
+                s3_helper,
+                report_file_path,
+                report_file_name,
+                pr_number,
+                commit_sha,
+                *downloaded_log_files_paths,
+            )            
 
-        report_url = upload_results(
-            s3_helper,
-            report_file_path,
-            report_file_name,
-            pr_number,
-            commit_sha,
-            *downloaded_log_files_paths,
-        )
-        report_url = report_url.replace("https://s3.amazonaws.com/", "s3://")
-        report_url = report_url.replace("%20", " ")
-        print(f"::notice ::Report s3 uri: {report_url}")
-        print(f"::notice ::Report download command: aws s3 cp '{report_url}' ./")
+        for report_url in report_urls:
+            report_url = report_url.replace("https://s3.amazonaws.com/", "s3://")
+            report_url = report_url.replace("%20", " ")
+            print(f"::notice ::Report/Log s3 uri: {report_url}")
+            print(f"::notice ::Report/Log download command: aws s3 cp '{report_url}' ./")
 
-        proton_log_folder_url = upload_proton_logs(
-            s3_helper,
-            proton_log_folder,
-            pr_number,
-            commit_sha,
-        )
-        print(f"::notice ::Proton server log url: {proton_log_folder_url}")
+            proton_log_folder_url = upload_proton_logs(
+                s3_helper,
+                proton_log_folder,
+                pr_number,
+                commit_sha,
+            )
+            print(f"::notice ::Proton server log url: {proton_log_folder_url}")
     else:
-        print("ci_runner: local mode, no report uploaded.")
+        print("ci_runner: local mode, no report uploaded.")    
+            
+
 
 
 if __name__ == "__main__":

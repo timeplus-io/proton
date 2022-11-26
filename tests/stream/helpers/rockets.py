@@ -494,7 +494,7 @@ def query_run_exec(statement_2_run, config):
             "query_result": query_result_str,
             "query_id_type": query_id_type,
         }
-    except (BaseException) as error:
+    except (BaseException) as error:  
         logger.debug(f"exception, error = {error}")
         query_end_time_str = str(datetime.datetime.now())
         query_results = {
@@ -930,7 +930,7 @@ def query_run_py(
     #    logger.setLevel(logging.INFO)
     # else:
     #    logger.setLevel(logging.DEBUG)
-
+    query_run_py_run_mode = 'None'
     try:
         logger = mp.get_logger()
         proton_server = None
@@ -939,7 +939,7 @@ def query_run_py(
         proton_cluster_query_node = config.get("proton_cluster_query_node")
         proton_create_stream_shards = config.get("proton_create_stream_shards")
         proton_create_stream_replicas = config.get("proton_create_stream_replicas")
-
+       
         if "cluster" not in proton_setting:
             proton_server = config.get("proton_server")
             proton_server_native_ports = config.get("proton_server_native_port")
@@ -964,6 +964,7 @@ def query_run_py(
             proton_server_native_port = proton_servers[0].get("port")
 
         if pyclient == None:
+            query_run_py_run_mode = 'process'
             console_handler = logging.StreamHandler(sys.stderr)
             console_handler.formatter = formatter
             logger.addHandler(console_handler)
@@ -972,7 +973,7 @@ def query_run_py(
             else:
                 logger.setLevel(logging.DEBUG)
             logger.debug(
-                f"process started: handler of logger = {logger.handlers}, logger.level = {logger.level}"
+                f"process started: query_run_py_run_mode = {query_run_py_run_mode}, handler of logger = {logger.handlers}, logger.level = {logger.level}"
             )
 
             settings = {"max_block_size": 100000}
@@ -984,8 +985,9 @@ def query_run_py(
             )  # create python client
             CLEAN_CLIENT = True
         else:
+            query_run_py_run_mode = 'local'
             logger.debug(
-                f"local running: handler of logger = {logger.handlers}, logger.level = {logger.level}"
+                f"local running: query_run_py_run_mode = {query_run_py_run_mode}, handler of logger = {logger.handlers}, logger.level = {logger.level}"
             )
 
         # logger.debug(f"config = {config}")
@@ -1315,39 +1317,117 @@ def query_run_py(
             pyclient.disconnect()
 
     except (BaseException, errors.ServerException) as error:
-        logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_py, exception, query_id={query_id}, query={query}, error = {error}")
-        if isinstance(error, errors.ServerException):
-            if (
-                error.code == 394
-            ):  # if the query is canceled '394' will be caught and compose the query_results and send to inputs_walk_through
-                # send the result
-                
-                query_end_time_str = str(datetime.datetime.now())
-                query_results = {
-                    "query_id": query_id,
-                    "query": query,
-                    "query_type": query_type,
-                    "query_state": "run",
-                    "query_start": query_start_time_str,
-                    "query_end": query_end_time_str,
-                    "query_result_column_types": query_result_column_types,
-                    "query_result": query_result_list,
-                    "query_id_type": query_id_type,
-                }
-               
+        error_string = f"query_run_py, exception, error = {error}" #todo: handle the error code but not string match
+        
+        if '. Connection' in error_string:
+            logger.debug(f"crash, connection failure, proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_py, query_run_py_run_mode = {query_run_py_run_mode}, exception, query_id={query_id}, query={query}, error = {error}")
+            query_results = {
+                "query_id": query_id,
+                "query": query,
+                "query_type": query_type,
+                "query_state": "crash",
+                "query_start": query_start_time_str,
+                "query_end": query_end_time_str,
+                "query_result": f"error_code:10000, error: {error}",
+                "query_id_type": query_id_type,
+                "error": error_string,
+            }
+            # if it's Connection related exception that means proton crashes, send 10000 as error_code
+            message_2_send = json.dumps(query_results)
+            if query_results_queue != None:
+                query_results_queue.put(message_2_send)            
+            if run_mode == "process" or query_type == "stream":
                 logger.debug(
-                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_id = {query_id}, query_results: {query_results} collected from query_result_iter at {datetime.datetime.now()}"
-                    
+                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id},  query_id = {query_id}, query={query}, query_results = {query_results}"
                 )
-                message_2_send = json.dumps(query_results)
-                if query_results_queue != None:
-                    query_results_queue.put(message_2_send)
-                    logger.info(
-                        f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_id = {query_id}, query_results message_2_send = {message_2_send} was sent."
+                # query_run_complete = datetime.datetime.now()
+                # time_spent = query_run_complete - query_run_start
+                # time_spent_ms = time_spent.total_seconds() * 1000
+                if telemetry_shared_list != None:
+                    telemetry_shared_list.append(
+                        {
+                            "statement_2_run": statement_2_run,
+                            "time_spent": 0,
+                        }
                     )
+                else:
+                    print()  # todo: put the telemetry data into return, telemetry_shared_list=None means query_run_py is called by query_execute directly but not in child process.
 
-            else:  # for other exception code, send the error_code as query_result back, some tests expect eception will use.
-                query_end_time_str = str(datetime.datetime.now())
+                pyclient.disconnect()            
+        else:            
+            logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_py, query_run_py_run_mode = {query_run_py_run_mode}, exception, query_id={query_id}, query={query}, error = {error}")
+            if isinstance(error, errors.ServerException):
+                if (
+                    error.code == 394
+                ):  # if the query is canceled '394' will be caught and compose the query_results and send to inputs_walk_through
+                    # send the result
+                    
+                    query_end_time_str = str(datetime.datetime.now())
+                    query_results = {
+                        "query_id": query_id,
+                        "query": query,
+                        "query_type": query_type,
+                        "query_state": "run",
+                        "query_start": query_start_time_str,
+                        "query_end": query_end_time_str,
+                        "query_result_column_types": query_result_column_types,
+                        "query_result": query_result_list,
+                        "query_id_type": query_id_type,
+                    }
+                
+                    logger.debug(
+                        f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_id = {query_id}, query_results: {query_results} collected from query_result_iter at {datetime.datetime.now()}"
+                        
+                    )
+                    message_2_send = json.dumps(query_results)
+                    if query_results_queue != None:
+                        query_results_queue.put(message_2_send)
+                        logger.info(
+                            f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_id = {query_id}, query_results message_2_send = {message_2_send} was sent."
+                        )
+
+                else:  # for other exception code, send the error_code as query_result back, some tests expect eception will use.
+                    query_end_time_str = str(datetime.datetime.now())
+                    query_results = {
+                        "query_id": query_id,
+                        "query": query,
+                        "query_type": query_type,
+                        "query_state": "exception",
+                        "query_start": query_start_time_str,
+                        "query_end": query_end_time_str,
+                        "query_result": f"error_code:{error.code}",
+                        "query_id_type": query_id_type,
+                    }
+                    logger.debug(
+                        f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, db exception, none-cancel query_results: {query_results}"
+                    )
+                    message_2_send = json.dumps(query_results)
+                    if query_results_queue != None:
+                        query_results_queue.put(message_2_send)
+
+                    # query_result_list = []
+                    # client.disconnect()
+
+                if run_mode == "process" or query_type == "stream":
+                    logger.debug(
+                        f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id},  query_id = {query_id}, query={query}, query_results = {query_results}"
+                    )
+                    query_run_complete = datetime.datetime.now()
+                    time_spent = query_run_complete - query_run_start
+                    time_spent_ms = time_spent.total_seconds() * 1000
+                    if telemetry_shared_list != None:
+                        telemetry_shared_list.append(
+                            {
+                                "statement_2_run": statement_2_run,
+                                "time_spent": time_spent_ms,
+                            }
+                        )
+                    else:
+                        print()  # todo: put the telemetry data into return, telemetry_shared_list=None means query_run_py is called by query_execute directly but not in child process.
+
+                    pyclient.disconnect()
+
+            else:
                 query_results = {
                     "query_id": query_id,
                     "query": query,
@@ -1355,71 +1435,36 @@ def query_run_py(
                     "query_state": "exception",
                     "query_start": query_start_time_str,
                     "query_end": query_end_time_str,
-                    "query_result": f"error_code:{error.code}",
+                    "query_result": f"error_code:10000, error: {error}",
                     "query_id_type": query_id_type,
                 }
-                logger.debug(
-                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, db exception, none-cancel query_results: {query_results}"
-                )
+                # if it's not db excelption, send 10000 as error_code
                 message_2_send = json.dumps(query_results)
                 if query_results_queue != None:
                     query_results_queue.put(message_2_send)
 
-                # query_result_list = []
-                # client.disconnect()
-
             if run_mode == "process" or query_type == "stream":
                 logger.debug(
-                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id},  query_id = {query_id}, query={query}, query_results = {query_results}"
+                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_id = {query_id}, query={query}, query_results = {query_results}"
                 )
-                query_run_complete = datetime.datetime.now()
-                time_spent = query_run_complete - query_run_start
-                time_spent_ms = time_spent.total_seconds() * 1000
+                # query_run_complete = datetime.datetime.now()
+                # time_spent = query_run_complete - query_run_start
+                # time_spent_ms = time_spent.total_seconds() * 1000
                 if telemetry_shared_list != None:
                     telemetry_shared_list.append(
-                        {
-                            "statement_2_run": statement_2_run,
-                            "time_spent": time_spent_ms,
-                        }
+                        {"statement_2_run": statement_2_run, "time_spent": 0}
                     )
                 else:
                     print()  # todo: put the telemetry data into return, telemetry_shared_list=None means query_run_py is called by query_execute directly but not in child process.
-
                 pyclient.disconnect()
 
-        else:
-            query_results = {
-                "query_id": query_id,
-                "query": query,
-                "query_type": query_type,
-                "query_state": "exception",
-                "query_start": query_start_time_str,
-                "query_end": query_end_time_str,
-                "query_result": f"error_code:10000, error: {error}",
-                "query_id_type": query_id_type,
-            }
-            # if it's not db excelption, send 10000 as error_code
-            message_2_send = json.dumps(query_results)
-            if query_results_queue != None:
-                query_results_queue.put(message_2_send)
-
-        if run_mode == "process" or query_type == "stream":
-            logger.debug(
-                f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_id = {query_id}, query={query}, query_results = {query_results}"
-            )
-            query_run_complete = datetime.datetime.now()
-            time_spent = query_run_complete - query_run_start
-            time_spent_ms = time_spent.total_seconds() * 1000
-            if telemetry_shared_list != None:
-                telemetry_shared_list.append(
-                    {"statement_2_run": statement_2_run, "time_spent": time_spent_ms}
-                )
-            else:
-                print()  # todo: put the telemetry data into return, telemetry_shared_list=None means query_run_py is called by query_execute directly but not in child process.
-            pyclient.disconnect()
-
     finally:
-
+        if query_run_py_run_mode == 'local':
+            logger.debug(f"local run shut down: query_run_py_run_mode = {query_run_py_run_mode}.")
+        elif query_run_py_run_mode == 'process':    
+            logger.debug(f"process shut down: query_run_py_run_mode = {query_run_py_run_mode}.")
+        else:
+            logger.debug(f"close: query_run_py_run_mode = {query_run_py_run_mode}.")
         return query_results
 
 
@@ -1815,10 +1860,15 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
             "Super, 1000 queries hit by a single test suite, we are in great time, by James @ Jan 10, 2022!"
         )
     # if len(query_procs) != 0:
+    print(f"query_execute: tear down msg recved, break while, start tear down and wait 30s for other processes shut down gracefully and terminiate all query_run_py processeses.")
+    time.sleep(30)
     for proc in query_procs:
         process = proc.get("process")
-        # process.terminate()
-        process.join()
+        process.terminate()
+        #process.join()
+    print(f"query_execute: process.join() done.")
+
+
     count = 0  # for avg_spent_time_ms of query_run statistics
     time_spent_query_run_ms = 0
     avg_time_spent_query_run_ms = 0
@@ -1961,7 +2011,13 @@ def query_id_exists_py(py_client, query_id, query_exist_check_sql=None):
             logger.debug(f"query_id_list is None or not a list")
             return False
     except (BaseException) as error:
+        error_string = f"query_id_exists_py, exception, Error = {error}"
         logger.debug(f"query_id_exists_py, exception, Error = {error}")
+        if '. Connection' in error_string: #todo: handle error code rather than error string match
+            raise Exception(f"query_id_exists, exception, Error = {error}")
+        
+
+            
     return False
 
 
@@ -2123,32 +2179,7 @@ def input_batch_rest(config, input_batch, table_schema):
                     f"depends_on = {depends_on} for input does not exist, raise exception"
                 )
                 raise Exception(f"depends_on = {depends_on} for input not found")
-            """
-            query_body = json.dumps({"query": "select query_id from system.processes"})
-            res = requests.post(query_url, data=query_body)
-            res_json = res.json()
-            query_id_list = res_json.get("data")
-            logger.debug(f"query_id_list: {query_id_list}")
-            if query_id_list != None and len(query_id_list) > 0:
-                retry = 200
-                # depends_on_exists = False
-                while retry > 0 and depends_on_exists != True:
-                    for element in query_id_list:
-                        if depends_on in element:
-                            depends_on_exists = True
-                            logger.debug(
-                                f"depends_on = {depends_on}, element in query_id_list = {element}, matched, depends_on found in query_id_list."
-                            )
-                    time.sleep(0.05)
-                    retry -= 1
-                    query_body = json.dumps(
-                        {"query": "select query_id from system.processes"}
-                    )
-                    res = requests.post(query_url, data=query_body)
-                    res_json = res.json()
-                    query_id_list = res_json.get("data")
-                    logger.debug(f"query_id_list: {query_id_list}")
-            """
+
         if wait != None:
             logger.debug(f"wait for {wait}s to start inputs.")
             wait = int(wait)
@@ -2219,7 +2250,7 @@ def input_batch_rest(config, input_batch, table_schema):
         """
         return input_batch_record
     except (BaseException) as error:
-        logger.debug(f"exception, error = {error}")
+        logger.debug(f"input_batch_rest, exception, error = {error}")
         return input_batch_record
 
 
@@ -3095,7 +3126,7 @@ def test_suite_run(
                 test_name = test.get("name")
                 steps = test.get("steps")
                 expected_results = test.get("expected_results")
-                test_suite_run_status.append({"test_id": test_id, "status":"not_run"}) #list for test suite running status, not_run or done
+                test_suite_run_status.append({"test_id": test_id, "status":"aborted"}) #list for test suite running status, aborted or done
                 test_run_id_list.append(test_id)
                 test_sets_2_run.append(
                     {
@@ -3215,6 +3246,14 @@ def test_suite_run(
                             f"test_suite_run: message_recv of query_results_queue.get() = {message_recv}"
                         )
                         query_results = json.loads(message_recv)
+                        print(f"query_result recved in test_suite_run = {query_results}")
+                        query_state = query_results.get("query_state")
+                        if query_state is not None and query_state == 'crash': #when Connection related error happens, it will be set in the query_state of the query results
+                            error = query_results.get("error")
+                            logger.debug(f"test_suite_run, exception, proton crash happens = {error}, raise Exception")
+                            raise Exception(f"test_suite_run, exception, Error = {error}")
+
+
                         statements_results.append(query_results)
 
                     # test_set = {
@@ -3255,7 +3294,7 @@ def test_suite_run(
                     "test_suite_run_status": test_suite_run_status,
                 }                
             except (BaseException) as error:
-                logger.info(f"exception: {error}")
+                logger.info(f"test_suite_run, exception: {error}, ")
                 test_suite_result_summary = {
                     "test_suite_name": test_suite_name,
                     "test_run_list_len": test_run_list_len,
@@ -3263,7 +3302,8 @@ def test_suite_run(
                     "test_list": test_run_list,
                     "proton_setting": proton_setting,
                     "test_suite_run_status": test_suite_run_status,
-                } 
+                }
+
 
             finally:
                 
@@ -3275,6 +3315,7 @@ def test_suite_run(
         
         test_suite_result_done_queue.put(test_suite_result_summary)
         test_suite_result_done_queue.join()
+       
         
     
     TESTS_QUERY_RESULTS = test_sets

@@ -69,6 +69,7 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
 
     statements_results_designed = [] #list for the query results for designated query_id
     for result in statements_results:
+        assert result != "aborted", f"statements_result = {result}"
         query_id_type = result.get("query_id_type")
         query_result_column_types = result.get('query_result_column_types')
 
