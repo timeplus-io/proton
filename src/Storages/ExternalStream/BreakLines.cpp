@@ -2,6 +2,8 @@
 
 #include <re2/re2.h>
 
+#include <cassert>
+
 namespace DB
 {
 /// line_breaker shall always have capture group

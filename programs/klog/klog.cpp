@@ -303,7 +303,7 @@ BenchmarkSettings parseProduceSettings(po::parsed_options & cmd_parsed, const ch
 
     BenchmarkSettings bench_settings;
 
-    bench_settings.wal_settings = move(settings);
+    bench_settings.wal_settings = std::move(settings);
     bench_settings.producer_settings.request_required_acks = option_map["request_required_acks"].as<Int32>();
     bench_settings.producer_settings.topic = option_map["kafka_topic"].as<String>();
     bench_settings.producer_settings.wal_client_pool_size = option_map["wal_client_pool_size"].as<Int32>();
@@ -388,7 +388,7 @@ BenchmarkSettings parseConsumeSettings(po::parsed_options & cmd_parsed, const ch
     /// parse topic, partition, offsets
     BenchmarkSettings bench_settings;
 
-    bench_settings.wal_settings = move(settings);
+    bench_settings.wal_settings = std::move(settings);
     bench_settings.consumer_settings.auto_offset_reset = option_map["auto_offset_reset"].as<String>();
     if (bench_settings.consumer_settings.auto_offset_reset == "stored")
     {
@@ -474,7 +474,7 @@ BenchmarkSettings parseTopicSettings(po::parsed_options & cmd_parsed, const char
 
     BenchmarkSettings bench_settings;
 
-    bench_settings.wal_settings = move(settings);
+    bench_settings.wal_settings = std::move(settings);
     bench_settings.topic_settings.mode = mode;
     bench_settings.topic_settings.name = option_map["name"].as<String>();
     bench_settings.topic_settings.partitions = option_map["partitions"].as<Int32>();
@@ -560,7 +560,7 @@ KafkaWALPtrs createDWals(const BenchmarkSettings & bench_settings, Int32 size)
         auto settings = make_unique<KafkaWALSettings>();
         /// make a copy
         *settings = *bench_settings.wal_settings;
-        wals.push_back(make_shared<KafkaWAL>(move(settings)));
+        wals.push_back(make_shared<KafkaWAL>(std::move(settings)));
         wals.back()->startup();
     }
     return wals;
@@ -886,7 +886,7 @@ void incrementalConsume(const BenchmarkSettings & bench_settings, Int32 size)
     {
         auto settings = make_unique<KafkaWALSettings>();
         *settings = *bench_settings.wal_settings;
-        wals.push_back(make_shared<KafkaWALConsumerMultiplexer>(move(settings)));
+        wals.push_back(make_shared<KafkaWALConsumerMultiplexer>(std::move(settings)));
         wals.back()->startup();
     }
 

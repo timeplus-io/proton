@@ -16,7 +16,7 @@ jobs:
             git config user.email "proton_robot@timeplus.io"
             mkdir $GITHUB_WORKSPACE/ccache
             echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
-            ./docker/packager/packager --package-type binary --docker-image-version aarch64 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+            ./docker/packager/packager --package-type binary --docker-image-version aarch64-clang-15 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
             docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
             cd $GITHUB_WORKSPACE/docker/server
             docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:testing-$SANITIZER-$GITHUB_SHA

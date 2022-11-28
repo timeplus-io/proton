@@ -17,6 +17,7 @@
 #include <Functions/FunctionsComparison.h>
 #include <DataTypes/Native.h>
 #include <Functions/IFunctionAdaptors.h>
+#include <Functions/IFunction.h>
 
 #include <Interpreters/JIT/CHJIT.h>
 #include <Interpreters/JIT/CompileDAG.h>

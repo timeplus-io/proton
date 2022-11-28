@@ -250,15 +250,15 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", required=True)
 
     parser.add_argument("--compiler", choices=(
-                                        "clang-14",
-                                        "clang-14-darwin",
-                                        "clang-14-darwin-aarch64",
-                                        "clang-14-aarch64",
-                                        "clang-14-ppc64le",
-                                        "clang-14-freebsd",
+                                        "clang-15",
+                                        "clang-15-darwin",
+                                        "clang-15-darwin-aarch64",
+                                        "clang-15-aarch64",
+                                        "clang-15-ppc64le",
+                                        "clang-15-freebsd",
                                         "gcc-11"
                                     ),
-                                    default="clang-14")
+                                    default="clang-15")
 
     parser.add_argument("--sanitizer", choices=("address", "thread", "memory", "undefined", ""), default="")
     parser.add_argument("--split-binary", action="store_true")

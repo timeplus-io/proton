@@ -194,6 +194,8 @@ void KeeperServer::launchRaftServer(
     if (!asio_listener)
         return;
 
+    std::vector<nuraft::ptr<nuraft::rpc_listener>> asio_listeners{asio_listener};
+
     nuraft::ptr<nuraft::delayed_task_scheduler> scheduler = asio_service;
     nuraft::ptr<nuraft::rpc_client_factory> rpc_cli_factory = asio_service;
 
@@ -203,7 +205,7 @@ void KeeperServer::launchRaftServer(
     /// raft_server creates unique_ptr from it
     nuraft::context * ctx = new nuraft::context(
         casted_state_manager, casted_state_machine,
-        asio_listener, logger, rpc_cli_factory, scheduler, params);
+        asio_listeners, logger, rpc_cli_factory, scheduler, params);
 
     raft_instance = nuraft::cs_new<nuraft::raft_server>(ctx, init_options);
 

@@ -175,6 +175,7 @@ void SessionLogElement::appendToBlock(MutableColumns & columns) const
         auto & values_col = assert_cast<ColumnString &>(*settings_tuple_col.getColumnPtr(1)->assumeMutable());
 
         size_t items_added = 0;
+        (void)items_added;
         for (const auto & kv : settings)
         {
             names_col.insert(kv.first);

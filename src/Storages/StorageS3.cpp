@@ -432,7 +432,7 @@ public:
         const String & key_,
         size_t min_upload_part_size_,
         size_t max_single_part_upload_size_)
-        : PartitionedSink(partition_by, context_, sample_block_)
+        : PartitionedSink(partition_by, context_, sample_block_, ProcessorID::StorageS3SinkID)
         , format(format_)
         , sample_block(sample_block_)
         , context(context_)

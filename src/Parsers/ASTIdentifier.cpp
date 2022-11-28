@@ -38,6 +38,7 @@ ASTIdentifier::ASTIdentifier(std::vector<String> && name_parts_, bool special, s
             if (part.empty())
                 ++params;
         }
+        (void)params;
         assert(params == name_params.size());
         children = std::move(name_params);
     }

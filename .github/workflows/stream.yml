@@ -24,7 +24,7 @@ jobs:
         rm cache_address.tar.gz
 
         echo "build proton binary"
-        ./docker/packager/packager --package-type binary --docker-image-version clang-14 --sanitizer address --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-15 --sanitizer address --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
         
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"

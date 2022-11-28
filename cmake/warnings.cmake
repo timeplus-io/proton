@@ -55,6 +55,7 @@ if (COMPILER_CLANG)
         no_warning(weak-template-vtables)
         no_warning(weak-vtables)
         no_warning(thread-safety-negative) # experimental flag, too many false positives
+        no_warning(enum-constexpr-conversion) # breaks magic-enum library in clang-16
         # TODO Enable conversion, sign-conversion, double-promotion warnings.
     else ()
         add_warning(comma)

@@ -51,7 +51,7 @@ public:
         assert(mem);
     }
 
-    ByteVector(ByteVector && other) noexcept : mem(move(other.mem)), cap(other.cap), siz(other.siz) { }
+    ByteVector(ByteVector && other) noexcept : mem(std::move(other.mem)), cap(other.cap), siz(other.siz) { }
 
     ByteVector(): mem(nullptr, std::free), cap(0), siz(0) { }
 

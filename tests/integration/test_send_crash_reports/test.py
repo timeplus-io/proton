@@ -33,7 +33,10 @@ def started_node():
 
 
 def test_send_segfault(started_node):
-    if started_node.is_built_with_thread_sanitizer() or started_node.is_built_with_memory_sanitizer():
+    # NOTE: another option is to increase waiting time.
+    if started_node.is_built_with_thread_sanitizer()
+        or started_node.is_built_with_address_sanitizer()
+        or started_node.is_built_with_memory_sanitizer():
         pytest.skip("doesn't fit in timeouts for stacktrace generation")
 
     started_node.copy_file_to_container(os.path.join(SCRIPT_DIR, "fake_sentry_server.py"), "/fake_sentry_server.py")

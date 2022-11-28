@@ -44,7 +44,8 @@ enable_language(C CXX ASM)
 include (cmake/arch.cmake)
 include (cmake/target.cmake)
 include (cmake/tools.cmake)
-include (cmake/analysis.cmake)
+include (cmake/clang_tidy.cmake)
+include (cmake/ccache.cmake)
 include (cmake/git_status.cmake)
 
 # Ignore export() since we don't use it,
@@ -66,8 +67,6 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git" AND NOT EXISTS "${proton_SOURCE_DIR}/contrib/boost/boost")
     message (FATAL_ERROR "Submodules are not initialized. Run\n\tgit submodule update --init --recursive")
 endif ()
-
-include (cmake/ccache.cmake)
 
 # Take care to add prlimit in command line before ccache, or else ccache thinks that
 # prlimit is compiler, and clang++ is its input file, and refuses to work  with
@@ -177,6 +176,8 @@ if (COMPILER_CLANG)
     set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wno-unused-command-line-argument")
     # generate ranges for fast "addr2line" search
     if (NOT CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE")
+        # NOTE: that clang has a bug because of it does not emit .debug_aranges
+        # with ThinLTO, so custom ld.lld wrapper is shipped in docker images.
         set(COMPILER_FLAGS "${COMPILER_FLAGS} -gdwarf-aranges")
     endif ()
 
@@ -187,6 +188,8 @@ if (COMPILER_CLANG)
             set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Xclang -fuse-ctor-homing")
         endif()
     endif()
+
+    no_warning(enum-constexpr-conversion) # breaks Protobuf in clang-16
 endif ()
 
 # If compiler has support for -Wreserved-identifier. It is difficult to detect by clang version,

@@ -739,7 +739,7 @@ void NO_INLINE Aggregator::executeImplBatch(
         }
 
         auto add_into_aggregate_states_function = compiled_aggregate_functions_holder->compiled_aggregate_functions.add_into_aggregate_states_function;
-        add_into_aggregate_states_function(rows, columns_data.data(), places.get());
+        add_into_aggregate_states_function(0, rows, columns_data.data(), places.get());
     }
 #endif
 
@@ -791,7 +791,7 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
         }
 
         auto add_into_aggregate_states_function_single_place = compiled_aggregate_functions_holder->compiled_aggregate_functions.add_into_aggregate_states_function_single_place;
-        add_into_aggregate_states_function_single_place(rows, columns_data.data(), res);
+        add_into_aggregate_states_function_single_place(0, rows, columns_data.data(), res);
 
 #if defined(MEMORY_SANITIZER)
 
@@ -1423,7 +1423,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
             }
 
             auto insert_aggregates_into_columns_function = compiled_functions.insert_aggregates_into_columns_function;
-            insert_aggregates_into_columns_function(places.size(), columns_data.data(), places.data());
+            insert_aggregates_into_columns_function(0, places.size(), columns_data.data(), places.data());
         }
 #endif
 
