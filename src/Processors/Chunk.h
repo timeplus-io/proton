@@ -90,7 +90,7 @@ struct ChunkContext
 
     CheckpointContextPtr getCheckpointContext() const { return ckpt_ctx; }
 
-    const Streaming::SubstreamID & getSubStreamID() const { return id; }
+    const Streaming::SubstreamID & getSubstreamID() const { return id; }
 };
 using ChunkContextPtr = std::shared_ptr<ChunkContext>;
 /// proton : ends
@@ -225,12 +225,18 @@ public:
         return nullptr;
     }
 
-    const Streaming::SubstreamID & getSubStreamID() const
+    const Streaming::SubstreamID & getSubstreamID() const
     {
         if (chunk_ctx)
-            return chunk_ctx->getSubStreamID();
+            return chunk_ctx->getSubstreamID();
 
         return Streaming::INVALID_SUBSTREAM_ID;
+    }
+
+    Streaming::WatermarkBound getWatermark() const
+    {
+        assert(chunk_ctx);
+        return chunk_ctx->getWatermark();
     }
 
     void reserve(size_t num_columns)

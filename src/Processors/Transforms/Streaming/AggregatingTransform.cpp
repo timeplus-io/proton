@@ -136,7 +136,7 @@ void AggregatingTransform::consume(Chunk chunk)
         }
         else
         {
-            if (!params->aggregator.executeOnBlock(columns, num_rows, variants, key_columns, aggregate_columns, no_more_keys))
+            if (!params->aggregator.executeOnBlock(std::move(columns), num_rows, variants, key_columns, aggregate_columns, no_more_keys))
                 is_consume_finished = true;
         }
     }
@@ -232,12 +232,14 @@ void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
     /// FIXME, concurrency
     UInt16 num_variants = many_data->variants.size();
+    Int64 last_version = many_data->version;
     for (size_t current_aggr = 0; const auto & data_variant : many_data->variants)
     {
         auto logic_id = many_data->aggregating_transforms[current_aggr]->getLogicID();
         UInt64 last_rows = *many_data->rows_since_last_finalizations[current_aggr];
-        ckpt_ctx->coordinator->checkpoint(getVersion(), logic_id, ckpt_ctx, [num_variants, last_rows, data_variant, this](WriteBuffer & wb) {
+        ckpt_ctx->coordinator->checkpoint(getVersion(), logic_id, ckpt_ctx, [num_variants, last_version, last_rows, data_variant, this](WriteBuffer & wb) {
             DB::writeIntBinary(num_variants, wb);
+            DB::writeIntBinary(last_version, wb);
             DB::writeIntBinary(last_rows, wb);
             params->aggregator.checkpoint(*data_variant, wb);
         });
@@ -261,6 +263,10 @@ void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
                     "Failed to recover aggregation checkpoint. Number of data variants are not the same, checkpointed={}, current={}",
                     num_variants,
                     many_data->variants.size());
+
+            Int64 last_version = 0;
+            DB::readIntBinary(last_version, rb);
+            many_data->version = last_version;
 
             UInt64 last_rows = 0;
             DB::readIntBinary(last_rows, rb);

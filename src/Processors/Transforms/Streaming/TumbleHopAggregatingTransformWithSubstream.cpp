@@ -8,14 +8,15 @@ namespace Streaming
 {
 
 TumbleHopAggregatingTransformWithSubstream::TumbleHopAggregatingTransformWithSubstream(Block header, AggregatingTransformParamsPtr params_)
-    : TumbleHopAggregatingTransformWithSubstream(std::move(header), std::move(params_), std::make_shared<SubstreamManyAggregatedData>(1), 0, 1, 1)
+    : TumbleHopAggregatingTransformWithSubstream(
+        std::move(header), std::move(params_), std::make_shared<SubstreamManyAggregatedData>(1), 0, 1, 1)
 {
 }
 
 TumbleHopAggregatingTransformWithSubstream::TumbleHopAggregatingTransformWithSubstream(
     Block header,
     AggregatingTransformParamsPtr params_,
-    SubstraemManyAggregatedDataPtr substream_many_data_,
+    SubstreamManyAggregatedDataPtr substream_many_data_,
     size_t current_variant_,
     size_t max_threads_,
     size_t temporary_data_merge_threads_)
@@ -36,13 +37,11 @@ TumbleHopAggregatingTransformWithSubstream::TumbleHopAggregatingTransformWithSub
 
 void TumbleHopAggregatingTransformWithSubstream::consume(Chunk chunk)
 {
-    const UInt64 num_rows = chunk.getNumRows();
-
-    if (num_rows > 0)
+    if (chunk.hasRows())
     {
-        Columns columns = chunk.detachColumns();
         assert(chunk.hasChunkContext());
-        executeOrMergeColumns(columns, chunk.getChunkContext()->getSubStreamID());
+        if (!executeOrMergeColumns(chunk.detachColumns(), chunk.getSubstreamID()))
+            is_consume_finished = true;
     }
 
     if (chunk.hasWatermark())
@@ -54,7 +53,7 @@ void TumbleHopAggregatingTransformWithSubstream::consume(Chunk chunk)
 void TumbleHopAggregatingTransformWithSubstream::finalize(ChunkContextPtr chunk_ctx)
 {
     auto watermark = chunk_ctx->getWatermark();
-    SubstreamContextPtr substream_ctx = getSubstreamContext(watermark.id);
+    SubstreamContextPtr substream_ctx = getOrCreateSubstreamContext(watermark.id);
     auto [min_watermark, max_watermark, arena_watermark] = finalizeAndGetWatermarks(substream_ctx, watermark);
 
     /// Do memory arena recycling by last finalized watermark
@@ -88,7 +87,7 @@ void TumbleHopAggregatingTransformWithSubstream::finalize(ChunkContextPtr chunk_
         // Clear the finalizing count and set arena recycle watermark
         {
             std::lock_guard<std::mutex> lock(substream_ctx->finalizing_mutex);
-            substream_ctx->finalized.reset();
+            substream_ctx->resetFinalized();
 
             /// We first notify all other variants that the aggregation is done for this round
             /// and then remove the project window buckets and their memory arena for the current variant.
@@ -102,7 +101,7 @@ void TumbleHopAggregatingTransformWithSubstream::finalize(ChunkContextPtr chunk_
 void TumbleHopAggregatingTransformWithSubstream::doFinalize(const WatermarkBound & watermark, ChunkContextPtr & chunk_ctx)
 {
     /// FIXME spill to disk, overflow_row etc cases
-    auto substream_ctx = getSubstreamContext(watermark.id);
+    auto substream_ctx = getOrCreateSubstreamContext(watermark.id);
 
     /// We lock all variants of current substream to merge
     std::lock_guard lock(substream_ctx->variants_mutex);
@@ -149,7 +148,8 @@ void TumbleHopAggregatingTransformWithSubstream::convertTwoLevel(
 
         for (auto bucket : buckets)
         {
-            Block block = params->aggregator.mergeAndConvertOneBucketToBlock(*data, arena, params->final, ConvertAction::STREAMING_EMIT, bucket, &is_cancelled);
+            Block block = params->aggregator.mergeAndConvertOneBucketToBlock(
+                *data, arena, params->final, ConvertAction::STREAMING_EMIT, bucket, &is_cancelled);
             if (is_cancelled)
                 return;
 
@@ -186,34 +186,39 @@ std::tuple<WatermarkBound, WatermarkBound, WatermarkBound>
 TumbleHopAggregatingTransformWithSubstream::finalizeAndGetWatermarks(SubstreamContextPtr substream_ctx, const WatermarkBound & wb)
 {
     WatermarkBound min_watermark, max_watermark, arena_watermark;
-    std::lock_guard lock(substream_ctx->finalizing_mutex);
-    /// Update min/max watermark for current substream
-    if (wb.watermark < substream_ctx->min_watermark.watermark)
-        substream_ctx->min_watermark = wb;
 
-    if (wb.watermark > substream_ctx->max_watermark.watermark)
-        substream_ctx->max_watermark = wb;
-
-    /// Set finalized status for one part of current substream,
-    /// and return min/max watermark that requires finalizing
-    substream_ctx->finalized.set(current_variant);
-    if (substream_ctx->finalized == all_finalized_mark)
     {
-        min_watermark = substream_ctx->min_watermark;
-        max_watermark = substream_ctx->max_watermark;
-        substream_ctx->min_watermark = MAX_WATERMARK;
-        substream_ctx->max_watermark = MIN_WATERMARK;
-    }
+        std::lock_guard lock(substream_ctx->finalizing_mutex);
 
-    /// Return watermark that requires arena recycling
-    /// (ignored the same watermark in same substream)
-    if (prev_arena_watermark != substream_ctx->arena_watermark)
-    {
-        arena_watermark = substream_ctx->arena_watermark;
-        prev_arena_watermark = arena_watermark;
+        /// Update min/max watermark for current substream
+        if (wb.watermark < substream_ctx->min_watermark.watermark)
+            substream_ctx->min_watermark = wb;
+
+        if (wb.watermark > substream_ctx->max_watermark.watermark)
+            substream_ctx->max_watermark = wb;
+
+        /// Set finalized status for one part of current substream,
+        /// and return min/max watermark that requires finalizing
+        substream_ctx->finalized[current_variant] = 1;
+        if (substream_ctx->allFinalized())
+        {
+            min_watermark = substream_ctx->min_watermark;
+            max_watermark = substream_ctx->max_watermark;
+            substream_ctx->min_watermark = MAX_WATERMARK;
+            substream_ctx->max_watermark = MIN_WATERMARK;
+        }
+
+        /// Return watermark that requires arena recycling
+        /// (ignored the same watermark in same substream)
+        if (prev_arena_watermark != substream_ctx->arena_watermark)
+        {
+            arena_watermark = substream_ctx->arena_watermark;
+            prev_arena_watermark = arena_watermark;
+        }
     }
 
     return {min_watermark, max_watermark, arena_watermark};
 }
+
 }
 }

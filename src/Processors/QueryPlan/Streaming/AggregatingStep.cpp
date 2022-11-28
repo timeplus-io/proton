@@ -148,18 +148,27 @@ void AggregatingStep::transformPipelineWithSubstream(
         if (!storage_has_evenly_distributed_read)
             pipeline.resize(pipeline.getNumStreams(), true, true);
 
-        auto substream_many_data = std::make_shared<SubstreamManyAggregatedData>(pipeline.getNumStreams());
+        if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
+            || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
+        {
+            auto substream_many_data = std::make_shared<SubstreamManyAggregatedData>(pipeline.getNumStreams());
 
-        size_t counter = 0;
-        pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
-            if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
-                || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
+            size_t counter = 0;
+            pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
                 return std::make_shared<TumbleHopAggregatingTransformWithSubstream>(
                     header, transform_params, substream_many_data, counter++, merge_threads, temporary_data_merge_threads);
-            else
+            });
+        }
+        else
+        {
+            auto session_many_data = std::make_shared<SessionManyAggregatedData>(pipeline.getNumStreams());
+
+            size_t counter = 0;
+            pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
                 return std::make_shared<SessionAggregatingTransform>(
-                    header, transform_params, substream_many_data, counter++, merge_threads, temporary_data_merge_threads);
-        });
+                    header, transform_params, session_many_data, counter++, merge_threads, temporary_data_merge_threads);
+            });
+        }
 
         pipeline.resize(1);
     }
@@ -176,5 +185,6 @@ void AggregatingStep::transformPipelineWithSubstream(
         });
     }
 }
+
 }
 }

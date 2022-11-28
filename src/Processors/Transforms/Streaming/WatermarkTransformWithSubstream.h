@@ -44,7 +44,6 @@ private:
         FunctionDescriptionPtr desc,
         bool proc_time);
 
-    inline std::pair<Int64, Int64> calcMinMaxEventTime(const Chunk & chunk) const;
     inline Watermark & getOrCreateSubstreamWatermark(const SubstreamID & id);
 
     Block header;

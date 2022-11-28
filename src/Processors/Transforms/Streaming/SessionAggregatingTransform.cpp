@@ -17,29 +17,34 @@ namespace Streaming
 {
 
 SessionAggregatingTransform::SessionAggregatingTransform(Block header, AggregatingTransformParamsPtr params_)
-    : SessionAggregatingTransform(std::move(header), std::move(params_), std::make_shared<SubstreamManyAggregatedData>(1), 0, 1, 1)
+    : SessionAggregatingTransform(std::move(header), std::move(params_), std::make_shared<SessionManyAggregatedData>(1), 0, 1, 1)
 {
 }
 
 SessionAggregatingTransform::SessionAggregatingTransform(
     Block header,
     AggregatingTransformParamsPtr params_,
-    SubstraemManyAggregatedDataPtr substream_many_data_,
+    SessionManyAggregatedDataPtr session_many_data_,
     size_t current_variant_,
     size_t max_threads_,
     size_t temporary_data_merge_threads_)
     : AggregatingTransformWithSubstream(
         std::move(header),
         std::move(params_),
-        std::move(substream_many_data_),
+        session_many_data_->substream_many_data,
         current_variant_,
         max_threads_,
         temporary_data_merge_threads_,
         "SessionAggregatingTransform",
         ProcessorID::SessionAggregatingTransformID)
-    , session_map(*(substream_many_data->sessions_maps[current_variant] = std::make_shared<SubstreamHashMap<SessionInfoPtr>>()))
+    , session_many_data(std::move(session_many_data_))
+    , session_map(*session_many_data->sessions_maps[current_variant])
 {
     assert(params->params.group_by == Aggregator::Params::GroupBy::SESSION);
+
+    /// FIXME: support parallel aggregating
+    if (many_aggregating_size != 1)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Parallel processing session window is not supported");
 }
 
 void SessionAggregatingTransform::consume(Chunk chunk)
@@ -51,14 +56,15 @@ void SessionAggregatingTransform::consume(Chunk chunk)
         Columns columns = chunk.detachColumns();
 
         /// Prepare for session window
-        ColumnPtr time_column = columns.at(params->params.time_col_pos);
+        ColumnPtr time_column = columns[params->params.time_col_pos];
 
         /// FIXME: Better to handle ColumnConst in method `processSessionRow`. The performance should be better.
-        ColumnPtr session_start_column = columns.at(params->params.session_start_pos)->convertToFullColumnIfConst();
-        ColumnPtr session_end_column = columns.at(params->params.session_end_pos)->convertToFullColumnIfConst();
+        ColumnPtr session_start_column = columns[params->params.session_start_pos]->convertToFullColumnIfConst();
+        ColumnPtr session_end_column = columns[params->params.session_end_pos]->convertToFullColumnIfConst();
 
         /// Get session info
-        SessionInfo & session_info = getOrCreateSessionInfo(chunk.getSubStreamID());
+        assert(chunk.hasChunkContext());
+        SessionInfo & session_info = getOrCreateSessionInfo(chunk.getSubstreamID());
 
         /// Prepare sessions to emit / process
         std::vector<IColumn::Filter> session_filters;
@@ -72,36 +78,35 @@ void SessionAggregatingTransform::consume(Chunk chunk)
 
         /// Prepare data in sessions
         /// [To process and emit session(s) ...] + [To process session]
-        UInt64 session_count = session_filters.size();
-        std::vector<Columns> columns_for_session(session_count, Columns(columns.size()));
+        auto session_count = session_filters.size();
+        std::vector<Columns> session_columns(session_count, Columns(columns.size()));
         for (size_t session_idx = 0; session_idx < session_count; ++session_idx)
         {
             const auto & filter = session_filters[session_idx];
+            auto & session_cols = session_columns[session_idx];
             for (size_t col_idx = 0; auto & column : columns)
             {
-                columns_for_session[session_idx][col_idx] = column->filter(filter, -1);
+                session_cols[col_idx] = column->filter(filter, -1);
                 ++col_idx;
             }
         }
 
         /// To process and emit session(s)
-        auto session_begin_to_emit = columns_for_session.begin();
+        auto session_begin_to_emit = session_columns.begin();
         auto session_end_to_emit = std::next(session_begin_to_emit, sessions_info_to_emit.size());
         size_t index_to_emit = 0;
-        std::for_each(session_begin_to_emit, session_end_to_emit, [&](const auto & columns_to_process) {
-            /// FIXME: handle the process error when return value is true
-            if (!executeOrMergeColumns(columns_to_process, session_info.id))
-                is_consume_finished = false;
+        std::for_each(session_begin_to_emit, session_end_to_emit, [&](auto & columns_to_process) {
+            if (!executeOrMergeColumns(std::move(columns_to_process), session_info.id))
+                is_consume_finished = true;
 
             finalizeSession(sessions_info_to_emit[index_to_emit++], merged_block);
         });
 
         /// To process session (not emit)
-        assert(columns_for_session.end() - session_end_to_emit <= 1);
-        std::for_each(session_end_to_emit, columns_for_session.end(), [&](const auto & columns_to_process) {
-            /// FIXME: handle the process error when return value is true
-            if (!executeOrMergeColumns(columns_to_process, session_info.id))
-                is_consume_finished = false;
+        assert(std::distance(session_end_to_emit, session_columns.end()) <= 1);
+        std::for_each(session_end_to_emit, session_columns.end(), [&](auto & columns_to_process) {
+            if (!executeOrMergeColumns(std::move(columns_to_process), session_info.id))
+                is_consume_finished = true;
         });
     }
 
@@ -117,30 +122,38 @@ void SessionAggregatingTransform::consume(Chunk chunk)
 /// Only for streaming aggregation case
 void SessionAggregatingTransform::finalizeSession(const SessionInfo & info, Block & merged_block)
 {
-    /// TODO: support parallel aggregating
-    if (many_aggregating_size != 1)
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented parallel processing session window");
-
     SCOPE_EXIT({ many_data->resetRowCounts(); });
 
     auto start = MonotonicMilliseconds::now();
 
-    auto substream_ctx = getSubstreamContext(info.id);
+    auto substream_ctx = getOrCreateSubstreamContext(info.id);
 
     /// We lock all variants of current substream to merge
-    std::lock_guard lock(substream_ctx->variants_mutex);
-    auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(substream_ctx->many_variants);
-    if (prepared_data_ptr->empty())
-        return;
+    {
+        std::lock_guard lock(substream_ctx->variants_mutex);
 
-    AggregatedDataVariantsPtr & first = prepared_data_ptr->at(0);
-    /// At least we need one arena in first data item per thread
-    Arenas & first_pool = first->aggregates_pools;
-    for (size_t j = first_pool.size(); j < max_threads; j++)
-        first_pool.emplace_back(std::make_shared<Arena>());
+        auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(substream_ctx->many_variants);
+        if (prepared_data_ptr->empty())
+            return;
 
-    assert(!prepared_data_ptr->at(0)->isTwoLevel());
-    convertSingleLevel(prepared_data_ptr, info, merged_block);
+        AggregatedDataVariantsPtr & first = prepared_data_ptr->at(0);
+        /// At least we need one arena in first data item per thread
+        Arenas & first_pool = first->aggregates_pools;
+        for (size_t j = first_pool.size(); j < max_threads; j++)
+            first_pool.emplace_back(std::make_shared<Arena>());
+
+        assert(!prepared_data_ptr->at(0)->isTwoLevel());
+        convertSingleLevel(prepared_data_ptr, info, merged_block);
+
+        /// Clear and reuse current session variants
+        for (auto & variants : substream_ctx->many_variants)
+        {
+            variants->init(variants->type);
+            variants->aggregates_pools = Arenas(1, std::make_shared<Arena>());
+            variants->aggregates_pool = variants->aggregates_pools.back().get();
+            params->aggregator.initStatesForWithoutKeyOrOverflow(*variants);
+        }
+    }
 
     auto end = MonotonicMilliseconds::now();
     LOG_INFO(
@@ -149,16 +162,7 @@ void SessionAggregatingTransform::finalizeSession(const SessionInfo & info, Bloc
         end - start,
         many_aggregating_size,
         info.id,
-        info.toString());
-
-    /// Clear and reuse current session variants
-    for (auto variants : substream_ctx->many_variants)
-    {
-        variants->init(variants->type);
-        variants->aggregates_pools = Arenas(1, std::make_shared<Arena>());
-        variants->aggregates_pool = variants->aggregates_pools.back().get();
-        params->aggregator.initStatesForWithoutKeyOrOverflow(*variants);
-    }
+        info.string());
 }
 
 void SessionAggregatingTransform::convertSingleLevel(ManyAggregatedDataVariantsPtr & data, const SessionInfo & info, Block & final_block)
@@ -230,7 +234,7 @@ SessionInfo & SessionAggregatingTransform::getOrCreateSessionInfo(const SessionI
     if (!session_info_ptr)
     {
         /// Initial session info
-        session_info_ptr = std::make_shared<SessionInfo>();
+        session_info_ptr = std::make_unique<SessionInfo>();
         session_info_ptr->id = id;
         session_info_ptr->scale = params->params.time_scale;
         session_info_ptr->interval = params->params.window_interval;
@@ -270,6 +274,7 @@ std::pair<std::vector<IColumn::Filter>, SessionInfos> SessionAggregatingTransfor
     const DateLUTImpl & time_zone = DateLUT::instance("UTC");
 
     auto ignore_row = [&]() { filter[offset] = 0; };
+
     auto keep_row = [&]() {
         filter[offset] = 1;
         /// Extend session window end and timeout timestamp
@@ -280,7 +285,7 @@ std::pair<std::vector<IColumn::Filter>, SessionInfos> SessionAggregatingTransfor
         }
     };
 
-    /// Keep/igonre the start session row
+    /// Keep/ignore the start session row
     auto keep_row_if_include_start = [&]() {
         if (params->params.window_desc->start_with_boundary)
             keep_row();
@@ -288,7 +293,7 @@ std::pair<std::vector<IColumn::Filter>, SessionInfos> SessionAggregatingTransfor
             ignore_row();
     };
 
-    /// Keep/igonre the close session row
+    /// Keep/ignore the close session row
     auto keep_row_if_include_end = [&]() {
         if (params->params.window_desc->end_with_boundary)
             keep_row();
@@ -305,7 +310,7 @@ std::pair<std::vector<IColumn::Filter>, SessionInfos> SessionAggregatingTransfor
         info.win_start = ts_secs;
         info.win_end = ts_secs + 1;
         info.timeout_ts = addTime(info.win_end, params->params.interval_kind, params->params.window_interval, time_zone, info.scale);
-        info.ingore_ts = addTime(info.win_start, params->params.timeout_kind, -1 * params->params.session_size, time_zone, info.scale);
+        info.ignore_ts = addTime(info.win_start, params->params.timeout_kind, -1 * params->params.session_size, time_zone, info.scale);
         info.max_session_ts = addTime(info.win_start, params->params.timeout_kind, params->params.session_size, time_zone, info.scale);
         info.active = true;
     };
@@ -331,7 +336,7 @@ std::pair<std::vector<IColumn::Filter>, SessionInfos> SessionAggregatingTransfor
             /// 3) if event_time > @max_session_ts, close session
             /// 4) if session end condition is true, close session
             assert(info.win_start <= info.win_end);
-            if (ts_secs < info.ingore_ts)
+            if (ts_secs < info.ignore_ts)
                 ignore_row();
             else if (ts_secs > info.timeout_ts || ts_secs > info.max_session_ts)
             {
@@ -379,27 +384,27 @@ std::pair<std::vector<IColumn::Filter>, SessionInfos> SessionAggregatingTransfor
 
 void SessionAggregatingTransform::emitGlobalOversizeSessionsIfPossible(const Chunk & chunk, Block & merged_block)
 {
-    if (chunk.hasWatermark())
+    if (!chunk.hasWatermark())
+        return;
+
+    auto max_ts = chunk.getWatermark().watermark;
+    if (max_ts >= max_event_ts)
     {
-        auto max_ts = chunk.getChunkContext()->getWatermark().watermark;
-        if (max_ts >= max_event_ts)
+        for (auto & [_, session_info] : session_map)
         {
-            for (auto & [_, session_info] : session_map)
+            if (!session_info->active)
+                continue;
+
+            /// emit sessions if has oversize session
+            if (max_ts > session_info->max_session_ts)
             {
-                if (!session_info->active)
-                    continue;
-
-                /// emit sessions if has oversize session
-                if (max_ts > session_info->max_session_ts)
-                {
-                    LOG_INFO(log, "Found oversize session-{}{}, will finalizing ...", session_info->id, session_info->toString());
-                    session_info->active = false;
-                    finalizeSession(*session_info, merged_block);
-                }
+                LOG_INFO(log, "Found oversize session-{}{}, will finalizing ...", session_info->id, session_info->string());
+                session_info->active = false;
+                finalizeSession(*session_info, merged_block);
             }
-
-            max_event_ts = max_ts;
         }
+
+        max_event_ts = max_ts;
     }
 }
 
