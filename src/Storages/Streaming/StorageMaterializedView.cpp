@@ -305,6 +305,10 @@ void StorageMaterializedView::read(
         header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
 
     auto storage = getTargetTable();
+    /// stop query, if the inner table has been deleted.
+    if (!storage)
+        throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Inner table of {}", getStorageID().getFullTableName());
+
     auto lock = storage->lockForShare(local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
     auto target_metadata_snapshot = storage->getInMemoryMetadataPtr();
     auto target_storage_snapshot = storage->getStorageSnapshot(target_metadata_snapshot);
