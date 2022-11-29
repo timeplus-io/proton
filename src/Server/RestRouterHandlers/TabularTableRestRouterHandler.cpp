@@ -103,7 +103,8 @@ bool TabularTableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr &
         if (!isDistributedDDL())
             continue;
 
-        if (std::find(ProtonConsts::RESERVED_COLUMN_NAMES.begin(), ProtonConsts::RESERVED_COLUMN_NAMES.end(), col_ptr->get("name").toString())
+        if (std::find(
+                ProtonConsts::RESERVED_COLUMN_NAMES.begin(), ProtonConsts::RESERVED_COLUMN_NAMES.end(), col_ptr->get("name").toString())
             != ProtonConsts::RESERVED_COLUMN_NAMES.end())
         {
             error_msg = fmt::format("Column '{}' is reserved.", col_ptr->get("name").toString());
@@ -111,7 +112,9 @@ bool TabularTableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr &
         }
 
         if (std::find(
-                ProtonConsts::RESERVED_COLUMN_NAMES.begin(), ProtonConsts::RESERVED_COLUMN_NAMES.end(), col.extract<Poco::JSON::Object::Ptr>()->get("name").toString())
+                ProtonConsts::RESERVED_COLUMN_NAMES.begin(),
+                ProtonConsts::RESERVED_COLUMN_NAMES.end(),
+                col.extract<Poco::JSON::Object::Ptr>()->get("name").toString())
             != ProtonConsts::RESERVED_COLUMN_NAMES.end())
         {
             error_msg = fmt::format("Column '{}' is reserved.", col.extract<Poco::JSON::Object::Ptr>()->get("name").toString());
@@ -170,7 +173,7 @@ String TabularTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Obj
 {
     const auto & columns = payload->getArray("columns");
 
-    bool has_event_time = false, has_index_time = false, has_delta_flag = false;
+    bool has_event_time = false, has_index_time = false, has_event_sn = false, has_delta_flag = false;
     std::vector<String> columns_definition;
     for (const auto & col : *columns)
     {
@@ -182,6 +185,8 @@ String TabularTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Obj
             has_event_time = true;
         else if (name == ProtonConsts::RESERVED_INDEX_TIME)
             has_index_time = true;
+        else if (name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID)
+            has_event_sn = true;
         else if (name == ProtonConsts::RESERVED_DELTA_FLAG)
             has_delta_flag = true;
     }
@@ -191,15 +196,27 @@ String TabularTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Obj
         if (payload->has(ProtonConsts::RESERVED_EVENT_TIME_API_NAME))
             /// FIXME: validate the result type of RESERVED_EVENT_TIME_API_NAME expression
             columns_definition.push_back(fmt::format(
-                "`{}` datetime64(3, 'UTC') DEFAULT {}", ProtonConsts::RESERVED_EVENT_TIME, payload->get(ProtonConsts::RESERVED_EVENT_TIME_API_NAME).toString()));
+                "`{}` datetime64(3, 'UTC') DEFAULT {}",
+                ProtonConsts::RESERVED_EVENT_TIME,
+                payload->get(ProtonConsts::RESERVED_EVENT_TIME_API_NAME).toString()));
         else
-            columns_definition.push_back(
-                fmt::format("`{}` datetime64(3, 'UTC') DEFAULT now64(3, 'UTC') CODEC (DoubleDelta, LZ4)", ProtonConsts::RESERVED_EVENT_TIME));
+            columns_definition.push_back(fmt::format(
+                "`{}` datetime64(3, 'UTC') DEFAULT now64(3, 'UTC') CODEC (DoubleDelta, LZ4)", ProtonConsts::RESERVED_EVENT_TIME));
     }
 
+    (void)has_index_time;
+    (void)has_event_sn;
+
+#if 0
     if (!has_index_time)
         /// RESERVED_INDEX_TIME will need recalculate when the block gets indexed to historical store
         columns_definition.push_back(fmt::format("`{}` datetime64(3, 'UTC') CODEC (DoubleDelta, LZ4)", ProtonConsts::RESERVED_INDEX_TIME));
+
+
+    /// RESERVED_EVENT_SEQUENCE_ID will be recalculated when the block gets indexed to historical store
+    if (!has_event_sn)
+        columns_definition.push_back(fmt::format("`{}` Int64 CODEC (Delta, LZ4)", ProtonConsts::RESERVED_EVENT_SEQUENCE_ID));
+#endif
 
     if (!has_delta_flag)
     {
@@ -208,8 +225,6 @@ String TabularTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Obj
             columns_definition.push_back(fmt::format("`{}` int8 DEFAULT 1", ProtonConsts::RESERVED_DELTA_FLAG));
     }
 
-    /// RESERVED_EVENT_SEQUENCE_ID will be recalculate when the block gets indexed to historical store
-    /// columns_definition.push_back("`" + RESERVED_EVENT_SEQUENCE_ID + "` Int64 CODEC (Delta, LZ4)");
     return boost::algorithm::join(columns_definition, ", ");
 }
 

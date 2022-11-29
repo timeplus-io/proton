@@ -164,8 +164,8 @@ void checkAndPrepareColumns(ASTCreateQuery & create)
     event_time_default.tryGet<String>(event_time_default_expr);
 
     bool has_event_time = false;
-    bool has_index_time = false;
-    bool has_sequence_id = false;
+    [[maybe_unused]] bool has_index_time = false;
+    [[maybe_unused]] bool has_sequence_id = false;
     bool has_delta_flag = false;
 
     for (const ASTPtr & column_ast : column_asts)
@@ -254,6 +254,7 @@ void checkAndPrepareColumns(ASTCreateQuery & create)
         column_asts.emplace_back(std::move(col_tp_time));
     }
 
+#if 0
     if (!has_index_time)
     {
         auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
@@ -274,8 +275,6 @@ void checkAndPrepareColumns(ASTCreateQuery & create)
         column_asts.emplace_back(std::move(col_tp_time));
     }
 
-    (void)has_sequence_id;
-#if 0
     if (!has_sequence_id)
     {
         auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
@@ -620,5 +619,6 @@ void waitForDDLOps(Poco::Logger * log, const ContextMutablePtr & ctx, bool force
         }
     }
 }
+
 }
 }
