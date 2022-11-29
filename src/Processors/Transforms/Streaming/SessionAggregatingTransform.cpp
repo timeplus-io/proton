@@ -53,6 +53,10 @@ void SessionAggregatingTransform::consume(Chunk chunk)
     auto num_rows = chunk.getNumRows();
     if (num_rows > 0)
     {
+        /// Get session info
+        assert(chunk.hasChunkContext());
+        SessionInfo & session_info = getOrCreateSessionInfo(chunk.getSubstreamID());
+
         Columns columns = chunk.detachColumns();
 
         /// Prepare for session window
@@ -61,10 +65,6 @@ void SessionAggregatingTransform::consume(Chunk chunk)
         /// FIXME: Better to handle ColumnConst in method `processSessionRow`. The performance should be better.
         ColumnPtr session_start_column = columns[params->params.session_start_pos]->convertToFullColumnIfConst();
         ColumnPtr session_end_column = columns[params->params.session_end_pos]->convertToFullColumnIfConst();
-
-        /// Get session info
-        assert(chunk.hasChunkContext());
-        SessionInfo & session_info = getOrCreateSessionInfo(chunk.getSubstreamID());
 
         /// Prepare sessions to emit / process
         std::vector<IColumn::Filter> session_filters;
@@ -230,6 +230,8 @@ void SessionAggregatingTransform::convertSingleLevel(ManyAggregatedDataVariantsP
 
 SessionInfo & SessionAggregatingTransform::getOrCreateSessionInfo(const SessionID & id)
 {
+    /// assert(id != INVALID_SUBSTREAM_ID);
+
     auto & session_info_ptr = session_map[id];
     if (!session_info_ptr)
     {

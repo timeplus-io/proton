@@ -2879,6 +2879,16 @@ private:
 
                         return true;
                     }
+
+                    /// proton : starts. For string to datetime64 conversion, we like to use BestEffortUS
+                    if constexpr (std::is_same_v<RightDataType, DataTypeDateTime64>)
+                    {
+
+                        using BestEffortDatetime64Parsing = ConvertThroughParsing<LeftDataType , RightDataType, FunctionName, ConvertFromStringExceptionMode::Zero, ConvertFromStringParsingMode::BestEffortUS>;
+                        result_column = BestEffortDatetime64Parsing::execute(arguments, result_type, input_rows_count, scale);
+                        return true;
+                    }
+                    /// proton : ends
                 }
 
                 result_column = ConvertImpl<LeftDataType, RightDataType, FunctionName>::execute(arguments, result_type, input_rows_count, scale);

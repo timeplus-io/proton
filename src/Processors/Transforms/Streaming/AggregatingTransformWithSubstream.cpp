@@ -57,7 +57,7 @@ bool AggregatingTransformWithSubstream::executeOrMergeColumns(Columns columns, c
 
 SubstreamContextPtr AggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
 {
-    assert(id != INVALID_SUBSTREAM_ID);
+    /// assert(id != INVALID_SUBSTREAM_ID);
 
     std::lock_guard lock(substream_many_data->ctx_mutex);
 
