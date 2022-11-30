@@ -201,10 +201,22 @@ GroupByKeysInfo getGroupByKeysInfo(const ASTs & group_by_keys)
     /// filling set with short names of keys
     for (const auto & group_key : group_by_keys)
     {
-        if (group_key->as<ASTFunction>())
-            data.has_function = true;
+        /// for grouping sets case
+        if (group_key->as<ASTExpressionList>())
+        {
+            const auto express_list_ast = group_key->as<const ASTExpressionList &>();
+            for (const auto & group_elem : express_list_ast.children)
+            {
+                data.key_names.insert(group_elem->getColumnName());
+            }
+        }
+        else
+        {
+            if (group_key->as<ASTFunction>())
+                data.has_function = true;
 
-        data.key_names.insert(group_key->getColumnName());
+            data.key_names.insert(group_key->getColumnName());
+        }
     }
 
     return data;
@@ -437,11 +449,26 @@ void optimizeMonotonousFunctionsInOrderBy(ASTSelectQuery * select_query, Context
     std::unordered_set<String> group_by_hashes;
     if (auto group_by = select_query->groupBy())
     {
-        for (auto & elem : group_by->children)
+        if (select_query->group_by_with_grouping_sets)
         {
-            auto hash = elem->getTreeHash();
-            String key = toString(hash.first) + '_' + toString(hash.second);
-            group_by_hashes.insert(key);
+            for (auto & set : group_by->children)
+            {
+                for (auto & elem : set->children)
+                {
+                    auto hash = elem->getTreeHash();
+                    String key = toString(hash.first) + '_' + toString(hash.second);
+                    group_by_hashes.insert(key);
+                }
+            }
+        }
+        else
+        {
+            for (auto & elem : group_by->children)
+            {
+                auto hash = elem->getTreeHash();
+                String key = toString(hash.first) + '_' + toString(hash.second);
+                group_by_hashes.insert(key);
+            }
         }
     }
 

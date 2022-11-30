@@ -18,6 +18,7 @@
 #include <Common/ColumnsHashing.h>
 #include <Common/assert_cast.h>
 #include <Common/filesystemHelpers.h>
+#include <Core/ColumnNumbers.h>
 
 #include <QueryPipeline/SizeLimits.h>
 

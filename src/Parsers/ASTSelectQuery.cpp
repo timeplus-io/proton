@@ -22,44 +22,20 @@ namespace ErrorCodes
 ASTPtr ASTSelectQuery::clone() const
 {
     auto res = std::make_shared<ASTSelectQuery>(*this);
+
+    /** NOTE Members must clone exactly in the same order in which they were inserted into `children` in ParserSelectQuery.
+     * This is important because the AST hash depends on the children order and this hash is used for multiple things,
+     * like the column identifiers in the case of subqueries in the IN statement or caching scalar queries (reused in CTEs so it's
+     * important for them to have the same hash).
+     * For distributed query processing, in case one of the servers is localhost and the other one is not, localhost query is executed
+     * within the process and is cloned, and the request is sent to the remote server in text form via TCP.
+     * And if the cloning order does not match the parsing order then different servers will get different identifiers.
+     *
+     * Since the positions map uses <key, position> we can copy it as is and ensure the new children array is created / pushed
+     * in the same order as the existing one */
     res->children.clear();
-    res->positions.clear();
-
-#define CLONE(expr) res->setExpression(expr, getExpression(expr, true))
-
-    /** NOTE Members must clone exactly in the same order,
-        *  in which they were inserted into `children` in ParserSelectQuery.
-        * This is important because of the children's names the identifier (getTreeHash) is compiled,
-        *  which can be used for column identifiers in the case of subqueries in the IN statement.
-        * For distributed query processing, in case one of the servers is localhost and the other one is not,
-        *  localhost query is executed within the process and is cloned,
-        *  and the request is sent to the remote server in text form via TCP.
-        * And if the cloning order does not match the parsing order,
-        *  then different servers will get different identifiers.
-        */
-    CLONE(Expression::WITH);
-    CLONE(Expression::SELECT);
-    CLONE(Expression::TABLES);
-    CLONE(Expression::PREWHERE);
-    CLONE(Expression::WHERE);
-    /// proton: starts
-    CLONE(Expression::PARTITION_BY);
-    /// proton: ends.
-    CLONE(Expression::GROUP_BY);
-    CLONE(Expression::HAVING);
-    CLONE(Expression::WINDOW);
-    CLONE(Expression::ORDER_BY);
-    CLONE(Expression::LIMIT_BY_OFFSET);
-    CLONE(Expression::LIMIT_BY_LENGTH);
-    CLONE(Expression::LIMIT_BY);
-    CLONE(Expression::LIMIT_OFFSET);
-    CLONE(Expression::LIMIT_LENGTH);
-    /// proton: starts
-    CLONE(Expression::EMIT);
-    /// proton: ends
-    CLONE(Expression::SETTINGS);
-
-#undef CLONE
+    for (const auto & child : children)
+        res->children.push_back(child->clone());
 
     return res;
 }
@@ -150,9 +126,12 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
         /// proton: starts
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "GROUP BY" << (s.one_line ? "" : "\n") << next_indent_str << (s.hilite ? hilite_none : "");
         /// proton: ends
-        s.one_line
+        if (!group_by_with_grouping_sets)
+        {
+            s.one_line
             ? groupBy()->formatImpl(s, state, frame)
             : groupBy()->as<ASTExpressionList &>().formatImplMultiline(s, state, frame);
+        }
     }
 
     if (group_by_with_rollup)
@@ -160,6 +139,20 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
 
     if (group_by_with_cube)
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << (s.one_line ? "" : "    ") << "WITH CUBE" << (s.hilite ? hilite_none : "");
+
+    if (group_by_with_grouping_sets)
+    {
+        auto nested_frame = frame;
+        nested_frame.surround_each_list_element_with_parens = true;
+        nested_frame.expression_list_prepend_whitespace = false;
+        nested_frame.indent++;
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << (s.one_line ? "" : "    ") << "GROUPING SETS" << (s.hilite ? hilite_none : "");
+        s.ostr << " (";
+        s.one_line
+        ? groupBy()->formatImpl(s, state, nested_frame)
+        : groupBy()->as<ASTExpressionList &>().formatImplMultiline(s, state, nested_frame);
+        s.ostr << ")";
+    }
 
     if (group_by_with_totals)
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << (s.one_line ? "" : "    ") << "WITH TOTALS" << (s.hilite ? hilite_none : "");
