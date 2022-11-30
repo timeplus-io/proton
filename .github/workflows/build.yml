@@ -127,6 +127,12 @@ jobs:
 
         docker manifest push timeplus/proton:prestage
 
+        docker manifest create timeplus/proton:latest \
+          timeplus/proton:prestage-amd64 \
+          timeplus/proton:prestage-arm64v8
+
+        docker manifest push timeplus/proton:latest
+
         PROTON_TAG="$(docker history --no-trunc timeplus/proton:prestage-amd64 | grep -Eo 'ARG version=[0-9]+.[0-9]+.[0-9]+' -o | grep -Eo '[0-9]+.[0-9]+.[0-9]+')"
         docker manifest create timeplus/proton:$PROTON_TAG-prestage \
           timeplus/proton:prestage-amd64 \
