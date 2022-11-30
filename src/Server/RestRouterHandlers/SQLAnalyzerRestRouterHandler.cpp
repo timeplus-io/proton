@@ -25,7 +25,8 @@
 #include <Parsers/ASTWatchQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
-#include <Parsers/parseQueryPipe.h>
+/// #include <Parsers/parseQueryPipe.h>
+#include <Parsers/parseQuery.h>
 
 #include <Parsers/Access/ASTCreateQuotaQuery.h>
 #include <Parsers/Access/ASTCreateRoleQuery.h>
@@ -39,6 +40,9 @@
 #include <Parsers/Access/ASTShowCreateAccessEntityQuery.h>
 #include <Parsers/Access/ASTShowGrantsQuery.h>
 #include <Parsers/Access/ASTShowPrivilegesQuery.h>
+
+#include <Parsers/Streaming/ASTUnsubscribeQuery.h>
+#include <Parsers/Streaming/ASTRecoverQuery.h>
 
 
 namespace DB
@@ -210,6 +214,10 @@ namespace
             return "SHOW_PRIV";
         else if (ast->as<ASTExternalDDLQuery>())
             return "EXTERNAL_DDL";
+        else if (ast->as<Streaming::ASTRecoverQuery>())
+            return "RECOVER";
+        else if (ast->as<Streaming::ASTUnsubscribeQuery>())
+            return "UNSUBSCRIBE";
         else
             return "UNKNOWN";
     }
@@ -224,14 +232,18 @@ std::pair<String, Int32> SQLAnalyzerRestRouterHandler::executePost(const Poco::J
     const auto & settings = query_context->getSettingsRef();
 
     String error_msg;
-    auto res = rewriteQueryPipeAndParse(
-        parser, query.c_str(), query.c_str() + query.size(), error_msg, false, settings.max_query_size, settings.max_parser_depth);
+    /// auto res = rewriteQueryPipeAndParse(
+    ///    parser, query.c_str(), query.c_str() + query.size(), error_msg, false, settings.max_query_size, settings.max_parser_depth);
+
+    auto * begin = query.c_str();
+    auto * end = query.c_str() + query.size();
+    auto ast = tryParseQuery(parser, begin, end, error_msg, false, "analyzer", false, settings.max_query_size, settings.max_parser_depth);
 
     if (error_msg.empty())
     {
-        auto & [rewritten_query, ast] = res;
+        /// auto & [rewritten_query, ast] = res;
 
-        LOG_DEBUG(log, "Query rewrite, query_id={} rewritten={}", query_context->getCurrentQueryId(), rewritten_query);
+        /// LOG_DEBUG(log, "Query rewrite, query_id={} rewritten={}", query_context->getCurrentQueryId(), rewritten_query);
 
         QueryProfileMatcher::Data profile;
         QueryProfileVisitor visitor(profile);
@@ -260,7 +272,8 @@ std::pair<String, Int32> SQLAnalyzerRestRouterHandler::executePost(const Poco::J
         return {
             buildResponse(
                 query,
-                rewritten_query,
+                /// rewritten_query,
+                query,
                 query_type,
                 profile,
                 block,
@@ -272,7 +285,7 @@ std::pair<String, Int32> SQLAnalyzerRestRouterHandler::executePost(const Poco::J
     }
     else
     {
-        LOG_ERROR(log, "Query rewrite, query_id={} error_msg={}", query_context->getCurrentQueryId(), error_msg);
+        LOG_ERROR(log, "Query analyzer, query_id={} error_msg={}", query_context->getCurrentQueryId(), error_msg);
 
         return {jsonErrorResponse("Invalid query", ErrorCodes::INCORRECT_QUERY), HTTPResponse::HTTP_BAD_REQUEST};
     }
