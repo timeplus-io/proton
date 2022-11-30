@@ -314,7 +314,7 @@ bool Client::executeMultiQuery(const String & all_queries_text)
 std::vector<String> Client::loadWarningMessages()
 {
     std::vector<String> messages;
-    connection->sendQuery(connection_parameters.timeouts, "SELECT message FROM system.warnings", "" /* query_id */,
+    connection->sendQuery(connection_parameters.timeouts, "SELECT message FROM system.warnings SETTINGS _tp_internal_system_open_sesame=true", "" /* query_id */,
                           QueryProcessingStage::Complete,
                           &global_context->getSettingsRef(),
                           &global_context->getClientInfo(), false);

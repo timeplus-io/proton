@@ -946,6 +946,7 @@ settings:
         aysnc_ingest_max_outstanding_blocks: 10000 # Max outstanding blocks to be committed per stream during async ingestion
         part_commit_pool_size: 8 # Total shared thread pool size for building and committing parts for Stream
         max_idempotent_ids: 1000 # Maximum idempotent IDs to keep in memory and on disk for idempotent data ingestion
+        _tp_internal_system_open_sesame: true # Control the access to system.* streams
 
     stream:
         default_shards: 1

@@ -89,9 +89,9 @@ static String getLoadSuggestionQuery(Int32 suggestion_limit, bool basic_suggesti
             query << "SELECT DISTINCT name FROM system.dictionaries LIMIT " << limit_str
                   << " UNION ALL ";
         }
-        query << "SELECT DISTINCT name FROM system.columns LIMIT " << limit_str;
+        query << "SELECT DISTINCT name FROM system.columns LIMIT " << limit_str << " SETTINGS _tp_internal_system_open_sesame=true";
     }
-    query << ") WHERE not_empty(res)";
+    query << ") WHERE not_empty(res) SETTINGS _tp_internal_system_open_sesame=true";
 
     return query.str();
 }

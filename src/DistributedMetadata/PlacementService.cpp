@@ -270,7 +270,7 @@ void PlacementService::doBroadcast()
     record.setShard(0);
     setupRecordHeaders(record, "1");
 
-    const String table_count_query = "SELECT count(*) as table_counts FROM system.tables WHERE database != 'system'";
+    const String table_count_query = "SELECT count(*) as table_counts FROM system.tables WHERE database != 'system' SETTINGS _tp_internal_system_open_sesame=true";
 
     auto context = Context::createCopy(global_context);
     context->makeQueryContext();

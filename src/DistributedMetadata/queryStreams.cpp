@@ -18,7 +18,7 @@ void queryStreams(ContextMutablePtr query_context, const std::function<void(Bloc
     String query = fmt::format(
         "SELECT {} FROM system.tables WHERE NOT is_temporary AND ((database != 'system' AND database != 'INFORMATION_SCHEMA' AND database "
         "!= 'information_schema') OR (database = 'system' AND (name = 'tasks' OR name = 'tables'))) settings "
-        "show_table_uuid_in_table_create_query_if_not_nil = 1 ",
+        "show_table_uuid_in_table_create_query_if_not_nil = 1, _tp_internal_system_open_sesame=true",
         cols);
 
     executeNonInsertQuery(query, query_context, callback);

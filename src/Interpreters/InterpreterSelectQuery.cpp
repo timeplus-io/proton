@@ -131,6 +131,7 @@ namespace ErrorCodes
     extern const int MISSING_GROUP_BY;
     extern const int UNSUPPORTED;
     extern const int FUNCTION_NOT_ALLOWED;
+    extern const int DATABASE_ACCESS_DENIED;
     /// proton: ends
 }
 
@@ -618,8 +619,15 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     ASTSelectQuery & query = getSelectQuery();
     std::shared_ptr<TableJoin> table_join = joined_tables.makeTableJoin(query);
 
+    /// proton : starts, only allow system.* access under a special setting
     if (storage)
+    {
         row_policy_filter = context->getRowPolicyFilter(table_id.getDatabaseName(), table_id.getTableName(), RowPolicyFilterType::SELECT_FILTER);
+
+        if (table_id.getDatabaseName() == "system" && !settings._tp_internal_system_open_sesame.value)
+            throw Exception(ErrorCodes::DATABASE_ACCESS_DENIED, "Have no permission to access system database");
+    }
+    /// proton : ends
 
     StorageView * view = nullptr;
     if (storage)
