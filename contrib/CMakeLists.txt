@@ -144,6 +144,10 @@ add_contrib (c-ares-cmake c-ares)
 option(ENABLE_MUDUO "Enable muduo lib" YES)
 add_contrib (liburing-cmake liburing)
 add_contrib (muduo-cmake muduo)
+option(ENABLE_PROTON_V8 "Enable V8 engine support" ${ENABLE_LIBRARIES})
+if (ENABLE_PROTON_V8)
+    add_contrib(v8-cmake)
+endif()
 # proton: ends
 
 # Put all targets defined here and in subdirectories under "contrib/<immediate-subdir>" folders in GUI-based IDEs.

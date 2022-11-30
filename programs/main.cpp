@@ -48,9 +48,15 @@ int mainGitImport(int argc, char ** argv);
 #if ENABLE_PROTON_KEEPER
 int mainKeeper(int argc, char ** argv);
 #endif
+#if ENABLE_PROTON_COMPRESSOR
+int mainCompressor(int argc, char ** argv);
+#endif
 /// proton: starts.
 #if ENABLE_PROTON_METASTORE
 int mainMetaStore(int argc, char ** argv);
+#endif
+#if ENABLE_PROTON_V8
+int mainv8(int argc, char ** argv);
 #endif
 /// proton: ends.
 #if ENABLE_PROTON_KLOG_BENCHMARK
@@ -108,9 +114,15 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
 #if ENABLE_PROTON_KEEPER
     {"keeper", mainKeeper},
 #endif
+#if ENABLE_PROTON_COMPRESSOR
+    {"compressor", mainCompressor},
+#endif
 /// proton: starts.
 #if ENABLE_PROTON_METASTORE
     {"metastore", mainMetaStore},
+#endif
+#if ENABLE_PROTON_V8
+    {"v8", mainv8},
 #endif
 /// proton: ends.
 #if ENABLE_PROTON_KLOG_BENCHMARK

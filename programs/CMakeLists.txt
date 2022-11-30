@@ -24,6 +24,12 @@ option (ENABLE_PROTON_KLOG_BENCHMARK "Kafka write ahead log benchmark" ${ENABLE_
 
 option (ENABLE_PROTON_KEEPER "proton alternative to ZooKeeper" ${ENABLE_PROTON_ALL})
 
+# https://presentations.clickhouse.com/matemarketing_2020/
+option (ENABLE_PROTON_GIT_IMPORT "A tool to analyze Git repositories" ${ENABLE_PROTON_ALL})
+
+# https://clickhouse.com/docs/en/operations/utilities/clickhouse-compressor/
+option (ENABLE_PROTON_COMPRESSOR "Data compressor and decompressor" ${ENABLE_proton_ALL})
+
 if (NOT ENABLE_NURAFT)
     # RECONFIGURE_MESSAGE_LEVEL should not be used here,
     # since ENABLE_NURAFT is set to OFF for FreeBSD and Darwin.
@@ -39,6 +45,7 @@ if (NOT USE_NURAFT)
     message (STATUS "proton-metastore will not be built (lack of NuRaft)")
     set(ENABLE_PROTON_METASTORE OFF)
 endif()
+option (ENABLE_PROTON_V8 "Proton v8 example" ${ENABLE_PROTON_ALL})
 # proton: ends.
 
 if (PROTON_SPLIT_BINARY)
@@ -92,11 +99,29 @@ else()
     message(STATUS "proton keeper mode: OFF")
 endif()
 
+if (ENABLE_PROTON_GIT_IMPORT)
+    message(STATUS "proton git-import: ON")
+else()
+    message(STATUS "proton git-import: OFF")
+endif()
+
+if (ENABLE_PROTON_COMPRESSOR)
+    message(STATUS "Compressor mode: ON")
+else()
+    message(STATUS "Compressor mode: OFF")
+endif()
+
 # proton: starts.
 if (ENABLE_PROTON_METASTORE)
     message(STATUS "proton metastore mode: ON")
 else()
     message(STATUS "proton metastore mode: OFF")
+endif()
+
+if (ENABLE_PROTON_V8)
+    message(STATUS "proton v8 mode: ON")
+else()
+    message(STATUS "proton v8 mode: OFF")
 endif()
 # proton: ends.
 
@@ -169,6 +194,8 @@ add_subdirectory (format)
 add_subdirectory (install)
 add_subdirectory (bash-completion)
 add_subdirectory (klog)
+add_subdirectory (git-import)
+add_subdirectory (compressor)
 
 if (ENABLE_PROTON_KEEPER)
     add_subdirectory (keeper)
@@ -177,6 +204,9 @@ endif()
 # proton: starts.
 if (ENABLE_PROTON_METASTORE)
     add_subdirectory (metastore)
+endif()
+if (ENABLE_PROTON_V8)
+    add_subdirectory (v8)
 endif()
 # proton: ends.
 
@@ -188,7 +218,9 @@ if (CLICKHOUSE_ONE_SHARED)
     ${CLICKHOUSE_BENCHMARK_SOURCES}
     ${CLICKHOUSE_FORMAT_SOURCES}
     ${CLICKHOUSE_GIT_IMPORT_SOURCES}
+    ${CLICKHOUSE_COMPRESSOR_SOURCES}
     ${CLICKHOUSE_KEEPER_SOURCES}
+    ${CLICKHOUSE_V8_SOURCES}
     ${CLICKHOUSE_KEEPER_CONVERTER_SOURCES}
     ${CLICKHOUSE_STATIC_FILES_DISK_UPLOADER_SOURCES}
     ${CLICKHOUSE_KLOG_BENCHMARK_SOURCES})
@@ -200,7 +232,9 @@ if (CLICKHOUSE_ONE_SHARED)
       ${CLICKHOUSE_BENCHMARK_LINK}
       ${CLICKHOUSE_FORMAT_LINK}
       ${CLICKHOUSE_GIT_IMPORT_LINK}
+      ${CLICKHOUSE_COMPRESSOR_LINK}
       ${CLICKHOUSE_KEEPER_LINK}
+      ${CLICKHOUSE_V8_LINK}
       ${CLICKHOUSE_KEEPER_CONVERTER_LINK}
       ${CLICKHOUSE_STATIC_FILES_DISK_UPLOADER_LINK})
 
@@ -211,6 +245,8 @@ if (CLICKHOUSE_ONE_SHARED)
       ${CLICKHOUSE_BENCHMARK_INCLUDE}
       ${CLICKHOUSE_FORMAT_INCLUDE}
       ${CLICKHOUSE_GIT_IMPORT_INCLUDE}
+      ${CLICKHOUSE_COMPRESSOR_INCLUDE}
+      ${CLICKHOUSE_V8_INCLUDE}
       ${CLICKHOUSE_KEEPER_INCLUDE}
       ${CLICKHOUSE_KEEPER_CONVERTER_INCLUDE})
 
@@ -228,6 +264,7 @@ if (PROTON_SPLIT_BINARY)
         proton-format
         proton-git-import
         proton-klog-benchmark
+        proton-v8
     )
 
     if (ENABLE_PROTON_KEEPER)
@@ -237,6 +274,9 @@ if (PROTON_SPLIT_BINARY)
     # proton: starts.
     if (ENABLE_PROTON_METASTORE)
         list (APPEND CLICKHOUSE_ALL_TARGETS proton-metastore)
+    endif ()
+    if (ENABLE_PROTON_V8)
+        list (APPEND CLICKHOUSE_ALL_TARGETS proton-v8)
     endif ()
     # proton: ends.
 
@@ -275,9 +315,18 @@ else ()
     if (ENABLE_PROTON_KEEPER)
         proton_target_link_split_lib(proton keeper)
     endif()
+    if (ENABLE_PROTON_GIT_IMPORT)
+        proton_target_link_split_lib(proton git-import)
+    endif ()
+    if (ENABLE_PROTON_COMPRESSOR)
+        proton_target_link_split_lib(proton compressor)
+    endif ()
     # proton: starts.
     if (ENABLE_PROTON_METASTORE)
         proton_target_link_split_lib(proton metastore)
+    endif()
+    if (ENABLE_PROTON_V8)
+        proton_target_link_split_lib(proton v8)
     endif()
     # proton: ends.
     if (ENABLE_PROTON_INSTALL)
@@ -318,11 +367,26 @@ else ()
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-keeper" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
         list(APPEND PROTON_BUNDLE proton-keeper)
     endif ()
+    if (ENABLE_PROTON_GIT_IMPORT)
+        add_custom_target (proton-git-import ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-git-import DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-git-import" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-git-import)
+    endif ()
+    if (ENABLE_PROTON_COMPRESSOR)
+        add_custom_target (proton-compressor ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-compressor DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-compressor" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-compressor)
+    endif ()
     # proton: starts.
     if (ENABLE_PROTON_METASTORE)
         add_custom_target (proton-metastore ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-metastore DEPENDS proton)
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-metastore" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
         list(APPEND PROTON_BUNDLE proton-metastore)
+    endif ()
+    if (ENABLE_PROTON_V8)
+        add_custom_target (proton-v8 ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-v8 DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-v8" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-v8)
     endif ()
     # proton: ends.
     if (ENABLE_PROTON_KLOG_BENCHMARK)

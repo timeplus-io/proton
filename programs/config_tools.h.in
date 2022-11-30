@@ -20,6 +20,7 @@
 #cmakedefine01 ENABLE_PROTON_KEEPER_CONVERTER
 #cmakedefine01 ENABLE_PROTON_STATIC_FILES_DISK_UPLOADER
 /// proton : starts.
+#cmakedefine01 ENABLE_PROTON_V8
 #cmakedefine01 ENABLE_PROTON_METASTORE
 #cmakedefine01 ENABLE_PROTON_KLOG_BENCHMARK
 /// proton : ends.
