@@ -137,9 +137,6 @@ std::pair<String, ASTPtr> handleRecoverQuery(const Streaming::ASTRecoverQuery * 
     /// Reset query ID with the recovered one since we will use this as ckpt
     context->setCurrentQueryId(query_id);
 
-    /// Setup the correct query execution mode
-    context->setSetting("exec_mode", String("recover"));
-
     ParserQuery parser(end);
     auto ast = parseQuery(parser, begin, end, "", settings.max_query_size, settings.max_parser_depth);
     return {query, ast};
@@ -587,6 +584,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     }
 
     setQuerySpecificSettings(ast, context);
+
+    /// proton : starts. We will need reset exec_mode to support `recover from select * from stream settings exec_mode='subscribe'` case
+    /// since re-parsing the recovered query will reset exec_mode='subscribe'
+    if (!recovered_query.empty())
+        context->setSetting("exec_mode", String("recover"));
+    /// proton : ends
 
     /// There is an option of probabilistic logging of queries.
     /// If it is used - do the random sampling and "collapse" the settings.
