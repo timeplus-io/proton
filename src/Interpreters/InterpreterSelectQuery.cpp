@@ -2444,7 +2444,7 @@ void InterpreterSelectQuery::executeWhere(QueryPlan & query_plan, const ActionsD
 }
 
 static Aggregator::Params getAggregatorParams(
-    const ASTPtr & /*query_ptr*/,
+    const ASTPtr & query_ptr,
     const SelectQueryExpressionAnalyzer & query_analyzer,
     const Context & context,
     const Block & current_data_stream_header,
@@ -2453,6 +2453,12 @@ static Aggregator::Params getAggregatorParams(
     bool overflow_row, const Settings & settings,
     size_t group_by_two_level_threshold, size_t group_by_two_level_threshold_bytes)
 {
+    const auto stats_collecting_params = Aggregator::Params::StatsCollectingParams(
+        query_ptr,
+        settings.collect_hash_table_stats_during_aggregation,
+        settings.max_entries_for_hash_table_stats,
+        settings.max_size_to_preallocate_for_aggregation);
+
     return Aggregator::Params{
         current_data_stream_header,
         keys,
@@ -2471,7 +2477,8 @@ static Aggregator::Params getAggregatorParams(
         settings.min_free_disk_space_for_temporary_data,
         settings.compile_aggregate_expressions,
         settings.min_count_to_compile_aggregate_expression,
-        Block{}
+        Block{},
+        stats_collecting_params
     };
 }
 
@@ -2529,7 +2536,6 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
         return;
 
     const auto & header_before_aggregation = query_plan.getCurrentDataStream().header;
-
     AggregateDescriptions aggregates = query_analyzer->aggregates();
     for (auto & descr : aggregates)
         if (descr.arguments.empty())
