@@ -22,12 +22,15 @@ jobs:
             docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:testing-$SANITIZER-$GITHUB_SHA
             docker push timeplus/proton:testing-$SANITIZER-$GITHUB_SHA
             cd $GITHUB_WORKSPACE/tests/stream
+
+            tar -zcf ./cache-arm${SANITIZER:+_}$SANITIZER.tar.gz -C $GITHUB_WORKSPACE/ccache .
+            aws s3 cp --no-progress ./cache-arm${SANITIZER:+_}$SANITIZER.tar.gz s3://tp-internal/proton/
+
             export PROTON_VERSION=testing-$SANITIZER-$GITHUB_SHA
             env
             pip3 install -r helpers/requirements.txt
             python3 ci_runner.py --debug --settings=redp,nativelog
-            tar -zcf ./cache-arm${SANITIZER:+_}$SANITIZER.tar.gz -C $GITHUB_WORKSPACE/ccache .
-            aws s3 cp --no-progress ./cache-arm${SANITIZER:+_}$SANITIZER.tar.gz s3://tp-internal/proton/
+
             cat $GITHUB_WORKSPACE/tests/stream/.status
             cat $GITHUB_WORKSPACE/tests/stream/.status | grep nativelog:ExitCode.OK | grep redp:ExitCode.OK
     steps:
