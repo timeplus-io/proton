@@ -115,7 +115,7 @@ void ApplyWithSubqueryVisitor::visit(ASTFunction & func, const Data & data)
     /// GROUP BY ..."
     /// it will find 'transformed' argument in tumble function and replace with the subquery
     /// defined by WITH and set its cte_name to 'transformed'
-    if (func.name == "hop" || func.name == "tumble" || func.name == "session" || func.name == "dedup")
+    if (func.name == "hop" || func.name == "tumble" || func.name == "session" || func.name == "dedup" || func.name == "table")
     {
         auto & ast = func.arguments->children.at(0);
         if (const auto * identifier = ast->as<ASTIdentifier>())

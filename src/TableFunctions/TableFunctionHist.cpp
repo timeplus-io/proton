@@ -3,6 +3,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <Storages/IStorage.h>
+#include <Storages/StorageView.h>
 #include <Storages/Streaming/storageUtil.h>
 #include <TableFunctions/TableFunctionFactory.h>
 
@@ -41,9 +42,13 @@ void TableFunctionHist::parseArguments(const ASTPtr & func_ast, ContextPtr conte
 StoragePtr TableFunctionHist::calculateColumnDescriptions(ContextPtr context)
 {
     streaming = false;
+
+    if (subquery)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "table function can't be applied to subquery '{}'", storage_id.getNameForLogs());
+
     auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
-    if (!supportStreamingQuery(storage))
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "table function can't be applied to '{}'", storage->getName());
+    if (storage->as<StorageView>() || !supportStreamingQuery(storage))
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "table function can't be applied to {} '{}'", storage->getName(), storage_id.getNameForLogs());
 
     underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr());
     columns = underlying_storage_snapshot->getMetadataForQuery()->getColumns();
