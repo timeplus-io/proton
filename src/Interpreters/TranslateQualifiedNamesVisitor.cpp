@@ -66,6 +66,17 @@ bool TranslateQualifiedNamesMatcher::Data::unknownColumn(size_t table_pos, const
             return false;
     }
 
+    /// proton: starts.
+    /// It may be a dynamic object elem. (a.event.type)
+    /// Such as table 'a' with object column 'event', and it's possible that the subcolumn is 'event.type'.
+    if (source_columns.count(identifier.name()))
+        return false;
+    if (nested1 && source_columns.count(*nested1))
+        return false;
+    if (nested2 && source_columns.count(*nested2))
+        return false;
+    /// proton: ends.
+
     return !columns.empty();
 }
 
@@ -108,13 +119,8 @@ void TranslateQualifiedNamesMatcher::visit(ASTIdentifier & identifier, ASTPtr &,
             size_t table_pos = *best_pos;
             if (data.unknownColumn(table_pos, identifier))
             {
-                /// proton: starts
-                /// It may be a dynamic object elem.
-                /// Such as table 'event' with object column 'event', and it's possible that the subcolumn is 'event.type'.
-                if (data.hasColumn(identifier.name()))
-                    return;
-
                 String table_name = data.tables[table_pos].table.getQualifiedNamePrefix(false);
+                /// proton: starts
                 throw Exception("There's no column '" + identifier.name() + "' in stream '" + table_name + "'",
                                 ErrorCodes::UNKNOWN_IDENTIFIER);
                 /// proton: ends

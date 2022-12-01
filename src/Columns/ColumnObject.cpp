@@ -536,10 +536,6 @@ MutableColumnPtr ColumnObject::cloneResized(size_t new_size) const
         return res;
 
     auto old_size = size();
-    if (old_size == 0)
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-            "ColumnObject doesn't support resize to non-zero length from zero length");
-
     if (new_size <= old_size)
     {
         res->insertRangeFrom(*this, 0, new_size);
