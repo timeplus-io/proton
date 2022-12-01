@@ -81,7 +81,7 @@ public:
     /// Creates column with the same type and specified size.
     /// If size is less current size, then data is cut.
     /// If size is greater, than default values are appended.
-    virtual MutablePtr cloneResized(size_t /*size*/) const { throw Exception("Cannot cloneResized() column " + getName(), ErrorCodes::NOT_IMPLEMENTED); }
+    virtual MutablePtr cloneResized(size_t /*size*/) const { throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot cloneResized() column {}", getName()); }
 
     /// Returns number of values in column.
     virtual size_t size() const = 0;
