@@ -47,11 +47,14 @@ Block IInputFormat::read(size_t num_rows, UInt64 timeout_ms)
     {
         auto chunk = generate();
         read_rows = chunk.getNumRows();
-        if (!result)
-            result = std::move(chunk);
-        else
-            result.append(chunk);
-        total_rows += read_rows;
+        if (!chunk.empty())
+        {
+            if (!result)
+                result = std::move(chunk);
+            else
+                result.append(chunk);
+            total_rows += read_rows;
+        }
 
         if (read_rows == 0)
         {

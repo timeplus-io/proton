@@ -19,8 +19,8 @@
 #include <Processors/Formats/IOutputFormat.h>
 
 /// proton: starts
-#include <Common/sendRequest.h>
 #include <IO/ReadBufferFromString.h>
+#include <Common/sendRequest.h>
 
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
@@ -36,6 +36,8 @@ namespace ErrorCodes
     extern const int REMOTE_CALL_FAILED;
     extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
     extern const int INVALID_DATA;
+    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     /// proton: ends
 }
 
@@ -198,7 +200,7 @@ public:
         size_t result_column_size = result_col_ptr->size();
         if (result_column_size != input_rows_count)
             throw Exception(
-                ErrorCodes::UNSUPPORTED_METHOD,
+                ErrorCodes::INVALID_DATA,
                 "Function {}: wrong result, expected {} row(s), actual {}",
                 quoteString(getName()),
                 input_rows_count,
