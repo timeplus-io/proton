@@ -4,7 +4,7 @@
 #include <base/types.h>
 
 #include <fmt/format.h>
-
+#include <magic_enum.hpp>
 namespace DB
 {
 namespace Streaming

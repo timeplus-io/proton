@@ -3,6 +3,7 @@
 #include "IAggregateFunction.h"
 
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnDecimal.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
@@ -165,7 +166,10 @@ public:
     {
         auto & top_k = this->data(place);
         top_k.reserve(k + 1);
-        top_k.add(assert_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num], k);
+        if constexpr (is_decimal<T>)
+            top_k.add(assert_cast<const ColumnDecimal<T> &>(*columns[0]).getData()[row_num], k);
+        else
+            top_k.add(assert_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num], k);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -199,25 +203,39 @@ public:
 
         offsets_to.push_back(offsets_to.back() + size);
 
-        typename ColumnVector<T>::Container & data_to = assert_cast<ColumnVector<T> &>(arr_to.getData()).getData();
-        size_t old_size = data_to.size();
-        data_to.resize(old_size + size);
+        if constexpr (is_decimal<T>)
+        {
+            typename ColumnDecimal<T>::Container & data_to = assert_cast<ColumnDecimal<T> &>(arr_to.getData()).getData();
+            size_t old_size = data_to.size();
+            data_to.resize(old_size + size);
 
-        top_k.sort();
+            top_k.sort();
 
-        size_t i = 0;
-        for (auto it = top_k.begin(); it != top_k.end(); ++it, ++i)
-            data_to[old_size + i] = *it;
+            size_t i = 0;
+            for (auto it = top_k.begin(); it != top_k.end(); ++it, ++i)
+                data_to[old_size + i] = *it;
+        }
+        else
+        {
+            typename ColumnVector<T>::Container & data_to = assert_cast<ColumnVector<T> &>(arr_to.getData()).getData();
+            size_t old_size = data_to.size();
+            data_to.resize(old_size + size);
+
+            top_k.sort();
+
+            size_t i = 0;
+            for (auto it = top_k.begin(); it != top_k.end(); ++it, ++i)
+                data_to[old_size + i] = *it;
+        }
     }
 };
+
 
 /** Template parameter with true value should be used for columns that store their elements in memory continuously.
  *  For such columns minMaxK() can be implemented more efficiently (especially for small numeric arrays).
  */
 template <bool is_plain_column, bool is_min>
-class AggregateFunctionMinMaxKGeneric : public IAggregateFunctionDataHelper<
-                                            AggregateFunctionMinMaxKData<StringRef, is_min>,
-                                            AggregateFunctionMinMaxKGeneric<is_plain_column, is_min>>
+class AggregateFunctionMinMaxKGeneric : public IAggregateFunctionDataHelper<AggregateFunctionMinMaxKData<StringRef, is_min>,AggregateFunctionMinMaxKGeneric<is_plain_column, is_min>>
 {
 private:
     using State = AggregateFunctionMinMaxKData<StringRef, is_min>;
@@ -319,6 +337,8 @@ enum class TypeCategory : UInt8
     NUMERIC,
     STRING_REF,
     SEIRIALIZED_STRING_REF,
+    DECIMAL,
+    TUPLE,
     OTHERS,
 };
 
@@ -507,6 +527,13 @@ public:
             {
                 string_ref_indexs.push_back(tuple_value.size());
                 arena_allocated_size += std::any_cast<const StringRef &>(val).size;
+            }
+            else if (type_category == TypeCategory::TUPLE)
+            {
+                auto t=std::any_cast<TupleValue &>(val).operators;
+                auto tval=std::any_cast<TupleValue &>(val).values;
+                std::cout<<t->comparers.size();
+                std::cout<<tval.size();
             }
 
             tuple_value.push_back(std::move(val));

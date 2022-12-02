@@ -62,6 +62,7 @@
 #include <Client/InternalTextLogs.h>
 #include <boost/algorithm/string/replace.hpp>
 
+#include <base/ReplxxLineReader.h>
 
 namespace fs = std::filesystem;
 using namespace std::literals;

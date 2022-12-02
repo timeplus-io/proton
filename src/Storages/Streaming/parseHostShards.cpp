@@ -4,7 +4,7 @@
 #include <Common/parseIntStrict.h>
 
 #include <vector>
-
+#include <assert.h>
 namespace DB
 {
 namespace ErrorCodes

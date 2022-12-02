@@ -202,6 +202,19 @@ static IAggregateFunction * createWithTwoNumericTypesSecond(const IDataType & se
     return nullptr;
 }
 
+template <template <typename, bool> class AggregateFunctionTemplate, bool bool_param, typename... TArgs>
+static IAggregateFunction * createWithDecimalType(const IDataType & argument_type, TArgs && ... args)
+{
+    WhichDataType which(argument_type);
+    if (which.idx == TypeIndex::Decimal32) return new AggregateFunctionTemplate<Decimal32, bool_param>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::Decimal64) return new AggregateFunctionTemplate<Decimal64, bool_param>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::Decimal128) return new AggregateFunctionTemplate<Decimal128, bool_param>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::Decimal256) return new AggregateFunctionTemplate<Decimal256, bool_param>(std::forward<TArgs>(args)...);
+    if constexpr (AggregateFunctionTemplate<DateTime64, bool_param>::DateTime64Supported)
+        if (which.idx == TypeIndex::DateTime64) return new AggregateFunctionTemplate<DateTime64, bool_param>(std::forward<TArgs>(args)...);
+    return nullptr;
+}
+
 template <template <typename, typename> class AggregateFunctionTemplate, typename... TArgs>
 static IAggregateFunction * createWithTwoNumericTypes(const IDataType & first_type, const IDataType & second_type, TArgs && ... args)
 {

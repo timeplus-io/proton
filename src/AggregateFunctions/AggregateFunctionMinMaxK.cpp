@@ -6,6 +6,7 @@
 
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypesDecimal.h>
 #include <Functions/FunctionHelpers.h>
 #include <Common/FieldVisitorConvertToNumber.h>
 
@@ -87,7 +88,10 @@ namespace
         AggregateFunctionPtr res;
         if (argument_types.size() == 1)
         {
-            res.reset(createWithNumericType<AggregateFunctionMinMaxK, is_min>(*argument_types[0], k, argument_types[0], params));
+            if (isDecimal(argument_types[0]))
+                res.reset(createWithDecimalType<AggregateFunctionMinMaxK, is_min>(*argument_types[0], k, argument_types[0], params));
+            else
+                res.reset(createWithNumericType<AggregateFunctionMinMaxK, is_min>(*argument_types[0], k, argument_types[0], params));
             if (!res)
                 res = AggregateFunctionPtr(createWithExtraTypes<is_min>(argument_types[0], k, params));
         }
@@ -106,6 +110,37 @@ namespace
         return res;
     }
 
+    void cast_from(const IColumn &icolumn,std::vector<std::any> &values, size_t row_num){
+        switch (icolumn.getDataType()){
+            case TypeIndex::Int32 :
+                values.emplace_back(assert_cast< const DB::ColumnVector<Int32> & >(icolumn).getElement(row_num));
+                return ;
+            case TypeIndex::Decimal32 :
+                values.emplace_back(assert_cast< const DB::ColumnDecimal<Decimal32> & >(icolumn).getElement(row_num));
+                return ;
+        default:
+            return ;
+        }
+    }
+
+
+    // void  insert_into_cast(auto icolumn,std::any val)
+    // {
+
+    //     switch (icolumn.getDataType()){
+    //         case TypeIndex::Int32 :
+    //             auto & column= assert_cast< const DB::ColumnVector<Int32> & >(icolumn);
+    //             column.insertValue(std::any_cast<const Int32 &>(val));
+    //             return ;
+    //         case TypeIndex::Decimal32 :
+    //             column= assert_cast< const DB::ColumnDecimal<Decimal32> & >(icolumn);
+    //             column.insertValue(std::any_cast<const Decimal32 &>(val));
+    //             return ;
+    //     default:
+    //         return ;
+    //     // auto & column= assert_cast<DB::ColumnVector<Int32> &>(icolumn);
+    //     // column.insertValue(std::any_cast<const Int32 &>(tuple_value.values[idx]));
+    // }
 
     template <typename TYPE, bool is_min>
     constexpr decltype(auto) buildValueComparer()
@@ -122,6 +157,20 @@ namespace
         };
     }
 
+    void cast_operators_from(const IColumn &icolumn, TupleOperators & operators)
+    {
+        switch (icolumn.getDataType()){
+            case TypeIndex::Int32 :
+                operators.comparers.emplace_back(buildValueComparer<Int32 , false>());
+                return ;
+            case TypeIndex::Decimal32 :
+                operators.comparers.emplace_back(buildValueComparer<Decimal32 , false>());
+                return ;
+        default:
+            return ;
+        }
+    }
+    
     template <typename TYPE, TypeCategory type_category>
     constexpr decltype(auto) buildValueGetter(size_t col_index)
     {
@@ -134,6 +183,30 @@ namespace
             }
             else if constexpr (type_category == TypeCategory::STRING_REF)
                 return {columns[col_index]->getDataAt(row_num), type_category};
+            else if constexpr (type_category == TypeCategory::DECIMAL)
+                {
+                    const auto & column = assert_cast<const DB::ColumnDecimal<TYPE> &>(*columns[col_index]);
+                    return {column.getElement(row_num), type_category};
+                }
+            else if constexpr (type_category == TypeCategory::TUPLE)
+                {
+                    static TupleOperators  operators;
+                    std::vector<size_t> string_ref_indexs;
+                    std::vector<std::any> values;
+                    operators.comparers.clear();
+
+                    const auto & tuple_column = assert_cast<const DB::ColumnTuple &>(*columns[col_index]);
+                    for (unsigned int i=0;i<tuple_column.getColumns().size();i++)
+                    {
+                        // values.push_back(assert_cast<const DB::ColumnVector<Int32> &>(tuple_column.getColumn(i)).getElement(row_num));
+                        // operators.comparers.emplace_back(buildValueComparer<Int32 , false>());
+                        
+                        auto &icolumn=tuple_column.getColumn(i);
+                        cast_from(icolumn,values,row_num);
+                        cast_operators_from(icolumn,operators);
+                    }
+                    return {TupleValue(std::move(values),std::move(string_ref_indexs),std::move(operators)), type_category};
+                }
             else
             {
                 const auto & column = assert_cast<const DB::ColumnVector<TYPE> &>(*columns[col_index]);
@@ -156,6 +229,37 @@ namespace
                 const auto & string_ref = std::any_cast<const TYPE &>(val);
                 to_column.getColumn(tuple_element_index).insertData(string_ref.data, string_ref.size);
             }
+            else if constexpr (type_category == TypeCategory::DECIMAL)
+            {
+                auto & column = assert_cast<DB::ColumnDecimal<TYPE> &>(to_column.getColumn(tuple_element_index));
+                column.insertValue(std::any_cast<const TYPE &>(val));
+            }
+            else if constexpr (type_category == TypeCategory::TUPLE)
+            {
+                const auto & tuple_value = std::any_cast<const TYPE &>(val);
+                auto & column_tuple = assert_cast<DB::ColumnTuple &>(to_column.getColumn(tuple_element_index));
+                for (unsigned int idx = 0;idx < column_tuple.getColumns().size();idx++)
+                {
+                    auto & icolumn=column_tuple.getColumn(idx);
+                    // auto & column= assert_cast<DB::ColumnVector<Int32> &>(icolumn);
+                    // column.insertValue(std::any_cast<const Int32 &>(tuple_value.values[idx]));
+
+                    // insert_into_cast(icolumn,tuple_value.values[idx]);
+
+                    switch (icolumn.getDataType()){
+                        case TypeIndex::Int32 :
+                            {auto & column= assert_cast< DB::ColumnVector<Int32> & >(icolumn);
+                            column.insertValue(std::any_cast<const Int32 &>(tuple_value.values[idx]));
+                            break;}
+                        case TypeIndex::Decimal32 :
+                            {auto & column= assert_cast< DB::ColumnDecimal<Decimal32> & >(icolumn);
+                            column.insertValue(std::any_cast<const Decimal32 &>(tuple_value.values[idx]));
+                            break;}
+                    default:
+                        return ;
+                    }
+                }
+            }
             else
             {
                 auto & column = assert_cast<DB::ColumnVector<TYPE> &>(to_column.getColumn(tuple_element_index));
@@ -174,7 +278,7 @@ namespace
     constexpr decltype(auto) buildValueReader()
     {
         return [](ReadBuffer & buf, Arena * arena) -> std::pair<std::any, size_t> {
-            if constexpr (std::is_same_v<TYPE, StringRef>)
+            if constexpr (std::is_same_v<TYPE, StringRef> || std::is_same_v<TYPE, TupleValue> )
             {
                 auto string_ref = readStringBinaryInto(*arena, buf);
                 return {string_ref, string_ref.size};
@@ -187,6 +291,9 @@ namespace
             }
         };
     }
+
+    #undef ASSERT_CAST_COLUMN
+    #undef DISPATCH_BY_TYPEINDEX
 }
 
 #define DISPATCH(TYPE, M, ...) \
@@ -228,6 +335,16 @@ namespace
                 M(Float32, TypeCategory::NUMERIC, ##__VA_ARGS__); break; \
             case TypeIndex::Float64: \
                 M(Float64, TypeCategory::NUMERIC, ##__VA_ARGS__); break; \
+            case TypeIndex::Decimal32: \
+                M(Decimal32, TypeCategory::DECIMAL, ##__VA_ARGS__); break; \
+            case TypeIndex::Decimal64: \
+                M(Decimal64, TypeCategory::DECIMAL, ##__VA_ARGS__); break; \
+            case TypeIndex::Decimal128: \
+                M(Decimal128, TypeCategory::DECIMAL, ##__VA_ARGS__); break; \
+            case TypeIndex::Decimal256: \
+                M(Decimal256, TypeCategory::DECIMAL, ##__VA_ARGS__); break; \
+            case TypeIndex::Tuple: \
+                M(TupleValue, TypeCategory::TUPLE, ##__VA_ARGS__); break; \
             default: \
             { \
                 if (TYPE->isValueUnambiguouslyRepresentedInContiguousMemoryRegion()) \
@@ -253,9 +370,18 @@ void AggregateFunctionMinMaxKTuple<is_min>::buildTupleValueOperators(TupleOperat
     for (size_t col_idx = 0; col_idx < this->argument_types.size(); ++col_idx)
     {
         const auto & arg_type = this->argument_types[col_idx];
+
         /// Compare by first argument
         if (col_idx == 0)
+        {  
+           if (WhichDataType(arg_type).idx == TypeIndex::Tuple)
+            {
+            auto  c0=assert_cast<const DataTypeTuple &>(*arg_type).getElement(0);
+            String t=c0->getName();
+            std::cout<<t;
+            }
             DISPATCH(arg_type, BUILD_PARTIAL_COMPARER);
+        }
 
         /// Get value from columns[col_idx] (Column)
         DISPATCH(arg_type, BUILD_VALUE_GETTER, col_idx);
