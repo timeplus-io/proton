@@ -53,14 +53,15 @@ public:
     void negate(AggregateDataPtr __restrict place, const IColumn ** , size_t, Arena *) const override { --data(place).count; }
 
     void addBatchSinglePlace(
-        size_t /*batch_size*/,
+        size_t row_begin,
+        size_t row_end,
         AggregateDataPtr place,
         const IColumn ** columns,
         Arena *,
         ssize_t if_argument_pos,
         const IColumn * delta_col) const override
     {
-        assert(delta_col != nullptr);
+        assert(delta_col );
 
         const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
         auto & count = data(place).count;
@@ -84,12 +85,13 @@ public:
         else
         {
             /// Sum of delta_flag
-            count = std::accumulate(delta_flags.begin(), delta_flags.end(), count);
+            count = std::accumulate(delta_flags.begin() + row_begin, delta_flags.begin() + row_end, count);
         }
     }
 
     void addBatchSinglePlaceNotNull(
-        size_t batch_size,
+        size_t row_begin,
+        size_t row_end,
         AggregateDataPtr place,
         const IColumn ** columns,
         const UInt8 * null_map,
@@ -97,7 +99,7 @@ public:
         ssize_t if_argument_pos,
         const IColumn * delta_col) const override
     {
-        assert(delta_col != nullptr);
+        assert(delta_col);
 
         const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
         auto & count = data(place).count;
@@ -105,7 +107,7 @@ public:
         if (if_argument_pos >= 0)
         {
             const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
-            for (size_t idx = 0; idx < batch_size; ++idx)
+            for (size_t idx = row_begin; idx < row_end; ++idx)
                 if (flags[idx] && null_map[idx] == 0)
                     count += delta_flags[idx];
 
@@ -113,7 +115,7 @@ public:
         }
         else
         {
-            for (size_t idx = 0; idx < batch_size; ++idx)
+            for (size_t idx = row_begin; idx < row_end; ++idx)
                 if (null_map[idx] == 0)
                     count += delta_flags[idx];
         }
@@ -247,14 +249,15 @@ public:
     }
 
     void addBatchSinglePlace(
-        size_t batch_size,
+        size_t row_begin,
+        size_t row_end,
         AggregateDataPtr place,
         const IColumn ** columns,
         Arena *,
         ssize_t if_argument_pos,
         const IColumn * delta_col) const override
     {
-        assert(delta_col != nullptr);
+        assert(delta_col);
 
         const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
         auto & count = data(place).count;
@@ -269,7 +272,7 @@ public:
 
             const auto & null_map = nc.getNullMapData();
 
-            for (size_t i = 0; i < batch_size; ++i)
+            for (size_t i = row_begin; i < row_end; ++i)
                 if (flags[i] != 0 && null_map[i] == 0)
                      count += delta_flags[i];
 
@@ -279,7 +282,7 @@ public:
         {
             const auto & null_map = nc.getNullMapData();
 
-            for (size_t i = 0; i < batch_size; ++i)
+            for (size_t i = row_begin; i < row_end; ++i)
                 if (!null_map[i])
                     count += delta_flags[i];
 

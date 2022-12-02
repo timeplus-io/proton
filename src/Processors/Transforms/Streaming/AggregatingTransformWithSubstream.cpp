@@ -52,7 +52,7 @@ bool AggregatingTransformWithSubstream::executeOrMergeColumns(Columns columns, c
     std::shared_lock lock(substream_ctx->variants_mutex);
     auto & data_variant = substream_ctx->many_variants[current_variant];
 
-    return params->aggregator.executeOnBlock(std::move(columns), num_rows, *data_variant, key_columns, aggregate_columns, no_more_keys);
+    return params->aggregator.executeOnBlock(std::move(columns), 0, num_rows, *data_variant, key_columns, aggregate_columns, no_more_keys);
 }
 
 SubstreamContextPtr AggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)

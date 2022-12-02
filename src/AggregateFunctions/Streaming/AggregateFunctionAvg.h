@@ -238,8 +238,16 @@ public:
     }
 
     void
-    addBatchSinglePlace(size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena *, ssize_t if_argument_pos, const IColumn * delta_col) const final
+    addBatchSinglePlace(
+        size_t row_begin,
+        size_t row_end,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        Arena *,
+        ssize_t if_argument_pos,
+        const IColumn * delta_col) const final
     {
+        assert(delta_col);
         AggregateFunctionSumData<Numerator> sum_data;
         const auto & column = assert_cast<const ColVecType &>(*columns[0]);
         const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
@@ -248,25 +256,33 @@ public:
         if (if_argument_pos >= 0)
         {
             const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
-            sum_data.addManyConditional(column.getData().data(), flags.data(), batch_size, delta_col);
+            sum_data.addManyConditional(column.getData().data(), flags.data(), row_begin, row_end, delta_col);
 
             /// this->data(place).denominator += countBytesInFilter(flags.data(), batch_size);
-            for (size_t i = 0; i < batch_size; ++i)
+            for (size_t i = row_begin; i < row_end; ++i)
                 if (flags[i])
                     denominator += delta_flags[i];
         }
         else
         {
-            sum_data.addMany(column.getData().data(), batch_size, delta_col);
-            denominator += std::accumulate(delta_flags.begin(), delta_flags.end(), 0);
+            sum_data.addMany(column.getData().data(), row_begin, row_end, delta_col);
+            denominator += std::accumulate(delta_flags.begin() + row_begin, delta_flags.begin() + row_end, 0);
         }
         increment(place, sum_data.sum);
     }
 
     void addBatchSinglePlaceNotNull(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, const UInt8 * null_map, Arena *, ssize_t if_argument_pos, const IColumn * delta_col)
+        size_t row_begin,
+        size_t row_end,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        const UInt8 * null_map,
+        Arena *,
+        ssize_t if_argument_pos,
+        const IColumn * delta_col)
         const final
     {
+        assert(delta_col);
         AggregateFunctionSumData<Numerator> sum_data;
         const auto & column = assert_cast<const ColVecType &>(*columns[0]);
         const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
@@ -276,23 +292,23 @@ public:
         {
             /// Merge the 2 sets of flags (null and if) into a single one. This allows us to use parallelizable sums when available
             const auto * if_flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData().data();
-            auto final_flags = std::make_unique<UInt8[]>(batch_size);
+            auto final_flags = std::make_unique<UInt8[]>(row_end);
             size_t used_value = 0;
-            for (size_t i = 0; i < batch_size; ++i)
+            for (size_t i = row_begin; i < row_end; ++i)
             {
                 UInt8 kept = (!null_map[i]) & !!if_flags[i];
                 final_flags[i] = kept;
                 used_value += (kept * delta_flags[i]);
             }
 
-            sum_data.addManyConditional(column.getData().data(), final_flags.get(), batch_size, delta_col);
+            sum_data.addManyConditional(column.getData().data(), final_flags.get(), row_begin, row_end, delta_col);
             denominator += used_value;
         }
         else
         {
-            sum_data.addManyNotNull(column.getData().data(), null_map, batch_size, delta_col);
+            sum_data.addManyNotNull(column.getData().data(), null_map, row_begin, row_end, delta_col);
             /// this->data(place).denominator += batch_size - countBytesInFilter(null_map, batch_size);
-            for (size_t i = 0; i < batch_size; ++i)
+            for (size_t i = row_begin; i < row_end; ++i)
                 if (!null_map[i])
                     denominator += delta_flags[i];
         }

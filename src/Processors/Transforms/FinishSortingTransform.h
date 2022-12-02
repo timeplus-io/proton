@@ -22,7 +22,7 @@ protected:
     void generate() override;
 
 private:
-    SortDescription description_sorted;
+    SortDescriptionWithPositions description_with_positions;
 
     Chunk tail_chunk;
 };

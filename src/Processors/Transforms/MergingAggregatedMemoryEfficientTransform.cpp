@@ -1,4 +1,5 @@
 #include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
+#include <Processors/Transforms/convertToChunk.h>
 #include <Processors/ISimpleTransform.h>
 #include <Processors/Transforms/AggregatingInOrderTransform.h>
 #include <QueryPipeline/Pipe.h>

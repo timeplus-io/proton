@@ -4,11 +4,9 @@
 
 #if USE_EMBEDDED_COMPILER
 
-#include <Core/SortDescription.h>
 #include <Functions/IFunction.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Interpreters/JIT/CHJIT.h>
-
 
 namespace DB
 {

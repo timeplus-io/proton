@@ -78,7 +78,7 @@ public:
             arguments_raw[i] = arguments[i].get();
 
         assert(!arguments.empty());
-        this->nested_func->addBatchSinglePlace(arguments[0]->size(), Base::getNestedPlace(place), arguments_raw.data(), arena);
+        this->nested_func->addBatchSinglePlace(0, arguments[0]->size(), Base::getNestedPlace(place), arguments_raw.data(), arena);
         this->nested_func->insertResultInto(Base::getNestedPlace(place), to, arena);
 
         /// Clear streaming set for each streaming emit

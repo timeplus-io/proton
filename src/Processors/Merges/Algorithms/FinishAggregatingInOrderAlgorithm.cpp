@@ -2,6 +2,7 @@
 #include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Processors/Transforms/AggregatingInOrderTransform.h>
+#include <Processors/Transforms/convertToChunk.h>
 #include <Core/SortCursor.h>
 
 #include <base/range.h>
@@ -15,7 +16,7 @@ namespace ErrorCodes
 }
 
 FinishAggregatingInOrderAlgorithm::State::State(
-    const Chunk & chunk, const SortDescription & desc, Int64 total_bytes_)
+    const Chunk & chunk, const SortDescriptionWithPositions & desc, Int64 total_bytes_)
     : all_columns(chunk.getColumns())
     , num_rows(chunk.getNumRows())
     , total_bytes(total_bytes_)
@@ -38,19 +39,11 @@ FinishAggregatingInOrderAlgorithm::FinishAggregatingInOrderAlgorithm(
     : header(header_)
     , num_inputs(num_inputs_)
     , params(params_)
-    , description(std::move(description_))
     , max_block_size(max_block_size_)
     , max_block_bytes(max_block_bytes_)
 {
-    /// Replace column names in description to positions.
-    for (auto & column_description : description)
-    {
-        if (!column_description.column_name.empty())
-        {
-            column_description.column_number = header_.getPositionByName(column_description.column_name);
-            column_description.column_name.clear();
-        }
-    }
+    for (const auto & column_description : description_)
+        description.emplace_back(column_description, header_.getPositionByName(column_description.column_name));
 }
 
 void FinishAggregatingInOrderAlgorithm::initialize(Inputs inputs)

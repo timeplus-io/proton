@@ -3571,7 +3571,7 @@ private:
                     const auto & nullable_col = assert_cast<const ColumnNullable &>(*col);
                     const auto & null_map = nullable_col.getNullMapData();
 
-                    if (!memoryIsZero(null_map.data(), null_map.size()))
+                    if (!memoryIsZero(null_map.data(), 0, null_map.size()))
                         throw Exception{"Cannot convert null value to non-nullable type",
                                         ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN};
                 }

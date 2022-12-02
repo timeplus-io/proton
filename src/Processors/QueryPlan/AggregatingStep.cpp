@@ -1,5 +1,3 @@
-#include <cassert>
-#include <cstddef>
 #include <memory>
 #include <Processors/QueryPlan/AggregatingStep.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
@@ -91,6 +89,16 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
         params.group_by_two_level_threshold_bytes = 0;
     }
 
+    /// optimize_aggregation_in_order
+    if (group_by_info)
+    {
+        /// two-level aggregation is not supported anyway for in order aggregation.
+        allow_to_use_two_level_group_by = false;
+
+        /// It is incorrect for in order aggregation.
+        params.stats_collecting_params.disable();
+    }
+
     /** Two-level aggregation is useful in two cases:
       * 1. Parallel aggregation is done, and the results should be merged in parallel.
       * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
@@ -143,6 +151,7 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
                     transform_params->params.compile_aggregate_expressions,
                     transform_params->params.min_count_to_compile_aggregate_expression,
                     transform_params->params.intermediate_header,
+                    transform_params->params.stats_collecting_params
                 };
                 auto transform_params_for_set = std::make_shared<AggregatingTransformParams>(std::move(params_for_set), final);
 
@@ -269,7 +278,7 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
                     /// not greater than 'aggregation_in_order_max_block_bytes'.
                     /// So, we reduce 'max_bytes' value for aggregation in 'merge_threads' times.
                     return std::make_shared<AggregatingInOrderTransform>(
-                        header, transform_params, group_by_sort_description,
+                        header, transform_params, group_by_info, group_by_sort_description,
                         max_block_size, aggregation_in_order_max_block_bytes / merge_threads,
                         many_data, counter++);
                 });
@@ -301,7 +310,7 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
                 pipeline.addSimpleTransform([&](const Block & header)
                 {
                     return std::make_shared<AggregatingInOrderTransform>(
-                        header, transform_params, group_by_sort_description,
+                        header, transform_params, group_by_info, group_by_sort_description,
                         max_block_size, aggregation_in_order_max_block_bytes);
                 });
 

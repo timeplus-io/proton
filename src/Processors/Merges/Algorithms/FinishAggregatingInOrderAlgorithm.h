@@ -69,7 +69,7 @@ private:
         /// Number of bytes in all columns + number of bytes in arena, related to current chunk.
         size_t total_bytes = 0;
 
-        State(const Chunk & chunk, const SortDescription & description, Int64 total_bytes_);
+        State(const Chunk & chunk, const SortDescriptionWithPositions & description, Int64 total_bytes_);
         State() = default;
 
         bool isValid() const { return current_row < num_rows; }
@@ -78,7 +78,7 @@ private:
     Block header;
     size_t num_inputs;
     AggregatingTransformParamsPtr params;
-    SortDescription description;
+    SortDescriptionWithPositions description;
     size_t max_block_size;
     size_t max_block_bytes;
 

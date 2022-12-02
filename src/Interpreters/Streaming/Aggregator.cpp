@@ -59,6 +59,14 @@ namespace ErrorCodes
 
 namespace Streaming
 {
+inline bool worthConvertToTwoLevel(
+    size_t group_by_two_level_threshold, size_t result_size, size_t group_by_two_level_threshold_bytes, auto result_size_bytes)
+{
+    // params.group_by_two_level_threshold will be equal to 0 if we have only one thread to execute aggregation (refer to AggregatingStep::transformPipeline).
+    return (group_by_two_level_threshold && result_size >= group_by_two_level_threshold)
+        || (group_by_two_level_threshold_bytes && result_size_bytes >= static_cast<Int64>(group_by_two_level_threshold_bytes));
+}
+
 AggregatedDataVariants::~AggregatedDataVariants()
 {
     if (aggregator && !aggregator->all_aggregates_has_trivial_destructor)
@@ -663,6 +671,24 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
     }
 }
 
+void Aggregator::executeImpl(
+    AggregatedDataVariants & result,
+    size_t row_begin,
+    size_t row_end,
+    ColumnRawPtrs & key_columns,
+    AggregateFunctionInstruction * aggregate_instructions,
+    bool no_more_keys,
+    AggregateDataPtr overflow_row) const
+{
+    #define M(NAME, IS_TWO_LEVEL) \
+        else if (result.type == AggregatedDataVariants::Type::NAME) \
+            executeImpl(*result.NAME, result.aggregates_pool, row_begin, row_end, key_columns, aggregate_instructions, no_more_keys, overflow_row);
+
+    if (false) {} // NOLINT
+    APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
+    #undef M
+}
+
 /** It's interesting - if you remove `noinline`, then gcc for some reason will inline this function, and the performance decreases (~ 10%).
   * (Probably because after the inline of this function, more internal functions no longer be inlined.)
   * Inline does not make sense, since the inner loop is entirely inside this function.
@@ -671,7 +697,8 @@ template <typename Method>
 void NO_INLINE Aggregator::executeImpl(
     Method & method,
     Arena * aggregates_pool,
-    size_t rows,
+    size_t row_begin,
+    size_t row_end,
     ColumnRawPtrs & key_columns,
     AggregateFunctionInstruction * aggregate_instructions,
     bool no_more_keys,
@@ -684,17 +711,17 @@ void NO_INLINE Aggregator::executeImpl(
 #if USE_EMBEDDED_COMPILER
         if (compiled_aggregate_functions_holder)
         {
-            executeImplBatch<false, true>(method, state, aggregates_pool, rows, aggregate_instructions, overflow_row);
+            executeImplBatch<false, true>(method, state, aggregates_pool, row_begin, row_end, aggregate_instructions, overflow_row);
         }
         else
 #endif
         {
-            executeImplBatch<false, false>(method, state, aggregates_pool, rows, aggregate_instructions, overflow_row);
+            executeImplBatch<false, false>(method, state, aggregates_pool, row_begin, row_end, aggregate_instructions, overflow_row);
         }
     }
     else
     {
-        executeImplBatch<true, false>(method, state, aggregates_pool, rows, aggregate_instructions, overflow_row);
+        executeImplBatch<true, false>(method, state, aggregates_pool, row_begin, row_end, aggregate_instructions, overflow_row);
     }
 }
 
@@ -703,7 +730,8 @@ void NO_INLINE Aggregator::executeImplBatch(
     Method & method,
     typename Method::State & state,
     Arena * aggregates_pool,
-    size_t rows,
+    size_t row_begin,
+    size_t row_end,
     AggregateFunctionInstruction * aggregate_instructions,
     AggregateDataPtr overflow_row) const
 {
@@ -715,7 +743,7 @@ void NO_INLINE Aggregator::executeImplBatch(
 
         /// For all rows.
         AggregateDataPtr place = aggregates_pool->alloc(0);
-        for (size_t i = 0; i < rows; ++i)
+        for (size_t i = row_begin; i < row_end; ++i)
             state.emplaceKey(method.data, i, *aggregates_pool).setMapped(place);
         return;
     }
@@ -739,7 +767,8 @@ void NO_INLINE Aggregator::executeImplBatch(
             for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
             {
                 inst->batch_that->addBatchLookupTable8(
-                    rows,
+                    row_begin,
+                    row_end,
                     reinterpret_cast<AggregateDataPtr *>(method.data.data()),
                     inst->state_offset,
                     [&](AggregateDataPtr & aggregate_data)
@@ -755,10 +784,14 @@ void NO_INLINE Aggregator::executeImplBatch(
         }
     }
 
-    std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[rows]);
+    /// NOTE: only row_end-row_start is required, but:
+    /// - this affects only optimize_aggregation_in_order,
+    /// - this is just a pointer, so it should not be significant,
+    /// - and plus this will require other changes in the interface.
+    std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[row_end]);
 
     /// For all rows.
-    for (size_t i = 0; i < rows; ++i)
+    for (size_t i = row_begin; i < row_end; ++i)
     {
         AggregateDataPtr aggregate_data = nullptr;
 
@@ -843,7 +876,7 @@ void NO_INLINE Aggregator::executeImplBatch(
         }
 
         auto add_into_aggregate_states_function = compiled_aggregate_functions_holder->compiled_aggregate_functions.add_into_aggregate_states_function;
-        add_into_aggregate_states_function(0, rows, columns_data.data(), places.get());
+        add_into_aggregate_states_function(row_begin, row_end, columns_data.data(), places.get());
     }
 #endif
 
@@ -859,9 +892,9 @@ void NO_INLINE Aggregator::executeImplBatch(
         AggregateFunctionInstruction * inst = aggregate_instructions + i;
 
         if (inst->offsets)
-            inst->batch_that->addBatchArray(rows, places.get(), inst->state_offset, inst->batch_arguments, inst->offsets, aggregates_pool);
+            inst->batch_that->addBatchArray(row_begin, row_end, places.get(), inst->state_offset, inst->batch_arguments, inst->offsets, aggregates_pool);
         else
-            inst->batch_that->addBatch(rows, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool, -1, inst->delta_column);
+            inst->batch_that->addBatch(row_begin, row_end, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool, -1, inst->delta_column);
     }
 }
 
@@ -869,7 +902,8 @@ void NO_INLINE Aggregator::executeImplBatch(
 template <bool use_compiled_functions>
 void NO_INLINE Aggregator::executeWithoutKeyImpl(
     AggregatedDataWithoutKey & res,
-    size_t rows,
+    size_t row_begin,
+    size_t row_end,
     AggregateFunctionInstruction * aggregate_instructions,
     Arena * arena) const
 {
@@ -893,7 +927,7 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
         }
 
         auto add_into_aggregate_states_function_single_place = compiled_aggregate_functions_holder->compiled_aggregate_functions.add_into_aggregate_states_function_single_place;
-        add_into_aggregate_states_function_single_place(0, rows, columns_data.data(), res);
+        add_into_aggregate_states_function_single_place(row_begin, row_end, columns_data.data(), res);
 
 #if defined(MEMORY_SANITIZER)
 
@@ -924,9 +958,22 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
 
         if (inst->offsets)
             inst->batch_that->addBatchSinglePlace(
-                inst->offsets[static_cast<ssize_t>(rows - 1)], res + inst->state_offset, inst->batch_arguments, arena, -1, inst->delta_column);
+                inst->offsets[static_cast<ssize_t>(row_begin) - 1],
+                inst->offsets[row_end - 1],
+                res + inst->state_offset,
+                inst->batch_arguments,
+                arena,
+                -1,
+                inst->delta_column);
         else
-            inst->batch_that->addBatchSinglePlace(rows, res + inst->state_offset, inst->batch_arguments, arena, -1, inst->delta_column);
+            inst->batch_that->addBatchSinglePlace(
+                row_begin,
+                row_end,
+                res + inst->state_offset,
+                inst->batch_arguments,
+                arena,
+                -1,
+                inst->delta_column);
     }
 }
 
@@ -1006,17 +1053,31 @@ void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns 
     }
 }
 
-
-bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & result,
-                                ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, bool & no_more_keys) const
+bool Aggregator::executeOnBlock(
+    const Block & block,
+    AggregatedDataVariants & result,
+    ColumnRawPtrs & key_columns,
+    AggregateColumns & aggregate_columns,
+    bool & no_more_keys) const
 {
-    UInt64 num_rows = block.rows();
-    return executeOnBlock(block.getColumns(), num_rows, result, key_columns, aggregate_columns, no_more_keys);
+    return executeOnBlock(
+        block.getColumns(),
+        /* row_begin= */ 0,
+        block.rows(),
+        result,
+        key_columns,
+        aggregate_columns,
+        no_more_keys);
 }
 
-
-bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedDataVariants & result,
-    ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, bool & no_more_keys) const
+bool Aggregator::executeOnBlock(
+    Columns columns,
+    size_t row_begin,
+    size_t row_end,
+    AggregatedDataVariants & result,
+    ColumnRawPtrs & key_columns,
+    AggregateColumns & aggregate_columns,
+    bool & no_more_keys) const
 {
     /// `result will destroy the states of aggregate functions in the destructor
     result.aggregator = this;
@@ -1057,7 +1118,7 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
 
     /// proton: starts. For window start/end aggregation, we will need setup timestamp of the aggr to
     /// enable memory recycling.
-    setupAggregatesPoolTimestamps(num_rows, key_columns, result.aggregates_pool);
+    setupAggregatesPoolTimestamps(row_begin, row_end, key_columns, result.aggregates_pool);
     /// proton: ends
 
     NestedColumnsHolder nested_columns_holder;
@@ -1075,27 +1136,19 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
 // #if USE_EMBEDDED_COMPILER
 //         if (compiled_aggregate_functions_holder)
 //         {
-//             executeWithoutKeyImpl<true>(result.without_key, num_rows, aggregate_functions_instructions.data(), result.aggregates_pool);
+//             executeWithoutKeyImpl<true>(result.without_key, row_begin, row_end, aggregate_functions_instructions.data(), result.aggregates_pool);
 //         }
 //         else
 // #endif
         {
-            executeWithoutKeyImpl<false>(result.without_key, num_rows, aggregate_functions_instructions.data(), result.aggregates_pool);
+            executeWithoutKeyImpl<false>(result.without_key, row_begin, row_end, aggregate_functions_instructions.data(), result.aggregates_pool);
         }
     }
     else
     {
         /// This is where data is written that does not fit in `max_rows_to_group_by` with `group_by_overflow_mode = any`.
         AggregateDataPtr overflow_row_ptr = params.overflow_row ? result.without_key : nullptr;
-
-        #define M(NAME, IS_TWO_LEVEL) \
-            else if (result.type == AggregatedDataVariants::Type::NAME) \
-                executeImpl(*result.NAME, result.aggregates_pool, num_rows, key_columns, aggregate_functions_instructions.data(), \
-                    no_more_keys, overflow_row_ptr);
-
-        if (false) {} // NOLINT
-        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
-        #undef M
+        executeImpl(result, row_begin, row_end, key_columns, aggregate_functions_instructions.data(), no_more_keys, overflow_row_ptr);
     }
 
     size_t result_size = result.sizeWithoutOverflowRow();
@@ -1107,9 +1160,8 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
     /// Here all the results in the sum are taken into account, from different threads.
     auto result_size_bytes = current_memory_usage - memory_usage_before_aggregation;
 
-    bool worth_convert_to_two_level
-        = (params.group_by_two_level_threshold && result_size >= params.group_by_two_level_threshold)
-        || (params.group_by_two_level_threshold_bytes && result_size_bytes >= static_cast<Int64>(params.group_by_two_level_threshold_bytes));
+    bool worth_convert_to_two_level = worthConvertToTwoLevel(
+        params.group_by_two_level_threshold, result_size, params.group_by_two_level_threshold_bytes, result_size_bytes);
 
     /** Converting to a two-level data structure.
       * It allows you to make, in the subsequent, an effective merge - either economical from memory or parallel.
@@ -1593,7 +1645,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
             bool destroy_place_after_insert = !is_state && clear_states;
             /// proton: ends
 
-            aggregate_functions[destroy_index]->insertResultIntoBatch(places.size(), places.data(), offset, *final_aggregate_column, arena, destroy_place_after_insert);
+            aggregate_functions[destroy_index]->insertResultIntoBatch(0, places.size(), places.data(), offset, *final_aggregate_column, arena, destroy_place_after_insert);
         }
     }
     catch (...)
@@ -1613,7 +1665,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
         }
 
         size_t offset = offsets_of_aggregate_states[aggregate_functions_destroy_index];
-        aggregate_functions[aggregate_functions_destroy_index]->destroyBatch(places.size(), places.data(), offset);
+        aggregate_functions[aggregate_functions_destroy_index]->destroyBatch(0, places.size(), places.data(), offset);
     }
 
     if (exception)
@@ -2535,7 +2587,8 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
     {
         /// Merge state of aggregate functions.
         aggregate_functions[j]->mergeBatch(
-            rows, places.get(), offsets_of_aggregate_states[j],
+            0, rows,
+            places.get(), offsets_of_aggregate_states[j],
             aggregate_columns[j]->data(),
             aggregates_pool);
     }
@@ -3071,7 +3124,7 @@ void Aggregator::initStatesForWithoutKeyOrOverflow(AggregatedDataVariants & data
 /// Loop the window column to find out the lower bound and set this lower bound to aggregates pool
 /// Any new memory allocation (MemoryChunk) will attach this lower bound timestamp which means
 /// the MemoryChunk contains states which is at and beyond this lower bound timestamp
-void Aggregator::setupAggregatesPoolTimestamps(UInt64 num_rows, const ColumnRawPtrs & key_columns, Arena * aggregates_pool) const
+void Aggregator::setupAggregatesPoolTimestamps(size_t row_begin, size_t row_end, const ColumnRawPtrs & key_columns, Arena * aggregates_pool) const
 {
     if (params.group_by != Params::GroupBy::WINDOW_START && params.group_by != Params::GroupBy::WINDOW_END)
         return;
@@ -3080,7 +3133,7 @@ void Aggregator::setupAggregatesPoolTimestamps(UInt64 num_rows, const ColumnRawP
     UInt64 window_upper_bound = 0;
 
     /// FIXME, can we avoid this loop ?
-    for (size_t i = 0; i < num_rows; ++i)
+    for (size_t i = row_begin; i < row_end; ++i)
     {
         auto window = key_columns[0]->get64(i);
         if (window > window_upper_bound)
@@ -3451,7 +3504,7 @@ void NO_INLINE Aggregator::doRecoverStates(Method & method, Arena * aggregates_p
         emplace_result.setMapped(aggregate_data);
     }
 
-    setupAggregatesPoolTimestamps(block.rows(), key_columns, aggregates_pool);
+    setupAggregatesPoolTimestamps(0, block.rows(), key_columns, aggregates_pool);
 }
 
 
