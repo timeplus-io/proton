@@ -1654,6 +1654,8 @@ struct RecurrentWindowFunction : public WindowFunction
     {
         return recurrent_detail::getCurrentValueFromInputColumn<T>(transform, function_index, column_index);
     }
+
+    /// bool hasTrivialDestructor() const override { return true; }
 };
 
 struct WindowFunctionExponentialTimeDecayedSum final : public RecurrentWindowFunction<1>

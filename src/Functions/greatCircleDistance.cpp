@@ -1,12 +1,12 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnConst.h>
+#include <Common/TargetSpecific.h>
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
 #include <Functions/IFunction.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/TargetSpecific.h>
 #include <Functions/PerformanceAdaptors.h>
 #include <base/range.h>
 #include <cmath>

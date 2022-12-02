@@ -8,5 +8,6 @@ void registerAggregateFunctionsAlias(AggregateFunctionFactory & factory)
     /// 'uniq_XXXX' functions
     factory.registerAlias("uniq", "unique");
     factory.registerAlias("uniq_exact", "unique_exact");
+    factory.registerAlias("uniq_hll12", "unique_hll12");
 }
 }

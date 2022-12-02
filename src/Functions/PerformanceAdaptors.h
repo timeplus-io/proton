@@ -1,9 +1,9 @@
 #pragma once
 
-#include <Functions/TargetSpecific.h>
 #include <Functions/IFunction.h>
 
 #include <Common/Stopwatch.h>
+#include <Common/TargetSpecific.h>
 #include <Interpreters/Context.h>
 
 #include <mutex>

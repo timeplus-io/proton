@@ -21,6 +21,8 @@ namespace Poco { class Logger; }
 namespace DB
 {
 
+void abortOnFailedAssertion(const String & description);
+
 class Exception : public Poco::Exception
 {
 public:

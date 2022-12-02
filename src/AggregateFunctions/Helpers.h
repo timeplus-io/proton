@@ -55,7 +55,7 @@ static IAggregateFunction * createWithNumericType(const IDataType & argument_typ
 {
     WhichDataType which(argument_type);
 #define DISPATCH(TYPE) \
-    if (which.idx == TypeIndex::TYPE) return new AggregateFunctionTemplate<Data<TYPE>>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::TYPE) return new AggregateFunctionTemplate<Data<TYPE>>(std::forward<TArgs>(args)...); /// NOLINT
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
     if (which.idx == TypeIndex::Enum8) return new AggregateFunctionTemplate<Data<Int8>>(std::forward<TArgs>(args)...);
@@ -94,11 +94,24 @@ static IAggregateFunction * createWithNumericType(const IDataType & argument_typ
 {
     WhichDataType which(argument_type);
 #define DISPATCH(TYPE) \
-    if (which.idx == TypeIndex::TYPE) return new AggregateFunctionTemplate<TYPE, Data<TYPE>>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::TYPE) return new AggregateFunctionTemplate<TYPE, Data<TYPE>>(std::forward<TArgs>(args)...); /// NOLINT
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
     if (which.idx == TypeIndex::Enum8) return new AggregateFunctionTemplate<Int8, Data<Int8>>(std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::Enum16) return new AggregateFunctionTemplate<Int16, Data<Int16>>(std::forward<TArgs>(args)...);
+    return nullptr;
+}
+
+template <template <typename, typename> class AggregateFunctionTemplate, template <typename, bool> class Data, bool bool_param, typename... TArgs>
+static IAggregateFunction * createWithNumericType(const IDataType & argument_type, TArgs && ... args)
+{
+    WhichDataType which(argument_type);
+#define DISPATCH(TYPE) \
+    if (which.idx == TypeIndex::TYPE) return new AggregateFunctionTemplate<TYPE, Data<TYPE, bool_param>>(std::forward<TArgs>(args)...); /// NOLINT
+    FOR_NUMERIC_TYPES(DISPATCH)
+#undef DISPATCH
+    if (which.idx == TypeIndex::Enum8) return new AggregateFunctionTemplate<Int8, Data<Int8, bool_param>>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::Enum16) return new AggregateFunctionTemplate<Int16, Data<Int16, bool_param>>(std::forward<TArgs>(args)...);
     return nullptr;
 }
 
@@ -121,7 +134,7 @@ static IAggregateFunction * createWithBasicNumberOrDateOrDateTime(const IDataTyp
     WhichDataType which(argument_type);
 #define DISPATCH(TYPE) \
     if (which.idx == TypeIndex::TYPE) \
-        return new AggregateFunctionTemplate<TYPE, Data<TYPE>>(std::forward<TArgs>(args)...);
+        return new AggregateFunctionTemplate<TYPE, Data<TYPE>>(std::forward<TArgs>(args)...); /// NOLINT
     FOR_BASIC_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
 

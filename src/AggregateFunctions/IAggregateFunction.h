@@ -1,14 +1,15 @@
 #pragma once
 
+#include <Columns/ColumnSparse.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnSparse.h>
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/Field.h>
 #include <Interpreters/Context_fwd.h>
-#include <Common/Exception.h>
 #include <base/types.h>
+#include <Common/Exception.h>
+#include <Common/ThreadPool.h>
 
 #include "config_core.h"
 
@@ -73,13 +74,19 @@ public:
     /// Get the data type of internal state. By default it is AggregateFunction(name(params), argument_types...).
     virtual DataTypePtr getStateType() const;
 
+    /// Same as the above but normalize state types so that variants with the same binary representation will use the same type.
+    virtual DataTypePtr getNormalizedStateType() const { return getStateType(); }
+
     /// Returns true if two aggregate functions have the same state representation in memory and the same serialization,
     /// so state of one aggregate function can be safely used with another.
     /// Examples:
     ///  - quantile(x), quantile(a)(x), quantile(b)(x) - parameter doesn't affect state and used for finalization only
     ///  - foo(x) and fooIf(x) - If combinator doesn't affect state
     /// By default returns true only if functions have exactly the same names, combinators and parameters.
-    virtual bool haveSameStateRepresentation(const IAggregateFunction & rhs) const;
+    bool haveSameStateRepresentation(const IAggregateFunction & rhs) const;
+    virtual bool haveSameStateRepresentationImpl(const IAggregateFunction & rhs) const;
+
+    virtual const IAggregateFunction & getBaseAggregateFunctionWithSameStateRepresentation() const { return *this; }
 
     bool haveEqualArgumentTypes(const IAggregateFunction & rhs) const;
 
@@ -107,6 +114,17 @@ public:
     /// Delete data for aggregation.
     virtual void destroy(AggregateDataPtr __restrict place) const noexcept = 0;
 
+    /// Delete all combinator states that were used after combinator -State.
+    /// For example for uniqArrayStateForEachMap(...) it will destroy
+    /// states that were created by combinators Map and ForEach.
+    /// It's needed because ColumnAggregateFunction in the result will be
+    /// responsible only for destruction of states that were created
+    /// by aggregate function and all combinators before -State combinator.
+    virtual void destroyUpToState(AggregateDataPtr __restrict place) const noexcept
+    {
+        destroy(place);
+    }
+
     /// It is not necessary to delete data.
     virtual bool hasTrivialDestructor() const = 0;
 
@@ -123,6 +141,23 @@ public:
      */
     virtual void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const = 0;
 
+    /// Adds several default values of arguments into aggregation data on which place points to.
+    /// Default values must be a the 0-th positions in columns.
+    virtual void addManyDefaults(AggregateDataPtr __restrict place, const IColumn ** columns, size_t length, Arena * arena) const = 0;
+
+    /// Merges state (on which place points to) with other state of current aggregation function.
+    virtual void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const = 0;
+
+    /// Tells if merge() with thread pool parameter could be used.
+    virtual bool isAbleToParallelizeMerge() const { return false; }
+
+    /// Should be used only if isAbleToParallelizeMerge() returned true.
+    virtual void
+    merge(AggregateDataPtr __restrict /*place*/, ConstAggregateDataPtr /*rhs*/, ThreadPool & /*thread_pool*/, Arena * /*arena*/) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "merge() with thread pool parameter isn't implemented for {} ", getName());
+    }
+
     /// proton : starts. for changelog processing, delete existing row from current aggregation result
     virtual void negate(AggregateDataPtr __restrict /*place*/, const IColumn ** /*columns*/, size_t /*row_num*/, Arena * /*arena*/) const
     {
@@ -135,9 +170,6 @@ public:
         merge(place, rhs, arena);
     }
     /// proton : ends
-
-    /// Merges state (on which place points to) with other state of current aggregation function.
-    virtual void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const = 0;
 
     /// Serializes state (to transmit it over the network, for example).
     virtual void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> version = std::nullopt) const = 0; /// NOLINT
@@ -156,10 +188,22 @@ public:
     /// window function.
     virtual void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const = 0;
 
+    /// Special method for aggregate functions with -State combinator, it behaves the same way as insertResultInto,
+    /// but if we need to insert AggregateData into ColumnAggregateFunction we use special method
+    /// insertInto that inserts default value and then performs merge with provided AggregateData
+    /// instead of just copying pointer to this AggregateData. Used in WindowTransform.
+    virtual void insertMergeResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const
+    {
+        if (isState())
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Function {} is marked as State but method insertMergeResultInto is not implemented");
+
+        insertResultInto(place, to, arena);
+    }
+
     /// Used for machine learning methods. Predict result from trained model.
     /// Will insert result into `to` column for rows in range [offset, offset + limit).
     virtual void predictValues(
-        ConstAggregateDataPtr /* place */,
+        ConstAggregateDataPtr __restrict /* place */,
         IColumn & /*to*/,
         const ColumnsWithTypeAndName & /*arguments*/,
         size_t /*offset*/,
@@ -219,7 +263,7 @@ public:
     virtual void addBatchSinglePlace( /// NOLINT
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         Arena * arena,
         ssize_t if_argument_pos = -1,
@@ -229,7 +273,7 @@ public:
     virtual void addBatchSparseSinglePlace(
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         Arena * arena) const = 0;
 
@@ -239,7 +283,7 @@ public:
     virtual void addBatchSinglePlaceNotNull( /// NOLINT
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         const UInt8 * null_map,
         Arena * arena,
@@ -249,7 +293,7 @@ public:
     virtual void addBatchSinglePlaceFromInterval( /// NOLINT
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         Arena * arena,
         ssize_t if_argument_pos = -1,
@@ -284,8 +328,7 @@ public:
         Arena * arena) const = 0;
 
     /** Insert result of aggregate function into result column with batch size.
-      * If destroy_place_after_insert is true. Then implementation of this method
-      * must destroy aggregate place if insert state into result column was successful.
+      * The implementation of this method will destroy aggregate place up to -State if insert state into result column was successful.
       * All places that were not inserted must be destroyed if there was exception during insert into result column.
       */
     virtual void insertResultIntoBatch(
@@ -383,7 +426,7 @@ template <typename Derived>
 class IAggregateFunctionHelper : public IAggregateFunction
 {
 private:
-    static void addFree(const IAggregateFunction * that, AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena * arena)
+    static void addFree(const IAggregateFunction * that, AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
     {
         static_cast<const Derived &>(*that).add(place, columns, row_num, arena);
     }
@@ -393,6 +436,16 @@ public:
         : IAggregateFunction(argument_types_, parameters_) {}
 
     AddFunc getAddressOfAddFunction() const override { return &addFree; }
+
+    void addManyDefaults(
+        AggregateDataPtr __restrict place,
+        const IColumn ** columns,
+        size_t length,
+        Arena * arena) const override
+    {
+        for (size_t i = 0; i < length; ++i)
+            static_cast<const Derived *>(this)->add(place, columns, 0, arena);
+    }
 
     /// proton : starts
     void addBatch( /// NOLINT
@@ -469,13 +522,9 @@ public:
     {
         const auto & column_sparse = assert_cast<const ColumnSparse &>(*columns[0]);
         const auto * values = &column_sparse.getValuesColumn();
-        auto offset_it = column_sparse.begin();
+        auto offset_it = column_sparse.getIterator(row_begin);
 
-        /// FIXME: make it more optimal
-        for (size_t i = 0; i < row_begin; ++i, ++offset_it)
-            ;
-
-        for (size_t i = 0; i < row_end; ++i, ++offset_it)
+        for (size_t i = row_begin; i < row_end; ++i, ++offset_it)
             static_cast<const Derived *>(this)->add(places[offset_it.getCurrentRow()] + place_offset,
                                                     &values, offset_it.getValueIndex(), arena);
     }
@@ -497,7 +546,7 @@ public:
     void addBatchSinglePlace( /// NOLINT
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         Arena * arena,
         ssize_t if_argument_pos = -1,
@@ -555,28 +604,27 @@ public:
     void addBatchSparseSinglePlace(
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         Arena * arena) const override
     {
-        /// TODO: add values and defaults separately if order of adding isn't important.
         const auto & column_sparse = assert_cast<const ColumnSparse &>(*columns[0]);
         const auto * values = &column_sparse.getValuesColumn();
-        auto offset_it = column_sparse.begin();
+        const auto & offsets = column_sparse.getOffsetsData();
 
-        /// FIXME: make it more optimal
-        for (size_t i = 0; i < row_begin; ++i, ++offset_it)
-            ;
+        auto from = std::lower_bound(offsets.begin(), offsets.end(), row_begin) - offsets.begin() + 1;
+        auto to = std::lower_bound(offsets.begin(), offsets.end(), row_end) - offsets.begin() + 1;
 
-        for (size_t i = 0; i < row_end; ++i, ++offset_it)
-            static_cast<const Derived *>(this)->add(place, &values, offset_it.getValueIndex(), arena);
+        size_t num_defaults = (row_end - row_begin) - (to - from);
+        static_cast<const Derived *>(this)->addBatchSinglePlace(from, to, place, &values, arena, -1, nullptr);
+        static_cast<const Derived *>(this)->addManyDefaults(place, &values, num_defaults, arena);
     }
 
     /// proton : starts
     void addBatchSinglePlaceNotNull( /// NOLINT
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         const UInt8 * null_map,
         Arena * arena,
@@ -636,7 +684,7 @@ public:
     void addBatchSinglePlaceFromInterval( /// NOLINT
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         Arena * arena,
         ssize_t if_argument_pos = -1,
@@ -701,7 +749,7 @@ public:
         Arena * arena)
         const override
     {
-        size_t current_offset = 0;
+        size_t current_offset = offsets[static_cast<ssize_t>(row_begin) - 1];
         for (size_t i = row_begin; i < row_end; ++i)
         {
             size_t next_offset = offsets[i];
@@ -811,9 +859,18 @@ public:
     static constexpr bool DateTime64Supported = true;
 
     IAggregateFunctionDataHelper(const DataTypes & argument_types_, const Array & parameters_)
-        : IAggregateFunctionHelper<Derived>(argument_types_, parameters_) {}
+        : IAggregateFunctionHelper<Derived>(argument_types_, parameters_)
+    {
+        /// To prevent derived classes changing the destroy() without updating hasTrivialDestructor() to match it
+        /// Enforce that either both of them are changed or none are
+        constexpr bool declares_destroy_and_hasTrivialDestructor =
+            std::is_same_v<decltype(&IAggregateFunctionDataHelper::destroy), decltype(&Derived::destroy)> ==
+            std::is_same_v<decltype(&IAggregateFunctionDataHelper::hasTrivialDestructor), decltype(&Derived::hasTrivialDestructor)>;
+        static_assert(declares_destroy_and_hasTrivialDestructor,
+            "destroy() and hasTrivialDestructor() methods of an aggregate function must be either both overridden or not");
+    }
 
-    void create(AggregateDataPtr place) const override /// NOLINT
+    void create(AggregateDataPtr __restrict place) const override /// NOLINT
     {
         new (place) Data;
     }

@@ -206,6 +206,7 @@ public:
 
     Iterator begin() const { return Iterator(getOffsetsData(), _size, 0, 0); }
     Iterator end() const { return Iterator(getOffsetsData(), _size, getOffsetsData().size(), _size); }
+    Iterator getIterator(size_t n) const;
 
 private:
     using Inserter = std::function<void(IColumn &)>;
@@ -223,7 +224,7 @@ private:
     /// Sorted offsets of non-default values in the full column.
     /// 'offsets[i]' corresponds to 'values[i + 1]'.
     WrappedPtr offsets;
-    size_t _size;
+    size_t _size; /// NOLINT
 };
 
 ColumnPtr recursiveRemoveSparse(const ColumnPtr & column);
