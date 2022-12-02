@@ -182,7 +182,6 @@ private:
     void buildStreamingProcessingQueryPlanForSessionWindow(QueryPlan & query_plan) const;
     void checkEmitVersion();
     void handleSnapshotSeekTo();
-    void handleStreamingWindowOverSubstream();
     void checkAndPrepareStreamingFunctions();
     void analyzeStreamingMode(); /// analyze whether it is streaming query
     void analyzeChangelogMode(); /// analyze whether it is changelog query

@@ -367,6 +367,55 @@
           ]
         }
       ]
+    },
+    {
+      "id": 3,
+      "tags": ["complex"],
+      "name": "complex over",
+      "description": "complex over functions in same substream",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query":"drop stream if exists test_substream_3"},
+            {"client":"python", "query_type": "table", "wait": 2, "query":"create stream test_substream_3(id int, value int, t datetime64(3))"},
+            {"client":"python", "query_id":"1700", "terminate": "manual", "query_type": "stream", "depends_on_stream":"test_substream_3", "query":"select window_start, window_end, id, value, value - 1, max(value) over (partition by id, value), emit_version() from tumble(test_substream_3, t, 2s) partition by id, value group by window_start, window_end"},
+            {"client":"python", "query_type": "table", "wait": 2, "query":"insert into test_substream_3(id, value, t) values(1, 100, '2020-01-01 10:00:00')(1, 200, '2020-01-01 10:00:01')(1, 100, '2020-01-01 10:00:02')(1, 100, '2020-01-01 10:00:03')(1, 200, '2020-01-01 10:00:04')(1, 100, '2020-01-01 10:00:05')"},
+            {"client":"python", "query_type": "table", "query":"insert into test_substream_3(id, value, t) values(2, 100, '2020-01-01 10:00:00')(2, 200, '2020-01-01 10:00:01')(2, 100, '2020-01-01 10:00:02')(2, 100, '2020-01-01 10:00:03')(2, 200, '2020-01-01 10:00:04')(2, 100, '2020-01-01 10:00:05')"},
+            {"client":"python", "wait": 3, "run_mode":"table", "query_type": "table", "query":"kill query where query_id = '1700'"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1700",
+          "expected_results":[
+            ["2020-01-01 10:00:00", "2020-01-01 10:00:02", 1, 100, 99, 100, 0],
+            ["2020-01-01 10:00:02", "2020-01-01 10:00:04", 1, 100, 99, 100, 1],
+            ["2020-01-01 10:00:00", "2020-01-01 10:00:02", 1, 200, 199, 200, 0],
+            ["2020-01-01 10:00:00", "2020-01-01 10:00:02", 2, 100, 99, 100, 0],
+            ["2020-01-01 10:00:02", "2020-01-01 10:00:04", 2, 100, 99, 100, 1],
+            ["2020-01-01 10:00:00", "2020-01-01 10:00:02", 2, 200, 199, 200, 0]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "tags": ["error over"],
+      "name": "error over",
+      "description": "error over functions in same substream",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_id":"1700", "query_end_timer":3, "query_type": "stream", "query":"select window_start, window_end, id, val_i, val_i - 1, lag(val_i), max(val_i) over (partition by id), emit_version() from tumble(test_substream, 2s) partition by id group by window_start, window_end"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1700", "expected_results":"error_code:48"
+        }
+      ]
     }
   ]
 }

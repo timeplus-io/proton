@@ -1,5 +1,7 @@
 #include "PartitionByVisitor.h"
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Functions/FunctionFactory.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
@@ -9,10 +11,19 @@
 
 namespace DB
 {
-
 namespace
 {
-std::unordered_set<String> ignore_funcs = {"emit_version"};
+bool isStatefulFunction(const String & name, ContextPtr context)
+{
+    if (AggregateFunctionFactory::instance().isAggregateFunctionName(name))
+        return true;
+
+    const auto & function = FunctionFactory::instance().tryGet(name, context);
+    if (function && function->isStateful())
+        return true;
+
+    return false;
+}
 }
 
 bool PartitionByMatcher::needChildVisit(ASTPtr &, ASTPtr &, Data &)
@@ -38,7 +49,7 @@ void PartitionByMatcher::visit(ASTPtr & ast, Data & data)
     {
         if (auto * node_func = ast->as<ASTFunction>())
         {
-            if (!data.win_define || node_func->is_window_function || ignore_funcs.contains(node_func->name))
+            if (!data.win_define || node_func->is_window_function || !isStatefulFunction(node_func->name, data.context))
                 return;
 
             /// Convert functoin to window function.

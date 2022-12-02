@@ -11,6 +11,7 @@ public:
 
     struct Data
     {
+        ContextPtr context;
         ASTPtr win_define;
     };
 

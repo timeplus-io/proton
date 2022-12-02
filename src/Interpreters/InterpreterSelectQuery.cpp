@@ -997,10 +997,6 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
     analysis_result = ExpressionAnalysisResult(
         *query_analyzer, metadata_snapshot, first_stage, second_stage, options.only_analyze, filter_info, source_header, emit_version, isChangelog());
 
-    /// proton: starts.
-    handleStreamingWindowOverSubstream();
-    /// proton: ends.
-
     if (options.to_stage == QueryProcessingStage::Enum::FetchColumns)
     {
         auto header = source_header;
@@ -3186,7 +3182,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         /// Window over aggregates are not compatible with regular aggregates
         /// so they can't coexist at the same level in one SQL.
         assert(aggregates.empty());
-        assert(query_analyzer->windowDescriptions().size() == 1);
+        assert(query_analyzer->windowDescriptions().size() <= 1);
         for (const auto & [_, window_desc] : query_analyzer->windowDescriptions())
         {
             for (const auto & window_func : window_desc.window_functions)
@@ -3658,6 +3654,7 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
     /// select sum(x), avg(x) from ... partition by id
     /// e.g. sum(x) -> sum(x) over(paritiotn by id), avg(x) over(partition by id)
     PartitionByVisitor::Data partition_by_data;
+    partition_by_data.context = context;
     PartitionByVisitor(partition_by_data).visit(query_ptr);
 
     /// Prepare streaming window functions
@@ -3668,7 +3665,10 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED, "Window over aggregation is not compatible with non-window over aggregation in the same query");
 
-    if (!data.aggregate_overs.empty() && !data.non_aggregate_overs.empty())
+    query_info.has_aggregate_over = !data.aggregate_overs.empty();
+    query_info.has_non_aggregate_over = !data.non_aggregate_overs.empty();
+
+    if (query_info.has_aggregate_over && query_info.has_non_aggregate_over)
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED, "Window over aggregation is not compatible with window over non-aggregation in the same query");
 
@@ -3717,6 +3717,16 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
                 /// Use PARTITION BY keys as GROUP BY expression
                 query.setExpression(ASTSelectQuery::Expression::GROUP_BY, definition.partition_by->clone());
             }
+
+            /// Precached ahead partition keys before analyzing AST to avoid keys missing,
+            /// in special case when `select i, max(i) over (partition by id) from test group by i`,
+            /// it will be optimized to `select i, i from test group by i`
+            if (query_info.has_aggregate_over)
+            {
+                query_info.substream_keys.reserve(definition.partition_by->children.size());
+                for (const auto & column_ast : definition.partition_by->children)
+                    query_info.substream_keys.emplace_back(column_ast->getColumnName());
+            }
         }
         else if (definition.getDefaultWindowName() != unique_window_name)
             throw Exception(
@@ -3724,34 +3734,6 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
                 "Streaming window over is required to have identical signature, but '{}' is not the same as '{}'",
                 unique_window_name,
                 definition.getDefaultWindowName());
-    }
-}
-
-void InterpreterSelectQuery::handleStreamingWindowOverSubstream()
-{
-    if (query_info.has_window && isStreaming())
-    {
-        const auto & windows = query_analyzer->windowDescriptions();
-        assert(windows.size() == 1);
-        const auto & window = windows.begin()->second;
-
-        for (const auto & win_desc : window.window_functions)
-        {
-            if (win_desc.aggregate_function)
-                query_info.has_aggregate_over = true;
-            if (win_desc.function)
-                query_info.has_non_aggregate_over = true;
-        }
-        assert(!(query_info.has_aggregate_over && query_info.has_non_aggregate_over));
-
-        /// Cache partition keys if need aggregate, which are used as substream keys in SubstreamWatermark and StreamingAggregator
-        if (query_info.has_aggregate_over)
-        {
-            assert(!window.partition_by.empty());
-            query_info.substream_keys.reserve(window.partition_by.size());
-            for (const auto & column_desc : window.partition_by)
-                query_info.substream_keys.emplace_back(column_desc.column_name);
-        }
     }
 }
 /// proton: ends
