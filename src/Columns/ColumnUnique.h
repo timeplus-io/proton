@@ -1,4 +1,5 @@
 #pragma once
+
 #include <Columns/IColumnUnique.h>
 #include <Columns/IColumnImpl.h>
 #include <Columns/ReverseIndex.h>
@@ -7,16 +8,16 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnConst.h>
 
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/NumberTraits.h>
 
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
-#include <base/range.h>
 
+#include <base/range.h>
 #include <base/unaligned.h>
-#include "Columns/ColumnConst.h"
 
 
 namespace DB
@@ -89,7 +90,6 @@ public:
     }
 
     int compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const override;
-    void updatePermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res, EqualRanges & equal_range) const override;
 
     void getExtremes(Field & min, Field & max) const override { column_holder->getExtremes(min, max); }
     bool valuesHaveFixedSize() const override { return column_holder->valuesHaveFixedSize(); }
@@ -137,15 +137,16 @@ public:
 
     UInt128 getHash() const override { return hash.getHash(*getRawColumnPtr()); }
 
+    /// This is strange. Please remove this method as soon as possible.
     std::optional<UInt64> getOrFindValueIndex(StringRef value) const override
     {
         if (std::optional<UInt64> res = reverse_index.getIndex(value); res)
             return res;
 
-        auto& nested = *getNestedColumn();
+        const IColumn & nested = *getNestedColumn();
 
         for (size_t i = 0; i < nested.size(); ++i)
-            if (nested.getDataAt(i) == value)
+            if (!nested.isNullAt(i) && nested.getDataAt(i) == value)
                 return i;
 
         return {};
@@ -328,7 +329,7 @@ size_t ColumnUnique<ColumnType>::uniqueInsertFrom(const IColumn & src, size_t n)
     if (is_nullable && src.isNullAt(n))
         return getNullValueIndex();
 
-    if (auto * nullable = checkAndGetColumn<ColumnNullable>(src))
+    if (const auto * nullable = checkAndGetColumn<ColumnNullable>(src))
         return uniqueInsertFrom(nullable->getNestedColumn(), n);
 
     auto ref = src.getDataAt(n);
@@ -355,7 +356,7 @@ StringRef ColumnUnique<ColumnType>::serializeValueIntoArena(size_t n, Arena & ar
     {
         static constexpr auto s = sizeof(UInt8);
 
-        auto pos = arena.allocContinue(s, begin);
+        auto * pos = arena.allocContinue(s, begin);
         UInt8 flag = (n == getNullValueIndex() ? 1 : 0);
         unalignedStore<UInt8>(pos, flag);
 
@@ -431,42 +432,6 @@ int ColumnUnique<ColumnType>::compareAt(size_t n, size_t m, const IColumn & rhs,
     return getNestedColumn()->compareAt(n, m, *column_unique.getNestedColumn(), nan_direction_hint);
 }
 
-template <typename ColumnType>
-void ColumnUnique<ColumnType>::updatePermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res, EqualRanges & equal_ranges) const
-{
-    if (equal_ranges.empty())
-        return;
-
-    bool found_null_value_index = false;
-    for (size_t i = 0; i < equal_ranges.size() && !found_null_value_index; ++i)
-    {
-        auto & [first, last] = equal_ranges[i];
-        for (auto j = first; j < last; ++j)
-        {
-            if (res[j] == getNullValueIndex())
-            {
-                if ((nan_direction_hint > 0) != reverse)
-                {
-                    std::swap(res[j], res[last - 1]);
-                    --last;
-                }
-                else
-                {
-                    std::swap(res[j], res[first]);
-                    ++first;
-                }
-                if (last - first <= 1)
-                {
-                    equal_ranges.erase(equal_ranges.begin() + i);
-                }
-                found_null_value_index = true;
-                break;
-            }
-        }
-    }
-    getNestedColumn()->updatePermutation(reverse, limit, nan_direction_hint, res, equal_ranges);
-}
-
 template <typename IndexType>
 static void checkIndexes(const ColumnVector<IndexType> & indexes, size_t max_dictionary_size)
 {
@@ -528,7 +493,7 @@ MutableColumnPtr ColumnUnique<ColumnType>::uniqueInsertRangeImpl(
         return nullptr;
     };
 
-    if (auto * nullable_column = checkAndGetColumn<ColumnNullable>(src))
+    if (const auto * nullable_column = checkAndGetColumn<ColumnNullable>(src))
     {
         src_column = typeid_cast<const ColumnType *>(&nullable_column->getNestedColumn());
         null_map = &nullable_column->getNullMapData();
@@ -549,7 +514,7 @@ MutableColumnPtr ColumnUnique<ColumnType>::uniqueInsertRangeImpl(
     auto insert_key = [&](const StringRef & ref, ReverseIndex<UInt64, ColumnType> & cur_index) -> MutableColumnPtr
     {
         auto inserted_pos = cur_index.insert(ref);
-        positions[num_added_rows] = inserted_pos;
+        positions[num_added_rows] = static_cast<IndexType>(inserted_pos);
         if (inserted_pos == next_position)
             return update_position(next_position);
 
@@ -561,9 +526,9 @@ MutableColumnPtr ColumnUnique<ColumnType>::uniqueInsertRangeImpl(
         auto row = start + num_added_rows;
 
         if (null_map && (*null_map)[row])
-            positions[num_added_rows] = getNullValueIndex();
+            positions[num_added_rows] = static_cast<IndexType>(getNullValueIndex());
         else if (column->compareAt(getNestedTypeDefaultValueIndex(), row, *src_column, 1) == 0)
-            positions[num_added_rows] = getNestedTypeDefaultValueIndex();
+            positions[num_added_rows] = static_cast<IndexType>(getNestedTypeDefaultValueIndex());
         else
         {
             auto ref = src_column->getDataAt(row);
@@ -575,7 +540,7 @@ MutableColumnPtr ColumnUnique<ColumnType>::uniqueInsertRangeImpl(
                 if (insertion_point == reverse_index.lastInsertionPoint())
                     res = insert_key(ref, *secondary_index);
                 else
-                    positions[num_added_rows] = insertion_point;
+                    positions[num_added_rows] = static_cast<IndexType>(insertion_point);
             }
             else
                 res = insert_key(ref, reverse_index);
@@ -592,7 +557,7 @@ MutableColumnPtr ColumnUnique<ColumnType>::uniqueInsertRangeImpl(
 template <typename ColumnType>
 MutableColumnPtr ColumnUnique<ColumnType>::uniqueInsertRangeFrom(const IColumn & src, size_t start, size_t length)
 {
-    auto callForType = [this, &src, start, length](auto x) -> MutableColumnPtr
+    auto call_for_type = [this, &src, start, length](auto x) -> MutableColumnPtr
     {
         size_t size = getRawColumnPtr()->size();
 
@@ -608,13 +573,13 @@ MutableColumnPtr ColumnUnique<ColumnType>::uniqueInsertRangeFrom(const IColumn &
 
     MutableColumnPtr positions_column;
     if (!positions_column)
-        positions_column = callForType(UInt8());
+        positions_column = call_for_type(UInt8());
     if (!positions_column)
-        positions_column = callForType(UInt16());
+        positions_column = call_for_type(UInt16());
     if (!positions_column)
-        positions_column = callForType(UInt32());
+        positions_column = call_for_type(UInt32());
     if (!positions_column)
-        positions_column = callForType(UInt64());
+        positions_column = call_for_type(UInt64());
     if (!positions_column)
         throw Exception("Can't find index type for ColumnUnique", ErrorCodes::LOGICAL_ERROR);
 
@@ -635,7 +600,7 @@ IColumnUnique::IndexesWithOverflow ColumnUnique<ColumnType>::uniqueInsertRangeWi
     if (!overflowed_keys_ptr)
         throw Exception("Invalid keys type for ColumnUnique.", ErrorCodes::LOGICAL_ERROR);
 
-    auto callForType = [this, &src, start, length, overflowed_keys_ptr, max_dictionary_size](auto x) -> MutableColumnPtr
+    auto call_for_type = [this, &src, start, length, overflowed_keys_ptr, max_dictionary_size](auto x) -> MutableColumnPtr
     {
         size_t size = getRawColumnPtr()->size();
 
@@ -654,13 +619,13 @@ IColumnUnique::IndexesWithOverflow ColumnUnique<ColumnType>::uniqueInsertRangeWi
 
     MutableColumnPtr positions_column;
     if (!positions_column)
-        positions_column = callForType(UInt8());
+        positions_column = call_for_type(UInt8());
     if (!positions_column)
-        positions_column = callForType(UInt16());
+        positions_column = call_for_type(UInt16());
     if (!positions_column)
-        positions_column = callForType(UInt32());
+        positions_column = call_for_type(UInt32());
     if (!positions_column)
-        positions_column = callForType(UInt64());
+        positions_column = call_for_type(UInt64());
     if (!positions_column)
         throw Exception("Can't find index type for ColumnUnique", ErrorCodes::LOGICAL_ERROR);
 

@@ -664,6 +664,12 @@ ColumnPtr ColumnObject::replicate(const Offsets & offsets) const
     return res_column;
 }
 
+void ColumnObject::getPermutation(PermutationSortDirection, PermutationSortStability, size_t, int, Permutation & res) const
+{
+    res.resize(num_rows);
+    std::iota(res.begin(), res.end(), 0);
+}
+
 void ColumnObject::popBack(size_t length)
 {
     for (auto & entry : subcolumns)

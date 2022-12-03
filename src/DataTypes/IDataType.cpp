@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <Columns/IColumn.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnSparse.h>

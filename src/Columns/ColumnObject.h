@@ -194,6 +194,8 @@ public:
     MutableColumnPtr cloneWithSubcolumns(const Names & subcolumn_names) const;
     /// proton: ends.
 
+    void getPermutation(PermutationSortDirection, PermutationSortStability, size_t, int, Permutation & res) const override;
+    void updatePermutation(PermutationSortDirection, PermutationSortStability, size_t, int, Permutation &, EqualRanges &) const override {}
     /// All other methods throw exception.
 
     ColumnPtr decompress() const override { throwMustBeConcrete(); }
@@ -211,8 +213,6 @@ public:
     int compareAt(size_t, size_t, const IColumn &, int) const override { throwMustBeConcrete(); }
     void compareColumn(const IColumn &, size_t, PaddedPODArray<UInt64> *, PaddedPODArray<Int8> &, int, int) const override { throwMustBeConcrete(); }
     bool hasEqualValues() const override { throwMustBeConcrete(); }
-    void getPermutation(bool, size_t, int, Permutation &) const override { throwMustBeConcrete(); }
-    void updatePermutation(bool, size_t, int, Permutation &, EqualRanges &) const override { throwMustBeConcrete(); }
     MutableColumns scatter(ColumnIndex, const Selector &) const override { throwMustBeConcrete(); }
     void gather(ColumnGathererStream &) override { throwMustBeConcrete(); }
     void getExtremes(Field &, Field &) const override { throwMustBeConcrete(); }
