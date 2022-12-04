@@ -39,7 +39,7 @@ public:
         return true;
     }
 
-    bool insert(const T & v, const A & arg)
+    bool insert(T v, A arg)
     {
         if (atCapacity())
         {
@@ -70,7 +70,7 @@ public:
             auto arg_count_iter = std::find(iter->second->begin(), iter->second->end(), arg);
             if (arg_count_iter == iter->second->end())
             {
-                iter->second->emplace_back(arg, 1);
+                iter->second->emplace_back(std::move(arg), 1);
                 ++current_size;
             }
             else
@@ -80,8 +80,8 @@ public:
         {
             /// Didn't find v in the map
             auto arg_counts = std::make_unique<ArgCounts>();
-            arg_counts->emplace_back(arg, 1);
-            [[maybe_unused]] auto [_, inserted] = m.emplace(v, std::move(arg_counts));
+            arg_counts->emplace_back(std::move(arg), 1);
+            [[maybe_unused]] auto [_, inserted] = m.emplace(std::move(v), std::move(arg_counts));
             assert(inserted);
 
             ++current_size;
@@ -94,7 +94,8 @@ public:
         return true;
     }
 
-    bool erase(const T & v, const A & arg)
+    template<typename TT, typename AA>
+    bool erase(const TT & v, const AA & arg)
     {
         auto iter = m.find(v);
         if (iter != m.end())
@@ -220,6 +221,10 @@ public:
         bool operator==(const ArgCount & rhs) const { return arg == rhs.arg; }
 
         bool operator==(const A & arg_) const { return arg == arg_; }
+
+        /// To enable heterogeneous comparison
+        template<typename AA>
+        bool operator==(const AA & arg_) const { return arg == arg_; }
     };
 
 private:

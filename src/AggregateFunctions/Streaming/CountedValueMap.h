@@ -25,7 +25,7 @@ public:
         return inserted;
     }
 
-    bool insert(const T & v)
+    bool insert(T v)
     {
         if (max_size > 0 && m.size() == max_size)
         {
@@ -57,7 +57,7 @@ public:
         else
         {
             /// Didn't find v in the map
-            [[maybe_unused]] auto [_, inserted] = m.emplace(v, 1);
+            [[maybe_unused]] auto [_, inserted] = m.emplace(std::move(v), 1);
             assert(inserted);
 
             eraseExtraElements();
@@ -66,7 +66,9 @@ public:
         return true;
     }
 
-    bool erase(const T & v)
+    /// To enable heterogeneous erase
+    template<typename TT>
+    bool erase(const TT & v)
     {
         auto iter = m.find(v);
         if (iter != m.end())

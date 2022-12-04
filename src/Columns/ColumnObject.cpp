@@ -567,13 +567,23 @@ size_t ColumnObject::allocatedBytes() const
     return res;
 }
 
-void ColumnObject::forEachSubcolumn(ColumnCallback callback)
+void ColumnObject::forEachSubcolumn(ColumnCallback callback) const
 {
-    if (!isFinalized())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot iterate over non-finalized ColumnObject");
+    for (const auto & entry : subcolumns)
+        for (const auto & part : entry->data.data)
+            callback(part);
+}
 
-    for (auto & entry : subcolumns)
-        callback(entry->data.data.back());
+void ColumnObject::forEachSubcolumnRecursively(RecursiveColumnCallback callback) const
+{
+    for (const auto & entry : subcolumns)
+    {
+        for (const auto & part : entry->data.data)
+        {
+            callback(*part);
+            part->forEachSubcolumnRecursively(callback);
+        }
+    }
 }
 
 void ColumnObject::insert(const Field & field)

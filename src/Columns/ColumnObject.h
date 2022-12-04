@@ -178,7 +178,8 @@ public:
     MutableColumnPtr cloneResized(size_t new_size) const override;
     size_t byteSize() const override;
     size_t allocatedBytes() const override;
-    void forEachSubcolumn(ColumnCallback callback) override;
+    void forEachSubcolumn(ColumnCallback callback) const override;
+    void forEachSubcolumnRecursively(RecursiveColumnCallback callback) const override;
     void insert(const Field & field) override;
     void insertDefault() override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;

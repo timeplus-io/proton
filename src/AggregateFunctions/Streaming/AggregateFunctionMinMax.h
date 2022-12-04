@@ -3,6 +3,7 @@
 #include "CountedValueMap.h"
 
 #include <AggregateFunctions/IAggregateFunction.h>
+#include <AggregateFunctions/dataWithTerminatingZero.h>
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
@@ -95,7 +96,7 @@ public:
             readBinary(value, buf);
             readVarUInt(count, buf);
 
-            [[maybe_unused]] auto inserted = values.insert(value, count);
+            [[maybe_unused]] auto inserted = values.insert(std::move(value), count);
             assert(inserted);
         }
     }
@@ -412,7 +413,7 @@ public:
         if (has())
         {
             const auto & v = values.firstValue();
-            assert_cast<ColVecType &>(to).insertDataWithTerminatingZero(v.c_str(), v.size());
+            Compatibility::insertDataWithTerminatingZero(assert_cast<ColVecType &>(to), v.data(), v.size());
         }
         else
             assert_cast<ColVecType &>(to).insertDefault();
@@ -453,12 +454,12 @@ public:
 
     bool add(const IColumn & column, size_t row_num, Arena *)
     {
-        return values.insert(assert_cast<const ColVecType &>(column).getDataAtWithTerminatingZero(row_num).toString());
+        return values.insert(std::string{Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColVecType &>(column), row_num)});
     }
 
     bool negate(const IColumn & column, size_t row_num, Arena *)
     {
-        return values.erase(assert_cast<const ColVecType &>(column).getDataAtWithTerminatingZero(row_num).toString());
+        return values.erase(Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColVecType &>(column), row_num));
     }
 
     bool merge(const Self & rhs, Arena *)

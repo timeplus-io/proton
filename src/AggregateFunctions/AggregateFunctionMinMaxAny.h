@@ -5,14 +5,13 @@
 
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnDecimal.h>
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnNullable.h>
 #include <DataTypes/IDataType.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <base/StringRef.h>
 #include <Common/assert_cast.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <AggregateFunctions/IAggregateFunction.h>
+#include <AggregateFunctions/dataWithTerminatingZero.h>
 
 #include <Common/config.h>
 
@@ -449,35 +448,6 @@ public:
 
 };
 
-struct Compatibility
-{
-    /// Old versions used to store terminating null-character in SingleValueDataString.
-    /// Then -WithTerminatingZero methods were removed from IColumn interface,
-    /// because these methods are quite dangerous and easy to misuse. It introduced incompatibility.
-    /// See https://github.com/ClickHouse/ClickHouse/pull/41431 and https://github.com/ClickHouse/ClickHouse/issues/42916
-    /// Here we keep these functions for compatibility.
-    /// It's safe because there's no way unsanitized user input (without \0 at the end) can reach these functions.
-
-    static StringRef getDataAtWithTerminatingZero(const ColumnString & column, size_t n)
-    {
-        auto res = column.getDataAt(n);
-        /// ColumnString always reserves extra byte for null-character after string.
-        /// But getDataAt returns StringRef without the null-character. Let's add it.
-        chassert(res.data[res.size] == '\0');
-        ++res.size;
-        return res;
-    }
-
-    static void insertDataWithTerminatingZero(ColumnString & column, const char * pos, size_t length)
-    {
-        /// String already has terminating null-character.
-        /// But insertData will add another one unconditionally. Trim existing null-character to avoid duplication.
-        chassert(0 < length);
-        chassert(pos[length - 1] == '\0');
-        column.insertData(pos, length - 1);
-    }
-};
-
 /** For strings. Short strings are stored in the object itself, and long strings are allocated separately.
   * NOTE It could also be suitable for arrays of numbers.
   */
@@ -523,9 +493,9 @@ private:
         return data_ptr;
     }
 
-    StringRef getStringRef() const
+    std::string_view getStringRef() const
     {
-        return StringRef(getData(), size);
+        return std::string_view(getData(), size);
     }
 
 public:
@@ -621,12 +591,12 @@ public:
     }
 
     /// Assuming to.has()
-    void changeImpl(StringRef value, Arena * arena)
+    void changeImpl(std::string_view value, Arena * arena)
     {
-        if (unlikely(MAX_STRING_SIZE < value.size))
-            throw Exception(ErrorCodes::TOO_LARGE_STRING_SIZE, "String size is too big ({})", value.size);
+        if (unlikely(MAX_STRING_SIZE < value.size()))
+            throw Exception(ErrorCodes::TOO_LARGE_STRING_SIZE, "String size is too big ({})", value.size());
 
-        UInt32 value_size = static_cast<UInt32>(value.size);
+        UInt32 value_size = static_cast<UInt32>(value.size());
 
         if (value_size <= MAX_SMALL_STRING_SIZE)
         {
@@ -634,13 +604,13 @@ public:
             size = value_size;
 
             if (size > 0)
-                memcpy(small_data, value.data, size);
+                memcpy(small_data, value.data(), size);
         }
         else
         {
             allocateLargeDataIfNeeded(value_size, arena);
             size = value_size;
-            memcpy(large_data, value.data, size);
+            memcpy(large_data, value.data(), size);
         }
     }
 

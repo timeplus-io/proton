@@ -1769,7 +1769,7 @@ Block Aggregator::prepareBlockAndFill(
                         column_aggregate_func->addArena(pool);
 
                 /// Aggregate state can be wrapped into array if aggregate function ends with -Resample combinator.
-                final_aggregate_columns[i]->forEachSubcolumn([&data_variants](auto & subcolumn)
+                final_aggregate_columns[i]->forEachSubcolumn([&data_variants](IColumn::WrappedPtr & subcolumn)
                 {
                     if (auto * column_aggregate_func = typeid_cast<ColumnAggregateFunction *>(subcolumn.get()))
                         for (auto & pool : data_variants.aggregates_pools)

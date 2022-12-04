@@ -2,8 +2,8 @@
 
 #include "CountedArgValueMap.h"
 
+#include <AggregateFunctions/dataWithTerminatingZero.h>
 #include <Columns/ColumnDecimal.h>
-#include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <IO/ReadHelpers.h>
@@ -66,7 +66,7 @@ public:
             if (has())
             {
                 const auto & v = values.firstArg();
-                return assert_cast<ColumnString &>(to).insertDataWithTerminatingZero(v.c_str(), v.size());
+                return Compatibility::insertDataWithTerminatingZero(assert_cast<ColumnString &>(to), v.data(), v.size());
             }
         }
         else
@@ -151,17 +151,17 @@ public:
     {
         if constexpr (isFixedType<ValType>())
         {
-            const auto & val = assert_cast<const ColumnVectorOrDecimal<ValType> &>(column_val).getData()[row_num];
+            auto val = assert_cast<const ColumnVectorOrDecimal<ValType> &>(column_val).getData()[row_num];
 
             if constexpr (isFixedType<ResType>())
             {
-                const auto & res = assert_cast<const ColumnVectorOrDecimal<ResType> &>(column_res).getData()[row_num];
+                auto res = assert_cast<const ColumnVectorOrDecimal<ResType> &>(column_res).getData()[row_num];
                 return values.insert(val, res);
             }
             else if constexpr (std::is_same_v<ResType, String>)
             {
-                const auto & res = assert_cast<const ColumnString &>(column_res).getDataAtWithTerminatingZero(row_num).toString();
-                return values.insert(val, res);
+                auto res = std::string{Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_res), row_num)};
+                return values.insert(val, std::move(res));
             }
             else
             {
@@ -170,21 +170,21 @@ public:
         }
         else if constexpr (std::is_same_v<ValType, String>)
         {
-            const auto & val = assert_cast<const ColumnString &>(column_val).getDataAtWithTerminatingZero(row_num).toString();
+            auto val = std::string{Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_val), row_num)};
 
             if constexpr (isFixedType<ResType>())
             {
-                const auto & res = assert_cast<const ColumnVectorOrDecimal<ResType> &>(column_res).getData()[row_num];
-                return values.insert(val, res);
+                auto res = assert_cast<const ColumnVectorOrDecimal<ResType> &>(column_res).getData()[row_num];
+                return values.insert(std::move(val), res);
             }
             else if constexpr (std::is_same_v<ResType, String>)
             {
-                const auto & res = assert_cast<const ColumnString &>(column_res).getDataAtWithTerminatingZero(row_num).toString();
-                return values.insert(val, res);
+                auto res = std::string{Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_res), row_num)};
+                return values.insert(std::move(val), std::move(res));
             }
             else
             {
-                return values.insert(val, column_res[row_num]);
+                return values.insert(std::move(val), std::move(column_res[row_num]));
             }
         }
         else
@@ -192,17 +192,17 @@ public:
             /// Generic
             if constexpr (isFixedType<ResType>())
             {
-                const auto & res = assert_cast<const ColumnVectorOrDecimal<ResType> &>(column_res).getData()[row_num];
-                return values.insert(column_res[row_num], res);
+                auto res = assert_cast<const ColumnVectorOrDecimal<ResType> &>(column_res).getData()[row_num];
+                return values.insert(std::move(column_val[row_num]), res);
             }
             else if constexpr (std::is_same_v<ResType, String>)
             {
-                const auto & res = assert_cast<const ColumnString &>(column_res).getDataAtWithTerminatingZero(row_num).toString();
-                return values.insert(column_res[row_num], res);
+                auto res = std::string{Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_res), row_num)};
+                return values.insert(std::move(column_val[row_num]), std::move(res));
             }
             else
             {
-                return values.insert(column_res[row_num], column_res[row_num]);
+                return values.insert(std::move(column_val[row_num]), std::move(column_res[row_num]));
             }
         }
     }
@@ -211,40 +211,40 @@ public:
     {
         if constexpr (isFixedType<ValType>())
         {
-            const auto & val = assert_cast<const ColumnVectorOrDecimal<ValType> &>(column_val).getData()[row_num];
+            auto val = assert_cast<const ColumnVectorOrDecimal<ValType> &>(column_val).getData()[row_num];
 
             if constexpr (isFixedType<ResType>())
             {
-                const auto & res = assert_cast<const ColumnVectorOrDecimal<ResType> &>(column_res).getData()[row_num];
+                auto res = assert_cast<const ColumnVectorOrDecimal<ResType> &>(column_res).getData()[row_num];
                 return values.erase(val, res);
             }
             else if constexpr (std::is_same_v<ResType, String>)
             {
-                const auto & res = assert_cast<const ColumnString &>(column_res).getDataAtWithTerminatingZero(row_num).toString();
+                auto res = Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_res), row_num);
                 return values.erase(val, res);
             }
             else
             {
-                return values.erase(val, column_res[row_num]);
+                return values.erase(val, std::move(column_res[row_num]));
             }
         }
         else if constexpr (std::is_same_v<ValType, String>)
         {
-            const auto & val = assert_cast<const ColumnString &>(column_val).getDataAtWithTerminatingZero(row_num).toString();
+            auto val = Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_val), row_num);
 
             if constexpr (isFixedType<ResType>())
             {
-                const auto & res = assert_cast<const ColumnVectorOrDecimal<ResType> &>(column_res).getData()[row_num];
+                auto res = assert_cast<const ColumnVectorOrDecimal<ResType> &>(column_res).getData()[row_num];
                 return values.erase(val, res);
             }
             else if constexpr (std::is_same_v<ResType, String>)
             {
-                const auto & res = assert_cast<const ColumnString &>(column_res).getDataAtWithTerminatingZero(row_num).toString();
+                auto res = Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_res), row_num);
                 return values.erase(val, res);
             }
             else
             {
-                return values.erase(val, column_res[row_num]);
+                return values.erase(val, std::move(column_res[row_num]));
             }
         }
         else
@@ -252,17 +252,17 @@ public:
             /// Generic
             if constexpr (isFixedType<ResType>())
             {
-                const auto & res = assert_cast<const ColumnVectorOrDecimal<ResType> &>(column_res).getData()[row_num];
-                return values.erase(column_res[row_num], res);
+                auto res = assert_cast<const ColumnVectorOrDecimal<ResType> &>(column_res).getData()[row_num];
+                return values.erase(std::move(column_val[row_num]), res);
             }
             else if constexpr (std::is_same_v<ResType, String>)
             {
-                const auto & res = assert_cast<const ColumnString &>(column_res).getDataAtWithTerminatingZero(row_num).toString();
-                return values.erase(column_res[row_num], res);
+                auto res = Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_res), row_num);
+                return values.erase(std::move(column_val[row_num]), res);
             }
             else
             {
-                return values.erase(column_res[row_num], column_res[row_num]);
+                return values.erase(std::move(column_val[row_num]), std::move(column_res[row_num]));
             }
         }
     }
