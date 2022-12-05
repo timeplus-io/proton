@@ -18,7 +18,7 @@ namespace ErrorCodes
 
 
 /** Not an aggregate function, but an adapter of aggregate functions,
-  * Aggregate functions with the `Merge` suffix accept `DataTypeAggregateFunction` as an argument
+  * Aggregate functions with the `_merge` suffix accept `DataTypeAggregateFunction` as an argument
   * (state of the aggregate function obtained earlier using the aggregate function with the `State` suffix)
   * and combine them with aggregation.
   */
@@ -42,7 +42,7 @@ public:
 
     String getName() const override
     {
-        return nested_func->getName() + "Merge";
+        return nested_func->getName() + "_merge";
     }
 
     DataTypePtr getReturnType() const override

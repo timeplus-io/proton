@@ -471,7 +471,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
         const auto * ast = engine_args[arg_num]->as<ASTLiteral>();
         if (ast && ast->value.getType() == Field::Types::UInt64)
-            storage_settings->index_granularity = safeGet<UInt64>(ast->value);
+            storage_settings->index_granularity = ast->value.safeGet<UInt64>();
         else
             throw Exception(
                 "Index granularity must be a positive integer" + getMergeTreeVerboseHelp(is_extended_storage_def),

@@ -95,8 +95,8 @@ void WindowFrame::toString(WriteBuffer & buf) const
 void WindowFrame::checkValid() const
 {
     // Check the validity of offsets.
-    if (type == WindowFrame::FrameType::Rows
-        || type == WindowFrame::FrameType::Groups)
+    if (type == WindowFrame::FrameType::ROWS
+        || type == WindowFrame::FrameType::GROUPS)
     {
         if (begin_type == BoundaryType::Offset
             && !((begin_offset.getType() == Field::Types::UInt64
@@ -202,7 +202,7 @@ void WindowDescription::checkValid() const
     frame.checkValid();
 
     // RANGE OFFSET requires exactly one ORDER BY column.
-    if (frame.type == WindowFrame::FrameType::Range
+    if (frame.type == WindowFrame::FrameType::RANGE
         && (frame.begin_type == WindowFrame::BoundaryType::Offset
             || frame.end_type == WindowFrame::BoundaryType::Offset)
         && order_by.size() != 1)

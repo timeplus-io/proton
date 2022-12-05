@@ -1,3 +1,4 @@
+#include <base/map.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Columns/ColumnMap.h>
 #include <Core/Field.h>
@@ -21,6 +22,27 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
 }
 
+DataTypeMap::DataTypeMap(const DataTypePtr & nested_)
+    : nested(nested_)
+{
+    const auto * type_array = typeid_cast<const DataTypeArray *>(nested.get());
+    if (!type_array)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+            "Expected array(tuple(key, value)) type, got {}", nested->getName());
+
+    const auto * type_tuple = typeid_cast<const DataTypeTuple *>(type_array->getNestedType().get());
+    if (!type_tuple)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+            "Expected array(tuple(key, value)) type, got {}", nested->getName());
+
+    if (type_tuple->getElements().size() != 2)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+            "Expected array(tuple(key, value)) type, got {}", nested->getName());
+
+    key_type = type_tuple->getElement(0);
+    value_type = type_tuple->getElement(1);
+    assertKeyType();
+}
 
 DataTypeMap::DataTypeMap(const DataTypes & elems_)
 {
@@ -44,22 +66,7 @@ DataTypeMap::DataTypeMap(const DataTypePtr & key_type_, const DataTypePtr & valu
 
 void DataTypeMap::assertKeyType() const
 {
-    bool type_error = false;
-    if (key_type->getTypeId() == TypeIndex::LowCardinality)
-    {
-        const auto & low_cardinality_data_type = assert_cast<const DataTypeLowCardinality &>(*key_type);
-        if (!isStringOrFixedString(*(low_cardinality_data_type.getDictionaryType())))
-            type_error = true;
-    }
-    else if (!key_type->isValueRepresentedByInteger()
-        && !isStringOrFixedString(*key_type)
-        && !WhichDataType(key_type).isNothing()
-        && !WhichDataType(key_type).isUUID())
-    {
-        type_error = true;
-    }
-
-    if (type_error)
+    if (!checkKeyType(key_type))
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
             "Type of map key must be a type, that can be represented by integer or string or fixed_string (possibly low_cardinality) or uuid,"
             " but {} given", key_type->getName());
@@ -99,6 +106,25 @@ bool DataTypeMap::equals(const IDataType & rhs) const
 
     const DataTypeMap & rhs_map = static_cast<const DataTypeMap &>(rhs);
     return nested->equals(*rhs_map.nested);
+}
+
+bool DataTypeMap::checkKeyType(DataTypePtr key_type)
+{
+    if (key_type->getTypeId() == TypeIndex::LowCardinality)
+    {
+        const auto & low_cardinality_data_type = assert_cast<const DataTypeLowCardinality &>(*key_type);
+        if (!isStringOrFixedString(*(low_cardinality_data_type.getDictionaryType())))
+            return false;
+    }
+    else if (!key_type->isValueRepresentedByInteger()
+             && !isStringOrFixedString(*key_type)
+             && !WhichDataType(key_type).isNothing()
+             && !WhichDataType(key_type).isUUID())
+    {
+        return false;
+    }
+
+    return true;
 }
 
 static DataTypePtr create(const ASTPtr & arguments)

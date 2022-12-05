@@ -38,7 +38,7 @@ static IColumn & extractNestedColumn(IColumn & column)
 
 void SerializationMap::serializeBinary(const Field & field, WriteBuffer & ostr) const
 {
-    const auto & map = get<const Map &>(field);
+    const auto & map = field.get<const Map &>();
     writeVarUInt(map.size(), ostr);
     for (const auto & elem : map)
     {
@@ -142,23 +142,30 @@ void SerializationMap::deserializeTextImpl(IColumn & column, ReadBuffer & istr, 
                 break;
 
             reader(istr, key, key_column);
+            ++size;
+
             skipWhitespaceIfAny(istr);
             assertChar(':', istr);
-
-            ++size;
             skipWhitespaceIfAny(istr);
+
             reader(istr, value, value_column);
 
             skipWhitespaceIfAny(istr);
         }
 
-        offsets.push_back(offsets.back() + size);
         assertChar('}', istr);
     }
     catch (...)
     {
+        if (size)
+        {
+            nested_tuple.getColumnPtr(0) = key_column.cut(0, offsets.back());
+            nested_tuple.getColumnPtr(1) = value_column.cut(0, offsets.back());
+        }
         throw;
     }
+
+    offsets.push_back(offsets.back() + size);
 }
 
 void SerializationMap::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const

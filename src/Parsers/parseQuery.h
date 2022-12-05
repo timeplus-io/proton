@@ -56,6 +56,7 @@ ASTPtr parseQuery(
     size_t max_query_size,
     size_t max_parser_depth);
 
+
 /** Split queries separated by ; on to list of single queries
   * Returns pointer to the end of last successfully parsed query (first), and true if all queries are successfully parsed (second)
   * NOTE: INSERT's data should be placed in single line.
@@ -64,7 +65,8 @@ std::pair<const char *, bool> splitMultipartQuery(
     const std::string & queries,
     std::vector<std::string> & queries_list,
     size_t max_query_size,
-    size_t max_parser_depth);
+    size_t max_parser_depth,
+    bool allow_settings_after_format_in_insert);
 
 /// proton: starts
 String getSyntaxErrorMessage(

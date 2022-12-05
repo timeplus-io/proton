@@ -1,7 +1,5 @@
-#include <Common/HashTable/ClearableHashMap.h>
 #include <Common/FieldVisitorsAccurateComparison.h>
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnTuple.h>
@@ -246,7 +244,7 @@ bool MergeTreeIndexConditionBloomFilter::traverseAtomAST(const ASTPtr & node, Bl
                 const_value.getType() == Field::Types::Float64)
             {
                 /// Zero in all types is represented in memory the same way as in UInt64.
-                out.function = const_value.reinterpret<UInt64>() ? RPNElement::ALWAYS_TRUE : RPNElement::ALWAYS_FALSE;
+                out.function = const_value.get<UInt64>() ? RPNElement::ALWAYS_TRUE : RPNElement::ALWAYS_FALSE;
                 return true;
             }
         }
@@ -552,7 +550,7 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTEquals(
 
                 for (const auto & f : value_field.get<Array>())
                 {
-                    if ((f.isNull() && !is_nullable) || f.IsDecimal(f.getType()))
+                    if ((f.isNull() && !is_nullable) || f.isDecimal(f.getType()))
                         return false;
 
                     mutable_column->insert(convertFieldToType(f, *actual_type, value_type.get()));
@@ -613,7 +611,7 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTEquals(
 
         if (which.isTuple() && function->name == "tuple_cast")
         {
-            const Tuple & tuple = get<const Tuple &>(value_field);
+            const Tuple & tuple = value_field.get<const Tuple &>();
             const auto * value_tuple_data_type = typeid_cast<const DataTypeTuple *>(value_type.get());
             const ASTs & arguments = typeid_cast<const ASTExpressionList &>(*function->arguments).children;
 

@@ -15,6 +15,7 @@
 
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
+#include <Common/FieldVisitors.h>
 
 #include <base/range.h>
 #include <base/unaligned.h>
@@ -330,14 +331,44 @@ size_t ColumnUnique<ColumnType>::getNullValueIndex() const
 template <typename ColumnType>
 size_t ColumnUnique<ColumnType>::uniqueInsert(const Field & x)
 {
+    class FieldVisitorGetData : public StaticVisitor<>
+    {
+    public:
+        StringRef res;
+
+        [[noreturn]] static void throwUnsupported()
+        {
+            throw Exception("Unsupported field type", ErrorCodes::LOGICAL_ERROR);
+        }
+
+        [[noreturn]] void operator() (const Null &) { throwUnsupported(); }
+        [[noreturn]] void operator() (const Array &) { throwUnsupported(); }
+        [[noreturn]] void operator() (const Tuple &) { throwUnsupported(); }
+        [[noreturn]] void operator() (const Map &) { throwUnsupported(); }
+        [[noreturn]] void operator() (const Object &) { throwUnsupported(); }
+        [[noreturn]] void operator() (const AggregateFunctionStateData &) { throwUnsupported(); }
+        void operator() (const String & x) { res = {x.data(), x.size()}; }
+        void operator() (const UInt64 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
+        void operator() (const UInt128 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
+        void operator() (const UInt256 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
+        void operator() (const Int64 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
+        void operator() (const Int128 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
+        void operator() (const Int256 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
+        void operator() (const UUID & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
+        void operator() (const Float64 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
+        void operator() (const DecimalField<Decimal32> & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
+        void operator() (const DecimalField<Decimal64> & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
+        void operator() (const DecimalField<Decimal128> & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
+        void operator() (const DecimalField<Decimal256> & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
+        void operator() (const bool & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
+    };
+
     if (x.isNull())
         return getNullValueIndex();
 
-    if (valuesHaveFixedSize())
-        return uniqueInsertData(&x.reinterpret<char>(), size_of_value_if_fixed);
-
-    auto & val = x.get<String>();
-    return uniqueInsertData(val.data(), val.size());
+    FieldVisitorGetData visitor;
+    applyVisitor(visitor, x);
+    return uniqueInsertData(visitor.res.data, visitor.res.size);
 }
 
 template <typename ColumnType>
@@ -528,7 +559,7 @@ MutableColumnPtr ColumnUnique<ColumnType>::uniqueInsertRangeImpl(
     if (secondary_index)
         next_position += secondary_index->size();
 
-    auto insert_key = [&](const StringRef & ref, ReverseIndex<UInt64, ColumnType> & cur_index) -> MutableColumnPtr
+    auto insert_key = [&](StringRef ref, ReverseIndex<UInt64, ColumnType> & cur_index) -> MutableColumnPtr
     {
         auto inserted_pos = cur_index.insert(ref);
         positions[num_added_rows] = static_cast<IndexType>(inserted_pos);

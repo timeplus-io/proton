@@ -286,7 +286,7 @@ String Field::dump() const
     return applyVisitor(FieldVisitorDump(), *this);
 }
 
-Field Field::restoreFromDump(const std::string_view & dump_)
+Field Field::restoreFromDump(std::string_view dump_)
 {
     auto show_error = [&dump_]
     {
@@ -492,7 +492,7 @@ Field Field::restoreFromDump(const std::string_view & dump_)
     }
 
     show_error();
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 
@@ -557,6 +557,33 @@ String toString(const Field & x)
             return toString<decltype(value)>(value);
         },
         x);
+}
+
+String fieldTypeToString(Field::Types::Which type)
+{
+    switch (type)
+    {
+        case Field::Types::Which::Null: return "null";
+        case Field::Types::Which::Array: return "array";
+        case Field::Types::Which::Tuple: return "tuple";
+        case Field::Types::Which::Map: return "map";
+        case Field::Types::Which::Object: return "json";
+        case Field::Types::Which::AggregateFunctionState: return "aggregate_function_state";
+        case Field::Types::Which::Bool: return "bool";
+        case Field::Types::Which::String: return "string";
+        case Field::Types::Which::Decimal32: return "decimal32";
+        case Field::Types::Which::Decimal64: return "decimal64";
+        case Field::Types::Which::Decimal128: return "decimal128";
+        case Field::Types::Which::Decimal256: return "decimal256";
+        case Field::Types::Which::Float64: return "float64";
+        case Field::Types::Which::Int64: return "int64";
+        case Field::Types::Which::Int128: return "int128";
+        case Field::Types::Which::Int256: return "int256";
+        case Field::Types::Which::UInt64: return "uint64";
+        case Field::Types::Which::UInt128: return "uint128";
+        case Field::Types::Which::UInt256: return "uint256";
+        case Field::Types::Which::UUID: return "uuid";
+    }
 }
 
 }

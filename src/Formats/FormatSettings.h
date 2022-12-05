@@ -95,8 +95,8 @@ struct FormatSettings
         bool allow_double_quotes = true;
         bool empty_as_default = false;
         bool crlf_end_of_line = false;
-        bool input_format_enum_as_number = false;
-        bool input_format_arrays_as_nested_csv = false;
+        bool enum_as_number = false;
+        bool arrays_as_nested_csv = false;
         String null_representation = "\\N";
         char tuple_delimiter = ',';
     } csv;
@@ -128,6 +128,8 @@ struct FormatSettings
         bool escape_forward_slashes = true;
         bool named_tuples_as_objects = false;
         bool serialize_as_strings = false;
+        bool read_bools_as_numbers = true;
+        bool read_numbers_as_strings = true;
     } json;
 
     struct
@@ -200,7 +202,7 @@ struct FormatSettings
         bool empty_as_default = false;
         bool crlf_end_of_line = false;
         String null_representation = "\\N";
-        bool input_format_enum_as_number = false;
+        bool enum_as_number = false;
     } tsv;
 
     struct
@@ -215,6 +217,7 @@ struct FormatSettings
         bool import_nested = false;
         bool allow_missing_columns = false;
         int64_t row_batch_size = 100'000;
+        bool output_string_as_string = false;
     } orc;
 
     /// For capnProto format we should determine how to

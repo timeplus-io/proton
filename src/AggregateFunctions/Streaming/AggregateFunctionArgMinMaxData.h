@@ -2,8 +2,8 @@
 
 #include "CountedArgValueMap.h"
 
-#include <AggregateFunctions/dataWithTerminatingZero.h>
 #include <Columns/ColumnDecimal.h>
+#include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <IO/ReadHelpers.h>
@@ -66,7 +66,7 @@ public:
             if (has())
             {
                 const auto & v = values.firstArg();
-                return Compatibility::insertDataWithTerminatingZero(assert_cast<ColumnString &>(to), v.data(), v.size());
+                return assert_cast<ColumnString &>(to).insertData(v.data(), v.size());
             }
         }
         else
@@ -160,7 +160,7 @@ public:
             }
             else if constexpr (std::is_same_v<ResType, String>)
             {
-                auto res = std::string{Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_res), row_num)};
+                auto res = assert_cast<const ColumnString &>(column_res).getDataAt(row_num).toString();
                 return values.insert(val, std::move(res));
             }
             else
@@ -170,7 +170,7 @@ public:
         }
         else if constexpr (std::is_same_v<ValType, String>)
         {
-            auto val = std::string{Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_val), row_num)};
+            auto val = assert_cast<const ColumnString &>(column_val).getDataAt(row_num).toString();
 
             if constexpr (isFixedType<ResType>())
             {
@@ -179,7 +179,7 @@ public:
             }
             else if constexpr (std::is_same_v<ResType, String>)
             {
-                auto res = std::string{Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_res), row_num)};
+                auto res = assert_cast<const ColumnString &>(column_res).getDataAt(row_num).toString();
                 return values.insert(std::move(val), std::move(res));
             }
             else
@@ -197,7 +197,7 @@ public:
             }
             else if constexpr (std::is_same_v<ResType, String>)
             {
-                auto res = std::string{Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_res), row_num)};
+                auto res = assert_cast<const ColumnString &>(column_res).getDataAt(row_num).toString();
                 return values.insert(std::move(column_val[row_num]), std::move(res));
             }
             else
@@ -220,7 +220,7 @@ public:
             }
             else if constexpr (std::is_same_v<ResType, String>)
             {
-                auto res = Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_res), row_num);
+                auto res = assert_cast<const ColumnString &>(column_res).getDataAt(row_num).toView();
                 return values.erase(val, res);
             }
             else
@@ -230,7 +230,7 @@ public:
         }
         else if constexpr (std::is_same_v<ValType, String>)
         {
-            auto val = Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_val), row_num);
+            auto val = assert_cast<const ColumnString &>(column_val).getDataAt(row_num).toView();
 
             if constexpr (isFixedType<ResType>())
             {
@@ -239,7 +239,7 @@ public:
             }
             else if constexpr (std::is_same_v<ResType, String>)
             {
-                auto res = Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_res), row_num);
+                auto res = assert_cast<const ColumnString &>(column_res).getDataAt(row_num).toView();
                 return values.erase(val, res);
             }
             else
@@ -257,7 +257,7 @@ public:
             }
             else if constexpr (std::is_same_v<ResType, String>)
             {
-                auto res = Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column_res), row_num);
+                auto res = assert_cast<const ColumnString &>(column_res).getDataAt(row_num).toView();
                 return values.erase(std::move(column_val[row_num]), res);
             }
             else

@@ -19,11 +19,16 @@ namespace ErrorCodes
     extern const int CANNOT_READ_ALL_DATA;
     extern const int CANNOT_READ_ARRAY_FROM_TEXT;
     extern const int LOGICAL_ERROR;
+    extern const int TOO_LARGE_ARRAY_SIZE;
 }
+
+static constexpr size_t MAX_ARRAY_SIZE = 1ULL << 30;
+static constexpr size_t MAX_ARRAYS_SIZE = 1ULL << 40;
+
 
 void SerializationArray::serializeBinary(const Field & field, WriteBuffer & ostr) const
 {
-    const Array & a = get<const Array &>(field);
+    const Array & a = field.get<const Array &>();
     writeVarUInt(a.size(), ostr);
     for (size_t i = 0; i < a.size(); ++i)
     {
@@ -37,7 +42,7 @@ void SerializationArray::deserializeBinary(Field & field, ReadBuffer & istr) con
     size_t size;
     readVarUInt(size, istr);
     field = Array();
-    Array & arr = get<Array &>(field);
+    Array & arr = field.get<Array &>();
     arr.reserve(size);
     for (size_t i = 0; i < size; ++i)
         nested->deserializeBinary(arr.emplace_back(), istr);
@@ -124,7 +129,12 @@ namespace
         {
             ColumnArray::Offset current_size = 0;
             readIntBinary(current_size, istr);
-            current_offset += current_size;
+
+            if (unlikely(current_size > MAX_ARRAY_SIZE))
+                throw Exception(ErrorCodes::TOO_LARGE_ARRAY_SIZE, "Array size is too large: {}", current_size);
+            if (unlikely(__builtin_add_overflow(current_offset, current_size, &current_offset)))
+                throw Exception(ErrorCodes::TOO_LARGE_ARRAY_SIZE, "Deserialization of array offsets will lead to overflow");
+
             offset_values[i] = current_offset;
             ++i;
         }
@@ -167,30 +177,30 @@ namespace
 
         return column_offsets;
     }
-}
 
-ColumnPtr arrayOffsetsToSizes(const IColumn & column)
-{
-    const auto & column_offsets = assert_cast<const ColumnArray::ColumnOffsets &>(column);
-    MutableColumnPtr column_sizes = column_offsets.cloneEmpty();
-
-    if (column_offsets.empty())
-        return column_sizes;
-
-    const auto & offsets_data = column_offsets.getData();
-    auto & sizes_data = assert_cast<ColumnArray::ColumnOffsets &>(*column_sizes).getData();
-
-    sizes_data.resize(offsets_data.size());
-
-    IColumn::Offset prev_offset = 0;
-    for (size_t i = 0, size = offsets_data.size(); i < size; ++i)
+    ColumnPtr arrayOffsetsToSizes(const IColumn & column)
     {
-        auto current_offset = offsets_data[i];
-        sizes_data[i] = current_offset - prev_offset;
-        prev_offset =  current_offset;
-    }
+        const auto & column_offsets = assert_cast<const ColumnArray::ColumnOffsets &>(column);
+        MutableColumnPtr column_sizes = column_offsets.cloneEmpty();
 
-    return column_sizes;
+        if (column_offsets.empty())
+            return column_sizes;
+
+        const auto & offsets_data = column_offsets.getData();
+        auto & sizes_data = assert_cast<ColumnArray::ColumnOffsets &>(*column_sizes).getData();
+
+        sizes_data.resize(offsets_data.size());
+
+        IColumn::Offset prev_offset = 0;
+        for (size_t i = 0, size = offsets_data.size(); i < size; ++i)
+        {
+            auto current_offset = offsets_data[i];
+            sizes_data[i] = current_offset - prev_offset;
+            prev_offset = current_offset;
+        }
+
+        return column_sizes;
+    }
 }
 
 DataTypePtr SerializationArray::SubcolumnCreator::create(const DataTypePtr & prev) const
@@ -358,6 +368,9 @@ void SerializationArray::deserializeBinaryBulkWithMultipleStreams(
     if (last_offset < nested_column->size())
         throw Exception("Nested column is longer than last offset", ErrorCodes::LOGICAL_ERROR);
     size_t nested_limit = last_offset - nested_column->size();
+
+    if (unlikely(nested_limit > MAX_ARRAYS_SIZE))
+        throw Exception(ErrorCodes::TOO_LARGE_ARRAY_SIZE, "Array sizes are too large: {}", nested_limit);
 
     /// Adjust value size hint. Divide it to the average array size.
     settings.avg_value_size_hint = nested_limit ? settings.avg_value_size_hint / nested_limit * offset_values.size() : 0;
@@ -547,7 +560,7 @@ void SerializationArray::deserializeTextCSV(IColumn & column, ReadBuffer & istr,
     readCSV(s, istr, settings.csv);
     ReadBufferFromString rb(s);
 
-    if (settings.csv.input_format_arrays_as_nested_csv)
+    if (settings.csv.arrays_as_nested_csv)
     {
         deserializeTextImpl(column, rb,
             [&](IColumn & nested_column)

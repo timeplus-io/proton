@@ -28,7 +28,7 @@ TEST(ComparisonGraph, Bounds)
 
         const auto & [lower, strict] = *res;
 
-        ASSERT_EQ(get<UInt64>(lower), 3);
+        ASSERT_EQ(lower.get<UInt64>(), 3);
         ASSERT_TRUE(strict);
     }
 
@@ -38,7 +38,7 @@ TEST(ComparisonGraph, Bounds)
 
         const auto & [upper, strict] = *res;
 
-        ASSERT_EQ(get<UInt64>(upper), 7);
+        ASSERT_EQ(upper.get<UInt64>(), 7);
         ASSERT_TRUE(strict);
     }
 

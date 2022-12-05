@@ -1,6 +1,7 @@
 #include "ASTToJSONUtils.h"
 
 #include <Common/ProtonCommon.h>
+#include <Common/SettingsChanges.h>
 
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>

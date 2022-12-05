@@ -3,6 +3,7 @@
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
 
+#include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnNullable.h>
@@ -11,7 +12,6 @@
 #include <Common/assert_cast.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <AggregateFunctions/IAggregateFunction.h>
-#include <AggregateFunctions/dataWithTerminatingZero.h>
 
 #include <Common/config.h>
 
@@ -479,30 +479,22 @@ public:
     }
 
 private:
-    char * getDataMutable()
-    {
-        return size <= MAX_SMALL_STRING_SIZE ? small_data : large_data;
-    }
-
     const char * getData() const
     {
         const char * data_ptr = size <= MAX_SMALL_STRING_SIZE ? small_data : large_data;
-        /// It must always be terminated with null-character
-        chassert(0 < size);
-        chassert(data_ptr[size - 1] == '\0');
         return data_ptr;
     }
 
-    std::string_view getStringRef() const
+    StringRef getStringRef() const
     {
-        return std::string_view(getData(), size);
+        return StringRef(getData(), size);
     }
 
 public:
     void insertResultInto(IColumn & to) const
     {
         if (has())
-            Compatibility::insertDataWithTerminatingZero(assert_cast<ColumnString &>(to), getData(), size);
+            assert_cast<ColumnString &>(to).insertData(getData(), size);
         else
             assert_cast<ColumnString &>(to).insertDefault();
     }
@@ -513,8 +505,8 @@ public:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "String size is too big ({}), it's a bug", size);
 
         /// For serialization we use signed Int32 (for historical reasons), -1 means "no value"
-        Int32 size_to_write = size ? size : -1;
-        writeBinary(size_to_write, buf);
+        /// Int32 size_to_write = size ? size : -1;
+        writeBinary(size, buf);
         if (has())
             buf.write(getData(), size);
     }
@@ -537,66 +529,29 @@ public:
 
     void read(ReadBuffer & buf, const ISerialization & /*serialization*/, Arena * arena)
     {
-        /// For serialization we use signed Int32 (for historical reasons), -1 means "no value"
-        Int32 rhs_size_signed;
-        readBinary(rhs_size_signed, buf);
-
-        if (rhs_size_signed < 0)
-        {
-            /// Don't free large_data here.
-            size = 0;
+        readBinary(size, buf);
+        if (size == 0)
             return;
-        }
 
-        UInt32 rhs_size = rhs_size_signed;
-        if (rhs_size <= MAX_SMALL_STRING_SIZE)
+        if (size <= MAX_SMALL_STRING_SIZE)
         {
             /// Don't free large_data here.
-            size = rhs_size;
             buf.readStrict(small_data, size);
         }
         else
         {
-            /// Reserve one byte more for null-character
-            allocateLargeDataIfNeeded(rhs_size + 1, arena);
-            size = rhs_size;
+            allocateLargeDataIfNeeded(size, arena);
             buf.readStrict(large_data, size);
         }
-
-        /// Check if the string we read is null-terminated (getDataMutable does not have the assertion)
-        if (0 < size && getDataMutable()[size - 1] == '\0')
-            return;
-
-        /// It's not null-terminated, but it must be (for historical reasons). There are two variants:
-        /// - The value was serialized by one of the incompatible versions of ClickHouse. We had some range of versions
-        ///   that used to serialize SingleValueDataString without terminating '\0'. Let's just append it.
-        /// - An attacker sent crafted data. Sanitize it and append '\0'.
-        /// In all other cases the string must be already null-terminated.
-
-        /// NOTE We cannot add '\0' unconditionally, because it will be duplicated.
-        /// NOTE It's possible that a string that actually ends with '\0' was written by one of the incompatible versions.
-        ///      Unfortunately, we cannot distinguish it from normal string written by normal version.
-        ///      So such strings will be trimmed.
-
-        if (size == MAX_SMALL_STRING_SIZE)
-        {
-            /// Special case: We have to move value to large_data
-            allocateLargeDataIfNeeded(size + 1, arena);
-            memcpy(large_data, small_data, size);
-        }
-
-        /// We have enough space to append
-        ++size;
-        getDataMutable()[size - 1] = '\0';
     }
 
     /// Assuming to.has()
-    void changeImpl(std::string_view value, Arena * arena)
+    void changeImpl(StringRef value, Arena * arena)
     {
-        if (unlikely(MAX_STRING_SIZE < value.size()))
-            throw Exception(ErrorCodes::TOO_LARGE_STRING_SIZE, "String size is too big ({})", value.size());
+        if (unlikely(MAX_STRING_SIZE < value.size))
+            throw Exception(ErrorCodes::TOO_LARGE_STRING_SIZE, "String size is too big ({})", value.size);
 
-        UInt32 value_size = static_cast<UInt32>(value.size());
+        UInt32 value_size = static_cast<UInt32>(value.size);
 
         if (value_size <= MAX_SMALL_STRING_SIZE)
         {
@@ -604,19 +559,19 @@ public:
             size = value_size;
 
             if (size > 0)
-                memcpy(small_data, value.data(), size);
+                memcpy(small_data, value.data, size);
         }
         else
         {
             allocateLargeDataIfNeeded(value_size, arena);
             size = value_size;
-            memcpy(large_data, value.data(), size);
+            memcpy(large_data, value.data, size);
         }
     }
 
     void change(const IColumn & column, size_t row_num, Arena * arena)
     {
-        changeImpl(Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column), row_num), arena);
+        changeImpl(assert_cast<const ColumnString &>(column).getDataAt(row_num), arena);
     }
 
     void change(const Self & to, Arena * arena)
@@ -665,7 +620,7 @@ public:
 
     bool changeIfLess(const IColumn & column, size_t row_num, Arena * arena)
     {
-        if (!has() || Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column), row_num) < getStringRef())
+        if (!has() || assert_cast<const ColumnString &>(column).getDataAt(row_num) < getStringRef())
         {
             change(column, row_num, arena);
             return true;
@@ -687,7 +642,7 @@ public:
 
     bool changeIfGreater(const IColumn & column, size_t row_num, Arena * arena)
     {
-        if (!has() || Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column), row_num) > getStringRef())
+        if (!has() || assert_cast<const ColumnString &>(column).getDataAt(row_num) > getStringRef())
         {
             change(column, row_num, arena);
             return true;
@@ -714,7 +669,7 @@ public:
 
     bool isEqualTo(const IColumn & column, size_t row_num) const
     {
-        return has() && Compatibility::getDataAtWithTerminatingZero(assert_cast<const ColumnString &>(column), row_num) == getStringRef();
+        return has() && assert_cast<const ColumnString &>(column).getDataAt(row_num) == getStringRef();
     }
 
     static bool allocatesMemoryInArena()

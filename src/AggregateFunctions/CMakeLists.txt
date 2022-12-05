@@ -195,6 +195,7 @@ set (clickhouse_aggregate_functions_sources
         AggregateFunctionQuantile.cpp
         AggregateFunctionSimpleState.cpp
         AggregateFunctionState.cpp
+        AggregateFunctionMerge.cpp
         AggregateFunctionSum.cpp
         AggregateFunctionSumCount.cpp
         AggregateFunctionTopK.cpp

@@ -23,7 +23,8 @@ private:
 public:
     static constexpr bool is_parametric = true;
 
-    DataTypeMap(const DataTypes & elems);
+    explicit DataTypeMap(const DataTypePtr & nested_);
+    explicit DataTypeMap(const DataTypes & elems);
     DataTypeMap(const DataTypePtr & key_type_, const DataTypePtr & value_type_);
 
     TypeIndex getTypeId() const override { return TypeIndex::Map; }
@@ -47,6 +48,8 @@ public:
     const DataTypePtr & getNestedType() const { return nested; }
 
     SerializationPtr doGetDefaultSerialization() const override;
+
+    static bool checkKeyType(DataTypePtr key_type);
 
 private:
     void assertKeyType() const;

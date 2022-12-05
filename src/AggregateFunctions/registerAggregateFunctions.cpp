@@ -66,7 +66,7 @@ void registerAggregateFunctionCombinatorArray(AggregateFunctionCombinatorFactory
 //void registerAggregateFunctionCombinatorForEach(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCombinatorSimpleState(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCombinatorState(AggregateFunctionCombinatorFactory &);
-//void registerAggregateFunctionCombinatorMerge(AggregateFunctionCombinatorFactory &);
+void registerAggregateFunctionCombinatorMerge(AggregateFunctionCombinatorFactory &);
 //void registerAggregateFunctionCombinatorNull(AggregateFunctionCombinatorFactory &);
 //void registerAggregateFunctionCombinatorOrFill(AggregateFunctionCombinatorFactory &);
 //void registerAggregateFunctionCombinatorResample(AggregateFunctionCombinatorFactory &);
@@ -175,7 +175,7 @@ void registerAggregateFunctions()
         /// registerAggregateFunctionCombinatorForEach(factory);
         registerAggregateFunctionCombinatorSimpleState(factory);
         registerAggregateFunctionCombinatorState(factory);
-        /// registerAggregateFunctionCombinatorMerge(factory);
+        registerAggregateFunctionCombinatorMerge(factory);
         /// registerAggregateFunctionCombinatorNull(factory);
         /// registerAggregateFunctionCombinatorOrFill(factory);
         /// registerAggregateFunctionCombinatorResample(factory);

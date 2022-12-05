@@ -80,7 +80,7 @@ StorageStreamProperties::create(ASTStorage & storage_def, const ColumnsDescripti
     ASTLiteral * shards_ast = engine_args[0]->as<ASTLiteral>();
     if (shards_ast && shards_ast->value.getType() == Field::Types::UInt64)
     {
-        properties->shards = safeGet<UInt64>(shards_ast->value);
+        properties->shards = shards_ast->value.safeGet<UInt64>();
     }
     else
     {
@@ -90,7 +90,7 @@ StorageStreamProperties::create(ASTStorage & storage_def, const ColumnsDescripti
     ASTLiteral * replication_factor_ast = engine_args[1]->as<ASTLiteral>();
     if (replication_factor_ast && replication_factor_ast->value.getType() == Field::Types::UInt64)
     {
-        properties->replication_factor = safeGet<UInt64>(replication_factor_ast->value);
+        properties->replication_factor = replication_factor_ast->value.safeGet<UInt64>();
     }
     else
     {

@@ -11,7 +11,7 @@ private:
     SerializationPtr nested;
 
 public:
-    SerializationArray(const SerializationPtr & nested_) : nested(nested_) {}
+    explicit SerializationArray(const SerializationPtr & nested_) : nested(nested_) {}
 
     void serializeBinary(const Field & field, WriteBuffer & ostr) const override;
     void deserializeBinary(Field & field, ReadBuffer & istr) const override;
@@ -75,14 +75,12 @@ private:
     {
         const ColumnPtr offsets;
 
-        SubcolumnCreator(const ColumnPtr & offsets_) : offsets(offsets_) {}
+        explicit SubcolumnCreator(const ColumnPtr & offsets_) : offsets(offsets_) {}
 
         DataTypePtr create(const DataTypePtr & prev) const override;
         SerializationPtr create(const SerializationPtr & prev) const override;
         ColumnPtr create(const ColumnPtr & prev) const override;
     };
 };
-
-ColumnPtr arrayOffsetsToSizes(const IColumn & column);
 
 }

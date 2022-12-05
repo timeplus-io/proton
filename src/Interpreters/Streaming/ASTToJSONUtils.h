@@ -7,6 +7,9 @@
 
 namespace DB
 {
+
+class SettingsChanges;
+
 namespace Streaming
 {
 void columnDeclarationToJSON(Poco::JSON::Object & column_mapping_json, const ASTColumnDeclaration & col_decl);

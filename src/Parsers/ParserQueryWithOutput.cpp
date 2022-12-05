@@ -56,7 +56,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserShowCreateAccessEntityQuery show_create_access_entity_p;
     ParserShowGrantsQuery show_grants_p;
     ParserShowPrivilegesQuery show_privileges_p;
-    ParserExplainQuery explain_p(end);
+    ParserExplainQuery explain_p(end, allow_settings_after_format_in_insert);
 
     ASTPtr query;
 
@@ -134,7 +134,9 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         // Pass them manually, to apply in InterpreterSelectQuery::initSettings()
         if (query->as<ASTSelectWithUnionQuery>())
         {
-            QueryWithOutputSettingsPushDownVisitor::Data data{query_with_output.settings_ast};
+            auto settings = query_with_output.settings_ast->clone();
+            assert_cast<ASTSetQuery *>(settings.get())->print_in_format = false;
+            QueryWithOutputSettingsPushDownVisitor::Data data{settings};
             QueryWithOutputSettingsPushDownVisitor(data).visit(query);
         }
     }
