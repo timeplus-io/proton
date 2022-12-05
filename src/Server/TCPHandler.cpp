@@ -76,6 +76,7 @@ namespace ErrorCodes
     extern const int UNEXPECTED_PACKET_FROM_CLIENT;
     extern const int SUPPORT_IS_DISABLED;
     extern const int UNKNOWN_PROTOCOL;
+    extern const int QUERY_WAS_CANCELLED;
 }
 
 TCPHandler::TCPHandler(IServer & server_, TCPServer & tcp_server_, const Poco::Net::StreamSocket & socket_, bool parse_proxy_protocol_, std::string server_display_name_, bool snapshot_mode_)
@@ -394,7 +395,7 @@ void TCPHandler::runImpl()
         }
         catch (const Exception & e)
         {
-            state.io.onException();
+            state.io.onException(e.code() != ErrorCodes::QUERY_WAS_CANCELLED);
             exception.emplace(e);
 
             if (e.code() == ErrorCodes::UNKNOWN_PACKET_FROM_CLIENT)
@@ -418,12 +419,12 @@ void TCPHandler::runImpl()
              *  Although in one of them, we have to send exception to the client, but in the other - we can not.
              *  We will try to send exception to the client in any case - see below.
              */
-            state.io.onException();
+            state.io.onException(false); /// proton : don't log the stack trace for network issue
             exception.emplace(Exception::CreateFromPocoTag{}, e);
         }
         catch (const Poco::Exception & e)
         {
-            state.io.onException();
+            state.io.onException(true);
             exception.emplace(Exception::CreateFromPocoTag{}, e);
         }
 // Server should die on std logic errors in debug, like with assert()
@@ -432,7 +433,7 @@ void TCPHandler::runImpl()
 #ifndef NDEBUG
         catch (const std::logic_error & e)
         {
-            state.io.onException();
+            state.io.onException(true);
             exception.emplace(Exception::CreateFromSTDTag{}, e);
             sendException(*exception, send_exception_with_stack_trace);
             std::abort();
@@ -440,12 +441,12 @@ void TCPHandler::runImpl()
 #endif
         catch (const std::exception & e)
         {
-            state.io.onException();
+            state.io.onException(true);
             exception.emplace(Exception::CreateFromSTDTag{}, e);
         }
         catch (...)
         {
-            state.io.onException();
+            state.io.onException(true);
             exception.emplace("Unknown exception", ErrorCodes::UNKNOWN_EXCEPTION);
         }
 
@@ -465,7 +466,8 @@ void TCPHandler::runImpl()
                 }
 
                 const auto & e = *exception;
-                LOG_ERROR(log, fmt::runtime(getExceptionMessage(e, true)));
+                if (e.code() != ErrorCodes::QUERY_WAS_CANCELLED)
+                    LOG_ERROR(log, fmt::runtime(getExceptionMessage(e, true)));
                 sendException(*exception, send_exception_with_stack_trace);
             }
         }

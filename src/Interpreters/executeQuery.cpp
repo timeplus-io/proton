@@ -1041,7 +1041,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                  log_queries,
                  log_queries_min_type = settings.log_queries_min_type,
                  log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
-                 quota(quota), status_info_to_query_log] () mutable
+                 quota(quota), status_info_to_query_log] (bool log_trace) mutable
             {
                 if (quota)
                     quota->used(QuotaType::ERRORS, 1, /* check_exceeded = */ false);
@@ -1070,7 +1070,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     status_info_to_query_log(elem, info, ast, context);
                 }
 
-                if (current_settings.calculate_text_stack_trace)
+                if (current_settings.calculate_text_stack_trace && log_trace)
                     setExceptionStackTrace(elem);
                 logException(context, elem);
 
@@ -1090,7 +1090,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 {
                     ProfileEvents::increment(ProfileEvents::FailedInsertQuery);
                 }
-
             };
 
             res.finish_callback = std::move(finish_callback);
@@ -1274,9 +1273,14 @@ void executeQuery(
             /// It's possible to have queries without input and output.
         }
     }
+    catch (const Exception & e)
+    {
+        streams.onException(e.code() != ErrorCodes::QUERY_WAS_CANCELLED);
+        throw;
+    }
     catch (...)
     {
-        streams.onException();
+        streams.onException(true);
         throw;
     }
 
@@ -1297,9 +1301,14 @@ void executeTrivialBlockIO(BlockIO & streams, ContextPtr context)
         CompletedPipelineExecutor executor(streams.pipeline);
         executor.execute();
     }
+    catch (const Exception & e)
+    {
+        streams.onException(e.code() != ErrorCodes::QUERY_WAS_CANCELLED);
+        throw;
+    }
     catch (...)
     {
-        streams.onException();
+        streams.onException(true);
         throw;
     }
 

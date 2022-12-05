@@ -26,7 +26,7 @@ struct BlockIO
 
     /// Callbacks for query logging could be set here.
     std::function<void(QueryPipeline &)> finish_callback;
-    std::function<void()> exception_callback;
+    std::function<void(bool log_trace)> exception_callback;
 
     /// When it is true, don't bother sending any non-empty blocks to the out stream
     bool null_format = false;
@@ -40,10 +40,10 @@ struct BlockIO
         pipeline.reset();
     }
 
-    void onException() const
+    void onException(bool log_trace) const
     {
         if (exception_callback)
-            exception_callback();
+            exception_callback(log_trace);
     }
 
 private:
