@@ -1,0 +1,128 @@
+{
+    "commments":
+        "Tests covering the steam query smoke cases.",
+    "test_suite_config": {
+        "proton_ci_mode": "local",
+        "table_schemas":[
+            {
+                "name": "event",
+                "type": "table",
+                "reset": "False",
+                "config": "setting_1",
+		        "query_parameters":"logstore_retention_ms=3600000",
+                "ttl_expression": "to_datetime(_tp_time) + INTERVAL 1 HOUR",                  
+                "columns": [
+                    {
+                        "name": "event",
+                        "type": "json"
+                    },
+                    {
+                        "name": "perf_event_time",
+                        "type": "datetime64(3)",
+                        "default": "now64(3)"
+                    },                      
+                    {
+                        "name": "_perf_row_id",
+                        "type": "string"
+                    },                  
+                    {
+                        "name": "_perf_ingest_time",
+                        "type": "string"
+                    }                    
+            ]},
+            {
+                "name": "input_stress_event_s",
+                "type": "table",
+                "reset": "False",
+                "config": "setting_1",
+		        "query_parameters":"logstore_retention_ms=3600000",
+                "ttl_expression": "to_datetime(_tp_time) + INTERVAL 1 HOUR",                                 
+                "columns": [
+                    {
+                        "name": "json_string",
+                        "type": "string"
+                    },
+                    {
+                        "name": "perf_event_time",
+                        "type": "datetime64(3)",
+                        "default": "now64(3)"
+                    },                      
+                    {
+                        "name": "_perf_row_id",
+                        "type": "string"
+                    },                  
+                    {
+                        "name": "_perf_ingest_time",
+                        "type": "string"
+                    }                    
+                ]    
+            },
+            {
+                "name": "input_stress_event_s1",
+                "type": "table",
+                "reset": "False",
+                "config": "setting_1",
+		        "query_parameters":"logstore_retention_ms=3600000",
+                "ttl_expression": "to_datetime(_tp_time) + INTERVAL 1 HOUR",                                
+                "columns": [
+                    {
+                        "name": "json_string",
+                        "type": "string"
+                    },
+                    {
+                        "name": "perf_event_time",
+                        "type": "datetime64(3)",
+                        "default": "now64(3)"
+                    },                      
+                    {
+                        "name": "_perf_row_id",
+                        "type": "string"
+                    },                  
+                    {
+                        "name": "_perf_ingest_time",
+                        "type": "string"
+                    }                    
+                ]
+            }         
+
+
+        ],
+        "setup": {
+
+        },
+        "tests_2_run": {"ids_2_run": [8], "tags_2_run":[], "tags_2_skip":["bug", "todo", "to_support"]} 
+    },
+
+    "tests": [
+
+        {
+            "id": 8,
+            "tags": ["input stress - event input only"],
+            "name": "longevity - proton, with query time easy json volume, 80 streams",
+            "description": "tail query latency w/single source",
+            "db_engine":"proton",
+            "input_info_table": "input_info",
+            "steps":[
+                {"statements": [
+
+                    {"client":"python", "config_set": "setting_1", "wait": 1, "query_id": 605, "run_mode":"process", "loop_times": 1, "workers": 1, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from input_stress_event_s", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python", "config_set": "setting_1", "wait": 1, "query_id": 606, "run_mode":"process", "loop_times": 1, "workers": 1, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from input_stress_event_s1", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"}
+
+                ]},
+                    
+
+                {"inputs": [
+
+                    {"table_name": "input_stress_event_s","input_id": 615, "table_schema_ref":"input_stress_event_s", "client":"rest", "workers":10, "data_source":"file", "data_set_path":"event", "data_set_file": "event_github.json", "data_set_file_format": "json", "json_column": "json_string", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":100, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "input_stress_event_s1","input_id": 616, "table_schema_ref":"input_stress_event_s1", "workers":1, "data_source":"file", "data_set_path":"event", "data_set_file": "event_github.json", "data_set_file_format": "json", "json_column": "json_string", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":100, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}                           
+
+                ]}
+
+            ]               
+        }
+    ]
+}
+
+

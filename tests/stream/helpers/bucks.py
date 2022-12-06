@@ -964,7 +964,8 @@ def batch_input_from_data_set_py(
     py_client,
     data_set_with_header,
     batch_size=1,
-    connection_mode="session_per_batch",
+    interval=0,
+    connection_mode="session_per_batch"
 ):
     logger = mp.get_logger()
     logger.debug(f"start running...")
@@ -1026,7 +1027,8 @@ def batch_input_from_data_set_py(
                     # metric_create_batch_time.append(f"complete create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
                     py_client.execute(input_sql)
                     logger.debug(f"input_sql = {input_sql} executed")
-
+                    if interval > 0:
+                        time.sleep(interval)
                     # input_sql_list.append(input_sql)
                     batch_str = ""
                     j = 0
@@ -1042,6 +1044,8 @@ def batch_input_from_data_set_py(
             # print(f"input_client: input_sql = {input_sql}")
             # metric_create_batch_time.append(f"complete create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
             py_client.execute(input_sql)
+            if interval > 0:
+                time.sleep(interval)
 
         return input_sql
     except (BaseException) as error:
@@ -1056,7 +1060,8 @@ def batch_input_from_data_set_rest(
     session,
     data_set_with_header,
     batch_size=1,
-    connection_mode="session_per_batch",
+    interval=0,
+    connection_mode="session_per_batch"
 ):
     # todo: get table schema from data_set header or change the batch_input_from_data_set_py to read schema from tests.json
     logger = mp.get_logger()
@@ -1075,7 +1080,7 @@ def batch_input_from_data_set_rest(
         j = 0  # as batch counter
         data_set = data_set_with_header
         for row in data_set:
-            print(f"batch_input_from_data_set_rest, row = {row}")
+            #print(f"batch_input_from_data_set_rest, row = {row}")
 
             row_list = []
             if i == 0:
@@ -1108,6 +1113,8 @@ def batch_input_from_data_set_rest(
                     )
                     input_rest_body_data = []
                     j = 0
+                    if interval > 0:
+                        time.sleep(interval)
                 else:
                     j += 1
 
@@ -1122,7 +1129,8 @@ def batch_input_from_data_set_rest(
             logger.debug(
                 f"res.status_code of requests.post({input_url}, data={input_rest_body_json} = {res.status_code}"
             )
-
+            if interval > 0:
+                time.sleep(interval)
         return res
     except (BaseException) as error:
         logger.debug(f"exception, error = {error}")
@@ -1148,7 +1156,6 @@ def input_client(
     # print(f"input_from_csv: csv_file_path = {csv_file_path}")
 
     logger = mp.get_logger()
-
     # formatter = logging.Formatter(
     #    "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"
     # )
@@ -1177,7 +1184,7 @@ def input_client(
 
     worker_mode = source.get("worker_mode")
 
-    print(f"worker_mode = {worker_mode}, start_from = {start_from}, end_at = {end_at}")
+    print(f"worker_mode = {worker_mode}, start_from = {start_from}, end_at = {end_at}, interval = {interval}")
 
     logger.debug(
         f"worker for input_id = {input_id}, input_sub_id = {input_sub_id}, agend_id = {agent_id} started... input_tear_down.value = {input_tear_down.value}"
@@ -1211,7 +1218,7 @@ def input_client(
                     else:
                         table_name_copy = table_name
                     batch_input_from_data_set_py(
-                        config, table_name_copy, py_client, data_set, batch_size
+                        config, table_name_copy, py_client, data_set, batch_size, interval
                     )
 
                     if (
@@ -1222,7 +1229,6 @@ def input_client(
                         i += 1
                         if i > end_at:
                             i = 0
-
                     if loop_times > 0:
                         loop_count += 1  # if loop_times < 0, run infinitely
 
@@ -1278,6 +1284,7 @@ def input_client(
                         session,
                         data_set,
                         batch_size,
+                        interval
                     )
                     if (
                         worker_mode is not None
@@ -1433,7 +1440,6 @@ def input_walk_through(
             )
             # logger.debug(f"args = {args}")
             proc = mp.Process(target=input_client, args=args)
-
             proc_workers.append(
                 {
                     "input_id": input_id,
