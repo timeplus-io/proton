@@ -136,6 +136,7 @@ namespace
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
                 "Number of arguments for function '{}' doesn't match: passed {}, should be 2, syntax: {}(context, parttern)",
                 func_name,
+                arguments.size(),
                 func_name);
 
         if (!isString(arguments[0]))

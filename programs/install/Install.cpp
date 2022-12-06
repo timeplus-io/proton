@@ -5,7 +5,7 @@
 #include <sys/stat.h>
 #include <pwd.h>
 
-#if defined(__linux__)
+#if defined(OS_LINUX)
     #include <syscall.h>
     #include <linux/capability.h>
 #endif
@@ -798,7 +798,7 @@ int mainInstall(int argc, char ** argv)
           *  then attempt to run this file will end up with a cryptic "Operation not permitted" message.
           */
 
-#if defined(__linux__)
+#if defined(OS_LINUX)
         fmt::print("Setting capabilities for proton binary. This is optional.\n");
         std::string command = fmt::format("command -v setcap >/dev/null"
             " && command -v capsh >/dev/null"

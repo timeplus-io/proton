@@ -12,7 +12,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#if defined(__linux__)
+#if defined(OS_LINUX)
 
 #include <sys/syscall.h>
 #include <sys/uio.h>
@@ -83,7 +83,7 @@ std::future<IAsynchronousReader::Result> ThreadPoolReader::submit(Request reques
 
     int fd = assert_cast<const LocalFileDescriptor &>(*request.descriptor).fd;
 
-#if defined(__linux__)
+#if defined(OS_LINUX)
     /// Check if data is already in page cache with preadv2 syscall.
 
     /// We don't want to depend on new Linux kernel.
@@ -148,8 +148,7 @@ std::future<IAsynchronousReader::Result> ThreadPoolReader::submit(Request reques
                 {
                     ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadFailed);
                     promise.set_exception(std::make_exception_ptr(ErrnoException(
-                        fmt::format("Cannot read from file {}, {}", fd,
-                            errnoToString(ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR, errno)),
+                        fmt::format("Cannot read from file {}, {}", fd, errnoToString()),
                         ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR, errno)));
                     return future;
                 }

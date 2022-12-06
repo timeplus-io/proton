@@ -22,7 +22,7 @@ std::unique_ptr<TemporaryFile> createTemporaryFile(const std::string & path);
 std::filesystem::path getMountPoint(std::filesystem::path absolute_path);
 
 /// Returns name of filesystem mounted to mount_point
-#if !defined(__linux__)
+#if !defined(OS_LINUX)
 [[noreturn]]
 #endif
 String getFilesystemName([[maybe_unused]] const String & mount_point);

@@ -231,6 +231,7 @@ private:
             {
                 throw Exception(ErrorCodes::BAD_ARGUMENTS,
                     "Function {} decimal scale should have native UInt type. Actual {}",
+                    name,
                     scale_argument.type->getName());
             }
 

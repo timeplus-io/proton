@@ -1,7 +1,7 @@
 #include "filesystemHelpers.h"
 
 #include <sys/stat.h>
-#if defined(__linux__)
+#if defined(OS_LINUX)
 #    include <cstdio>
 #    include <mntent.h>
 #endif
@@ -88,12 +88,12 @@ std::filesystem::path getMountPoint(std::filesystem::path absolute_path)
 }
 
 /// Returns name of filesystem mounted to mount_point
-#if !defined(__linux__)
+#if !defined(OS_LINUX)
 [[noreturn]]
 #endif
 String getFilesystemName([[maybe_unused]] const String & mount_point)
 {
-#if defined(__linux__)
+#if defined(OS_LINUX)
     FILE * mounted_filesystems = setmntent("/etc/mtab", "r");
     if (!mounted_filesystems)
         throw DB::Exception("Cannot open /etc/mtab to get name of filesystem", ErrorCodes::SYSTEM_ERROR);

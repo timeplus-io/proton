@@ -98,7 +98,7 @@ IDiskRemote::Metadata::Metadata(
         if (e.code() == ErrorCodes::UNKNOWN_FORMAT)
             throw;
 
-        throw Exception("Failed to read metadata file", e, ErrorCodes::UNKNOWN_FORMAT);
+        throw Exception(ErrorCodes::UNKNOWN_FORMAT, "Failed to read metadata file");
     }
 }
 

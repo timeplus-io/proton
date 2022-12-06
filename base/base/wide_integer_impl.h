@@ -298,7 +298,7 @@ struct integer<Bits, Signed>::_impl
         /// int64_t max value precisely.
 
         // TODO Be compatible with Apple aarch64
-#if not (defined(__APPLE__) && defined(__aarch64__))
+#if not (defined(OS_DARWIN) && defined(__aarch64__))
         static_assert(LDBL_MANT_DIG >= 64,
             "On your system long double has less than 64 precision bits, "
             "which may result in UB when initializing double from int64_t");

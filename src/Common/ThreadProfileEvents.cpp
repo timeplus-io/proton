@@ -1,6 +1,6 @@
 #include "ThreadProfileEvents.h"
 
-#if defined(__linux__)
+#if defined(OS_LINUX)
 
 #include "TaskStatsInfoGetter.h"
 #include "ProcfsMetricsProvider.h"
@@ -26,7 +26,7 @@
 
 namespace ProfileEvents
 {
-#if defined(__linux__)
+#if defined(OS_LINUX)
     extern const Event OSIOWaitMicroseconds;
     extern const Event OSCPUWaitMicroseconds;
     extern const Event OSCPUVirtualTimeMicroseconds;
@@ -164,7 +164,7 @@ void TasksStatsCounters::incrementProfileEvents(const ::taskstats & prev, const 
 
 #endif
 
-#if defined(__linux__)
+#if defined(OS_LINUX)
 
 namespace DB
 {

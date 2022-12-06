@@ -21,7 +21,7 @@ namespace ErrorCodes
 }
 
 
-#if defined(__linux__)
+#if defined(OS_LINUX)
 
 #include <unistd.h>
 #include <fcntl.h>
