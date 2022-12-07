@@ -1,8 +1,8 @@
 #pragma once
 
+#include <Interpreters/Streaming/FunctionDescription.h>
 #include <Processors/IProcessor.h>
 #include <Processors/Streaming/ChunkSplitter.h>
-#include <Interpreters/Streaming/FunctionDescription.h>
 
 namespace DB
 {
@@ -13,11 +13,7 @@ class Sessionizer;
 class SessionTransformWithSubstream final : public IProcessor
 {
 public:
-    SessionTransformWithSubstream(
-        const Block & input_header,
-        const Block & output_header,
-        FunctionDescriptionPtr desc_,
-        std::vector<size_t> key_column_positions);
+    SessionTransformWithSubstream(const Block & input_header, const Block & output_header, FunctionDescriptionPtr desc_);
 
     String getName() const override { return "SessionTransformWithSubstream"; }
 
@@ -37,8 +33,6 @@ private:
     Chunk input_chunk;
     Chunks output_chunks;
     typename Chunks::iterator output_iter{output_chunks.begin()};
-
-    ChunkSplitter substream_splitter;
 
     SubstreamHashMap<std::unique_ptr<Sessionizer>> substream_sessionizers;
 

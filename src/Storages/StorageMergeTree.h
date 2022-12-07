@@ -302,7 +302,11 @@ protected:
         const String & date_column_name,
         const MergingParams & merging_params_,
         std::unique_ptr<MergeTreeSettings> settings_,
-        bool has_force_restore_data_flag);
+        bool has_force_restore_data_flag,
+        /// proton: starts.
+        Int32 shard_num_ = 0
+        /// proton: ends.
+        );
 
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr & part) const override;
 };

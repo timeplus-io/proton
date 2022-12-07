@@ -3,7 +3,6 @@
 #include <Processors/Transforms/Streaming/GlobalAggregatingTransform.h>
 #include <Processors/Transforms/Streaming/SessionAggregatingTransform.h>
 #include <Processors/Transforms/Streaming/TumbleHopAggregatingTransform.h>
-#include <Processors/Transforms/Streaming/TumbleHopAggregatingTransformWithSubstream.h>
 
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
@@ -51,7 +50,7 @@ AggregatingStep::AggregatingStep(
 {
 }
 
-void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings)
+void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
 {
     QueryPipelineProcessorsCollector collector(pipeline, this);
 
@@ -71,18 +70,12 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
       */
     auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version);
 
-    /// For substream
-    if (!transform_params->params.substream_key_indices.empty()
-        || transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION)
-    {
-        transformPipelineWithSubstream(transform_params, pipeline, settings);
-        aggregating = collector.detachProcessors(0);
-        return;
-    }
-
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.getNumStreams() > 1)
     {
+        if (transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Parallel processing session window is not supported");
+
         /// Add resize transform to uniformly distribute data between aggregating streams.
         if (!storage_has_evenly_distributed_read)
             pipeline.resize(pipeline.getNumStreams(), true, true);
@@ -110,6 +103,8 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
             if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
                 || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
                 return std::make_shared<TumbleHopAggregatingTransform>(header, transform_params);
+            else if (transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION)
+                return std::make_shared<SessionAggregatingTransform>(header, transform_params);
             else
                 return std::make_shared<GlobalAggregatingTransform>(header, transform_params);
         });
@@ -131,59 +126,6 @@ void AggregatingStep::describeActions(JSONBuilder::JSONMap & map) const
 void AggregatingStep::describePipeline(FormatSettings & settings) const
 {
     IQueryPlanStep::describePipeline(aggregating, settings);
-}
-
-void AggregatingStep::transformPipelineWithSubstream(
-    AggregatingTransformParamsPtr transform_params, QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
-{
-    assert(
-        transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
-        || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END
-        || transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION);
-
-    /// If there are several sources, then we perform parallel aggregation
-    if (pipeline.getNumStreams() > 1)
-    {
-        /// Add resize transform to uniformly distribute data between aggregating streams.
-        if (!storage_has_evenly_distributed_read)
-            pipeline.resize(pipeline.getNumStreams(), true, true);
-
-        if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
-            || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
-        {
-            auto substream_many_data = std::make_shared<SubstreamManyAggregatedData>(pipeline.getNumStreams());
-
-            size_t counter = 0;
-            pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
-                return std::make_shared<TumbleHopAggregatingTransformWithSubstream>(
-                    header, transform_params, substream_many_data, counter++, merge_threads, temporary_data_merge_threads);
-            });
-        }
-        else
-        {
-            auto session_many_data = std::make_shared<SessionManyAggregatedData>(pipeline.getNumStreams());
-
-            size_t counter = 0;
-            pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
-                return std::make_shared<SessionAggregatingTransform>(
-                    header, transform_params, session_many_data, counter++, merge_threads, temporary_data_merge_threads);
-            });
-        }
-
-        pipeline.resize(1);
-    }
-    else
-    {
-        pipeline.resize(1);
-
-        pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
-            if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
-                || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
-                return std::make_shared<TumbleHopAggregatingTransformWithSubstream>(header, transform_params);
-            else
-                return std::make_shared<SessionAggregatingTransform>(header, transform_params);
-        });
-    }
 }
 
 }

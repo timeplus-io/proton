@@ -1303,6 +1303,42 @@ Block Aggregator::convertOneBucketToBlock(
     return block;
 }
 
+Block Aggregator::convertOneBucketToBlockFinal(AggregatedDataVariants & variants, ConvertAction action, size_t bucket) const
+{
+    auto method = variants.type;
+    Block block;
+
+    if (false) {} // NOLINT
+#define M(NAME) \
+    else if (method == AggregatedDataVariants::Type::NAME) \
+        block = convertOneBucketToBlock(variants, *variants.NAME, variants.aggregates_pool, true, action, bucket);
+
+    APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
+#undef M
+    else
+        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+
+    return block;
+}
+
+Block Aggregator::convertOneBucketToBlockIntermediate(AggregatedDataVariants & variants, ConvertAction action, size_t bucket) const
+{
+    auto method = variants.type;
+    Block block;
+
+    if (false) {} // NOLINT
+#define M(NAME) \
+    else if (method == AggregatedDataVariants::Type::NAME) \
+        block = convertOneBucketToBlock(variants, *variants.NAME, variants.aggregates_pool, false, action, bucket);
+
+    APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
+#undef M
+    else
+        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+
+    return block;
+}
+
 Block Aggregator::mergeAndConvertOneBucketToBlock(
     ManyAggregatedDataVariants & variants,
     Arena * arena,

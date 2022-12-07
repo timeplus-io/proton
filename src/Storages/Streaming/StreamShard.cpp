@@ -101,7 +101,8 @@ StreamShard::StreamShard(
             date_column_name_,
             merging_params_,
             std::move(settings_),
-            has_force_restore_data_flag_);
+            has_force_restore_data_flag_,
+            shard);
 
         buildIdempotentKeysIndex(storage->lastIdempotentKeys());
         auto sn = storage->committedSN();
@@ -922,6 +923,9 @@ void StreamShard::deinitNativeLog()
         if (resp.hasError())
         {
             LOG_ERROR(log, "Failed to clean up log, error={}", resp.errString());
+            if (resp.hasUnretryableError())
+                break;
+
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
         else

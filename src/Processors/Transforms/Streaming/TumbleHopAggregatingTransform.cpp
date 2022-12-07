@@ -54,7 +54,7 @@ void TumbleHopAggregatingTransform::finalize(ChunkContextPtr chunk_ctx)
             if (bound.watermark < min_watermark.watermark)
                 min_watermark = bound;
 
-            if (bound.watermark > min_watermark.watermark)
+            if (bound.watermark > max_watermark.watermark)
                 max_watermark = bound;
 
             /// Reset watermarks
@@ -64,7 +64,7 @@ void TumbleHopAggregatingTransform::finalize(ChunkContextPtr chunk_ctx)
         }
 
         if (min_watermark.watermark != max_watermark.watermark)
-            LOG_INFO(log, "Found watermark skew. min_watermark={}, max_watermark={}", min_watermark.watermark, min_watermark.watermark);
+            LOG_INFO(log, "Found watermark skew. min_watermark={}, max_watermark={}", min_watermark.watermark, max_watermark.watermark);
 
         auto start = MonotonicMilliseconds::now();
         doFinalize(min_watermark, chunk_ctx);
@@ -155,7 +155,7 @@ void TumbleHopAggregatingTransform::convertTwoLevel(
             if (is_cancelled)
                 return;
 
-            if (params->emit_version)
+            if (params->emit_version && params->final)
                 emitVersion(block);
 
             if (merged_block)
@@ -175,7 +175,10 @@ void TumbleHopAggregatingTransform::convertTwoLevel(
     }
 
     if (merged_block)
+    {
+        chunk_ctx->setWatermark(watermark);
         setCurrentChunk(convertToChunk(merged_block), chunk_ctx);
+    }
 
     /// Tell other variants to clean up memory arena
     many_data->arena_watermark = watermark;

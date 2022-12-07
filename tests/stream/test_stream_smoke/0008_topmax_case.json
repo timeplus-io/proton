@@ -139,7 +139,7 @@
 
         {
             "id": 3,
-            "tags": ["topmax"],
+            "tags": ["topmax", "change"],
             "name": "top_k in session",
             "description": "create a table test_topmax, 1 column for 1 type and ingest data top_k on (int,map) on session window",
             "steps":[
@@ -253,7 +253,7 @@
         },
         {
             "id": 10,
-            "tags": ["topmax"],
+            "tags": ["topmax", "change"],
             "name": "max on float output in order",
             "description": "create a table test_topmax, 1 column for 1 type and ingest data max_k on float on session window",
             "steps":[

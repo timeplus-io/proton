@@ -3,7 +3,6 @@
 #include "Watermark.h"
 
 #include <Processors/IProcessor.h>
-#include <Processors/Streaming/ChunkSplitter.h>
 
 namespace DB
 {
@@ -22,7 +21,6 @@ public:
         TreeRewriterResultPtr syntax_analyzer_result,
         FunctionDescriptionPtr desc,
         bool proc_time,
-        std::vector<size_t> key_column_positions,
         const Block & input_header,
         const Block & output_header,
         Poco::Logger * log);
@@ -50,8 +48,6 @@ private:
     Chunk input_chunk;
     Chunks output_chunks;
     typename Chunks::iterator output_iter{output_chunks.begin()};
-
-    ChunkSplitter substream_splitter;
 
     String watermark_name;
     WatermarkPtr watermark_template;

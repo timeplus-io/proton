@@ -8,8 +8,10 @@
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/Streaming/DedupTransformStep.h>
 #include <Processors/QueryPlan/Streaming/SessionStep.h>
+#include <Processors/QueryPlan/Streaming/SessionStepWithSubstream.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
+#include <Processors/QueryPlan/Streaming/WatermarkStepWithSubstream.h>
 #include <Processors/QueryPlan/Streaming/WindowAssignmentStep.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/ExternalStream/StorageExternalStream.h>
@@ -26,19 +28,6 @@ namespace DB
 {
 namespace Streaming
 {
-
-namespace
-{
-std::vector<size_t> keyPositionsForSubstreams(const Block & header, const SelectQueryInfo & query_info)
-{
-    std::vector<size_t> substream_key_positions;
-    substream_key_positions.reserve(query_info.substream_keys.size());
-    for (const auto & key : query_info.substream_keys)
-        substream_key_positions.emplace_back(header.getPositionByName(key));
-    return substream_key_positions;
-}
-}
-
 ProxyStream::ProxyStream(
     const StorageID & id_,
     const ColumnsDescription & columns_,
@@ -189,12 +178,8 @@ void ProxyStream::read(
 
     auto * distributed = storage->as<StorageStream>();
     assert(distributed);
-
-    if (streaming && context_->getSettingsRef().query_mode.value != "table")
-        distributed->readStreaming(query_plan, query_info, updated_column_names, storage_snapshot, context_);
-    else
-        distributed->readHistory(
-            query_plan, updated_column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+    distributed->read(
+        query_plan, updated_column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 }
 
 NamesAndTypesList ProxyStream::getVirtuals() const
@@ -348,18 +333,24 @@ void ProxyStream::processWatermarkStep(QueryPlan & query_plan, const SelectQuery
     else
     {
         Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
-
-        std::vector<size_t> substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
-
-        query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(
-            query_plan.getCurrentDataStream(),
-            std::move(output_header),
-            query_info.query,
-            query_info.syntax_analyzer_result,
-            streaming_func_desc,
-            proc_time,
-            std::move(substream_key_positions),
-            log));
+        if (query_info.hasPartitionByKeys())
+            query_plan.addStep(std::make_unique<Streaming::WatermarkStepWithSubstream>(
+                query_plan.getCurrentDataStream(),
+                std::move(output_header),
+                query_info.query,
+                query_info.syntax_analyzer_result,
+                streaming_func_desc,
+                proc_time,
+                log));
+        else
+            query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(
+                query_plan.getCurrentDataStream(),
+                std::move(output_header),
+                query_info.query,
+                query_info.syntax_analyzer_result,
+                streaming_func_desc,
+                proc_time,
+                log));
     }
 }
 
@@ -377,10 +368,12 @@ void ProxyStream::processSessionStep(QueryPlan & query_plan, const SelectQueryIn
     auto session_end_type = std::make_shared<DataTypeBool>();
     output_header.insert(insert_pos++, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
 
-    std::vector<size_t> substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
-
-    query_plan.addStep(std::make_unique<Streaming::SessionStep>(
-        query_plan.getCurrentDataStream(), std::move(output_header), streaming_func_desc, substream_key_positions));
+    if (query_info.hasPartitionByKeys())
+        query_plan.addStep(std::make_unique<Streaming::SessionStepWithSubstream>(
+            query_plan.getCurrentDataStream(), std::move(output_header), streaming_func_desc));
+    else
+        query_plan.addStep(std::make_unique<Streaming::SessionStep>(
+            query_plan.getCurrentDataStream(), std::move(output_header), streaming_func_desc));
 }
 
 void ProxyStream::processWindowAssignmentStep(
@@ -398,13 +391,53 @@ void ProxyStream::processWindowAssignmentStep(
 
 StorageSnapshotPtr ProxyStream::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const
 {
-    if (nested_proxy_storage)
-        return nested_proxy_storage->getStorageSnapshot(metadata_snapshot);
-
-    if (storage)
-        return storage->getStorageSnapshot(metadata_snapshot);
+    if (auto nested = getNestedStorage())
+        return nested->getStorageSnapshot(metadata_snapshot);
 
     return IStorage::getStorageSnapshot(metadata_snapshot);
+}
+
+bool ProxyStream::isRemote() const
+{
+    if (auto nested = getNestedStorage())
+        return nested->isRemote();
+
+    return IStorage::isRemote(); 
+}
+
+bool ProxyStream::supportsParallelInsert() const
+{
+    if (auto nested = getNestedStorage())
+        return nested->supportsParallelInsert();
+
+    return IStorage::supportsParallelInsert();
+}
+
+bool ProxyStream::supportsIndexForIn() const
+{
+    if (auto nested = getNestedStorage())
+        return nested->supportsIndexForIn();
+
+    return IStorage::supportsIndexForIn();
+}
+
+bool ProxyStream::supportsSubcolumns() const
+{
+    if (auto nested = getNestedStorage())
+        return nested->supportsSubcolumns();
+
+    return IStorage::supportsSubcolumns(); 
+}
+
+StoragePtr ProxyStream::getNestedStorage() const
+{
+    if (nested_proxy_storage)
+        return nested_proxy_storage;
+
+    if (storage)
+        return storage;
+
+    return nullptr;  /// subquery
 }
 }
 }

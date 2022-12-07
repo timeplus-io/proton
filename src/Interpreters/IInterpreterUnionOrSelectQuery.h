@@ -7,8 +7,9 @@
 #include <DataTypes/DataTypesNumber.h>
 
 /// proton: starts.
-#include <Storages/ColumnsDescription.h>
+#include <Functions/FunctionHelpers.h>
 #include <Interpreters/Streaming/JoinStreamDescription.h>
+#include <Storages/ColumnsDescription.h>
 /// proton: ends.
 
 namespace DB
@@ -31,13 +32,34 @@ public:
         , max_streams(context->getSettingsRef().max_threads)
     {
         if (options.shard_num)
+        {
             context->addLocalScalar(
                 "_shard_num",
                 Block{{DataTypeUInt32().createColumnConst(1, *options.shard_num), std::make_shared<DataTypeUInt32>(), "_shard_num"}});
+
+            /// proton: starts.
+            /// This is a distirbuted query on local node, get required shard_num
+            context->setShardToRead(*options.shard_num - 1);  /// based on 0
+            /// proton: ends.
+        }
+
         if (options.shard_count)
             context->addLocalScalar(
                 "_shard_count",
                 Block{{DataTypeUInt32().createColumnConst(1, *options.shard_count), std::make_shared<DataTypeUInt32>(), "_shard_count"}});
+
+        /// proton: starts.
+        /// This is a distirbuted query on remote node, get required shard_num
+        if (context->hasQueryContext() && context->getQueryContext()->hasScalar("_shard_num"))
+        {
+            const auto * column_const = checkAndGetColumnConst<ColumnVector<UInt32>>(
+                context->getQueryContext()->getScalar("_shard_num").getByPosition(0).column.get());
+            if (unlikely(!column_const))
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Don't get shard num from distributed query on remote node");
+
+            context->setShardToRead(column_const->getValue<UInt32>() - 1);  /// based on 0
+        }
+        /// proton: ends.
     }
 
     virtual void buildQueryPlan(QueryPlan & query_plan) = 0;

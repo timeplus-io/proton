@@ -95,6 +95,7 @@ enum class ProcessorID : UInt32
     ReplacingWindowColumnTransformID = 83,
     SessionTransformID = 84,
     SessionTransformWithSubstreamID = 85,
+    ShufflingTransformID = 86,
 
     /// Aggregating transform
     AggregatingInOrderTransformID = 1'000,
@@ -106,6 +107,8 @@ enum class ProcessorID : UInt32
     TumbleHopAggregatingTransformID = 1'006,
     SessionAggregatingTransformID = 1'007,
     TumbleHopAggregatingTransformWithSubstreamID = 1'008,
+    SessionAggregatingTransformWithSubstreamID = 1'009,
+    GlobalAggregatingTransformWithSubstreamID = 1'010,
 
     /// Format Input Processors
     ParallelParsingInputFormatID = 4'000,
@@ -217,9 +220,7 @@ enum class ProcessorID : UInt32
     TablesBlockSourceID = 10'042,
     ZerosSourceID = 10'043,
     StorageS3SourceID = 10'044,
-    //proton: starts
     GenerateRandomSourceID = 10'045,
-    //proton: ends
 
     /// Sink Processors
     EmptySinkID = 20'000,
@@ -478,6 +479,18 @@ inline ProcessorID toProcessID(UInt32 v)
         case 82:
             pid = ProcessorID::PartitionedStorageFileSinkID;
             break;
+        case 83:
+            pid = ProcessorID::ReplacingWindowColumnTransformID;
+            break;
+        case 84:
+            pid = ProcessorID::SessionTransformID;
+            break;
+        case 85:
+            pid = ProcessorID::SessionTransformWithSubstreamID;
+            break;
+        case 86:
+            pid = ProcessorID::ShufflingTransformID;
+            break;
 
         /// Aggregating transform
         case 1'000:
@@ -506,6 +519,12 @@ inline ProcessorID toProcessID(UInt32 v)
             break;
         case 1'008:
             pid = ProcessorID::TumbleHopAggregatingTransformWithSubstreamID;
+            break;
+        case 1'009:
+            pid = ProcessorID::SessionAggregatingTransformWithSubstreamID;
+            break;
+        case 1'010:
+            pid = ProcessorID::GlobalAggregatingTransformWithSubstreamID;
             break;
 
         /// Format Input Processors

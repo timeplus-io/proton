@@ -24,13 +24,11 @@ WatermarkTransformWithSubstream::WatermarkTransformWithSubstream(
     TreeRewriterResultPtr syntax_analyzer_result,
     FunctionDescriptionPtr desc,
     bool proc_time,
-    std::vector<size_t> key_column_positions,
     const Block & input_header,
     const Block & output_header,
     Poco::Logger * log_)
     : IProcessor({input_header}, {output_header}, ProcessorID::WatermarkTransformWithSubstreamID)
     , header(input_header)
-    , substream_splitter(std::move(key_column_positions))
     , log(log_)
 {
     initWatermark(input_header, query, syntax_analyzer_result, desc, proc_time);
@@ -86,29 +84,38 @@ IProcessor::Status WatermarkTransformWithSubstream::prepare()
 
 void WatermarkTransformWithSubstream::work()
 {
-    /// We will need clear input_chunk for next run
-    Chunk process_chunk;
-    process_chunk.swap(input_chunk);
-
-    auto split_chunks{substream_splitter.split(process_chunk)};
+    assert(input_chunk.hasChunkContext());
 
     assert(output_iter == output_chunks.end());
     output_chunks.clear();
-    output_chunks.reserve(split_chunks.size());
 
-    for (auto & chunk_with_id : split_chunks)
+    /// We will need clear input_chunk for next run
+    Chunk process_chunk;
+    process_chunk.swap(input_chunk);
+    if (process_chunk.hasRows())
     {
-        auto & watermark = getOrCreateSubstreamWatermark(chunk_with_id.id);
+        auto & watermark = getOrCreateSubstreamWatermark(process_chunk.getSubstreamID());
 
-        assert(chunk_with_id.chunk);
-        watermark.process(chunk_with_id.chunk);
-        assert(chunk_with_id.chunk);
+        watermark.process(process_chunk);
+        assert(process_chunk);
 
-        /// Keep substream id for each sub-chunk, used for downstream processors
-        auto chunk_ctx = chunk_with_id.chunk.getOrCreateChunkContext();
-        chunk_ctx->setSubstreamID(std::move(chunk_with_id.id));
+        output_chunks.emplace_back(std::move(process_chunk));
+    }
+    else
+    {
+        /// FIXME, we shall establish timer only when necessary instead of blindly generating empty heartbeat chunk
+        output_chunks.reserve(substream_watermarks.size());
+        for (auto & [id, watermark] : substream_watermarks)
+        {
+            auto chunk = process_chunk.clone();
+            watermark->process(chunk);
 
-        output_chunks.emplace_back(std::move(chunk_with_id.chunk));
+            if (chunk.hasWatermark())
+            {
+                chunk.getChunkContext()->setSubstreamID(id);
+                output_chunks.emplace_back(std::move(chunk));
+            }
+        }
     }
 
     output_iter = output_chunks.begin(); /// need to output chunks

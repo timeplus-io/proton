@@ -69,32 +69,6 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
-    void readStreaming(
-        QueryPlan & query_plan,
-        SelectQueryInfo & query_info,
-        const Names & column_names,
-        const StorageSnapshotPtr & storage_snapshot,
-        ContextPtr context_);
-
-    void readHistory(
-        QueryPlan & query_plan,
-        const Names & column_names,
-        const StorageSnapshotPtr & storage_snapshot,
-        SelectQueryInfo & query_info,
-        ContextPtr context_,
-        QueryProcessingStage::Enum processed_stage,
-        size_t max_block_size,
-        unsigned num_streams);
-
-    void readConcat(
-        QueryPlan & query_plan,
-        SelectQueryInfo & query_info,
-        Names column_names,
-        const StorageSnapshotPtr & storage_snapshot,
-        ContextPtr context,
-        QueryProcessingStage::Enum processed_stage,
-        size_t max_block_size);
-
     NamesAndTypesList getVirtuals() const override;
 
     NamesAndTypesList getVirtualsHistory() const;
@@ -202,6 +176,56 @@ private:
         QueryProcessingStage::Enum processed_stage);
 
 public:
+    enum class QueryMode : uint8_t
+    {
+        STREAMING,          /// streaming query
+        STREAMING_CONCAT,   /// streaming query with backfilled historical data
+        HISTORICAL          /// historical query
+    };
+    
+    using StreamShardPtrs = std::vector<std::shared_ptr<StreamShard>>;
+    struct ShardsToRead
+    {
+        QueryMode mode;
+        StreamShardPtrs local_shards;  /// Also as streaming shards when mode is STREAMING || STREAMING_CONCAT
+        StreamShardPtrs remote_shards;
+
+        bool requireDistributed() const { return !remote_shards.empty(); }
+    };
+
+private:
+    ShardsToRead getRequiredShardsToRead(ContextPtr context_, const SelectQueryInfo & query_info) const;
+
+    void readStreaming(
+        const StreamShardPtrs & shards_to_read,
+        QueryPlan & query_plan,
+        SelectQueryInfo & query_info,
+        const Names & column_names,
+        const StorageSnapshotPtr & storage_snapshot,
+        ContextPtr context_);
+
+    void readConcat(
+        const StreamShardPtrs & shards_to_read,
+        QueryPlan & query_plan,
+        SelectQueryInfo & query_info,
+        Names column_names,
+        const StorageSnapshotPtr & storage_snapshot,
+        ContextPtr context,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size);
+
+    void readHistory(
+        const StreamShardPtrs & shards_to_read,
+        QueryPlan & query_plan,
+        const Names & column_names,
+        const StorageSnapshotPtr & storage_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr context_,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        unsigned num_streams);
+
+public:
     IColumn::Selector createSelector(const ColumnWithTypeAndName & result) const;
     IColumn::Selector createSelector(const Block & block) const;
 
@@ -229,7 +253,7 @@ public:
     /// Return (shard_id, committed_sn) pairs
     std::vector<std::pair<Int32, Int64>> lastCommittedSequences() const;
 
-    const std::vector<std::shared_ptr<StreamShard>> & getStreamShards() const { return stream_shards; }
+    const StreamShardPtrs & getStreamShards() const { return stream_shards; }
 
     friend class StreamSink;
     friend class MergeTreeData;
@@ -250,7 +274,6 @@ protected:
         bool has_force_restore_data_flag_);
 
 private:
-    bool requireDistributedQuery(ContextPtr context_) const;
     std::vector<Int64> getOffsets(const String & seek_to) const;
 
 private:
@@ -307,7 +330,10 @@ private:
     ExpressionActionsPtr sharding_key_expr;
     bool rand_sharding_key = false;
 
-    std::vector<std::shared_ptr<StreamShard>> stream_shards;
+    /// Ascending order based on shard id
+    StreamShardPtrs stream_shards;    /// All shards
+    StreamShardPtrs local_shards;     /// Only local shards
+    StreamShardPtrs remote_shards;    /// Only remote virtual shards
 
     /// For sharding
     bool sharding_key_is_deterministic = false;

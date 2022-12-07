@@ -95,12 +95,16 @@
 #include <Interpreters/Streaming/PartitionByVisitor.h>
 #include <Parsers/ASTWindowDefinition.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStep.h>
+#include <Processors/QueryPlan/Streaming/AggregatingStepWithSubstream.h>
 #include <Processors/QueryPlan/Streaming/JoinStep.h>
 #include <Processors/QueryPlan/Streaming/ProcessTimeFilterStep.h>
 #include <Processors/QueryPlan/Streaming/SessionStep.h>
+#include <Processors/QueryPlan/Streaming/SessionStepWithSubstream.h>
+#include <Processors/QueryPlan/Streaming/ShufflingStep.h>
 #include <Processors/QueryPlan/Streaming/SortingStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
+#include <Processors/QueryPlan/Streaming/WatermarkStepWithSubstream.h>
 #include <Processors/QueryPlan/Streaming/WindowStep.h>
 #include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Storages/Streaming/ProxyStream.h>
@@ -281,8 +285,8 @@ namespace
     std::vector<size_t> keyPositionsForSubstreams(const Block & header, const SelectQueryInfo & query_info)
     {
         std::vector<size_t> substream_key_positions;
-        substream_key_positions.reserve(query_info.substream_keys.size());
-        for (const auto & key : query_info.substream_keys)
+        substream_key_positions.reserve(query_info.partition_by_keys.size());
+        for (const auto & key : query_info.partition_by_keys)
             substream_key_positions.emplace_back(header.getPositionByName(key));
         return substream_key_positions;
     }
@@ -2287,7 +2291,8 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         interpreter_subquery->buildQueryPlan(query_plan);
         query_plan.addInterpreterContext(context);
 
-        if (!storage && isStreaming())
+        /// If we only fetch columns, don't need add streaming processing step, e.g. `WatermarkStep` etc.
+        if (options.to_stage != QueryProcessingStage::Enum::FetchColumns && !storage && isStreaming())
             /// Global aggregation over subquery case
             buildStreamingProcessingQueryPlan(query_plan);
     }
@@ -2394,16 +2399,26 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         adding_limits_and_quota->setStepDescription("Set limits and quota after reading from storage");
         query_plan.addStep(std::move(adding_limits_and_quota));
 
-        /// proton: starts. Streaming Window
-        /// Supports: TableFunction, Stream, MaterializedView
-        ///
-        /// For distributed query, so far as tumble, hop need to be calculated in initial node, therefore skip 'Watermark' and 'WindowsAssignment' steps
-        if (auto * proxy_stream = storage->as<Streaming::ProxyStream>();
-            proxy_stream && context->getClientInfo().query_kind != ClientInfo::QueryKind::SECONDARY_QUERY)
-            proxy_stream->buildStreamingProcessingQueryPlan(
-                query_plan, required_columns_after_streaming_window, query_info, storage_snapshot, context, shouldApplyWatermark());
-        else
-            buildStreamingProcessingQueryPlan(query_plan);
+        /// proton: starts.
+        /// TODO: Support more shuffling rules
+        /// 1) Group by keys
+        /// 2) Sharding expr keys
+        if (query_info.hasPartitionByKeys())
+        {
+            auto substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
+            query_plan.addStep(std::make_unique<Streaming::ShufflingStep>(
+                query_plan.getCurrentDataStream(), std::move(substream_key_positions), context->getSettingsRef().max_threads));
+        }
+
+        /// If we only fetch columns, don't need add streaming processing step, e.g. `WatermarkStep` etc.
+        if (options.to_stage != QueryProcessingStage::Enum::FetchColumns)
+        {
+            if (auto * proxy_stream = storage->as<Streaming::ProxyStream>())
+                proxy_stream->buildStreamingProcessingQueryPlan(
+                    query_plan, required_columns_after_streaming_window, query_info, storage_snapshot, context, shouldApplyWatermark());
+            else
+                buildStreamingProcessingQueryPlan(query_plan);
+        }
         /// proton: ends
     }
     else
@@ -3204,18 +3219,6 @@ void InterpreterSelectQuery::executeStreamingAggregation(
             for (const auto & name : descr.argument_names)
                 descr.arguments.push_back(header_before_aggregation.getPositionByName(name));
 
-    /// Prepare substream key indices for only tumble/hop
-    std::vector<size_t> substream_key_positions;
-    if (query_info.has_aggregate_over)
-    {
-        if (streaming_group_by == Streaming::Aggregator::Params::GroupBy::WINDOW_START
-            || streaming_group_by == Streaming::Aggregator::Params::GroupBy::WINDOW_END
-            || streaming_group_by == Streaming::Aggregator::Params::GroupBy::SESSION)
-        {
-            substream_key_positions = keyPositionsForSubstreams(header_before_aggregation, query_info);
-        }
-    }
-
     const Settings & settings = context->getSettingsRef();
 
     Streaming::Aggregator::Params params(
@@ -3244,7 +3247,6 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         session_start_pos,
         session_end_pos,
         delta_col_pos,
-        std::move(substream_key_positions),
         getStreamingFunctionDescription());
 
     auto merge_threads = max_streams;
@@ -3254,16 +3256,18 @@ void InterpreterSelectQuery::executeStreamingAggregation(
 
     bool storage_has_evenly_distributed_read = storage && storage->hasEvenlyDistributedRead();
 
-    auto aggregating_step = std::make_unique<Streaming::AggregatingStep>(
-        query_plan.getCurrentDataStream(),
-        params,
-        final,
-        merge_threads,
-        temporary_data_merge_threads,
-        storage_has_evenly_distributed_read,
-        emit_version);
-
-    query_plan.addStep(std::move(aggregating_step));
+    if (query_info.hasPartitionByKeys())
+        query_plan.addStep(
+            std::make_unique<Streaming::AggregatingStepWithSubstream>(query_plan.getCurrentDataStream(), params, final, emit_version));
+    else
+        query_plan.addStep(std::make_unique<Streaming::AggregatingStep>(
+            query_plan.getCurrentDataStream(),
+            params,
+            final,
+            merge_threads,
+            temporary_data_merge_threads,
+            storage_has_evenly_distributed_read,
+            emit_version));
 }
 
 bool InterpreterSelectQuery::isStreaming() const
@@ -3480,21 +3484,24 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
     else
     {
         Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
-
-        /// Prepare substream key indices for only tumble/hop
-        std::vector<size_t> substream_key_positions;
-        if (!hasGlobalAggregation())
-            substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
-
-        query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(
-            query_plan.getCurrentDataStream(),
-            std::move(output_header),
-            query_info.query,
-            query_info.syntax_analyzer_result,
-            getStreamingFunctionDescription(),
-            false,
-            std::move(substream_key_positions),
-            log));
+        if (query_info.hasPartitionByKeys())
+            query_plan.addStep(std::make_unique<Streaming::WatermarkStepWithSubstream>(
+                query_plan.getCurrentDataStream(),
+                std::move(output_header),
+                query_info.query,
+                query_info.syntax_analyzer_result,
+                getStreamingFunctionDescription(),
+                false,
+                log));
+        else
+            query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(
+                query_plan.getCurrentDataStream(),
+                std::move(output_header),
+                query_info.query,
+                query_info.syntax_analyzer_result,
+                getStreamingFunctionDescription(),
+                false,
+                log));
     }
 }
 
@@ -3514,18 +3521,12 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlanForSessionWindow(Q
     auto session_end_type = std::make_shared<DataTypeBool>();
     output_header.insert(insert_pos++, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
 
-    /// Prepare substream key indices for only tumble/hop
-    std::vector<size_t> substream_key_positions;
-    if (!hasGlobalAggregation())
-        substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
-
-
-    query_plan.addStep(std::make_unique<Streaming::SessionStep>(
-        query_plan.getCurrentDataStream(),
-        std::move(output_header),
-        getStreamingFunctionDescription(),
-        substream_key_positions
-        ));
+    if (query_info.hasPartitionByKeys())
+        query_plan.addStep(std::make_unique<Streaming::SessionStepWithSubstream>(
+            query_plan.getCurrentDataStream(), std::move(output_header), getStreamingFunctionDescription()));
+    else
+        query_plan.addStep(std::make_unique<Streaming::SessionStep>(
+            query_plan.getCurrentDataStream(), std::move(output_header), getStreamingFunctionDescription()));    
 }
 
 void InterpreterSelectQuery::checkEmitVersion()
@@ -3723,9 +3724,9 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
             /// it will be optimized to `select i, i from test group by i`
             if (query_info.has_aggregate_over)
             {
-                query_info.substream_keys.reserve(definition.partition_by->children.size());
+                query_info.partition_by_keys.reserve(definition.partition_by->children.size());
                 for (const auto & column_ast : definition.partition_by->children)
-                    query_info.substream_keys.emplace_back(column_ast->getColumnName());
+                    query_info.partition_by_keys.emplace_back(column_ast->getColumnName());
             }
         }
         else if (definition.getDefaultWindowName() != unique_window_name)

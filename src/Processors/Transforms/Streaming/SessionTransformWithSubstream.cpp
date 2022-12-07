@@ -9,10 +9,9 @@ namespace DB
 namespace Streaming
 {
 SessionTransformWithSubstream::SessionTransformWithSubstream(
-    const Block & input_header, const Block & output_header, FunctionDescriptionPtr desc_, std::vector<size_t> key_column_positions)
+    const Block & input_header, const Block & output_header, FunctionDescriptionPtr desc_)
     : IProcessor({input_header}, {output_header}, ProcessorID::SessionTransformWithSubstreamID)
     , desc(std::move(desc_))
-    , substream_splitter(std::move(key_column_positions))
     , time_col_is_datetime64(isDateTime64(desc->argument_types[0]))
     , time_col_pos(input_header.getPositionByName(desc->argument_names[0]))
 {
@@ -65,50 +64,35 @@ IProcessor::Status SessionTransformWithSubstream::prepare()
 
 void SessionTransformWithSubstream::work()
 {
-    /// the SessionAggregatingTransform needs current event time bound to check oversize session
-    /// So we add an empty chunk with min/max event time
-
     /// We will need clear input_chunk for next run
     Chunk process_chunk;
     process_chunk.swap(input_chunk);
 
-    Chunk min_max_chunk;
-    if (process_chunk.hasRows())
-    {
-        auto min_max_ts = calcMinMaxEventTime(process_chunk);
+    if (!process_chunk.hasRows() && !process_chunk.hasChunkContext())
+        return;
 
-        auto chunk_ctx = std::make_shared<ChunkContext>();
-        chunk_ctx->setWatermark(min_max_ts.second, min_max_ts.first);
+    assert(process_chunk.hasChunkContext());
 
-        Chunk chunk(getOutputs().front().getHeader().getColumns(), 0);
-        chunk.setChunkContext(std::move(chunk_ctx));
-        min_max_chunk.swap(chunk);
-    }
+    /// the SessionAggregatingTransform needs current event time bound to check oversize session
+    /// So we add an empty chunk with min/max event time
+    auto min_max_ts = calcMinMaxEventTime(process_chunk);
 
-    auto split_chunks{substream_splitter.split(process_chunk)};
+    auto chunk_ctx = std::make_shared<ChunkContext>();
+    chunk_ctx->setWatermark(min_max_ts.second, min_max_ts.first);
+    chunk_ctx->setSubstreamID(process_chunk.getSubstreamID());
+
+    Chunk min_max_chunk(getOutputs().front().getHeader().getColumns(), 0, nullptr, std::move(chunk_ctx));
+
+    auto & sessionizer = getOrCreateSubstreamSessionizer(process_chunk.getSubstreamID());
+
+    assert(process_chunk);
+    sessionizer.sessionize(process_chunk);
+    assert(process_chunk);
 
     assert(output_iter == output_chunks.end());
     output_chunks.clear();
-    output_chunks.reserve(split_chunks.size());
-
-    for (auto & chunk_with_id : split_chunks)
-    {
-        auto & sessionizer = getOrCreateSubstreamSessionizer(chunk_with_id.id);
-
-        assert(chunk_with_id.chunk);
-        sessionizer.sessionize(chunk_with_id.chunk);
-        assert(chunk_with_id.chunk);
-
-        /// Keep substream id for each sub-chunk, used for downstream processors
-        auto chunk_ctx = chunk_with_id.chunk.getOrCreateChunkContext();
-        chunk_ctx->setSubstreamID(std::move(chunk_with_id.id));
-
-        output_chunks.emplace_back(std::move(chunk_with_id.chunk));
-    }
-
-    if (min_max_chunk)
-        output_chunks.emplace_back(std::move(min_max_chunk));
-
+    output_chunks.emplace_back(std::move(process_chunk));
+    output_chunks.emplace_back(std::move(min_max_chunk));
     output_iter = output_chunks.begin(); /// need to output chunks
 }
 
@@ -132,6 +116,8 @@ std::pair<Int64, Int64> SessionTransformWithSubstream::calcMinMaxEventTime(const
 
 Sessionizer & SessionTransformWithSubstream::getOrCreateSubstreamSessionizer(const SubstreamID & id)
 {
+    assert(id != INVALID_SUBSTREAM_ID);
+
     auto iter = substream_sessionizers.find(id);
     if (iter == substream_sessionizers.end())
     {

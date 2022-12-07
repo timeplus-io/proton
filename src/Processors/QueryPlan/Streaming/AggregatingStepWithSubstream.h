@@ -11,20 +11,16 @@ namespace Streaming
 struct AggregatingTransformParams;
 using AggregatingTransformParamsPtr = std::shared_ptr<AggregatingTransformParams>;
 
-/// Streaming Aggregation. See StreamingAggregatingTransform.
-class AggregatingStep : public ITransformingStep
+class AggregatingStepWithSubstream final : public ITransformingStep
 {
 public:
-    AggregatingStep(
+    AggregatingStepWithSubstream(
         const DataStream & input_stream_,
         Aggregator::Params params_,
         bool final_,
-        size_t merge_threads_,
-        size_t temporary_data_merge_threads_,
-        bool storage_has_evenly_distributed_read_,
         bool emit_version_);
 
-    String getName() const override { return "StreamingAggregating"; }
+    String getName() const override { return "StreamingAggregatingWithSubstream"; }
 
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &) override;
 
@@ -38,10 +34,6 @@ public:
 private:
     Aggregator::Params params;
     bool final;
-    size_t merge_threads;
-    size_t temporary_data_merge_threads;
-
-    bool storage_has_evenly_distributed_read;
     bool emit_version;
 
     Processors aggregating;

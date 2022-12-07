@@ -71,7 +71,13 @@ public:
     /// Whether has GlobalAggregation in subquery
     bool hasGlobalAggregation() const { return has_global_aggr; }
 
-    bool supportsSubcolumns() const override { return storage && storage->supportsSubcolumns(); }
+    bool isRemote() const override;
+    bool supportsParallelInsert() const override;
+    bool supportsIndexForIn() const override;
+    bool supportsSubcolumns() const override;
+
+    StoragePtr getNestedStorage() const;
+
     StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const override;
 
     void buildStreamingProcessingQueryPlan(

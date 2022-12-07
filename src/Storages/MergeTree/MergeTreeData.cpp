@@ -185,7 +185,10 @@ MergeTreeData::MergeTreeData(
     std::unique_ptr<MergeTreeSettings> storage_settings_,
     bool require_part_metadata_,
     bool attach,
-    BrokenPartCallback broken_part_callback_)
+    BrokenPartCallback broken_part_callback_,
+    /// proton: starts.
+    Int32 shard_num_)
+    /// proton: ends.
     : IStorage(table_id_)
     , WithMutableContext(context_->getGlobalContext())
     , merging_params(merging_params_)
@@ -201,6 +204,9 @@ MergeTreeData::MergeTreeData(
     , parts_mover(this)
     , background_operations_assignee(*this, BackgroundJobsAssignee::Type::DataProcessing, getContext())
     , background_moves_assignee(*this, BackgroundJobsAssignee::Type::Moving, getContext())
+    /// proton: starts.
+    , shard_num(shard_num_)
+    /// proton: ends.
 {
     context_->getGlobalContext()->initializeBackgroundExecutorsIfNeeded();
 

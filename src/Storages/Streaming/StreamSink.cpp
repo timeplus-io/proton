@@ -92,7 +92,8 @@ inline IngestMode StreamSink::getIngestMode() const
     if (ingest_mode != IngestMode::None && ingest_mode != IngestMode::INVALID)
         return ingest_mode;
 
-    if (storage.ingestMode() != IngestMode::None && ingest_mode != IngestMode::INVALID)
+    auto storage_ingest_mode = storage.ingestMode();
+    if (storage_ingest_mode != IngestMode::None && storage_ingest_mode != IngestMode::INVALID)
         return storage.ingestMode();
 
     return IngestMode::ASYNC;

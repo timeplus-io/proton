@@ -41,6 +41,10 @@
 #include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
 #include <IO/WriteBufferFromOStream.h>
 
+/// proton: starts.
+#include <Common/ProtonCommon.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -1198,6 +1202,12 @@ static void selectColumnNames(
             sample_factor_column_queried = true;
             virt_column_names.push_back(name);
         }
+        /// proton: starts.
+        else if (name == ProtonConsts::RESERVED_SHARD)
+        {
+            virt_column_names.push_back(name);
+        }
+        /// proton: ends.
         else
         {
             real_column_names.push_back(name);

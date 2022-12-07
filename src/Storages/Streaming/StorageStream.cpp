@@ -38,7 +38,6 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int TYPE_MISMATCH;
-extern const int INVALID_CONFIG_PARAMETER;
 extern const int NOT_IMPLEMENTED;
 extern const int OK;
 extern const int UNABLE_TO_SKIP_UNUSED_SHARDS;
@@ -215,6 +214,49 @@ String makeFormattedListOfShards(const ClusterPtr & cluster)
 
     return buf.str();
 }
+
+String makeFormattedNameOfStreamingShards(const StorageStream::StreamShardPtrs & streaming_shards)
+{
+    WriteBufferFromOwnString buf;
+
+    bool head = true;
+    buf << "StreamingShard-";
+    for (const auto & streaming_shard : streaming_shards)
+    {
+        (head ? buf << "local:" : buf << ",") << streaming_shard->getShard();
+        head = false;
+    }
+
+    return buf.str();
+}
+
+String makeFormattedNameOfLocalShards(const StorageStream::StreamShardPtrs & local_shards)
+{
+    WriteBufferFromOwnString buf;
+
+    bool head = true;
+    buf << "HistoricalShard-";
+    for (const auto & local_shard : local_shards)
+    {
+        (head ? buf << "local:" : buf << ",") << local_shard->getShard();
+        head = false;
+    }
+    return buf.str();
+}
+
+String makeFormattedNameOfConcatShards(const StorageStream::StreamShardPtrs & concat_shards)
+{
+    WriteBufferFromOwnString buf;
+
+    bool head = true;
+    buf << "StreamingShard(Concat)-";
+    for (const auto & concat_shard : concat_shards)
+    {
+        (head ? buf << "local:" : buf << ",") << concat_shard->getShard();
+        head = false;
+    }
+    return buf.str();
+}
 }
 
 StorageStream::StorageStream(
@@ -271,7 +313,42 @@ StorageStream::StorageStream(
     }
 
     for (Int32 shard_id = 0; shard_id < shards; ++shard_id)
+    {
+        auto iter = std::find_if(stream_shards.begin(), stream_shards.end(), [&](const auto & elem) { return elem->shard == shard_id; });
+        /// Populate virtual shard
+        if (iter != stream_shards.end())
+        {
+            if ((*iter)->storage)
+                local_shards.push_back(*iter);
+            else
+                remote_shards.push_back(*iter);
+        }
+        else
+        {
+            stream_shards.emplace_back(std::make_shared<StreamShard>(
+                replication_factor,
+                shards,
+                shard_id,
+                table_id_,
+                "",
+                metadata_,
+                attach_,
+                context_,
+                date_column_name_,
+                merging_params_,
+                std::make_unique<MergeTreeSettings>(*settings_),
+                has_force_restore_data_flag_,
+                this,
+                log));
+
+            remote_shards.push_back(stream_shards.back());
+        }
+
         slot_to_shard.push_back(shard_id);
+    }
+
+    /// Ascending order based on shard id
+    std::sort(stream_shards.begin(), stream_shards.end(), [](const auto & l, const auto & r) { return l->shard < r->shard; });
 
     if (sharding_key_)
     {
@@ -298,7 +375,9 @@ NamesAndTypesList StorageStream::getVirtuals() const
 
 NamesAndTypesList StorageStream::getVirtualsHistory() const
 {
-    return MergeTreeData::getVirtuals();
+    auto virtual_list = MergeTreeData::getVirtuals();
+    virtual_list.push_back(NameAndTypePair(ProtonConsts::RESERVED_SHARD, std::make_shared<DataTypeInt32>()));
+    return virtual_list;
 }
 
 void StorageStream::readRemote(
@@ -354,6 +433,7 @@ void StorageStream::readRemote(
 }
 
 void StorageStream::readConcat(
+    const StreamShardPtrs & shards_to_read,
     QueryPlan & query_plan,
     SelectQueryInfo & query_info,
     Names column_names,
@@ -362,8 +442,8 @@ void StorageStream::readConcat(
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size)
 {
-    /// FIXME, we only support one shard processing for now. For multiple shards, we will need dispatch query to remote shard server
-    assert(!requireDistributedQuery(context_));
+    auto description = makeFormattedNameOfConcatShards(shards_to_read);
+    LOG_INFO(log, "Read local streaming concat {}", description);
 
     /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
     /// We will need add one
@@ -373,7 +453,8 @@ void StorageStream::readConcat(
     else
         header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, /* use_extended_objects */ false);
 
-    for (auto & stream_shard : stream_shards)
+    std::vector<QueryPlanPtr> plans;
+    for (auto & stream_shard : shards_to_read)
     {
         auto create_streaming_source = [this, header, storage_snapshot, stream_shard, context_](Int64 & max_sn_in_parts) {
             if (max_sn_in_parts < 0)
@@ -438,8 +519,9 @@ void StorageStream::readConcat(
 
         assert(stream_shard->storage);
 
+        auto plan = std::make_unique<QueryPlan>();
         stream_shard->storage->readConcat(
-            query_plan,
+            *plan,
             column_names,
             storage_snapshot,
             query_info,
@@ -447,18 +529,43 @@ void StorageStream::readConcat(
             processed_stage,
             max_block_size,
             std::move(create_streaming_source));
+
+        if (plan->isInitialized())
+            plans.push_back(std::move(plan));
     }
+
+    if (plans.empty())
+        return;
+
+    if (plans.size() == 1)
+    {
+        query_plan = std::move(*plans.front());
+        return;
+    }
+
+    DataStreams input_streams;
+    input_streams.reserve(plans.size());
+    for (auto & plan : plans)
+        input_streams.emplace_back(plan->getCurrentDataStream());
+
+    auto union_step = std::make_unique<UnionStep>(std::move(input_streams));
+    union_step->setStepDescription(description);
+    query_plan.unitePlans(std::move(union_step), std::move(plans));
 }
 
 void StorageStream::readStreaming(
+    const StreamShardPtrs & shards_to_read,
     QueryPlan & query_plan,
     SelectQueryInfo & /*query_info*/,
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
     ContextPtr context_)
 {
+    auto description = makeFormattedNameOfStreamingShards(shards_to_read);
+    LOG_INFO(log, "Read local streaming {}", description);
+
     Pipes pipes;
-    pipes.reserve(shards);
+    pipes.reserve(shards_to_read.size());
 
     const auto & settings_ref = context_->getSettingsRef();
     /// 1) Checkpointed queries shall not be multiplexed
@@ -467,30 +574,15 @@ void StorageStream::readStreaming(
         && (settings_ref.seek_to.value == "latest" || settings_ref.seek_to.value.empty())
         && (settings_ref.exec_mode == ExecuteMode::NORMAL);
 
-    std::vector<std::pair<std::shared_ptr<StreamShard>, Int32>> shard_info;
-    if (requireDistributedQuery(context_))
-    {
-        /// This is a distributed query on multi-shards
-        auto & shard = stream_shards.back();
-        for (Int32 i = 0; i < shards; ++i)
-            shard_info.emplace_back(shard, i);
-    }
-    else
-    {
-        /// multi-shards in single node for NativeLog
-        for (auto & stream_shard : stream_shards)
-            shard_info.emplace_back(stream_shard, stream_shard->shard);
-    }
-
     if (share_resource_group)
     {
-        for (auto & [stream_shard, shard] : shard_info)
+        for (auto stream_shard : shards_to_read)
         {
             if (!column_names.empty())
-                pipes.emplace_back(stream_shard->source_multiplexers->createChannel(shard, column_names, storage_snapshot, context_));
+                pipes.emplace_back(stream_shard->source_multiplexers->createChannel(stream_shard->shard, column_names, storage_snapshot, context_));
             else
                 pipes.emplace_back(stream_shard->source_multiplexers->createChannel(
-                    shard, {ProtonConsts::RESERVED_EVENT_TIME}, storage_snapshot, context_));
+                    stream_shard->shard, {ProtonConsts::RESERVED_EVENT_TIME}, storage_snapshot, context_));
         }
     }
     else
@@ -506,10 +598,9 @@ void StorageStream::readStreaming(
             header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, /* use_extended_objects */ false);
 
         auto offsets = stream_shards.back()->getOffsets(settings_ref.seek_to.value);
-
-        for (auto & [stream_shard, _] : shard_info)
-            pipes.emplace_back(std::make_shared<StreamingStoreSource>(
-                stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log));
+        for (auto stream_shard : shards_to_read)
+            pipes.emplace_back(
+                std::make_shared<StreamingStoreSource>(stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log));
     }
 
     LOG_INFO(
@@ -520,10 +611,7 @@ void StorageStream::readStreaming(
         share_resource_group ? "shared" : "dedicated");
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
-    /// In cluster deployment, if there are multiple souces, there will be multiple thread conducting aggregation which cannot finalize
-    /// the aggregated result correctly. To avoid multi-thread aggregation, resize the source to 1 stream here.
-    /// pipe.resize(1);
-    auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName());
+    auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), description);
     query_plan.addStep(std::move(read_step));
 }
 
@@ -537,25 +625,54 @@ void StorageStream::read(
     size_t max_block_size,
     unsigned num_streams)
 {
-    /// Non streaming window function: tail or global streaming aggr
-    const auto & settings_ref = context_->getSettingsRef();
+    auto shards_to_read = getRequiredShardsToRead(context_, query_info);
 
-    if (query_info.syntax_analyzer_result->streaming)
+    /// [DISTIRBUTED] This is a distributed query
+    if (shards_to_read.requireDistributed())
     {
-        /// FIXME, to support seek_to='-1h'
-        bool back_fill_from_historical = isChangelogKvMode() || isVersionedKvMode()
-            || (settings_ref.seek_to.value == "earliest" && settings_ref.enable_backfill_from_historical_store.value);
-        if (back_fill_from_historical && !requireDistributedQuery(context_))
-            readConcat(query_plan, query_info, column_names, storage_snapshot, std::move(context_), processed_stage, max_block_size);
-        else
-            readStreaming(query_plan, query_info, column_names, storage_snapshot, std::move(context_));
+        /// For now, we only support read remote source
+        if (processed_stage != QueryProcessingStage::FetchColumns)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for distributed query");
+ 
+        return readRemote(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage);
     }
-    else
-        readHistory(
-            query_plan, column_names, storage_snapshot, query_info, std::move(context_), processed_stage, max_block_size, num_streams);
+
+    /// [LOCAL]
+    assert(!shards_to_read.local_shards.empty());
+    switch (shards_to_read.mode)
+    {
+        case QueryMode::STREAMING: {
+            return readStreaming(
+                shards_to_read.local_shards, query_plan, query_info, column_names, storage_snapshot, std::move(context_));
+        }
+        case QueryMode::STREAMING_CONCAT: {
+            return readConcat(
+                shards_to_read.local_shards,
+                query_plan,
+                query_info,
+                column_names,
+                storage_snapshot,
+                std::move(context_),
+                processed_stage,
+                max_block_size);
+        }
+        case QueryMode::HISTORICAL: {
+            return readHistory(
+                shards_to_read.local_shards,
+                query_plan,
+                column_names,
+                storage_snapshot,
+                query_info,
+                std::move(context_),
+                processed_stage,
+                max_block_size,
+                num_streams);
+        }
+    }
 }
 
 void StorageStream::readHistory(
+    const StreamShardPtrs & shards_to_read,
     QueryPlan & query_plan,
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
@@ -565,56 +682,61 @@ void StorageStream::readHistory(
     size_t max_block_size,
     unsigned num_streams)
 {
-    if (requireDistributedQuery(context_))
-    {
-        /// This is a distributed query
-        readRemote(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage);
-    }
+    assert(!shards_to_read.empty());
+
+    auto description = makeFormattedNameOfLocalShards(shards_to_read);
+    LOG_INFO(log, "Read local historical {}", description);
+
+    Block header;
+    if (!column_names.empty())
+        header = storage_snapshot->getSampleBlockForColumns(column_names, /* use_extended_objects */ false);
     else
+        header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, /* use_extended_objects */ false);
+
+    auto shard_num_streams = num_streams / shards_to_read.size();
+    if (shard_num_streams == 0)
+        shard_num_streams = 1;
+
+    std::vector<QueryPlanPtr> plans;
+    plans.reserve(stream_shards.size());
+    for (auto & stream_shard : shards_to_read)
     {
-        if (stream_shards.size() == 1)
-        {
-            stream_shards.back()->storage->read(
-                query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
-        }
-        else
-        {
-            auto shard_num_streams = num_streams / stream_shards.size();
-            if (shard_num_streams == 0)
-                shard_num_streams = 1;
+        auto plan = std::make_unique<QueryPlan>();
 
-            std::vector<QueryPlanPtr> plans;
-            plans.reserve(stream_shards.size());
+        assert(stream_shard->storage);
+        stream_shard->storage->read(
+            *plan,
+            column_names,
+            stream_shard->storage->getStorageSnapshot(storage_snapshot->metadata),
+            query_info,
+            context_,
+            processed_stage,
+            max_block_size,
+            shard_num_streams);
 
-            for (auto & stream_shard : stream_shards)
-            {
-                auto plan = std::make_unique<QueryPlan>();
-
-                assert(stream_shard->storage);
-                stream_shard->storage->read(
-                    *plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, shard_num_streams);
-
-                plans.push_back(std::move(plan));
-            }
-
-            DataStreams input_streams;
-            input_streams.reserve(plans.size());
-
-            for (auto & plan : plans)
-            {
-                /// If shard has no data skip it or we can create emtpy source like
-                /// InterpreterSelectQuery::addEmptySourceToQueryPlan(...) does
-                if (plan->isInitialized())
-                    input_streams.emplace_back(plan->getCurrentDataStream());
-            }
-
-            if (!input_streams.empty())
-            {
-                auto union_step = std::make_unique<UnionStep>(std::move(input_streams));
-                query_plan.unitePlans(std::move(union_step), std::move(plans));
-            }
-        }
+        /// If shard has no data skip it or we can create emtpy source like
+        /// InterpreterSelectQuery::addEmptySourceToQueryPlan(...) does
+        if (plan->isInitialized())
+            plans.push_back(std::move(plan));
     }
+
+    if (plans.empty())
+        return;
+
+    if (plans.size() == 1)
+    {
+        query_plan = std::move(*plans.front());
+        return;
+    }
+
+    DataStreams input_streams;
+    input_streams.reserve(plans.size());
+    for (auto & plan : plans)
+        input_streams.emplace_back(plan->getCurrentDataStream());
+
+    auto union_step = std::make_unique<UnionStep>(std::move(input_streams));
+    union_step->setStepDescription(description);
+    query_plan.unitePlans(std::move(union_step), std::move(plans));
 }
 
 Pipe StorageStream::read(
@@ -700,30 +822,53 @@ bool StorageStream::isRemote() const
 {
     /// If there is no backing storage, it is remote
     /// checking one shard is good enough
-    return stream_shards.back()->storage == nullptr;
+    return !remote_shards.empty();
 }
 
-bool StorageStream::requireDistributedQuery(ContextPtr context_) const
+/// <[local shards], [remote shard], [remote shard]>
+StorageStream::ShardsToRead StorageStream::getRequiredShardsToRead(ContextPtr context_, const SelectQueryInfo & query_info) const
 {
-    if (!stream_shards.back()->storage)
-        return true;
+    ShardsToRead result;
+    if (query_info.syntax_analyzer_result->streaming)
+    {
+        const auto & settings_ref = context_->getSettingsRef();
+        bool require_back_fill_from_historical = isChangelogKvMode() || isVersionedKvMode()
+            || (settings_ref.seek_to.value == "earliest" && settings_ref.enable_backfill_from_historical_store.value);
+        result.mode = require_back_fill_from_historical ? QueryMode::STREAMING_CONCAT : QueryMode::STREAMING;
+    }
+    else
+        result.mode = QueryMode::HISTORICAL;
 
-    /// If it has backing storage and it is a single shard table
-    if (shards == 1)
-        return false;
-
-    const auto & client_info = context_->getClientInfo();
-    if (client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
-        /// If this query is a remote query already
-        return false;
-
-    if (stream_shards.size() == static_cast<size_t>(shards))
-        /// Local host has all stream shards
-        return false;
-
-    /// If it has backing storage and it is a multiple shard stream and
-    /// this query is an initial query, we need execute a distributed query
-    return true;
+    /// Special case: read specified shard
+    if (auto only_one_shard_to_read = context_->getShardToRead(); only_one_shard_to_read.has_value())
+    {
+        assert(stream_shards.size() > static_cast<size_t>(*only_one_shard_to_read));
+        auto stream_shard = stream_shards[*only_one_shard_to_read];
+        if (result.mode == QueryMode::STREAMING)
+        {
+            result.local_shards.emplace_back(std::move(stream_shard));
+        }
+        else
+        {
+            if (stream_shard->storage)
+                result.local_shards.emplace_back(std::move(stream_shard));
+            else
+                result.remote_shards.emplace_back(std::move(stream_shard));
+        }
+    }
+    else
+    {
+        if (result.mode == QueryMode::STREAMING)
+        {
+            result.local_shards = stream_shards;
+        }
+        else
+        {
+            result.local_shards = local_shards;
+            result.remote_shards = remote_shards;
+        }
+    }
+    return result;
 }
 
 bool StorageStream::supportsParallelInsert() const
@@ -994,18 +1139,21 @@ QueryProcessingStage::Enum StorageStream::getQueryProcessingStage(
     const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info) const
 {
-    if (query_info.syntax_analyzer_result->streaming)
-    {
-        return QueryProcessingStage::Enum::FetchColumns;
-    }
-    else if (requireDistributedQuery(context_))
+    auto shards_to_read = getRequiredShardsToRead(context_, query_info);
+    if (shards_to_read.requireDistributed())
     {
         return getQueryProcessingStageRemote(context_, to_stage, storage_snapshot, query_info);
     }
+    else if (shards_to_read.mode == QueryMode::HISTORICAL)
+    {
+        /// [LOCAL] HISTORICAL: Use the last shard is good enough
+        assert(!shards_to_read.local_shards.empty());
+        return shards_to_read.local_shards.back()->storage->getQueryProcessingStage(context_, to_stage, storage_snapshot, query_info);
+    }
     else
     {
-        /// Use the last shard is good enough
-        return stream_shards.back()->storage->getQueryProcessingStage(context_, to_stage, storage_snapshot, query_info);
+        /// [LOCAL] STREAMING or STREAMING_CONCAT:
+        return QueryProcessingStage::Enum::FetchColumns;
     }
 }
 

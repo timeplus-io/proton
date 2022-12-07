@@ -384,7 +384,10 @@ public:
                   std::unique_ptr<MergeTreeSettings> settings_,
                   bool require_part_metadata_,
                   bool attach,
-                  BrokenPartCallback broken_part_callback_ = [](const String &){});
+                  BrokenPartCallback broken_part_callback_ = [](const String &){},
+                  /// proton: starts.
+                  Int32 shard_num_ = 0);
+                  /// proton: ends.
 
     /// Build a block of minmax and count values of a MergeTree table. These values are extracted
     /// from minmax_indices, the first expression of primary key, and part rows.
@@ -952,6 +955,7 @@ public:
     void setCommittedSN(Int64 committed_sn_) { committed_sn = committed_sn_; }
     Int64 inMemoryCommittedSN() const { return inmemory_committed_sn; }
     void setInMemoryCommittedSN(Int64 committed_sn_) { inmemory_committed_sn = committed_sn_; }
+    Int32 shardNum() const { return shard_num; }
     /// proton: ends
 
 protected:
@@ -1260,6 +1264,8 @@ private:
     std::atomic<Int64> inmemory_committed_sn = -1;
 
     bool inmemory = false;
+
+    Int32 shard_num = 0;
     /// proton: ends
 
     void resetObjectColumnsFromActiveParts(const DataPartsLock & lock);

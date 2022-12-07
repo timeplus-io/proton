@@ -9,10 +9,10 @@ namespace DB
 namespace Streaming
 {
 /// Implement watermark assignment for streaming processing
-class WatermarkStep final : public ITransformingStep
+class WatermarkStepWithSubstream final : public ITransformingStep
 {
 public:
-    WatermarkStep(
+    WatermarkStepWithSubstream(
         const DataStream & input_stream_,
         Block output_header,
         ASTPtr query_,
@@ -21,9 +21,9 @@ public:
         bool proc_time,
         Poco::Logger * log);
 
-    ~WatermarkStep() override = default;
+    ~WatermarkStepWithSubstream() override = default;
 
-    String getName() const override { return "WatermarkStep"; }
+    String getName() const override { return "WatermarkStepWithSubstream"; }
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
 
 private:

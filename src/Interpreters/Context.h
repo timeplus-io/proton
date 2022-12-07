@@ -254,6 +254,10 @@ private:
     UInt64 block_base_id = 0;
     IngestMode ingest_mode = IngestMode::None;
     bool distributed_ddl_operation = false;
+
+    /// For now, if there are X shards on one remote node, we will execute X remote queries to read per shard
+    /// FIXME: support multiple shards to read
+    std::optional<Int32> shard_to_read;  /// specify read shard num
     /// proton: ends
 
     /// Record entities accessed by current query, and store this information in system.query_log.
@@ -587,6 +591,9 @@ public:
     /// true, means to create the table but suspend all operations on disk parts. It is used when adding a replica
     bool isStartSuspend() const { return getQueryParameters().contains("_suspend"); }
     ThreadPool & getPartCommitPool() const;
+
+    void setShardToRead(Int32 shard) { shard_to_read = shard; }
+    const std::optional<Int32> & getShardToRead() const { return shard_to_read; }
     /// proton: ends
 
     /// Id of initiating query for distributed queries; or current query id if it's not a distributed query.

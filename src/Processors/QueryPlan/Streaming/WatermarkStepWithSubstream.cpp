@@ -1,6 +1,6 @@
-#include "WatermarkStep.h"
+#include "WatermarkStepWithSubstream.h"
 
-#include <Processors/Transforms/Streaming/WatermarkTransform.h>
+#include <Processors/Transforms/Streaming/WatermarkTransformWithSubstream.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
 namespace DB
@@ -23,7 +23,8 @@ DB::ITransformingStep::Traits getTraits()
         }};
 }
 }
-WatermarkStep::WatermarkStep(
+
+WatermarkStepWithSubstream::WatermarkStepWithSubstream(
     const DataStream & input_stream_,
     Block output_header_,
     ASTPtr query_,
@@ -40,10 +41,10 @@ WatermarkStep::WatermarkStep(
 {
 }
 
-void WatermarkStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & /* settings */)
+void WatermarkStepWithSubstream::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & /* settings */)
 {
     pipeline.addSimpleTransform([&](const Block & header) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        return std::make_shared<WatermarkTransform>(query, syntax_analyzer_result, desc, proc_time, header, output_stream->header, log);
+        return std::make_shared<WatermarkTransformWithSubstream>(query, syntax_analyzer_result, desc, proc_time, header, output_stream->header, log);
     });
 }
 }

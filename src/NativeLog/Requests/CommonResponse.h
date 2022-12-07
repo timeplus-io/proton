@@ -2,6 +2,11 @@
 
 #include <fmt/format.h>
 
+namespace DB::ErrorCodes
+{
+extern const int RESOURCE_NOT_FOUND;
+}
+
 namespace nlog
 {
 struct CommonResponse
@@ -14,6 +19,7 @@ public:
     std::string error_message;
 
     bool hasError() const { return error_code != 0; }
+    bool hasUnretryableError() const { return error_code == DB::ErrorCodes::RESOURCE_NOT_FOUND; }
 
     std::string errString() const
     {

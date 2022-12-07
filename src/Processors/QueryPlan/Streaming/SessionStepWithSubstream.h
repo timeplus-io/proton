@@ -9,17 +9,14 @@ namespace DB
 namespace Streaming
 {
 /// Implement session transform to evaluate the session start / end predicates
-class SessionStep final : public ITransformingStep
+class SessionStepWithSubstream final : public ITransformingStep
 {
 public:
-    SessionStep(
-        const DataStream & input_stream_,
-        Block output_header,
-        FunctionDescriptionPtr desc_);
+    SessionStepWithSubstream(const DataStream & input_stream_, Block output_header, FunctionDescriptionPtr desc_);
 
-    ~SessionStep() override = default;
+    ~SessionStepWithSubstream() override = default;
 
-    String getName() const override { return "SessionStep"; }
+    String getName() const override { return "SessionStepWithSubstream"; }
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
 
 private:

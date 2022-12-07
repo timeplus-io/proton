@@ -71,7 +71,11 @@ StorageMergeTree::StorageMergeTree(
     const String & date_column_name,
     const MergingParams & merging_params_,
     std::unique_ptr<MergeTreeSettings> storage_settings_,
-    bool has_force_restore_data_flag)
+    bool has_force_restore_data_flag,
+    /// proton: starts.
+    Int32 shard_num_
+    /// proton: ends.
+    )
     : MergeTreeData(
         table_id_,
         relative_data_path_,
@@ -81,7 +85,11 @@ StorageMergeTree::StorageMergeTree(
         merging_params_,
         std::move(storage_settings_),
         false,      /// require_part_metadata
-        attach)
+        attach,
+        /// proton: starts.
+        [](const String &){},
+        shard_num_)
+        /// proton: ends.
     , reader(*this)
     , writer(*this)
     , merger_mutator(*this,

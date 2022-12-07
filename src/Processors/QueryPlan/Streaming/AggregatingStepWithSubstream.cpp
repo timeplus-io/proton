@@ -1,0 +1,91 @@
+#include "AggregatingStepWithSubstream.h"
+
+#include <Processors/Transforms/Streaming/GlobalAggregatingTransformWithSubstream.h>
+#include <Processors/Transforms/Streaming/SessionAggregatingTransformWithSubstream.h>
+#include <Processors/Transforms/Streaming/TumbleHopAggregatingTransformWithSubstream.h>
+
+#include <QueryPipeline/QueryPipelineBuilder.h>
+
+
+namespace DB
+{
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+}
+
+namespace Streaming
+{
+namespace
+{
+ITransformingStep::Traits getTraits()
+{
+    return ITransformingStep::Traits{
+        {
+            .preserves_distinct_columns = false, /// Actually, we may check that distinct names are in aggregation keys
+            .returns_single_stream = false,
+            .preserves_number_of_streams = true,
+            .preserves_sorting = false,
+        },
+        {
+            .preserves_number_of_rows = false,
+        }};
+}
+}
+
+AggregatingStepWithSubstream::AggregatingStepWithSubstream(
+    const DataStream & input_stream_,
+    Aggregator::Params params_,
+    bool final_,
+    bool emit_version_)
+    : ITransformingStep(
+        input_stream_,
+        params_.getHeader(final_, params_.group_by == Aggregator::Params::GroupBy::SESSION, params_.time_col_is_datetime64, emit_version_),
+        getTraits(),
+        false)
+    , params(std::move(params_))
+    , final(std::move(final_))
+    , emit_version(emit_version_)
+{
+}
+
+void AggregatingStepWithSubstream::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
+{
+    QueryPipelineProcessorsCollector collector(pipeline, this);
+
+    /// Forget about current totals and extremes. They will be calculated again after aggregation if needed.
+    pipeline.dropTotalsAndExtremes();
+
+    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version);
+
+    /// If there are several sources, we perform aggregation separately (Assume it's shuffled data by substream keys)
+    pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
+        if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
+            || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
+            return std::make_shared<TumbleHopAggregatingTransformWithSubstream>(header, transform_params);
+        else if (transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION)
+            return std::make_shared<SessionAggregatingTransformWithSubstream>(header, transform_params);
+        else
+            return std::make_shared<GlobalAggregatingTransformWithSubstream>(header, transform_params);
+    });
+
+    aggregating = collector.detachProcessors(0);
+}
+
+void AggregatingStepWithSubstream::describeActions(FormatSettings & settings) const
+{
+    params.explain(settings.out, settings.offset);
+}
+
+void AggregatingStepWithSubstream::describeActions(JSONBuilder::JSONMap & map) const
+{
+    params.explain(map);
+}
+
+void AggregatingStepWithSubstream::describePipeline(FormatSettings & settings) const
+{
+    IQueryPlanStep::describePipeline(aggregating, settings);
+}
+
+}
+}

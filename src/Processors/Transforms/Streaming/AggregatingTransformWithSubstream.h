@@ -7,72 +7,90 @@
 #include <Interpreters/Streaming/Aggregator.h>
 #include <Processors/IProcessor.h>
 
+#include <any>
+
 namespace DB
 {
 namespace Streaming
 {
-const WatermarkBound MAX_WATERMARK
-    = WatermarkBound{INVALID_SUBSTREAM_ID, std::numeric_limits<Int64>::max(), std::numeric_limits<Int64>::max()};
-const WatermarkBound MIN_WATERMARK = WatermarkBound{};
-
 struct SubstreamContext
 {
-    std::shared_mutex variants_mutex;
-    ManyAggregatedDataVariants many_variants;
-
-    std::mutex finalizing_mutex;
-    std::vector<UInt8> finalized;
+    AggregatedDataVariants variants;
     Int64 version = 0;
+    UInt64 rows_since_last_finalization = 0;
 
-    /// Only for tumble/hop
-    WatermarkBound min_watermark{MAX_WATERMARK};
-    WatermarkBound max_watermark{MIN_WATERMARK};
-    WatermarkBound arena_watermark{};
+    std::any field;  /// Stuff additional data context to it if needed
 
-    bool allFinalized() const { return std::all_of(finalized.begin(), finalized.end(), [](auto f) { return f; }); }
-    void resetFinalized() { std::fill(finalized.begin(), finalized.end(), 0); }
+    bool hasField() const { return field.has_value(); }
 
-    explicit SubstreamContext(size_t num) : many_variants(num), finalized(num, 0)
-    {
-        for (auto & elem : many_variants)
-            elem = std::make_shared<AggregatedDataVariants>();
-    }
+    template<typename T>
+    void setField(T && field_) { field = field_; }
+
+    template<typename T>
+    T & getField() { return std::any_cast<T &>(field); }
+
+    template<typename T>
+    const T & getField() const { return std::any_cast<const T &>(field); }
+
+    bool hasNewData() const { return rows_since_last_finalization > 0; }
+    void resetRowCounts() { rows_since_last_finalization = 0; }
+    void addRowCount(size_t rows) { rows_since_last_finalization += rows; }
 };
 using SubstreamContextPtr = std::shared_ptr<SubstreamContext>;
 
-struct SubstreamManyAggregatedData
-{
-    std::mutex ctx_mutex;
-    SubstreamHashMap<SubstreamContextPtr> substream_contexts;
-
-    ManyAggregatedDataPtr many_data;
-
-    explicit SubstreamManyAggregatedData(size_t num_threads) : many_data(std::make_shared<ManyAggregatedData>(num_threads)) { }
-};
-using SubstreamManyAggregatedDataPtr = std::shared_ptr<SubstreamManyAggregatedData>;
-
-/// Multiplex N substreams to max_threads
-class AggregatingTransformWithSubstream : public AggregatingTransform
+/// For now, substream transforms only process the shuffled data
+class AggregatingTransformWithSubstream : public IProcessor
 {
 public:
-    AggregatingTransformWithSubstream(
-        Block header,
-        AggregatingTransformParamsPtr params_,
-        SubstreamManyAggregatedDataPtr substream_many_data,
-        size_t current_variant_,
-        size_t max_threads,
-        size_t temporary_data_merge_threads,
-        const String & log_name,
-        ProcessorID pid_);
+    AggregatingTransformWithSubstream(Block header, AggregatingTransformParamsPtr params_, const String & log_name, ProcessorID pid_);
+
+    Status prepare() override;
+    void work() override;
+
+private:
+    virtual void consume(SubstreamContext & ctx, Chunk chunk);
+
+    virtual void finalize(SubstreamContext &, ChunkContextPtr) { }
 
 protected:
-    void emitVersion(Block & block, const SubstreamID & id);
-    bool executeOrMergeColumns(Columns columns, const SubstreamID & id);
-    SubstreamContextPtr getOrCreateSubstreamContext(const SubstreamID & id);
+    void emitVersion(SubstreamContext & ctx, Block & block);
+    bool executeOrMergeColumns(SubstreamContext & ctx, Columns columns);
+    void setCurrentChunk(Chunk chunk, ChunkContextPtr chunk_ctx);
+
+    virtual SubstreamContextPtr getOrCreateSubstreamContext(const SubstreamID & id);
     bool removeSubstreamContext(const SubstreamID & id);
 
-    SubstreamManyAggregatedDataPtr substream_many_data;
-    size_t many_aggregating_size;
+    inline IProcessor::Status preparePushToOutput();
+
+    AggregatingTransformParamsPtr params;
+    Poco::Logger * log;
+
+    ColumnRawPtrs key_columns;
+    Aggregator::AggregateColumns aggregate_columns;
+
+    /** Used if there is a limit on the maximum number of rows in the aggregation,
+     *   and if group_by_overflow_mode == ANY.
+     *  In this case, new keys are not added to the set, but aggregation is performed only by
+     *   keys that have already managed to get into the set.
+     */
+    bool no_more_keys = false;
+
+    /// TODO: calculate time only for aggregation.
+    Stopwatch watch;
+
+    UInt64 src_rows = 0;
+    UInt64 src_bytes = 0;
+
+    bool is_consume_finished = false;
+
+    Chunk current_chunk;
+    bool read_current_chunk = false;
+
+    /// Aggregated result which is pushed to downstream output
+    Chunk current_chunk_aggregated;
+    bool has_input = false;
+
+    SubstreamHashMap<SubstreamContextPtr> substream_contexts;
 };
 
 }

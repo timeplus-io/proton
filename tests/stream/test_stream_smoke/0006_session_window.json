@@ -43,7 +43,7 @@
     "tests": [
         {
             "id": 0,
-            "tags": ["session window"],
+            "tags": ["session window", "change"],
             "name": "stream session window with session_size triggered emit",
             "description": "stream session window with session_size triggered emit, 2s interval with session_size 10s",
             "steps":[
@@ -72,7 +72,7 @@
 
         {
             "id": 1,
-            "tags": ["session window"],
+            "tags": ["session window", "change"],
             "name": "stream session window with session_size triggered emit",
             "description": "stream session window with session_size triggered emit, 2s interval with session_size 10s",
             "steps":[
@@ -272,7 +272,7 @@
         },
         {
             "id": 7,
-            "tags": ["session window"],
+            "tags": ["session window", "change"],
             "name": "stream session window with multiple session keys",
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10",
             "steps":[
@@ -304,7 +304,7 @@
         },
         {
             "id": 8,
-            "tags": ["session window", "cluster_table_bug"],
+            "tags": ["session window", "cluster_table_bug", "change"],
             "name": "stream session window with join",
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, joins with test_session_d",
             "steps":[
@@ -342,7 +342,7 @@
         }  ,
         {
             "id": 9,
-            "tags": ["session window"],
+            "tags": ["session window", "change"],
             "name": "stream session window on top of sub query tail",
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, session based on transformed tail",
             "steps":[
@@ -374,7 +374,7 @@
         },
         {
             "id": 10,
-            "tags": ["session window", "cluster_table_bug"],
+            "tags": ["session window", "cluster_table_bug", "change"],
             "name": "stream session window as sub query",
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, session as subquery",
             "steps":[
@@ -409,7 +409,7 @@
         },         
         {
             "id": 11,
-            "tags": ["session window"],
+            "tags": ["session window", "change"],
             "name": "stream session window on top of tumble sub query",
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, session based on tumble",
             "steps":[

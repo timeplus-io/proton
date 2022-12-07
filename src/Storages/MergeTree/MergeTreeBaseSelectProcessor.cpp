@@ -15,6 +15,10 @@
 
 #include <city.h>
 
+/// proton: starts.
+#include <Common/ProtonCommon.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -332,6 +336,9 @@ namespace
         virtual void insertArrayOfStringsColumn(const ColumnPtr & column, const String & name) = 0;
         virtual void insertStringColumn(const ColumnPtr & column, const String & name) = 0;
         virtual void insertUInt64Column(const ColumnPtr & column, const String & name) = 0;
+        /// proton: starts.
+        virtual void insertInt32Column(const ColumnPtr & column, const String & name) = 0;
+        /// proton: ends.
         virtual void insertUUIDColumn(const ColumnPtr & column, const String & name) = 0;
 
         virtual void insertPartitionValueColumn(
@@ -413,6 +420,18 @@ static void injectVirtualColumnsImpl(
                 else
                     inserter.insertPartitionValueColumn(rows, {}, partition_value_type, virtual_column_name);
             }
+            /// proton: starts.
+            else if (virtual_column_name == ProtonConsts::RESERVED_SHARD)
+            {
+                ColumnPtr column;
+                if (rows)
+                    column = DataTypeInt32().createColumnConst(rows, part->storage.shardNum())->convertToFullColumnIfConst();
+                else
+                    column = DataTypeInt32().createColumn();
+
+                inserter.insertInt32Column(column, virtual_column_name);
+            }
+            /// proton: ends.
         }
     }
 }
@@ -437,6 +456,13 @@ namespace
         {
             block.insert({column, std::make_shared<DataTypeUInt64>(), name});
         }
+
+        /// proton: starts.
+        void insertInt32Column(const ColumnPtr & column, const String & name) final
+        {
+            block.insert({column, std::make_shared<DataTypeInt32>(), name});
+        }
+        /// proton: ends.
 
         void insertUUIDColumn(const ColumnPtr & column, const String & name) final
         {
@@ -477,6 +503,13 @@ namespace
         {
             columns.push_back(column);
         }
+
+        /// proton: starts.
+        void insertInt32Column(const ColumnPtr & column, const String &) final
+        {
+            columns.push_back(column);
+        }
+        /// proton: ends.
 
         void insertUUIDColumn(const ColumnPtr & column, const String &) final
         {

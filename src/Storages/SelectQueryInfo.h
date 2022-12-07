@@ -165,7 +165,9 @@ struct SelectQueryInfo
     /// proton: starts.
     bool has_aggregate_over = false;
     bool has_non_aggregate_over = false;
-    Names substream_keys;
+    Names partition_by_keys;
+
+    bool hasPartitionByKeys() const { return !partition_by_keys.empty(); }
     /// proton: ends.
 
     ClusterPtr getCluster() const { return !optimized_cluster ? cluster : optimized_cluster; }

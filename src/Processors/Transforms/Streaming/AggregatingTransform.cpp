@@ -127,18 +127,8 @@ void AggregatingTransform::consume(Chunk chunk)
     {
         Columns columns = chunk.detachColumns();
 
-        if (params->only_merge)
-        {
-            auto block = getInputs().front().getHeader().cloneWithColumns(columns);
-            materializeBlockInplace(block);
-            if (!params->aggregator.mergeOnBlock(block, variants, no_more_keys))
-                is_consume_finished = true;
-        }
-        else
-        {
-            if (!params->aggregator.executeOnBlock(std::move(columns), 0, num_rows, variants, key_columns, aggregate_columns, no_more_keys))
-                is_consume_finished = true;
-        }
+        if (!executeOrMergeColumns(columns))
+            is_consume_finished = true;
     }
 
     /// Since checkpoint barrier is always standalone, it can't coexist with watermark,
@@ -147,6 +137,19 @@ void AggregatingTransform::consume(Chunk chunk)
         finalize(chunk.getChunkContext());
     else if (chunk.requestCheckpoint())
         checkpointAlignment(chunk);
+}
+
+bool AggregatingTransform::executeOrMergeColumns(Columns columns)
+{
+    const UInt64 num_rows = columns[0]->size();
+    if (params->only_merge)
+    {
+        auto block = getInputs().front().getHeader().cloneWithColumns(columns);
+        materializeBlockInplace(block);
+        return params->aggregator.mergeOnBlock(block, variants, no_more_keys);
+    }
+    else
+        return params->aggregator.executeOnBlock(std::move(columns), 0, num_rows, variants, key_columns, aggregate_columns, no_more_keys);
 }
 
 void AggregatingTransform::emitVersion(Block & block)
@@ -176,7 +179,7 @@ void AggregatingTransform::setCurrentChunk(Chunk chunk, ChunkContextPtr chunk_ct
         /// so we should not clear its watermark (watermark act as a timer). This shall be fixed
         /// by install a timer in down stream of the global aggregation instead of relying on
         /// downstream watermark as timer
-        if (params->params.group_by != Aggregator::Params::GroupBy::OTHER)
+        if (params->final && params->params.group_by != Aggregator::Params::GroupBy::OTHER)
             chunk_ctx->clearWatermark();
 
         current_chunk_aggregated.setChunkContext(std::move(chunk_ctx));

@@ -1,41 +1,16 @@
 #pragma once
 
-#include "AggregatingTransformWithSubstream.h"
+#include "AggregatingTransform.h"
+#include "SessionHelper.h"
 
 namespace DB
 {
 namespace Streaming
 {
-struct SessionManyAggregatedData
-{
-    SubstreamManyAggregatedDataPtr substream_many_data;
-
-    std::vector<std::unique_ptr<SubstreamHashMap<SessionInfoPtr>>> sessions_maps;
-
-    explicit SessionManyAggregatedData(size_t num_threads)
-        : substream_many_data(std::make_shared<SubstreamManyAggregatedData>(num_threads))
-    {
-        sessions_maps.reserve(num_threads);
-
-        for (size_t i = 0; i < num_threads; ++i)
-            sessions_maps.emplace_back(std::make_unique<SubstreamHashMap<SessionInfoPtr>>());
-    }
-};
-using SessionManyAggregatedDataPtr = std::shared_ptr<SessionManyAggregatedData>;
-
-class SessionAggregatingTransform final : public AggregatingTransformWithSubstream
+class SessionAggregatingTransform final : public AggregatingTransform
 {
 public:
     SessionAggregatingTransform(Block header, AggregatingTransformParamsPtr params_);
-
-    /// For Parallel aggregating.
-    SessionAggregatingTransform(
-        Block header,
-        AggregatingTransformParamsPtr params_,
-        SessionManyAggregatedDataPtr session_many_data_,
-        size_t current_variant_,
-        size_t max_threads_,
-        size_t temporary_data_merge_threads);
 
     ~SessionAggregatingTransform() override = default;
 
@@ -43,21 +18,11 @@ public:
 
 private:
     void consume(Chunk chunk) override;
-    void finalizeSession(const SessionInfo & info, Block & merged_block);
-    void convertSingleLevel(ManyAggregatedDataVariantsPtr & data, const SessionInfo & info, Block & merged_block);
-    SessionInfo & getOrCreateSessionInfo(const SessionID & session_id);
-    SessionInfo & getSessionInfo(const SessionID & session_id);
-    void resetSessionInfo(SessionInfo & info);
 
-    template <typename TargetColumnType>
-    std::pair<std::vector<IColumn::Filter>, SessionInfos> prepareSession(
-        SessionInfo & info, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t num_rows);
-    void emitGlobalOversizeSessionsIfPossible(const Chunk & chunk, Block & merged_block);
+    void finalizeSession(const SessionInfo & info, Block & merged_block);
 
 private:
-    SessionManyAggregatedDataPtr session_many_data;
-    SubstreamHashMap<SessionInfoPtr> & session_map;
-    Int64 max_event_ts = 0;
+    SessionInfo session_info;
 };
 }
 }

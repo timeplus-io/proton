@@ -10,8 +10,8 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern int OK;
-    extern int RESOURCE_NOT_FOUND;
+    extern const int OK;
+    extern const int RESOURCE_NOT_FOUND;
 }
 
 StreamingBlockReaderNativeLog::StreamingBlockReaderNativeLog(

@@ -38,7 +38,6 @@
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/Streaming/FunctionDescription.h>
-#include <Interpreters/Streaming/SessionInfo.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 #include <Parsers/ASTFunction.h>
 #include <Common/HashTable/Hash.h>
@@ -658,9 +657,6 @@ public:
         Int64 max_emit_timeout = 0;
         UInt64 session_size = 0;
 
-        /// Params for substream
-        std::vector<size_t> substream_key_indices;
-
         FunctionDescriptionPtr window_desc;
         IntervalKind::Kind interval_kind = IntervalKind::Second;
         IntervalKind::Kind timeout_kind = IntervalKind::Second;
@@ -686,7 +682,6 @@ public:
             ssize_t session_start_pos_ = -1,
             ssize_t session_end_pos_ = -1,
             ssize_t delta_col_pos_ = -1,
-            std::vector<size_t> substream_key_indices_ = {},
             FunctionDescriptionPtr window_desc_ = nullptr)
         : src_header(src_header_),
             intermediate_header(intermediate_header_),
@@ -706,7 +701,6 @@ public:
             session_start_pos(session_start_pos_),
             session_end_pos(session_end_pos_),
             delta_col_pos(delta_col_pos_),
-            substream_key_indices(std::move(substream_key_indices_)),
             window_desc(window_desc_)
         {
             if (window_desc)
@@ -803,6 +797,17 @@ public:
       *          );
       */
     BlocksList convertToBlocks(AggregatedDataVariants & data_variants, bool final, ConvertAction action, size_t max_threads) const;
+    BlocksList convertToBlocksFinal(AggregatedDataVariants & data_variants, ConvertAction action, size_t max_threads) const
+    {
+        return convertToBlocks(data_variants, true, action, max_threads);
+    }
+    BlocksList convertToBlocksIntermediate(AggregatedDataVariants & data_variants, ConvertAction action, size_t max_threads) const
+    {
+        return convertToBlocks(data_variants, false, action, max_threads);
+    }
+
+    Block convertOneBucketToBlockFinal(AggregatedDataVariants & data_variants, ConvertAction action, size_t bucket) const;
+    Block convertOneBucketToBlockIntermediate(AggregatedDataVariants & data_variants, ConvertAction action, size_t bucket) const;
 
     ManyAggregatedDataVariantsPtr prepareVariantsToMerge(ManyAggregatedDataVariants & data_variants) const;
 
@@ -820,6 +825,8 @@ public:
       * This is needed to simplify merging of that data with other results, that are already two-level.
       */
     std::vector<Block> convertBlockToTwoLevel(const Block & block) const;
+
+    void initStatesForWithoutKeyOrOverflow(AggregatedDataVariants & data_variants) const;
 
     /// For external aggregation.
     void writeToTemporaryFile(AggregatedDataVariants & data_variants, const String & tmp_path) const;
@@ -1179,7 +1186,6 @@ private:
         MutableColumns & final_key_columns) const;
 
     /// proton: starts
-    void initStatesForWithoutKeyOrOverflow(AggregatedDataVariants & data_variants) const;
     void setupAggregatesPoolTimestamps(size_t row_begin, size_t row_end, const ColumnRawPtrs & key_columns, Arena * aggregates_pool) const;
     void removeBucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const;
     std::vector<size_t> bucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const;
