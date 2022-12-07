@@ -4,9 +4,33 @@
 #include "PlacementStrategy.h"
 
 #include <Core/BackgroundSchedulePool.h>
+#include <Interpreters/StorageID.h>
+#include <Storages/IStorage_fwd.h>
 
 namespace DB
 {
+struct StorageInfoForStream
+{
+    StorageID id = StorageID::createEmpty();
+    uint64_t streaming_data_bytes = 0;
+    std::vector<String> streaming_data_paths;
+    uint64_t historical_data_bytes = 0;
+    std::vector<String> historical_data_paths;
+
+    Poco::Dynamic::Var toJSON(bool is_simple = false) const;
+};
+
+struct StorageInfo
+{
+    uint64_t total_bytes_on_disk = 0;
+    std::unordered_map<String, StorageInfoForStream> streams;
+    std::optional<bool> need_sort_by_bytes; /// {}: not sort, true: desc sort, false: asc sort
+
+    Poco::Dynamic::Var toJSON(bool is_simple = false) const;
+    void sortingStreamByBytes(bool desc = true) { need_sort_by_bytes = desc; }
+};
+using StorageInfoPtr = std::shared_ptr<StorageInfo>;
+
 class CatalogService;
 
 class PlacementService final : public MetadataService
@@ -16,10 +40,7 @@ public:
 
     explicit PlacementService(const ContextMutablePtr & global_context_);
     PlacementService(const ContextMutablePtr & global_context_, PlacementStrategyPtr strategy_);
-    virtual ~PlacementService() override
-    {
-        preShutdown();
-    }
+    virtual ~PlacementService() override { preShutdown(); }
 
     void scheduleBroadcast();
 
@@ -32,6 +53,9 @@ public:
     std::vector<NodeMetricsPtr> nodes() const;
 
     bool ready() const override { return started.test() && nodes().size(); }
+
+    StorageInfoPtr loadStorageInfo(const String & ns, const String & stream);
+    void checkStorageQuotaOrThrow();
 
 private:
     void preShutdown();
@@ -48,6 +72,9 @@ private:
     void broadcast();
     void doBroadcast();
 
+    void loadLocalStoragesInfo(StorageInfoPtr & disk_info, const String & ns, const String & stream) const;
+    std::pair<size_t, std::vector<String>> getLocalStorageInfo(StoragePtr storage) const;
+
 private:
     CatalogService & catalog;
 
@@ -58,6 +85,8 @@ private:
     BackgroundSchedulePoolTaskHolder broadcast_task;
 
     size_t reschedule_interval;
+    StorageInfoPtr storage_info_ptr = nullptr;
+    uint64_t last_update_s;
 };
 
 }

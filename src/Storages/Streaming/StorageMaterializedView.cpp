@@ -1,9 +1,10 @@
 #include "StorageMaterializedView.h"
+
+#include <DistributedMetadata/PlacementService.h>
 #include "StorageStream.h"
 
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageFactory.h>
-
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
@@ -62,7 +63,12 @@ public:
     String getName() const override { return "CheckMaterializedViewValidTransform"; }
 
 protected:
-    void transform(Chunk &) override { view.checkValid(); }
+    void transform(Chunk &) override
+    {
+        view.checkValid();
+        /// check disk quota
+        PlacementService::instance(nullptr).checkStorageQuotaOrThrow();
+    }
 
 private:
     const StorageMaterializedView & view;
@@ -419,7 +425,7 @@ StoragePtr StorageMaterializedView::getTargetTable()
     catch (Exception &)
     {
         /// sometimes during asynchronously deleting mv, the target might have be deleted already
-        LOG_ERROR(log, "inner table {} does not exists", target_table_id.getFullTableName());
+        LOG_ERROR(log, "inner table of {} does not exists", target_table_id.getShortName());
         return nullptr;
     }
 
