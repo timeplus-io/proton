@@ -4,14 +4,14 @@ SET joined_subquery_requires_alias = 0;
 SELECT
     loyalty, 
     count()
-from table(test.hits) ANY LEFT JOIN 
+FROM test.hits ANY LEFT JOIN 
 (
     SELECT
         UserID, 
         sum(to_uint8(SearchEngineID = 2)) AS yandex, 
         sum(to_uint8(SearchEngineID = 3)) AS google, 
         to_int8(if(yandex > google, yandex / (yandex + google), -google / (yandex + google)) * 10) AS loyalty
-    from table(test.hits)
+    FROM test.hits
     WHERE (SearchEngineID = 2) OR (SearchEngineID = 3)
     GROUP BY UserID
     HAVING (yandex + google) > 10
@@ -26,7 +26,7 @@ SELECT
 FROM
 (
     SELECT UserID
-    from table(test.hits)
+    FROM test.hits
 ) ANY LEFT JOIN 
 (
     SELECT
@@ -34,7 +34,7 @@ FROM
         sum(to_uint8(SearchEngineID = 2)) AS yandex, 
         sum(to_uint8(SearchEngineID = 3)) AS google, 
         to_int8(if(yandex > google, yandex / (yandex + google), -google / (yandex + google)) * 10) AS loyalty
-    from table(test.hits)
+    FROM test.hits
     WHERE (SearchEngineID = 2) OR (SearchEngineID = 3)
     GROUP BY UserID
     HAVING (yandex + google) > 10
@@ -54,7 +54,7 @@ FROM
     FROM
     (
         SELECT UserID
-        from table(test.hits)
+        FROM test.hits
     ) ANY LEFT JOIN 
     (
         SELECT
@@ -62,7 +62,7 @@ FROM
             sum(to_uint8(SearchEngineID = 2)) AS yandex, 
             sum(to_uint8(SearchEngineID = 3)) AS google, 
             to_int8(if(yandex > google, yandex / (yandex + google), -google / (yandex + google)) * 10) AS loyalty
-        from table(test.hits)
+        FROM test.hits
         WHERE (SearchEngineID = 2) OR (SearchEngineID = 3)
         GROUP BY UserID
         HAVING (yandex + google) > 10
@@ -76,7 +76,7 @@ SELECT
     loyalty, 
     count() AS c, 
     log(c + 1) * 1000
-from table(test.hits) ANY INNER JOIN 
+FROM test.hits ANY INNER JOIN 
 (
     SELECT
         UserID, 
@@ -87,7 +87,7 @@ from table(test.hits) ANY INNER JOIN
             UserID, 
             sum(to_uint8(SearchEngineID = 2)) AS yandex, 
             sum(to_uint8(SearchEngineID = 3)) AS google
-        from table(test.hits)
+        FROM test.hits
         WHERE (SearchEngineID = 2) OR (SearchEngineID = 3)
         GROUP BY UserID
         HAVING (yandex + google) > 10

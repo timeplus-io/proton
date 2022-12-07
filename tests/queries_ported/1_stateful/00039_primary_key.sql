@@ -1,2 +1,2 @@
-SELECT count() from table(test.hits) WHERE CounterID < 10000;
-SELECT count() from table(test.hits) WHERE 10000 > CounterID;
+SELECT count() FROM test.hits WHERE CounterID < 10000;
+SELECT count() FROM test.hits WHERE 10000 > CounterID;

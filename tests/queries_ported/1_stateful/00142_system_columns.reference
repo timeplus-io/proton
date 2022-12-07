@@ -131,5 +131,3 @@ hits	ParsedParams.ValueDouble	array(float64)
 hits	IslandID	fixed_string(16)		
 hits	RequestNum	uint32		
 hits	RequestTry	uint8		
-hits	_tp_time	datetime64(3, \'UTC\')	DEFAULT	now64(3, \'UTC\')
-hits	_tp_index_time	datetime64(3, \'UTC\')		

@@ -499,7 +499,7 @@
               (2, 's9', '2022-05-23 15:46:20'),
               (2, 's10', '2022-05-23 15:46:21')"
             },
-            {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1014'"}
+            {"client":"python", "wait": 8, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1014'"}
           ]
         }
       ],
@@ -1078,7 +1078,7 @@
               (1, 's7', '2022-05-23 15:45:20'),
               (1, 's8', '2022-05-23 15:45:21')"
             },
-            {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1036'"}
+            {"client":"python", "wait": 8, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1036'"}
           ]
         }
       ],

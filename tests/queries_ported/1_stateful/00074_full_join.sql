@@ -10,14 +10,14 @@ FROM
     SELECT
         (CounterID % 100000) AS CounterID,
         count() AS hits
-    from table(test.hits)
+    FROM test.hits
     GROUP BY CounterID
 ) ANY FULL OUTER JOIN
 (
     SELECT
         (CounterID % 100000) AS CounterID,
         sum(Sign) AS visits
-    FROM table(test.visits)
+    FROM test.visits
     GROUP BY CounterID
     HAVING visits > 0
 ) USING CounterID
@@ -37,14 +37,14 @@ FROM
     SELECT
         (CounterID % 100000) AS CounterID,
         count() AS hits
-    from table(test.hits)
+    FROM test.hits
     GROUP BY CounterID
 ) ANY LEFT JOIN
 (
     SELECT
         (CounterID % 100000) AS CounterID,
         sum(Sign) AS visits
-    FROM table(test.visits)
+    FROM test.visits
     GROUP BY CounterID
     HAVING visits > 0
 ) USING CounterID
@@ -64,14 +64,14 @@ FROM
     SELECT
         (CounterID % 100000) AS CounterID,
         count() AS hits
-    from table(test.hits)
+    FROM test.hits
     GROUP BY CounterID
 ) ANY RIGHT JOIN
 (
     SELECT
         (CounterID % 100000) AS CounterID,
         sum(Sign) AS visits
-    FROM table(test.visits)
+    FROM test.visits
     GROUP BY CounterID
     HAVING visits > 0
 ) USING CounterID
@@ -91,14 +91,14 @@ FROM
     SELECT
         (CounterID % 100000) AS CounterID,
         count() AS hits
-    from table(test.hits)
+    FROM test.hits
     GROUP BY CounterID
 ) ANY INNER JOIN
 (
     SELECT
         (CounterID % 100000) AS CounterID,
         sum(Sign) AS visits
-    FROM table(test.visits)
+    FROM test.visits
     GROUP BY CounterID
     HAVING visits > 0
 ) USING CounterID

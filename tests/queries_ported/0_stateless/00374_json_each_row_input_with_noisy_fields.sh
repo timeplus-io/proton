@@ -34,6 +34,6 @@ echo '{"d" : "2017-08-31 18:36:48", "t" : ""}
 {"d" : 1504193808, "t" : []}
 {"d" : 01504193808, "t" : []}' \
 | $CLICKHOUSE_CLIENT --input_format_skip_unknown_fields=1 -q "INSERT INTO json_each_row FORMAT JSONEachRow"
-sleep 2s
+sleep 3s
 $CLICKHOUSE_CLIENT -q "SELECT DISTINCT * FROM table(json_each_row) settings asterisk_include_reserved_columns=false"
 $CLICKHOUSE_CLIENT -q "DROP STREAM json_each_row"

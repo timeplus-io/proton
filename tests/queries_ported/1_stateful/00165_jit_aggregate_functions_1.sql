@@ -13,7 +13,7 @@ SELECT
     avg(WatchID),
     avg_weighted(WatchID, CounterID),
     count(WatchID)
-FROM table(test.hits)
+FROM test.hits
 GROUP BY CounterID ORDER BY count() DESC LIMIT 20;
 
 SELECT 'Simple functions with non compilable function';
@@ -27,7 +27,7 @@ SELECT
     avg(WatchID),
     avg_weighted(WatchID, CounterID),
     count(WatchID)
-FROM table(test.hits)
+FROM test.hits
 GROUP BY CounterID ORDER BY count() DESC LIMIT 20;
 
 SELECT 'Simple functions if combinator';
@@ -41,7 +41,7 @@ SELECT
     avg_if(WatchID, predicate),
     avg_weighted_if(WatchID, CounterID, predicate),
     count_if(WatchID, predicate)
-FROM table(test.hits)
+FROM test.hits
 GROUP BY CounterID ORDER BY count() DESC LIMIT 20;
 
 SELECT 'Simple functions without key';
@@ -53,7 +53,7 @@ SELECT
     avg(WatchID),
     avg_weighted(WatchID, CounterID),
     count(WatchID)
-FROM table(test.hits)
+FROM test.hits
 ORDER BY min_watch_id DESC LIMIT 20;
 
 SELECT 'Simple functions with non compilable function without key';
@@ -66,7 +66,7 @@ SELECT
     avg(WatchID),
     avg_weighted(WatchID, CounterID),
     count(WatchID)
-FROM table(test.hits)
+FROM test.hits
 ORDER BY min_watch_id DESC LIMIT 20;
 
 SELECT 'Simple functions if combinator without key';
@@ -79,7 +79,7 @@ SELECT
     avg_if(WatchID, predicate),
     avg_weighted_if(WatchID, CounterID, predicate),
     count_if(WatchID, predicate)
-FROM table(test.hits)
+FROM test.hits
 ORDER BY min_watch_id
 DESC LIMIT 20;
 
@@ -97,7 +97,7 @@ SELECT
     avg(WatchID),
     avg_weighted(WatchID, CounterID),
     count(WatchID)
-FROM table(test.hits)
+FROM test.hits
 GROUP BY CounterID ORDER BY count() DESC LIMIT 20;
 
 SELECT 'Simple functions with non compilable function';
@@ -110,7 +110,7 @@ SELECT
     avg(WatchID),
     avg_weighted(WatchID, CounterID),
     count(WatchID)
-FROM table(test.hits)
+FROM test.hits
 GROUP BY CounterID ORDER BY count() DESC LIMIT 20;
 
 SELECT 'Simple functions if combinator';
@@ -124,7 +124,7 @@ SELECT
     avg_if(WatchID, predicate),
     avg_weighted_if(WatchID, CounterID, predicate),
     count_if(WatchID, predicate)
-FROM table(test.hits)
+FROM test.hits
 GROUP BY CounterID ORDER BY count() DESC LIMIT 20;
 
 SELECT 'Simple functions without key';
@@ -136,7 +136,7 @@ SELECT
     avg(WatchID),
     avg_weighted(WatchID, CounterID),
     count(WatchID)
-FROM table(test.hits)
+FROM test.hits
 ORDER BY min_watch_id DESC LIMIT 20;
 
 SELECT 'Simple functions with non compilable function without key';
@@ -149,7 +149,7 @@ SELECT
     avg(WatchID),
     avg_weighted(WatchID, CounterID),
     count(WatchID)
-FROM table(test.hits)
+FROM test.hits
 ORDER BY min_watch_id DESC LIMIT 20;
 
 SELECT 'Simple functions if combinator without key';
@@ -162,6 +162,6 @@ SELECT
     avg_if(WatchID, predicate),
     avg_weighted_if(WatchID, CounterID, predicate),
     count_if(WatchID, predicate)
-FROM table(test.hits)
+FROM test.hits
 ORDER BY min_watch_id
 DESC LIMIT 20;

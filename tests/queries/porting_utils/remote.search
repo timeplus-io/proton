@@ -101,7 +101,7 @@
   12,90: SELECT CounterID AS k, quantilesTiming(0.1, 0.5, 0.9, 0.99, 0.999)(ResolutionWidth) FROM remote('127.0.0.{1,2}', test.hits) GROUP BY k ORDER BY count() DESC, CounterID LIMIT 10;
 
 /Users/jameshao/projects/proton/tests/queries_porting/1_stateful/00088_global_in_one_shard_and_rows_before_limit.sql
-  4,32: SELECT EventDate, count() FROM remote('127.0.0.1', test.hits) WHERE UserID GLOBAL IN (SELECT UserID from table(test.hits)) GROUP BY EventDate ORDER BY EventDate LIMIT 5 FORMAT JSONCompact;
+  4,32: SELECT EventDate, count() FROM remote('127.0.0.1', test.hits) WHERE UserID GLOBAL IN (SELECT UserID FROM test.hits) GROUP BY EventDate ORDER BY EventDate LIMIT 5 FORMAT JSONCompact;
 
 /Users/jameshao/projects/proton/tests/queries_porting/1_stateful/00090_thread_pool_deadlock.sh
   9,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;

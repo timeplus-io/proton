@@ -1,1 +1,1 @@
-SELECT sum(Sign) FROM table(test.visits)
+SELECT sum(Sign) FROM test.visits

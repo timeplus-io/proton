@@ -1,5 +1,5 @@
 DROP STREAM IF EXISTS test.view;
-CREATE VIEW test.view AS SELECT CounterID, count() AS c from table(test.hits) GROUP BY CounterID;
+CREATE VIEW test.view AS SELECT CounterID, count() AS c FROM test.hits GROUP BY CounterID;
 SELECT count() FROM test.view;
 SELECT c, count() FROM test.view GROUP BY c ORDER BY count() DESC LIMIT 10;
 SELECT * FROM test.view ORDER BY c DESC LIMIT 10;

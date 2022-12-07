@@ -1,1 +1,1 @@
-SELECT sum(AdvEngineID), count(), avg(ResolutionWidth) from table(test.hits)
+SELECT sum(AdvEngineID), count(), avg(ResolutionWidth) FROM test.hits

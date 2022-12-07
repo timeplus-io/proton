@@ -1,1 +1,1 @@
-SELECT count() from table(test.hits)
+SELECT count() FROM test.hits

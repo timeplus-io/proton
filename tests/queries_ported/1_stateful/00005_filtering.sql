@@ -1,2 +1,2 @@
-SELECT count() from table(test.hits) WHERE AdvEngineID != 0
+SELECT count() FROM test.hits WHERE AdvEngineID != 0
 

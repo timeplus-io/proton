@@ -2,12 +2,12 @@ SELECT
     EventDate,
     count() AS hits,
     any(visits)
-from table(test.hits) ANY LEFT JOIN
+FROM test.hits ANY LEFT JOIN
 (
     SELECT
         StartDate AS EventDate,
         sum(Sign) AS visits
-    FROM table(test.visits)
+    FROM test.visits
     GROUP BY EventDate
 ) USING EventDate
 GROUP BY EventDate
