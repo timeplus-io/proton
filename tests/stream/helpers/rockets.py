@@ -36,7 +36,16 @@
 #    "('dev2', 78.30000305175781, datetime.datetime(2020, 2, 2, 20, 0), datetime.datetime(2020, 2, 2, 20, 0, 10))"
 #    ]
 # }
-# import global_settigns
+# Errors in debug log:
+#  QUERY_ERROR FATAL
+#  - QUERY_RUN_ERROR CRASH
+#  - QUERY_RUN_ERROR FATAL
+#  INPUT_ERROR FATAL
+#  - INPUT_TABLE_ERROR FATAL
+#  - INPUT_DEPENDS_ON_ERROR FATAL
+#  - INPUT_DEPENDS_ON_STREAM_ERROR FATAL
+#  TEST_SUITE_ENV_SETUP_ERROR
+#  import global_settigns
 
 from cgi import test
 import os, sys, json, getopt, subprocess, traceback
@@ -1119,12 +1128,13 @@ def query_run_py(
         if depends_on != None:
             depends_on_exists = False
             depends_on_exists = query_exists(depends_on, client=pyclient)
-            if not depends_on_exists:
+            print(f"query_run_py: depends_on_exists = {depends_on_exists}")
+            if not depends_on_exists: #todo: error handling logic and error code
                 logger.debug(
-                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception"
+                    f"QUERY_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} does not exist, raise Fatal Error, the stream query failed and exit by error."
                 )
                 raise Exception(
-                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception"
+                    f"QUERY_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} does not exist, raise Fatal Error, the stream query failed and exit by error."
                 )
             else:
                 logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} exists")
@@ -1338,7 +1348,7 @@ def query_run_py(
                 query_results_queue.put(message_2_send)            
             if run_mode == "process" or query_type == "stream":
                 logger.debug(
-                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id},  query_id = {query_id}, query={query}, query_results = {query_results}"
+                    f"QUERY_RUN_ERROR CRASH exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id},  query_id = {query_id}, query={query}, query_results = {query_results}"
                 )
                 # query_run_complete = datetime.datetime.now()
                 # time_spent = query_run_complete - query_run_start
@@ -1354,6 +1364,38 @@ def query_run_py(
                     print()  # todo: put the telemetry data into return, telemetry_shared_list=None means query_run_py is called by query_execute directly but not in child process.
 
                 pyclient.disconnect()            
+        elif 'Fatal' in error_string or 'fatal' in error_string:
+            logger.debug(f"QUERY_RUN_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_py, query_run_py_run_mode = {query_run_py_run_mode}, query_id={query_id}, query={query}, error = {error}")
+            query_results = {
+                "query_id": query_id,
+                "query": query,
+                "query_type": query_type,
+                "query_state": "fatal",
+                "query_start": query_start_time_str,
+                "query_end": query_end_time_str,
+                "query_result": f"error_code:10000, error: {error}",
+                "query_id_type": query_id_type,
+                "error": error_string,
+            }
+            # if it's Connection related exception that means proton crashes, send 10000 as error_code
+            message_2_send = json.dumps(query_results)
+            if query_results_queue != None:
+                query_results_queue.put(message_2_send)            
+            if run_mode == "process" or query_type == "stream":
+                logger.debug(
+                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id},  query_id = {query_id}, query={query}, query_results = {query_results}"
+                )
+                if telemetry_shared_list != None:
+                    telemetry_shared_list.append(
+                        {
+                            "statement_2_run": statement_2_run,
+                            "time_spent": 0,
+                        }
+                    )
+                else:
+                    print()  # todo: put the telemetry data into return, telemetry_shared_list=None means query_run_py is called by query_execute directly but not in child process.
+
+                pyclient.disconnect()     
         else:            
             logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_py, query_run_py_run_mode = {query_run_py_run_mode}, exception, query_id={query_id}, query={query}, error = {error}")
             if isinstance(error, errors.ServerException):
@@ -2095,16 +2137,16 @@ def query_exists(
         return False
 
 
-def input_batch_rest(config, input_batch, table_schema):
+def input_batch_rest(config, test_suite_name, test_id, input_batch, table_schema):
     # todo: complete the input by rest
     logger = mp.get_logger()
     input_batch_record = {}
     try:
+        proton_setting = config.get("proton_setting")
         logger.debug(
-            f"input_batch_rest: input_batch = {input_batch}, table_schema = {table_schema}"
+            f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, input_batch_rest: input_batch = {input_batch}, table_schema = {table_schema}"
         )
         rest_setting = config.get("rest_setting")
-        proton_setting = config.get("proton_setting")
         input_url = rest_setting.get("ingest_url")
         query_url = rest_setting.get("query_url")
         table_ddl_url = rest_setting.get("table_ddl_url")
@@ -2112,7 +2154,7 @@ def input_batch_rest(config, input_batch, table_schema):
         # table_name = table_schema.get("name")
         table_name = input_batch.get("table_name")
         if table_name == None:
-            raise Exception("table_name of input_batch is None")
+            raise Exception("exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, table_name of input_batch is None")
         columns = input_batch.get("columns")
         if columns == None and table_schema == None:
             return []
@@ -2125,7 +2167,7 @@ def input_batch_rest(config, input_batch, table_schema):
         input_rest_body_data = []
         input_rest_body = {"columns": input_rest_columns, "data": input_rest_body_data}
 
-        depends_on_stream = input_batch.get("depends_on_stream")
+        depends_on_stream = input_batch.get("depends_on_stream")        
         if depends_on_stream != None:
             logger.debug(f"depends_on_stream = {depends_on_stream}, checking...")
             retry = 500
@@ -2136,10 +2178,10 @@ def input_batch_rest(config, input_batch, table_schema):
                 logger.debug(f"depends_on_stream exists.")
             else:
                 logger.debug(
-                    f"depends_on_stream = {depends_on_stream} does not exist, raise exception"
+                    f"INPUT_DEPENDS_ON_STREAM_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, depends_on_stream not found, depends_on_stream = {depends_on_stream} for input not found"
                 )
                 raise Exception(
-                    f"depends_on_stream = {depends_on_stream} for input not found"
+                    f"INPUT_DEPENDS_ON_STREAM_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, depends_on_stream not found, depends_on_stream = {depends_on_stream} for input not found"
                 )
 
         depends_on = input_batch.get("depends_on")
@@ -2176,9 +2218,9 @@ def input_batch_rest(config, input_batch, table_schema):
 
             if not depends_on_exists:
                 logger.debug(
-                    f"depends_on = {depends_on} for input does not exist, raise exception"
+                    f"INPUT_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, depends_on = {depends_on} for input not found, raise exception."
                 )
-                raise Exception(f"depends_on = {depends_on} for input not found")
+                raise Exception(f"INPUT_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, depends_on = {depends_on} for input not found")
 
         if wait != None:
             logger.debug(f"wait for {wait}s to start inputs.")
@@ -2227,7 +2269,7 @@ def input_batch_rest(config, input_batch, table_schema):
             logger.debug(
                 f"table_name = {table_name} for input not found after multiple retry, raise exception"
             )
-            raise Exception(f"table_name = {table_name} for input not found")
+            raise Exception(f"INPUT_TABLE_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, table_name = {table_name} for input not found")
 
         res = requests.post(input_url, data=input_rest_body)
         logger.debug(
@@ -2250,8 +2292,9 @@ def input_batch_rest(config, input_batch, table_schema):
         """
         return input_batch_record
     except (BaseException) as error:
-        logger.debug(f"input_batch_rest, exception, error = {error}")
-        return input_batch_record
+        logger.debug(f"INPUT_BATCH_REST_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, error = {error}")
+        raise Exception(f"table_name = {table_name} for input not found")
+        #return input_batch_record
 
 
 def find_schema(table_name, table_schemas):
@@ -2265,6 +2308,8 @@ def find_schema(table_name, table_schemas):
 
 def input_walk_through_rest(
     config,
+    test_suite_name,
+    test_id,
     inputs,
     table_schemas,
     wait_before_inputs=1,  # todo: remove all the sleep
@@ -2272,32 +2317,33 @@ def input_walk_through_rest(
 ):
     logger = mp.get_logger()
     rest_setting = config.get("rest_setting")
+    proton_setting = config.get("proton_setting")
     logger.debug(f"rest_setting = {rest_setting}, table_schemas = {table_schemas}")
     wait_before_inputs = wait_before_inputs  # the seconds sleep before inputs starts to ensure the query is run on proton.
     sleep_after_inputs = sleep_after_inputs  # the seconds sleep after evary inputs of a case to ensure the stream query result was emmited by proton and received by the query execute
     time.sleep(wait_before_inputs)
     input_url = rest_setting.get("ingest_url")
     inputs_record = []
-
     try:
         for batch in inputs:
             table_name = batch.get("table_name")
             depends_on = batch.get("depends_on")
             table_schema = find_schema(table_name, table_schemas)
 
-            logger.debug(f"input_walk_through_rest: table_schema = {table_schema}")
+            logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, input_walk_through_rest: table_schema = {table_schema}")
             batch_sleep_before_input = batch.get("sleep")
             if batch_sleep_before_input != None:
                 logger.info(f"sleep {batch_sleep_before_input} before input")
                 time.sleep(int(batch_sleep_before_input))
 
-            input_batch_record = input_batch_rest(config, batch, table_schema)
+            input_batch_record = input_batch_rest(config, test_suite_name, test_id, batch, table_schema)
             inputs_record.append(input_batch_record)
 
         if isinstance(sleep_after_inputs, int):
             time.sleep(sleep_after_inputs)
     except (BaseException) as error:
-        logger.info(f"exception: error = {error}")
+        logger.info(f"INPUT_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, error = {error}")
+        raise Exception(f"INPUT_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, error = {error}")
     return inputs_record
 
 
@@ -2388,10 +2434,10 @@ def depends_on_stream_exist(table_ddl_url, depends_on_stream_list, query_id):
         logger.debug(f"retry remains after retry -=1: {retry}")
         if retry <= 0:
             logger.debug(
-                f"check depends_on_stream 500 times and depends_on_stream={depends_on_stream} does not exist"
+                f"QUERY_DEPENDS_ON_ERROR FATAL exception: check depends_on_stream 500 times and depends_on_stream={depends_on_stream} does not exist"
             )
             raise Exception(
-                f"depends_on_stream = {depends_on_stream} for query_id = {query_id}, query = {query} not found"
+                f"QUERY_DEPENDS_ON_ERROR FATAL exception: depends_on_stream = {depends_on_stream} for query_id = {query_id}, query = {query} not found"
             )
         else:
             logger.debug(
@@ -2646,9 +2692,10 @@ def drop_view_if_exist_py(client, table_name):
         raise Exception(f"drop_view_if_exist_py, exception, error = {error}")
 
 
-def test_suite_env_setup(client, config, test_suite_config):
+def test_suite_env_setup(client, config, test_suite_name, test_suite_config):
     logger = mp.get_logger()
     rest_setting = config.get("rest_setting")
+    proton_setting = config.get("proton_setting")
     proton_create_stream_shards = config.get("proton_create_stream_shards")
     proton_create_stream_replicas = config.get("proton_create_stream_replicas")
     try:
@@ -2701,11 +2748,12 @@ def test_suite_env_setup(client, config, test_suite_config):
         setup = test_suite_config.get("setup")
         logger.debug(f"setup = {setup}")
         if setup != None:
+            test_id = 'setup' #if input_walk_through_rest is called in setup phase, set test_id = 'setup'
             setup_inputs = setup.get("inputs")
             if setup_inputs != None:
                 logger.debug(f"input_walk_through_rest to be started.")
                 setup_input_res = input_walk_through_rest(
-                    config, setup_inputs, table_schemas
+                    config, test_suite_name, test_id, setup_inputs, table_schemas
                 )
             setup_statements = setup.get(
                 "statements"
@@ -2731,8 +2779,8 @@ def test_suite_env_setup(client, config, test_suite_config):
 
                     logger.debug(f"query_id = {query_id}, query_run_py is called")
     except (BaseException) as error:
-        logger.info(f"test_suite_env_setup exception, error = {error}") #todo: define private exception
-        raise Exception(f"test_suite_env_setup, exception: {error}")
+        logger.info(f"TEST_SUITE_ENV_SETUP_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, error = {error}") #todo: define private exception
+        raise Exception(f"TEST_SUITE_ENV_SETUP_ERROR FATAL exception: {error}")
 
     return tables_setup
 
@@ -3107,7 +3155,7 @@ def test_suite_run(
         client = None
         if test_run_list_len == 0:
             logger.info(
-                f"test_suite_name = {test_suite_name}, test_run_list = {test_run_list}, 0 case collected, bypass."
+                f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_run_list = {test_run_list}, 0 case collected, bypass."
             )
             test_suite_result_summary = {
                 "test_suite_name": test_suite_name,
@@ -3144,7 +3192,7 @@ def test_suite_run(
                 if test_suite_config != None:
                     logger.debug(f"test_suite_env_setup is to be started......")
                     tables_setup = test_suite_env_setup(
-                        client, config, test_suite_config
+                        client, config, test_suite_name, test_suite_config
                     ) #setup env for test suite running
                     logger.info(
                         f"test_suite_name = {test_suite_name}, tables_setup = {tables_setup} done."
@@ -3178,7 +3226,7 @@ def test_suite_run(
                     )
 
                     logger.info(
-                        f"test_id_run = {test_id_run}, test_suite_name = {test_suite_name}, test_id = {test_id} starts......"
+                        f"proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name}, test_id = {test_id} starts......"
                     )
 
                     for step in steps:
@@ -3206,21 +3254,21 @@ def test_suite_run(
                                     statements_results.append(element)
 
                             logger.info(
-                                f"test_suite_run: {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id}, step{step_id}.statements{statements_id}, done..."
+                                f"proton_setting = {proton_setting}, test_suite_run: {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id}, step{step_id}.statements{statements_id}, done..."
                             )
 
                             statements_id += 1
                         elif "inputs" in step:
                             inputs = step.get("inputs")
                             logger.info(
-                                f"test_id_run = {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id} inputs = {inputs}"
+                                f"proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id} inputs = {inputs}"
                             )
 
                             inputs_record = input_walk_through_rest(
-                                config, inputs, table_schemas
+                                config, test_suite_name, test_id, inputs, table_schemas
                             )  # inputs walk through rest_client
                             logger.info(
-                                f"test_id_run = {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id} input_walk_through done"
+                                f"proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id} input_walk_through done"
                             )
                             # time.sleep(0.5) #wait for the data inputs done.
                         step_id += 1
@@ -3248,10 +3296,13 @@ def test_suite_run(
                         query_results = json.loads(message_recv)
                         print(f"query_result recved in test_suite_run = {query_results}")
                         query_state = query_results.get("query_state")
-                        if query_state is not None and query_state == 'crash': #when Connection related error happens, it will be set in the query_state of the query results
+                        if query_state is not None and (query_state == 'crash' or query_state== 'fatal'): #when Connection related error happens, it will be set in the query_state of the query results
                             error = query_results.get("error")
-                            logger.debug(f"test_suite_run, exception, proton crash happens = {error}, raise Exception")
-                            raise Exception(f"test_suite_run, exception, Error = {error}")
+                            if query_state == 'crash':
+                                logger.debug(f"QUERY_ERROR CRASH exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_run, proton crash happens = {error}, raise Exception")
+                            else:
+                                logger.debug(f"QUERY_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_run, proton fatal happens = {error}, raise Exception")
+                            raise Exception(f"QUERY_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_run, Error = {error}")
 
 
                         statements_results.append(query_results)
@@ -3310,8 +3361,8 @@ def test_suite_run(
                 test_suite_run_ctl_queue.get()
                 test_suite_run_ctl_queue.task_done()
 
-            logger.info(f"test_suite_name = {test_suite_name} running ends")
-            logger.info(f"test_suite_name = {test_suite_name}, test_suite_run_status = {test_suite_run_status} ")
+            logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name} running ends")
+            logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_suite_run_status = {test_suite_run_status} ")
         
         test_suite_result_done_queue.put(test_suite_result_summary)
         test_suite_result_done_queue.join()
