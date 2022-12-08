@@ -6,6 +6,7 @@
 #include <IO/WriteBufferFromFile.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeString.h>
+#include <Processors/Formats/IRowInputFormat.h>
 #include <Processors/Formats/Impl/HiveTextRowInputFormat.h>
 #include <Processors/Formats/Impl/CSVRowOutputFormat.h>
 #include <Formats/FormatFactory.h>
@@ -17,6 +18,7 @@ using namespace DB;
 int main()
 try
 {
+#if USE_HIVE
     Block sample;
     {
         // a
@@ -109,6 +111,7 @@ try
     {
         output_format->write(res);
     }
+#endif
     return 0;
 }
 catch (...)

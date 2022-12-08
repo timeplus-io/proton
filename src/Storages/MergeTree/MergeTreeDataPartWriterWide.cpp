@@ -117,8 +117,7 @@ void MergeTreeDataPartWriterWide::addStreams(
             settings.max_compress_block_size);
     };
 
-    ISerialization::SubstreamPath path;
-    data_part->getSerialization(column)->enumerateStreams(path, callback, column.type);
+    data_part->getSerialization(column)->enumerateStreams(callback, column.type);
 }
 
 
@@ -272,7 +271,7 @@ void MergeTreeDataPartWriterWide::flushMarkToFile(const StreamNameAndMark & stre
 StreamsWithMarks MergeTreeDataPartWriterWide::getCurrentMarksForColumn(
     const NameAndTypePair & column,
     WrittenOffsetColumns & offset_columns,
-    ISerialization::SubstreamPath & path)
+    ISerialization::SubstreamPath & /*path*/)
 {
     StreamsWithMarks result;
     data_part->getSerialization(column)->enumerateStreams([&] (const ISerialization::SubstreamPath & substream_path)
@@ -282,7 +281,7 @@ StreamsWithMarks MergeTreeDataPartWriterWide::getCurrentMarksForColumn(
         String stream_name = ISerialization::getFileNameForStream(column, substream_path);
 
         /// Don't write offsets more than one time for Nested type.
-        if (is_offsets && offset_columns.count(stream_name))
+        if (is_offsets && offset_columns.contains(stream_name))
             return;
 
         Stream & stream = *column_streams[stream_name];
@@ -297,7 +296,7 @@ StreamsWithMarks MergeTreeDataPartWriterWide::getCurrentMarksForColumn(
         stream_with_mark.mark.offset_in_decompressed_block = stream.compressed.offset();
 
         result.push_back(stream_with_mark);
-    }, path);
+    });
 
     return result;
 }
@@ -325,7 +324,7 @@ void MergeTreeDataPartWriterWide::writeSingleGranule(
             return;
 
         column_streams[stream_name]->compressed.nextIfAtEnd();
-    }, serialize_settings.path);
+    });
 }
 
 /// Column must not be empty. (column.size() !== 0)
@@ -346,7 +345,7 @@ void MergeTreeDataPartWriterWide::writeColumn(
     {
         ISerialization::SerializeBinaryBulkSettings serialize_settings;
         serialize_settings.getter = createStreamGetter(name_and_type, offset_columns);
-        serialization->serializeBinaryBulkStatePrefix(serialize_settings, it->second);
+        serialization->serializeBinaryBulkStatePrefix(column, serialize_settings, it->second);
     }
 
     const auto & global_settings = storage.getContext()->getSettingsRef();
@@ -361,7 +360,7 @@ void MergeTreeDataPartWriterWide::writeColumn(
 
         if (granule.mark_on_start)
         {
-            if (last_non_written_marks.count(name))
+            if (last_non_written_marks.contains(name))
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "We have to add new mark for column, but already have non written mark. Current mark {}, total marks {}, offset {}", getCurrentMark(), index_granularity.getMarksCount(), rows_written_in_last_mark);
             last_non_written_marks[name] = getCurrentMarksForColumn(name_and_type, offset_columns, serialize_settings.path);
         }
@@ -387,7 +386,7 @@ void MergeTreeDataPartWriterWide::writeColumn(
         }
     }
 
-    serialization->enumerateStreams([&] (const ISerialization::SubstreamPath & substream_path)
+    serialization->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path)
     {
         bool is_offsets = !substream_path.empty() && substream_path.back().type == ISerialization::Substream::ArraySizes;
         if (is_offsets)
@@ -395,7 +394,7 @@ void MergeTreeDataPartWriterWide::writeColumn(
             String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
             offset_columns.insert(stream_name);
         }
-    }, serialize_settings.path);
+    });
 }
 
 
@@ -601,7 +600,7 @@ void MergeTreeDataPartWriterWide::writeFinalMark(
             String stream_name = ISerialization::getFileNameForStream(column, substream_path);
             offset_columns.insert(stream_name);
         }
-    }, path);
+    });
 }
 
 static void fillIndexGranularityImpl(

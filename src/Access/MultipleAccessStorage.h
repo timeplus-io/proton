@@ -1,7 +1,8 @@
 #pragma once
 
 #include <Access/IAccessStorage.h>
-#include <Common/LRUCache.h>
+#include <base/defines.h>
+#include <Common/CacheBase.h>
 #include <mutex>
 
 
@@ -17,7 +18,7 @@ public:
     using StoragePtr = std::shared_ptr<Storage>;
     using ConstStoragePtr = std::shared_ptr<const Storage>;
 
-    MultipleAccessStorage(const String & storage_name_ = STORAGE_TYPE);
+    explicit MultipleAccessStorage(const String & storage_name_ = STORAGE_TYPE);
     ~MultipleAccessStorage() override;
 
     const char * getStorageType() const override { return STORAGE_TYPE; }
@@ -57,8 +58,8 @@ private:
     std::shared_ptr<const Storages> getStoragesInternal() const;
     void updateSubscriptionsToNestedStorages(std::unique_lock<std::mutex> & lock) const;
 
-    std::shared_ptr<const Storages> nested_storages;
-    mutable LRUCache<UUID, Storage> ids_cache;
+    std::shared_ptr<const Storages> nested_storages; /// TSA_GUARDED_BY(mutex);
+    mutable CacheBase<UUID, Storage> ids_cache; /// TSA_GUARDED_BY(mutex);
     mutable std::list<OnChangedHandler> handlers_by_type[static_cast<size_t>(AccessEntityType::MAX)];
     mutable std::unordered_map<StoragePtr, scope_guard> subscriptions_to_nested_storages[static_cast<size_t>(AccessEntityType::MAX)];
     mutable std::mutex mutex;

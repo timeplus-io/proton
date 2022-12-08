@@ -84,8 +84,6 @@ IProcessor::Status WatermarkTransformWithSubstream::prepare()
 
 void WatermarkTransformWithSubstream::work()
 {
-    assert(input_chunk.hasChunkContext());
-
     assert(output_iter == output_chunks.end());
     output_chunks.clear();
 
@@ -94,6 +92,8 @@ void WatermarkTransformWithSubstream::work()
     process_chunk.swap(input_chunk);
     if (process_chunk.hasRows())
     {
+        assert(process_chunk.hasChunkContext());
+
         auto & watermark = getOrCreateSubstreamWatermark(process_chunk.getSubstreamID());
 
         watermark.process(process_chunk);

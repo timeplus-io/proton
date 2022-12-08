@@ -1,23 +1,41 @@
 #pragma once
 
+#include <Columns/ColumnObject.h>
 #include <DataTypes/Serializations/SimpleTextSerialization.h>
+#include <Common/ObjectPool.h>
 
 /// proton: starts.
-#include <Core/Names.h>
+/// #include <Core/Names.h>
 /// proton: ends.
 
 namespace DB
 {
 
-/// Serialization for data type Object.
-/// Supported only test serialization/deserialization.
-/// and binary bulk serialization/deserialization without position independent
-/// encoding, i.e. serialization/deserialization into Native format.
+/** Serialization for data type Object.
+  * Supported only text serialization/deserialization.
+  * and binary bulk serialization/deserialization without position independent
+  * encoding, i.e. serialization/deserialization into Native format.
+  */
 template <typename Parser>
 class SerializationObject : public ISerialization
 {
 public:
+    /** In Native format ColumnObject can be serialized
+      * in two formats: as Tuple or as String.
+      * The format is the following:
+      *
+      * <serialization_kind> 1 byte -- 0 if Tuple, 1 if String.
+      * [type_name] -- Only for tuple serialization.
+      * ... data of internal column ...
+      *
+      * ClickHouse client serializazes objects as tuples.
+      * String serialization exists for clients, which cannot
+      * do parsing by themselves and they can send raw data as
+      * string. It will be parsed on the server side.
+      */
+
     void serializeBinaryBulkStatePrefix(
+        const IColumn & column,
         SerializeBinaryBulkSettings & settings,
         SerializeBinaryBulkStatePtr & state) const override;
 
@@ -60,12 +78,46 @@ public:
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const override;
     void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const override;
 
+private:
+    enum class BinarySerializationKind : UInt8
+    {
+        TUPLE = 0,
+        STRING = 1,
+    };
+
+    struct SerializeStateObject;
+    struct DeserializeStateObject;
+
+    void deserializeBinaryBulkFromString(
+        ColumnObject & column_object,
+        size_t limit,
+        DeserializeBinaryBulkSettings & settings,
+        DeserializeStateObject & state,
+        SubstreamsCache * cache) const;
+
+    void deserializeBinaryBulkFromTuple(
+        ColumnObject & column_object,
+        size_t limit,
+        DeserializeBinaryBulkSettings & settings,
+        DeserializeStateObject & state,
+        SubstreamsCache * cache) const;
+
+    template <typename TSettings>
+    void checkSerializationIsSupported(const TSettings & settings) const;
+
+    template <typename Reader>
+    void deserializeTextImpl(IColumn & column, Reader && reader) const;
+
+    void serializeTextImpl(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const;
+    void serializeTextFromSubcolumn(const ColumnObject::Subcolumn & subcolumn, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const;
+
     /// proton: starts
     void deserializeBinaryBulkWithMultipleStreamsSkip(
         size_t limit,
         DeserializeBinaryBulkSettings & settings,
         DeserializeBinaryBulkStatePtr & state) const override;
 
+public:
     explicit SerializationObject(const Names & partial_deserialized_subcolumns_ = {})
         : partial_deserialized_subcolumns(partial_deserialized_subcolumns_)
     {
@@ -75,19 +127,11 @@ private:
     Names partial_deserialized_subcolumns;
     /// proton: ends
 
-private:
-    template <typename TSettings, typename TStatePtr>
-    void checkSerializationIsSupported(const TSettings & settings, const TStatePtr & state) const;
-
-    template <typename Reader>
-    void deserializeTextImpl(IColumn & column, Reader && reader) const;
-
-    void serializeTextImpl(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const;
-
-    mutable Parser parser;
+    /// Pool of parser objects to make SerializationObject thread safe.
+    mutable SimpleObjectPool<Parser> parsers_pool;
 };
 
-/// proton: starts.
+/// proton: starts. Add partial deserialized columns support
 SerializationPtr getObjectSerialization(const String & schema_format, const Names & partial_deserialized_subcolumns = {});
 /// proton: ends.
 

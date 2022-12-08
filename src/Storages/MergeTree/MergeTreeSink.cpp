@@ -20,8 +20,9 @@ void MergeTreeSink::onStart()
 void MergeTreeSink::consume(Chunk chunk)
 {
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
-    String block_dedup_token;
+    auto storage_snapshot = storage.getStorageSnapshot(metadata_snapshot);
 
+    storage.writer.deduceTypesOfObjectColumns(storage_snapshot, block);
     auto part_blocks = storage.writer.splitBlockIntoParts(block, max_parts_per_block, metadata_snapshot, context);
 
     /// proton: starts
@@ -31,6 +32,7 @@ void MergeTreeSink::consume(Chunk chunk)
     for (auto & current_block : part_blocks)
     {
         Stopwatch watch;
+        String block_dedup_token;
 
         if (ignorePartBlock(parts, part_index))
         {
@@ -39,13 +41,10 @@ void MergeTreeSink::consume(Chunk chunk)
         }
 
         SequenceInfoPtr part_seq;
-
         if (seq_info)
-        {
             part_seq = seq_info->shallowClone(part_index, parts);
-        }
 
-        MergeTreeData::MutableDataPartPtr part = storage.writer.writeTempPart(current_block, metadata_snapshot, part_seq, context);
+        auto part = storage.writer.writeTempPart(current_block, metadata_snapshot, part_seq, context);
 
         part_index++;
         /// proton: ends

@@ -139,7 +139,7 @@ void updateTTL(
 }
 
 BlocksWithPartition MergeTreeDataWriter::splitBlockIntoParts(
-        const Block & block, size_t max_parts, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
+    const Block & block, size_t max_parts, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
 {
     BlocksWithPartition result;
     if (!block || !block.rows())
@@ -276,16 +276,10 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
 {
     Block & block = block_with_partition.block;
     auto columns = metadata_snapshot->getColumns().getAllPhysical().filter(block.getNames());
-    auto storage_snapshot = data.getStorageSnapshot(metadata_snapshot);
 
-    /// We convert objects to tuples due to DataTypeObject doesn't support serialization with position independent encoding and more
-    if (!storage_snapshot->object_columns.get()->empty())
-    {
-        auto extended_storage_columns = storage_snapshot->getColumns(
-            GetColumnsOptions(GetColumnsOptions::AllPhysical).withExtendedObjects());
-
-        fillAndConvertObjectsToTuples(columns, block, extended_storage_columns);
-    }
+    for (auto & column : columns)
+        if (isObject(column.type))
+            column.type = block.getByName(column.name).type;
 
     static const String TMP_PREFIX = "tmp_insert_";
 
@@ -455,6 +449,12 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     ProfileEvents::increment(ProfileEvents::MergeTreeDataWriterCompressedBytes, new_data_part->getBytesOnDisk());
 
     return new_data_part;
+}
+
+void MergeTreeDataWriter::deduceTypesOfObjectColumns(const StorageSnapshotPtr & storage_snapshot, Block & block)
+{
+    if (!storage_snapshot->object_columns.get()->empty())
+        convertDynamicColumnsToTuples(block, storage_snapshot);
 }
 
 MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeProjectionPartImpl(

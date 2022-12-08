@@ -253,7 +253,7 @@ ASTPtr StorageView::restoreViewName(ASTSelectQuery & select_query, const ASTPtr 
 /// proton: starts.
 StorageSnapshotPtr StorageView::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const
 {
-    if (hasObjectColumns(metadata_snapshot->getColumns()))
+    if (hasDynamicSubcolumns(metadata_snapshot->getColumns()))
     {
         auto object_columns
             = InterpreterSelectWithUnionQuery(getInMemoryMetadataPtr()->getSelectQuery().inner_query, local_context, SelectQueryOptions().analyze())

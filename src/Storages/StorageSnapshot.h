@@ -14,8 +14,12 @@ struct StorageSnapshot
     const IStorage & storage;
     const StorageMetadataPtr metadata;
 
+    /// proton : starts
     /// Allow to get/set dynamic object columns for streaming store source
     MultiVersion<ColumnsDescription> object_columns;
+
+    bool force_use_extended_objects = false;
+    /// proton : ends
 
     /// Additional data, on which set of columns may depend.
     /// E.g. data parts in MergeTree, list of blocks in Memory, etc.
@@ -29,10 +33,6 @@ struct StorageSnapshot
 
     /// Projection that is used in query.
     mutable const ProjectionDescription * projection = nullptr;
-
-    std::unordered_map<String, DataTypePtr> virtual_columns;
-
-    bool force_use_extended_objects = false;
 
     StorageSnapshot(
         const IStorage & storage_,
@@ -79,6 +79,10 @@ struct StorageSnapshot
     /// Get columns with types according to options only for requested names.
     NamesAndTypesList getColumnsByNames(const GetColumnsOptions & options, const Names & names) const;
 
+    /// Get column with type according to options for requested name.
+    std::optional<NameAndTypePair> tryGetColumn(const GetColumnsOptions & options, const String & column_name) const;
+    NameAndTypePair getColumn(const GetColumnsOptions & options, const String & column_name) const;
+
     /// Block with ordinary + materialized + aliases + virtuals + subcolumns.
     /// proton: starts
     /// when `use_extended_objects` is true, we will convert `json` to `tuple` representation,
@@ -101,8 +105,14 @@ struct StorageSnapshot
 
 private:
     void init();
+
+    std::unordered_map<String, DataTypePtr> virtual_columns;
+
+    /// System columns are not visible in the schema but might be persisted in the data.
+    /// One example of such column is lightweight delete mask '_row_exists'.
+    std::unordered_map<String, DataTypePtr> system_columns;
 };
 
-using StorageSnapshotPtr = std::shared_ptr<const StorageSnapshot>;
+using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
 
 }

@@ -60,7 +60,8 @@ public:
         return ColumnArray::create(nested_column->assumeMutable());
     }
 
-    template <typename ... Args, typename = typename std::enable_if<IsMutableColumns<Args ...>::value>::type>
+    template <typename ... Args>
+    requires (IsMutableColumns<Args ...>::value)
     static MutablePtr create(Args &&... args) { return Base::create(std::forward<Args>(args)...); }
 
     /** On the index i there is an offset to the beginning of the i + 1 -th element. */
@@ -174,6 +175,9 @@ public:
     double getRatioOfDefaultRows(double sample_ratio) const override;
 
     void getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const override;
+
+    void finalize() override { data->finalize(); }
+    bool isFinalized() const override { return data->isFinalized(); }
 
     bool isCollationSupported() const override { return getData().isCollationSupported(); }
 

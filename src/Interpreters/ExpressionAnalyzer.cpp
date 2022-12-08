@@ -10,7 +10,6 @@
 #include <Parsers/ASTWindowDefinition.h>
 #include <Parsers/DumpASTNode.h>
 
-#include <DataTypes/DataTypeNullable.h>
 #include <Columns/IColumn.h>
 
 #include <Interpreters/ArrayJoinAction.h>
@@ -34,9 +33,6 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageDictionary.h>
 #include <Storages/StorageJoin.h>
-
-
-#include <Dictionaries/DictionaryStructure.h>
 
 #include <Common/typeid_cast.h>
 #include <Common/StringUtils/StringUtils.h>

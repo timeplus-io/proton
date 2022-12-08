@@ -570,15 +570,15 @@ void ColumnTuple::getIndicesOfNonDefaultRows(Offsets & indices, size_t from, siz
     return getIndicesOfNonDefaultRowsImpl<ColumnTuple>(indices, from, limit);
 }
 
-SerializationInfoPtr ColumnTuple::getSerializationInfo() const
+void ColumnTuple::finalize()
 {
-    MutableSerializationInfos infos;
-    infos.reserve(columns.size());
+    for (auto & column : columns)
+        column->finalize();
+}
 
-    for (const auto & column : columns)
-        infos.push_back(const_pointer_cast<SerializationInfo>(column->getSerializationInfo()));
-
-    return std::make_shared<SerializationInfoTuple>(std::move(infos), SerializationInfo::Settings{});
+bool ColumnTuple::isFinalized() const
+{
+    return std::all_of(columns.begin(), columns.end(), [](const auto & column) { return column->isFinalized(); });
 }
 
 }

@@ -16,7 +16,6 @@ namespace ErrorCodes
     extern const int UNKNOWN_PACKET_FROM_SERVER;
     extern const int UNKNOWN_EXCEPTION;
     extern const int NOT_IMPLEMENTED;
-    extern const int QUERY_WAS_CANCELLED;
 }
 
 LocalConnection::LocalConnection(ContextPtr context_, bool send_progress_)
@@ -138,17 +137,17 @@ void LocalConnection::sendQuery(
     }
     catch (const Exception & e)
     {
-        state->io.onException(e.code() != ErrorCodes::QUERY_WAS_CANCELLED);
+        state->io.onException();
         state->exception.emplace(e);
     }
     catch (const std::exception & e)
     {
-        state->io.onException(true);
+        state->io.onException();
         state->exception.emplace(Exception::CreateFromSTDTag{}, e);
     }
     catch (...)
     {
-        state->io.onException(true);
+        state->io.onException();
         state->exception.emplace("Unknown exception", ErrorCodes::UNKNOWN_EXCEPTION);
     }
 }
@@ -236,17 +235,17 @@ bool LocalConnection::poll(size_t)
         }
         catch (const Exception & e)
         {
-            state->io.onException(e.code() != ErrorCodes::QUERY_WAS_CANCELLED);
+            state->io.onException();
             state->exception.emplace(e);
         }
         catch (const std::exception & e)
         {
-            state->io.onException(true);
+            state->io.onException();
             state->exception.emplace(Exception::CreateFromSTDTag{}, e);
         }
         catch (...)
         {
-            state->io.onException(true);
+            state->io.onException();
             state->exception.emplace("Unknown exception", ErrorCodes::UNKNOWN_EXCEPTION);
         }
     }

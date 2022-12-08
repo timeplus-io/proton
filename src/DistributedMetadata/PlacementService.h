@@ -20,7 +20,7 @@ struct StorageInfoForStream
     Poco::Dynamic::Var toJSON(bool is_simple = false) const;
 };
 
-struct StorageInfo
+struct StreamStorageInfo
 {
     uint64_t total_bytes_on_disk = 0;
     std::unordered_map<String, StorageInfoForStream> streams;
@@ -29,7 +29,7 @@ struct StorageInfo
     Poco::Dynamic::Var toJSON(bool is_simple = false) const;
     void sortingStreamByBytes(bool desc = true) { need_sort_by_bytes = desc; }
 };
-using StorageInfoPtr = std::shared_ptr<StorageInfo>;
+using StreamStorageInfoPtr = std::shared_ptr<StreamStorageInfo>;
 
 class CatalogService;
 
@@ -54,7 +54,7 @@ public:
 
     bool ready() const override { return started.test() && nodes().size(); }
 
-    StorageInfoPtr loadStorageInfo(const String & ns, const String & stream);
+    StreamStorageInfoPtr loadStorageInfo(const String & ns, const String & stream);
     void checkStorageQuotaOrThrow();
 
 private:
@@ -72,7 +72,7 @@ private:
     void broadcast();
     void doBroadcast();
 
-    void loadLocalStoragesInfo(StorageInfoPtr & disk_info, const String & ns, const String & stream) const;
+    void loadLocalStoragesInfo(StreamStorageInfoPtr & disk_info, const String & ns, const String & stream) const;
     std::pair<size_t, std::vector<String>> getLocalStorageInfo(StoragePtr storage) const;
 
 private:
@@ -85,7 +85,7 @@ private:
     BackgroundSchedulePoolTaskHolder broadcast_task;
 
     size_t reschedule_interval;
-    StorageInfoPtr storage_info_ptr = nullptr;
+    StreamStorageInfoPtr storage_info_ptr = nullptr;
     uint64_t last_update_s;
 };
 

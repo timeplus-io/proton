@@ -41,13 +41,13 @@ namespace
     ///         }
     ///     }
     /// }
-    String buildResponse(const StorageInfoPtr & disk_info, const String & query_id, bool is_simple = false)
+    String buildResponse(const StreamStorageInfoPtr & storage_info, const String & query_id, bool is_simple = false)
     {
         Poco::JSON::Object resp(Poco::JSON_PRESERVE_KEY_ORDER);
         resp.set("request_id", query_id);
 
-        if (disk_info)
-            resp.set("data", disk_info->toJSON(is_simple));
+        if (storage_info)
+            resp.set("data", storage_info->toJSON(is_simple));
 
         std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
         resp.stringify(resp_str_stream, 0);

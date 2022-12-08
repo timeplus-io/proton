@@ -3,11 +3,9 @@
 #include <Interpreters/AsynchronousMetricLog.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Interpreters/DatabaseCatalog.h>
-#include <Interpreters/Context.h>
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
 #include <Common/CurrentMetrics.h>
-#include <Common/typeid_cast.h>
 #include <Common/filesystemHelpers.h>
 #include <Server/ProtocolServerAdapter.h>
 #include <Storages/MarkCache.h>

@@ -82,11 +82,11 @@ void StreamingStoreSourceBase::fillAndUpdateObjects(Block & block)
             = storage_snapshot.getColumns(GetColumnsOptions(GetColumnsOptions::AllPhysical).withExtendedObjects());
 
         /// Fill missing elems for objects in block (only filled those @required_object_names)
-        fillAndConvertObjectsToTuples(columns_list, block, extended_storage_columns, required_object_names, /*no_convert*/ true);
+        fillAndConvertObjectsToTuples(columns_list, block, extended_storage_columns, required_object_names);
 
         /// Update object columns if have changes
         auto current_object_columns = *storage_snapshot.object_columns.get();
-        if (DB::updateObjectColumns(current_object_columns, columns_list))
+        if (updateObjectColumns(current_object_columns, storage_snapshot.metadata->getColumns(), columns_list))
             storage_snapshot.object_columns.set(std::make_unique<ColumnsDescription>(std::move(current_object_columns)));
     }
     catch (Exception & e)

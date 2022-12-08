@@ -39,7 +39,7 @@ static void writeData(const ISerialization & serialization, const ColumnPtr & co
     settings.low_cardinality_max_dictionary_size = 0; //-V1048
 
     ISerialization::SerializeBinaryBulkStatePtr state;
-    serialization.serializeBinaryBulkStatePrefix(settings, state);
+    serialization.serializeBinaryBulkStatePrefix(*full_column, settings, state);
     serialization.serializeBinaryBulkWithMultipleStreams(*full_column, offset, limit, settings, state);
     serialization.serializeBinaryBulkStateSuffix(settings, state);
 }
@@ -78,7 +78,7 @@ void SimpleNativeWriter::write(const Block & block)
         }
 
         /// Serialization. Dynamic, if client supports it.
-        auto info = column.column->getSerializationInfo();
+        auto info = column.type->getSerializationInfo(*column.column);
         auto serialization = column.type->getSerialization(*info);
 
         bool has_custom = info->hasCustomSerialization();

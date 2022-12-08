@@ -395,7 +395,7 @@ void TCPHandler::runImpl()
         }
         catch (const Exception & e)
         {
-            state.io.onException(e.code() != ErrorCodes::QUERY_WAS_CANCELLED);
+            state.io.onException();
             exception.emplace(e);
 
             if (e.code() == ErrorCodes::UNKNOWN_PACKET_FROM_CLIENT)
@@ -419,12 +419,12 @@ void TCPHandler::runImpl()
              *  Although in one of them, we have to send exception to the client, but in the other - we can not.
              *  We will try to send exception to the client in any case - see below.
              */
-            state.io.onException(false); /// proton : don't log the stack trace for network issue
+            state.io.onException();
             exception.emplace(Exception::CreateFromPocoTag{}, e);
         }
         catch (const Poco::Exception & e)
         {
-            state.io.onException(true);
+            state.io.onException();
             exception.emplace(Exception::CreateFromPocoTag{}, e);
         }
 // Server should die on std logic errors in debug, like with assert()
@@ -433,7 +433,7 @@ void TCPHandler::runImpl()
 #ifndef NDEBUG
         catch (const std::logic_error & e)
         {
-            state.io.onException(true);
+            state.io.onException();
             exception.emplace(Exception::CreateFromSTDTag{}, e);
             sendException(*exception, send_exception_with_stack_trace);
             std::abort();
@@ -441,12 +441,12 @@ void TCPHandler::runImpl()
 #endif
         catch (const std::exception & e)
         {
-            state.io.onException(true);
+            state.io.onException();
             exception.emplace(Exception::CreateFromSTDTag{}, e);
         }
         catch (...)
         {
-            state.io.onException(true);
+            state.io.onException();
             exception.emplace("Unknown exception", ErrorCodes::UNKNOWN_EXCEPTION);
         }
 

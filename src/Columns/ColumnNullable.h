@@ -41,7 +41,8 @@ public:
         return ColumnNullable::create(nested_column_->assumeMutable(), null_map_->assumeMutable());
     }
 
-    template <typename ... Args, typename = typename std::enable_if<IsMutableColumns<Args ...>::value>::type>
+    template <typename ... Args>
+    requires (IsMutableColumns<Args ...>::value)
     static MutablePtr create(Args &&... args) { return Base::create(std::forward<Args>(args)...); }
 
     const char * getFamilyName() const override { return "nullable"; }
@@ -55,19 +56,7 @@ public:
     bool getBool(size_t n) const override { return isNullAt(n) ? false : nested_column->getBool(n); }
     UInt64 get64(size_t n) const override { return nested_column->get64(n); }
     bool isDefaultAt(size_t n) const override { return isNullAt(n); }
-
-    /**
-     * If isNullAt(n) returns false, returns the nested column's getDataAt(n), otherwise returns a special value
-     * EMPTY_STRING_REF indicating that data is not present.
-     */
-    StringRef getDataAt(size_t n) const override
-    {
-        if (isNullAt(n))
-            return EMPTY_STRING_REF;
-
-        return getNestedColumn().getDataAt(n);
-    }
-
+    StringRef getDataAt(size_t) const override;
     /// Will insert null value if pos=nullptr
     void insertData(const char * pos, size_t length) override;
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const override;
@@ -205,7 +194,6 @@ private:
     WrappedPtr nested_column;
     WrappedPtr null_map;
 
-    /// proton: starts.
     template <bool negative>
     void applyNullMapImpl(const ColumnBool & map);
     /// proton: ends.
@@ -220,5 +208,6 @@ private:
 };
 
 ColumnPtr makeNullable(const ColumnPtr & column);
+ColumnPtr makeNullableSafe(const ColumnPtr & column);
 
 }

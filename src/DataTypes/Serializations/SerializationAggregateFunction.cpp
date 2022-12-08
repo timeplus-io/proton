@@ -214,8 +214,10 @@ void SerializationAggregateFunction::deserializeTextCSV(IColumn & column, ReadBu
 }
 
 /// proton: starts
-void SerializationAggregateFunction::deserializeBinaryBulkSkip(ReadBuffer & /*istr*/, size_t /*limit*/) const
+void SerializationAggregateFunction::deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const
 {
+    (void) istr;
+    (void) limit;
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Skip deserialization is not implemented for aggregate function");
 
     /*

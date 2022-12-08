@@ -26,7 +26,8 @@ NamesAndTypesList StorageSnapshot::getColumns(const GetColumnsOptions & options)
 {
     auto all_columns = getMetadataForQuery()->getColumns().get(options);
 
-    extendObjectColumns(all_columns, *object_columns.get(), options.with_extended_objects || force_use_extended_objects, options.with_subcolumns);
+    if (options.with_extended_objects || force_use_extended_objects)
+        extendObjectColumns(all_columns, *object_columns.get(), options.with_subcolumns);
 
     if (options.with_virtuals)
     {
@@ -39,7 +40,7 @@ NamesAndTypesList StorageSnapshot::getColumns(const GetColumnsOptions & options)
                 column_names.insert(column.name);
 
             for (const auto & [name, type] : virtual_columns)
-                if (!column_names.count(name))
+                if (!column_names.contains(name))
                     all_columns.emplace_back(name, type);
         }
     }
@@ -50,42 +51,46 @@ NamesAndTypesList StorageSnapshot::getColumns(const GetColumnsOptions & options)
 NamesAndTypesList StorageSnapshot::getColumnsByNames(const GetColumnsOptions & options, const Names & names) const
 {
     NamesAndTypesList res;
-    const auto & columns = getMetadataForQuery()->getColumns();
     for (const auto & name : names)
+        res.push_back(getColumn(options, name));
+    return res;
+}
+
+std::optional<NameAndTypePair> StorageSnapshot::tryGetColumn(const GetColumnsOptions & options, const String & column_name) const
+{
+    const auto & columns = getMetadataForQuery()->getColumns();
+    auto column = columns.tryGetColumn(options, column_name);
+    /// proton : starts.
+    auto return_extended_objects = options.with_extended_objects || force_use_extended_objects;
+    /// Either the column is not an object column or it is not required to return extended object. Then return as it is
+    if (column && (!isObject(column->type) || !return_extended_objects))
+        return column;
+
+    if (return_extended_objects || options.with_subcolumns)
     {
-        auto column = columns.tryGetColumn(options, name);
-        if (column && (!(options.with_extended_objects || force_use_extended_objects) || !isObject(column->type)))
-        {
-            res.emplace_back(std::move(*column));
-            continue;
-        }
+        auto object_column = object_columns.get()->tryGetColumn(options, column_name);
+        if (object_column)
+            return object_column;
+    }
+    /// proton : ends
 
-        if (options.with_extended_objects || force_use_extended_objects || options.with_subcolumns)
-        {
-            auto object_column = object_columns.get()->tryGetColumn(options, name);
-            if (object_column)
-            {
-                res.emplace_back(std::move(*object_column));
-                continue;
-            }
-        }
-
-        if (options.with_virtuals)
-        {
-            auto it = virtual_columns.find(name);
-            if (it != virtual_columns.end())
-            {
-                res.emplace_back(name, it->second);
-                continue;
-            }
-        }
-
-        /// proton: starts.
-        throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_STREAM, "There is no column {} in stream", name);
-        /// proton: ends.
+    if (options.with_virtuals)
+    {
+        auto it = virtual_columns.find(column_name);
+        if (it != virtual_columns.end())
+            return NameAndTypePair(column_name, it->second);
     }
 
-    return res;
+    return {};
+}
+
+NameAndTypePair StorageSnapshot::getColumn(const GetColumnsOptions & options, const String & column_name) const
+{
+    auto column = tryGetColumn(options, column_name);
+    if (!column)
+        throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_STREAM, "There is no column {} in table", column_name);
+
+    return *column;
 }
 
 Block StorageSnapshot::getSampleBlockForColumns(const Names & column_names, bool use_extended_objects /*= false*/) const
@@ -98,7 +103,10 @@ Block StorageSnapshot::getSampleBlockForColumns(const Names & column_names, bool
         auto column = columns.tryGetColumnOrSubcolumn(GetColumnsOptions::All, name);
         auto object_column = object_columns.get()->tryGetColumnOrSubcolumn(GetColumnsOptions::All, name);
 
-        if (column && (!(use_extended_objects || force_use_extended_objects) || !object_column))
+        /// proton : starts
+        auto return_extended_objects = use_extended_objects || force_use_extended_objects;
+        if (column && (!object_column || !return_extended_objects))
+        /// proton : ends
         {
             res.insert({column->type->createColumn(), column->type, column->name});
         }
@@ -115,10 +123,8 @@ Block StorageSnapshot::getSampleBlockForColumns(const Names & column_names, bool
         }
         else
         {
-            /// proton: starts.
             throw Exception(ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK,
                 "Column {} not found in stream {}", backQuote(name), storage.getStorageID().getNameForLogs());
-            /// proton: ends.
         }
     }
 
@@ -149,16 +155,14 @@ void StorageSnapshot::check(const Names & column_names) const
     {
         bool has_column = columns.hasColumnOrSubcolumn(GetColumnsOptions::AllPhysical, name)
             || object_columns.get()->hasColumnOrSubcolumn(GetColumnsOptions::AllPhysical, name)
-            || virtual_columns.count(name);
+            || virtual_columns.contains(name);
 
         if (!has_column)
         {
             auto list_of_columns = listOfColumns(columns.get(options));
-            /// proton: starts.
             throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_STREAM,
                 "There is no column with name {} in stream {}. There are columns: {}",
                 backQuote(name), storage.getStorageID().getNameForLogs(), list_of_columns);
-            /// proton: ends.
         }
 
         if (unique_names.count(name))

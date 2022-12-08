@@ -25,7 +25,7 @@ void SerializationNothing::deserializeBinaryBulk(IColumn & column, ReadBuffer & 
 /// proton: starts
 void SerializationNothing::deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const
 {
-    istr.ignore(limit);
+    istr.tryIgnore(limit);
 }
 /// proton: ends
 

@@ -111,7 +111,7 @@ DataTypePtr FieldToDataType::operator() (const Array & x) const
     for (const Field & elem : x)
         element_types.emplace_back(applyVisitor(FieldToDataType(allow_convertion_to_string), elem));
 
-    return std::make_shared<DataTypeArray>(getLeastSupertype(element_types, allow_convertion_to_string));
+    return std::make_shared<DataTypeArray>(getLeastSupertype(element_types));
 }
 
 DataTypePtr FieldToDataType::operator() (const Tuple & tuple) const
@@ -144,8 +144,8 @@ DataTypePtr FieldToDataType::operator() (const Map & map) const
     }
 
     return std::make_shared<DataTypeMap>(
-        getLeastSupertype(key_types, allow_convertion_to_string),
-        getLeastSupertype(value_types, allow_convertion_to_string));
+        getLeastSupertype(key_types),
+        getLeastSupertype(value_types));
 }
 
 DataTypePtr FieldToDataType::operator() (const Object &) const

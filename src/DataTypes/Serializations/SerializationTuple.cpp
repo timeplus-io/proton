@@ -283,7 +283,7 @@ void SerializationTuple::deserializeTextCSV(IColumn & column, ReadBuffer & istr,
 }
 
 void SerializationTuple::enumerateStreams(
-    SubstreamPath & path,
+    EnumerateStreamsSettings & settings,
     const StreamCallback & callback,
     const SubstreamData & data) const
 {
@@ -293,15 +293,12 @@ void SerializationTuple::enumerateStreams(
 
     for (size_t i = 0; i < elems.size(); ++i)
     {
-        SubstreamData next_data =
-        {
-            elems[i],
-            type_tuple ? type_tuple->getElement(i) : nullptr,
-            column_tuple ? column_tuple->getColumnPtr(i) : nullptr,
-            info_tuple ? info_tuple->getElementInfo(i) : nullptr,
-        };
+        auto next_data = SubstreamData(elems[i])
+            .withType(type_tuple ? type_tuple->getElement(i) : nullptr)
+            .withColumn(column_tuple ? column_tuple->getColumnPtr(i) : nullptr)
+            .withSerializationInfo(info_tuple ? info_tuple->getElementInfo(i) : nullptr);
 
-        elems[i]->enumerateStreams(path, callback, next_data);
+        elems[i]->enumerateStreams(settings, callback, next_data);
     }
 }
 
@@ -317,6 +314,7 @@ struct DeserializeBinaryBulkStateTuple : public ISerialization::DeserializeBinar
 
 
 void SerializationTuple::serializeBinaryBulkStatePrefix(
+    const IColumn & column,
     SerializeBinaryBulkSettings & settings,
     SerializeBinaryBulkStatePtr & state) const
 {
@@ -324,7 +322,7 @@ void SerializationTuple::serializeBinaryBulkStatePrefix(
     tuple_state->states.resize(elems.size());
 
     for (size_t i = 0; i < elems.size(); ++i)
-        elems[i]->serializeBinaryBulkStatePrefix(settings, tuple_state->states[i]);
+        elems[i]->serializeBinaryBulkStatePrefix(extractElementColumn(column, i), settings, tuple_state->states[i]);
 
     state = std::move(tuple_state);
 }

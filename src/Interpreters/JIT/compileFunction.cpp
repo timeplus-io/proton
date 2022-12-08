@@ -52,11 +52,11 @@ ColumnData getColumnData(const IColumn * column)
 
     if (const auto * nullable = typeid_cast<const ColumnNullable *>(column))
     {
-        result.null_data = nullable->getNullMapColumn().getRawData().data;
+        result.null_data = nullable->getNullMapColumn().getRawData().data();
         column = &nullable->getNestedColumn();
     }
 
-    result.data = column->getRawData().data;
+    result.data = column->getRawData().data();
 
     return result;
 }

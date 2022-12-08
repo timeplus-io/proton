@@ -1203,7 +1203,7 @@ MutateTask::MutateTask(
     ctx->storage_from_source_part = std::make_shared<StorageFromMergeTreeDataPart>(ctx->source_part);
 
     auto storage_snapshot = ctx->storage_from_source_part->getStorageSnapshot(ctx->metadata_snapshot);
-    extendObjectColumns(ctx->storage_columns, *(storage_snapshot->object_columns.get()), /* use_extended_objects */ true, /*with_subcolumns=*/ false);
+    extendObjectColumns(ctx->storage_columns, *(storage_snapshot->object_columns.get()), /*with_subcolumns=*/ false);
 }
 
 

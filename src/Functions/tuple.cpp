@@ -60,21 +60,10 @@ public:
             throw Exception("Function " + getName() + " requires at least one argument.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         DataTypes types;
-        Strings names;
+        types.reserve(arguments.size());
 
         for (const auto & argument : arguments)
-        {
             types.emplace_back(argument.type);
-            names.emplace_back(argument.name);
-        }
-
-        /// Create named tuple if possible. We don't print tuple element names
-        /// because they are bad anyway -- aliases are not used, e.g. tuple(1 a)
-        /// will have element name '1' and not 'a'. If we ever change this, and
-        /// add the ability to access tuple elements by name, like tuple(1 a).a,
-        /// we should probably enable printing for better discoverability.
-        if (DataTypeTuple::canBeCreatedWithNames(names))
-            return std::make_shared<DataTypeTuple>(types, names, false /*print names*/);
 
         return std::make_shared<DataTypeTuple>(types);
     }

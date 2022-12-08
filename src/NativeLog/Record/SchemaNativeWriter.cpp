@@ -8,22 +8,22 @@ namespace nlog
 {
 namespace
 {
-    ALWAYS_INLINE void writeData(
-        const DB::ISerialization & serialization, const DB::ColumnPtr & column, DB::WriteBuffer & ostr, uint64_t offset, uint64_t limit)
-    {
-        /// If there are columns-constants - then we materialize them.
-        /// (Since the data type does not know how to serialize / deserialize constants.)
-        DB::ColumnPtr full_column = column->convertToFullColumnIfConst();
-        DB::ISerialization::SerializeBinaryBulkSettings settings;
-        settings.getter = [&ostr](DB::ISerialization::SubstreamPath) -> DB::WriteBuffer * { return &ostr; };
-        settings.position_independent_encoding = false;
-        settings.low_cardinality_max_dictionary_size = 0; //-V1048
+ALWAYS_INLINE void
+writeData(const DB::ISerialization & serialization, const DB::ColumnPtr & column, DB::WriteBuffer & ostr, uint64_t offset, uint64_t limit)
+{
+    /// If there are columns-constants - then we materialize them.
+    /// (Since the data type does not know how to serialize / deserialize constants.)
+    DB::ColumnPtr full_column = column->convertToFullColumnIfConst();
+    DB::ISerialization::SerializeBinaryBulkSettings settings;
+    settings.getter = [&ostr](DB::ISerialization::SubstreamPath) -> DB::WriteBuffer * { return &ostr; };
+    settings.position_independent_encoding = false;
+    settings.low_cardinality_max_dictionary_size = 0; //-V1048
 
-        DB::ISerialization::SerializeBinaryBulkStatePtr state;
-        serialization.serializeBinaryBulkStatePrefix(settings, state);
-        serialization.serializeBinaryBulkWithMultipleStreams(*full_column, offset, limit, settings, state);
-        serialization.serializeBinaryBulkStateSuffix(settings, state);
-    }
+    DB::ISerialization::SerializeBinaryBulkStatePtr state;
+    serialization.serializeBinaryBulkStatePrefix(*full_column, settings, state);
+    serialization.serializeBinaryBulkWithMultipleStreams(*full_column, offset, limit, settings, state);
+    serialization.serializeBinaryBulkStateSuffix(settings, state);
+}
 }
 
 SchemaNativeWriter::SchemaNativeWriter(DB::WriteBuffer & ostr_, const std::vector<uint16_t> & column_positions_)
@@ -55,7 +55,7 @@ void SchemaNativeWriter::write(const DB::Block & block)
     for (const auto & column : block)
     {
         /// Serialization. Dynamic, if client supports it.
-        auto info = column.column->getSerializationInfo();
+        auto info = column.type->getSerializationInfo(*column.column);
         auto serialization = column.type->getSerialization(*info);
         bool has_custom = info->hasCustomSerialization();
 

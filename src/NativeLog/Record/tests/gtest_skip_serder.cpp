@@ -453,7 +453,7 @@ void doInsertColumnArrayArray(DB::Block & block, const String & col_name, std::f
     auto data_type = std::make_shared<DB::DataTypeTuple>(types);
     insert_func(data_type, "tuple_without_names");
 
-    data_type = std::make_shared<DB::DataTypeTuple>(types, names, true);
+    data_type = std::make_shared<DB::DataTypeTuple>(types, names);
     insert_func(data_type, "tuple_with_names");
 }
 

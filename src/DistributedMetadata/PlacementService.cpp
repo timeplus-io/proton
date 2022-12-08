@@ -67,7 +67,7 @@ Poco::Dynamic::Var StorageInfoForStream::toJSON(bool is_simple) const
     return obj;
 }
 
-Poco::Dynamic::Var StorageInfo::toJSON(bool is_simple) const
+Poco::Dynamic::Var StreamStorageInfo::toJSON(bool is_simple) const
 {
     Poco::JSON::Object obj(Poco::JSON_PRESERVE_KEY_ORDER);
     obj.set("total_bytes_on_disk", total_bytes_on_disk);
@@ -206,14 +206,14 @@ std::vector<NodeMetricsPtr> PlacementService::nodes() const
     return nodes;
 }
 
-StorageInfoPtr PlacementService::loadStorageInfo(const String & ns, const String & stream)
+StreamStorageInfoPtr PlacementService::loadStorageInfo(const String & ns, const String & stream)
 {
     if (storage_info_ptr && last_update_s > 0 && UTCSeconds::now() - last_update_s < STORAGE_UPDATE_INTERVAL_S)
         return storage_info_ptr;
 
-    StorageInfoPtr disk_info = std::make_shared<StorageInfo>();
+    StreamStorageInfoPtr storage_info = std::make_shared<StreamStorageInfo>();
     /// Load from historical storage
-    loadLocalStoragesInfo(disk_info, ns, stream);
+    loadLocalStoragesInfo(storage_info, ns, stream);
 
     /// Load from streaming store
     nlog::NativeLog & native_log = nlog::NativeLog::instance(nullptr);
@@ -225,11 +225,11 @@ StorageInfoPtr PlacementService::loadStorageInfo(const String & ns, const String
             throw DB::Exception(list_resp.error_code, "Failed to list streams in streaming store: {}", list_resp.error_message);
 
         /// streams + 100 (reserved for other engines, such as system tables)
-        disk_info->streams.reserve(list_resp.streams.size() + 100);
+        storage_info->streams.reserve(list_resp.streams.size() + 100);
         for (const auto & stream_desc : list_resp.streams)
         {
             StorageID storage_id{stream_desc.ns, stream_desc.stream};
-            auto & stream_info = disk_info->streams[storage_id.getFullNameNotQuoted()];
+            auto & stream_info = storage_info->streams[storage_id.getFullNameNotQuoted()];
             stream_info.id = storage_id;
 
             auto streaming_data_info_opt = native_log.getLocalStreamInfo(stream_desc);
@@ -241,11 +241,11 @@ StorageInfoPtr PlacementService::loadStorageInfo(const String & ns, const String
 
             stream_info.streaming_data_bytes = streaming_data_info_opt->first;
             stream_info.streaming_data_paths = std::move(streaming_data_info_opt->second);
-            disk_info->total_bytes_on_disk += stream_info.streaming_data_bytes;
+            storage_info->total_bytes_on_disk += stream_info.streaming_data_bytes;
         }
     }
 
-    storage_info_ptr = std::move(disk_info);
+    storage_info_ptr = std::move(storage_info);
     last_update_s = UTCSeconds::now();
 
     return storage_info_ptr;
@@ -428,7 +428,7 @@ void PlacementService::doBroadcast()
     LOG_DEBUG(log, "Appended node metrics");
 }
 
-void PlacementService::loadLocalStoragesInfo(StorageInfoPtr & disk_info, const String & ns, const String & stream) const
+void PlacementService::loadLocalStoragesInfo(StreamStorageInfoPtr & storage_info, const String & ns, const String & stream) const
 {
     const auto access = global_context->getAccess();
     if (stream.empty())
@@ -462,10 +462,10 @@ void PlacementService::loadLocalStoragesInfo(StorageInfoPtr & disk_info, const S
                 //     continue;
 
                 StorageID storage_id{info.database, info.table};
-                auto & stream_info = disk_info->streams[storage_id.getFullNameNotQuoted()];
+                auto & stream_info = storage_info->streams[storage_id.getFullNameNotQuoted()];
                 stream_info.id = storage_id;
                 std::tie(stream_info.historical_data_bytes, stream_info.historical_data_paths) = getLocalStorageInfo(info.storage);
-                disk_info->total_bytes_on_disk += stream_info.historical_data_bytes;
+                storage_info->total_bytes_on_disk += stream_info.historical_data_bytes;
             }
         }
     }
@@ -480,13 +480,13 @@ void PlacementService::loadLocalStoragesInfo(StorageInfoPtr & disk_info, const S
         // if (!access->isGranted(AccessType::SHOW_TABLES, ns, stream))
         //     throw Exception(ErrorCodes::ACCESS_DENIED, "Not enough privileges to show the stream '{}'", storage_id.getNameForLogs());
 
-        auto & stream_info = disk_info->streams[storage_id.getFullNameNotQuoted()];
+        auto & stream_info = storage_info->streams[storage_id.getFullNameNotQuoted()];
         stream_info.id = storage_id;
 
         if (!dynamic_cast<MergeTreeData *>(storage.get()))
             return; /// skip
         std::tie(stream_info.historical_data_bytes, stream_info.historical_data_paths) = getLocalStorageInfo(storage);
-        disk_info->total_bytes_on_disk += stream_info.historical_data_bytes;
+        storage_info->total_bytes_on_disk += stream_info.historical_data_bytes;
     }
 }
 

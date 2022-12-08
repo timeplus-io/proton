@@ -6010,7 +6010,7 @@ ReservationPtr MergeTreeData::balancedReservation(
 ColumnsDescription MergeTreeData::getObjectColumns(
     const DataPartsVector & parts, const ColumnsDescription & storage_columns)
 {
-    return DB::getObjectColumns(
+    return DB::getConcreteObjectColumns(
         parts.begin(), parts.end(),
         storage_columns, [](const auto & part) -> const auto & { return part->getColumns(); });
 }
@@ -6018,7 +6018,7 @@ ColumnsDescription MergeTreeData::getObjectColumns(
 ColumnsDescription MergeTreeData::getObjectColumns(
     boost::iterator_range<DataPartIteratorByStateAndInfo> range, const ColumnsDescription & storage_columns)
 {
-    return DB::getObjectColumns(
+    return DB::getConcreteObjectColumns(
         range.begin(), range.end(),
         storage_columns, [](const auto & part) -> const auto & { return part->getColumns(); });
 }
@@ -6027,7 +6027,7 @@ void MergeTreeData::resetObjectColumnsFromActiveParts(const DataPartsLock & /*lo
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();
     const auto & columns = metadata_snapshot->getColumns();
-    if (!hasObjectColumns(columns))
+    if (!hasDynamicSubcolumns(columns))
         return;
 
     auto range = getDataPartsStateRange(DataPartState::Active);
@@ -6038,10 +6038,10 @@ void MergeTreeData::updateObjectColumns(const DataPartPtr & part, const DataPart
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();
     const auto & columns = metadata_snapshot->getColumns();
-    if (!hasObjectColumns(columns))
+    if (!hasDynamicSubcolumns(columns))
         return;
 
-    DB::updateObjectColumns(object_columns, part->getColumns());
+    DB::updateObjectColumns(object_columns, columns, part->getColumns());
 }
 
 StorageSnapshotPtr MergeTreeData::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const

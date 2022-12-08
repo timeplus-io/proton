@@ -6,16 +6,3 @@ target_link_libraries (merge_selector PRIVATE dbms)
 
 proton_add_executable (merge_selector2 merge_selector2.cpp)
 target_link_libraries (merge_selector2 PRIVATE dbms)
-
-proton_add_executable (get_current_inserts_in_replicated get_current_inserts_in_replicated.cpp)
-target_link_libraries (get_current_inserts_in_replicated PRIVATE dbms clickhouse_common_config clickhouse_common_zookeeper string_utils)
-
-proton_add_executable (transform_part_zk_nodes transform_part_zk_nodes.cpp)
-target_link_libraries (transform_part_zk_nodes
-    PRIVATE
-        boost::program_options
-        clickhouse_common_config
-        clickhouse_common_zookeeper
-        dbms
-        string_utils
-)

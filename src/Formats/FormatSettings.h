@@ -39,7 +39,8 @@ struct FormatSettings
     enum class DateTimeInputFormat
     {
         Basic,      /// Default format for fast parsing: YYYY-MM-DD hh:mm:ss (ISO-8601 without fractional part and timezone) or NNNNNNNNNN unix timestamp.
-        BestEffort  /// Use sophisticated rules to parse whatever possible.
+        BestEffort,  /// Use sophisticated rules to parse whatever possible.
+        BestEffortUS  /// Use sophisticated rules to parse American style: mm/dd/yyyy
     };
 
     DateTimeInputFormat date_time_input_format = DateTimeInputFormat::Basic;
@@ -63,6 +64,9 @@ struct FormatSettings
     };
 
     DateTimeOutputFormat date_time_output_format = DateTimeOutputFormat::Simple;
+
+    bool input_format_ipv4_default_on_conversion_error = false;
+    bool input_format_ipv6_default_on_conversion_error = false;
 
     UInt64 input_allow_errors_num = 0;
     Float32 input_allow_errors_ratio = 0;
@@ -124,7 +128,9 @@ struct FormatSettings
     {
         bool array_of_rows = false;
         bool quote_64bit_integers = true;
+        bool quote_64bit_floats = false;
         bool quote_denormals = true;
+        bool quote_decimals = false;
         bool escape_forward_slashes = true;
         bool named_tuples_as_objects = false;
         bool serialize_as_strings = false;

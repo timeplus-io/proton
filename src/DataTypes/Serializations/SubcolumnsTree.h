@@ -3,7 +3,7 @@
 #include <DataTypes/Serializations/PathInData.h>
 #include <DataTypes/IDataType.h>
 #include <Columns/IColumn.h>
-#include <unordered_map>
+#include <Common/HashTable/HashMap.h>
 
 namespace DB
 {
@@ -31,7 +31,8 @@ public:
         Kind kind = TUPLE;
         const Node * parent = nullptr;
 
-        std::map<String, std::shared_ptr<Node>, std::less<>> children;
+        Arena strings_pool;
+        HashMapWithStackMemory<StringRef, std::shared_ptr<Node>, StringRefHash, 4> children;
 
         NodeData data;
         PathInData path;
@@ -39,15 +40,18 @@ public:
         bool isNested() const { return kind == NESTED; }
         bool isScalar() const { return kind == SCALAR; }
 
-        void addChild(const String & key, std::shared_ptr<Node> next_node)
+        void addChild(std::string_view key, std::shared_ptr<Node> next_node)
         {
             next_node->parent = this;
-            children[key] = std::move(next_node);
+            StringRef key_ref{strings_pool.insert(key.data(), key.length()), key.length()};
+            children[key_ref] = std::move(next_node);
         }
     };
 
     using NodeKind = typename Node::Kind;
     using NodePtr = std::shared_ptr<Node>;
+
+    SubcolumnsTree() : root(std::make_shared<Node>(Node::TUPLE)) {}
 
     /// Add a leaf without any data in other nodes.
     bool add(const PathInData & path, const NodeData & leaf_data)
@@ -71,22 +75,18 @@ public:
     bool add(const PathInData & path, const NodeCreator & node_creator)
     {
         const auto & parts = path.getParts();
-
         if (parts.empty())
             return false;
-
-        if (!root)
-            root = std::make_shared<Node>(Node::TUPLE);
 
         Node * current_node = root.get();
         for (size_t i = 0; i < parts.size() - 1; ++i)
         {
             assert(current_node->kind != Node::SCALAR);
 
-            auto it = current_node->children.find(parts[i].key);
+            auto it = current_node->children.find(StringRef{parts[i].key});
             if (it != current_node->children.end())
             {
-                current_node = it->second.get();
+                current_node = it->getMapped().get();
                 node_creator(current_node->kind, true);
 
                 if (current_node->isNested() != parts[i].is_nested)
@@ -101,7 +101,7 @@ public:
             }
         }
 
-        auto it = current_node->children.find(parts.back().key);
+        auto it = current_node->children.find(StringRef{parts.back().key});
         if (it != current_node->children.end())
             return false;
 
@@ -164,13 +164,13 @@ public:
         return node;
     }
 
-    bool empty() const { return root == nullptr; }
+    bool empty() const { return root->children.empty(); }
     size_t size() const { return leaves.size(); }
 
     using Nodes = std::vector<NodePtr>;
 
     const Nodes & getLeaves() const { return leaves; }
-    const Node * getRoot() const { return root.get(); }
+    const Node & getRoot() const { return *root; }
 
     using iterator = typename Nodes::iterator;
     using const_iterator = typename Nodes::const_iterator;
@@ -184,19 +184,19 @@ public:
 private:
     const Node * findImpl(const PathInData & path, bool find_exact) const
     {
-        if (!root)
+        if (empty())
             return nullptr;
 
         const auto & parts = path.getParts();
-        const Node * current_node = root.get();
+        const auto * current_node = root.get();
 
         for (const auto & part : parts)
         {
-            auto it = current_node->children.find(part.key);
+            auto it = current_node->children.find(StringRef{part.key});
             if (it == current_node->children.end())
                 return find_exact ? nullptr : current_node;
 
-            current_node = it->second.get();
+            current_node = it->getMapped().get();
         }
 
         return current_node;

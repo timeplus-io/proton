@@ -65,7 +65,6 @@ namespace ErrorCodes
     extern const int NO_DATA_TO_INSERT;
     extern const int SUPPORT_IS_DISABLED;
     extern const int BAD_REQUEST_PARAMETER;
-    extern const int QUERY_WAS_CANCELLED;
 }
 
 namespace
@@ -1287,7 +1286,7 @@ namespace
 
     void Call::onException(const Exception & exception)
     {
-        io.onException(exception.code() != ErrorCodes::QUERY_WAS_CANCELLED);
+        io.onException();
 
         LOG_ERROR(log, fmt::runtime(getExceptionMessage(exception, true)));
 

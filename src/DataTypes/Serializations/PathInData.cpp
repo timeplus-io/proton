@@ -6,9 +6,6 @@
 #include <Columns/ColumnArray.h>
 #include <Common/SipHash.h>
 
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string.hpp>
 
@@ -36,15 +33,15 @@ PathInData::PathInData(std::string_view path_)
 }
 
 PathInData::PathInData(const Parts & parts_)
-    : path(buildPath(parts_))
-    , parts(buildParts(path, parts_))
 {
+    buildPath(parts_);
+    buildParts(parts_);
 }
 
 PathInData::PathInData(const PathInData & other)
     : path(other.path)
-    , parts(buildParts(path, other.getParts()))
 {
+    buildParts(other.getParts());
 }
 
 PathInData & PathInData::operator=(const PathInData & other)
@@ -52,20 +49,20 @@ PathInData & PathInData::operator=(const PathInData & other)
     if (this != &other)
     {
         path = other.path;
-        parts = buildParts(path, other.parts);
+        buildParts(other.parts);
     }
     return *this;
 }
 
-UInt128 PathInData::getPartsHash(const Parts & parts_)
+UInt128 PathInData::getPartsHash(const Parts::const_iterator & begin, const Parts::const_iterator & end)
 {
     SipHash hash;
-    hash.update(parts_.size());
-    for (const auto & part : parts_)
+    hash.update(std::distance(begin, end));
+    for (auto part_it = begin; part_it != end; ++part_it)
     {
-        hash.update(part.key.data(), part.key.length());
-        hash.update(part.is_nested);
-        hash.update(part.anonymous_array_level);
+        hash.update(part_it->key.data(), part_it->key.length());
+        hash.update(part_it->is_nested);
+        hash.update(part_it->anonymous_array_level);
     }
 
     UInt128 res;
@@ -73,79 +70,41 @@ UInt128 PathInData::getPartsHash(const Parts & parts_)
     return res;
 }
 
-void PathInData::writeBinary(WriteBuffer & out) const
-{
-    writeVarUInt(parts.size(), out);
-    for (const auto & part : parts)
-    {
-        writeStringBinary(part.key, out);
-        writeVarUInt(part.is_nested, out);
-        writeVarUInt(part.anonymous_array_level, out);
-    }
-}
-
-void PathInData::readBinary(ReadBuffer & in)
-{
-    size_t num_parts;
-    readVarUInt(num_parts, in);
-
-    Arena arena;
-    Parts temp_parts;
-    temp_parts.reserve(num_parts);
-
-    for (size_t i = 0; i < num_parts; ++i)
-    {
-        bool is_nested;
-        UInt8 anonymous_array_level;
-
-        auto ref = readStringBinaryInto(arena, in);
-        readVarUInt(is_nested, in);
-        readVarUInt(anonymous_array_level, in);
-
-        temp_parts.emplace_back(static_cast<std::string_view>(ref), is_nested, anonymous_array_level);
-    }
-
-    /// Recreate path and parts.
-    path = buildPath(temp_parts);
-    parts = buildParts(path, temp_parts);
-}
-
-String PathInData::buildPath(const Parts & other_parts)
+void PathInData::buildPath(const Parts & other_parts)
 {
     if (other_parts.empty())
-        return "";
+        return;
 
-    String res;
+    path.clear();
     auto it = other_parts.begin();
-    res += it->key;
+    path += it->key;
     ++it;
     for (; it != other_parts.end(); ++it)
     {
-        res += ".";
-        res += it->key;
+        path += ".";
+        path += it->key;
     }
-
-    return res;
 }
 
-PathInData::Parts PathInData::buildParts(const String & other_path, const Parts & other_parts)
+void PathInData::buildParts(const Parts & other_parts)
 {
     if (other_parts.empty())
-        return {};
+        return;
 
-    Parts res;
-    const char * begin = other_path.data();
+    parts.clear();
+    parts.reserve(other_parts.size());
+    const char * begin = path.data();
     for (const auto & part : other_parts)
     {
-        res.emplace_back(std::string_view{begin, part.key.length()}, part.is_nested, part.anonymous_array_level);
+        has_nested |= part.is_nested;
+        parts.emplace_back(std::string_view{begin, part.key.length()}, part.is_nested, part.anonymous_array_level);
         begin += part.key.length() + 1;
     }
-    return res;
 }
 
 size_t PathInData::Hash::operator()(const PathInData & value) const
 {
-    auto hash = getPartsHash(value.parts);
+    auto hash = getPartsHash(value.parts.begin(), value.parts.end());
     return hash.items[0] ^ hash.items[1];
 }
 

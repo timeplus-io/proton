@@ -42,6 +42,8 @@ public:
       */
     static BlocksWithPartition splitBlockIntoParts(const Block & block, size_t max_parts, const StorageMetadataPtr & metadata_snapshot, ContextPtr context);
 
+    static void deduceTypesOfObjectColumns(const StorageSnapshotPtr & storage_snapshot, Block & block);
+
     /** All rows must correspond to same partition.
       * Returns part with unique name starting with 'tmp_', yet not added to MergeTreeData.
       * If seq_info is not null, commit the sequence info as well. Added by proton

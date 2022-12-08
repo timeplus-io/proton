@@ -7,10 +7,8 @@
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <Storages/VirtualColumnUtils.h>
-#include <Databases/IDatabase.h>
 #include <Parsers/queryToString.h>
 
 namespace DB
@@ -235,7 +233,7 @@ void StorageSystemPartsColumns::processNextStorage(
                 subcolumn_names.push_back(name);
                 subcolumn_types.push_back(data.type->getName());
                 subcolumn_sers.push_back(ISerialization::kindToString(data.serialization->getKind()));
-            }, { serialization, column.type, nullptr, nullptr });
+            }, ISerialization::SubstreamData(serialization).withType(column.type));
 
             if (columns_mask[src_index++])
                 columns[res_index++]->insert(subcolumn_names);

@@ -15,8 +15,6 @@
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Common/typeid_cast.h>
 
-#include <Interpreters/InDepthNodeVisitor.h>
-
 #include <algorithm>
 
 /// proton: starts.
@@ -336,7 +334,7 @@ ColumnsDescriptionPtr InterpreterSelectWithUnionQuery::getExtendedObjects() cons
     for (const auto & interpreter : nested_interpreters)
         object_columns_list.emplace_back(interpreter->getExtendedObjects());
 
-    /// We only merged the same objects based on the first interpreter objects, and get the leaest common type,
+    /// We only merged the same objects based on the first interpreter objects, and get the least common type,
     /// because union/intersect/except must be same output for each interpreter, for example:
     /// interpreter-1 objects:
     /// json a => tuple(x int, y int), json b => tuple(m string)

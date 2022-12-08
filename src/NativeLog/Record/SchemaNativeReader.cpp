@@ -8,8 +8,8 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int CANNOT_READ_ALL_DATA;
-    extern const int UNSUPPORTED;
+extern const int CANNOT_READ_ALL_DATA;
+extern const int UNSUPPORTED;
 }
 }
 
@@ -17,54 +17,54 @@ namespace nlog
 {
 namespace
 {
-    ALWAYS_INLINE void readData(const DB::ISerialization & serialization, DB::ColumnPtr & column, DB::ReadBuffer & istr, size_t rows)
+ALWAYS_INLINE void readData(const DB::ISerialization & serialization, DB::ColumnPtr & column, DB::ReadBuffer & istr, size_t rows)
+{
+    DB::ISerialization::DeserializeBinaryBulkSettings settings;
+    settings.getter = [&](DB::ISerialization::SubstreamPath) -> DB::ReadBuffer * { return &istr; };
+    settings.avg_value_size_hint = 0;
+    settings.position_independent_encoding = false;
+    settings.native_format = true;
+
+    DB::ISerialization::DeserializeBinaryBulkStatePtr state;
+
+    serialization.deserializeBinaryBulkStatePrefix(settings, state);
+    serialization.deserializeBinaryBulkWithMultipleStreams(column, rows, settings, state, nullptr);
+
+    if (column->size() != rows)
+        throw DB::Exception(
+            DB::ErrorCodes::CANNOT_READ_ALL_DATA,
+            "Cannot read all data in NativeBlockInputStream. Rows read: {}. Rows expected: {}",
+            column->size(),
+            rows);
+}
+
+ALWAYS_INLINE void readDataSkip(const DB::ISerialization & serialization, DB::ReadBuffer & istr, size_t rows)
+{
+    DB::ISerialization::DeserializeBinaryBulkSettings settings;
+    settings.getter = [&](DB::ISerialization::SubstreamPath) -> DB::ReadBuffer * { return &istr; };
+    settings.avg_value_size_hint = 0;
+    settings.position_independent_encoding = false;
+    settings.native_format = true;
+
+    DB::ISerialization::DeserializeBinaryBulkStatePtr state;
+
+    serialization.deserializeBinaryBulkStatePrefix(settings, state);
+    serialization.deserializeBinaryBulkWithMultipleStreamsSkip(rows, settings, state);
+}
+
+/// Add partial deserialized subcolumns for object/tuple
+ALWAYS_INLINE void processPartialDeserializationInfo(
+    DB::MutableSerializationInfoPtr & info, const DB::ColumnWithTypeAndName & column, const std::vector<String> & subcolumns)
+{
+    assert(subcolumns.size() > 0);
+    if (isObject(column.type))
     {
-        DB::ISerialization::DeserializeBinaryBulkSettings settings;
-        settings.getter = [&](DB::ISerialization::SubstreamPath) -> DB::ReadBuffer * { return &istr; };
-        settings.avg_value_size_hint = 0;
-        settings.position_independent_encoding = false;
-        settings.native_format = true;
-
-        DB::ISerialization::DeserializeBinaryBulkStatePtr state;
-
-        serialization.deserializeBinaryBulkStatePrefix(settings, state);
-        serialization.deserializeBinaryBulkWithMultipleStreams(column, rows, settings, state, nullptr);
-
-        if (column->size() != rows)
-            throw DB::Exception(
-                DB::ErrorCodes::CANNOT_READ_ALL_DATA,
-                "Cannot read all data in NativeBlockInputStream. Rows read: {}. Rows expected: {}",
-                column->size(),
-                rows);
+        auto & info_object = assert_cast<DB::SerializationInfoObject &>(*info);
+        info_object.addPartialDeserializedSubcolumns(subcolumns);
     }
-
-    ALWAYS_INLINE void readDataSkip(const DB::ISerialization & serialization, DB::ReadBuffer & istr, size_t rows)
-    {
-        DB::ISerialization::DeserializeBinaryBulkSettings settings;
-        settings.getter = [&](DB::ISerialization::SubstreamPath) -> DB::ReadBuffer * { return &istr; };
-        settings.avg_value_size_hint = 0;
-        settings.position_independent_encoding = false;
-        settings.native_format = true;
-
-        DB::ISerialization::DeserializeBinaryBulkStatePtr state;
-
-        serialization.deserializeBinaryBulkStatePrefix(settings, state);
-        serialization.deserializeBinaryBulkWithMultipleStreamsSkip(rows, settings, state);
-    }
-
-    /// Add partial deserialized subcolumns for object/tuple
-    ALWAYS_INLINE void processPartialDeserializationInfo(
-        DB::MutableSerializationInfoPtr & info, const DB::ColumnWithTypeAndName & column, const std::vector<String> & subcolumns)
-    {
-        assert(subcolumns.size() > 0);
-        if (isObject(column.type))
-        {
-            auto & info_object = assert_cast<DB::SerializationInfoObject &>(*info);
-            info_object.addPartialDeserializedSubcolumns(subcolumns);
-        }
-        /// TODO: So far, not support subcolumns of tuple/others.
-        /// Still read all subcolumns.
-    }
+    /// TODO: So far, not support subcolumns of tuple/others.
+    /// Still read all subcolumns.
+}
 }
 
 /// @param partial_ does the wire format contains partial columns of the schema ? true means only partial columns are stored

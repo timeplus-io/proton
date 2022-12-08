@@ -36,8 +36,9 @@ public:
     static Ptr create(const ColumnPtr & column) { return ColumnMap::create(column->assumeMutable()); }
     static Ptr create(ColumnPtr && arg) { return create(arg); }
 
-    template <typename Arg, typename = typename std::enable_if<std::is_rvalue_reference<Arg &&>::value>::type>
-    static MutablePtr create(Arg && arg) { return Base::create(std::forward<Arg>(arg)); }
+    template <typename ... Args>
+    requires (IsMutableColumns<Args ...>::value)
+    static MutablePtr create(Args &&... args) { return Base::create(std::forward<Args>(args)...); }
 
     std::string getName() const override;
     const char * getFamilyName() const override { return "map"; }
@@ -92,6 +93,8 @@ public:
     bool structureEquals(const IColumn & rhs) const override;
     double getRatioOfDefaultRows(double sample_ratio) const override;
     void getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const override;
+    void finalize() override { nested->finalize(); }
+    bool isFinalized() const override { return nested->isFinalized(); }
 
     const ColumnArray & getNestedColumn() const { return assert_cast<const ColumnArray &>(*nested); }
     ColumnArray & getNestedColumn() { return assert_cast<ColumnArray &>(*nested); }
