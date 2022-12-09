@@ -1,9 +1,13 @@
 #include <Storages/MergeTree/MergeTreeSink.h>
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
-#include <Storages/MergeTree/SequenceInfo.h>
 #include <Storages/StorageMergeTree.h>
 #include <Interpreters/PartLog.h>
+#include <DataTypes/ObjectUtils.h>
 #include <base/logger_useful.h>
+
+/// proton : starts
+#include <Storages/MergeTree/SequenceInfo.h>
+///
 
 
 namespace DB
@@ -21,8 +25,9 @@ void MergeTreeSink::consume(Chunk chunk)
 {
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
     auto storage_snapshot = storage.getStorageSnapshot(metadata_snapshot);
+    if (!storage_snapshot->object_columns.get()->empty())
+        convertDynamicColumnsToTuples(block, storage_snapshot);
 
-    storage.writer.deduceTypesOfObjectColumns(storage_snapshot, block);
     auto part_blocks = storage.writer.splitBlockIntoParts(block, max_parts_per_block, metadata_snapshot, context);
 
     /// proton: starts

@@ -18,7 +18,6 @@ class DataTypeObject : public IDataType
 private:
     String schema_format;
     bool is_nullable;
-    SerializationPtr default_serialization;
 
 public:
     DataTypeObject(const String & schema_format_, bool is_nullable_);
@@ -37,9 +36,11 @@ public:
     bool haveSubtypes() const override { return false; }
     bool equals(const IDataType & rhs) const override;
     bool isParametric() const override { return true; }
+    bool hasDynamicSubcolumns() const override { return true; }
 
     SerializationPtr doGetDefaultSerialization() const override;
     /// proton: starts.
+    SerializationInfoPtr getSerializationInfo(const IColumn & column) const override;
     SerializationPtr getSerialization(const SerializationInfo & info) const override;
     MutableSerializationInfoPtr createSerializationInfo(const SerializationInfo::Settings & settings) const override;
     /// proton: ends.

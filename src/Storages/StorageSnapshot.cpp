@@ -63,7 +63,7 @@ std::optional<NameAndTypePair> StorageSnapshot::tryGetColumn(const GetColumnsOpt
     /// proton : starts.
     auto return_extended_objects = options.with_extended_objects || force_use_extended_objects;
     /// Either the column is not an object column or it is not required to return extended object. Then return as it is
-    if (column && (!isObject(column->type) || !return_extended_objects))
+    if (column && (!column->type->hasDynamicSubcolumns() || !return_extended_objects))
         return column;
 
     if (return_extended_objects || options.with_subcolumns)

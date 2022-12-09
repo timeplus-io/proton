@@ -110,7 +110,7 @@ void registerDataTypeDateTime(DataTypeFactory & factory)
     factory.registerDataType("datetime32", create32, DataTypeFactory::CaseInsensitive);
     factory.registerDataType("datetime64", create64, DataTypeFactory::CaseInsensitive);
 
-    factory.registerAlias("TIMESTAMP", "datetime", DataTypeFactory::CaseInsensitive);
+    /// factory.registerAlias("TIMESTAMP", "datetime", DataTypeFactory::CaseInsensitive);
 }
 
 }

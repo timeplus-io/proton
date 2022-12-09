@@ -42,8 +42,8 @@ struct ASTExistsDictionaryQueryIDAndQueryNames
 struct ASTShowCreateTableQueryIDAndQueryNames
 {
     static constexpr auto ID = "ShowCreateTableQuery";
-    static constexpr auto Query = "SHOW CREATE TABLE";
-    static constexpr auto QueryTemporary = "SHOW CREATE TEMPORARY TABLE";
+    static constexpr auto Query = "SHOW CREATE STREAM";
+    static constexpr auto QueryTemporary = "SHOW CREATE TEMPORARY STREAM";
 };
 
 struct ASTShowCreateViewQueryIDAndQueryNames
@@ -72,8 +72,8 @@ struct ASTShowCreateDictionaryQueryIDAndQueryNames
 struct ASTDescribeQueryExistsQueryIDAndQueryNames
 {
     static constexpr auto ID = "DescribeQuery";
-    static constexpr auto Query = "DESCRIBE TABLE";
-    static constexpr auto QueryTemporary = "DESCRIBE TEMPORARY TABLE";
+    static constexpr auto Query = "DESCRIBE STREAM";
+    static constexpr auto QueryTemporary = "DESCRIBE TEMPORARY STREAM";
 };
 
 using ASTExistsTableQuery = ASTQueryWithTableAndOutputImpl<ASTExistsTableQueryIDAndQueryNames>;
@@ -127,7 +127,7 @@ protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "")
-                      << "DESCRIBE TABLE" << (settings.hilite ? hilite_none : "");
+                      << "DESCRIBE STREAM" << (settings.hilite ? hilite_none : "");
         table_expression->formatImpl(settings, state, frame);
     }
 

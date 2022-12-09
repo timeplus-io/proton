@@ -239,7 +239,7 @@ ColumnDependencies StorageInMemoryMetadata::getColumnDependencies(const NameSet 
         auto required_columns = expression->getRequiredColumns();
         for (const auto & dependency : required_columns)
         {
-            if (updated_columns.count(dependency))
+            if (updated_columns.contains(dependency))
             {
                 to_set.insert(required_columns.begin(), required_columns.end());
                 return true;
@@ -516,7 +516,7 @@ void StorageInMemoryMetadata::check(const NamesAndTypesList & provided_columns) 
 
         const auto * available_type = it->getMapped();
 
-        if (!isObject(*available_type)
+        if (!available_type->hasDynamicSubcolumns()
             && !column.type->equals(*available_type)
             && !isCompatibleEnumTypes(available_type, column.type.get()))
             throw Exception(
@@ -565,7 +565,7 @@ void StorageInMemoryMetadata::check(const NamesAndTypesList & provided_columns, 
         const auto * provided_column_type = it->getMapped();
         const auto * available_column_type = jt->getMapped();
 
-        if (!isObject(*provided_column_type)
+        if (!provided_column_type->hasDynamicSubcolumns()
             && !provided_column_type->equals(*available_column_type)
             && !isCompatibleEnumTypes(available_column_type, provided_column_type))
             throw Exception(
@@ -595,7 +595,7 @@ void StorageInMemoryMetadata::check(const Block & block, bool need_all) const
 
     for (const auto & column : block)
     {
-        if (names_in_block.count(column.name))
+        if (names_in_block.contains(column.name))
             throw Exception("Duplicate column " + column.name + " in block", ErrorCodes::DUPLICATE_COLUMN);
 
         names_in_block.insert(column.name);
@@ -609,7 +609,7 @@ void StorageInMemoryMetadata::check(const Block & block, bool need_all) const
                 listOfColumns(available_columns));
 
         const auto * available_type = it->getMapped();
-        if (!isObject(*available_type)
+        if (!available_type->hasDynamicSubcolumns()
             && !column.type->equals(*available_type)
             && !isCompatibleEnumTypes(available_type, column.type.get()))
             throw Exception(
@@ -624,7 +624,7 @@ void StorageInMemoryMetadata::check(const Block & block, bool need_all) const
     {
         for (const auto & available_column : available_columns)
         {
-            if (!names_in_block.count(available_column.name))
+            if (!names_in_block.contains(available_column.name))
                 throw Exception("Expected column " + available_column.name, ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
         }
     }

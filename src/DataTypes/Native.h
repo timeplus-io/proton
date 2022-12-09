@@ -53,7 +53,7 @@ static inline llvm::Type * toNativeType(llvm::IRBuilderBase & builder, const IDa
         return builder.getInt8Ty();
     else if (data_type.isInt16() || data_type.isUInt16() || data_type.isDate())
         return builder.getInt16Ty();
-    else if (data_type.isInt32() || data_type.isUInt32() || data_type.isDateTime())
+    else if (data_type.isInt32() || data_type.isUInt32() || data_type.isDate32() || data_type.isDateTime())
         return builder.getInt32Ty();
     else if (data_type.isInt64() || data_type.isUInt64())
         return builder.getInt64Ty();
@@ -117,7 +117,8 @@ static inline bool canBeNativeType(const IDataType & type)
         return canBeNativeType(*data_type_nullable.getNestedType());
     }
 
-    return data_type.isNativeInt() || data_type.isNativeUInt() || data_type.isFloat() || data_type.isDate() || data_type.isEnum();
+    return data_type.isNativeInt() || data_type.isNativeUInt() || data_type.isFloat() || data_type.isDate()
+        || data_type.isDate32() || data_type.isDateTime() || data_type.isEnum();
 }
 
 static inline llvm::Type * toNativeType(llvm::IRBuilderBase & builder, const DataTypePtr & type)
@@ -207,7 +208,7 @@ static inline llvm::Value * nativeCast(llvm::IRBuilder<> & b, const DataTypePtr 
     return nativeCast(b, from, value, n_to);
 }
 
-static inline std::pair<llvm::Value *, llvm::Value *> nativeCastToCommon(llvm::IRBuilder<> & b, const DataTypePtr & lhs_type, llvm::Value * lhs, const DataTypePtr & rhs_type, llvm::Value * rhs)
+static inline std::pair<llvm::Value *, llvm::Value *> nativeCastToCommon(llvm::IRBuilder<> & b, const DataTypePtr & lhs_type, llvm::Value * lhs, const DataTypePtr & rhs_type, llvm::Value * rhs) /// NOLINT
 {
     llvm::Type * common;
 
@@ -223,7 +224,7 @@ static inline std::pair<llvm::Value *, llvm::Value *> nativeCastToCommon(llvm::I
         size_t rhs_bit_width = rhs->getType()->getIntegerBitWidth() + (!rhs_is_signed && lhs_is_signed);
 
         size_t max_bit_width = std::max(lhs_bit_width, rhs_bit_width);
-        common = b.getIntNTy(max_bit_width);
+        common = b.getIntNTy(static_cast<unsigned>(max_bit_width));
     }
     else
     {
@@ -274,7 +275,7 @@ static inline llvm::Constant * getColumnNativeValue(llvm::IRBuilderBase & builde
     {
         return llvm::ConstantInt::get(type, column.getUInt(index));
     }
-    else if (column_data_type.isNativeInt() || column_data_type.isEnum())
+    else if (column_data_type.isNativeInt() || column_data_type.isEnum() || column_data_type.isDate32())
     {
         return llvm::ConstantInt::get(type, column.getInt(index));
     }

@@ -11,8 +11,8 @@
 #include <Formats/NativeWriter.h>
 
 #include <Common/typeid_cast.h>
-#include <DataTypes/DataTypeLowCardinality.h>
 #include <Columns/ColumnSparse.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 
 namespace DB
@@ -102,7 +102,7 @@ void NativeWriter::write(const Block & block)
             mark.offset_in_decompressed_block = ostr_concrete->getRemainingBytes();
         }
 
-        ColumnWithTypeAndName column = block.safeGetByPosition(i);
+        auto column = block.safeGetByPosition(i);
 
         /// Name
         writeStringBinary(column.name, ostr);
@@ -112,12 +112,7 @@ void NativeWriter::write(const Block & block)
 
         writeStringBinary(type_name, ostr);
 
-        const auto * aggregate_function_data_type = typeid_cast<const DataTypeAggregateFunction *>(column.type.get());
-        if (aggregate_function_data_type && aggregate_function_data_type->isVersioned())
-        {
-            auto version = aggregate_function_data_type->getVersionFromRevision(client_revision);
-            aggregate_function_data_type->setVersion(version, /* if_empty */true);
-        }
+        setVersionToAggregateFunctions(column.type, true, client_revision);
 
         /// Serialization. Dynamic, if client supports it.
         SerializationPtr serialization;

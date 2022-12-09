@@ -54,7 +54,6 @@ void SchemaNativeWriter::write(const DB::Block & block)
 
     for (const auto & column : block)
     {
-        /// Serialization. Dynamic, if client supports it.
         auto info = column.type->getSerializationInfo(*column.column);
         auto serialization = column.type->getSerialization(*info);
         bool has_custom = info->hasCustomSerialization();

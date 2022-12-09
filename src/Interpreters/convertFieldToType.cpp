@@ -448,7 +448,7 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
         try
         {
             /// proton : starts. Best effort parsing
-            type_to_parse->getDefaultSerialization()->deserializeWholeText(*col, in_buffer, FormatSettings{.date_time_input_format = FormatSettings::DateTimeInputFormat::BestEffort});
+            type_to_parse->getDefaultSerialization()->deserializeWholeText(*col, in_buffer, FormatSettings{.date_time_input_format = FormatSettings::DateTimeInputFormat::BestEffortUS});
             /// proton : ends
         }
         catch (Exception & e)

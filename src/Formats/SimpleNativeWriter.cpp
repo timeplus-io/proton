@@ -70,12 +70,7 @@ void SimpleNativeWriter::write(const Block & block)
         String type_name = column.type->getName();
         writeStringBinary(type_name, ostr);
 
-        const auto * aggregate_function_data_type = typeid_cast<const DataTypeAggregateFunction *>(column.type.get());
-        if (aggregate_function_data_type && aggregate_function_data_type->isVersioned())
-        {
-            auto version = aggregate_function_data_type->getVersionFromRevision(client_revision);
-            aggregate_function_data_type->setVersion(version, /* if_empty */ true);
-        }
+        setVersionToAggregateFunctions(column.type, true, client_revision);
 
         /// Serialization. Dynamic, if client supports it.
         auto info = column.type->getSerializationInfo(*column.column);
