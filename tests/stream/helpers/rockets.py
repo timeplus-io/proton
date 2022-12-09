@@ -44,7 +44,8 @@
 #  - INPUT_TABLE_ERROR FATAL
 #  - INPUT_DEPENDS_ON_ERROR FATAL
 #  - INPUT_DEPENDS_ON_STREAM_ERROR FATAL
-#  TEST_SUITE_ENV_SETUP_ERROR
+#  TEST_SUITE_ENV_SETUP_ERROR FATAL
+#  TEST_SUITE_TIMEOUT_ERROR FATAL
 #  import global_settigns
 
 from cgi import test
@@ -56,6 +57,7 @@ import random
 import requests
 import uuid
 import multiprocessing as mp
+import threading
 from clickhouse_driver import Client
 from clickhouse_driver import errors
 from requests.api import request
@@ -82,6 +84,8 @@ VIEW_ONLY_NODE_FIRST = "view_only_node_first"
 HOST_ALL_NODE_FIRST = "host_all_node_first"
 HOST_NONE_NODE_FIRST = "host_none_node_first"
 
+DEFAULT_TEST_SUITE_TIMEOUT = 1200 #seconds
+DEFAULT_CASE_TIMEOUT = 60 #seconds, todo: case level timeout guardian
 
 # alive = mp.Value('b', True)
 
@@ -190,7 +194,10 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     test_suite_query_reulst_queue_list = (
         []
     )  # a list of map of test_sutie_name and test_suite_query_result_queue
+    proton_ci_mode = os.getenv("PROTON_CI_MODE", "Github")
     proton_setting = os.getenv("PROTON_SETTING", "default")
+    test_suite_timeout = os.getenv("TEST_SUITE_TIMEOUT", DEFAULT_TEST_SUITE_TIMEOUT) # get TEST_SUITE_TIMEOUT env var which is set by ci_runner.py, if no env var get, 20mins for test suite execution timeout, this could be set in tests.json too.
+    test_case_timeout = os.getenv("TEST_CASE_TIMEOUT", DEFAULT_CASE_TIMEOUT)
     proton_cluster_query_route_mode = os.getenv(
         "PROTON_CLUSTER_QUERY_ROUTE_MODE", "default"
     )
@@ -216,7 +223,10 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     if config == None:
         raise Exception("No config env vars nor config file")
 
+    config["proton_ci_mode"] = proton_ci_mode
     config["proton_setting"] = proton_setting  # put proton_setting into config
+    config["test_suite_timeout"] =test_suite_timeout # put test_suite_timeout into config
+    config["test_case_timeout"] = test_case_timeout
     config["proton_create_stream_shards"] = proton_create_stream_shards
     config["proton_create_stream_replicas"] = proton_create_stream_replicas
 
@@ -283,7 +293,7 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     # query_exe_client = mp.Process(target=query_execute_new, args=(config, query_exe_queue, query_results_queue))
 
     rockets_context = {
-        "proton_setting": proton_setting,  # todo: refactor, remove this, the proton_setting is only readed from config
+        #"proton_setting": proton_setting,  # todo: refactor, remove this, the proton_setting is only readed from config
         "config": config,
         "test_suite_run_ctl_queue": test_suite_run_ctl_queue,
         "test_suite_result_done_queue": test_suite_result_done_queue,
@@ -986,9 +996,9 @@ def query_run_py(
             )
 
             settings = {"max_block_size": 100000}
-            logger.debug(
-                f"pyclient create, proton_server = {proton_server}, port = {proton_server_native_port}"
-            )
+            # logger.debug(
+            #     f"pyclient create, proton_server = {proton_server}, port = {proton_server_native_port}"
+            # )
             pyclient = Client(
                 host=proton_server, port=proton_server_native_port
             )  # create python client
@@ -1310,7 +1320,7 @@ def query_run_py(
             message_2_send = json.dumps(query_results)
             query_results_queue.put(message_2_send)
 
-        logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_py: query_results_queue.put done.")
+        #logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_py: query_results_queue.put done.")
 
         if run_mode == "process" or query_type == "stream":
             # logger.debug(f"query_run_py: query_id = {query_id}, query={query}, query_results = {query_results}")
@@ -1382,9 +1392,9 @@ def query_run_py(
             if query_results_queue != None:
                 query_results_queue.put(message_2_send)            
             if run_mode == "process" or query_type == "stream":
-                logger.debug(
-                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id},  query_id = {query_id}, query={query}, query_results = {query_results}"
-                )
+                # logger.debug(
+                #     f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id},  query_id = {query_id}, query={query}, query_results = {query_results}"
+                # )
                 if telemetry_shared_list != None:
                     telemetry_shared_list.append(
                         {
@@ -1451,9 +1461,9 @@ def query_run_py(
                     # client.disconnect()
 
                 if run_mode == "process" or query_type == "stream":
-                    logger.debug(
-                        f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id},  query_id = {query_id}, query={query}, query_results = {query_results}"
-                    )
+                    # logger.debug(
+                    #     f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id},  query_id = {query_id}, query={query}, query_results = {query_results}"
+                    # )
                     query_run_complete = datetime.datetime.now()
                     time_spent = query_run_complete - query_run_start
                     time_spent_ms = time_spent.total_seconds() * 1000
@@ -1486,9 +1496,9 @@ def query_run_py(
                     query_results_queue.put(message_2_send)
 
             if run_mode == "process" or query_type == "stream":
-                logger.debug(
-                    f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_id = {query_id}, query={query}, query_results = {query_results}"
-                )
+                # logger.debug(
+                #     f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_id = {query_id}, query={query}, query_results = {query_results}"
+                # )
                 # query_run_complete = datetime.datetime.now()
                 # time_spent = query_run_complete - query_run_start
                 # time_spent_ms = time_spent.total_seconds() * 1000
@@ -1570,9 +1580,9 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
     query_run_count = 3000  # limit the query run count to 1000,
     query_result_list = []
     # max query_run_count, hard code right now, could be sent from query_walk_through (for example based on total statements no.)
-    logger.debug(
-        f"proton_server = {proton_server},proton_server_native_port = {proton_server_native_port}"
-    )
+    # logger.debug(
+    #     f"proton_server = {proton_server},proton_server_native_port = {proton_server_native_port}"
+    # )
     client = Client(
         host=proton_server, port=proton_server_native_port
     )  # create python client
@@ -1816,14 +1826,14 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                                 user=user_name,
                                 password=password,
                             )
-                            logger.debug(
-                                f"statement_client=Client(host={proton_server}, port={proton_server_native_port}, user={user_name}, password={password})"
-                            )
+                            # logger.debug(
+                            #     f"statement_client=Client(host={proton_server}, port={proton_server_native_port}, user={user_name}, password={password})"
+                            # )
                         else:
                             statement_client = client
-                            logger.debug(
-                                f"proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}, statement_client={client}, statement_2_run={statement_2_run}"
-                            )
+                            # logger.debug(
+                            #     f"proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}, statement_client={client}"
+                            # )
                         logger.debug(
                             f"statement_2_run = {statement_2_run}, settings= {settings}, config={config}, statement_client={statement_client}"
                         )
@@ -1908,7 +1918,7 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
         process = proc.get("process")
         process.terminate()
         #process.join()
-    print(f"query_execute: process.join() done.")
+    logger.info(f"query_execute: all processes terminated.")
 
 
     count = 0  # for avg_spent_time_ms of query_run statistics
@@ -2762,13 +2772,15 @@ def test_suite_env_setup(client, config, test_suite_name, test_suite_config):
                 for statement_2_run in setup_statements:
                     settings = {"max_block_size": 100000}
                     query_id = statement_2_run.get("query_id")
-                    query_id = statement_2_run.get("query_id")
                     if query_id is None:
                         query_id = str(uuid.uuid1())
                         # query_id = random.randint(
                         #    1, 10000
                         # )  # unique query id, if no query_id specified in tests.json
+                    statement_2_run["test_suite_name"] = test_suite_name
+                    statement_2_run["test_id"] = test_id
                     statement_2_run["query_id"] = query_id
+                    
                     query_results = query_run_py(
                         statement_2_run,
                         settings,
@@ -3042,7 +3054,6 @@ def test_case_collect(test_suite, tests_2_run, test_ids_set, proton_setting):
 
 
 def test_suite_run(
-    proton_setting,
     config,
     test_suite_run_ctl_queue,
     test_suite_result_done_queue,
@@ -3091,7 +3102,35 @@ def test_suite_run(
     query_exe_client.start()  # start the query execute process
     logger.debug(f"query_exe_client: {query_exe_client} started.")
 
+    
+    proton_setting = config.get("proton_setting")
+    test_suite_timeout = config.get("test_suite_timeout")
+    if test_suite_timeout is None or test_suite_timeout == DEFAULT_TEST_SUITE_TIMEOUT:
+        test_suite_timeout = test_suite.get("test_suite_timeout")
+        if test_suite_timeout is None:
+            test_suite_timeout = DEFAULT_TEST_SUITE_TIMEOUT
     rest_setting = config.get("rest_setting")
+
+    test_case_timeout = config.get("test_case_timeout")
+    if test_case_timeout is None or test_case_timeout == DEFAULT_CASE_TIMEOUT:
+        test_case_timeout = test_suite.get("test_case_timeout")
+        if test_case_timeout is None:
+            test_case_timeout = DEFAULT_CASE_TIMEOUT
+    rest_setting = config.get("rest_setting")
+
+
+    test_suite_timeout_hit = threading.Event() #set the test_suite_timeout_hit flag as False and start a timer to set this flag
+    def timeout_flag(timeout_hit_event): #timeout_hit_event is a threading.Event
+        timeout_hit_event.set()
+        query_exe_client.terminate()
+        message_2_send = "case_result_done"
+        q_exec_client_conn.send(message_2_send)
+        q_exec_client_conn.send("tear_down_done")
+
+        print(f"TEST_SUITE_TIME_OUT_ERROR FATAL and set the treading event and stop query_execute process and send case_result_done to pipe")
+    
+    timer = threading.Timer(test_suite_timeout, timeout_flag, [test_suite_timeout_hit])
+    timer.start()
     # proton_server = config.get("proton_server")
     # proton_server_native_ports = config.get("proton_server_native_port")
     # proton_server_native_ports = proton_server_native_ports.split(",")
@@ -3205,7 +3244,11 @@ def test_suite_run(
                         f"test_suite_name = {test_suite_name}, no test_suite_config, bypass test_suite_env_setup"
                     )
                 i = 0
-                while i < len(test_run_list):
+                logger.debug(f"test_suite_timeout_hit.is_set() = {test_suite_timeout_hit.is_set()}")
+                if test_suite_timeout_hit.is_set():
+                    logger.info(f"raise TEST_SUITE_TIMEOUT_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_timeout = {test_suite_timeout} hit")
+                    raise Exception(f"TEST_SUITE_TIMEOUT_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_timeout = {test_suite_timeout} hit")                
+                while i < len(test_run_list) and not test_suite_timeout_hit.is_set():
                     test_case = test_run_list[i]
                     statements_results = []
                     inputs_record = []
@@ -3276,6 +3319,7 @@ def test_suite_run(
                     query_conn.send("test_steps_done")
                     logger.debug("test_steps_done sent to query_execute")
 
+
                     message_recv = (
                         query_conn.recv()
                     )  # wait the query_execute to send "case_result_done" to indicate all the statements in pipe are consumed.
@@ -3284,6 +3328,7 @@ def test_suite_run(
                         f"test_suite_run: mssage_recv from query_execute = {message_recv}"
                     )
                     assert message_recv == "case_result_done"
+                    
 
                     while (
                         not query_results_queue.empty()
@@ -3294,7 +3339,7 @@ def test_suite_run(
                             f"test_suite_run: message_recv of query_results_queue.get() = {message_recv}"
                         )
                         query_results = json.loads(message_recv)
-                        print(f"query_result recved in test_suite_run = {query_results}")
+                        print(f"query_result recved in test_suite_run")
                         query_state = query_results.get("query_state")
                         if query_state is not None and (query_state == 'crash' or query_state== 'fatal'): #when Connection related error happens, it will be set in the query_state of the query results
                             error = query_results.get("error")
@@ -3334,8 +3379,11 @@ def test_suite_run(
                     
                     i += 1
                     test_id_run += 1
+                    print(f"test_suite_timeout_hit = {test_suite_timeout_hit}")
 
-                
+                    if test_suite_timeout_hit.is_set():
+                        logger.info(f"raise TEST_SUITE_TIMEOUT_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_timeout = {test_suite_timeout} hit")
+                        raise Exception(f"TEST_SUITE_TIMEOUT_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_timeout = {test_suite_timeout} hit")
                 test_suite_result_summary = {
                     "test_suite_name": test_suite_name,
                     "test_run_list_len": test_run_list_len,
@@ -3370,6 +3418,7 @@ def test_suite_run(
         
     
     TESTS_QUERY_RESULTS = test_sets
+    timer.cancel() #test_suite execution done, cancel timer otherwise the process will not terminate until timer done
     query_conn.send("tear_down")
     message_recv = query_conn.recv()
     query_results_queue.close()
@@ -3407,7 +3456,7 @@ def test_suite_run(
     logger.info(
         f"table drop {count} times, total time spent = {time_spent_drop}ms, avg_time_spent_create = { avg_time_spent_drop}"
     )
-
+    
     return (test_run_list_len_total, test_sets)
 
 
@@ -3423,9 +3472,11 @@ def rockets_run(test_context):
     else:
         logging_level = "DEBUG"
     docker_compose_file = test_context.get("docker_compose_file")
-    proton_setting = test_context.get("proton_setting")
+    #proton_setting = test_context.get("proton_setting")
     config = test_context.get("config")
-    proton_ci_mode = os.getenv("PROTON_CI_MODE", "Github")
+    proton_setting = config.get("proton_setting")
+    #proton_ci_mode = os.getenv("PROTON_CI_MODE", "Github")
+    proton_ci_mode = config.get("proton_ci_mode")
     test_suites_selected_sets = None
     test_suites_selected_sets = test_context.get("test_suites_selected_sets")
     test_suite_run_ctl_queue = test_context.get("test_suite_run_ctl_queue")
@@ -3453,7 +3504,7 @@ def rockets_run(test_context):
         test_suite_runner = mp.Process(
             target=test_suite_run,
             args=(
-                proton_setting,
+                #proton_setting,
                 config,
                 test_suite_run_ctl_queue,
                 test_suite_result_done_queue,
@@ -3499,7 +3550,8 @@ def rockets_run(test_context):
             test_suite_result_collect_done += 1
             time.sleep(random.random())
             test_sets_recvd_len = len(test_sets_recvd)
-            print(f"test_suite_name_recvd: {test_suite_name_recvd}")
+            logger.info(f"test_suite_name_recvd: {test_suite_name_recvd}")
+            logger.debug(f"test_suite_result_collect_done = {test_suite_result_collect_done},len(test_suites_selected_sets) = {len(test_suites_selected_sets)}")
             if test_sets_recvd_len != test_run_list_len_recvd:
                 print(
                     f"test_suite_name_recvd = {test_suite_name_recvd}, test run list length mismatch with test sets,test_sets_recvd_len = {test_sets_recvd_len}, test_run_list_len_recvd = {test_run_list_len_recvd}, test_run_list_recvd = {test_run_list_recvd}, test_sets_recvd = {test_sets_recvd}"

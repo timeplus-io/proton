@@ -1527,9 +1527,11 @@ def env_setup(client, config, test_suite_config, env_compose_file, proton_ci_mod
     logger.debug(f"env_setup: setup = {setup}")
     if setup != None:
         setup_inputs = setup.get("inputs")
+        test_suite_name = 'setup'
+        test_id = 'setup'
         if setup_inputs != None:
             setup_input_res = input_walk_through_rest(
-                config, setup_inputs, table_schemas
+                config, test_suite_name, test_id, setup_inputs, table_schemas
             )
         setup_statements = setup.get(
             "statements"

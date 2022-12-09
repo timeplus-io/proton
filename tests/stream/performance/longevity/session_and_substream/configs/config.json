@@ -1,33 +1,33 @@
 {
     "rest_setting": {
-        "table_ddl_url": "http://localhost:3218/proton/v1/ddl/streams",
-        "ingest_url": "http://localhost:3218/proton/v1/ingest/streams",
-        "query_url": "http://localhost:3218/proton/v1/search",
-        "health_check_url": "http://localhost:3218/proton/ping",
-        "info_url": "http://localhost:3218/proton/info",
+        "table_ddl_url": "http://proton_host:3218/proton/v1/ddl/streams",
+        "ingest_url": "http://proton_host:3218/proton/v1/ingest/streams",
+        "query_url": "http://proton_host:3218/proton/v1/search",
+        "health_check_url": "http://proton_host:3218/proton/ping",
+        "info_url": "http://proton_host:3218/proton/info",
         "params": {
             "headers": {
                 "Content-Type": "application/json"
             }
         }
     },
-    "proton_server": "localhost",
+    "proton_server": "proton_host",
     "proton_server_native_port": "8463",
     "setting_1": {
         "db_engine":"proton",
         "rest_setting": {
-            "table_ddl_url": "http://localhost:3218/proton/v1/ddl/streams",
-            "ingest_url": "http://localhost:3218/proton/v1/ingest/streams",
-            "query_url": "http://localhost:3218/proton/v1/search",
-            "health_check_url": "http://localhost:3218/proton/ping",
-            "info_url": "http://localhost:3218/proton/info",
+            "table_ddl_url": "http://proton_host:3218/proton/v1/ddl/streams",
+            "ingest_url": "http://proton_host:3218/proton/v1/ingest/streams",
+            "query_url": "http://proton_host:3218/proton/v1/search",
+            "health_check_url": "http://proton_host:3218/proton/ping",
+            "info_url": "http://proton_host:3218/proton/info",
             "params": {
                 "headers": {
                     "Content-Type": "application/json"
                 }
             }
         },
-        "proton_server": "localhost",
+        "proton_server": "proton_host",
         "proton_server_native_port": "8463"
     },
     "setting_mz": {
