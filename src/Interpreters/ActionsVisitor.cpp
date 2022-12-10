@@ -665,6 +665,7 @@ void ActionsMatcher::visit(const ASTPtr & ast, Data & data)
         for (auto & child : ast->children)
             visit(child, data);
 
+        /// FIXME, why using column nothing
         data.addColumn(ColumnWithTypeAndName{ColumnNothing::create(0), std::make_shared<DataTypeNothing>(), ast->getColumnName()});
     }
     /// proton: ends.

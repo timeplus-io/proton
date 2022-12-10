@@ -274,7 +274,7 @@ static void logException(ContextPtr context, QueryLogElement & elem)
         comment = fmt::format(" (comment: {})", elem.log_comment);
 
     if (elem.stack_trace.empty())
-        LOG_ERROR(
+        LOG_WARNING(
             &Poco::Logger::get("executeQuery"),
             "{} (from {}){} (in query: {})",
             elem.exception,

@@ -116,10 +116,10 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionParseDateTime32BestEffortOrNull>();
     factory.registerFunction<FunctionParseDateTime64BestEffort>();
     factory.registerFunction<FunctionParseDateTime64BestEffortOrZero>();
-    /// proton: starts
-    factory.registerFunction<FunctionParseDateTime64BestEffortUSOrZero>();
-    /// proton: ends
     factory.registerFunction<FunctionParseDateTime64BestEffortOrNull>();
+    factory.registerFunction<FunctionParseDateTime64BestEffortUS>();
+    factory.registerFunction<FunctionParseDateTime64BestEffortUSOrZero>();
+    factory.registerFunction<FunctionParseDateTime64BestEffortUSOrNull>();
 
     factory.registerFunction<FunctionConvert<DataTypeInterval, NameToIntervalSecond, PositiveMonotonicity>>();
     factory.registerFunction<FunctionConvert<DataTypeInterval, NameToIntervalMinute, PositiveMonotonicity>>();

@@ -657,6 +657,12 @@ struct WindowImpl<SESSION>
 };
 
 template <>
+bool FunctionWindow<SESSION>::useDefaultImplementationForNothing() const
+{
+    return false;
+}
+
+template <>
 ColumnNumbers FunctionWindow<SESSION>::getArgumentsThatAreAlwaysConstant() const
 {
     return {1};

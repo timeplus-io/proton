@@ -3,21 +3,19 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Columns/ColumnsNumber.h>
 
-
 namespace DB
 {
 namespace
 {
 
-/// Returns 1 if and only if the argument is constant expression.
-/// This function exists for development, debugging and demonstration purposes.
-class FunctionIsConstant : public IFunction
+/// Return true if the column is nullable.
+class FunctionIsNullable : public IFunction
 {
 public:
-    static constexpr auto name = "is_constant";
+    static constexpr auto name = "is_nullable";
     static FunctionPtr create(ContextPtr)
     {
-        return std::make_shared<FunctionIsConstant>();
+        return std::make_shared<FunctionIsNullable>();
     }
 
     String getName() const override
@@ -29,7 +27,11 @@ public:
 
     bool useDefaultImplementationForNothing() const override { return false; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     bool useDefaultImplementationForLowCardinalityColumns() const override { return false; }
+
+    ColumnNumbers getArgumentsThatDontImplyNullableReturnType(size_t /*number_of_arguments*/) const override { return {0}; }
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
 
@@ -40,22 +42,21 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const override
     {
-        return std::make_shared<DataTypeBool>();
+        return std::make_shared<DataTypeUInt8>();
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         const auto & elem = arguments[0];
-        return ColumnBool::create(input_rows_count, isColumnConst(*elem.column));
+        return ColumnUInt8::create(input_rows_count, isColumnNullable(*elem.column) || elem.type->isLowCardinalityNullable());
     }
 };
 
 }
 
-void registerFunctionIsConstant(FunctionFactory & factory)
+void registerCastOverloadResolvers(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionIsConstant>();
+    factory.registerFunction<FunctionIsNullable>();
 }
-
 }
 
