@@ -21,7 +21,6 @@ cur_dir = os.path.dirname(os.path.abspath(__file__))
 config_file_path = f"{cur_dir}/test_stream_smoke/configs/config.json"
 
 docker_compose_file_path = f"{cur_dir}/test_stream_smoke/configs/docker-compose.yaml"
-DEFAULT_TEST_SUITE_TIMEOUT = 1800 #seconds
 
 
 def compress_logs(self, dir, relpaths, result_path):
@@ -271,7 +270,6 @@ if __name__ == "__main__":
                 "cluster_query_node=",
                 "create_stream_shards=",
                 "create_stream_replicas=",
-                "test_suite_timeout=",
             ],
         )
     except (getopt.GetoptError) as error:
@@ -281,7 +279,6 @@ if __name__ == "__main__":
         )
         sys.exit(1)
     print(f"opts = {opts}")
-    test_suite_timeout = DEFAULT_TEST_SUITE_TIMEOUT
     for name, value in opts:
         if name in ("--local", "-l"):
             os.environ["PROTON_CI_MODE"] = "local"
@@ -320,13 +317,10 @@ if __name__ == "__main__":
 
         if name in ("--create_stream_replicas"):
             os.environ["PROTON_CREATE_STREAM_REPLICAS"] = value
-        
-        if name in ("--test_suite_timeout"):
-            if str(value).isdigit():
-                os.environ["TEST_SUITE_TIMEOUT"] = value
-                test_suite_timeout = int(value)
 
-
+    print(
+        f"ci_runner: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}"
+    )
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.formatter = formatter
     logger.addHandler(console_handler)
@@ -337,9 +331,7 @@ if __name__ == "__main__":
 
     i = 0
 
-    logger.info(
-        f"ci_runner: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}, test_suite_timeout = {test_suite_timeout} starts"
-    )
+    logger.debug(f"settings = {settings}")
 
     if run_mode == "local":
         env_docker_compose_res = True

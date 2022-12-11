@@ -66,8 +66,8 @@
                 "ttl_expression": "to_datetime(_tp_time) + INTERVAL 1 HOUR",                                
                 "columns": [
                     {
-                        "name": "json",
-                        "type": "json"
+                        "name": "json_string",
+                        "type": "string"
                     },
                     {
                         "name": "perf_event_time",
@@ -113,9 +113,9 @@
 
                 {"inputs": [
 
-                    {"table_name": "input_stress_event_s","input_id": 615, "table_schema_ref":"input_stress_event_s", "client":"rest", "workers":1, "data_source":"file", "data_set_path":"event", "data_set_file": "event_github.json", "data_set_file_format": "json", "json_column": "json_string", "table_schema_file":"table_schema.json -todo", 
+                    {"table_name": "input_stress_event_s","input_id": 615, "table_schema_ref":"input_stress_event_s", "client":"rest", "workers":10, "data_source":"file", "data_set_path":"event", "data_set_file": "event_github.json", "data_set_file_format": "json", "json_column": "json_string", "table_schema_file":"table_schema.json -todo", 
                         "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":100, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
-                    {"table_name": "input_stress_event_s1","input_id": 616, "table_schema_ref":"input_stress_event_s1", "workers":1, "data_source":"file", "data_set_path":"event", "data_set_file": "event_github.json", "data_set_file_format": "json", "json_column": "json", "table_schema_file":"table_schema.json -todo", 
+                    {"table_name": "input_stress_event_s1","input_id": 616, "table_schema_ref":"input_stress_event_s1", "workers":1, "data_source":"file", "data_set_path":"event", "data_set_file": "event_github.json", "data_set_file_format": "json", "json_column": "json_string", "table_schema_file":"table_schema.json -todo", 
                         "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":100, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}                           
 
                 ]}
