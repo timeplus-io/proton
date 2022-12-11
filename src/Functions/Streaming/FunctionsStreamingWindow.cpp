@@ -183,6 +183,10 @@ struct WindowImpl<TUMBLE>
 
         switch (std::get<0>(interval))
         {
+            /// FIXME, TIME
+            case IntervalKind::Nanosecond:
+            case IntervalKind::Microsecond:
+            case IntervalKind::Millisecond:
             case IntervalKind::Second:
                 return executeTumbleDateTime64<IntervalKind::Second>(*time_column_vec, std::get<1>(interval), time_zone);
             case IntervalKind::Minute:
@@ -267,6 +271,10 @@ struct WindowImpl<TUMBLE>
 
         switch (std::get<0>(interval))
         {
+            /// FIXME, TIME
+            case IntervalKind::Nanosecond:
+            case IntervalKind::Microsecond:
+            case IntervalKind::Millisecond:
             case IntervalKind::Second:
                 return executeTumble<UInt32, IntervalKind::Second>(*time_column_vec, std::get<1>(interval), time_zone);
             case IntervalKind::Minute:
@@ -390,6 +398,10 @@ struct WindowImpl<HOP>
 
         switch (std::get<0>(window_interval))
         {
+            /// FIXME, TIME
+            case IntervalKind::Nanosecond:
+            case IntervalKind::Microsecond:
+            case IntervalKind::Millisecond:
             case IntervalKind::Second:
                 return executeHopDateTime64<IntervalKind::Second>(
                     *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
@@ -540,6 +552,10 @@ struct WindowImpl<HOP>
 
         switch (std::get<0>(window_interval))
         {
+            /// FIXME, TIME
+            case IntervalKind::Nanosecond:
+            case IntervalKind::Microsecond:
+            case IntervalKind::Millisecond:
             case IntervalKind::Second:
                 return executeHop<UInt32, IntervalKind::Second>(
                     *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);

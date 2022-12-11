@@ -406,6 +406,12 @@ ALWAYS_INLINE Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_u
 {
     switch (kind)
     {
+        /// FIXME, TIME
+        case IntervalKind::Nanosecond:
+        case IntervalKind::Microsecond:
+        case IntervalKind::Millisecond:
+            return AddTime<IntervalKind::Second>::execute(time_sec, num_units, time_zone);
+
 #define CASE_WINDOW_KIND(KIND) \
     case IntervalKind::KIND: { \
         return AddTime<IntervalKind::KIND>::execute(time_sec, num_units, time_zone); \

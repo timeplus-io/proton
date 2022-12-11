@@ -11,6 +11,9 @@ void registerFunctionToDayOfWeek(FunctionFactory &);
 void registerFunctionToDayOfYear(FunctionFactory &);
 void registerFunctionToHour(FunctionFactory &);
 void registerFunctionToMinute(FunctionFactory &);
+void registerFunctionToStartOfNanosecond(FunctionFactory &);
+void registerFunctionToStartOfMicrosecond(FunctionFactory &);
+void registerFunctionToStartOfMillisecond(FunctionFactory &);
 void registerFunctionToStartOfSecond(FunctionFactory &);
 void registerFunctionToSecond(FunctionFactory &);
 void registerFunctionToStartOfDay(FunctionFactory &);
@@ -73,6 +76,13 @@ void registerFunctionDateTrunc(FunctionFactory &);
 
 void registerFunctiontimezoneOffset(FunctionFactory &);
 
+void registerFunctionSubtractNanoseconds(FunctionFactory &);
+void registerFunctionSubtractMicroseconds(FunctionFactory &);
+void registerFunctionSubtractMilliseconds(FunctionFactory &);
+void registerFunctionAddNanoseconds(FunctionFactory &);
+void registerFunctionAddMicroseconds(FunctionFactory &);
+void registerFunctionAddMilliseconds(FunctionFactory &);
+
 /// proton: starts
 void registerFunctionStreamingNow64(FunctionFactory &);
 void registerFunctionStreamingNow(FunctionFactory &);
@@ -99,6 +109,9 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     registerFunctionToStartOfMonth(factory);
     registerFunctionToStartOfQuarter(factory);
     registerFunctionToStartOfYear(factory);
+    registerFunctionToStartOfNanosecond(factory);
+    registerFunctionToStartOfMicrosecond(factory);
+    registerFunctionToStartOfMillisecond(factory);
     registerFunctionToStartOfSecond(factory);
     registerFunctionToStartOfMinute(factory);
     registerFunctionToStartOfFiveMinute(factory);
@@ -149,6 +162,13 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     registerFunctionFromModifiedJulianDay(factory);
     registerFunctionDateTrunc(factory);
     registerFunctiontimezoneOffset(factory);
+
+    registerFunctionSubtractNanoseconds(factory);
+    registerFunctionSubtractMicroseconds(factory);
+    registerFunctionSubtractMilliseconds(factory);
+    registerFunctionAddNanoseconds(factory);
+    registerFunctionAddMicroseconds(factory);
+    registerFunctionAddMilliseconds(factory);
 
     /// proton: starts
     registerFunctionStreamingNow64(factory);

@@ -7,7 +7,7 @@
 namespace DB
 {
 
-using FunctionToRelativeMonthNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeMonthNumImpl>;
+using FunctionToRelativeMonthNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeMonthNumImpl<ResultPrecision::Standard>>;
 
 void registerFunctionToRelativeMonthNum(FunctionFactory & factory)
 {

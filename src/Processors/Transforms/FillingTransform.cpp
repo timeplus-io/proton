@@ -26,7 +26,7 @@ Block FillingTransform::transformHeader(Block header, const SortDescription & so
 
     /// Columns which are not from sorting key may not be constant anymore.
     for (auto & column : header)
-        if (column.column && isColumnConst(*column.column) && !sort_keys.count(column.name))
+        if (column.column && isColumnConst(*column.column) && !sort_keys.contains(column.name))
             column.column = column.type->createColumn();
 
     return header;
@@ -34,18 +34,20 @@ Block FillingTransform::transformHeader(Block header, const SortDescription & so
 
 template <typename T>
 static FillColumnDescription::StepFunction getStepFunction(
-    IntervalKind kind, Int64 step, const DateLUTImpl & date_lut)
+    IntervalKind kind, Int64 step, const DateLUTImpl & date_lut, UInt16 scale = DataTypeDateTime64::default_scale)
 {
     switch (kind)
     {
-        #define DECLARE_CASE(NAME) \
+#define DECLARE_CASE(NAME) \
         case IntervalKind::NAME: \
-            return [step, &date_lut](Field & field) { field = Add##NAME##sImpl::execute(static_cast<T>(field.get<T>()), step, date_lut); };
+            return [step, scale, &date_lut](Field & field) { \
+                field = Add##NAME##sImpl::execute(static_cast<T>(\
+                    field.get<T>()), static_cast<Int32>(step), date_lut, scale); };
 
         FOR_EACH_INTERVAL_KIND(DECLARE_CASE)
-        #undef DECLARE_CASE
+#undef DECLARE_CASE
     }
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 static bool tryConvertFields(FillColumnDescription & descr, const DataTypePtr & type)
@@ -92,7 +94,7 @@ static bool tryConvertFields(FillColumnDescription & descr, const DataTypePtr & 
             Int64 avg_seconds = descr.fill_step.get<Int64>() * descr.step_kind->toAvgSeconds();
             if (avg_seconds < 86400)
                 throw Exception(ErrorCodes::INVALID_WITH_FILL_EXPRESSION,
-                    "Value of step is to low ({} seconds). Must be >= 1 day", avg_seconds);
+                        "Value of step is to low ({} seconds). Must be >= 1 day", avg_seconds);
         }
 
         if (which.isDate())
@@ -108,20 +110,18 @@ static bool tryConvertFields(FillColumnDescription & descr, const DataTypePtr & 
 
             switch (*descr.step_kind)
             {
-                #define DECLARE_CASE(NAME) \
+#define DECLARE_CASE(NAME) \
                 case IntervalKind::NAME: \
                     descr.step_func = [step, &time_zone = date_time64->getTimeZone()](Field & field) \
                     { \
                         auto field_decimal = field.get<DecimalField<DateTime64>>(); \
-                        auto components = DecimalUtils::splitWithScaleMultiplier(field_decimal.getValue(), field_decimal.getScaleMultiplier()); \
-                        auto res = Add##NAME##sImpl::execute(components, step, time_zone); \
-                        auto res_decimal = decimalFromComponentsWithMultiplier<DateTime64>(res, field_decimal.getScaleMultiplier()); \
-                        field = DecimalField(res_decimal, field_decimal.getScale()); \
+                        auto res = Add##NAME##sImpl::execute(field_decimal.getValue(), step, time_zone, field_decimal.getScale()); \
+                        field = DecimalField(res, field_decimal.getScale()); \
                     }; \
                     break;
 
                 FOR_EACH_INTERVAL_KIND(DECLARE_CASE)
-                #undef DECLARE_CASE
+#undef DECLARE_CASE
             }
         }
         else

@@ -1557,6 +1557,9 @@ struct NameToDecimal256 { static constexpr auto name = "to_decimal256"; };
         static constexpr auto kind = IntervalKind::INTERVAL_KIND; \
     };
 
+DEFINE_NAME_TO_INTERVAL(nanosecond, Nanosecond)
+DEFINE_NAME_TO_INTERVAL(microsecond, Microsecond)
+DEFINE_NAME_TO_INTERVAL(millisecond, Millisecond)
 DEFINE_NAME_TO_INTERVAL(second, Second)
 DEFINE_NAME_TO_INTERVAL(minute, Minute)
 DEFINE_NAME_TO_INTERVAL(hour, Hour)
@@ -2952,9 +2955,9 @@ private:
     {
         switch (kind)
         {
-            /// GENERATE_INTERVAL_CASE(Nanosecond)
-            /// GENERATE_INTERVAL_CASE(Microsecond)
-            /// GENERATE_INTERVAL_CASE(Millisecond)
+            GENERATE_INTERVAL_CASE(Nanosecond)
+            GENERATE_INTERVAL_CASE(Microsecond)
+            GENERATE_INTERVAL_CASE(Millisecond)
             GENERATE_INTERVAL_CASE(Second)
             GENERATE_INTERVAL_CASE(Minute)
             GENERATE_INTERVAL_CASE(Hour)

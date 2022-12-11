@@ -495,6 +495,12 @@ ALWAYS_INLINE std::pair<Int64, Int64> HopTumbleBaseWatermark::getWindow(Int64 ti
     auto interval = getProgressingInterval();
     switch (window_interval_kind)
     {
+         /// FIXME, TIME
+        case IntervalKind::Nanosecond:
+        case IntervalKind::Microsecond:
+        case IntervalKind::Millisecond:
+            return {0, AddTime<IntervalKind::Second>::execute(0, interval, *timezone)}; \
+
 #define CASE_WINDOW_KIND(KIND) \
     case IntervalKind::KIND: { \
         auto w_start = ToStartOfTransform<IntervalKind::KIND>::execute(time_sec, interval, *timezone); \

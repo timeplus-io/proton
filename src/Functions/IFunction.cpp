@@ -18,8 +18,6 @@
 #include <cstdlib>
 #include <memory>
 
-#include <Common/config.h>
-
 #if USE_EMBEDDED_COMPILER
 #    pragma GCC diagnostic push
 #    pragma GCC diagnostic ignored "-Wunused-parameter"

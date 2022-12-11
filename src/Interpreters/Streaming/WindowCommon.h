@@ -71,6 +71,11 @@ public:
     {
         switch (kind)
         {
+            /// FIXME, TIME
+            case IntervalKind::Nanosecond:
+            case IntervalKind::Microsecond:
+            case IntervalKind::Millisecond:
+                return BaseScaleInterval{num_units, SCALE_SECOND, kind};
             /// Based on SCALE_SECOND
             case IntervalKind::Second:
                 return BaseScaleInterval{num_units, SCALE_SECOND, kind};
@@ -90,7 +95,7 @@ public:
             case IntervalKind::Year:
                 return BaseScaleInterval{num_units * 12, SCALE_MONTH, kind};
         }
-        __builtin_unreachable();
+        UNREACHABLE();
     }
 
     static BaseScaleInterval toBaseScale(const std::pair<Int64, IntervalKind> & interval)
