@@ -160,7 +160,7 @@
                 ]},
 
                 {"statements": [
-                    {"client":"python", "wait": 4, "run_mode":"process", "query_type": "table", "query":"kill query where query_id = '601'"},
+                    {"client":"python", "wait": 4,"depends_on":601, "query_type": "table", "query":"kill query where query_id = '601'"},
                     {"client":"python", "query_type": "table", "query":"select id, max(value) from table(test_stream_only) group by id, location"}
                 ]
                 }

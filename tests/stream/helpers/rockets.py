@@ -84,7 +84,7 @@ VIEW_ONLY_NODE_FIRST = "view_only_node_first"
 HOST_ALL_NODE_FIRST = "host_all_node_first"
 HOST_NONE_NODE_FIRST = "host_none_node_first"
 
-DEFAULT_TEST_SUITE_TIMEOUT = 1200 #seconds
+DEFAULT_TEST_SUITE_TIMEOUT = 1800 #seconds
 DEFAULT_CASE_TIMEOUT = 60 #seconds, todo: case level timeout guardian
 
 # alive = mp.Value('b', True)
@@ -1140,14 +1140,14 @@ def query_run_py(
             depends_on_exists = query_exists(depends_on, client=pyclient)
             print(f"query_run_py: depends_on_exists = {depends_on_exists}")
             if not depends_on_exists: #todo: error handling logic and error code
-                logger.debug(
-                    f"QUERY_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} does not exist, raise Fatal Error, the stream query failed and exit by error."
+                logger.info(
+                    f"QUERY_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} does not be found during 30s after {query_id} was started, raise Fatal Error, the depends_on query may failed to start in 30s or exits/ends unexpectedly."
                 )
                 raise Exception(
-                    f"QUERY_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} does not exist, raise Fatal Error, the stream query failed and exit by error."
+                    f"QUERY_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} does not be found during 30s after {query_id} was started, raise Fatal Error, the depends_on query may failed to start in 30s or exit/ends unexpectedly."
                 )
             else:
-                logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} exists")
+                logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} exists")
 
         if (
             proton_create_stream_shards is not None
@@ -1519,6 +1519,63 @@ def query_run_py(
             logger.debug(f"close: query_run_py_run_mode = {query_run_py_run_mode}.")
         return query_results
 
+def query_exists_cluster(config, query_proc, client, retry=300):
+    proton_setting = config.get("proton_setting")
+    test_suite_name = query_proc.get("test_suite_name")
+    test_id = query_proc.get("test_id")
+    query_id = query_proc.get("query_id")
+    process = query_proc.get("process")
+
+    try:
+        if "cluster" not in proton_setting:
+            while (
+                not query_id_exists_py(client, query_id)
+                and process.exitcode == None
+                and retry > 0
+            ):  # process.exitcode is checked when another retry to identify if the query_run_py if already exist due to exception or other reasons.
+                time.sleep(0.1)
+                retry -= 1
+        else:  # todo: consolidate the cluster query_id exists logic into a standalone function or query_exists()
+            proton_servers = config.get("proton_servers")
+            depends_on_exists = False
+            depends_on_exists_flag = 0
+            while (
+                not depends_on_exists and retry > 0
+            ):  # todo: consolidate this cluster query exist into a cluster_query_exists function or query_exists()
+                for item in proton_servers:
+                    proton_server = item.get("host")
+                    proton_server_native_port = item.get("port")
+                    logger.debug(
+                        f"proton_server={proton_server}, proton_server_native_port = {proton_server_native_port}"
+                    )
+                    pyclient = Client(
+                        host=proton_server,
+                        port=proton_server_native_port,
+                    )
+                    if query_id_exists_py(pyclient, query_id):
+                        depends_on_exists_flag += 1
+                    pyclient.disconnect()
+                if depends_on_exists_flag > 0:
+                    depends_on_exists = True
+                else:
+                    depends_on_exists = False
+                time.sleep(0.1)
+                retry -= 1
+
+        if retry > 0:
+            logger.debug(
+                f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_exists_cluster check for query_id = {query_id}, found"
+            )
+            return True
+        else:
+            logger.debug(
+                f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_exists_cluster check for query_id = {query_id},  not found after {retry} times retry with interval = 0.1s."
+            )
+            return False
+
+    except (BaseException, errors.ServerException) as error:
+        logger.debug(f"QYERT_EXISTS_CLUSTER_ERROR FATAL exception: proton_setting  = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, error = {error}")
+        raise Exception(f"QYERT_EXISTS_CLUSTER_ERROR FATAL exception: proton_setting  = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, error = {error}")
 
 def query_execute(config, child_conn, query_results_queue, alive, logging_level="INFO"):
     mp_mgr = (
@@ -1618,6 +1675,10 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                     # for proc in query_procs:
                     for proc in query_procs:
                         process = proc.get("process")
+                        proton_setting = proc.get("proton_setting")
+                        test_suite_name = proc.get("test_suite_name")
+                        test_id = proc.get("test_id")
+                        wait = proc.get("wait")
                         query_id = proc.get("query_id")
                         exitcode = process.exitcode
                         terminate = proc.get("terminate")
@@ -1629,54 +1690,62 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                             logger.debug(
                                 f"query_id = {query_id}, process = {process}, process.exitcode = {process.exitcode}"
                             )
-                            retry = 200
-                            if "cluster" not in proton_setting:
-                                while (
-                                    not query_id_exists_py(client, query_id)
-                                    and process.exitcode == None
-                                    and retry > 0
-                                ):  # process.exitcode is checked when another retry to identify if the query_run_py if already exist due to exception or other reasons.
-                                    time.sleep(0.1)
-                                    retry -= 1
-                            else:  # todo: consolidate the cluster query_id exists logic into a standalone function or query_exists()
-                                proton_servers = config.get("proton_servers")
-                                depends_on_exists = False
-                                depends_on_exists_flag = 0
-                                while (
-                                    not depends_on_exists and retry > 0
-                                ):  # todo: consolidate this cluster query exist into a cluster_query_exists function or query_exists()
-                                    for item in proton_servers:
-                                        proton_server = item.get("host")
-                                        proton_server_native_port = item.get("port")
-                                        logger.debug(
-                                            f"proton_server={proton_server}, proton_server_native_port = {proton_server_native_port}"
-                                        )
-                                        pyclient = Client(
-                                            host=proton_server,
-                                            port=proton_server_native_port,
-                                        )
-                                        if query_id_exists_py(pyclient, query_id):
-                                            depends_on_exists_flag += 1
-                                        pyclient.disconnect()
-                                    if depends_on_exists_flag > 0:
-                                        depends_on_exists = True
-                                    else:
-                                        depends_on_exists = False
-                                    time.sleep(0.1)
-                                    retry -= 1
+                            # retry = 300
+                            # if "cluster" not in proton_setting:
+                            #     while (
+                            #         not query_id_exists_py(client, query_id)
+                            #         and process.exitcode == None
+                            #         and retry > 0
+                            #     ):  # process.exitcode is checked when another retry to identify if the query_run_py if already exist due to exception or other reasons.
+                            #         time.sleep(0.1)
+                            #         retry -= 1
+                            # else:  # todo: consolidate the cluster query_id exists logic into a standalone function or query_exists()
+                            #     proton_servers = config.get("proton_servers")
+                            #     depends_on_exists = False
+                            #     depends_on_exists_flag = 0
+                            #     while (
+                            #         not depends_on_exists and retry > 0
+                            #     ):  # todo: consolidate this cluster query exist into a cluster_query_exists function or query_exists()
+                            #         for item in proton_servers:
+                            #             proton_server = item.get("host")
+                            #             proton_server_native_port = item.get("port")
+                            #             logger.debug(
+                            #                 f"proton_server={proton_server}, proton_server_native_port = {proton_server_native_port}"
+                            #             )
+                            #             pyclient = Client(
+                            #                 host=proton_server,
+                            #                 port=proton_server_native_port,
+                            #             )
+                            #             if query_id_exists_py(pyclient, query_id):
+                            #                 depends_on_exists_flag += 1
+                            #             pyclient.disconnect()
+                            #         if depends_on_exists_flag > 0:
+                            #             depends_on_exists = True
+                            #         else:
+                            #             depends_on_exists = False
+                            #         time.sleep(0.1)
+                            #         retry -= 1
 
-                            if retry > 0:
-                                logger.debug(
-                                    f"check and wait for query exist to kill, query_2_kill = {query_id} is found, continue"
-                                )
-                            else:
-                                logger.debug(
-                                    f"check and wait for query exist to kill, query_2_kill = {query_id} after 500 times with 0.05s sleep retring check still not found, continue."
-                                )
+                            # if retry > 0:
+                            #     logger.debug(
+                            #         f"check and wait for query exist to kill, query_2_kill = {query_id} is found, continue"
+                            #     )
+                            # else:
+                            #     logger.debug(
+                            #         f"check and wait for query exist to kill, query_2_kill = {query_id} after 300 times with 0.1s sleep retring check still not found, extending 10 retry after stream query wait set = {wait}."
+                            #     )
+                            kill_query_exists_res = query_exists_cluster(config, proc, client)
+                            if not kill_query_exists_res: # sleep for another "wait" and retry 10 times as final try.
+                                retry = 10
+                                time.sleep(wait)
+                                kill_query_exists_res = query_exists_cluster(config, proc, client, 10)
+                            
+                            if not kill_query_exists_res:
+                                raise Exception(f"QUERY_END_TIMER_DEPENDS_ON_ERROR, proton_server={proton_server}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id check for query_end_timer failed, query_id = {query_id} for query_end_timer does not exist, the query may faild to start or exit by error.")
 
                             if query_end_timer != None:
                                 logger.debug(
-                                    f"query_end_timer = {query_end_timer}, sleep {query_end_timer} secons."
+                                    f"query_end_timer = {query_end_timer}, sleep {query_end_timer} seconds."
                                 )
                                 time.sleep(int(query_end_timer))
                             logger.debug(
@@ -1740,6 +1809,9 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
             else:
                 statement_2_run = json.loads(json.dumps(message_recv))
                 logger.debug(f"query_execute: statement_2_run = {statement_2_run}")
+                proton_setting = statement_2_run.get("proton_setting")
+                test_suite_name = statement_2_run.get("test_suite_name")
+                test_id = statement_2_run.get("test_id")
                 query_id = str(statement_2_run.get("query_id"))
                 query_client = statement_2_run.get("client")
                 query_type = statement_2_run.get("query_type")
@@ -1783,6 +1855,10 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                             "query_end_timer": query_end_timer,
                             "query_id": query_id,
                             "query": query,
+                            "proton_setting": proton_setting,
+                            "test_suite_name": test_suite_name,
+                            "test_id": test_id,
+                            "wait":wait,
                         }  # have to put append before start, otherwise exception when append shared list.
                     )  # put every query_run process into array for case_done check
                     query_proc.start()
@@ -1951,15 +2027,19 @@ def query_walk_through(proton_setting,test_suite_name, test_id, statements, quer
     query_results_json_str = ""
     stream_query_id = "False"
     query_end_timer = 0
+    max_wait = 0
     while statement_id_run < len(statements):
         query_results = {}
         query_executed_msg = {}
         statement = statements[statement_id_run]
         client = statement.get("client")
         wait = statement.get("wait")
+        if wait is None:
+            wait = 0
         query_id = statement.get("query_id")
         query = statement.get("query")
         query_type = statement.get("query_type")
+        run_mode = statement.get("run_mode")
         terminate = statement.get("terminate")
         statement["proton_setting"] = proton_setting
         statement["test_id"] = test_id
@@ -1982,7 +2062,11 @@ def query_walk_through(proton_setting,test_suite_name, test_id, statements, quer
         # logger.debug(f"query_walk_through: statement = {statement}.")
         if query_end_timer == None:
             query_end_timer = 0
-
+        if query_type == "stream" or run_mode == "process":
+            if max_wait < int(wait):
+                max_wait = int(wait)
+        else:
+            max_wait += wait
         # query_exe_queue.put(statement)
         query_conn.send(statement)
         logger.debug(
@@ -1990,16 +2074,16 @@ def query_walk_through(proton_setting,test_suite_name, test_id, statements, quer
             f"query_walk_through: statement query_id = {query_id}, query = {query} was send to query_execute."
         )
 
-        if isinstance(wait, dict):  # if wait for a specific query done
-            print()  # todo: check the query_id and implement the logic to notify the query_execute that this query need to be done after the query to be wait done and implement the wait logic in query_execute_new
-        elif str(wait).isdigit():  # if wait for x seconds and then execute the query
-            time.sleep(wait)
+        # if isinstance(wait, dict):  # if wait for a specific query done
+        #     print()  # todo: check the query_id and implement the logic to notify the query_execute that this query need to be done after the query to be wait done and implement the wait logic in query_execute_new
+        # elif str(wait).isdigit():  # if wait for x seconds and then execute the query
+        #     time.sleep(wait)
 
         statement_id_run += 1
         # time.sleep(1) # wait the query_execute execute the stream command
 
     logger.debug(f"query_walk_through: end... stream_query_id = {stream_query_id}")
-    return querys_results
+    return max_wait
 
 
 def input_walk_through_pyclient(proton_client, inputs, table_schema):
@@ -2112,7 +2196,7 @@ def query_exists(
     logger = mp.get_logger()
     query_id_list = []
     query_id_exists = False
-    retry = 200
+    retry = 600
     logger.debug(f"checking query_id = {query_id} if exists...")
     while not query_id_exists and retry > 0:
         if client == None:
@@ -2182,7 +2266,7 @@ def input_batch_rest(config, test_suite_name, test_id, input_batch, table_schema
             logger.debug(f"depends_on_stream = {depends_on_stream}, checking...")
             retry = 500
             while table_exist(table_ddl_url, depends_on_stream) is None:
-                time.sleep(0.01)
+                time.sleep(0.1)
                 retry -= 1
             if retry > 0:
                 logger.debug(f"depends_on_stream exists.")
@@ -3244,7 +3328,7 @@ def test_suite_run(
                         f"test_suite_name = {test_suite_name}, no test_suite_config, bypass test_suite_env_setup"
                     )
                 i = 0
-                logger.debug(f"test_suite_timeout_hit.is_set() = {test_suite_timeout_hit.is_set()}")
+                logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_suite_timeout_hit.is_set() = {test_suite_timeout_hit.is_set()}")
                 if test_suite_timeout_hit.is_set():
                     logger.info(f"raise TEST_SUITE_TIMEOUT_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_timeout = {test_suite_timeout} hit")
                     raise Exception(f"TEST_SUITE_TIMEOUT_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_timeout = {test_suite_timeout} hit")                
@@ -3271,15 +3355,14 @@ def test_suite_run(
                     logger.info(
                         f"proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name}, test_id = {test_id} starts......"
                     )
-
+                    wait_before_inputs = 0
                     for step in steps:
                         statements_id = 0
-                        inputs_id = 0
-
+                        inputs_id = 0                        
                         if "statements" in step:
                             step_statements = step.get("statements")
                             logger.debug(
-                                f"test_suite_name = {test_suite_name}, step_statements = {step_statements}"
+                                f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, step_statements = {step_statements}"
                             )
                             query_walk_through_res = query_walk_through(
                                 proton_setting, test_suite_name, test_id, step_statements, query_conn
@@ -3288,13 +3371,15 @@ def test_suite_run(
                             logger.debug(
                                 f"query_walk_through_res = {query_walk_through_res}"
                             )
+                            wait_before_inputs = query_walk_through_res #get the max_wai in query_walk_through
+                            
 
-                            if (
-                                statement_result_from_query_execute != None
-                                and len(statement_result_from_query_execute) > 0
-                            ):
-                                for element in statement_result_from_query_execute:
-                                    statements_results.append(element)
+                            # if (
+                            #     statement_result_from_query_execute != None
+                            #     and len(statement_result_from_query_execute) > 0
+                            # ):
+                            #     for element in statement_result_from_query_execute:
+                            #         statements_results.append(element)
 
                             logger.info(
                                 f"proton_setting = {proton_setting}, test_suite_run: {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id}, step{step_id}.statements{statements_id}, done..."
@@ -3302,6 +3387,7 @@ def test_suite_run(
 
                             statements_id += 1
                         elif "inputs" in step:
+                            time.sleep(wait_before_inputs) #auto wait the max_wait of the query_execute
                             inputs = step.get("inputs")
                             logger.info(
                                 f"proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id} inputs = {inputs}"
@@ -3339,7 +3425,10 @@ def test_suite_run(
                             f"test_suite_run: message_recv of query_results_queue.get() = {message_recv}"
                         )
                         query_results = json.loads(message_recv)
-                        print(f"query_result recved in test_suite_run")
+                        query_id = query_results.get("query_id")
+                        query = query_results.get("query")
+                        query_type = query_results.get("query_type")
+                        logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_type = {query_type}, query = {query}, query_result recved in test_suite_run")
                         query_state = query_results.get("query_state")
                         if query_state is not None and (query_state == 'crash' or query_state== 'fatal'): #when Connection related error happens, it will be set in the query_state of the query results
                             error = query_results.get("error")
@@ -3379,7 +3468,7 @@ def test_suite_run(
                     
                     i += 1
                     test_id_run += 1
-                    print(f"test_suite_timeout_hit = {test_suite_timeout_hit}")
+                    #print(f"test_suite_timeout_hit = {test_suite_timeout_hit}")
 
                     if test_suite_timeout_hit.is_set():
                         logger.info(f"raise TEST_SUITE_TIMEOUT_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_timeout = {test_suite_timeout} hit")
@@ -3410,7 +3499,9 @@ def test_suite_run(
                 test_suite_run_ctl_queue.task_done()
 
             logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name} running ends")
-            logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_suite_run_status = {test_suite_run_status} ")
+            logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_suite_run_status: ")
+            for status in test_suite_run_status:
+                logger.info(f"{status}")
         
         test_suite_result_done_queue.put(test_suite_result_summary)
         test_suite_result_done_queue.join()
