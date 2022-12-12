@@ -7,7 +7,6 @@
 
 #include <Columns/ColumnConst.h>
 #include <DistributedMetadata/CatalogService.h>
-#include <DistributedMetadata/PlacementService.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ClusterProxy/DistributedSelectStreamFactory.h>
 #include <Interpreters/ClusterProxy/executeQuery.h>
@@ -953,8 +952,6 @@ std::optional<UInt64> StorageStream::totalBytes(const Settings & settings) const
 
 SinkToStoragePtr StorageStream::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_)
 {
-    /// check if exceed the total storage quota if will interrupt any running INSERT query
-    PlacementService::instance(getContext()).checkStorageQuotaOrThrow();
     return std::make_shared<StreamSink>(*this, metadata_snapshot, context_);
 }
 
