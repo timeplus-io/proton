@@ -4,7 +4,7 @@ ENV LANG=en_US.UTF-8 \
     LANGUAGE=en_US:en \
     LC_ALL=en_US.UTF-8 \
     TZ=UTC \
-    CLICKHOUSE_CONFIG=/etc/clickhouse-server/config.xml
+    PROTON_CONFIG=/etc/proton-server/config.xml
 
 COPY alpine-root/ /
 
@@ -15,21 +15,21 @@ COPY alpine-root/ /
 # installed to prevent picking those uid / gid by some unrelated software.
 # The same uid / gid (101) is used both for alpine and ubuntu.
 
-RUN addgroup -S -g 101 clickhouse \
-    && adduser -S -h /var/lib/clickhouse -s /bin/bash -G clickhouse -g "ClickHouse server" -u 101 clickhouse \
-    && mkdir -p /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server /etc/clickhouse-client \
-    && chown clickhouse:clickhouse /var/lib/clickhouse \
-    && chown root:clickhouse /var/log/clickhouse-server \
+RUN addgroup -S -g 101 timeplus \
+    && adduser -S -h /var/lib/proton -s /bin/bash -G timeplus -g "timeplus server" -u 101 timeplus \
+    && mkdir -p /var/lib/proton /var/log/proton-server /etc/proton-server /etc/proton-client \
+    && chown timeplus:timeplus /var/lib/proton \
+    && chown root:timeplus /var/log/proton-server \
     && chmod +x /entrypoint.sh \
     && apk add --no-cache su-exec bash tzdata \
     && cp /usr/share/zoneinfo/UTC /etc/localtime \
     && echo "UTC" > /etc/timezone \
-    && chmod ugo+Xrw -R /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server /etc/clickhouse-client
+    && chmod ugo+Xrw -R /var/lib/proton /var/log/proton-server /etc/proton-server /etc/proton-client
 
-# we need to allow "others" access to clickhouse folder, because docker container
+# we need to allow "others" access to proton folder, because docker container
 # can be started with arbitrary uid (openshift usecase)
 
-VOLUME /var/lib/clickhouse \
-       /var/log/clickhouse-server
+VOLUME /var/lib/proton \
+       /var/log/proton-server
 
 ENTRYPOINT ["/entrypoint.sh"]

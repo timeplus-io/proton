@@ -1,21 +1,22 @@
 FROM ubuntu:20.04
 
 # FIXME, XXX, timeplus deb repo
-ARG repository="deb https://repo.timeplus/deb/stable/ main/"
+# ARG repository="deb https://repo.timeplus/deb/stable/ main/"
+ARG repository=""
 ARG version=1.1.21
 ARG gosu_ver=1.10
 
 # set non-empty deb_location_url url to create a docker image
 # from debs created by CI build, for example:
-# docker build . --network host --build-arg version="21.4.1.6282" --build-arg deb_location_url="https://clickhouse-builds.s3.yandex.net/21852/069cfbff388b3d478d1a16dc7060b48073f5d522/clickhouse_build_check/clang-11_relwithdebuginfo_none_bundled_unsplitted_disable_False_deb/" -t filimonovq/clickhouse-server:pr21852
+# docker build . --network host --build-arg version="21.4.1.6282" --build-arg deb_location_url="https://proton-builds.s3.yandex.net/21852/069cfbff388b3d478d1a16dc7060b48073f5d522/proton_build_check/clang-11_relwithdebuginfo_none_bundled_unsplitted_disable_False_deb/" -t filimonovq/proton-server:pr21852
 ARG deb_location_url=""
 
 # set non-empty single_binary_location_url to create docker image
 # from a single binary url (useful for non-standard builds - with sanitizers, for arm64).
 # for example (run on aarch64 server):
-# docker build . --network host --build-arg single_binary_location_url="https://builds.clickhouse.tech/master/aarch64/clickhouse" -t altinity/clickhouse-server:master-testing-arm
+# docker build . --network host --build-arg single_binary_location_url="https://builds.proton.tech/master/aarch64/proton" -t altinity/proton-server:master-testing-arm
 # docker build . --network host --build-arg single_binary_location_url=http://192.168.0.16:8000/build_docker/programs/proton -t timeplus/proton
-# note: clickhouse-odbc-bridge is not supported there.
+# note: proton-odbc-bridge is not supported there.
 ARG single_binary_location_url=""
 
 # see https://github.com/moby/moby/issues/4032#issuecomment-192327844
@@ -45,8 +46,8 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 COPY su-exec.c /su-exec.c
 
-RUN groupadd -r proton --gid=101 \
-    && useradd -r -g proton --uid=101 --home-dir=/var/lib/proton --shell=/bin/bash proton \
+RUN groupadd -r timeplus --gid=101 \
+    && useradd -r -g timeplus --uid=101 --home-dir=/var/lib/proton --shell=/bin/bash timeplus \
     && apt-get update \
     && apt-get install --yes --no-install-recommends \
         apt-transport-https \
@@ -62,8 +63,8 @@ RUN groupadd -r proton --gid=101 \
     && echo $repository > /etc/apt/sources.list.d/proton.list \
     && if [ -n "$deb_location_url" ]; then \
             echo "installing from custom url with deb packages: $deb_location_url" \
-            rm -rf /tmp/clickhouse_debs \
-            && mkdir -p /tmp/clickhouse_debs \
+            rm -rf /tmp/proton_debs \
+            && mkdir -p /tmp/proton_debs \
             && wget --progress=bar:force:noscroll "${deb_location_url}/proton-common-static_${version}_amd64.deb" -P /tmp/proton_debs \
             && wget --progress=bar:force:noscroll "${deb_location_url}/proton-client_${version}_all.deb" -P /tmp/proton_debs \
             && wget --progress=bar:force:noscroll "${deb_location_url}/proton-server_${version}_all.deb" -P /tmp/proton_debs \
@@ -74,7 +75,7 @@ RUN groupadd -r proton --gid=101 \
             && mkdir -p /tmp/proton_binary \
             && wget --progress=bar:force:noscroll "$single_binary_location_url" -O /tmp/proton_binary/proton \
             && chmod +x /tmp/proton_binary/proton \
-            && /tmp/proton_binary/proton install --user "proton" --group "proton" ; \
+            && /tmp/proton_binary/proton install --user "timeplus" --group "timeplus" ; \
        else \
            echo "installing from repository: $repository" \
            && apt-get update \
@@ -98,7 +99,7 @@ RUN groupadd -r proton --gid=101 \
     && mkdir -p /var/lib/proton /var/log/proton-server /etc/proton-server /etc/proton-client \
     && chmod ugo+Xrw -R /var/lib/proton /var/log/proton-server /etc/proton-server /etc/proton-client
 
-# we need to allow "others" access to clickhouse folder, because docker container
+# we need to allow "others" access to proton folder, because docker container
 # can be started with arbitrary uid (openshift usecase)
 
 RUN locale-gen en_US.UTF-8

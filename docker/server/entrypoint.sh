@@ -8,8 +8,8 @@ if [ "${PROTON_DO_NOT_CHOWN:-0}" = "1" ]; then
     DO_CHOWN=0
 fi
 
-PROTON_UID="${PROTON_UID:-"$(id -u proton)"}"
-PROTON_GID="${PROTON_GID:-"$(id -g proton)"}"
+PROTON_UID="${PROTON_UID:-"$(id -u timeplus)"}"
+PROTON_GID="${PROTON_GID:-"$(id -g timeplus)"}"
 
 # support --user
 if [ "$(id -u)" = "0" ]; then
