@@ -31,6 +31,14 @@ jobs:
           exit 127
         fi
 
+        echo "upload cache_address.tar.gz"
+        tar -zcf ./cache_address.tar.gz -C $GITHUB_WORKSPACE/ccache .
+        ls -al .
+        aws s3 cp --no-progress ./cache_address.tar.gz s3://tp-internal/proton/
+        rm -rf $GITHUB_WORKSPACE/ccache
+
+        df -h
+
         docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
         cd $GITHUB_WORKSPACE/docker/server
 
@@ -46,11 +54,6 @@ jobs:
         env
         pip3 install -r helpers/requirements.txt
         python3 ci_runner.py --debug --settings=redp,nativelog
-
-        echo "upload cache_address.tar.gz"
-        tar -zcf ./cache_address.tar.gz -C $GITHUB_WORKSPACE/ccache .
-        ls -al .
-        aws s3 cp --no-progress ./cache_address.tar.gz s3://tp-internal/proton/
 
         echo "check test result"
         cat $GITHUB_WORKSPACE/tests/stream/.status

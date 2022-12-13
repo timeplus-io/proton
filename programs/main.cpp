@@ -55,9 +55,6 @@ int mainCompressor(int argc, char ** argv);
 #if ENABLE_PROTON_METASTORE
 int mainMetaStore(int argc, char ** argv);
 #endif
-#if ENABLE_PROTON_V8
-int mainv8(int argc, char ** argv);
-#endif
 /// proton: ends.
 #if ENABLE_PROTON_KLOG_BENCHMARK
 int mainKLog(int argc, char ** argv);
@@ -120,9 +117,6 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
 /// proton: starts.
 #if ENABLE_PROTON_METASTORE
     {"metastore", mainMetaStore},
-#endif
-#if ENABLE_PROTON_V8
-    {"v8", mainv8},
 #endif
 /// proton: ends.
 #if ENABLE_PROTON_KLOG_BENCHMARK

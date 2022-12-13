@@ -45,7 +45,6 @@ if (NOT USE_NURAFT)
     message (STATUS "proton-metastore will not be built (lack of NuRaft)")
     set(ENABLE_PROTON_METASTORE OFF)
 endif()
-option (ENABLE_PROTON_V8 "Proton v8 example" ${ENABLE_PROTON_ALL})
 # proton: ends.
 
 if (PROTON_SPLIT_BINARY)
@@ -116,12 +115,6 @@ if (ENABLE_PROTON_METASTORE)
     message(STATUS "proton metastore mode: ON")
 else()
     message(STATUS "proton metastore mode: OFF")
-endif()
-
-if (ENABLE_PROTON_V8)
-    message(STATUS "proton v8 mode: ON")
-else()
-    message(STATUS "proton v8 mode: OFF")
 endif()
 # proton: ends.
 
@@ -205,9 +198,6 @@ endif()
 if (ENABLE_PROTON_METASTORE)
     add_subdirectory (metastore)
 endif()
-if (ENABLE_PROTON_V8)
-    add_subdirectory (v8)
-endif()
 # proton: ends.
 
 if (CLICKHOUSE_ONE_SHARED)
@@ -220,7 +210,6 @@ if (CLICKHOUSE_ONE_SHARED)
     ${CLICKHOUSE_GIT_IMPORT_SOURCES}
     ${CLICKHOUSE_COMPRESSOR_SOURCES}
     ${CLICKHOUSE_KEEPER_SOURCES}
-    ${CLICKHOUSE_V8_SOURCES}
     ${CLICKHOUSE_KEEPER_CONVERTER_SOURCES}
     ${CLICKHOUSE_STATIC_FILES_DISK_UPLOADER_SOURCES}
     ${CLICKHOUSE_KLOG_BENCHMARK_SOURCES})
@@ -234,7 +223,6 @@ if (CLICKHOUSE_ONE_SHARED)
       ${CLICKHOUSE_GIT_IMPORT_LINK}
       ${CLICKHOUSE_COMPRESSOR_LINK}
       ${CLICKHOUSE_KEEPER_LINK}
-      ${CLICKHOUSE_V8_LINK}
       ${CLICKHOUSE_KEEPER_CONVERTER_LINK}
       ${CLICKHOUSE_STATIC_FILES_DISK_UPLOADER_LINK})
 
@@ -246,7 +234,6 @@ if (CLICKHOUSE_ONE_SHARED)
       ${CLICKHOUSE_FORMAT_INCLUDE}
       ${CLICKHOUSE_GIT_IMPORT_INCLUDE}
       ${CLICKHOUSE_COMPRESSOR_INCLUDE}
-      ${CLICKHOUSE_V8_INCLUDE}
       ${CLICKHOUSE_KEEPER_INCLUDE}
       ${CLICKHOUSE_KEEPER_CONVERTER_INCLUDE})
 
@@ -264,7 +251,6 @@ if (PROTON_SPLIT_BINARY)
         proton-format
         proton-git-import
         proton-klog-benchmark
-        proton-v8
     )
 
     if (ENABLE_PROTON_KEEPER)
@@ -274,9 +260,6 @@ if (PROTON_SPLIT_BINARY)
     # proton: starts.
     if (ENABLE_PROTON_METASTORE)
         list (APPEND CLICKHOUSE_ALL_TARGETS proton-metastore)
-    endif ()
-    if (ENABLE_PROTON_V8)
-        list (APPEND CLICKHOUSE_ALL_TARGETS proton-v8)
     endif ()
     # proton: ends.
 
@@ -324,9 +307,6 @@ else ()
     # proton: starts.
     if (ENABLE_PROTON_METASTORE)
         proton_target_link_split_lib(proton metastore)
-    endif()
-    if (ENABLE_PROTON_V8)
-        proton_target_link_split_lib(proton v8)
     endif()
     # proton: ends.
     if (ENABLE_PROTON_INSTALL)
@@ -383,11 +363,7 @@ else ()
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-metastore" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
         list(APPEND PROTON_BUNDLE proton-metastore)
     endif ()
-    if (ENABLE_PROTON_V8)
-        add_custom_target (proton-v8 ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-v8 DEPENDS proton)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-v8" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
-        list(APPEND PROTON_BUNDLE proton-v8)
-    endif ()
+
     # proton: ends.
     if (ENABLE_PROTON_KLOG_BENCHMARK)
         add_custom_target (proton-klog-benchmark ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-klog-benchmark DEPENDS proton)
