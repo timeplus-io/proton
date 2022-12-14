@@ -194,14 +194,14 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
             if (traits->isStringAsString(column_name))
                 return {avro::StringSchema(), [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
                     {
-                        const StringRef & s = assert_cast<const ColumnString &>(column).getDataAt(row_num);
+                        StringRef s = assert_cast<const ColumnString &>(column).getDataAt(row_num);
                         encoder.encodeString(s.toString());
                     }
                 };
             else
                 return {avro::BytesSchema(), [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
                     {
-                        const StringRef & s = assert_cast<const ColumnString &>(column).getDataAt(row_num);
+                        StringRef s = assert_cast<const ColumnString &>(column).getDataAt(row_num);
                         encoder.encodeBytes(reinterpret_cast<const uint8_t *>(s.data), s.size);
                     }
                 };
@@ -211,7 +211,7 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
             auto schema = avro::FixedSchema(size, "fixed_" + toString(type_name_increment));
             return {schema, [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
             {
-                const StringRef & s = assert_cast<const ColumnFixedString &>(column).getDataAt(row_num);
+                StringRef s = assert_cast<const ColumnFixedString &>(column).getDataAt(row_num);
                 encoder.encodeFixed(reinterpret_cast<const uint8_t *>(s.data), s.size);
             }};
         }

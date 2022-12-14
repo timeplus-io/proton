@@ -247,7 +247,7 @@ public:
     static auto ALWAYS_INLINE dispatch(Self & self, KeyHolder && key_holder, Func && func)
     {
         StringHashTableHash hash;
-        const StringRef & x = keyHolderGetKey(key_holder);
+        StringRef x = keyHolderGetKey(key_holder);
         const size_t sz = x.size;
         if (sz == 0)
         {

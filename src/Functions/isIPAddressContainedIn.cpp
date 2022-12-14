@@ -27,7 +27,7 @@ class IPAddressVariant
 {
 public:
 
-    explicit IPAddressVariant(const StringRef & address_str)
+    explicit IPAddressVariant(StringRef address_str)
     {
         /// IP address parser functions require that the input is
         /// NULL-terminated so we need to copy it.

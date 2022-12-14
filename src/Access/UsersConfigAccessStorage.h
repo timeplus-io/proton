@@ -18,7 +18,7 @@ class UsersConfigAccessStorage : public IAccessStorage
 {
 public:
     static constexpr char STORAGE_TYPE[] = "users.xml";
-    using CheckSettingNameFunction = std::function<void(const std::string_view &)>;
+    using CheckSettingNameFunction = std::function<void(std::string_view)>;
 
     UsersConfigAccessStorage(const String & storage_name_ = STORAGE_TYPE, const CheckSettingNameFunction & check_setting_name_function_ = {});
     UsersConfigAccessStorage(const CheckSettingNameFunction & check_setting_name_function_);

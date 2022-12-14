@@ -24,7 +24,6 @@ namespace ErrorCodes
 
 namespace
 {
-
     /// Substitute return type for Date and DateTime
     template <bool is_min>
     class AggregateFunctionMinMaxKDate : public AggregateFunctionMinMaxK<DataTypeDate::FieldType, is_min>

@@ -94,7 +94,7 @@ struct RepeatImpl
 
     template <typename T>
     static void constStrVectorRepeat(
-        const StringRef & copy_str,
+        StringRef copy_str,
         ColumnString::Chars & res_data,
         ColumnString::Offsets & res_offsets,
         const PaddedPODArray<T> & col_num)

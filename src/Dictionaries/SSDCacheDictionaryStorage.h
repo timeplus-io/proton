@@ -151,7 +151,7 @@ public:
     /// Check if it is enough place to write key in block
     inline bool enoughtPlaceToWriteKey(const SSDCacheComplexKey & cache_key) const
     {
-        const StringRef & key = cache_key.key;
+        StringRef key = cache_key.key;
         size_t complex_key_size = sizeof(key.size) + key.size;
 
         return (current_block_offset + (complex_key_size + sizeof(cache_key.size) + cache_key.size)) <= block_size;
@@ -198,7 +198,7 @@ public:
 
         char * current_block_offset_data = block_data + current_block_offset;
 
-        const StringRef & key = cache_key.key;
+        StringRef key = cache_key.key;
 
         /// Write complex key
         memcpy(reinterpret_cast<void *>(current_block_offset_data), reinterpret_cast<const void *>(&key.size), sizeof(key.size));

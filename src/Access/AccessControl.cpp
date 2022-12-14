@@ -96,7 +96,7 @@ public:
         registered_prefixes = prefixes_;
     }
 
-    bool isSettingNameAllowed(const std::string_view & setting_name) const
+    bool isSettingNameAllowed(std::string_view setting_name) const
     {
         if (Settings::hasBuiltin(setting_name))
             return true;
@@ -111,7 +111,7 @@ public:
         return false;
     }
 
-    void checkSettingNameIsAllowed(const std::string_view & setting_name) const
+    void checkSettingNameIsAllowed(std::string_view setting_name) const
     {
         if (isSettingNameAllowed(setting_name))
             return;
@@ -170,7 +170,7 @@ void AccessControl::addUsersConfigStorage(const Poco::Util::AbstractConfiguratio
 
 void AccessControl::addUsersConfigStorage(const String & storage_name_, const Poco::Util::AbstractConfiguration & users_config_)
 {
-    auto check_setting_name_function = [this](const std::string_view & setting_name) { checkSettingNameIsAllowed(setting_name); };
+    auto check_setting_name_function = [this](std::string_view setting_name) { checkSettingNameIsAllowed(setting_name); };
     auto new_storage = std::make_shared<UsersConfigAccessStorage>(storage_name_, check_setting_name_function);
     new_storage->setConfig(users_config_);
     addStorage(new_storage);
@@ -202,7 +202,7 @@ void AccessControl::addUsersConfigStorage(
                 return;
         }
     }
-    auto check_setting_name_function = [this](const std::string_view & setting_name) { checkSettingNameIsAllowed(setting_name); };
+    auto check_setting_name_function = [this](std::string_view setting_name) { checkSettingNameIsAllowed(setting_name); };
     auto new_storage = std::make_shared<UsersConfigAccessStorage>(storage_name_, check_setting_name_function);
     new_storage->load(users_config_path_, include_from_path_, preprocessed_dir_);
     addStorage(new_storage);
@@ -417,12 +417,12 @@ void AccessControl::setCustomSettingsPrefixes(const String & comma_separated_pre
     setCustomSettingsPrefixes(prefixes);
 }
 
-bool AccessControl::isSettingNameAllowed(const std::string_view & setting_name) const
+bool AccessControl::isSettingNameAllowed(std::string_view setting_name) const
 {
     return custom_settings_prefixes->isSettingNameAllowed(setting_name);
 }
 
-void AccessControl::checkSettingNameIsAllowed(const std::string_view & setting_name) const
+void AccessControl::checkSettingNameIsAllowed(std::string_view setting_name) const
 {
     custom_settings_prefixes->checkSettingNameIsAllowed(setting_name);
 }

@@ -249,7 +249,7 @@ String readStringByEscapingRule(ReadBuffer & buf, FormatSettings::EscapingRule e
     return readByEscapingRule<true>(buf, escaping_rule, format_settings);
 }
 
-static bool evaluateConstantExpressionFromString(const StringRef & field, DataTypePtr & type, ContextPtr context)
+static bool evaluateConstantExpressionFromString(StringRef field, DataTypePtr & type, ContextPtr context)
 {
     if (!context)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "You must provide context to evaluate constant expression");

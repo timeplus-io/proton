@@ -48,14 +48,14 @@ struct SpaceSavingArena
 template <>
 struct SpaceSavingArena<StringRef>
 {
-    const StringRef emplace(const StringRef & key)
+    const StringRef emplace(StringRef key)
     {
         auto ptr = arena.alloc(key.size);
         std::copy(key.data, key.data + key.size, ptr);
         return StringRef{ptr, key.size};
     }
 
-    void free(const StringRef & key)
+    void free(StringRef key)
     {
         if (key.data)
             arena.free(const_cast<char *>(key.data), key.size);

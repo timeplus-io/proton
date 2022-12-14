@@ -41,7 +41,7 @@ Integer parseIntStrict(const std::string & s, String::size_type lpos, String::si
 }
 
 template <typename Integer>
-Integer parseIntStrict(const std::string_view & s, String::size_type lpos, String::size_type rpos)
+Integer parseIntStrict(std::string_view s, String::size_type lpos, String::size_type rpos)
 {
     return parseIntStrict<std::string_view, Integer>(s, lpos, rpos);
 }

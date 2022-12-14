@@ -328,9 +328,9 @@ namespace std
 
 namespace ZeroTraits
 {
-    inline bool check(const StringRef & x) { return 0 == x.size; }
+    inline bool check(StringRef x) { return 0 == x.size; }
     inline void set(StringRef & x) { x.size = 0; }
 }
 
 
-std::ostream & operator<<(std::ostream & os, const StringRef & str);
+std::ostream & operator<<(std::ostream & os, StringRef str);

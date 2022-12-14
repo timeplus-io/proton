@@ -45,16 +45,16 @@ class BaseSettings : public Traits_::Data
 public:
     using Traits = Traits_;
 
-    void set(const std::string_view & name, const Field & value);
-    Field get(const std::string_view & name) const;
+    void set(std::string_view name, const Field & value);
+    Field get(std::string_view name) const;
 
-    void setString(const std::string_view & name, const String & value);
-    String getString(const std::string_view & name) const;
+    void setString(std::string_view name, const String & value);
+    String getString(std::string_view name) const;
 
-    bool tryGet(const std::string_view & name, Field & value) const;
-    bool tryGetString(const std::string_view & name, String & value) const;
+    bool tryGet(std::string_view name, Field & value) const;
+    bool tryGetString(std::string_view name, String & value) const;
 
-    bool isChanged(const std::string_view & name) const;
+    bool isChanged(std::string_view name) const;
     SettingsChanges changes() const;
     void applyChange(const SettingChange & change);
     void applyChanges(const SettingsChanges & changes);
@@ -63,22 +63,22 @@ public:
     /// Resets all the settings to their default values.
     void resetToDefault();
 
-    bool has(const std::string_view & name) const { return hasBuiltin(name) || hasCustom(name); }
-    static bool hasBuiltin(const std::string_view & name);
-    bool hasCustom(const std::string_view & name) const;
+    bool has(std::string_view name) const { return hasBuiltin(name) || hasCustom(name); }
+    static bool hasBuiltin(std::string_view name);
+    bool hasCustom(std::string_view name) const;
 
-    const char * getTypeName(const std::string_view & name) const;
-    const char * getDescription(const std::string_view & name) const;
+    const char * getTypeName(std::string_view name) const;
+    const char * getDescription(std::string_view name) const;
 
     /// Checks if it's possible to assign a field to a specified value and throws an exception if not.
     /// This function doesn't change the fields, it performs check only.
-    static void checkCanSet(const std::string_view & name, const Field & value);
-    static void checkCanSetString(const std::string_view & name, const String & str);
+    static void checkCanSet(std::string_view name, const Field & value);
+    static void checkCanSetString(std::string_view name, const String & str);
 
     /// Conversions without changing the fields.
-    static Field castValueUtil(const std::string_view & name, const Field & value);
-    static String valueToStringUtil(const std::string_view & name, const Field & value);
-    static Field stringToValueUtil(const std::string_view & name, const String & str);
+    static Field castValueUtil(std::string_view name, const Field & value);
+    static String valueToStringUtil(std::string_view name, const Field & value);
+    static Field stringToValueUtil(std::string_view name, const String & str);
 
     void write(WriteBuffer & out, SettingsWriteFormat format = SettingsWriteFormat::DEFAULT) const;
     void read(ReadBuffer & in, SettingsWriteFormat format = SettingsWriteFormat::DEFAULT);
@@ -164,19 +164,19 @@ public:
     Iterator end() const { return allChanged().end(); }
 
 private:
-    SettingFieldCustom & getCustomSetting(const std::string_view & name);
-    const SettingFieldCustom & getCustomSetting(const std::string_view & name) const;
-    const SettingFieldCustom * tryGetCustomSetting(const std::string_view & name) const;
+    SettingFieldCustom & getCustomSetting(std::string_view name);
+    const SettingFieldCustom & getCustomSetting(std::string_view name) const;
+    const SettingFieldCustom * tryGetCustomSetting(std::string_view name) const;
 
     std::conditional_t<Traits::allow_custom_settings, CustomSettingMap, boost::blank> custom_settings_map;
 };
 
 struct BaseSettingsHelpers
 {
-    [[noreturn]] static void throwSettingNotFound(const std::string_view & name);
-    static void warningSettingNotFound(const std::string_view & name);
+    [[noreturn]] static void throwSettingNotFound(std::string_view name);
+    static void warningSettingNotFound(std::string_view name);
 
-    static void writeString(const std::string_view & str, WriteBuffer & out);
+    static void writeString(std::string_view str, WriteBuffer & out);
     static String readString(ReadBuffer & in);
 
     enum Flags : UInt64
@@ -190,7 +190,7 @@ struct BaseSettingsHelpers
 };
 
 template <typename Traits_>
-void BaseSettings<Traits_>::set(const std::string_view & name, const Field & value)
+void BaseSettings<Traits_>::set(std::string_view name, const Field & value)
 {
     const auto & accessor = Traits::Accessor::instance();
     if (size_t index = accessor.find(name); index != static_cast<size_t>(-1))
@@ -200,7 +200,7 @@ void BaseSettings<Traits_>::set(const std::string_view & name, const Field & val
 }
 
 template <typename Traits_>
-Field BaseSettings<Traits_>::get(const std::string_view & name) const
+Field BaseSettings<Traits_>::get(std::string_view name) const
 {
     const auto & accessor = Traits::Accessor::instance();
     if (size_t index = accessor.find(name); index != static_cast<size_t>(-1))
@@ -210,7 +210,7 @@ Field BaseSettings<Traits_>::get(const std::string_view & name) const
 }
 
 template <typename Traits_>
-void BaseSettings<Traits_>::setString(const std::string_view & name, const String & value)
+void BaseSettings<Traits_>::setString(std::string_view name, const String & value)
 {
     const auto & accessor = Traits::Accessor::instance();
     if (size_t index = accessor.find(name); index != static_cast<size_t>(-1))
@@ -220,7 +220,7 @@ void BaseSettings<Traits_>::setString(const std::string_view & name, const Strin
 }
 
 template <typename Traits_>
-String BaseSettings<Traits_>::getString(const std::string_view & name) const
+String BaseSettings<Traits_>::getString(std::string_view name) const
 {
     const auto & accessor = Traits::Accessor::instance();
     if (size_t index = accessor.find(name); index != static_cast<size_t>(-1))
@@ -230,7 +230,7 @@ String BaseSettings<Traits_>::getString(const std::string_view & name) const
 }
 
 template <typename Traits_>
-bool BaseSettings<Traits_>::tryGet(const std::string_view & name, Field & value) const
+bool BaseSettings<Traits_>::tryGet(std::string_view name, Field & value) const
 {
     const auto & accessor = Traits::Accessor::instance();
     if (size_t index = accessor.find(name); index != static_cast<size_t>(-1))
@@ -247,7 +247,7 @@ bool BaseSettings<Traits_>::tryGet(const std::string_view & name, Field & value)
 }
 
 template <typename Traits_>
-bool BaseSettings<Traits_>::tryGetString(const std::string_view & name, String & value) const
+bool BaseSettings<Traits_>::tryGetString(std::string_view name, String & value) const
 {
     const auto & accessor = Traits::Accessor::instance();
     if (size_t index = accessor.find(name); index != static_cast<size_t>(-1))
@@ -264,7 +264,7 @@ bool BaseSettings<Traits_>::tryGetString(const std::string_view & name, String &
 }
 
 template <typename Traits_>
-bool BaseSettings<Traits_>::isChanged(const std::string_view & name) const
+bool BaseSettings<Traits_>::isChanged(std::string_view name) const
 {
     const auto & accessor = Traits::Accessor::instance();
     if (size_t index = accessor.find(name); index != static_cast<size_t>(-1))
@@ -316,20 +316,20 @@ void BaseSettings<Traits_>::resetToDefault()
 }
 
 template <typename Traits_>
-bool BaseSettings<Traits_>::hasBuiltin(const std::string_view & name)
+bool BaseSettings<Traits_>::hasBuiltin(std::string_view name)
 {
     const auto & accessor = Traits::Accessor::instance();
     return (accessor.find(name) != static_cast<size_t>(-1));
 }
 
 template <typename Traits_>
-bool BaseSettings<Traits_>::hasCustom(const std::string_view & name) const
+bool BaseSettings<Traits_>::hasCustom(std::string_view name) const
 {
     return tryGetCustomSetting(name);
 }
 
 template <typename Traits_>
-const char * BaseSettings<Traits_>::getTypeName(const std::string_view & name) const
+const char * BaseSettings<Traits_>::getTypeName(std::string_view name) const
 {
     const auto & accessor = Traits::Accessor::instance();
     if (size_t index = accessor.find(name); index != static_cast<size_t>(-1))
@@ -341,7 +341,7 @@ const char * BaseSettings<Traits_>::getTypeName(const std::string_view & name) c
 }
 
 template <typename Traits_>
-const char * BaseSettings<Traits_>::getDescription(const std::string_view & name) const
+const char * BaseSettings<Traits_>::getDescription(std::string_view name) const
 {
     const auto & accessor = Traits::Accessor::instance();
     if (size_t index = accessor.find(name); index != static_cast<size_t>(-1))
@@ -353,19 +353,19 @@ const char * BaseSettings<Traits_>::getDescription(const std::string_view & name
 }
 
 template <typename Traits_>
-void BaseSettings<Traits_>::checkCanSet(const std::string_view & name, const Field & value)
+void BaseSettings<Traits_>::checkCanSet(std::string_view name, const Field & value)
 {
     castValueUtil(name, value);
 }
 
 template <typename Traits_>
-void BaseSettings<Traits_>::checkCanSetString(const std::string_view & name, const String & str)
+void BaseSettings<Traits_>::checkCanSetString(std::string_view name, const String & str)
 {
     stringToValueUtil(name, str);
 }
 
 template <typename Traits_>
-Field BaseSettings<Traits_>::castValueUtil(const std::string_view & name, const Field & value)
+Field BaseSettings<Traits_>::castValueUtil(std::string_view name, const Field & value)
 {
     const auto & accessor = Traits::Accessor::instance();
     if (size_t index = accessor.find(name); index != static_cast<size_t>(-1))
@@ -377,7 +377,7 @@ Field BaseSettings<Traits_>::castValueUtil(const std::string_view & name, const 
 }
 
 template <typename Traits_>
-String BaseSettings<Traits_>::valueToStringUtil(const std::string_view & name, const Field & value)
+String BaseSettings<Traits_>::valueToStringUtil(std::string_view name, const Field & value)
 {
     const auto & accessor = Traits::Accessor::instance();
     if (size_t index = accessor.find(name); index != static_cast<size_t>(-1))
@@ -389,7 +389,7 @@ String BaseSettings<Traits_>::valueToStringUtil(const std::string_view & name, c
 }
 
 template <typename Traits_>
-Field BaseSettings<Traits_>::stringToValueUtil(const std::string_view & name, const String & str)
+Field BaseSettings<Traits_>::stringToValueUtil(std::string_view name, const String & str)
 {
     try
     {
@@ -521,7 +521,7 @@ bool operator!=(const BaseSettings<Traits_> & left, const BaseSettings<Traits_> 
 }
 
 template <typename Traits_>
-SettingFieldCustom & BaseSettings<Traits_>::getCustomSetting(const std::string_view & name)
+SettingFieldCustom & BaseSettings<Traits_>::getCustomSetting(std::string_view name)
 {
     if constexpr (Traits::allow_custom_settings)
     {
@@ -537,7 +537,7 @@ SettingFieldCustom & BaseSettings<Traits_>::getCustomSetting(const std::string_v
 }
 
 template <typename Traits_>
-const SettingFieldCustom & BaseSettings<Traits_>::getCustomSetting(const std::string_view & name) const
+const SettingFieldCustom & BaseSettings<Traits_>::getCustomSetting(std::string_view name) const
 {
     if constexpr (Traits::allow_custom_settings)
     {
@@ -549,7 +549,7 @@ const SettingFieldCustom & BaseSettings<Traits_>::getCustomSetting(const std::st
 }
 
 template <typename Traits_>
-const SettingFieldCustom * BaseSettings<Traits_>::tryGetCustomSetting(const std::string_view & name) const
+const SettingFieldCustom * BaseSettings<Traits_>::tryGetCustomSetting(std::string_view name) const
 {
     if constexpr (Traits::allow_custom_settings)
     {
@@ -777,7 +777,7 @@ bool BaseSettings<Traits_>::SettingFieldRef::isObsolete() const
         public: \
             static const Accessor & instance(); \
             size_t size() const { return field_infos.size(); } \
-            size_t find(const std::string_view & name) const; \
+            size_t find(std::string_view name) const; \
             const String & getName(size_t index) const { return field_infos[index].name; } \
             const char * getTypeName(size_t index) const { return field_infos[index].type; } \
             const char * getDescription(size_t index) const { return field_infos[index].description; } \
@@ -846,7 +846,7 @@ bool BaseSettings<Traits_>::SettingFieldRef::isObsolete() const
     \
     SETTINGS_TRAITS_NAME::Accessor::Accessor() {} \
     \
-    size_t SETTINGS_TRAITS_NAME::Accessor::find(const std::string_view & name) const \
+    size_t SETTINGS_TRAITS_NAME::Accessor::find(std::string_view name) const \
     { \
         auto it = name_to_index_map.find(name); \
         if (it != name_to_index_map.end()) \

@@ -43,7 +43,7 @@ public:
     }
 
     /// throws exception if value is not valid
-    const StringRef & getNameForValue(const T & value) const
+    StringRef getNameForValue(const T & value) const
     {
         return findByValue(value)->second;
     }

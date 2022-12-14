@@ -108,7 +108,7 @@ inline const String & RawStoreInputFormat::columnName(size_t i) const
     return getPort().getHeader().getByPosition(i).name;
 }
 
-inline size_t RawStoreInputFormat::columnIndex(const StringRef & name, size_t key_index)
+inline size_t RawStoreInputFormat::columnIndex(StringRef name, size_t key_index)
 {
     /// Optimization by caching the order of fields (which is almost always the same)
     /// and a quick check to match the next expected field, instead of searching the hash table.
@@ -164,7 +164,7 @@ static inline void skipColonDelimeter(ReadBuffer & istr)
     skipWhitespaceIfAny(istr);
 }
 
-void RawStoreInputFormat::skipUnknownField(const StringRef & name_ref)
+void RawStoreInputFormat::skipUnknownField(StringRef name_ref)
 {
     if (!format_settings.skip_unknown_fields)
         throw Exception("Unknown field found while parsing JSONEachRow format: " + name_ref.toString(), ErrorCodes::INCORRECT_DATA);

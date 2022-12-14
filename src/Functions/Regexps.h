@@ -261,7 +261,7 @@ namespace MultiRegexps
 
         std::vector<String> str_patterns;
         str_patterns.reserve(patterns.size());
-        for (const StringRef & ref : patterns)
+        for (StringRef ref : patterns)
             str_patterns.push_back(ref.toString());
 
         /// Get the lock for finding database.

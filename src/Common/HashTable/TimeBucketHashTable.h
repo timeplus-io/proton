@@ -52,7 +52,7 @@ public:
         return key & ((0xFFull << ((win_key_size - 1) << 3)) + ((1ull << ((win_key_size - 1) << 3)) - 1));
     }
 
-    ALWAYS_INLINE size_t windowKey(const StringRef & key)
+    ALWAYS_INLINE size_t windowKey(StringRef key)
     {
         /// deserialize the first win_key_size bytes
         if (win_key_size == 8)

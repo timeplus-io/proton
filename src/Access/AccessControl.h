@@ -101,8 +101,8 @@ public:
     /// This function also enables custom prefixes to be used.
     void setCustomSettingsPrefixes(const Strings & prefixes);
     void setCustomSettingsPrefixes(const String & comma_separated_prefixes);
-    bool isSettingNameAllowed(const std::string_view & name) const;
-    void checkSettingNameIsAllowed(const std::string_view & name) const;
+    bool isSettingNameAllowed(std::string_view name) const;
+    void checkSettingNameIsAllowed(std::string_view name) const;
 
     UUID authenticate(const Credentials & credentials, const Poco::Net::IPAddress & address) const;
     void setExternalAuthenticatorsConfig(const Poco::Util::AbstractConfiguration & config);
