@@ -389,9 +389,9 @@ void StorageStream::readRemote(
 {
     Block header;
     if (!column_names.empty())
-        header = storage_snapshot->getSampleBlockForColumns(column_names, /* use_extended_objects */ false);
+        header = storage_snapshot->getSampleBlockForColumns(column_names);
     else
-        header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, /* use_extended_objects */ false);
+        header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
 
     /// sometimes 'getQueryProcessingStage' has not been called before 'read', get cluster info first before creating pipes
     /// by calling 'getQueryProcessingStageRemote'
@@ -448,9 +448,9 @@ void StorageStream::readConcat(
     /// We will need add one
     Block header;
     if (!column_names.empty())
-        header = storage_snapshot->getSampleBlockForColumns(column_names, /* use_extended_objects */ false);
+        header = storage_snapshot->getSampleBlockForColumns(column_names);
     else
-        header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, /* use_extended_objects */ false);
+        header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
 
     std::vector<QueryPlanPtr> plans;
     for (auto & stream_shard : shards_to_read)
@@ -592,9 +592,9 @@ void StorageStream::readStreaming(
         /// We will need add one
         Block header;
         if (!column_names.empty())
-            header = storage_snapshot->getSampleBlockForColumns(column_names, /* use_extended_objects */ false);
+            header = storage_snapshot->getSampleBlockForColumns(column_names);
         else
-            header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, /* use_extended_objects */ false);
+            header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
 
         auto offsets = stream_shards.back()->getOffsets(settings_ref.seek_to.value);
         for (auto stream_shard : shards_to_read)
@@ -688,9 +688,9 @@ void StorageStream::readHistory(
 
     Block header;
     if (!column_names.empty())
-        header = storage_snapshot->getSampleBlockForColumns(column_names, /* use_extended_objects */ false);
+        header = storage_snapshot->getSampleBlockForColumns(column_names);
     else
-        header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, /* use_extended_objects */ false);
+        header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
 
     auto shard_num_streams = num_streams / shards_to_read.size();
     if (shard_num_streams == 0)

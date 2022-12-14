@@ -7,11 +7,27 @@
 
 /// proton : starts
 #include <Storages/MergeTree/SequenceInfo.h>
-///
+/// proton : ends
 
 
 namespace DB
 {
+
+MergeTreeSink::~MergeTreeSink() = default;
+
+MergeTreeSink::MergeTreeSink(
+    StorageMergeTree & storage_,
+    StorageMetadataPtr metadata_snapshot_,
+    size_t max_parts_per_block_,
+    ContextPtr context_)
+    : SinkToStorage(metadata_snapshot_->getSampleBlock(), ProcessorID::MergeTreeSinkID)
+    , storage(storage_)
+    , metadata_snapshot(metadata_snapshot_)
+    , max_parts_per_block(max_parts_per_block_)
+    , context(context_)
+    , storage_snapshot(storage.getStorageSnapshot(metadata_snapshot))
+{
+}
 
 void MergeTreeSink::onStart()
 {
@@ -20,11 +36,9 @@ void MergeTreeSink::onStart()
     storage.delayInsertOrThrowIfNeeded();
 }
 
-
 void MergeTreeSink::consume(Chunk chunk)
 {
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
-    auto storage_snapshot = storage.getStorageSnapshot(metadata_snapshot);
     if (!storage_snapshot->object_columns.get()->empty())
         convertDynamicColumnsToTuples(block, storage_snapshot);
 
@@ -33,6 +47,8 @@ void MergeTreeSink::consume(Chunk chunk)
     /// proton: starts
     Int32 parts = static_cast<Int32>(part_blocks.size());
     Int32 part_index = 0;
+
+    const Settings & settings = context->getSettingsRef();
 
     for (auto & current_block : part_blocks)
     {
@@ -49,19 +65,19 @@ void MergeTreeSink::consume(Chunk chunk)
         if (seq_info)
             part_seq = seq_info->shallowClone(part_index, parts);
 
-        auto part = storage.writer.writeTempPart(current_block, metadata_snapshot, part_seq, context);
+        auto temp_part = storage.writer.writeTempPart(current_block, metadata_snapshot, part_seq, context);
 
         part_index++;
         /// proton: ends
 
         /// If optimize_on_insert setting is true, current_block could become empty after merge
         /// and we didn't create part.
-        if (!part)
+        if (!temp_part)
             continue;
 
         if (storage.getDeduplicationLog())
         {
-            const String & dedup_token = context->getSettingsRef().insert_deduplication_token;
+            const String & dedup_token = settings.insert_deduplication_token;
             if (!dedup_token.empty())
             {
                 /// multiple blocks can be inserted within the same insert query
@@ -72,9 +88,9 @@ void MergeTreeSink::consume(Chunk chunk)
         }
 
         /// Part can be deduplicated, so increment counters and add to part log only if it's really added
-        if (storage.renameTempPartAndAdd(part, &storage.increment, nullptr, storage.getDeduplicationLog(), block_dedup_token))
+        if (storage.renameTempPartAndAdd(temp_part, &storage.increment, nullptr, storage.getDeduplicationLog(), block_dedup_token))
         {
-            PartLog::addNewPart(storage.getContext(), part, watch.elapsed());
+            PartLog::addNewPart(storage.getContext(), temp_part, watch.elapsed());
 
             /// Initiate async merge - it will be done if it's good time for merge and if there are space in 'background_pool'.
             storage.background_operations_assignee.trigger();

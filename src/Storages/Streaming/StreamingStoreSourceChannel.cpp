@@ -56,8 +56,7 @@ void StreamingStoreSourceChannel::readAndProcess()
         /// Block in channel shall always contain full columns
         assert(block.columns() == columns_desc.positions.size());
 
-        if (hasObjectColumns())
-            fillAndUpdateObjects(block);
+        fillAndUpdateObjectsIfNecessary(block);
 
         for (const auto & pos : columns_desc.positions)
         {
@@ -84,8 +83,7 @@ void StreamingStoreSourceChannel::readAndProcess()
                 case SourceColumnsDescription::ReadColumnType::SUB:
                 {
                     /// need a deep copy
-                    auto col{getSubcolumnFromblock(
-                        block, pos.parentPosition(), columns_desc.subcolumns_to_read[pos.subPosition()])};
+                    auto col{getSubcolumnFromBlock(block, pos.parentPosition(), columns_desc.subcolumns_to_read[pos.subPosition()])};
                     columns.push_back(col->cloneResized(col->size()));
                     break;
                 }

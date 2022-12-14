@@ -3,6 +3,7 @@
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
 #include <DataTypes/ObjectUtils.h>
+#include <Storages/StorageSnapshot.h>
 #include <base/logger_useful.h>
 
 namespace DB
@@ -16,18 +17,17 @@ extern const int RECOVER_CHECKPOINT_FAILED;
 StreamingStoreSourceBase::StreamingStoreSourceBase(
     const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr query_context_, Poco::Logger * log_, ProcessorID pid_)
     : SourceWithProgress(header, pid_)
-    , storage_snapshot(*storage_snapshot_)
+    , storage_snapshot(std::make_shared<StorageSnapshot>(*storage_snapshot_)) /// We like to make a copy of it since we will mutate the snapshot
     , query_context(std::move(query_context_))
     , log(log_)
     , header_chunk(header.getColumns(), 0)
     , columns_desc(
-          storage_snapshot.getColumnsByNames(GetColumnsOptions(GetColumnsOptions::All).withSubcolumns().withVirtuals(), header.getNames()),
-          storage_snapshot.getMetadataForQuery()->getSampleBlock())
-    , required_object_names(getNamesOfObjectColumns(header.getNamesAndTypesList()))
+          storage_snapshot->getColumnsByNames(GetColumnsOptions(GetColumnsOptions::All).withSubcolumns().withVirtuals().withExtendedObjects(), header.getNames()),
+          storage_snapshot->getMetadataForQuery()->getSampleBlock())
 {
     /// Init current object description and update current storage snapshot for streaming source
     if (!columns_desc.physical_object_column_names_to_read.empty())
-        storage_snapshot.object_columns.set(std::make_unique<ColumnsDescription>(storage_snapshot.object_columns.get()->getByNames(
+        storage_snapshot->object_columns.set(std::make_unique<ColumnsDescription>(storage_snapshot->object_columns.get()->getByNames(
             GetColumnsOptions::AllPhysical, columns_desc.physical_object_column_names_to_read)));
 
     iter = result_chunks.begin();
@@ -36,7 +36,7 @@ StreamingStoreSourceBase::StreamingStoreSourceBase(
 }
 
 ColumnPtr
-StreamingStoreSourceBase::getSubcolumnFromblock(const Block & block, size_t parent_column_pos, const NameAndTypePair & subcolumn_pair) const
+StreamingStoreSourceBase::getSubcolumnFromBlock(const Block & block, size_t parent_column_pos, const NameAndTypePair & subcolumn_pair) const
 {
     assert(subcolumn_pair.isSubcolumn());
 
@@ -60,7 +60,7 @@ StreamingStoreSourceBase::getSubcolumnFromblock(const Block & block, size_t pare
             convert_act.execute(subcolumn_block, block.rows());
             return subcolumn_block.getByPosition(0).column;
         }
-        else if (storage_snapshot.object_columns.get()->hasSubcolumn(subcolumn_pair.name))
+        else if (storage_snapshot->object_columns.get()->hasSubcolumn(subcolumn_pair.name))
         {
             /// we return default value if the object has this subcolumn but current block doesn't exist
             return subcolumn_pair.type->createColumn()->cloneResized(block.rows());
@@ -73,21 +73,25 @@ StreamingStoreSourceBase::getSubcolumnFromblock(const Block & block, size_t pare
         return parent.type->getSubcolumn(subcolumn_pair.getSubcolumnName(), parent.column);
 }
 
-void StreamingStoreSourceBase::fillAndUpdateObjects(Block & block)
+void StreamingStoreSourceBase::fillAndUpdateObjectsIfNecessary(Block & block)
 {
+    /// Note
+    /// 1. JSON column is appended to streaming data store as it is.
+    /// 2. When committing JSON column to historical data store, we will convert it to extended object (tuple(...))
+    /// For now, requested columns which have `json` storage type, will have `tuple(...)` in header
+    /// we will need convert json column read from streaming store to tuple(...)
+
+    if (!hasObjectColumns())
+        return;
+
     try
     {
-        auto columns_list = storage_snapshot.metadata->getColumns().getAllPhysical().filter(block.getNames());
-        auto extended_storage_columns
-            = storage_snapshot.getColumns(GetColumnsOptions(GetColumnsOptions::AllPhysical).withExtendedObjects());
-
-        /// Fill missing elems for objects in block (only filled those @required_object_names)
-        fillAndConvertObjectsToTuples(columns_list, block, extended_storage_columns, required_object_names);
+        convertDynamicColumnsToTuples(block, storage_snapshot);
 
         /// Update object columns if have changes
-        auto current_object_columns = *storage_snapshot.object_columns.get();
-        if (updateObjectColumns(current_object_columns, storage_snapshot.metadata->getColumns(), columns_list))
-            storage_snapshot.object_columns.set(std::make_unique<ColumnsDescription>(std::move(current_object_columns)));
+        auto current_object_columns = *storage_snapshot->object_columns.get();
+        if (updateObjectColumns(current_object_columns, storage_snapshot->metadata->getColumns(), block.getNamesAndTypesList()))
+            storage_snapshot->object_columns.set(std::make_unique<ColumnsDescription>(std::move(current_object_columns)));
     }
     catch (Exception & e)
     {

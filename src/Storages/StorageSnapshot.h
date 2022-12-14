@@ -14,11 +14,10 @@ struct StorageSnapshot
     const IStorage & storage;
     const StorageMetadataPtr metadata;
 
-    /// proton : starts
-    /// Allow to get/set dynamic object columns for streaming store source
+    /// proton : starts.
+    /// Make object column multi-versioned to allow to get/set
+    /// dynamic object columns for streaming store source
     MultiVersion<ColumnsDescription> object_columns;
-
-    bool force_use_extended_objects = false;
     /// proton : ends
 
     /// Additional data, on which set of columns may depend.
@@ -29,7 +28,7 @@ struct StorageSnapshot
     };
 
     using DataPtr = std::shared_ptr<const Data>;
-    const DataPtr data;
+    DataPtr data;
 
     /// Projection that is used in query.
     mutable const ProjectionDescription * projection = nullptr;
@@ -84,11 +83,9 @@ struct StorageSnapshot
     NameAndTypePair getColumn(const GetColumnsOptions & options, const String & column_name) const;
 
     /// Block with ordinary + materialized + aliases + virtuals + subcolumns.
-    /// proton: starts
-    /// when `use_extended_objects` is true, we will convert `json` to `tuple` representation,
-    /// otherwise keep `json` column as it is in the sample block.
-    Block getSampleBlockForColumns(const Names & column_names, bool use_extended_objects = false) const;
-    /// proton: ends.
+    Block getSampleBlockForColumns(const Names & column_names) const;
+
+    ColumnsDescription getDescriptionForColumns(const Names & column_names) const;
 
     /// Verify that all the requested names are in the table and are set correctly:
     /// list of names is not empty and the names do not repeat.

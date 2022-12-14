@@ -5,10 +5,13 @@
 #include <Interpreters/Context_fwd.h>
 #include <NativeLog/Record/Record.h>
 #include <Processors/Sources/SourceWithProgress.h>
-#include <Storages/StorageSnapshot.h>
 
 namespace DB
 {
+
+struct StorageSnapshot;
+using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
+
 class StreamingStoreSourceBase : public SourceWithProgress
 {
 public:
@@ -28,7 +31,7 @@ private:
     Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx_);
 
 protected:
-    StorageSnapshot storage_snapshot;
+    StorageSnapshotPtr storage_snapshot;
 
     ContextPtr query_context;
 
@@ -38,11 +41,9 @@ protected:
 
     SourceColumnsDescription columns_desc;
 
-    NameSet required_object_names;
-
     bool hasObjectColumns() const { return !columns_desc.physical_object_column_names_to_read.empty(); }
-    ColumnPtr getSubcolumnFromblock(const Block & block, size_t parent_column_pos, const NameAndTypePair & subcolumn_pair) const;
-    void fillAndUpdateObjects(Block & block);
+    ColumnPtr getSubcolumnFromBlock(const Block & block, size_t parent_column_pos, const NameAndTypePair & subcolumn_pair) const;
+    void fillAndUpdateObjectsIfNecessary(Block & block);
 
     std::vector<Chunk> result_chunks;
     std::vector<Chunk>::iterator iter;

@@ -37,20 +37,14 @@ struct JoinedElement
     void checkTableName(const DatabaseAndTableWithAlias & table, const String & current_database) const
     {
         if (!element.table_expression)
-            /// proton: starts
             throw Exception("Not a stream expression in JOIN (ARRAY JOIN?)", ErrorCodes::LOGICAL_ERROR);
-            /// proton: ends
 
         ASTTableExpression * table_expression = element.table_expression->as<ASTTableExpression>();
         if (!table_expression)
-            /// proton: starts
             throw Exception("Wrong stream expression in JOIN", ErrorCodes::LOGICAL_ERROR);
-            /// proton: ends
 
         if (!table.same(DatabaseAndTableWithAlias(*table_expression, current_database)))
-            /// proton: starts
             throw Exception("Inconsistent stream names", ErrorCodes::LOGICAL_ERROR);
-            /// proton: ends
     }
 
     void rewriteCommaToCross()
@@ -90,7 +84,7 @@ bool isAllowedToRewriteCrossJoin(const ASTPtr & node, const Aliases & aliases)
         auto idents = IdentifiersCollector::collect(node);
         for (const auto * ident : idents)
         {
-            if (ident->isShort() && aliases.count(ident->shortName()))
+            if (ident->isShort() && aliases.contains(ident->shortName()))
                 return false;
         }
         return true;
@@ -106,7 +100,7 @@ std::map<size_t, std::vector<ASTPtr>> moveExpressionToJoinOn(
     const Aliases & aliases)
 {
     std::map<size_t, std::vector<ASTPtr>> asts_to_join_on;
-    for (const auto & node : collectConjunctions(ast))
+    for (const auto & node : splitConjunctionsAst(ast))
     {
         if (const auto * func = node->as<ASTFunction>(); func && func->name == NameEquals::name)
         {

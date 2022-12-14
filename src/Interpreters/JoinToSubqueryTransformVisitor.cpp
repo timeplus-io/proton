@@ -1,24 +1,24 @@
-#include <Common/typeid_cast.h>
+#include <Core/Defines.h>
 #include <Core/NamesAndTypes.h>
-#include <Interpreters/JoinToSubqueryTransformVisitor.h>
-#include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
+#include <Interpreters/IdentifierSemantic.h>
+#include <Interpreters/JoinToSubqueryTransformVisitor.h>
 #include <Interpreters/RequiredSourceColumnsVisitor.h>
+#include <Parsers/ASTAsterisk.h>
+#include <Parsers/ASTColumnsMatcher.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTColumnsTransformers.h>
+#include <Parsers/ASTQualifiedAsterisk.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTExpressionList.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTAsterisk.h>
-#include <Parsers/ASTColumnsMatcher.h>
-#include <Parsers/ASTQualifiedAsterisk.h>
-#include <Parsers/ParserTablesInSelectQuery.h>
 #include <Parsers/ExpressionListParsers.h>
+#include <Parsers/ParserTablesInSelectQuery.h>
 #include <Parsers/parseQuery.h>
-#include <IO/WriteHelpers.h>
-#include <Core/Defines.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/typeid_cast.h>
 
 namespace DB
 {
@@ -81,6 +81,7 @@ public:
         /// By default should_add_column_predicate returns true for any column name
         void addTableColumns(
             const String & table_name,
+            ASTs & columns,
             ShouldAddColumnPredicate should_add_column_predicate = [](const String &) { return true; })
         {
             auto it = table_columns.find(table_name);
@@ -105,7 +106,7 @@ public:
                     else
                         identifier = std::make_shared<ASTIdentifier>(std::vector<String>{it->first, column.name});
 
-                    new_select_expression_list->children.emplace_back(std::move(identifier));
+                    columns.emplace_back(std::move(identifier));
                 }
             }
         }
@@ -129,14 +130,18 @@ private:
 
         for (const auto & child : node.children)
         {
-            if (child->as<ASTAsterisk>())
+            ASTs columns;
+            if (const auto * asterisk = child->as<ASTAsterisk>())
             {
                 has_asterisks = true;
 
                 for (auto & table_name : data.tables_order)
-                    data.addTableColumns(table_name);
+                    data.addTableColumns(table_name, columns);
+
+                for (const auto & transformer : asterisk->children)
+                    IASTColumnsTransformer::transform(transformer, columns);
             }
-            else if (child->as<ASTQualifiedAsterisk>())
+            else if (const auto * qualified_asterisk = child->as<ASTQualifiedAsterisk>())
             {
                 has_asterisks = true;
 
@@ -144,17 +149,44 @@ private:
                     throw Exception("Logical error: qualified asterisk must have exactly one child", ErrorCodes::LOGICAL_ERROR);
                 auto & identifier = child->children[0]->as<ASTTableIdentifier &>();
 
-                data.addTableColumns(identifier.name());
+                data.addTableColumns(identifier.name(), columns);
+
+                // QualifiedAsterisk's transformers start to appear at child 1
+                for (auto it = qualified_asterisk->children.begin() + 1; it != qualified_asterisk->children.end(); ++it)
+                {
+                    IASTColumnsTransformer::transform(*it, columns);
+                }
             }
-            else if (auto * columns_matcher = child->as<ASTColumnsMatcher>())
+            else if (const auto * columns_list_matcher = child->as<ASTColumnsListMatcher>())
+            {
+                has_asterisks = true;
+
+                for (const auto & ident : columns_list_matcher->column_list->children)
+                    columns.emplace_back(ident->clone());
+
+                for (const auto & transformer : columns_list_matcher->children)
+                    IASTColumnsTransformer::transform(transformer, columns);
+            }
+            else if (const auto * columns_regexp_matcher = child->as<ASTColumnsRegexpMatcher>())
             {
                 has_asterisks = true;
 
                 for (auto & table_name : data.tables_order)
-                    data.addTableColumns(table_name, [&](const String & column_name) { return columns_matcher->isColumnMatching(column_name); });
+                    data.addTableColumns(
+                        table_name,
+                        columns,
+                        [&](const String & column_name) { return columns_regexp_matcher->isColumnMatching(column_name); });
+
+                for (const auto & transformer : columns_regexp_matcher->children)
+                    IASTColumnsTransformer::transform(transformer, columns);
             }
             else
                 data.new_select_expression_list->children.push_back(child);
+
+            data.new_select_expression_list->children.insert(
+                data.new_select_expression_list->children.end(),
+                std::make_move_iterator(columns.begin()),
+                std::make_move_iterator(columns.end()));
         }
 
         if (!has_asterisks)
@@ -204,9 +236,7 @@ bool needRewrite(ASTSelectQuery & select, std::vector<const ASTTableExpression *
     {
         const auto * table = tables->children[i]->as<ASTTablesInSelectQueryElement>();
         if (!table)
-            /// proton: starts
             throw Exception("Stream expected", ErrorCodes::LOGICAL_ERROR);
-            /// proton: ends
 
         if (table->table_expression)
             if (const auto * expression = table->table_expression->as<ASTTableExpression>())
@@ -215,9 +245,7 @@ bool needRewrite(ASTSelectQuery & select, std::vector<const ASTTableExpression *
             continue;
 
         if (!table->table_join && !table->array_join)
-            /// proton: starts
             throw Exception("Joined stream expected", ErrorCodes::LOGICAL_ERROR);
-            /// proton: ends
 
         if (table->array_join)
         {
@@ -736,9 +764,7 @@ ASTPtr JoinToSubqueryTransformMatcher::replaceJoin(ASTPtr ast_left, ASTPtr ast_r
         throw Exception("Two TablesInSelectQueryElements expected", ErrorCodes::LOGICAL_ERROR);
 
     if (!right->table_join)
-        /// proton: starts
         throw Exception("Stream join expected", ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
 
     /// replace '_t' with pair of joined tables
     RewriteVisitor::Data visitor_data{ast_left, ast_right};

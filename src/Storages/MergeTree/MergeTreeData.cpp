@@ -2494,10 +2494,8 @@ bool MergeTreeData::renameTempPartAndAdd(
     std::string_view deduplication_token)
 {
     if (out_transaction && &out_transaction->data != this)
-        /// proton: starts
         throw Exception("MergeTreeData::Transaction for one stream cannot be used with another. It is a bug.",
             ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
 
     DataPartsVector covered_parts;
     {
@@ -2523,10 +2521,8 @@ bool MergeTreeData::renameTempPartAndReplace(
     std::string_view deduplication_token)
 {
     if (out_transaction && &out_transaction->data != this)
-        /// proton: starts
         throw Exception("MergeTreeData::Transaction for one stream cannot be used with another. It is a bug.",
             ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
 
     part->assertState({DataPartState::Temporary});
 

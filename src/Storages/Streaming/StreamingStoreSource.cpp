@@ -80,8 +80,7 @@ void StreamingStoreSource::readAndProcess()
 
         assert(columns_desc.positions.size() >= block.columns());
 
-        if (hasObjectColumns())
-            fillAndUpdateObjects(block);
+        fillAndUpdateObjectsIfNecessary(block);
 
         for (const auto & pos : columns_desc.positions)
         {
@@ -101,7 +100,7 @@ void StreamingStoreSource::readAndProcess()
                 }
                 case SourceColumnsDescription::ReadColumnType::SUB: {
                     columns.push_back(
-                        getSubcolumnFromblock(block, pos.parentPosition(), columns_desc.subcolumns_to_read[pos.subPosition()]));
+                        getSubcolumnFromBlock(block, pos.parentPosition(), columns_desc.subcolumns_to_read[pos.subPosition()]));
                     break;
                 }
             }

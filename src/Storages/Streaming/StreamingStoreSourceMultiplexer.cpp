@@ -136,7 +136,7 @@ void StreamingStoreSourceMultiplexer::fanOut(nlog::RecordPtrs records)
 StreamingStoreSourceChannelPtr StreamingStoreSourceMultiplexer::createChannel(
     const Names & column_names, const StorageSnapshotPtr & storage_snapshot, ContextPtr query_context)
 {
-    auto header{storage_snapshot->getSampleBlockForColumns(column_names, /* use_extended_objects */ false)};
+    auto header{storage_snapshot->getSampleBlockForColumns(column_names)};
     auto channel = std::make_shared<StreamingStoreSourceChannel>(
         shared_from_this(), std::move(header), storage_snapshot, std::move(query_context), log);
 

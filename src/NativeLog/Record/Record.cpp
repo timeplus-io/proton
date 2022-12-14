@@ -208,7 +208,7 @@ void Record::deserializeInSchemaDataV0(Record & record, DB::ReadBuffer & rb, con
 {
     bool partial = (record.block_format == BlockFormat::NATIVE_IN_SCHEMA_PARTIAL);
 
-    if (likely(record.codec() == DB::CompressionMethodByte::NONE))
+    if (record.codec() == DB::CompressionMethodByte::NONE)
     {
         SchemaNativeReader reader(rb, partial, record.schema_version, schema_ctx);
         reader.read(record.block);

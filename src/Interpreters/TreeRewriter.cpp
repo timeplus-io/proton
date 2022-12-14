@@ -35,7 +35,6 @@
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeLowCardinality.h>
-#include <DataTypes/DataTypesNumber.h>
 
 #include <IO/WriteHelpers.h>
 #include <Storages/IStorage.h>
@@ -546,9 +545,7 @@ void getArrayJoinedColumns(ASTPtr & query, TreeRewriterResult & result, const AS
                 }
             }
             if (!found)
-                /// proton: starts
                 throw Exception("No columns in nested stream " + source_name, ErrorCodes::EMPTY_NESTED_STREAM);
-                /// proton: ends
         }
     }
 }
@@ -901,6 +898,7 @@ void TreeRewriterResult::collectSourceColumns(bool add_special)
     if (storage)
     {
         auto options = GetColumnsOptions(add_special ? GetColumnsOptions::All : GetColumnsOptions::AllPhysical);
+        options.withExtendedObjects();
         if (storage->supportsSubcolumns())
             options.withSubcolumns();
 
@@ -943,6 +941,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
 
     NameSet required = columns_context.requiredColumns();
 
+    /// proton : starts
     if (storage)
     {
         if (auto * proxy = storage->as<Streaming::ProxyStream>())
@@ -959,6 +958,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
             }
         }
     }
+    /// proton : end
 
     if (columns_context.has_table_join)
     {

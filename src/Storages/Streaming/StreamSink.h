@@ -12,6 +12,8 @@ namespace DB
 class Context;
 class Block;
 class StorageStream;
+struct StorageSnapshot;
+using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
 
 struct BlockWithShard
 {
@@ -44,6 +46,7 @@ private:
 private:
     StorageStream & storage;
     StorageMetadataPtr metadata_snapshot;
+    /// StorageSnapshotPtr storage_snapshot;
     ContextPtr query_context;
 
     std::vector<UInt16> column_positions;

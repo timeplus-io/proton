@@ -1,6 +1,7 @@
 #include "StreamSink.h"
 #include "StorageStream.h"
 
+#include <DataTypes/ObjectUtils.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
 #include <KafkaLog/KafkaWAL.h>
@@ -10,16 +11,17 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int TIMEOUT_EXCEEDED;
-    extern const int UNSUPPORTED_PARAMETER;
-    extern const int INTERNAL_ERROR;
-    extern const int OK;
+extern const int TIMEOUT_EXCEEDED;
+extern const int UNSUPPORTED_PARAMETER;
+extern const int INTERNAL_ERROR;
+extern const int OK;
 }
 
 StreamSink::StreamSink(StorageStream & storage_, const StorageMetadataPtr metadata_snapshot_, ContextPtr query_context_)
     : SinkToStorage(metadata_snapshot_->getSampleBlockNonMaterialized(), ProcessorID::StreamSinkID)
     , storage(storage_)
     , metadata_snapshot(metadata_snapshot_)
+    /// , storage_snapshot(storage.getStorageSnapshot(metadata_snapshot))
     , query_context(query_context_)
 {
     /// metadata_snapshot can contain only partial columns of the schema when light ingest feature is on
@@ -107,6 +109,10 @@ void StreamSink::consume(Chunk chunk)
     assert(column_positions.empty() || column_positions.size() == chunk.getNumColumns());
 
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
+
+    /// if (!storage_snapshot->object_columns.get()->empty())
+    ///    convertDynamicColumnsToTuples(block, storage_snapshot);
+
     /// 1) Split block by sharding key.
     /// FIXME, when nativelog is distributed, we will need revisit the sharding logic
     BlocksWithShard blocks{shardBlock(std::move(block))};

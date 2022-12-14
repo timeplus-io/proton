@@ -304,7 +304,7 @@ MergeTreeReadTaskColumns getReadTaskColumns(
 
         Names post_column_names;
         for (const auto & name : column_names)
-            if (!pre_name_set.count(name))
+            if (!pre_name_set.contains(name))
                 post_column_names.push_back(name);
 
         column_names = post_column_names;
@@ -313,12 +313,7 @@ MergeTreeReadTaskColumns getReadTaskColumns(
     MergeTreeReadTaskColumns result;
     NamesAndTypesList all_columns;
 
-    /// proton: starts. Original code converts `json` to `tuple` by enable `.withExentedObject()` option when reading, hence
-    /// origin code is `GetColumnsOptions(GetColumnsOptions::All).withSubcolumns().withExtendedObjects();`
-    /// we drop the `.withExtendedObject()` option here to return original (unconverted) `json` object to make
-    /// it more fit for streaming processing.
-    auto options = GetColumnsOptions(GetColumnsOptions::All).withSubcolumns();
-    /// proton: ends
+    auto options = GetColumnsOptions(GetColumnsOptions::All).withSubcolumns().withExtendedObjects();
     result.pre_columns = storage_snapshot->getColumnsByNames(options, pre_column_names);
     result.columns = storage_snapshot->getColumnsByNames(options, column_names);
     result.should_reorder = should_reorder;

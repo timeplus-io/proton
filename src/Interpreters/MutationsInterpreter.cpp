@@ -292,9 +292,7 @@ MutationsInterpreter::MutationsInterpreter(
     , commands(std::move(commands_))
     , context(Context::createCopy(context_))
     , can_execute(can_execute_)
-    /// proton: starts. add option `useExtendedObjectsForHist()`
-    , select_limits(SelectQueryOptions().analyze(!can_execute).ignoreLimits().ignoreProjections().useExtendedObjectsForHist())
-    /// proton: ends.
+    , select_limits(SelectQueryOptions().analyze(!can_execute).ignoreLimits().ignoreProjections())
 {
     mutation_ast = prepare(!can_execute);
 }

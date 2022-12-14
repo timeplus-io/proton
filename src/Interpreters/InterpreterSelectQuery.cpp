@@ -264,24 +264,6 @@ namespace
 
     using StreamingFunctionVisitor = InDepthNodeVisitor<OneTypeMatcher<StreamingFunctionData, StreamingFunctionData::ignoreSubquery>, false>;
 
-    /// Add where expression: <event_time> >= to_datetime64(utc_ms/1000, 3, 'UTC')
-    void addEventTimeFilter(ASTSelectQuery & select, Int64 utc_ms)
-    {
-        auto where_ast = makeASTFunction(
-            "greater_or_equals",
-            std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME),
-            makeASTFunction(
-                "to_datetime64",
-                makeASTFunction("divide", std::make_shared<ASTLiteral>(utc_ms), std::make_shared<ASTLiteral>(1000)),
-                std::make_shared<ASTLiteral>(UInt64(3)),
-                std::make_shared<ASTLiteral>("UTC")));
-
-        if (select.where())
-            select.refWhere() = makeASTFunction("and", where_ast, select.where()->clone());
-        else
-            select.setExpression(ASTSelectQuery::Expression::WHERE, where_ast);
-    }
-
     std::vector<size_t> keyPositionsForSubstreams(const Block & header, const SelectQueryInfo & query_info)
     {
         std::vector<size_t> substream_key_positions;
@@ -604,21 +586,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     /// proton: starts.
     analyzeStreamingMode();
     analyzeChangelogMode();
-
-    /// Support snapshot query with seek_to, handling with streaming query before `TreeRewriter::analyzeSelect`
-    if (!isStreaming() && storage)
-    {
-        if (supportStreamingQuery(storage))
-            handleSnapshotSeekTo();
-
-        if (options.use_extended_objects_for_hist)
-        {
-            auto snapshot = storage_snapshot->clone();
-            snapshot->force_use_extended_objects = true;
-            storage_snapshot = std::move(snapshot);
-        }
-    }
-    /// proton: ends.
 
     joined_tables.rewriteDistributedInAndJoins(query_ptr);
 
@@ -3539,31 +3506,6 @@ void InterpreterSelectQuery::checkEmitVersion()
             throw Exception(ErrorCodes::UNSUPPORTED, "emit_version() shall be only used along with streaming aggregations");
         else if (!streaming)
             throw Exception(ErrorCodes::UNSUPPORTED, "emit_version() shall be only used in streaming query");
-    }
-}
-
-void InterpreterSelectQuery::handleSnapshotSeekTo()
-{
-    /// For snapshot query, if seek_to is empty, we use 'earliest' by default.
-    const auto & seek_to = context->getSettingsRef().seek_to.value;
-    auto [time_based_seek, utc_ms] = parseSeekTo(seek_to.empty() ? "earliest" : seek_to, 1, true);
-
-    if (utc_ms[0] == nlog::EARLIEST_SN)
-    {
-        /// Do nothing for earliest
-    }
-    else if (utc_ms[0] == nlog::LATEST_SN)
-    {
-        /// Filter by now() for latest
-        addEventTimeFilter(getSelectQuery(), UTCMilliseconds::now());
-    }
-    else
-    {
-        if (!time_based_seek)
-            throw Exception(ErrorCodes::UNSUPPORTED, "Sequence number based seek to is not supported");
-
-        /// Filter by the specified timestamp
-        addEventTimeFilter(getSelectQuery(), utc_ms[0]);
     }
 }
 

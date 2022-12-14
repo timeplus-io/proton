@@ -220,7 +220,7 @@ void fillAndConvertObjectsToTuples(
     NamesAndTypesList & columns_list,
     Block & block,
     const NamesAndTypesList & extended_storage_columns,
-    const NameSet & fill_missing_objects);
+    const Names & columns_to_convert);
 
 /// Receives several Tuple types and deduces the least common type among them.
 std::pair<ColumnPtr, DataTypePtr> createSubcolumnFromNode(const ColumnObject::Subcolumns::Node & node);

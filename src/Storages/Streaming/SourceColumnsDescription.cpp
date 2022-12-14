@@ -36,7 +36,6 @@ SourceColumnsDescription::SourceColumnsDescription(const NamesAndTypesList & col
 
     positions.reserve(column_size);
     physical_column_positions_to_read.positions.reserve(column_size);
-    physical_object_column_names_to_read.reserve(column_size);
     subcolumns_to_read.reserve(column_size);
 
     std::vector<uint16_t> read_all_subcolumns_positions;

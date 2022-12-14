@@ -1001,7 +1001,7 @@ void setAllObjectsToDummyTupleType(NamesAndTypesList & columns)
             column.type = createConcreteEmptyDynamicColumn(column.type);
 }
 
-
+/// proton: starts.
 NameSet getNamesOfObjectColumns(const NamesAndTypesList & columns_list)
 {
     NameSet res;
@@ -1012,12 +1012,11 @@ NameSet getNamesOfObjectColumns(const NamesAndTypesList & columns_list)
     return res;
 }
 
-/// proton: starts.
 void fillAndConvertObjectsToTuples(
     NamesAndTypesList & columns_list,
     Block & block,
     const NamesAndTypesList & extended_storage_columns,
-    const NameSet & cols_to_fill_if_absent)
+    const Names & columns_to_convert)
 {
     std::unordered_map<String, DataTypePtr> storage_columns_map;
     for (const auto & [name, type] : extended_storage_columns)
@@ -1048,7 +1047,8 @@ void fillAndConvertObjectsToTuples(
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Column '{}' not found in storage", name_type.name);
 
         /// Fill missing elems into object column as needed.
-        if (cols_to_fill_if_absent.contains(name_type.name))
+        auto need_convert = std::find(columns_to_convert.begin(), columns_to_convert.end(), name_type.name) != columns_to_convert.end();
+        if (need_convert)
         {
             auto [paths, types] = flattenTuple(it->second);
             assert(paths.size() == types.size());
