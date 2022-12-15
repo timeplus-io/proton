@@ -1,6 +1,8 @@
 #pragma once
 
 #include <memory>
+
+#include <base/shared_ptr_helper.h>
 #include <Columns/IColumn.h>
 #include <Core/Names.h>
 #include <Processors/Sources/SourceWithProgress.h>
