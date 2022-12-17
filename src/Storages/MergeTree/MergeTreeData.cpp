@@ -230,9 +230,7 @@ MergeTreeData::MergeTreeData(
         catch (Exception & e)
         {
             /// Better error message.
-            /// proton: starts
             e.addMessage("(while initializing the partition key from date column " + backQuote(date_column_name) + ")");
-            /// proton: ends
             throw;
         }
     }
@@ -1137,32 +1135,26 @@ void MergeTreeData::loadDataPartsFromDisk(
     pool.wait();
 
     if (has_non_adaptive_parts && has_adaptive_parts && !settings->enable_mixed_granularity_parts)
-        /// proton: starts
         throw Exception(
             "Stream contains parts with adaptive and non adaptive marks, but `setting enable_mixed_granularity_parts` is disabled",
             ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
 
     has_non_adaptive_index_granularity_parts = has_non_adaptive_parts;
 
     if (suspicious_broken_parts > settings->max_suspicious_broken_parts && !skip_sanity_checks)
-        /// proton: starts
         throw Exception(ErrorCodes::TOO_MANY_UNEXPECTED_DATA_PARTS,
             "Suspiciously many ({} parts, {} in total) broken parts to remove while maximum allowed broken parts count is {}. You can change the maximum value "
                         "with merge tree setting 'max_suspicious_broken_parts' in <merge_tree> configuration section or in stream settings in .sql file "
                         "(don't forget to return setting back to default value)",
             suspicious_broken_parts, formatReadableSizeWithBinarySuffix(suspicious_broken_parts_bytes), settings->max_suspicious_broken_parts);
-        /// proton: ends
 
     if (suspicious_broken_parts_bytes > settings->max_suspicious_broken_parts_bytes && !skip_sanity_checks)
-        /// proton: starts
         throw Exception(ErrorCodes::TOO_MANY_UNEXPECTED_DATA_PARTS,
             "Suspiciously big size ({} parts, {} in total) of all broken parts to remove while maximum allowed broken parts size is {}. "
             "You can change the maximum value with merge tree setting 'max_suspicious_broken_parts_bytes' in <merge_tree> configuration "
             "section or in stream settings in .sql file (don't forget to return setting back to default value)",
             suspicious_broken_parts, formatReadableSizeWithBinarySuffix(suspicious_broken_parts_bytes),
             formatReadableSizeWithBinarySuffix(settings->max_suspicious_broken_parts_bytes));
-        /// proton: ends
 }
 
 
@@ -2340,9 +2332,7 @@ void MergeTreeData::changeSettings(
                     {
                         auto disk = new_storage_policy->getDiskByName(disk_name);
                         if (disk->exists(relative_data_path))
-                            /// proton: starts
                             throw Exception("New storage policy contain disks which already contain data of a stream with the same name", ErrorCodes::LOGICAL_ERROR);
-                            /// proton: ends
                     }
 
                     for (const String & disk_name : all_diff_disk_names)
@@ -2660,10 +2650,8 @@ MergeTreeData::DataPartsVector MergeTreeData::renameTempPartAndReplace(
     MutableDataPartPtr & part, SimpleIncrement * increment, Transaction * out_transaction, MergeTreeDeduplicationLog * deduplication_log)
 {
     if (out_transaction && &out_transaction->data != this)
-        /// proton: starts
         throw Exception("MergeTreeData::Transaction for one stream cannot be used with another. It is a bug.",
             ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
 
     DataPartsVector covered_parts;
     {
@@ -3069,9 +3057,7 @@ void MergeTreeData::delayInsertOrThrowIfNeeded(Poco::Event * until) const
     if (parts_count_in_total >= settings->max_parts_in_total)
     {
         ProfileEvents::increment(ProfileEvents::RejectedInserts);
-        /// proton: starts
         throw Exception("Too many parts (" + toString(parts_count_in_total) + ") in all partitions in total. This indicates wrong choice of partition key. The threshold can be modified with 'max_parts_in_total' setting in <merge_tree> element in config.xml or with per-stream setting.", ErrorCodes::TOO_MANY_PARTS);
-        /// proton: ends
     }
 
     size_t parts_count_in_partition = getMaxPartsCountForPartition();
@@ -4176,14 +4162,12 @@ ReservationPtr MergeTreeData::tryReserveSpacePreferringTTLRules(
         SpacePtr destination_ptr = getDestinationForMoveTTL(*move_ttl_entry, is_insert);
         if (!destination_ptr)
         {
-            /// proton: starts
             if (move_ttl_entry->destination_type == DataDestinationType::VOLUME)
                 LOG_WARNING(log, "Would like to reserve space on volume '{}' by TTL rule of stream '{}' but volume was not found or rule is not applicable at the moment",
                     move_ttl_entry->destination_name, log_name);
             else if (move_ttl_entry->destination_type == DataDestinationType::DISK)
                 LOG_WARNING(log, "Would like to reserve space on disk '{}' by TTL rule of stream '{}' but disk was not found or rule is not applicable at the moment",
                     move_ttl_entry->destination_name, log_name);
-            /// proton: ends
         }
         else
         {
@@ -4191,14 +4175,12 @@ ReservationPtr MergeTreeData::tryReserveSpacePreferringTTLRules(
             if (reservation)
                 return reservation;
             else
-                /// proton: starts
                 if (move_ttl_entry->destination_type == DataDestinationType::VOLUME)
                     LOG_WARNING(log, "Would like to reserve space on volume '{}' by TTL rule of stream '{}' but there is not enough space",
                     move_ttl_entry->destination_name, log_name);
                 else if (move_ttl_entry->destination_type == DataDestinationType::DISK)
                     LOG_WARNING(log, "Would like to reserve space on disk '{}' by TTL rule of stream '{}' but there is not enough space",
                         move_ttl_entry->destination_name, log_name);
-                /// proton: ends
         }
     }
 
@@ -5124,11 +5106,9 @@ MergeTreeData & MergeTreeData::checkStructureAndGetMergeTreeData(IStorage & sour
 {
     MergeTreeData * src_data = dynamic_cast<MergeTreeData *>(&source_table);
     if (!src_data)
-        /// proton: starts
         throw Exception("Stream " + source_table.getStorageID().getNameForLogs() +
                         " supports attachPartitionFrom only for the current engine family."
                         " Got " + source_table.getName(), ErrorCodes::NOT_IMPLEMENTED);
-        /// proton: ends
 
     if (my_snapshot->getColumns().getAllPhysical().sizeOfDifference(src_snapshot->getColumns().getAllPhysical()))
         throw Exception("Tables have different structure", ErrorCodes::INCOMPATIBLE_COLUMNS);
@@ -5715,7 +5695,6 @@ bool MergeTreeData::canUsePolymorphicParts(const MergeTreeSettings & settings, S
         if (out_reason && (settings.min_rows_for_wide_part != 0 || settings.min_bytes_for_wide_part != 0
             || settings.min_rows_for_compact_part != 0 || settings.min_bytes_for_compact_part != 0))
         {
-            /// proton: starts
             *out_reason = fmt::format(
                     "Stream can't create parts with adaptive granularity, but settings"
                     " min_rows_for_wide_part = {}"
@@ -5725,7 +5704,6 @@ bool MergeTreeData::canUsePolymorphicParts(const MergeTreeSettings & settings, S
                     ". Parts with non-adaptive granularity can be stored only in Wide (default) format.",
                     settings.min_rows_for_wide_part,    settings.min_bytes_for_wide_part,
                     settings.min_rows_for_compact_part, settings.min_bytes_for_compact_part);
-            /// proton: ends
         }
 
         return false;
@@ -5813,10 +5791,8 @@ bool MergeTreeData::insertQueryIdOrThrowNoLock(const String & query_id, size_t m
     if (query_id_set.find(query_id) != query_id_set.end())
         return false;
     if (query_id_set.size() >= max_queries)
-        /// proton: starts
         throw Exception(
             ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES, "Too many simultaneous queries for stream {}. Maximum is: {}", log_name, max_queries);
-        /// proton: ends
     query_id_set.insert(query_id);
     return true;
 }
