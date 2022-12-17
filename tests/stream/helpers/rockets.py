@@ -46,6 +46,12 @@
 #  - INPUT_DEPENDS_ON_STREAM_ERROR FATAL
 #  TEST_SUITE_ENV_SETUP_ERROR FATAL
 #  TEST_SUITE_TIMEOUT_ERROR FATAL
+#  RESET_TABLES_OF_TEST_INPUTS_ERROR
+#  - DROP_TABLE_FAILURE_ERROR
+#  - CREATE_TABLE_FAILURE_ERROR
+
+
+
 #  import global_settigns
 
 from cgi import test
@@ -2960,83 +2966,119 @@ def find_table_reset_in_table_schemas(table, table_schemas):
 def reset_tables_of_test_inputs(client, config, table_schemas, test_case):
     logger = mp.get_logger()
     rest_setting = config.get("rest_setting")
+    proton_setting = config.get("proton_setting")
+    test_suite_name = config.get("test_suite_name")
     proton_create_stream_shards = config.get("proton_create_stream_shards")
     proton_create_stream_replicas = config.get("proton_create_stream_replicas")
     table_ddl_url = rest_setting.get("table_ddl_url")
     steps = test_case.get("steps")
     tables_recreated = []
-    for step in steps:
-        if "inputs" in step:
-            inputs = step.get("inputs")
-            for input in inputs:  # clean table data before each inputs walk through
-                logger.debug(f"input in inputs = {input}")
-                table = input.get("table_name")
-                is_table_reset = None
-                logger.debug(f"table of input in inputs = {table}")
-                is_table_reset = find_table_reset_in_table_schemas(table, table_schemas)
-                if (
-                    is_table_reset != None and is_table_reset == False
-                ) or table in tables_recreated:
-                    pass
-                else:
-                    if table_exist(table_ddl_url, table):
-                        res = client.execute(f"drop stream if exists {table}")
-                        logger.debug(f"drop stream if exists {table} res = {res}")
-                        drop_start_time = datetime.datetime.now()
-                        logger.info(
-                            f"drop stream if exists {table} is called successfully"
-                        )
-                        wait_count = 0
-                        while table_exist(table_ddl_url, table):
-                            time.sleep(0.01)
-                            wait_count += 1
-                        # wait_time = wait_count * 10
-                        drop_complete_time = datetime.datetime.now()
-                        time_spent = drop_complete_time - drop_start_time
-                        time_spent_ms = time_spent.total_seconds() * 1000
-                        global TABLE_DROP_RECORDS
-                        TABLE_DROP_RECORDS.append(
-                            {"table_name": {table}, "time_spent": time_spent_ms}
-                        )
-                        logger.info(f"table {table} is dropped, {time_spent_ms} spent.")
+    try:
+        for step in steps:
+            if "inputs" in step:
+                inputs = step.get("inputs")
+                for input in inputs:  # clean table data before each inputs walk through
+                    res = None
+                    logger.debug(f"input in inputs = {input}")
+                    table = input.get("table_name")
+                    is_table_reset = None
+                    logger.debug(f"table of input in inputs = {table}")
+                    is_table_reset = find_table_reset_in_table_schemas(table, table_schemas)
+                    if (
+                        is_table_reset != None and is_table_reset == False
+                    ) or table in tables_recreated:
+                        pass
+                    else:
+                        if table_exist(table_ddl_url, table):
+                            res = client.execute(f"drop stream if exists {table}")
+                            logger.debug(f"drop stream if exists {table} res = {res}")
+                            drop_start_time = datetime.datetime.now()
+                            logger.info(
+                                f"drop stream if exists {table} is called successfully"
+                            )
+                            check_count = 100
+                            check_interval = 1
+                            time.sleep(check_interval)
+                            while table_exist(table_ddl_url, table) and check_count > 0:
+                                time.sleep(check_interval)
+                                check_count -= 1
+                            
+                            if check_count == 0:
+                                logger.info(f"raise DROP_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")
+                                raise Exception(f"DROP_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")                              
+                            drop_complete_time = datetime.datetime.now()
+                            time_spent = drop_complete_time - drop_start_time
+                            time_spent_ms = time_spent.total_seconds() * 1000
+                            global TABLE_DROP_RECORDS
+                            TABLE_DROP_RECORDS.append(
+                                {"table_name": {table}, "time_spent": time_spent_ms}
+                            )
+                            logger.info(f"table {table} is dropped, {time_spent_ms} spent.")
 
-                    if table_schemas != None:
-                        for table_schema in table_schemas:
-                            name = table_schema.get("name")
-                            if name == table and table_exist(table_ddl_url, table):
-                                logger.debug(
-                                    f"drop stream and re-create once case starts, table_ddl_url = {table_ddl_url}, table_schema = {table_schema}"
-                                )
-                                while table_exist(table_ddl_url, table):
+                        if table_schemas != None:
+                            for table_schema in table_schemas:
+                                name = table_schema.get("name")
+                                if name == table and table_exist(table_ddl_url, table):
                                     logger.debug(
-                                        f"{name} not dropped succesfully yet, wait ..."
+                                        f"drop stream and re-create once case starts, table_ddl_url = {table_ddl_url}, table_schema = {table_schema}"
                                     )
-                                    time.sleep(0.2)
-                                logger.debug(
-                                    f"drop stream and re-create once case starts, table {table} is dropped"
-                                )
+                                    res = client.execute(f"drop stream if exists {table}")
+                                    logger.debug(f"drop stream if exists {table} res = {res}")                                
+                                    check_count = 100
+                                    check_interval = 1
+                                    time.sleep(check_interval)                                
+                                    while table_exist(table_ddl_url, table) and check_count > 0:
+                                        logger.debug(
+                                            f"{name} not dropped succesfully yet, wait ..."
+                                        )
+                                        time.sleep(check_interval)
+                                        check_count -= 1
+                                    
+                                    if table_exist(table_ddl_url, table) and check_count == 0:
+                                        logger.info(f"raise DROP_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")
+                                        raise Exception(f"DROP_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")                                   
+                                    logger.debug(
+                                        f"drop stream and re-create once case starts, table {table} is dropped"
+                                    )
 
-                                create_table_rest(config, table_schema)
-                                while table_exist(table_ddl_url, table) is None:
-                                    logger.debug(
-                                        f"{name} not recreated successfully yet, wait ..."
-                                    )
-                                    time.sleep(0.2)
-                                tables_recreated.append(name)
-                            elif name == table and not table_exist(
-                                table_ddl_url, table
-                            ):
+                                    create_table_rest(config, table_schema)
+                                    check_count = 100
+                                    check_interval = 1
+                                    time.sleep(check_interval)                                 
+                                    while table_exist(table_ddl_url, table) is None and check_count > 0:
+                                        logger.debug(
+                                            f"{name} not recreated successfully yet, wait ..."
+                                        )
+                                        time.sleep(check_interval)
+                                        check_count -= 1
+                                    if check_count == 0:
+                                        logger.info(f"raise CREATE_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")
+                                        raise Exception(f"CREATE_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")                                                                       
+                                    tables_recreated.append(name)
+                                elif name == table and not table_exist(
+                                    table_ddl_url, table
+                                ):
 
-                                create_table_rest(config, table_schema)
-                                while table_exist(table_ddl_url, table) is None:
-                                    logger.debug(
-                                        f"{name} not recreated successfully yet, wait ..."
-                                    )
-                                    time.sleep(0.2)
-                                tables_recreated.append(name)
+                                    create_table_rest(config, table_schema)
+                                    check_count = 100
+                                    check_interval = 1
+                                    time.sleep(check_interval)                                 
+                                    while table_exist(table_ddl_url, table) is None and check_count > 0:
+                                        logger.debug(
+                                            f"{name} not recreated successfully yet, wait ..."
+                                        )
+                                        time.sleep(check_interval)
+                                        check_count -= 1
+                                    if check_count == 0:
+                                        logger.info(f"raise CREATE_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")
+                                        raise Exception(f"CREATE_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")                                                                       
+                                    tables_recreated.append(name)
         if len(tables_recreated) > 0:
             logger.debug(f"tables: {tables_recreated} are dropted and recreated.")
-    return tables_recreated
+        return tables_recreated
+    except (BaseException) as error:
+        logger.info(f"RESET_TABLES_OF_TEST_INPUTS_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, exception: {error}")
+        raise Exception(f"RESET_TABLES_OF_TEST_INPUTS_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, exception: {error}")
 
 
 def test_case_collect(test_suite, tests_2_run, test_ids_set, proton_setting):
@@ -3155,6 +3197,7 @@ def test_suite_run(
     )
     # run the test suite in a standlone process
     test_suite_name = test_suite_set_dict.get("test_suite_name")
+    config["test_suite_name"] = test_suite_name #test_suite_run is started to be run in a standalone process, set the test_suite_name in config, todo: logic for test_suite_run is not in multiple process
     logger.info(f"test_suite: {test_suite_name} running starts......")
     test_suite = test_suite_set_dict.get("test_suite")
     query_results_queue = test_suite_set_dict.get("query_results_queue")
@@ -3211,7 +3254,7 @@ def test_suite_run(
         q_exec_client_conn.send(message_2_send)
         q_exec_client_conn.send("tear_down_done")
 
-        print(f"TEST_SUITE_TIME_OUT_ERROR FATAL and set the treading event and stop query_execute process and send case_result_done to pipe")
+        logger.inf(f"TEST_SUITE_TIME_OUT_ERROR FATAL and set the timeout treading event and stop query_execute process and send case_result_done to pipe")
     
     timer = threading.Timer(test_suite_timeout, timeout_flag, [test_suite_timeout_hit])
     timer.start()

@@ -6,7 +6,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 
-FORMATS=('JSONEachRow' 'JSONCompactEachRow' 'JSONCompactstringsEachRow' 'JSONCompactEachRowWithNames' 'JSONCompactstringsEachRowWithNames' 'JSONCompactEachRowWithNamesAndTypes' 'JSONCompactstringsEachRowWithNamesAndTypes')
+FORMATS=('JSONEachRow' 'JSONCompactEachRow' 'JSONCompactStringsEachRow' 'JSONCompactEachRowWithNames' 'JSONCompactStringsEachRowWithNames' 'JSONCompactEachRowWithNamesAndTypes' 'JSONCompactStringsEachRowWithNamesAndTypes')
 
 for format in "${FORMATS[@]}"
 do
