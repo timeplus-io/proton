@@ -551,9 +551,13 @@ size_t IMergeTreeDataPart::getFileSizeOrZero(const String & file_name) const
     return checksum->second.file_size;
 }
 
-String IMergeTreeDataPart::getColumnNameWithMinimumCompressedSize(const StorageSnapshotPtr & storage_snapshot) const
+String IMergeTreeDataPart::getColumnNameWithMinimumCompressedSize(
+    const StorageSnapshotPtr & storage_snapshot, bool with_subcolumns) const
 {
-    auto options = GetColumnsOptions(GetColumnsOptions::AllPhysical).withExtendedObjects().withSubcolumns();
+    auto options = GetColumnsOptions(GetColumnsOptions::AllPhysical).withExtendedObjects();
+    if (with_subcolumns)
+        options.withSubcolumns();
+
     auto storage_columns = storage_snapshot->getColumns(options);
     MergeTreeData::AlterConversions alter_conversions;
     if (!parent_part)
@@ -611,28 +615,39 @@ void IMergeTreeDataPart::loadColumnsChecksumsIndexes(bool require_columns_checks
     /// Motivation: memory for index is shared between queries - not belong to the query itself.
     MemoryTrackerBlockerInThread temporarily_disable_memory_tracker(VariableContext::Global);
 
-    loadUUID();
-    loadColumns(require_columns_checksums);
-    loadChecksums(require_columns_checksums);
-    loadIndexGranularity();
-    calculateColumnsAndSecondaryIndicesSizesOnDisk();
-    loadIndex();     /// Must be called after loadIndexGranularity as it uses the value of `index_granularity`
-    loadRowsCount(); /// Must be called after loadIndexGranularity() as it uses the value of `index_granularity`.
-    loadPartitionAndMinMaxIndex();
-    if (!parent_part)
+    try
     {
-        loadTTLInfos();
-        loadProjections(require_columns_checksums, check_consistency);
+        loadUUID();
+        loadColumns(require_columns_checksums);
+        loadChecksums(require_columns_checksums);
+        loadIndexGranularity();
+        calculateColumnsAndSecondaryIndicesSizesOnDisk();
+        loadIndex(); /// Must be called after loadIndexGranularity as it uses the value of `index_granularity`
+        loadRowsCount(); /// Must be called after loadIndexGranularity() as it uses the value of `index_granularity`.
+        loadPartitionAndMinMaxIndex();
+        if (!parent_part)
+        {
+            loadTTLInfos();
+            loadProjections(require_columns_checksums, check_consistency);
+        }
+
+        if (check_consistency)
+            checkConsistency(require_columns_checksums);
+
+        loadDefaultCompressionCodec();
+
+        /// proton: starts
+        loadSequenceInfo();
+        /// proton: ends
     }
-
-    if (check_consistency)
-        checkConsistency(require_columns_checksums);
-
-    loadDefaultCompressionCodec();
-
-    /// proton: starts
-    loadSequenceInfo();
-    /// proton: ends
+    catch (...)
+    {
+        // There could be conditions that data part to be loaded is broken, but some of meta infos are already written
+        // into meta data before exception, need to clean them all.
+        // metadata_manager->deleteAll(/*include_projection*/ true);
+        // metadata_manager->assertAllDeleted(/*include_projection*/ true);
+        throw;
+    }
 }
 
 void IMergeTreeDataPart::loadProjections(bool require_columns_checksums, bool check_consistency)
