@@ -125,9 +125,10 @@ void AggregatingTransform::consume(Chunk chunk)
     auto num_rows = chunk.getNumRows();
     if (num_rows > 0)
     {
-        Columns columns = chunk.detachColumns();
-
-        if (!executeOrMergeColumns(columns))
+        /// There indeed has cases where num_rows of a chunk is greater than 0, but
+        /// the columns are empty : select count() from stream where a != 0.
+        /// So `executeOrMergeColumns` accepts num_rows as parameter
+        if (!executeOrMergeColumns(chunk.detachColumns(), num_rows))
             is_consume_finished = true;
     }
 
@@ -139,9 +140,8 @@ void AggregatingTransform::consume(Chunk chunk)
         checkpointAlignment(chunk);
 }
 
-bool AggregatingTransform::executeOrMergeColumns(Columns columns)
+bool AggregatingTransform::executeOrMergeColumns(Columns columns, size_t num_rows)
 {
-    const UInt64 num_rows = columns[0]->size();
     if (params->only_merge)
     {
         auto block = getInputs().front().getHeader().cloneWithColumns(columns);

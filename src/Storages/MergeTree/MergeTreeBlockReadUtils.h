@@ -22,7 +22,7 @@ using MergeTreeBlockSizePredictorPtr = std::shared_ptr<MergeTreeBlockSizePredict
   * so that you can calculate the DEFAULT expression for these columns.
   * Adds them to the `columns`.
   */
-NameSet injectRequiredColumns(const MergeTreeData & storage, const StorageMetadataPtr & metadata_snapshot, const MergeTreeData::DataPartPtr & part, Names & columns);
+NameSet injectRequiredColumns(const MergeTreeData & storage, const StorageSnapshotPtr & storage_snapshot, const MergeTreeData::DataPartPtr & part, Names & columns);
 
 
 /// A batch of work for MergeTreeThreadSelectBlockInputStream
@@ -55,9 +55,9 @@ struct MergeTreeReadTask
     bool isFinished() const { return mark_ranges.empty() && range_reader.isCurrentRangeFinished(); }
 
     MergeTreeReadTask(
-        const MergeTreeData::DataPartPtr & data_part_, const MarkRanges & mark_ranges_, const size_t part_index_in_query_,
+        const MergeTreeData::DataPartPtr & data_part_, const MarkRanges & mark_ranges_, size_t part_index_in_query_,
         const Names & ordered_names_, const NameSet & column_name_set_, const NamesAndTypesList & columns_,
-        const NamesAndTypesList & pre_columns_, const bool remove_prewhere_column_, const bool should_reorder_,
+        const NamesAndTypesList & pre_columns_, bool remove_prewhere_column_, bool should_reorder_,
         MergeTreeBlockSizePredictorPtr && size_predictor_);
 };
 

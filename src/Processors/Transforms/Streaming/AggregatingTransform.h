@@ -125,7 +125,7 @@ private:
 
 protected:
     void emitVersion(Block & block);
-    bool executeOrMergeColumns(Columns columns);
+    bool executeOrMergeColumns(Columns columns, size_t num_rows);
     void setCurrentChunk(Chunk chunk, ChunkContextPtr chunk_ctx);
 
 protected:
