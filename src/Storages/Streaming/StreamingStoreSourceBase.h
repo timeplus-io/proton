@@ -41,7 +41,7 @@ protected:
 
     SourceColumnsDescription columns_desc;
 
-    bool hasObjectColumns() const { return !columns_desc.physical_object_column_names_to_read.empty(); }
+    bool hasDynamicSubcolumns() const { return !columns_desc.physical_object_columns_to_read.empty(); }
     ColumnPtr getSubcolumnFromBlock(const Block & block, size_t parent_column_pos, const NameAndTypePair & subcolumn_pair) const;
     void fillAndUpdateObjectsIfNecessary(Block & block);
 

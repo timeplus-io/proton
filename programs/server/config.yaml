@@ -903,7 +903,7 @@ send_crash_reports:
     anonymize: false
     # Default endpoint should be changed to different Sentry DSN only if you have
     # some in-house engineers or hired consultants who're going to debug proton issues for you
-    endpoint: 'https://6f33034cfe684dd7a3ab9875e57b1c8d@o388870.ingest.sentry.io/5226277'
+    endpoint:
 
 # Uncomment to disable proton internal DNS caching.
 # disable_internal_dns_cache: 1

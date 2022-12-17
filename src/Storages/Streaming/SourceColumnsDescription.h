@@ -13,12 +13,16 @@ namespace DB
 
 class Block;
 
+struct StorageSnapshot;
+using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
+
 /// We calculate these column positions and lambda vector for simplify the logic and
 /// fast processing in readAndProcess since we don't need index by column name any more
 struct SourceColumnsDescription
 {
     SourceColumnsDescription() = default;
-    SourceColumnsDescription(const NamesAndTypesList & columns_to_read, const Block & schema);
+    SourceColumnsDescription(const Names & required_column_names, StorageSnapshotPtr storage_snapshot);
+    SourceColumnsDescription(const NamesAndTypesList & columns_to_read, const Block & schema, const NamesAndTypesList & all_extended_columns);
 
     enum class ReadColumnType : uint8_t
     {
@@ -92,7 +96,8 @@ struct SourceColumnsDescription
 
     NamesAndTypes subcolumns_to_read;
 
-    Names physical_object_column_names_to_read;
+    /// We like to use extended object type instead of original json type
+    NamesAndTypesList physical_object_columns_to_read;
 };
 
 }

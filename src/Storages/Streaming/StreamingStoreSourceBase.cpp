@@ -3,6 +3,7 @@
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
 #include <DataTypes/ObjectUtils.h>
+#include <Interpreters/inplaceBlockConversions.h>
 #include <Storages/StorageSnapshot.h>
 #include <base/logger_useful.h>
 
@@ -17,18 +18,17 @@ extern const int RECOVER_CHECKPOINT_FAILED;
 StreamingStoreSourceBase::StreamingStoreSourceBase(
     const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr query_context_, Poco::Logger * log_, ProcessorID pid_)
     : SourceWithProgress(header, pid_)
-    , storage_snapshot(std::make_shared<StorageSnapshot>(*storage_snapshot_)) /// We like to make a copy of it since we will mutate the snapshot
+    , storage_snapshot(
+          std::make_shared<StorageSnapshot>(*storage_snapshot_)) /// We like to make a copy of it since we will mutate the snapshot
     , query_context(std::move(query_context_))
     , log(log_)
     , header_chunk(header.getColumns(), 0)
-    , columns_desc(
-          storage_snapshot->getColumnsByNames(GetColumnsOptions(GetColumnsOptions::All).withSubcolumns().withVirtuals().withExtendedObjects(), header.getNames()),
-          storage_snapshot->getMetadataForQuery()->getSampleBlock())
+    , columns_desc(header.getNames(), storage_snapshot)
 {
-    /// Init current object description and update current storage snapshot for streaming source
-    if (!columns_desc.physical_object_column_names_to_read.empty())
+    /// Reset current object description and update current storage snapshot for streaming source
+    if (!columns_desc.physical_object_columns_to_read.empty())
         storage_snapshot->object_columns.set(std::make_unique<ColumnsDescription>(storage_snapshot->object_columns.get()->getByNames(
-            GetColumnsOptions::AllPhysical, columns_desc.physical_object_column_names_to_read)));
+            GetColumnsOptions::AllPhysical, columns_desc.physical_object_columns_to_read.getNames())));
 
     iter = result_chunks.begin();
 
@@ -81,21 +81,54 @@ void StreamingStoreSourceBase::fillAndUpdateObjectsIfNecessary(Block & block)
     /// For now, requested columns which have `json` storage type, will have `tuple(...)` in header
     /// we will need convert json column read from streaming store to tuple(...)
 
-    if (!hasObjectColumns())
+    if (!hasDynamicSubcolumns())
         return;
 
     try
     {
         convertDynamicColumnsToTuples(block, storage_snapshot);
 
-        /// Update object columns if have changes
-        auto current_object_columns = *storage_snapshot->object_columns.get();
-        if (updateObjectColumns(current_object_columns, storage_snapshot->metadata->getColumns(), block.getNamesAndTypesList()))
-            storage_snapshot->object_columns.set(std::make_unique<ColumnsDescription>(std::move(current_object_columns)));
+        /// Update json columns if have changes
+        /// auto current_object_columns = *storage_snapshot->object_columns.get();
+        /// if (updateObjectColumns(current_object_columns, storage_snapshot->metadata->getColumns(), block.getNamesAndTypesList()))
+        ///    storage_snapshot->object_columns.set(std::make_unique<ColumnsDescription>(std::move(current_object_columns)));
+
+        /// We will need convert json named tuple if json schema gets changed.
+        /// For example, json column in `storage_snapshot` initially has {"k1":"..."} (header has tuple(k1)), but later, json data
+        /// gets changed to {"k1":"...", "k2":"..."}, we actually like to convert {"k1":"...", "k2":"..."} to {"k1":"..."}.
+        /// The conversion may be the other way: {"k1":"..."} -> {"k1":"...", "k2":"..."}
+        /// The conversion can be just type conversion like from `"k1": int` to "k1": string`.
+        /// The conversion is recursive if a json object is nested in array, tuple, or has nested dynamic keys
+        /// The conversion means once we have a schema version : we stick to this version until the conversion failed (schema in-compatible)
+        /// We can't upgrade the schema to have a super set of them (all json subcolumns etc) because the pipeline header
+        /// is fixed and can't be changed when query is running
+        /// Due to this limitation, we have several consequences which we shall fix:
+        /// 1) if a query is running before any json data get ingested, the json will have {"_dummy":int8})
+        ///    schema and won't change in the lifetime of the streaming query.
+        /// 2) if a query initially has a subset keys of a json and then more json keys get ingested, the final result
+        ///    will be a subset of json
+        /// One workaround for this is initially ingest a super set of JSON which contains all possible keys or re-run the streaming query
+        /// as more data set is ingested
+
+        /// We will need to copy out the object columns and do the conversion on the copy
+        Block obj_block;
+        obj_block.reserve(columns_desc.physical_object_columns_to_read.size());
+        for (const auto & col_name_type : columns_desc.physical_object_columns_to_read)
+            obj_block.insert(block.getByName(col_name_type.name));
+
+        performRequiredConversions(obj_block, columns_desc.physical_object_columns_to_read, query_context);
+
+        /// After conversion, move it back to original block
+        for (auto & col_name_type : obj_block)
+        {
+            auto & col = block.getByName(col_name_type.name);
+            col.column = std::move(col_name_type.column);
+            col.type = std::move(col_name_type.type);
+        }
     }
     catch (Exception & e)
     {
-        e.addMessage("Failed to fill and update objects.");
+        e.addMessage("json data has incompatible schema changes");
         throw;
     }
 }

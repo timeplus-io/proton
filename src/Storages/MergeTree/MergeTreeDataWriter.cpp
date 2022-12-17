@@ -278,7 +278,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     auto columns = metadata_snapshot->getColumns().getAllPhysical().filter(block.getNames());
 
     for (auto & column : columns)
-        if (isObject(column.type))
+        if (column.type->hasDynamicSubcolumns())
             column.type = block.getByName(column.name).type;
 
     static const String TMP_PREFIX = "tmp_insert_";

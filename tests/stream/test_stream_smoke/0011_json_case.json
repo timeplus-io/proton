@@ -1,25 +1,26 @@
 {
     "test_suite_name": "json",
     "tag":"smoke",
-   
+
 
     "test_suite_config":{
         "setup": {
             "statements": [
-                {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json"},
                 {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json_d"},
                 {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json_str"},
                 {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json_obj"},
+                {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json_conversion"},
+                {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json_nested"},
+                {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_d (id int, location string)"},
                 {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_str (json string, timestamp datetime64(3) default now64(3))"},
                 {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_obj (json json, timestamp datetime64(3) default now64(3))"},
-                {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_d (id int, location string)"},
+                {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_conversion (id int, json json)"},
+                {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_nested (id int, arr array(json))"},
                 {"client":"python", "query_type": "table","depends_on_stream": "test_json_d", "wait":2, "query":"insert into test_json_d(id, location)values(1, '{\"id\":\"dev1\", \"location\":\"roof\"}')(2, '{\"id\":\"dev2\", \"location\":\"window\"}')(3, '{\"id\":\"dev3\", \"location\":\"floor\"}')(4, '{\"id\":\"dev4\", \"location\":\"ground\"}')"}
-    
-    
             ]
-        },         
+        },
         "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
-        
+
     },
     "commments":
         "Tests covering the steam query smoke cases.",
@@ -36,7 +37,7 @@
                     {"client":"python", "query_type": "table","wait":5, "query":"drop view if exists json_tumble_hop_mv"},
                     {"client":"python", "query_type": "table","depends_on_stream": "test_json_str", "wait":5, "query":"create materialized view if not exists json_hop_mv as with transformed as (select a.json:data.id as id, to_int64(a.json:data.value) as value, to_datetime(a.json:data.create_time) as created_at, b.location:location from test_json_str as a join table(test_json_d) as b on a.json:data.id = b.location:id) select window_start as ws, window_end as we, count() from hop(transformed, created_at, 3s, 5s) group by window_start, window_end"},
                     {"client":"python","query_id":"1201","depends_on_stream": "json_hop_mv", "wait":2, "query_type": "table", "query":"create materialized view if not exists json_tumble_hop_mv as select window_start as w_s, window_end as w_e, count() as cnt from tumble(json_hop_mv, we, 5s) group by window_start, window_end"},
-                    {"client":"python","query_id":"1202","depends_on_stream": "json_tumble_hop_mv", "wait":5, "query_end_timer":8, "query_type": "stream", "query":"select cnt from json_tumble_hop_mv"},                    
+                    {"client":"python","query_id":"1202","depends_on_stream": "json_tumble_hop_mv", "wait":5, "query_end_timer":8, "query_type": "stream", "query":"select cnt from json_tumble_hop_mv"},
                     {"client":"python", "query_type": "table","depends_on":1202,"depends_on_stream": "json_tumble_hop_mv", "wait":5,"query":
                         "insert into test_json_str (json, timestamp) values
                         ('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:01')
@@ -51,14 +52,14 @@
                         ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:09\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:09')
                         ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:01')
                         ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:10\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:10')"
-                    }                       
+                    }
 
                     ]}
             ],
 
             "expected_results": [{"query_id":"1202", "expected_results":[
                 ["1"]
-                
+
                 ]}
             ]
         },
@@ -73,7 +74,7 @@
                     {"client":"python", "query_type": "table","wait":5, "query":"drop view if exists json_tumble_hop_v"},
                     {"client":"python", "query_type": "table","depends_on_stream": "test_json_str", "wait":5, "query":"create view if not exists json_hop_v as with transformed as (select a.json:data.id as id, to_int64(a.json:data.value) as value, a.json:data.create_time::datetime as created_at, b.location:location from test_json_str as a join table(test_json_d) as b on a.json:data.id = b.location:id where value >0) select window_start as ws, window_end as we, count() from hop(transformed, created_at, 3s, 5s) group by window_start, window_end"},
                     {"client":"python","query_id":"1201","depends_on_stream": "json_hop_v", "wait":2, "query_type": "table", "query":"create view if not exists json_tumble_hop_v as select window_start as w_s, window_end as w_e, count() as cnt from tumble(json_hop_v, we, 5s) group by window_start, window_end"},
-                    {"client":"python","query_id":"1202","depends_on_stream": "json_tumble_hop_v", "wait":2, "query_end_timer":8, "query_type": "stream", "query":"select cnt from json_tumble_hop_v"},                    
+                    {"client":"python","query_id":"1202","depends_on_stream": "json_tumble_hop_v", "wait":2, "query_end_timer":8, "query_type": "stream", "query":"select cnt from json_tumble_hop_v"},
                     {"client":"python", "query_type": "table","depends_on":1202,"depends_on_stream": "json_tumble_hop_v", "wait":5,"query":
                         "insert into test_json_str (json, timestamp) values
                         ('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:01')
@@ -88,14 +89,14 @@
                         ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:09\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:09')
                         ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:01')
                         ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:10\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:10')"
-                    }                       
+                    }
 
                     ]}
             ],
 
             "expected_results": [{"query_id":"1202", "expected_results":[
                 ["1"]
-                
+
                 ]}
             ]
         },
@@ -118,6 +119,29 @@
             "expected_results": [
                 {"query_id":"1203", "expected_results":[["dev1", 100, "building"]]},
                 {"query_id":"1204", "expected_results":[["dev1", 100, "building"]]}
+            ]
+        },
+        {
+            "id": 3,
+            "tags": ["json"],
+            "name": "json_int_string_conversion",
+            "description": "When the value type of a key is changed from int to string or vice versa, it is expected proton to do the necessary conversion automatically",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","depends_on_stream": "test_json_conversion", "wait":1, "query":
+                        "insert into test_json_conversion (id, json) values (1, '{\"a\":1, \"b\":\"b\", \"c\":{\"k1\":\"v1\", \"k2\":\"v2\"}}')"
+                    },
+                    {"client":"python", "query_type": "table","depends_on_stream": "test_json_conversion", "wait":1, "query":
+                        "insert into test_json_conversion (id, json) values (2, '{\"a\":\"2\", \"b\":3, \"c\":{\"k1\":\"v1\", \"k2\":\"v2\"}}')"
+                    },
+                    {"client":"python", "query_id":"1205", "depends_on_stream": "test_json_conversion", "query":"select id, json.a, json.b, json.c.k1, json.c.k2 from test_json_conversion limit 2 settings seek_to='earliest'"},
+                    {"client":"python", "query_id":"1206", "query_type": "table" ,"depends_on_stream": "test_json_conversion", "wait": 2, "query":"select id, json.a, json.b, json.c.k1, json.c.k2 from table(test_json_conversion)"}
+                    ]}
+            ],
+
+            "expected_results": [
+                {"query_id":"1205", "expected_results":[[1, "1", "b", "v1", "v2"], [2, "2", "3", "v1", "v2"]]},
+                {"query_id":"1206", "expected_results":[[1, "1", "b", "v1", "v2"], [2, "2", "3", "v1", "v2"]]}
             ]
         }
     ]

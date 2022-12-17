@@ -30,6 +30,7 @@ DB::Block generateCommonSchema()
 constexpr auto Physical = DB::SourceColumnsDescription::ReadColumnType::PHYSICAL;
 constexpr auto Virtual = DB::SourceColumnsDescription::ReadColumnType::VIRTUAL;
 constexpr auto Sub = DB::SourceColumnsDescription::ReadColumnType::SUB;
+DB::NamesAndTypesList all_extended_columns = {{"col4", getType("json")}, {"col5", getType("json")}};
 }
 
 TEST(SourceColumnsDescription, AllPhysical)
@@ -37,7 +38,7 @@ TEST(SourceColumnsDescription, AllPhysical)
     auto schema = generateCommonSchema();
 
     DB::NamesAndTypesList columns_to_read{{"col1", getType("string")}, {"col3", getType("tuple(x int, y string)")}};
-    DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+    DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
     /// Pos to read
     ASSERT_EQ(columns_desc.positions.size(), 2);
     ASSERT_EQ(columns_desc.positions[0].type(), Physical);
@@ -59,7 +60,7 @@ TEST(SourceColumnsDescription, AllPhysical)
     ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
 
     /// Json description
-    ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 0);
+    ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 0);
 }
 
 TEST(SourceColumnsDescription, AllPhysicalWithJSON)
@@ -67,7 +68,7 @@ TEST(SourceColumnsDescription, AllPhysicalWithJSON)
     auto schema = generateCommonSchema();
 
     DB::NamesAndTypesList columns_to_read{{"col1", getType("string")}, {"col4", getType("json")}};
-    DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+    DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
     /// Pos to read
     ASSERT_EQ(columns_desc.positions.size(), 2);
     ASSERT_EQ(columns_desc.positions[0].type(), Physical);
@@ -89,8 +90,8 @@ TEST(SourceColumnsDescription, AllPhysicalWithJSON)
     ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
 
     /// Json description
-    ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 1);
-    EXPECT_EQ(columns_desc.physical_object_column_names_to_read[0], "col4");
+    ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 1);
+    EXPECT_EQ(columns_desc.physical_object_columns_to_read.begin()->name, "col4");
 }
 
 TEST(SourceColumnsDescription, AllPhysicalAndAllJson)
@@ -98,7 +99,7 @@ TEST(SourceColumnsDescription, AllPhysicalAndAllJson)
     auto schema = generateCommonSchema();
 
     DB::NamesAndTypesList columns_to_read{{"col5", getType("json")}, {"col4", getType("json")}};
-    DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+    DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
     /// Pos to read
     ASSERT_EQ(columns_desc.positions.size(), 2);
     ASSERT_EQ(columns_desc.positions[0].type(), Physical);
@@ -120,9 +121,9 @@ TEST(SourceColumnsDescription, AllPhysicalAndAllJson)
     ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
 
     /// Json description
-    ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 2);
-    EXPECT_EQ(columns_desc.physical_object_column_names_to_read[0], "col5");
-    EXPECT_EQ(columns_desc.physical_object_column_names_to_read[1], "col4");
+    ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 2);
+    EXPECT_EQ(columns_desc.physical_object_columns_to_read.begin()->name, "col5");
+    EXPECT_EQ(columns_desc.physical_object_columns_to_read.rbegin()->name, "col4");
 }
 
 TEST(SourceColumnsDescription, AllVirtual)
@@ -131,7 +132,7 @@ TEST(SourceColumnsDescription, AllVirtual)
 
     DB::NamesAndTypesList columns_to_read{
         {DB::ProtonConsts::RESERVED_APPEND_TIME, getType("int64")}, {DB::ProtonConsts::RESERVED_PROCESS_TIME, getType("int64")}};
-    DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+    DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
     /// Pos to read
     ASSERT_EQ(columns_desc.positions.size(), 2);
     ASSERT_EQ(columns_desc.positions[0].type(), Virtual);
@@ -153,7 +154,7 @@ TEST(SourceColumnsDescription, AllVirtual)
     ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
 
     /// Json description
-    ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 0);
+    ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 0);
 }
 
 TEST(SourceColumnsDescription, AllSubcolumn)
@@ -163,7 +164,7 @@ TEST(SourceColumnsDescription, AllSubcolumn)
     DB::NamesAndTypesList columns_to_read{
         {"col3", "y", getType("tuple(x int, y string)"), getType("string")},
         {"col3", "x", getType("tuple(x int, y string)"), getType("int")}};
-    DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+    DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
     /// Pos to read
     ASSERT_EQ(columns_desc.positions.size(), 2);
     ASSERT_EQ(columns_desc.positions[0].type(), Sub);
@@ -199,7 +200,7 @@ TEST(SourceColumnsDescription, AllSubcolumn)
     EXPECT_EQ(columns_desc.subcolumns_to_read[1].name, "col3.x");
 
     /// Json description
-    ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 0);
+    ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 0);
 }
 
 TEST(SourceColumnsDescription, AllSubcolumnWithJson)
@@ -209,7 +210,7 @@ TEST(SourceColumnsDescription, AllSubcolumnWithJson)
     DB::NamesAndTypesList columns_to_read{
         {"col3", "y", getType("tuple(x int, y string)"), getType("string")},
         {"col5", "abc", getType("tuple(abc int, xyz string)"), getType("int")}};
-    DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+    DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
     /// Pos to read
     ASSERT_EQ(columns_desc.positions.size(), 2);
     ASSERT_EQ(columns_desc.positions[0].type(), Sub);
@@ -247,8 +248,8 @@ TEST(SourceColumnsDescription, AllSubcolumnWithJson)
     EXPECT_EQ(columns_desc.subcolumns_to_read[1].name, "col5.abc");
 
     /// Json description
-    ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 1);
-    EXPECT_EQ(columns_desc.physical_object_column_names_to_read[0], "col5");
+    ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 1);
+    EXPECT_EQ(columns_desc.physical_object_columns_to_read.begin()->name, "col5");
 }
 
 TEST(SourceColumnsDescription, PhysicalAndVirtual)
@@ -257,7 +258,7 @@ TEST(SourceColumnsDescription, PhysicalAndVirtual)
 
     { /// physical + virtual
         DB::NamesAndTypesList columns_to_read{{"col1", getType("string")}, {DB::ProtonConsts::RESERVED_APPEND_TIME, getType("int64")}};
-        DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+        DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
         /// Pos to read
         ASSERT_EQ(columns_desc.positions.size(), 2);
         ASSERT_EQ(columns_desc.positions[0].type(), Physical);
@@ -279,12 +280,12 @@ TEST(SourceColumnsDescription, PhysicalAndVirtual)
         ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
 
         /// Json description
-        ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 0);
+        ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 0);
     }
 
     { /// physical-json + virtual
         DB::NamesAndTypesList columns_to_read{{"col5", getType("json")}, {DB::ProtonConsts::RESERVED_APPEND_TIME, getType("int64")}};
-        DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+        DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
         /// Pos to read
         ASSERT_EQ(columns_desc.positions.size(), 2);
         ASSERT_EQ(columns_desc.positions[0].type(), Physical);
@@ -305,13 +306,13 @@ TEST(SourceColumnsDescription, PhysicalAndVirtual)
         ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
 
         /// Json description
-        ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 1);
-        EXPECT_EQ(columns_desc.physical_object_column_names_to_read[0], "col5");
+        ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 1);
+        EXPECT_EQ(columns_desc.physical_object_columns_to_read.begin()->name, "col5");
     }
 
     { /// virtual + physical
         DB::NamesAndTypesList columns_to_read{{DB::ProtonConsts::RESERVED_APPEND_TIME, getType("int64")}, {"col1", getType("string")}};
-        DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+        DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
         /// Pos to read
         ASSERT_EQ(columns_desc.positions.size(), 2);
         ASSERT_EQ(columns_desc.positions[0].type(), Virtual);
@@ -333,12 +334,12 @@ TEST(SourceColumnsDescription, PhysicalAndVirtual)
         ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
 
         /// Json description
-        ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 0);
+        ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 0);
     }
 
     { /// virtual + physical-json
         DB::NamesAndTypesList columns_to_read{{DB::ProtonConsts::RESERVED_APPEND_TIME, getType("int64")}, {"col5", getType("json")}};
-        DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+        DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
         /// Pos to read
         ASSERT_EQ(columns_desc.positions.size(), 2);
         ASSERT_EQ(columns_desc.positions[0].type(), Virtual);
@@ -360,8 +361,8 @@ TEST(SourceColumnsDescription, PhysicalAndVirtual)
         ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 0);
 
         /// Json description
-        ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 1);
-        EXPECT_EQ(columns_desc.physical_object_column_names_to_read[0], "col5");
+        ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 1);
+        EXPECT_EQ(columns_desc.physical_object_columns_to_read.begin()->name, "col5");
     }
 }
 
@@ -375,7 +376,7 @@ TEST(SourceColumnsDescription, PhysicalAndSubcolumn)
             {"col1", getType("string")},
             {"col3", "y", getType("tuple(x int, y string)"), getType("string")},
         };
-        DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+        DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
         /// Pos to read
         ASSERT_EQ(columns_desc.positions.size(), 2);
         ASSERT_EQ(columns_desc.positions[0].type(), Physical);
@@ -404,13 +405,13 @@ TEST(SourceColumnsDescription, PhysicalAndSubcolumn)
         EXPECT_EQ(columns_desc.subcolumns_to_read[0].name, "col3.y");
 
         /// Json description
-        ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 0);
+        ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 0);
     }
 
     { /// subcolumn-json + physical-json
         DB::NamesAndTypesList columns_to_read{
             {"col5", "abc", getType("tuple(abc int, xyz string)"), getType("int")}, {"col4", getType("json")}};
-        DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+        DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
         /// Pos to read
         ASSERT_EQ(columns_desc.positions.size(), 2);
         ASSERT_EQ(columns_desc.positions[0].type(), Sub);
@@ -439,9 +440,9 @@ TEST(SourceColumnsDescription, PhysicalAndSubcolumn)
         EXPECT_EQ(columns_desc.subcolumns_to_read[0].name, "col5.abc");
 
         /// Json description
-        ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 2);
-        EXPECT_EQ(columns_desc.physical_object_column_names_to_read[0], "col5");
-        EXPECT_EQ(columns_desc.physical_object_column_names_to_read[1], "col4");
+        ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 2);
+        EXPECT_EQ(columns_desc.physical_object_columns_to_read.begin()->name, "col5");
+        EXPECT_EQ(columns_desc.physical_object_columns_to_read.rbegin()->name, "col4");
     }
 }
 
@@ -455,7 +456,7 @@ TEST(SourceColumnsDescription, VirtualAndSubcolumn)
             {DB::ProtonConsts::RESERVED_APPEND_TIME, getType("int64")},
             {"col3", "y", getType("tuple(x int, y string)"), getType("string")},
         };
-        DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+        DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
         /// Pos to read
         ASSERT_EQ(columns_desc.positions.size(), 2);
         ASSERT_EQ(columns_desc.positions[0].type(), Virtual);
@@ -485,14 +486,14 @@ TEST(SourceColumnsDescription, VirtualAndSubcolumn)
         EXPECT_EQ(columns_desc.subcolumns_to_read[0].name, "col3.y");
 
         /// Json description
-        ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 0);
+        ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 0);
     }
 
     { /// virtual + subcolumn-json
         DB::NamesAndTypesList columns_to_read{
             {DB::ProtonConsts::RESERVED_APPEND_TIME, getType("int64")},
             {"col5", "abc", getType("tuple(abc int, xyz string)"), getType("int")}};
-        DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+        DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
         /// Pos to read
         ASSERT_EQ(columns_desc.positions.size(), 2);
         ASSERT_EQ(columns_desc.positions[0].type(), Virtual);
@@ -522,8 +523,8 @@ TEST(SourceColumnsDescription, VirtualAndSubcolumn)
         EXPECT_EQ(columns_desc.subcolumns_to_read[0].name, "col5.abc");
 
         /// Json description
-        ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 1);
-        EXPECT_EQ(columns_desc.physical_object_column_names_to_read[0], "col5");
+        ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 1);
+        EXPECT_EQ(columns_desc.physical_object_columns_to_read.begin()->name, "col5");
     }
 }
 
@@ -538,7 +539,7 @@ TEST(SourceColumnsDescription, PhysicalAndVirtualAndSubcolumn)
             {DB::ProtonConsts::RESERVED_APPEND_TIME, getType("int64")},
             {"col3", "y", getType("tuple(x int, y string)"), getType("string")},
             {"col5", "abc", getType("tuple(abc int, xyz string)"), getType("int")}};
-        DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+        DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
         /// Pos to read
         ASSERT_EQ(columns_desc.positions.size(), 4);
         ASSERT_EQ(columns_desc.positions[0].type(), Physical);
@@ -582,8 +583,8 @@ TEST(SourceColumnsDescription, PhysicalAndVirtualAndSubcolumn)
         EXPECT_EQ(columns_desc.subcolumns_to_read[1].name, "col5.abc");
 
         /// Json description
-        ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 1);
-        EXPECT_EQ(columns_desc.physical_object_column_names_to_read[0], "col5");
+        ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 1);
+        EXPECT_EQ(columns_desc.physical_object_columns_to_read.begin()->name, "col5");
     }
 
     { /// (complex) physical + virtual + subcolumn
@@ -597,7 +598,7 @@ TEST(SourceColumnsDescription, PhysicalAndVirtualAndSubcolumn)
             {DB::ProtonConsts::RESERVED_APPEND_TIME, getType("int64")},
             {"col5", "abc", getType("tuple(abc int, xyz string)"), getType("int")},
             {DB::ProtonConsts::RESERVED_PROCESS_TIME, getType("int64")}};
-        DB::SourceColumnsDescription columns_desc(columns_to_read, schema);
+        DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns);
         /// Pos to read
         ASSERT_EQ(columns_desc.positions.size(), 9);
         ASSERT_EQ(columns_desc.positions[0].type(), Sub);
@@ -660,8 +661,8 @@ TEST(SourceColumnsDescription, PhysicalAndVirtualAndSubcolumn)
         EXPECT_EQ(columns_desc.subcolumns_to_read[2].name, "col5.abc");
 
         /// Json description
-        ASSERT_EQ(columns_desc.physical_object_column_names_to_read.size(), 2);
-        EXPECT_EQ(columns_desc.physical_object_column_names_to_read[0], "col5");
-        EXPECT_EQ(columns_desc.physical_object_column_names_to_read[1], "col4");
+        ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 2);
+        EXPECT_EQ(columns_desc.physical_object_columns_to_read.begin()->name, "col5");
+        EXPECT_EQ(columns_desc.physical_object_columns_to_read.rbegin()->name, "col4");
     }
 }
