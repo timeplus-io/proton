@@ -54,9 +54,7 @@ TableLockHolder IStorage::lockForShare(const String & query_id, const std::chron
     if (is_dropped)
     {
         auto table_id = getStorageID();
-        /// proton: starts
         throw Exception(ErrorCodes::STREAM_IS_DROPPED, "Stream {}.{} is dropped", table_id.database_name, table_id.table_name);
-        /// proton: ends
     }
 
     return result;
@@ -73,9 +71,7 @@ IStorage::AlterLockHolder IStorage::lockForAlter(const std::chrono::milliseconds
                         getStorageID().getFullTableName(), std::to_string(acquire_timeout.count()));
 
     if (is_dropped)
-        /// proton: starts
         throw Exception("Stream is dropped", ErrorCodes::STREAM_IS_DROPPED);
-        /// proton: ends
 
     return lock;
 }
@@ -87,9 +83,7 @@ TableExclusiveLockHolder IStorage::lockExclusively(const String & query_id, cons
     result.drop_lock = tryLockTimed(drop_lock, RWLockImpl::Write, query_id, acquire_timeout);
 
     if (is_dropped)
-        /// proton: starts
         throw Exception("Stream is dropped", ErrorCodes::STREAM_IS_DROPPED);
-        /// proton: ends
 
     return result;
 }
@@ -156,17 +150,13 @@ void IStorage::checkAlterIsPossible(const AlterCommands & commands, ContextPtr /
 
 void IStorage::checkMutationIsPossible(const MutationCommands & /*commands*/, const Settings & /*settings*/) const
 {
-    /// proton: starts
     throw Exception("The current engine " + getName() + " doesn't support mutations", ErrorCodes::NOT_IMPLEMENTED);
-    /// proton: ends
 }
 
 void IStorage::checkAlterPartitionIsPossible(
     const PartitionCommands & /*commands*/, const StorageMetadataPtr & /*metadata_snapshot*/, const Settings & /*settings*/) const
 {
-    /// proton: starts
     throw Exception("The current engine " + getName() + " doesn't support partitioning", ErrorCodes::NOT_IMPLEMENTED);
-    /// proton: ends
 }
 
 StorageID IStorage::getStorageID() const
@@ -228,22 +218,23 @@ bool IStorage::isStaticStorage() const
 
 BackupEntries IStorage::backup(const ASTs &, ContextPtr)
 {
-    /// proton: starts
     throw Exception("The engine " + getName() + " doesn't support backups", ErrorCodes::NOT_IMPLEMENTED);
-    /// proton: ends
 }
 
 RestoreDataTasks IStorage::restoreFromBackup(const BackupPtr &, const String &, const ASTs &, ContextMutablePtr)
 {
-    /// proton: starts
     throw Exception("The engine " + getName() + " doesn't support restoring", ErrorCodes::NOT_IMPLEMENTED);
-    /// proton: ends
 }
 
 std::string PrewhereInfo::dump() const
 {
     WriteBufferFromOwnString ss;
     ss << "PrewhereDagInfo\n";
+
+    if (row_level_filter)
+    {
+        ss << "row_level_filter " << row_level_filter->dumpDAG() << "\n";
+    }
 
     if (alias_actions)
     {
@@ -273,4 +264,5 @@ std::string FilterDAGInfo::dump() const
 
     return ss.str();
 }
+
 }

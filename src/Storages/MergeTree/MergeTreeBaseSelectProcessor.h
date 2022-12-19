@@ -104,6 +104,9 @@ protected:
 
     Names virt_column_names;
 
+    /// These columns will be filled by the merge tree range reader
+    Names non_const_virtual_column_names;
+
     DataTypePtr partition_value_type;
 
     /// This header is used for chunks from readFromPart().
@@ -114,7 +117,7 @@ protected:
 
     using MergeTreeReaderPtr = std::unique_ptr<IMergeTreeReader>;
     MergeTreeReaderPtr reader;
-    MergeTreeReaderPtr pre_reader;
+    std::vector<MergeTreeReaderPtr> pre_reader_for_step;
 
     MergeTreeReadTaskPtr task;
 

@@ -1328,7 +1328,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                     query_plan.getCurrentDataStream(),
                     expressions.prewhere_info->row_level_filter,
                     expressions.prewhere_info->row_level_column_name,
-                    false);
+                    true);
 
                 row_level_filter_step->setStepDescription("Row-level security filter (PREWHERE)");
                 query_plan.addStep(std::move(row_level_filter_step));
@@ -3493,7 +3493,7 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlanForSessionWindow(Q
             query_plan.getCurrentDataStream(), std::move(output_header), getStreamingFunctionDescription()));
     else
         query_plan.addStep(std::make_unique<Streaming::SessionStep>(
-            query_plan.getCurrentDataStream(), std::move(output_header), getStreamingFunctionDescription()));    
+            query_plan.getCurrentDataStream(), std::move(output_header), getStreamingFunctionDescription()));
 }
 
 void InterpreterSelectQuery::checkEmitVersion()

@@ -305,13 +305,14 @@ NamesAndTypesList StorageDistributed::getVirtuals() const
     /// NOTE This is weird. Most of these virtual columns are part of MergeTree
     /// tables info. But Distributed is general-purpose engine.
     return NamesAndTypesList{
-            NameAndTypePair("_table", std::make_shared<DataTypeString>()),
-            NameAndTypePair("_part", std::make_shared<DataTypeString>()),
-            NameAndTypePair("_part_index", std::make_shared<DataTypeUInt64>()),
-            NameAndTypePair("_part_uuid", std::make_shared<DataTypeUUID>()),
-            NameAndTypePair("_partition_id", std::make_shared<DataTypeString>()),
-            NameAndTypePair("_sample_factor", std::make_shared<DataTypeFloat64>()),
-            NameAndTypePair("_shard_num", std::make_shared<DataTypeUInt32>()), /// deprecated
+        NameAndTypePair("_table", std::make_shared<DataTypeString>()),
+        NameAndTypePair("_part", std::make_shared<DataTypeString>()),
+        NameAndTypePair("_part_index", std::make_shared<DataTypeUInt64>()),
+        NameAndTypePair("_part_uuid", std::make_shared<DataTypeUUID>()),
+        NameAndTypePair("_partition_id", std::make_shared<DataTypeString>()),
+        NameAndTypePair("_sample_factor", std::make_shared<DataTypeFloat64>()),
+        NameAndTypePair("_part_offset", std::make_shared<DataTypeUInt64>()),
+        NameAndTypePair("_shard_num", std::make_shared<DataTypeUInt32>()), /// deprecated
     };
 }
 
@@ -371,10 +372,8 @@ StorageDistributed::StorageDistributed(
         storage_policy = getContext()->getStoragePolicy(storage_policy_name_);
         data_volume = storage_policy->getVolume(0);
         if (storage_policy->getVolumes().size() > 1)
-            /// proton: starts
             LOG_WARNING(log, "Storage policy for Distributed stream has multiple volumes. "
                              "Only {} volume will be used to store data. Other will be ignored.", data_volume->getName());
-            /// proton: ends
     }
 
     /// Sanity check. Skip check if the table is already created to allow the server to start.
@@ -385,9 +384,7 @@ StorageDistributed::StorageDistributed(
 
         size_t num_local_shards = getCluster()->getLocalShardCount();
         if (num_local_shards && (remote_database.empty() || remote_database == id_.database_name) && remote_table == id_.table_name)
-            /// proton: starts
             throw Exception("Distributed stream " + id_.table_name + " looks at itself", ErrorCodes::INFINITE_LOOP);
-            /// proton: ends
     }
 }
 
@@ -1485,4 +1482,3 @@ void registerStorageDistributed(StorageFactory & factory)
 }
 
 }
-

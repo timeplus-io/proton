@@ -883,7 +883,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
 
         Strings forced_indices;
         {
-            Tokens tokens(&indices[0], &indices[indices.size()], settings.max_query_size);
+            Tokens tokens(indices.data(), &indices[indices.size()], settings.max_query_size);
             IParser::Pos pos(tokens, settings.max_parser_depth);
             Expected expected;
             if (!parseIdentifiersOrStringLiterals(pos, expected, forced_indices))
@@ -899,7 +899,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
 
         for (const auto & index_name : forced_indices)
         {
-            if (!useful_indices_names.count(index_name))
+            if (!useful_indices_names.contains(index_name))
             {
                 throw Exception(
                     ErrorCodes::INDEX_NOT_USED,
@@ -1014,7 +1014,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
             }
         };
 
-        size_t num_threads = std::min(size_t(num_streams), parts.size());
+        size_t num_threads = std::min<size_t>(num_streams, parts.size());
 
         if (num_threads <= 1)
         {
@@ -1123,7 +1123,7 @@ std::shared_ptr<QueryIdHolder> MergeTreeDataSelectExecutor::checkLimits(
         std::set<String> partitions;
         for (const auto & part_with_ranges : result.parts_with_ranges)
             partitions.insert(part_with_ranges.data_part->info.partition_id);
-        if (partitions.size() > size_t(max_partitions_to_read))
+        if (partitions.size() > static_cast<size_t>(max_partitions_to_read))
             throw Exception(
                 ErrorCodes::TOO_MANY_PARTITIONS,
                 "Too many partitions to read. Current {}, max {}",
@@ -1176,6 +1176,10 @@ static void selectColumnNames(
             virt_column_names.push_back(name);
         }
         else if (name == "_partition_id")
+        {
+            virt_column_names.push_back(name);
+        }
+        else if (name == "_part_offset")
         {
             virt_column_names.push_back(name);
         }
