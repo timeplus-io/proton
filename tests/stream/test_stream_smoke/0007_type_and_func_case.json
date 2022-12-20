@@ -701,6 +701,49 @@
                 {"query_id":"806", "expected_results":[["[]"], ["['is_registred']"], ["['registration_month', 'user_login', 'is_registred']"]]},
                 {"query_id":"807", "expected_results":[["True", "False", "False", "True", "True"]]}
             ]
+        },
+        {
+            "id": 33,
+            "tags": ["func"],
+            "name": "max_k function",
+            "description": "Tests covering max_k aggregation with decimal argument and nested tuple",
+            "steps":[
+                {
+                "statements": [
+                    {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists maxk_types"},
+                    {"client":"python", "query_type": "table", "wait":2, "query": "create stream maxk_types(uint8 uint8,uint16 uint16,uint32 uint32,uint64 uint64,uint128 uint128,uint256 uint256,int8 int8,int16 int16,int32 int32,int64 int64,int128 int128,int256 int256,float32 float32,float64 float64,date date,date32 date32,datetime datetime,datetime64 datetime64,string string,fixed_string fixed_string(1),enum enum('a'=1,'b'=2,'c'=3),enum16 enum16('a'=1,'b'=2,'c'=3),decimal32 decimal32(5),decimal64 decimal64(5),decimal128 decimal128(5),decimal256 decimal256(5))"},
+                    {"client":"python", "query_type": "table", "wait":2, "query":"insert into maxk_types(uint8 ,uint16 ,uint32 ,uint64 ,uint128 ,uint256 ,int8 ,int16 ,int32 ,int64 ,int128 ,int256 ,float32 ,float64 ,date ,date32 ,datetime ,datetime64 ,string ,fixed_string ,enum ,enum16 ,decimal32 ,decimal64 ,decimal128 ,decimal256) values(1,1,1,1,1,1, 1,1,1,1,1,1, 1.0,1.0, '2022-12-16','2022-12-16', '2022-03-24 17:17:17','2022-03-24 17:17:17' ,'a','a' , 'a','a' ,1.00,1.00,1.00,1.00)"},
+                    {"client":"python", "query_type": "table", "wait":2, "query":"insert into maxk_types(uint8 ,uint16 ,uint32 ,uint64 ,uint128 ,uint256 ,int8 ,int16 ,int32 ,int64 ,int128 ,int256 ,float32 ,float64 ,date ,date32 ,datetime ,datetime64 ,string ,fixed_string ,enum ,enum16 ,decimal32 ,decimal64 ,decimal128 ,decimal256) values(2,2,2,2,2,2, 2,2,2,2,2,2, 2.0,2.0, '2022-12-16','2022-12-16', '2022-12-16 17:17:17','2022-12-16 17:17:17' ,'b','b' , 'b','b' ,2.00,2.00,2.00,2.00)"},
+                    {"client":"python", "query_type": "table", "wait":2, "query":"insert into maxk_types(uint8 ,uint16 ,uint32 ,uint64 ,uint128 ,uint256 ,int8 ,int16 ,int32 ,int64 ,int128 ,int256 ,float32 ,float64 ,date ,date32 ,datetime ,datetime64 ,string ,fixed_string ,enum ,enum16 ,decimal32 ,decimal64 ,decimal128 ,decimal256) values(3,3,3,3,3,3, 3,3,3,3,3,3, 3.0,3.0, '2022-12-16','2022-12-16', '2022-12-16 17:17:17','2022-12-16 17:17:17' ,'c','c' , 'c','c' ,3.00,3.00,3.00,3.00)"},
+                    {"client":"python", "query_type": "table", "query_id":"800", "wait":2, "query":"select max_k(decimal128,2) from table(maxk_types)"},
+                    {"client":"python", "query_type": "table", "query_id":"801", "wait":2, "query":"select max_k((decimal32,string),2) from table(maxk_types)"},
+                    {"client":"python", "query_type": "table", "query_id":"802", "wait":2, "query":"select max_k(((string,decimal32),decimal64),2,uint8) from table(maxk_types)"},
+                    {"client":"python", "query_type": "table", "query_id":"803", "wait":2, "query":"select max_k( (uint8,uint16,uint32,uint64,uint128,uint256,int8,int16,int32,int64,int128,int256,float32,float64),2 ) from table(maxk_types)"},
+                    {"client":"python", "query_type": "table", "query_id":"804", "wait":2, "query":"select max_k( (date,date32,datetime,datetime64,string,fixed_string),2 ) from table(maxk_types)"},
+                    {"client":"python", "query_type": "table", "query_id":"805", "wait":2, "query":"select max_k( (enum,enum16,decimal32,decimal64,decimal128,decimal256),2 ) from table(maxk_types)"}
+                ]
+                }
+            ],
+            "expected_results": [
+                {"query_id":"800", "expected_results":[
+                    ["[Decimal('3'), Decimal('2')]"]
+                ]},
+                {"query_id":"801", "expected_results":[
+                    ["[((Decimal('3'), 'c'),), ((Decimal('2'), 'b'),)]"]
+                ]},
+                {"query_id":"802", "expected_results":[
+                    ["[((('c', Decimal('3')), Decimal('3')), 3), ((('b', Decimal('2')), Decimal('2')), 2)]"]
+                ]},
+                {"query_id":"803", "expected_results":[
+                    ["[((3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3.0, 3.0),), ((2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2.0, 2.0),)]"]
+                ]},
+                {"query_id":"804", "expected_results":[
+                    ["[((datetime.date(2022, 12, 16), datetime.date(2022, 12, 16), datetime.datetime(2022, 12, 16, 17, 17, 17), datetime.datetime(2022, 12, 16, 17, 17, 17), 'c', 'c'),), ((datetime.date(2022, 12, 16), datetime.date(2022, 12, 16), datetime.datetime(2022, 12, 16, 17, 17, 17), datetime.datetime(2022, 12, 16, 17, 17, 17), 'b', 'b'),)]"]
+                ]},
+                {"query_id":"805", "expected_results":[
+                    ["[(('c', 'c', Decimal('3'), Decimal('3'), Decimal('3'), Decimal('3')),), (('b', 'b', Decimal('2'), Decimal('2'), Decimal('2'), Decimal('2')),)]"]
+                ]}
+            ]
         }
     ]
 }

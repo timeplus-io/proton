@@ -59,10 +59,7 @@ struct AggregateFunctionMinMaxKData
         /// We ignore the Nan or NULL, so
         /// if is min_k, `nan_direction_hint=1` are considered larger than all numbers
         /// if is max_k, `nan_direction_hint=-1` are considered less than all numbers
-        if constexpr (is_min)
-            compare = std::bind(CompareHelper<T>::less, std::placeholders::_1, std::placeholders::_2, /* nan_direction_hint */ 1);
-        else
-            compare = std::bind(CompareHelper<T>::greater, std::placeholders::_1, std::placeholders::_2, /* nan_direction_hint */ -1);
+
         std::make_heap(values.begin(), values.end(), compare);
     }
 
@@ -107,6 +104,21 @@ struct AggregateFunctionMinMaxKData
 
         for (const auto & value : values)
             writeBinary(value, wb);
+
+        writeBoolText(is_sorted, wb);
+    }
+    void write(WriteBuffer & wb, auto & writers) const
+    {
+        writeVarUInt(values.size(), wb);
+
+        for (const auto & value : values)
+        {
+            assert(writers.size() == value.values.size());
+            for (size_t idx = 0; idx < writers.size(); ++idx)
+                writers[idx](value.values[idx], wb);
+
+            writeVectorBinary(value.string_ref_indexs, wb);
+        }
 
         writeBoolText(is_sorted, wb);
     }
@@ -234,104 +246,6 @@ public:
 /** Template parameter with true value should be used for columns that store their elements in memory continuously.
  *  For such columns minMaxK() can be implemented more efficiently (especially for small numeric arrays).
  */
-template <bool is_plain_column, bool is_min>
-class AggregateFunctionMinMaxKGeneric : public IAggregateFunctionDataHelper<AggregateFunctionMinMaxKData<StringRef, is_min>,AggregateFunctionMinMaxKGeneric<is_plain_column, is_min>>
-{
-private:
-    using State = AggregateFunctionMinMaxKData<StringRef, is_min>;
-
-    UInt64 k;
-    DataTypePtr & input_data_type;
-
-    static void deserializeAndInsert(StringRef str, IColumn & data_to);
-
-public:
-    AggregateFunctionMinMaxKGeneric(UInt64 k_, const DataTypePtr & input_data_type_, const Array & params)
-        : IAggregateFunctionDataHelper<
-            AggregateFunctionMinMaxKData<StringRef, is_min>,
-            AggregateFunctionMinMaxKGeneric<is_plain_column, is_min>>({input_data_type_}, params)
-        , k(k_)
-        , input_data_type(this->argument_types[0])
-    {
-    }
-
-    String getName() const override { return is_min ? "min_k" : "max_k"; }
-
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(input_data_type); }
-
-    bool allocatesMemoryInArena() const override { return true; }
-
-    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t>) const override
-    {
-        this->data(place).write(buf);
-    }
-
-    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /*version*/, Arena * arena) const override
-    {
-        auto & top_k = this->data(place);
-        top_k.reserve(k + 1);
-
-        // Specialized here because there's no deserialiser for StringRef
-        size_t size = 0;
-        readVarUInt(size, buf);
-        for (size_t i = 0; i < size; ++i)
-        {
-            auto ref = readStringBinaryInto(*arena, buf);
-            top_k.add(ref, k);
-            arena->rollback(ref.size);
-        }
-
-        readBoolText(top_k.is_sorted, buf);
-    }
-
-    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
-    {
-        auto & top_k = this->data(place);
-        top_k.reserve(k + 1);
-
-        if constexpr (is_plain_column)
-        {
-            top_k.add(columns[0]->getDataAt(row_num), k);
-        }
-        else
-        {
-            const char * begin = nullptr;
-            StringRef str_serialized = columns[0]->serializeValueIntoArena(row_num, *arena, begin);
-            top_k.add(str_serialized, k);
-            arena->rollback(str_serialized.size);
-        }
-    }
-
-    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
-    {
-        auto & top_k = this->data(place);
-        top_k.reserve(k + 1);
-
-        for (const auto & elem : this->data(rhs))
-            top_k.add(elem, k);
-    }
-
-    void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
-    {
-        ColumnArray & arr_to = assert_cast<ColumnArray &>(to);
-        ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
-        IColumn & data_to = arr_to.getData();
-
-        auto & top_k = this->data(place);
-        offsets_to.push_back(offsets_to.back() + top_k.size());
-
-        top_k.sort();
-
-        for (auto & elem : top_k)
-        {
-            if constexpr (is_plain_column)
-                data_to.insertData(elem.data, elem.size);
-            else
-                data_to.deserializeAndInsertFromArena(elem.data);
-        }
-    }
-};
-
 enum class TypeCategory : UInt8
 {
     NUMERIC,
@@ -350,59 +264,29 @@ struct TupleOperators
     using Writer = std::function<void(const std::any &, WriteBuffer &)>;
     using Reader = std::function<std::pair<std::any, size_t /*alloc_size*/>(ReadBuffer &, Arena *)>;
 
-    std::vector<Comparer> comparers;    /// Tuple element comparers
-    std::vector<Getter> getters;        /// Tuple element retrievers
-    std::vector<Appender> appenders;    /// Tuple element appender. Append one element to ColumnTuple
-    std::vector<Writer> writers;        /// Tuple element writers
-    std::vector<Reader> readers;        /// Tuple element readers
+    std::vector<Comparer> comparers; /// Tuple element comparers
+    std::vector<Getter> getters; /// Tuple element retrievers
+    std::vector<Appender> appenders; /// Tuple element appender. Append one element to ColumnTuple
+    std::vector<Writer> writers; /// Tuple element writers
+    std::vector<Reader> readers; /// Tuple element readers
 };
 
 struct TupleValue
 {
     std::vector<std::any> values;
     std::vector<size_t> string_ref_indexs;
-    const TupleOperators * operators;
+    std::vector<TupleOperators::Writer> writers;
 
-    TupleValue(std::vector<std::any> values_, std::vector<size_t> string_ref_indexs_, const TupleOperators & operators_)
-        : values(std::move(values_)), string_ref_indexs(std::move(string_ref_indexs_)), operators(&operators_)
+    TupleValue(std::vector<std::any> values_, std::vector<size_t> string_ref_indexs_)
+        : values(std::move(values_)), string_ref_indexs(std::move(string_ref_indexs_))
     {
-    }
-
-    bool operator<(const TupleValue & val) const
-    {
-        assert(operators->comparers.size() <= values.size());
-        assert(operators->comparers.size() <= val.values.size());
-        for (size_t i = 0; i < operators->comparers.size(); ++i)
-        {
-            auto res = operators->comparers[i](values[i], val.values[i]);
-            if (res < 0)
-                return true;
-            else if (res > 0)
-                return false;
-        }
-        return false;
-    }
-
-    bool operator>(const TupleValue & val) const
-    {
-        assert(operators->comparers.size() <= values.size());
-        assert(operators->comparers.size() <= val.values.size());
-        for (size_t i = 0; i < operators->comparers.size(); ++i)
-        {
-            auto res = operators->comparers[i](values[i], val.values[i]);
-            if (res > 0)
-                return true;
-            else if (res < 0)
-                return false;
-        }
-        return false;
     }
 
     void write(WriteBuffer & buf) const
     {
-        assert(operators->writers.size() == values.size());
-        for (size_t i = 0; i < operators->writers.size(); ++i)
-            operators->writers[i](values[i], buf);
+        assert(writers.size() == values.size());
+        for (size_t i = 0; i < writers.size(); ++i)
+            writers[i](values[i], buf);
 
         writeVectorBinary(string_ref_indexs, buf);
     }
@@ -421,6 +305,13 @@ struct SpaceSavingArena<TupleValue>
             std::copy(string_ref.data, string_ref.data + string_ref.size, ptr);
             new_tuple_value.values[string_ref_idx] = StringRef{ptr, string_ref.size};
         }
+
+        for (size_t index = 0; index < key.values.size(); ++index)
+        {
+            if (key.values[index].type() == typeid(TupleValue))
+                new_tuple_value.values[index] = emplace(std::any_cast<const TupleValue &>(key.values[index]));
+        }
+
         return new_tuple_value;
     }
 
@@ -447,6 +338,21 @@ struct AggregateFunctionMinMaxKTupleData : AggregateFunctionMinMaxKData<TupleVal
 {
     TupleOperators operators;
 
+    AggregateFunctionMinMaxKTupleData(TupleOperators && operators_) : operators(operators_)
+    {
+        AggregateFunctionMinMaxKTupleData::compare = [&](const TupleValue & l, const TupleValue & r) -> bool {
+            if constexpr (is_min)
+                return operators.comparers[0](l.values[0], r.values[0]) < 0;
+            else
+                return operators.comparers[0](l.values[0], r.values[0]) > 0;
+        };
+        std::make_heap(
+            AggregateFunctionMinMaxKTupleData::values.begin(),
+            AggregateFunctionMinMaxKTupleData::values.end(),
+            AggregateFunctionMinMaxKTupleData::compare);
+    }
+    AggregateFunctionMinMaxKTupleData() { }
+
     void read(ReadBuffer & rb, Arena * arena_)
     {
         size_t size = 0;
@@ -458,7 +364,9 @@ struct AggregateFunctionMinMaxKTupleData : AggregateFunctionMinMaxKData<TupleVal
         for (const auto & value : this->values)
             this->arena.free(value);
 
+        this->values.clear();
         this->values.reserve(size);
+
         for (size_t i = 0; i < size; ++i)
         {
             std::vector<std::any> tuple_values;
@@ -473,7 +381,7 @@ struct AggregateFunctionMinMaxKTupleData : AggregateFunctionMinMaxKData<TupleVal
 
             std::vector<size_t> string_ref_indexs;
             readVectorBinary(string_ref_indexs, rb);
-            this->values.push_back(TupleValue(std::move(tuple_values), std::move(string_ref_indexs), operators));
+            this->values.push_back(TupleValue(std::move(tuple_values), std::move(string_ref_indexs)));
             arena_->rollback(arena_allocated_size);
         }
 
@@ -497,15 +405,17 @@ public:
     }
 
 protected:
-    void buildTupleValueOperators(TupleOperators & operators) const;
+    TupleOperators buildTupleValueOperators() const;
 
 public:
     String getName() const override { return is_min ? "min_k" : "max_k"; }
 
     DataTypePtr getReturnType() const override
     {
-        assert(this->argument_types.size() > 1);
-        return std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(this->argument_types));
+        if (this->argument_types.size() == 1 && WhichDataType(this->argument_types[0]).idx != TypeIndex::Tuple)
+            return std::make_shared<DataTypeArray>(this->argument_types[0]);
+        else
+            return std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(this->argument_types));
     }
 
     bool allocatesMemoryInArena() const override { return true; }
@@ -515,7 +425,6 @@ public:
         auto & top_k = this->data(place);
         std::vector<std::any> tuple_value;
         std::vector<size_t> string_ref_indexs;
-        size_t arena_allocated_size = 0;
         for (const auto & getter : top_k.operators.getters)
         {
             auto [val, type_category] = getter(columns, row_num, arena);
@@ -523,24 +432,11 @@ public:
             {
                 string_ref_indexs.push_back(tuple_value.size());
             }
-            else if (type_category == TypeCategory::SEIRIALIZED_STRING_REF)
-            {
-                string_ref_indexs.push_back(tuple_value.size());
-                arena_allocated_size += std::any_cast<const StringRef &>(val).size;
-            }
-            else if (type_category == TypeCategory::TUPLE)
-            {
-                auto t=std::any_cast<TupleValue &>(val).operators;
-                auto tval=std::any_cast<TupleValue &>(val).values;
-                std::cout<<t->comparers.size();
-                std::cout<<tval.size();
-            }
 
             tuple_value.push_back(std::move(val));
         }
 
-        top_k.add(TupleValue(std::move(tuple_value), std::move(string_ref_indexs), top_k.operators), k);
-        arena->rollback(arena_allocated_size);
+        top_k.add(TupleValue(std::move(tuple_value), std::move(string_ref_indexs)), k);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -566,10 +462,9 @@ public:
 
     void create(AggregateDataPtr __restrict place) const override
     {
-        new (place) State;
+        new (place) State(this->buildTupleValueOperators());
         auto & data = this->data(place);
         data.reserve(k + 1);
-        this->buildTupleValueOperators(data.operators);
     }
 };
 }
