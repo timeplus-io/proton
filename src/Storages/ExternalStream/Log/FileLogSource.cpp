@@ -4,7 +4,7 @@
 
 #include <Storages/ExternalStream/BreakLines.h>
 #include <base/ClockUtils.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 
 #include <errno.h>
 #include <fcntl.h>

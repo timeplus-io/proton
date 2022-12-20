@@ -4,7 +4,7 @@
 #include <Interpreters/StorageID.h>
 #include <KafkaLog/KafkaWALCommon.h>
 #include <KafkaLog/KafkaWALSimpleConsumer.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {

@@ -6,9 +6,9 @@
 #include <NativeLog/Server/NativeLog.h>
 
 #include <base/ClockUtils.h>
-#include <base/logger_useful.h>
-#include <loggers/OwnFormattingChannel.h>
-#include <loggers/OwnPatternFormatter.h>
+#include <Common/logger_useful.h>
+#include <Loggers/OwnFormattingChannel.h>
+#include <Loggers/OwnPatternFormatter.h>
 #include <Common/Exception.h>
 
 #include <Poco/AutoPtr.h>

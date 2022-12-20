@@ -2,7 +2,7 @@
 #include "Loglet.h"
 
 #include <NativeLog/Common/LogAppendDescription.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 
 namespace nlog
 {

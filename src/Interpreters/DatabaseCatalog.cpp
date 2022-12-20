@@ -14,7 +14,7 @@
 #include <DistributedMetadata/CatalogService.h>
 #include <Common/renameat2.h>
 #include <Common/CurrentMetrics.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <filesystem>
 #include <Common/filesystemHelpers.h>

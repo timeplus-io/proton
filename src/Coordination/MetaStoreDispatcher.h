@@ -9,7 +9,7 @@
 
 #include <Coordination/CoordinationSettings.h>
 #include <Coordination/MetaStoreServer.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Exception.h>
 #include <Common/ThreadPool.h>

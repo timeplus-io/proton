@@ -21,7 +21,7 @@
 #include <Storages/Streaming/StorageRandom.h>
 #include <Common/ProtonCommon.h>
 
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Common/ProtonCommon.h>
 
 namespace DB

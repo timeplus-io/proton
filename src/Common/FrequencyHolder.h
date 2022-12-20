@@ -11,7 +11,7 @@
 #include <IO/ZstdInflatingReadBuffer.h>
 
 #include <base/StringRef.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 
 #include <string_view>
 #include <unordered_map>

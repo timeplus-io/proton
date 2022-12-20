@@ -1,7 +1,7 @@
 #include "KafkaWALPool.h"
 
 #include <Interpreters/Context.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <Poco/Util/AbstractConfiguration.h>

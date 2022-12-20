@@ -10,7 +10,7 @@
 #include <Common/DNSResolver.h>
 #include <Interpreters/DNSCacheUpdater.h>
 #include <base/defines.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <base/ErrorHandlers.h>
 #include <base/scope_guard.h>
 #include <Poco/Util/HelpFormatter.h>

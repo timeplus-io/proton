@@ -5,7 +5,7 @@
 #include <DataTypes/ObjectUtils.h>
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Storages/StorageSnapshot.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {

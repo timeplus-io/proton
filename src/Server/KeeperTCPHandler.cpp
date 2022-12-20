@@ -9,7 +9,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/NetException.h>
 #include <Common/setThreadName.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <chrono>
 #include <Common/PipeFDs.h>
 #include <IO/ReadBufferFromFileDescriptor.h>

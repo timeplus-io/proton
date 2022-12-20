@@ -5,7 +5,7 @@
 #include <NativeLog/Rocks/mapRocksStatus.h>
 
 #include <base/ClockUtils.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Common/Exception.h>
 
 #include <rocksdb/db.h>

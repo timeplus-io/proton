@@ -71,6 +71,8 @@ add_subdirectory (Formats)
 add_subdirectory (Compression)
 add_subdirectory (Server)
 add_subdirectory (Coordination)
+add_subdirectory (Daemon)
+add_subdirectory (Loggers)
 
 
 set(dbms_headers)
@@ -221,7 +223,7 @@ add_object_library(clickhouse_storages_mergetree Storages/MergeTree)
 add_object_library(clickhouse_storages_liveview Storages/LiveView)
 add_object_library(clickhouse_storages_windowview Storages/WindowView)
 add_object_library(clickhouse_client Client)
-add_object_library(clickhouse_bridge Bridge)
+add_object_library(clickhouse_bridge BridgeHelper)
 add_object_library(clickhouse_server Server)
 add_object_library(clickhouse_server_http Server/HTTP)
 add_object_library(clickhouse_formats Formats)
@@ -339,6 +341,10 @@ set_source_files_properties(
         Common/SymbolIndex.cpp
         PROPERTIES COMPILE_FLAGS "-O3 ${WITHOUT_COVERAGE}")
 
+if (TARGET ch_contrib::muduo_net)
+    target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::muduo_net)
+endif ()
+
 target_link_libraries (clickhouse_common_io
         PRIVATE
             string_utils
@@ -348,7 +354,6 @@ target_link_libraries (clickhouse_common_io
             common
             ch_contrib::double_conversion
             ch_contrib::dragonbox_to_chars
-            ch_contrib::muduo_net
 )
 
 # Use X86 AVX2/AVX512 instructions to accelerate filter operations

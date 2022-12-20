@@ -13,7 +13,7 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/Streaming/ASTEmitQuery.h>
 #include <Parsers/queryToString.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Common/IntervalKind.h>
 #include <Common/ProtonCommon.h>
 

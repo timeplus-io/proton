@@ -10,7 +10,7 @@
 #include <Parsers/queryToString.h>
 #include <Storages/IStorage.h>
 #include <Storages/Streaming/parseHostShards.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Common/Exception.h>
 
 #include <Poco/Util/AbstractConfiguration.h>

@@ -85,7 +85,9 @@ endif()
 if (TARGET ch_contrib::liburing)
     set(USE_LIBURING 1)
 endif()
-
+if (TARGET ch_contrib::muduo_net)
+    set(USE_MUDUO_NET 1)
+endif()
 # Enable / disable aggregation functions
 
 # Enable / disable functions

@@ -3,7 +3,7 @@
 #include <Storages/StorageMergeTree.h>
 #include <Interpreters/PartLog.h>
 #include <DataTypes/ObjectUtils.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 
 /// proton : starts
 #include <Storages/MergeTree/SequenceInfo.h>

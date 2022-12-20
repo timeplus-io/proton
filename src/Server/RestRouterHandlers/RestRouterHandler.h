@@ -3,7 +3,7 @@
 #include <Interpreters/Context.h>
 #include <Server/HTTP/HTMLForm.h>
 #include <Server/HTTP/HTTPRequestHandler.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <base/types.h>
 
 #include <boost/noncopyable.hpp>

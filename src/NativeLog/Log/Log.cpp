@@ -6,7 +6,7 @@
 #include <NativeLog/Common/LogSequenceMetadata.h>
 #include <NativeLog/Common/StreamShard.h>
 #include <NativeLog/Record/Record.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {

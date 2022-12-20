@@ -10,7 +10,7 @@
 #include <Processors/Chunk.h>
 #include <Storages/SelectQueryInfo.h>
 #include <base/ClockUtils.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Common/VersionRevision.h>
 
 namespace DB

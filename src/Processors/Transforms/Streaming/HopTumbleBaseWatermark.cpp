@@ -11,7 +11,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Processors/Chunk.h>
 #include <base/ClockUtils.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Common/DateLUT.h>
 #include <Common/StringUtils/StringUtils.h>
 

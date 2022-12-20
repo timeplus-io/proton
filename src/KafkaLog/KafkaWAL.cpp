@@ -2,7 +2,7 @@
 #include "KafkaWALCommon.h"
 #include "KafkaWALStats.h"
 
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
 

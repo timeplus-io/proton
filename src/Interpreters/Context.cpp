@@ -61,7 +61,7 @@
 #include <Common/StackTrace.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Config/AbstractConfigurationComparison.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <base/EnumReflection.h>
 #include <Common/RemoteHostFilter.h>
 #include <Interpreters/AsynchronousInsertQueue.h>

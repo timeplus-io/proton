@@ -84,7 +84,7 @@
 #include <Interpreters/Aggregator.h>
 
 #include <base/map.h>
-#include <base/scope_guard_safe.h>
+#include <Common/scope_guard_safe.h>
 #include <memory>
 
 /// proton: starts

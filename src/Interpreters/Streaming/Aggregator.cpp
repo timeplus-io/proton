@@ -30,7 +30,7 @@
 #include <Formats/SimpleNativeReader.h>
 #include <Formats/SimpleNativeWriter.h>
 #include <Interpreters/CompiledAggregateFunctionsHolder.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Common/ProtonCommon.h>
 #include <Common/VersionRevision.h>
 /// proton: ends

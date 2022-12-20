@@ -8,7 +8,7 @@
 #include <KafkaLog/KafkaWALSettings.h>
 #include <Processors/Executors/StreamingFormatExecutor.h>
 #include <base/ClockUtils.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Common/ProtonCommon.h>
 #include <Common/parseIntStrict.h>
 

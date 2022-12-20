@@ -8,7 +8,7 @@
 #include <DistributedMetadata/DDLService.h>
 #include <Interpreters/Context.h>
 #include <Common/typeid_cast.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {

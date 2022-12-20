@@ -6,7 +6,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/executeSelectQuery.h>
 #include <Storages/System/StorageSystemStoragePolicies.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 
 #include <city.h>
 

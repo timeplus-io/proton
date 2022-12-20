@@ -8,7 +8,7 @@
 #include <Common/formatReadable.h>
 #include <Common/ProfileEvents.h>
 #include <Common/thread_local_rng.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 
 #include <atomic>
 #include <random>

@@ -5,7 +5,7 @@
 #include <NativeLog/Common/LogDirFailureChannel.h>
 #include <NativeLog/Log/LogManager.h>
 #include <NativeLog/MetaStore/MetaStore.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 
 #include <Poco/Util/AbstractConfiguration.h>
 

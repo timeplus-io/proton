@@ -6,7 +6,7 @@
 #include <Interpreters/TableJoin.h>
 #include <Interpreters/join_common.h>
 
-/// #include <base/logger_useful.h>
+/// #include <Common/logger_useful.h>
 
 namespace DB
 {

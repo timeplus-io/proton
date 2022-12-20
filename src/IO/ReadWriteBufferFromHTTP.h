@@ -19,7 +19,7 @@
 #include <Common/DNSResolver.h>
 #include <Common/RemoteHostFilter.h>
 #include <Common/config.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Poco/URIStreamFactory.h>
 
 

@@ -14,8 +14,8 @@
 #include <Common/ThreadProfileEvents.h>
 #include <Common/ThreadStatus.h>
 #include <Common/checkStackSize.h>
+#include <Common/logger_useful.h>
 #include <base/scope_guard.h>
-#include <base/logger_useful.h>
 
 /// proton: starts.
 #include <Storages/Streaming/StorageMaterializedView.h>

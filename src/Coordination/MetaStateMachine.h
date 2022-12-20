@@ -3,7 +3,7 @@
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Coordination/CoordinationSettings.h>
 #include <Coordination/MetaSnapshotManager.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 
 #include <libnuraft/nuraft.hxx>
 #include <rocksdb/db.h>

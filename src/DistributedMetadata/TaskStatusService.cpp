@@ -11,7 +11,7 @@
 #include <Interpreters/executeSelectQuery.h>
 #include <KafkaLog/KafkaWALCommon.h>
 #include <base/ClockUtils.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Common/DateLUT.h>
 
 #include <Poco/Util/Application.h>

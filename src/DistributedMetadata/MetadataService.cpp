@@ -2,7 +2,7 @@
 
 #include <Interpreters/Context.h>
 #include <KafkaLog/KafkaWALPool.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Common/setThreadName.h>
 
 #include <boost/algorithm/string/case_conv.hpp>

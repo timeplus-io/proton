@@ -11,7 +11,7 @@
 #include <Common/DateLUT.h>
 #include <Common/MemoryTracker.h>
 #include <base/LineReader.h>
-#include <base/scope_guard_safe.h>
+#include <Common/scope_guard_safe.h>
 #include <Common/Exception.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/tests/gtest_global_context.h>

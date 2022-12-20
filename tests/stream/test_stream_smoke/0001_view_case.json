@@ -415,8 +415,8 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists test_v_stream_sum_view"},
-                    {"client":"python","query_id":"300", "query_type": "table","wait":1, "query":"create view test_v_stream_sum_view as select id, sum(value) as sum_value from test_mv group by id order by id limit 4 emit periodic 5s"},
-                    {"client":"python", "query_id":"301", "query_type": "stream","depends_on_stream":"test_v_stream_sum_view", "wait":1, "terminate":"manual", "query":"select * from test_v_stream_sum_view"}]},                    
+                    {"client":"python","query_id":"300", "query_type": "table","wait":2, "query":"create view test_v_stream_sum_view as select id, sum(value) as sum_value from test_mv group by id order by id limit 4 emit periodic 5s"},
+                    {"client":"python", "query_id":"301", "query_type": "stream","depends_on_stream":"test_v_stream_sum_view", "wait":2, "terminate":"manual", "query":"select * from test_v_stream_sum_view"}]},                    
 
                 {"inputs": [
                     {"table_name":"test_mv","depends_on_stream":"test_v_stream_sum_view", "depends_on": 301, "wait":3, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
@@ -433,7 +433,7 @@
                     ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 7, "run_mode":"table", "depends":{"query_id":301}, "query_type": "table", "query":"kill query where query_id = '301'"}
+                    {"client":"python", "wait": 8, "run_mode":"table", "depends":{"query_id":301}, "query_type": "table", "query":"kill query where query_id = '301'"}
                 ]
                 }
             ],

@@ -6,7 +6,7 @@
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/ISource.h>
 #include <QueryPipeline/printPipeline.h>
-#include <base/scope_guard_safe.h>
+#include <Common/scope_guard_safe.h>
 #include <Common/CurrentThread.h>
 #include <Common/MemoryTracker.h>
 #include <Common/setThreadName.h>

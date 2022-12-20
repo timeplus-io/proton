@@ -4,7 +4,7 @@
 #include <Columns/ColumnObject.h>
 #include <NativeLog/Cache/TailCache.h>
 #include <NativeLog/Server/NativeLog.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {

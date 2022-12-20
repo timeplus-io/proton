@@ -2,7 +2,7 @@
 
 #include <NativeLog/Record/Record.h>
 #include <base/ClockUtils.h>
-#include <base/logger_useful.h>
+#include <Common/logger_useful.h>
 #include <Common/Exception.h>
 #include <Common/parseIntStrict.h>
 
