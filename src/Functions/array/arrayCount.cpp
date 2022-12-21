@@ -12,7 +12,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_COLUMN;
 }
 
-/** arrayCount(x1,...,xn -> expression, array1,...,arrayn) - for how many elements of the array the expression is true.
+/** array_count(x1,...,xn -> expression, array1,...,arrayn) - for how many elements of the array the expression is true.
   * An overload of the form f(array) is available, which works in the same way as f(x -> x, array).
   */
 struct ArrayCountImpl
@@ -80,7 +80,7 @@ struct ArrayCountImpl
     }
 };
 
-struct NameArrayCount { static constexpr auto name = "arrayCount"; };
+struct NameArrayCount { static constexpr auto name = "array_count"; };
 using FunctionArrayCount = FunctionArrayMapped<ArrayCountImpl, NameArrayCount>;
 
 REGISTER_FUNCTION(ArrayCount)

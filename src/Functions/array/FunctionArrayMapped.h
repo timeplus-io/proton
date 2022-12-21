@@ -72,13 +72,13 @@ const IColumn::Offsets & getOffsets(const T & column)
   *  and return some result based on that transformation.
   *
   * Examples:
-  * arrayMap(x1,...,xn -> expression, array1,...,arrayn) - apply the expression to each element of the array (or set of parallel arrays).
+  * array_map(x1,...,xn -> expression, array1,...,arrayn) - apply the expression to each element of the array (or set of parallel arrays).
   * arrayFilter(x -> predicate, array) - leave in the array only the elements for which the expression is true.
   *
-  * For some functions arrayCount, arrayExists, arrayAll, an overload of the form f(array) is available,
+  * For some functions array_count, array_exists, array_all, an overload of the form f(array) is available,
   *  which works in the same way as f(x -> x, array).
   *
-  * See the example of Impl template parameter in arrayMap.cpp
+  * See the example of Impl template parameter in array_map.cpp
   */
 template <typename Impl, typename Name>
 class FunctionArrayMapped : public IFunction
