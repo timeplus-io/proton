@@ -42,11 +42,16 @@ endif()
 string (TIMESTAMP BUILD_TIME "%Y-%m-%dT%H:%M:%SZ" UTC)
 # proton: end.
 
-configure_file (StorageSystemBuildOptions.generated.cpp.in ${CONFIG_BUILD})
+function(generate_system_build_options)
+    include(${proton_SOURCE_DIR}/src/configure_config.cmake)
+    configure_file(StorageSystemBuildOptions.cpp.in StorageSystemBuildOptions.generated.cpp)
+endfunction()
+
+generate_system_build_options()
 
 include("${proton_SOURCE_DIR}/cmake/dbms_glob_sources.cmake")
 add_headers_and_sources(storages_system .)
-list (APPEND storages_system_sources ${CONFIG_BUILD})
+list (APPEND storages_system_sources StorageSystemBuildOptions.generated.cpp)
 
 add_custom_target(generate-contributors
     ./StorageSystemContributors.sh
@@ -75,6 +80,7 @@ list (APPEND storages_system_sources ${GENERATED_TIMEZONES_SRC})
 # Overlength strings
 set_source_files_properties(${GENERATED_LICENSES_SRC} PROPERTIES COMPILE_FLAGS -w)
 
+include(${proton_SOURCE_DIR}/cmake/embed_binary.cmake)
 clickhouse_embed_binaries(
         TARGET information_schema_metadata
         RESOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/InformationSchema/"

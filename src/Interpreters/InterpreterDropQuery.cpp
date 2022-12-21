@@ -19,7 +19,7 @@
 #include <base/ClockUtils.h>
 /// proton: ends
 
-#include "config_core.h"
+#include "config.h"
 
 namespace DB
 {

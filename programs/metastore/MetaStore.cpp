@@ -19,10 +19,8 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <filesystem>
 
-#if !defined(ARCADIA_BUILD)
-#include "config_core.h"
-#include "Common/config_version.h"
-#endif
+#include "config.h"
+#include "config_version.h"
 
 #include <Server/HTTPHandlerFactory.h>
 #include <Server/HTTP/HTTPServer.h>

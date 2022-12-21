@@ -253,7 +253,7 @@ void buildValueGetter(DataTypePtr data_type, size_t col_index, std::vector<Tuple
     /// build getter for a base column
     else
     {
-        getters.emplace_back([=](const DB::IColumn ** columns, size_t row_num, Arena * arena) -> std::pair<std::any, TypeCategory> {
+        getters.emplace_back([=](const DB::IColumn ** columns, size_t row_num, Arena *) -> std::pair<std::any, TypeCategory> {
             if constexpr (type_category == TypeCategory::STRING_REF)
             {
                 return {columns[col_index]->getDataAt(row_num), type_category};
@@ -476,7 +476,7 @@ void appendSingleValue(ColumnArray & arr_to, auto & top_k)
     }
 }
 template <bool is_min>
-void AggregateFunctionMinMaxKTuple<is_min>::insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const
+void AggregateFunctionMinMaxKTuple<is_min>::insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const
 {
 #define APPENED_SINGLE_VALUE(TYPE, TYPE_CATEGORY, ...) appendSingleValue<TYPE, TYPE_CATEGORY>(__VA_ARGS__)
     auto & top_k = this->data(place);

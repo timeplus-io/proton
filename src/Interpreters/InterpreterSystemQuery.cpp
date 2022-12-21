@@ -43,7 +43,7 @@
 #include <Interpreters/Streaming/DDLHelper.h>
 #include <Storages/Streaming/StorageStream.h>
 /// proton: ends
-#include "config_core.h"
+#include "config.h"
 
 namespace DB
 {

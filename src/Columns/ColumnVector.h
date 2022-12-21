@@ -11,7 +11,7 @@
 #include <Core/TypeId.h>
 #include <base/TypeName.h>
 
-#include "config_core.h"
+#include "config.h"
 
 #if USE_MULTITARGET_CODE
 #    include <immintrin.h>

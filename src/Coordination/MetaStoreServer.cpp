@@ -5,9 +5,7 @@
 #include "ReadBufferFromNuraftBuffer.h"
 #include "WriteBufferFromNuraftBuffer.h"
 
-#if !defined(ARCADIA_BUILD)
-#   include "config_core.h"
-#endif
+#include "config.h"
 
 #include <Common/setThreadName.h>
 

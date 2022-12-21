@@ -76,8 +76,8 @@
 #include <Compression/CompressionCodecEncrypted.h>
 #include <filesystem>
 
-#include "config_core.h"
-#include "Common/config_version.h"
+#include "config.h"
+#include "config_version.h"
 
 /// proton: starts
 #include <Checkpoint/CheckpointCoordinator.h>

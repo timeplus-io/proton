@@ -6,7 +6,7 @@
 #include <Common/NaNUtils.h>
 #include <DataTypes/NumberTraits.h>
 
-#include <Common/config.h>
+#include "config.h"
 
 
 namespace DB

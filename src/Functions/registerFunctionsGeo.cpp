@@ -1,5 +1,4 @@
-#include "config_functions.h"
-#include <config_core.h>
+#include "config.h"
 
 namespace DB
 {

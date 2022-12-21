@@ -46,7 +46,7 @@ include (cmake/target.cmake)
 include (cmake/tools.cmake)
 include (cmake/clang_tidy.cmake)
 include (cmake/ccache.cmake)
-include (cmake/git_status.cmake)
+include (cmake/git.cmake)
 
 # Ignore export() since we don't use it,
 # but it gets broken with a global targets via link_libraries()
@@ -544,8 +544,8 @@ macro (proton_add_executable target)
     endif()
 endmacro()
 
-set(ConfigIncludePath ${CMAKE_CURRENT_BINARY_DIR}/includes/configs CACHE INTERNAL "Path to generated configuration files.")
-include_directories(${ConfigIncludePath})
+set(CONFIG_INCLUDE_PATH ${CMAKE_CURRENT_BINARY_DIR}/includes/configs CACHE INTERNAL "Path to generated configuration files.")
+include_directories(${CONFIG_INCLUDE_PATH})
 
 # Add as many warnings as possible for our own code.
 include (cmake/warnings.cmake)

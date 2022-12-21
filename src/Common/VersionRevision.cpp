@@ -1,5 +1,5 @@
 #include <Common/VersionRevision.h>
-#include <Common/config_version.h>
+#include "config_version.h"
 
 namespace ProtonRevision
 {

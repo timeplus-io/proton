@@ -6,8 +6,7 @@
 #include <MurmurHash2.h>
 #include <MurmurHash3.h>
 
-#include "config_functions.h"
-#include "config_core.h"
+#include "config.h"
 
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>

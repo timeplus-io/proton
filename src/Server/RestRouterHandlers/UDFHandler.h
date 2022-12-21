@@ -3,8 +3,7 @@
 #include "RestRouterHandler.h"
 
 #include <Interpreters/Context.h>
-#include <Common/config.h>
-#include "config_core.h"
+#include "config.h"
 
 
 namespace DB

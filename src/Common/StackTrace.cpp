@@ -12,7 +12,7 @@
 #include <sstream>
 #include <unordered_map>
 
-#include <Common/config.h>
+#include "config.h"
 
 #if USE_UNWIND
 #    include <libunwind.h>

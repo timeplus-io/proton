@@ -12,7 +12,7 @@
 #include <Functions/IsOperation.h>
 #include <Functions/castTypeToEither.h>
 
-#include <Common/config.h>
+#include "config.h"
 
 #if USE_EMBEDDED_COMPILER
 #    pragma GCC diagnostic push

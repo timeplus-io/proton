@@ -1,5 +1,5 @@
 #if !defined(ARCADIA_BUILD)
-#include <Common/config.h>
+#include "config.h"
 #endif
 
 #include <Disks/DiskFactory.h>

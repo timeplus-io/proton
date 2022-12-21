@@ -5,8 +5,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include "Regexps.h"
 
-#include "config_functions.h"
-#include <Common/config.h>
+#include "config.h"
 
 #if USE_HYPERSCAN
 #    include <hs.h>

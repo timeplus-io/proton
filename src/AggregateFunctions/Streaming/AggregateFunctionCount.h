@@ -10,7 +10,7 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Common/assert_cast.h>
 
-#include <Common/config.h>
+#include "config.h"
 
 #if USE_EMBEDDED_COMPILER
 #    include <llvm/IR/IRBuilder.h>

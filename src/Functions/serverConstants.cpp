@@ -11,7 +11,7 @@
 #    include <Poco/Environment.h>
 #endif
 
-#include <Common/config_version.h>
+#include "config_version.h"
 
 
 namespace DB

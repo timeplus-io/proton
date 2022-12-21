@@ -3,8 +3,7 @@
 #include <Coordination/MetaStoreDispatcher.h>
 #include <Interpreters/IExternalLoaderConfigRepository.h>
 #include <base/types.h>
-#include <Common/config.h>
-#include "config_core.h"
+#include "config.h"
 
 #include <mutex>
 #include <unordered_set>

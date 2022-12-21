@@ -15,7 +15,7 @@
 #include <Storages/ExternalDataSourceConfiguration.h>
 #include <Common/Macros.h>
 
-#include "config_core.h"
+#include "config.h"
 
 namespace fs = std::filesystem;
 

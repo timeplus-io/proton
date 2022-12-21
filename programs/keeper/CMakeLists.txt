@@ -20,7 +20,6 @@ set (CLICKHOUSE_KEEPER_LINK
 )
 
 proton_program_add(keeper)
-
 install (FILES keeper_config.xml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-keeper" COMPONENT proton-keeper)
 
 clickhouse_embed_binaries(

@@ -1,5 +1,5 @@
 #include <Common/memory.h>
-#include <Common/config.h>
+#include "config.h"
 #include <new>
 
 #if defined(OS_DARWIN) && (USE_JEMALLOC)

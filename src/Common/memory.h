@@ -4,7 +4,7 @@
 #include <base/defines.h>
 
 #include <Common/CurrentMemoryTracker.h>
-#include <Common/config.h>
+#include "config.h"
 
 #if USE_JEMALLOC
 #    include <jemalloc/jemalloc.h>

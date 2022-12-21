@@ -16,7 +16,7 @@
 #include <base/StringRef.h>
 #include <Common/assert_cast.h>
 
-#include <Common/config.h>
+#include "config.h"
 
 #if USE_EMBEDDED_COMPILER
 #    include <DataTypes/Native.h>

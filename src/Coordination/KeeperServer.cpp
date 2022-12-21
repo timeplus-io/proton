@@ -1,6 +1,6 @@
 #include <Coordination/KeeperServer.h>
 
-#include "config_core.h"
+#include "config.h"
 
 #include <Coordination/LoggerWrapper.h>
 #include <Coordination/KeeperStateMachine.h>

@@ -128,7 +128,7 @@ if(NOT (USE_STATIC_LIBRARIES OR SPLIT_SHARED_LIBRARIES))
     set(CLICKHOUSE_ONE_SHARED ON)
 endif()
 
-configure_file (config_tools.h.in ${ConfigIncludePath}/config_tools.h)
+configure_file (config_tools.h.in ${CONFIG_INCLUDE_PATH}/config_tools.h)
 
 macro(proton_target_link_split_lib target name)
     if(NOT CLICKHOUSE_ONE_SHARED)

@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "config_core.h"
+#include "config.h"
 
 #if USE_NURAFT
 #include <Poco/ConsoleChannel.h>

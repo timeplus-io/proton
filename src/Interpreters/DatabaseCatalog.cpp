@@ -19,7 +19,7 @@
 #include <filesystem>
 #include <Common/filesystemHelpers.h>
 
-#include "config_core.h"
+#include "config.h"
 
 namespace fs = std::filesystem;
 

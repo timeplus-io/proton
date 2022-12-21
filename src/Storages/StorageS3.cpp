@@ -1,4 +1,4 @@
-#include <Common/config.h>
+#include "config.h"
 #include "Parsers/ASTCreateQuery.h"
 
 #if USE_AWS_S3

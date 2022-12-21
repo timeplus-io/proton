@@ -11,7 +11,7 @@
 #include <Common/Exception.h>
 #include <Common/ThreadPool.h>
 
-#include "config_core.h"
+#include "config.h"
 
 #include <cstddef>
 #include <memory>
