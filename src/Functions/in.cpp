@@ -11,6 +11,9 @@
 #include <Columns/ColumnLowCardinality.h>
 #include <Interpreters/Set.h>
 
+/// proton: starts.
+#include <DataTypes/DataTypeFactory.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -23,7 +26,7 @@ namespace
 {
 
 /** in(x, set) - function for evaluating the IN
-  * notIn(x, set) - and NOT IN.
+  * not_in(x, set) - and NOT IN.
   */
 
 template <bool negative, bool global, bool null_is_skipped, bool ignore_set>
@@ -71,13 +74,15 @@ public:
 
     /// Do not use default implementation for LowCardinality.
     /// For now, Set may be const or non const column, depending on how it was created.
-    /// But we will return Bool for any case.
+    /// But we will return UInt8 for any case.
     /// TODO: we could use special implementation later.
     bool useDefaultImplementationForLowCardinalityColumns() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const override
     {
-        return std::make_shared<DataTypeBool>();
+        /// proton: starts. return bool
+        return DataTypeFactory::instance().get("bool");
+        /// proton: ends.
     }
 
     bool useDefaultImplementationForConstants() const override
@@ -93,7 +98,7 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, [[maybe_unused]] size_t input_rows_count) const override
     {
         if constexpr (ignore_set)
-            return ColumnBool::create(input_rows_count, 0u);
+            return ColumnUInt8::create(input_rows_count, 0u);
 
         /// Second argument must be ColumnSet.
         ColumnPtr column_set_ptr = arguments[1].column;
@@ -101,7 +106,7 @@ public:
         if (!column_set)
             column_set = checkAndGetColumn<const ColumnSet>(column_set_ptr.get());
         if (!column_set)
-            throw Exception("Second argument for function '" + getName() + "' must be Set; found " + column_set_ptr->getName(),
+            throw Exception("Second argument for function '" + getName() + "' must be set; found " + column_set_ptr->getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
 
         ColumnsWithTypeAndName columns_of_key_columns;
@@ -121,7 +126,8 @@ public:
 
         auto set = column_set->getData();
         auto set_types = set->getDataTypes();
-        if (tuple && (set_types.size() != 1 || !set_types[0]->equals(*type_tuple)))
+
+        if (tuple && set_types.size() != 1 && set_types.size() == tuple->tupleSize())
         {
             const auto & tuple_columns = tuple->getColumns();
             const DataTypes & tuple_types = type_tuple->getElements();
@@ -173,7 +179,7 @@ void registerFunctionsInImpl(FunctionFactory & factory)
 
 }
 
-void registerFunctionsIn(FunctionFactory & factory)
+REGISTER_FUNCTION(In)
 {
     registerFunctionsInImpl<false>(factory);
     registerFunctionsInImpl<true>(factory);

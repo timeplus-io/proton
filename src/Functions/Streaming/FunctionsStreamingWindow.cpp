@@ -697,10 +697,10 @@ ColumnPtr FunctionWindow<type>::executeImpl(
     return WindowImpl<type>::dispatchForColumns(arguments, external_name);
 }
 
-void registerFunctionsStreamingWindow(FunctionFactory & factory)
+REGISTER_FUNCTION(StreamingWindow)
 {
-    factory.registerFunction<FunctionTumble>(FunctionFactory::CaseSensitive);
-    factory.registerFunction<FunctionHop>(FunctionFactory::CaseSensitive);
-    factory.registerFunction<FunctionSession>(FunctionFactory::CaseSensitive);
+    factory.registerFunction<FunctionTumble>();
+    factory.registerFunction<FunctionHop>();
+    factory.registerFunction<FunctionSession>();
 }
 }

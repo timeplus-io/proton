@@ -3482,10 +3482,10 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlanForSessionWindow(Q
     Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
 
     size_t insert_pos = 0;
-    auto session_start_type = std::make_shared<DataTypeBool>();
+    auto session_start_type = std::make_shared<DataTypeUInt8>();
     output_header.insert(insert_pos++, {session_start_type, ProtonConsts::STREAMING_SESSION_START});
 
-    auto session_end_type = std::make_shared<DataTypeBool>();
+    auto session_end_type = std::make_shared<DataTypeUInt8>();
     output_header.insert(insert_pos++, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
 
     if (query_info.hasPartitionByKeys())

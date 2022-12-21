@@ -61,11 +61,11 @@ namespace DB
             typename ColVecTo::MutablePtr col_to = ColVecTo::create(input_rows_count);
             typename ColVecTo::Container & vec_to = col_to->getData();
 
-            ColumnBool::MutablePtr col_null_map_to;
+            ColumnUInt8::MutablePtr col_null_map_to;
             UInt8 * vec_null_map_to [[maybe_unused]] = nullptr;
             if constexpr (nullOnErrors)
             {
-                col_null_map_to = ColumnBool::create(input_rows_count);
+                col_null_map_to = ColumnUInt8::create(input_rows_count);
                 vec_null_map_to = col_null_map_to->getData().data();
             }
 
@@ -157,7 +157,7 @@ namespace DB
 
         Monotonicity getMonotonicityForRange(const IDataType &, const Field &, const Field &) const override
         {
-            return { .is_monotonic = true, .is_always_monotonic = true };
+            return { .is_monotonic = true, .is_always_monotonic = true, .is_strict = true };
         }
 
     private:
@@ -228,7 +228,7 @@ namespace DB
         static constexpr auto name = "to_modified_julian_day_or_null";
     };
 
-    void registerFunctionToModifiedJulianDay(FunctionFactory & factory)
+    REGISTER_FUNCTION(ToModifiedJulianDay)
     {
         factory.registerFunction<ToModifiedJulianDayOverloadResolver<NameToModifiedJulianDay, DataTypeInt32, false>>();
         factory.registerFunction<ToModifiedJulianDayOverloadResolver<NameToModifiedJulianDayOrNull, DataTypeInt32, true>>();

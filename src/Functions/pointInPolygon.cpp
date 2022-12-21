@@ -26,6 +26,9 @@
 #include <string>
 #include <memory>
 
+/// proton: starts.
+#include <DataTypes/DataTypeFactory.h>
+/// proton: ends.
 
 namespace ProfileEvents
 {
@@ -150,7 +153,9 @@ public:
             }
         }
 
-        return std::make_shared<DataTypeBool>();
+        /// proton: starts. return bool
+        return DataTypeFactory::instance().get("bool");
+        /// proton: ends.
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
@@ -167,7 +172,7 @@ public:
 
         const auto & tuple_columns = tuple_col->getColumns();
 
-        const ColumnWithTypeAndName poly = arguments[1];
+        const ColumnWithTypeAndName & poly = arguments[1];
         const IColumn * poly_col = poly.column.get();
         const ColumnConst * const_poly_col = checkAndGetColumn<ColumnConst>(poly_col);
 
@@ -219,7 +224,7 @@ public:
                 throw Exception("Multi-argument version of function " + getName() + " works only with const polygon",
                     ErrorCodes::BAD_ARGUMENTS);
 
-            auto res_column = ColumnVector<Bool>::create(input_rows_count);
+            auto res_column = ColumnUInt8::create(input_rows_count);
             auto & data = res_column->getData();
 
             /// A polygon, possibly with holes, is represented by 2d array:
@@ -574,7 +579,7 @@ private:
 
 }
 
-void registerFunctionPointInPolygon(FunctionFactory & factory)
+REGISTER_FUNCTION(PointInPolygon)
 {
     factory.registerFunction<FunctionPointInPolygon<PointInPolygonWithGrid<Float64>>>();
 }

@@ -43,11 +43,11 @@ namespace DB
             data_to.resize(input_rows_count * strlen("YYYY-MM-DD") + 1);
             offsets_to.resize(input_rows_count);
 
-            ColumnBool::MutablePtr col_null_map_to;
-            ColumnBool::Container * vec_null_map_to [[maybe_unused]] = nullptr;
+            ColumnUInt8::MutablePtr col_null_map_to;
+            ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
             if constexpr (nullOnErrors)
             {
-                col_null_map_to = ColumnBool::create(input_rows_count);
+                col_null_map_to = ColumnUInt8::create(input_rows_count);
                 vec_null_map_to = &col_null_map_to->getData();
             }
 
@@ -139,7 +139,7 @@ namespace DB
 
         Monotonicity getMonotonicityForRange(const IDataType &, const Field &, const Field &) const override
         {
-            return { .is_monotonic = true, .is_always_monotonic = true };
+            return { .is_monotonic = true, .is_always_monotonic = true, .is_strict = true, };
         }
 
     private:
@@ -232,7 +232,7 @@ namespace DB
         static constexpr auto name = "from_modified_julian_day_or_null";
     };
 
-    void registerFunctionFromModifiedJulianDay(FunctionFactory & factory)
+    REGISTER_FUNCTION(FromModifiedJulianDay)
     {
         factory.registerFunction<FromModifiedJulianDayOverloadResolver<NameFromModifiedJulianDay, false>>();
         factory.registerFunction<FromModifiedJulianDayOverloadResolver<NameFromModifiedJulianDayOrNull, true>>();

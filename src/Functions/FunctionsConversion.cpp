@@ -5,11 +5,7 @@
 namespace DB
 {
 
-void registerFunctionFixedString(FunctionFactory & factory);
-
-void registerCastOverloadResolvers(FunctionFactory & factory);
-
-void registerFunctionsConversion(FunctionFactory & factory)
+REGISTER_FUNCTION(Conversion)
 {
     factory.registerFunction<FunctionToUInt8>();
     factory.registerFunction<FunctionToUInt16>();
@@ -35,11 +31,10 @@ void registerFunctionsConversion(FunctionFactory & factory)
     /// MySQL compatibility alias.
     /// proton: starts
     factory.registerFunction<FunctionToDate32>();
-    factory.registerFunction<FunctionToDate32>("DATE", FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionToDate32>("DATE", {}, FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionToInt>();
     factory.registerFunction<FunctionToFloat>();
     factory.registerFunction<FunctionToDecimal>();
-    factory.registerFunction<FunctionToBool>();
     /// proton: ends
     factory.registerFunction<FunctionToDateTime>();
     factory.registerFunction<FunctionToDateTime32>();
@@ -47,11 +42,7 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionToUUID>();
     factory.registerFunction<FunctionToString>();
 
-    registerFunctionFixedString(factory);
-
     factory.registerFunction<FunctionToUnixTimestamp>();
-
-    registerCastOverloadResolvers(factory);
 
     factory.registerFunction<FunctionToUInt8OrZero>();
     factory.registerFunction<FunctionToUInt16OrZero>();

@@ -58,14 +58,16 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes &) const override
     {
-        return std::make_shared<DataTypeBool>();
+        /// proton: starts. return bool
+        return DataTypeFactory::instance().get("bool");
+        /// proton: ends.
     }
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & /*result_type*/, size_t input_rows_count) const override
     {
-        auto res_column = ColumnBool::create();
+        auto res_column = ColumnUInt8::create();
         auto & res_data = res_column->getData();
         res_data.reserve(input_rows_count);
 
@@ -112,7 +114,7 @@ template <>
 const char * FunctionPolygonsWithin<SphericalPoint>::name = "polygons_within_spherical";
 
 
-void registerFunctionPolygonsWithin(FunctionFactory & factory)
+REGISTER_FUNCTION(PolygonsWithin)
 {
     factory.registerFunction<FunctionPolygonsWithin<CartesianPoint>>();
     factory.registerFunction<FunctionPolygonsWithin<SphericalPoint>>();

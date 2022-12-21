@@ -22,7 +22,6 @@ bool callOnBasicType(TypeIndex number, F && f)
     {
         switch (number)
         {
-            case TypeIndex::Bool:
             case TypeIndex::UInt8:        return f(TypePair<T, UInt8>());
             case TypeIndex::UInt16:       return f(TypePair<T, UInt16>());
             case TypeIndex::UInt32:       return f(TypePair<T, UInt32>());
@@ -93,7 +92,6 @@ inline bool callOnBasicTypes(TypeIndex type_num1, TypeIndex type_num2, F && f)
     {
         switch (type_num1)
         {
-            case TypeIndex::Bool:
             case TypeIndex::UInt8: return callOnBasicType<UInt8, _int, _float, _decimal, _datetime>(type_num2, std::forward<F>(f));
             case TypeIndex::UInt16: return callOnBasicType<UInt16, _int, _float, _decimal, _datetime>(type_num2, std::forward<F>(f));
             case TypeIndex::UInt32: return callOnBasicType<UInt32, _int, _float, _decimal, _datetime>(type_num2, std::forward<F>(f));
@@ -156,7 +154,6 @@ inline bool callOnBasicTypes(TypeIndex type_num1, TypeIndex type_num2, F && f)
     return false;
 }
 
-class DataTypeBool;
 class DataTypeDate;
 class DataTypeDate32;
 class DataTypeString;
@@ -174,7 +171,6 @@ bool callOnIndexAndDataType(TypeIndex number, F && f, ExtraArgs && ... args)
 {
     switch (number)
     {
-        case TypeIndex::Bool:           return f(TypePair<DataTypeBool, T>(), std::forward<ExtraArgs>(args)...);
         case TypeIndex::UInt8:          return f(TypePair<DataTypeNumber<UInt8>, T>(), std::forward<ExtraArgs>(args)...);
         case TypeIndex::UInt16:         return f(TypePair<DataTypeNumber<UInt16>, T>(), std::forward<ExtraArgs>(args)...);
         case TypeIndex::UInt32:         return f(TypePair<DataTypeNumber<UInt32>, T>(), std::forward<ExtraArgs>(args)...);

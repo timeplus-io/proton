@@ -95,7 +95,7 @@ DictionaryReader::DictionaryReader(const String & dictionary_name, const Names &
 
     ColumnNumbers positions_has{0, key_position};
     function_has = std::make_unique<FunctionWrapper>(FunctionFactory::instance().get("dict_has", context),
-                                                        arguments_has, sample_block, positions_has, "has", DataTypeBool().getTypeId());
+                                                        arguments_has, sample_block, positions_has, "has", DataTypeUInt8().getTypeId());
     functions_get.reserve(result_header.columns());
 
     for (size_t i = 0; i < result_header.columns(); ++i)
@@ -110,7 +110,7 @@ DictionaryReader::DictionaryReader(const String & dictionary_name, const Names &
     }
 }
 
-void DictionaryReader::readKeys(const IColumn & keys, Block & out_block, ColumnVector<Bool>::Container & found,
+void DictionaryReader::readKeys(const IColumn & keys, Block & out_block, ColumnVector<UInt8>::Container & found,
                                 std::vector<size_t> & positions) const
 {
     auto working_block = sample_block.getColumnsWithTypeAndName();
@@ -125,7 +125,7 @@ void DictionaryReader::readKeys(const IColumn & keys, Block & out_block, ColumnV
     function_has->execute(working_block, size);
     ColumnWithTypeAndName & has_column = working_block[has_position];
     auto mutable_has = IColumn::mutate(std::move(has_column.column));
-    found.swap(typeid_cast<ColumnVector<Bool> &>(*mutable_has).getData());
+    found.swap(typeid_cast<ColumnVector<UInt8> &>(*mutable_has).getData());
     has_column.column = nullptr;
 
     /// set mapping from source keys to resulting rows in output block

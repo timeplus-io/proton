@@ -1,4 +1,5 @@
 #include <Functions/FunctionsAES.h>
+#include <Interpreters/Context.h>
 
 #if USE_SSL
 
@@ -7,7 +8,6 @@
 
 #include <string>
 #include <cassert>
-
 
 namespace DB
 {
@@ -40,22 +40,10 @@ StringRef foldEncryptionKeyInMySQLCompatitableMode(size_t cipher_key_size, Strin
 
 const EVP_CIPHER * getCipherByName(StringRef cipher_name)
 {
-    const auto * evp_cipher = EVP_get_cipherbyname(cipher_name.data);
-    if (evp_cipher == nullptr)
-    {
-        // For some reasons following ciphers can't be found by name.
-        if (cipher_name == "aes-128-cfb128")
-            evp_cipher = EVP_aes_128_cfb128();
-        else if (cipher_name == "aes-192-cfb128")
-            evp_cipher = EVP_aes_192_cfb128();
-        else if (cipher_name == "aes-256-cfb128")
-            evp_cipher = EVP_aes_256_cfb128();
-    }
-
     // NOTE: cipher obtained not via EVP_CIPHER_fetch() would cause extra work on each context reset
     // with EVP_CIPHER_CTX_reset() or EVP_EncryptInit_ex(), but using EVP_CIPHER_fetch()
     // causes data race, so we stick to the slower but safer alternative here.
-    return evp_cipher;
+    return EVP_get_cipherbyname(cipher_name.data);
 }
 
 }

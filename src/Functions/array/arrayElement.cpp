@@ -45,8 +45,10 @@ namespace ArrayImpl
   */
 class FunctionArrayElement : public IFunction
 {
+/// proton: starts.
 private:
     ContextPtr context;
+/// proton: ends.
 
 public:
     static constexpr auto name = "array_element";
@@ -58,8 +60,11 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
+
+    /// proton: starts.
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
+    /// proton: ends.
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
@@ -149,20 +154,20 @@ public:
 
     void initSink(size_t size)
     {
-        auto sink = ColumnBool::create(size);
+        auto sink = ColumnUInt8::create(size);
         sink_null_map = sink->getData().data();
         sink_null_map_holder = std::move(sink);
     }
 
     void update(size_t from)
     {
-        sink_null_map[index] = bool(src_null_map && src_null_map[from]);
+        sink_null_map[index] = src_null_map && src_null_map[from];
         ++index;
     }
 
     void update()
     {
-        sink_null_map[index] = bool(src_null_map);
+        sink_null_map[index] = static_cast<bool>(src_null_map);
         ++index;
     }
 
@@ -462,11 +467,12 @@ struct ArrayElementGenericImpl
 
 }
 
-
+/// proton: starts.
 FunctionPtr FunctionArrayElement::create(ContextPtr ctx)
 {
     return std::make_shared<FunctionArrayElement>(ctx);
 }
+/// proton: ends.
 
 
 template <typename DataType>
@@ -485,10 +491,11 @@ ColumnPtr FunctionArrayElement::executeNumberConst(
 
     auto col_res = ColumnVector<DataType>::create();
 
-    if (index.getType() == Field::Types::UInt64)
+    if (index.getType() == Field::Types::UInt64
+        || (index.getType() == Field::Types::Int64 && index.get<Int64>() >= 0))
     {
         ArrayElementNumImpl<DataType>::template vectorConst<false>(
-            col_nested->getData(), col_array->getOffsets(), index.safeGet<UInt64>() - 1, col_res->getData(), builder);
+            col_nested->getData(), col_array->getOffsets(), index.get<UInt64>() - 1, col_res->getData(), builder);
     }
     else if (index.getType() == Field::Types::Int64)
     {
@@ -502,7 +509,7 @@ ColumnPtr FunctionArrayElement::executeNumberConst(
         /// arr[-2] is the element at offset 1 from the last and so on.
 
         ArrayElementNumImpl<DataType>::template vectorConst<true>(
-            col_nested->getData(), col_array->getOffsets(), -(UInt64(index.safeGet<Int64>()) + 1), col_res->getData(), builder);
+            col_nested->getData(), col_array->getOffsets(), -(static_cast<UInt64>(index.safeGet<Int64>()) + 1), col_res->getData(), builder);
     }
     else
         throw Exception("Illegal type of array index", ErrorCodes::LOGICAL_ERROR);
@@ -547,12 +554,13 @@ FunctionArrayElement::executeStringConst(const ColumnsWithTypeAndName & argument
 
     auto col_res = ColumnString::create();
 
-    if (index.getType() == Field::Types::UInt64)
+    if (index.getType() == Field::Types::UInt64
+        || (index.getType() == Field::Types::Int64 && index.get<Int64>() >= 0))
         ArrayElementStringImpl::vectorConst<false>(
             col_nested->getChars(),
             col_array->getOffsets(),
             col_nested->getOffsets(),
-            index.safeGet<UInt64>() - 1,
+            index.get<UInt64>() - 1,
             col_res->getChars(),
             col_res->getOffsets(),
             builder);
@@ -561,7 +569,7 @@ FunctionArrayElement::executeStringConst(const ColumnsWithTypeAndName & argument
             col_nested->getChars(),
             col_array->getOffsets(),
             col_nested->getOffsets(),
-            -(UInt64(index.safeGet<Int64>()) + 1),
+            -(UInt64(index.get<Int64>()) + 1),
             col_res->getChars(),
             col_res->getOffsets(),
             builder);
@@ -610,12 +618,13 @@ ColumnPtr FunctionArrayElement::executeGenericConst(
     const auto & col_nested = col_array->getData();
     auto col_res = col_nested.cloneEmpty();
 
-    if (index.getType() == Field::Types::UInt64)
+    if (index.getType() == Field::Types::UInt64
+        || (index.getType() == Field::Types::Int64 && index.get<Int64>() >= 0))
         ArrayElementGenericImpl::vectorConst<false>(
-            col_nested, col_array->getOffsets(), index.safeGet<UInt64>() - 1, *col_res, builder);
+            col_nested, col_array->getOffsets(), index.get<UInt64>() - 1, *col_res, builder);
     else if (index.getType() == Field::Types::Int64)
         ArrayElementGenericImpl::vectorConst<true>(
-            col_nested, col_array->getOffsets(), -(UInt64(index.safeGet<Int64>() + 1)), *col_res, builder);
+            col_nested, col_array->getOffsets(), -(static_cast<UInt64>(index.get<Int64>() + 1)), *col_res, builder);
     else
         throw Exception("Illegal type of array index", ErrorCodes::LOGICAL_ERROR);
 
@@ -710,8 +719,8 @@ ColumnPtr FunctionArrayElement::executeArgument(
         || (res = executeConst<IndexType>(arguments, result_type, index_data, builder, input_rows_count))
         || (res = executeString<IndexType>(arguments, index_data, builder))
         || (res = executeGeneric<IndexType>(arguments, index_data, builder))))
-    throw Exception("Illegal column " + arguments[0].column->getName()
-                + " of first argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception("Illegal column " + arguments[0].column->getName()
+                    + " of first argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
 
     return res;
 }
@@ -882,7 +891,8 @@ bool FunctionArrayElement::matchKeyToIndexStringConst(
     return castColumnString(&data, [&](const auto & data_column)
     {
         using DataColumn = std::decay_t<decltype(data_column)>;
-
+        if (index.getType() != Field::Types::String)
+            return false;
         MatcherStringConst<DataColumn> matcher{data_column, index.get<const String &>()};
         executeMatchKeyToIndex(offsets, matched_idxs, matcher);
         return true;
@@ -1031,12 +1041,14 @@ ColumnPtr FunctionArrayElement::executeMap(
     if (col_const_map)
         values_array = ColumnConst::create(values_array, input_rows_count);
 
+    const auto & type_map = assert_cast<const DataTypeMap &>(*arguments[0].type);
+
     /// Prepare arguments to call arrayElement for array with values and calculated indices at previous step.
     ColumnsWithTypeAndName new_arguments =
     {
         {
             values_array,
-            std::make_shared<DataTypeArray>(result_type),
+            std::make_shared<DataTypeArray>(type_map.getValueType()),
             ""
         },
         {
@@ -1078,17 +1090,21 @@ DataTypePtr FunctionArrayElement::getReturnTypeImpl(const DataTypes & arguments)
         /// proton: ends.
     }
 
+    /// proton: starts
     if (args_num == 2 && !isInteger(arguments[1]))
+    /// proton: ends.
     {
         throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
             "Second argument for function '{}' must be integer, got '{}' instead",
             getName(), arguments[1]->getName());
     }
 
+    /// proton: starts
     if (args_num == 1)
         return array_type ? array_type->getPtr() : std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>());
     else
         return array_type ? array_type->getNestedType() : std::make_shared<DataTypeString>();
+    /// proton: ends.
 }
 
 ColumnPtr FunctionArrayElement::executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
@@ -1097,12 +1113,14 @@ ColumnPtr FunctionArrayElement::executeImpl(const ColumnsWithTypeAndName & argum
     const auto * col_const_map = checkAndGetColumnConst<ColumnMap>(arguments[0].column.get());
 
     if (col_map || col_const_map)
+    /// proton: starts.
     {
         if (arguments.size() == 1)
             return arguments[0].column;
         else
             return executeMap(arguments, result_type, input_rows_count);
     }
+    /// proton: ends.
 
     /// Check nullability.
     bool is_array_of_nullable = false;
@@ -1111,7 +1129,9 @@ ColumnPtr FunctionArrayElement::executeImpl(const ColumnsWithTypeAndName & argum
 
     col_array = checkAndGetColumn<ColumnArray>(arguments[0].column.get());
     if (col_array)
+    {
         is_array_of_nullable = isColumnNullable(col_array->getData());
+    }
     else
     {
         col_const_array = checkAndGetColumnConstData<ColumnArray>(arguments[0].column.get());
@@ -1155,8 +1175,10 @@ ColumnPtr FunctionArrayElement::executeImpl(const ColumnsWithTypeAndName & argum
         }
     }
 
+    /// proton: starts.
     if (arguments.size() == 1)
         return arguments[0].column;
+    /// proton: ends.
 
     if (!is_array_of_nullable)
     {
@@ -1214,7 +1236,7 @@ ColumnPtr FunctionArrayElement::executeImpl(const ColumnsWithTypeAndName & argum
         auto res = perform(source_columns, tmp_ret_type, builder, input_rows_count);
 
         /// Store the result.
-        return ColumnNullable::create(res, builder ? std::move(builder).getNullMapColumnPtr() : ColumnBool::create());
+        return ColumnNullable::create(res, builder ? std::move(builder).getNullMapColumnPtr() : ColumnUInt8::create());
     }
 }
 
@@ -1268,7 +1290,7 @@ ColumnPtr FunctionArrayElement::perform(const ColumnsWithTypeAndName & arguments
 }
 
 
-void registerFunctionArrayElement(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayElement)
 {
     factory.registerFunction<FunctionArrayElement>();
 }

@@ -5,7 +5,7 @@
 namespace DB
 {
 
-template <bool without_www>
+template <bool without_www, bool conform_rfc>
 struct CutToFirstSignificantSubdomainCustom
 {
     static size_t getReserveLengthForElement() { return 15; }
@@ -18,7 +18,7 @@ struct CutToFirstSignificantSubdomainCustom
         Pos tmp_data;
         size_t tmp_length;
         Pos domain_end;
-        ExtractFirstSignificantSubdomain<without_www>::executeCustom(tld_lookup, data, size, tmp_data, tmp_length, &domain_end);
+        ExtractFirstSignificantSubdomain<without_www, conform_rfc>::executeCustom(tld_lookup, data, size, tmp_data, tmp_length, &domain_end);
 
         if (tmp_length == 0)
             return;
@@ -29,15 +29,54 @@ struct CutToFirstSignificantSubdomainCustom
 };
 
 struct NameCutToFirstSignificantSubdomainCustom { static constexpr auto name = "cut_to_first_significant_subdomain_custom"; };
-using FunctionCutToFirstSignificantSubdomainCustom = FunctionCutToFirstSignificantSubdomainCustomImpl<CutToFirstSignificantSubdomainCustom<true>, NameCutToFirstSignificantSubdomainCustom>;
+using FunctionCutToFirstSignificantSubdomainCustom = FunctionCutToFirstSignificantSubdomainCustomImpl<CutToFirstSignificantSubdomainCustom<true, false>, NameCutToFirstSignificantSubdomainCustom>;
 
 struct NameCutToFirstSignificantSubdomainCustomWithWWW { static constexpr auto name = "cut_to_first_significant_subdomain_custom_with_www"; };
-using FunctionCutToFirstSignificantSubdomainCustomWithWWW = FunctionCutToFirstSignificantSubdomainCustomImpl<CutToFirstSignificantSubdomainCustom<false>, NameCutToFirstSignificantSubdomainCustomWithWWW>;
+using FunctionCutToFirstSignificantSubdomainCustomWithWWW = FunctionCutToFirstSignificantSubdomainCustomImpl<CutToFirstSignificantSubdomainCustom<false, false>, NameCutToFirstSignificantSubdomainCustomWithWWW>;
 
-void registerFunctionCutToFirstSignificantSubdomainCustom(FunctionFactory & factory)
+struct NameCutToFirstSignificantSubdomainCustomRFC { static constexpr auto name = "cut_to_first_significant_subdomain_custom_rfc"; };
+using FunctionCutToFirstSignificantSubdomainCustomRFC = FunctionCutToFirstSignificantSubdomainCustomImpl<CutToFirstSignificantSubdomainCustom<true, true>, NameCutToFirstSignificantSubdomainCustomRFC>;
+
+struct NameCutToFirstSignificantSubdomainCustomWithWWWRFC { static constexpr auto name = "cut_to_first_significant_subdomain_custom_with_www_rfc"; };
+using FunctionCutToFirstSignificantSubdomainCustomWithWWWRFC = FunctionCutToFirstSignificantSubdomainCustomImpl<CutToFirstSignificantSubdomainCustom<false, true>, NameCutToFirstSignificantSubdomainCustomWithWWWRFC>;
+
+REGISTER_FUNCTION(CutToFirstSignificantSubdomainCustom)
 {
-    factory.registerFunction<FunctionCutToFirstSignificantSubdomainCustom>();
-    factory.registerFunction<FunctionCutToFirstSignificantSubdomainCustomWithWWW>();
+    factory.registerFunction<FunctionCutToFirstSignificantSubdomainCustom>(
+        {
+        R"(
+Returns the part of the domain that includes top-level subdomains up to the first significant subdomain. Accepts custom TLD list name.
+
+Can be useful if you need fresh TLD list or you have custom.
+        )",
+        Documentation::Examples{
+            {"cutToFirstSignificantSubdomainCustom", "SELECT cut_to_first_significant_subdomain_custom('bar.foo.there-is-no-such-domain', 'public_suffix_list');"},
+        },
+        Documentation::Categories{"URL"}
+        });
+    factory.registerFunction<FunctionCutToFirstSignificantSubdomainCustomWithWWW>(
+        {
+        R"(
+Returns the part of the domain that includes top-level subdomains up to the first significant subdomain without stripping `www`.
+Accepts custom TLD list name from config.
+
+Can be useful if you need fresh TLD list or you have custom.
+        )",
+        Documentation::Examples{{"cutToFirstSignificantSubdomainCustomWithWWW", "SELECT cut_to_first_significant_subdomain_custom_with_www('www.foo', 'public_suffix_list')"}},
+        Documentation::Categories{"URL"}
+        });
+    factory.registerFunction<FunctionCutToFirstSignificantSubdomainCustomRFC>(
+        {
+        R"(Similar to `cut_to_first_significant_subdomain_custom` but follows stricter rules according to RFC 3986.)",
+        Documentation::Examples{},
+        Documentation::Categories{"URL"}
+        });
+    factory.registerFunction<FunctionCutToFirstSignificantSubdomainCustomWithWWWRFC>(
+        {
+        R"(Similar to `cut_to_first_significant_subdomain_custom_with_www` but follows stricter rules according to RFC 3986.)",
+        Documentation::Examples{},
+        Documentation::Categories{"URL"}
+        });
 }
 
 }

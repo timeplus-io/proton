@@ -112,12 +112,12 @@ struct AddMicrosecondsImpl
 
     static inline NO_SANITIZE_UNDEFINED DateTime64 execute(UInt16, Int64, const DateLUTImpl &, UInt16 = 0)
     {
-        throw Exception("addMicroSeconds() cannot be used with Date", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception("add_microseconds() cannot be used with date", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     static inline NO_SANITIZE_UNDEFINED DateTime64 execute(Int32, Int64, const DateLUTImpl &, UInt16 = 0)
     {
-        throw Exception("addMicroSeconds() cannot be used with Date32", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception("add_microseconds() cannot be used with date32", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 };
 
@@ -164,7 +164,6 @@ struct AddMillisecondsImpl
         throw Exception("add_milliseconds() cannot be used with date32", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 };
-
 
 struct AddSecondsImpl
 {
@@ -613,7 +612,7 @@ public:
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!isNativeNumber(arguments[1].type))
-            throw Exception("Second argument for function " + getName() + " (delta) must be number",
+            throw Exception("Second argument for function " + getName() + " (delta) must be a number",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() == 2)
@@ -629,7 +628,7 @@ public:
             {
                 throw Exception(
                     "Function " + getName() + " supports 2 or 3 arguments. The 1st argument "
-                    "must be of type date or datetime. The 2nd argument must be number. "
+                    "must be of type date or datetime. The 2nd argument must be a number. "
                     "The 3rd argument (optional) must be "
                     "a constant string with timezone name. The timezone argument is allowed "
                     "only when the 1st argument has the type DateTime",

@@ -192,7 +192,6 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
     }
     else if (type.isValueRepresentedByNumber() && src.getType() != Field::Types::String)
     {
-        if (which_type.isBool()) return convertNumericType<Bool>(src, type);
         if (which_type.isUInt8()) return convertNumericType<UInt8>(src, type);
         if (which_type.isUInt16()) return convertNumericType<UInt16>(src, type);
         if (which_type.isUInt32()) return convertNumericType<UInt32>(src, type);
@@ -437,7 +436,9 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
         const IDataType * type_to_parse = &type;
         DataTypePtr holder;
 
-        if (type.canBePromoted())
+        /// proton: starts. bool don't be promoted
+        if (type.canBePromoted() && !isBool(type.getPtr()))
+        /// proton: ends.
         {
             holder = type.promoteNumericType();
             type_to_parse = holder.get();

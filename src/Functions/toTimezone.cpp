@@ -24,7 +24,7 @@ class ExecutableFunctionToTimeZone : public IExecutableFunction
 public:
     explicit ExecutableFunctionToTimeZone() = default;
 
-    String getName() const override { return "toTimezone"; }
+    String getName() const override { return "to_timezone"; }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & /*result_type*/, size_t /*input_rows_count*/) const override
     {
@@ -43,7 +43,7 @@ public:
         , argument_types(std::move(argument_types_))
         , return_type(std::move(return_type_)) {}
 
-    String getName() const override { return "toTimezone"; }
+    String getName() const override { return "to_timezone"; }
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
 
@@ -67,7 +67,7 @@ public:
     Monotonicity getMonotonicityForRange(const IDataType & /*type*/, const Field & /*left*/, const Field & /*right*/) const override
     {
         const bool b = is_constant_timezone;
-        return { .is_monotonic = b, .is_positive = b, .is_always_monotonic = b };
+        return { .is_monotonic = b, .is_positive = b, .is_always_monotonic = b, .is_strict = b };
     }
 
 private:
@@ -97,7 +97,7 @@ public:
         const auto which_type = WhichDataType(arguments[0].type);
         if (!which_type.isDateTime() && !which_type.isDateTime64())
             throw Exception{"Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() +
-                ". Should be datetime or datetime64", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                ". Should be dateTime or datetime64", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
         String time_zone_name = extractTimeZoneNameFromFunctionArguments(arguments, 1, 0);
         if (which_type.isDateTime())
@@ -123,7 +123,7 @@ public:
 
 }
 
-void registerFunctionToTimeZone(FunctionFactory & factory)
+REGISTER_FUNCTION(ToTimeZone)
 {
     factory.registerFunction<ToTimeZoneOverloadResolver>();
 }

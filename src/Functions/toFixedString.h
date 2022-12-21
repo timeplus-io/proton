@@ -8,6 +8,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnNullable.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context_fwd.h>
 
 
 namespace DB
@@ -42,7 +43,7 @@ public:
 
     size_t getNumberOfArguments() const override { return 2; }
     bool isInjective(const ColumnsWithTypeAndName &) const override { return true; }
-    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
@@ -71,11 +72,11 @@ public:
     {
         const auto & column = arguments[0].column;
 
-        ColumnBool::MutablePtr col_null_map_to;
-        ColumnBool::Container * vec_null_map_to [[maybe_unused]] = nullptr;
+        ColumnUInt8::MutablePtr col_null_map_to;
+        ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
         if constexpr (exception_mode == ConvertToFixedStringExceptionMode::Null)
         {
-            col_null_map_to = ColumnBool::create(column->size(), false);
+            col_null_map_to = ColumnUInt8::create(column->size(), false);
             vec_null_map_to = &col_null_map_to->getData();
         }
 

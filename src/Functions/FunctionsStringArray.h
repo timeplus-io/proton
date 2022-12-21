@@ -26,28 +26,29 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int BAD_ARGUMENTS;
     extern const int ILLEGAL_COLUMN;
+    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 
 /** Functions that split strings into an array of strings or vice versa.
   *
-  * splitByChar(sep, s)
-  * splitByString(sep, s)
-  * splitByRegexp(regexp, s)
+  * split_by_char(sep, s[, max_substrings])
+  * split_by_string(sep, s[, max_substrings])
+  * split_by_regexp(regexp, s[, max_substrings])
   *
-  * splitByWhitespace(s)      - split the string by whitespace characters
-  * splitByNonAlpha(s)        - split the string by whitespace and punctuation characters
+  * split_by_whitespace(s[, max_substrings])      - split the string by whitespace characters
+  * split_by_non_alpha(s[, max_substrings])        - split the string by whitespace and punctuation characters
   *
-  * extractAll(s, regexp)     - select from the string the subsequences corresponding to the regexp.
+  * extract_all(s, regexp)     - select from the string the subsequences corresponding to the regexp.
   * - first subpattern, if regexp has subpattern;
   * - zero subpattern (the match part, otherwise);
   * - otherwise, an empty array
   *
-  * arrayStringConcat(arr)
-  * arrayStringConcat(arr, delimiter)
+  * array_string_concat(arr)
+  * array_string_concat(arr, delimiter)
   * - join an array of strings into one string via a separator.
   *
-  * alphaTokens(s)            - select from the string subsequence `[a-zA-Z]+`.
+  * alpha_tokens(s[, max_substrings])            - select from the string subsequence `[a-zA-Z]+`.
   *
   * URL functions are located separately.
   */
@@ -58,7 +59,7 @@ using Pos = const char *;
 
 /// Substring generators. All of them have a common interface.
 
-class AlphaTokensImpl
+class SplitByAlphaImpl
 {
 private:
     Pos pos;
@@ -69,11 +70,16 @@ public:
     static constexpr auto name = "alpha_tokens";
     static String getName() { return name; }
 
-    static size_t getNumberOfArguments() { return 1; }
+    static bool isVariadic() { return true; }
+
+    static size_t getNumberOfArguments() { return 0; }
 
     /// Check the type of the function's arguments.
     static void checkArguments(const DataTypes & arguments)
     {
+        if (arguments.empty() || arguments.size() > 2)
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Function {} takes one or two arguments", getName());
+
         if (!isString(arguments[0]))
             throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be String.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -90,9 +96,15 @@ public:
     }
 
     /// Returns the position of the argument, that is the column of strings
-    size_t getStringsArgumentPosition()
+    static size_t getStringsArgumentPosition()
     {
         return 0;
+    }
+
+    /// Returns the position of the possible max_substrings argument. std::nullopt means max_substrings argument is disabled in current function.
+    static std::optional<size_t> getMaxSubstringsArgumentPosition()
+    {
+        return 1;
     }
 
     /// Get the next token, if any, or return false.
@@ -127,13 +139,17 @@ public:
     static constexpr auto name = "split_by_non_alpha";
     static String getName() { return name; }
 
-    static size_t getNumberOfArguments() { return 1; }
+    static bool isVariadic() { return true; }
+    static size_t getNumberOfArguments() { return 0; }
 
     /// Check the type of the function's arguments.
     static void checkArguments(const DataTypes & arguments)
     {
+        if (arguments.empty() || arguments.size() > 2)
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Function {} takes one or two arguments", getName());
+
         if (!isString(arguments[0]))
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be String.",
+            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be string.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -148,9 +164,15 @@ public:
     }
 
     /// Returns the position of the argument, that is the column of strings
-    size_t getStringsArgumentPosition()
+    static size_t getStringsArgumentPosition()
     {
         return 0;
+    }
+
+    /// Returns the position of the possible max_substrings argument. std::nullopt means max_substrings argument is disabled in current function.
+    static std::optional<size_t> getMaxSubstringsArgumentPosition()
+    {
+        return 1;
     }
 
     /// Get the next token, if any, or return false.
@@ -185,13 +207,17 @@ public:
     static constexpr auto name = "split_by_whitespace";
     static String getName() { return name; }
 
-    static size_t getNumberOfArguments() { return 1; }
+    static bool isVariadic() { return true; }
+    static size_t getNumberOfArguments() { return 0; }
 
     /// Check the type of the function's arguments.
     static void checkArguments(const DataTypes & arguments)
     {
+        if (arguments.empty() || arguments.size() > 2)
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Function {} takes one or two arguments", getName());
+
         if (!isString(arguments[0]))
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be String.",
+            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be string.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -206,9 +232,15 @@ public:
     }
 
     /// Returns the position of the argument, that is the column of strings
-    size_t getStringsArgumentPosition()
+    static size_t getStringsArgumentPosition()
     {
         return 0;
+    }
+
+    /// Returns the position of the possible max_substrings argument. std::nullopt means max_substrings argument is disabled in current function.
+    static std::optional<size_t> getMaxSubstringsArgumentPosition()
+    {
+        return 1;
     }
 
     /// Get the next token, if any, or return false.
@@ -237,22 +269,28 @@ class SplitByCharImpl
 private:
     Pos pos;
     Pos end;
-
     char sep;
 
 public:
     static constexpr auto name = "split_by_char";
     static String getName() { return name; }
-    static size_t getNumberOfArguments() { return 2; }
+    static bool isVariadic() { return true; }
+    static size_t getNumberOfArguments() { return 0; }
 
     static void checkArguments(const DataTypes & arguments)
     {
+        if (arguments.size() < 2 || arguments.size() > 3)
+            throw Exception(
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                "Function '{}' needs at least 2 arguments, at most 3 arguments; passed {}.",
+                name, arguments.size());
+
         if (!isString(arguments[0]))
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be String.",
+            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be string.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!isString(arguments[1]))
-            throw Exception("Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be String.",
+            throw Exception("Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be string.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -274,9 +312,15 @@ public:
     }
 
     /// Returns the position of the argument, that is the column of strings
-    size_t getStringsArgumentPosition()
+    static size_t getStringsArgumentPosition()
     {
         return 1;
+    }
+
+    /// Returns the position of the possible max_substrings argument. std::nullopt means max_substrings argument is disabled in current function.
+    static std::optional<size_t> getMaxSubstringsArgumentPosition()
+    {
+        return 2;
     }
 
     void set(Pos pos_, Pos end_)
@@ -317,7 +361,8 @@ private:
 public:
     static constexpr auto name = "split_by_string";
     static String getName() { return name; }
-    static size_t getNumberOfArguments() { return 2; }
+    static bool isVariadic() { return true; }
+    static size_t getNumberOfArguments() { return 0; }
 
     static void checkArguments(const DataTypes & arguments)
     {
@@ -337,9 +382,15 @@ public:
     }
 
     /// Returns the position of the argument that is the column of strings
-    size_t getStringsArgumentPosition()
+    static size_t getStringsArgumentPosition()
     {
         return 1;
+    }
+
+    /// Returns the position of the possible max_substrings argument. std::nullopt means max_substrings argument is disabled in current function.
+    static std::optional<size_t> getMaxSubstringsArgumentPosition()
+    {
+        return 2;
     }
 
     /// Called for each next string.
@@ -386,15 +437,18 @@ public:
 class SplitByRegexpImpl
 {
 private:
-    Regexps::Pool::Pointer re;
+    Regexps::RegexpPtr re;
     OptimizedRegularExpression::MatchVec matches;
 
     Pos pos;
     Pos end;
+
 public:
     static constexpr auto name = "split_by_regexp";
     static String getName() { return name; }
-    static size_t getNumberOfArguments() { return 2; }
+
+    static bool isVariadic() { return true; }
+    static size_t getNumberOfArguments() { return 0; }
 
     /// Check the type of function arguments.
     static void checkArguments(const DataTypes & arguments)
@@ -413,14 +467,19 @@ public:
                             ErrorCodes::ILLEGAL_COLUMN);
 
         if (!col->getValue<String>().empty())
-            re = Regexps::get<false, false>(col->getValue<String>());
-
+            re = std::make_shared<Regexps::Regexp>(Regexps::createRegexp<false, false, false>(col->getValue<String>()));
     }
 
     /// Returns the position of the argument that is the column of strings
-    size_t getStringsArgumentPosition()
+    static size_t getStringsArgumentPosition()
     {
         return 1;
+    }
+
+    /// Returns the position of the possible max_substrings argument. std::nullopt means max_substrings argument is disabled in current function.
+    static std::optional<size_t> getMaxSubstringsArgumentPosition()
+    {
+        return 2;
     }
 
     /// Called for each next string.
@@ -468,7 +527,7 @@ public:
 class ExtractAllImpl
 {
 private:
-    Regexps::Pool::Pointer re;
+    Regexps::RegexpPtr re;
     OptimizedRegularExpression::MatchVec matches;
     size_t capture;
 
@@ -477,6 +536,7 @@ private:
 public:
     static constexpr auto name = "extract_all";
     static String getName() { return name; }
+    static bool isVariadic() { return false; }
     static size_t getNumberOfArguments() { return 2; }
 
     /// Check the type of function arguments.
@@ -495,16 +555,22 @@ public:
                 + " of first argument of function " + getName() + ". Must be constant string.",
                 ErrorCodes::ILLEGAL_COLUMN);
 
-        re = Regexps::get<false, false>(col->getValue<String>());
+        re = std::make_shared<Regexps::Regexp>(Regexps::createRegexp<false, false, false>(col->getValue<String>()));
         capture = re->getNumberOfSubpatterns() > 0 ? 1 : 0;
 
         matches.resize(capture + 1);
     }
 
     /// Returns the position of the argument that is the column of strings
-    size_t getStringsArgumentPosition()
+    static size_t getStringsArgumentPosition()
     {
         return 0;
+    }
+
+    /// Returns the position of the possible max_substrings argument. std::nullopt means max_substrings argument is disabled in current function.
+    static std::optional<size_t> getMaxSubstringsArgumentPosition()
+    {
+        return std::nullopt;
     }
 
     /// Called for each next string.
@@ -556,11 +622,22 @@ public:
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
+    bool isVariadic() const override { return Generator::isVariadic(); }
+
     size_t getNumberOfArguments() const override { return Generator::getNumberOfArguments(); }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         Generator::checkArguments(arguments);
+
+        const auto max_substrings_pos = Generator::getMaxSubstringsArgumentPosition();
+        if (max_substrings_pos && *max_substrings_pos < arguments.size() && !isNativeInteger(arguments[*max_substrings_pos]))
+            throw Exception(
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "{}-th argument for function '{}' must be integer, got '{}' instead",
+                *max_substrings_pos + 1,
+                getName(),
+                arguments[*max_substrings_pos]->getName());
 
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>());
     }
@@ -570,6 +647,10 @@ public:
         Generator generator;
         generator.init(arguments);
         const auto & array_argument = arguments[generator.getStringsArgumentPosition()];
+
+        /// Whether we need to limit max tokens returned by Generator::get
+        /// If max_substrings is std::nullopt, no limit is applied.
+        auto max_substrings = getMaxSubstrings(arguments);
 
         const ColumnString * col_str = checkAndGetColumn<ColumnString>(array_argument.column.get());
         const ColumnConst * col_const_str =
@@ -604,9 +685,8 @@ public:
                 Pos end = reinterpret_cast<Pos>(&src_chars[current_src_offset]) - 1;
 
                 generator.set(pos, end);
-
                 size_t j = 0;
-                while (generator.get(token_begin, token_end))
+                while (generator.get(token_begin, token_end) && !(max_substrings && j >= *max_substrings))
                 {
                     size_t token_size = token_end - token_begin;
 
@@ -634,7 +714,7 @@ public:
             Pos token_begin = nullptr;
             Pos token_end = nullptr;
 
-            while (generator.get(token_begin, token_end))
+            while (generator.get(token_begin, token_end) && !(max_substrings && dst.size() >= *max_substrings))
                 dst.push_back(String(token_begin, token_end - token_begin));
 
             return result_type->createColumnConst(col_const_str->size(), dst);
@@ -644,6 +724,47 @@ public:
                     + ", " + array_argument.column->getName()
                     + " of arguments of function " + getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+private:
+    template <typename DataType>
+    std::optional<Int64> getMaxSubstringsImpl(const ColumnWithTypeAndName & argument) const
+    {
+        const auto * col = checkAndGetColumnConst<ColumnVector<DataType>>(argument.column.get());
+        if (!col)
+            return {};
+
+        auto value = col->template getValue<DataType>();
+        return static_cast<Int64>(value);
+    }
+
+    std::optional<size_t> getMaxSubstrings(const ColumnsWithTypeAndName & arguments) const
+    {
+        const auto pos = Generator::getMaxSubstringsArgumentPosition();
+        if (!pos)
+            return std::nullopt;
+
+        if (*pos >= arguments.size())
+            return std::nullopt;
+
+        std::optional<Int64> max_substrings;
+        if (!((max_substrings = getMaxSubstringsImpl<UInt8>(arguments[*pos])) || (max_substrings = getMaxSubstringsImpl<Int8>(arguments[*pos]))
+              || (max_substrings = getMaxSubstringsImpl<UInt16>(arguments[*pos])) || (max_substrings = getMaxSubstringsImpl<Int16>(arguments[*pos]))
+              || (max_substrings = getMaxSubstringsImpl<UInt32>(arguments[*pos])) || (max_substrings = getMaxSubstringsImpl<Int32>(arguments[*pos]))
+              || (max_substrings = getMaxSubstringsImpl<UInt64>(arguments[*pos])) || (max_substrings = getMaxSubstringsImpl<Int64>(arguments[*pos]))))
+            throw Exception(
+                ErrorCodes::ILLEGAL_COLUMN,
+                "Illegal column {}, which is {}-th argument of function {}",
+                arguments[*pos].column->getName(),
+                *pos + 1,
+                getName());
+
+        /// If max_substrings is negative or zero, tokenize will be applied as many times as possible, which is equivalent to
+        /// no max_substrings argument in function
+        if (max_substrings && *max_substrings <= 0)
+            return std::nullopt;
+
+        return *max_substrings;
     }
 };
 
@@ -816,7 +937,7 @@ public:
 };
 
 
-using FunctionAlphaTokens = FunctionTokens<AlphaTokensImpl>;
+using FunctionSplitByAlpha = FunctionTokens<SplitByAlphaImpl>;
 using FunctionSplitByNonAlpha = FunctionTokens<SplitByNonAlphaImpl>;
 using FunctionSplitByWhitespace = FunctionTokens<SplitByWhitespaceImpl>;
 using FunctionSplitByChar = FunctionTokens<SplitByCharImpl>;

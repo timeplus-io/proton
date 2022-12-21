@@ -16,14 +16,14 @@ namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int UNKNOWN_STREAM;
+    extern const int UNKNOWN_TABLE;
 }
 
 namespace
 {
 
 /** Usage:
- *  hasColumnInTable(['hostname'[, 'username'[, 'password']],] 'database', 'table', 'column')
+ *  has_column_in_table(['hostname'[, 'username'[, 'password']],] 'database', 'table', 'column')
  */
 class FunctionHasColumnInTable : public IFunction, WithContext
 {
@@ -111,9 +111,7 @@ ColumnPtr FunctionHasColumnInTable::executeImpl(const ColumnsWithTypeAndName & a
     String column_name = get_string_from_columns(arguments[arg++]);
 
     if (table_name.empty())
-        /// proton: starts
         throw Exception("Stream name is empty", ErrorCodes::UNKNOWN_STREAM);
-        /// proton: ends
 
     bool has_column;
     if (host_name.empty())
@@ -152,12 +150,12 @@ ColumnPtr FunctionHasColumnInTable::executeImpl(const ColumnsWithTypeAndName & a
         has_column = remote_columns.hasPhysical(column_name);
     }
 
-    return DataTypeUInt8().createColumnConst(input_rows_count, Field{UInt64(has_column)});
+    return DataTypeUInt8().createColumnConst(input_rows_count, Field{static_cast<UInt64>(has_column)});
 }
 
 }
 
-void registerFunctionHasColumnInTable(FunctionFactory & factory)
+REGISTER_FUNCTION(HasColumnInTable)
 {
     factory.registerFunction<FunctionHasColumnInTable>();
 }

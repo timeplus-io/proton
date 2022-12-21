@@ -427,7 +427,7 @@ struct AggregationMethodKeysFixed
         for (size_t i = 0; i < keys_size; ++i)
         {
             IColumn * observed_column;
-            ColumnBool * null_map;
+            ColumnUInt8 * null_map;
 
             bool column_nullable = false;
             if constexpr (has_nullable_keys)
@@ -438,7 +438,7 @@ struct AggregationMethodKeysFixed
             {
                 ColumnNullable & nullable_col = assert_cast<ColumnNullable &>(*key_columns[i]);
                 observed_column = &nullable_col.getNestedColumn();
-                null_map = assert_cast<ColumnBool *>(&nullable_col.getNullMapColumn());
+                null_map = assert_cast<ColumnUInt8 *>(&nullable_col.getNullMapColumn());
             }
             else
             {

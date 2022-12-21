@@ -159,9 +159,9 @@ public:
 
 }
 
-void registerFunctionStreamingNow64(FunctionFactory & factory)
+REGISTER_FUNCTION(StreamingNow64)
 {
-    factory.registerFunction<Now64OverloadResolver>(FunctionFactory::CaseSensitive);
+    factory.registerFunction<Now64OverloadResolver>();
 }
 
 }

@@ -99,9 +99,9 @@ public:
                 nested_type = arg.get();
             }
 
-            if (!WhichDataType(nested_type).isBool())
+            if (!WhichDataType(nested_type).isUInt8())
                 throw Exception{"Illegal type " + arg->getName() + " of argument (condition) "
-                    "of function " + getName() + ". Must be bool.",
+                    "of function " + getName() + ". Must be uint8 or bool.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         });
 
@@ -118,7 +118,7 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
-        ColumnsWithTypeAndName arguments = std::move(args);
+        ColumnsWithTypeAndName arguments = args;
         executeShortCircuitArguments(arguments);
         /** We will gather values from columns in branches to result column,
         *  depending on values of conditions.
@@ -234,11 +234,11 @@ public:
                 if (instruction.condition_always_true)
                     insert = true;
                 else if (!instruction.condition_is_nullable)
-                    insert = assert_cast<const ColumnBool &>(*instruction.condition).getData()[condition_index];
+                    insert = assert_cast<const ColumnUInt8 &>(*instruction.condition).getData()[condition_index];
                 else
                 {
                     const ColumnNullable & condition_nullable = assert_cast<const ColumnNullable &>(*instruction.condition);
-                    const ColumnBool & condition_nested = assert_cast<const ColumnBool &>(condition_nullable.getNestedColumn());
+                    const ColumnUInt8 & condition_nested = assert_cast<const ColumnUInt8 &>(condition_nullable.getNestedColumn());
                     const NullMap & condition_null_map = condition_nullable.getNullMapData();
 
                     insert = !condition_null_map[condition_index] && condition_nested.getData()[condition_index];
@@ -267,17 +267,19 @@ private:
         if (last_short_circuit_argument_index < 0)
             return;
 
-        /// Let's denote x_i' = maskedExecute(x_i, mask).
-        /// multiIf(x_0, y_0, x_1, y_1, x_2, y_2, ..., x_{n-1}, y_{n-1}, y_n)
+        executeColumnIfNeeded(arguments[0]);
+
+        /// Let's denote x_i' = masked_execute(x_i, mask).
+        /// multi_if(x_0, y_0, x_1, y_1, x_2, y_2, ..., x_{n-1}, y_{n-1}, y_n)
         /// We will support mask_i = !x_0 & !x_1 & ... & !x_i
         /// and condition_i = !x_0 & ... & !x_{i - 1} & x_i
         /// Base:
         /// mask_0 and condition_0 is 1 everywhere, x_0' = x_0.
         /// Iteration:
-        /// condition_i = extractMask(mask_{i - 1}, x_{i - 1}')
-        /// y_i' = maskedExecute(y_i, condition)
-        /// mask_i = extractMask(mask_{i - 1}, !x_{i - 1}')
-        /// x_i' = maskedExecute(x_i, mask)
+        /// condition_i = extract_mask(mask_{i - 1}, x_{i - 1}')
+        /// y_i' = masked_execute(y_i, condition)
+        /// mask_i = extract_mask(mask_{i - 1}, !x_{i - 1}')
+        /// x_i' = masked_execute(x_i, mask)
         /// Also we will treat NULL as 0 if x_i' is Nullable.
 
         IColumn::Filter mask(arguments[0].column->size(), 1);
@@ -331,7 +333,7 @@ private:
 
 }
 
-void registerFunctionMultiIf(FunctionFactory & factory)
+REGISTER_FUNCTION(MultiIf)
 {
     factory.registerFunction<FunctionMultiIf>();
 

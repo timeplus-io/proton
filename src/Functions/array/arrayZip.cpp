@@ -18,7 +18,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_COLUMN;
 }
 
-/// arrayZip(['a', 'b', 'c'], ['d', 'e', 'f']) = [('a', 'd'), ('b', 'e'), ('c', 'f')]
+/// array_zip(['a', 'b', 'c'], ['d', 'e', 'f']) = [('a', 'd'), ('b', 'e'), ('c', 'f')]
 class FunctionArrayZip : public IFunction
 {
 public:
@@ -93,7 +93,7 @@ public:
     }
 };
 
-void registerFunctionArrayZip(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayZip)
 {
     factory.registerFunction<FunctionArrayZip>();
 }

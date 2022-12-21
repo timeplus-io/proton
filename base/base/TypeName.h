@@ -45,10 +45,9 @@ TN_MAP(Array, array)
 TN_MAP(Tuple, tuple)
 TN_MAP(Map, map)
 TN_MAP(Object, json)
-TN_MAP(Bool, bool)
 
 /// Special case
-template <> constexpr inline std::string_view TypeName<AggregateFunctionStateData> = "AggregateFunctionState";
+template <> constexpr inline std::string_view TypeName<AggregateFunctionStateData> = "aggregate_function_state";
 
 #undef TN_MAP
 }

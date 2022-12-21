@@ -67,12 +67,12 @@ ColumnPtr FlatDictionary::getColumn(
     const auto & attribute = attributes[attribute_index];
 
     bool is_attribute_nullable = attribute.is_nullable_set.has_value();
-    ColumnBool::MutablePtr col_null_map_to;
-    ColumnBool::Container * vec_null_map_to = nullptr;
+    ColumnUInt8::MutablePtr col_null_map_to;
+    ColumnUInt8::Container * vec_null_map_to = nullptr;
 
     if (is_attribute_nullable)
     {
-        col_null_map_to = ColumnBool::create(size, false);
+        col_null_map_to = ColumnUInt8::create(size, false);
         vec_null_map_to = &col_null_map_to->getData();
     }
 
@@ -151,13 +151,13 @@ ColumnPtr FlatDictionary::getColumn(
     return result;
 }
 
-ColumnBool::Ptr FlatDictionary::hasKeys(const Columns & key_columns, const DataTypes &) const
+ColumnUInt8::Ptr FlatDictionary::hasKeys(const Columns & key_columns, const DataTypes &) const
 {
     PaddedPODArray<UInt64> backup_storage;
     const auto & keys = getColumnVectorData(this, key_columns.front(), backup_storage);
     size_t keys_size = keys.size();
 
-    auto result = ColumnBool::create(keys_size);
+    auto result = ColumnUInt8::create(keys_size);
     auto & out = result->getData();
 
     size_t keys_found = 0;
@@ -207,7 +207,7 @@ ColumnPtr FlatDictionary::getHierarchy(ColumnPtr key_column, const DataTypePtr &
     return dictionary_hierarchy_array;
 }
 
-ColumnBool::Ptr FlatDictionary::isInHierarchy(
+ColumnUInt8::Ptr FlatDictionary::isInHierarchy(
     ColumnPtr key_column,
     ColumnPtr in_key_column,
     const DataTypePtr &) const

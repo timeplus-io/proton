@@ -40,19 +40,21 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const override
     {
-        return std::make_shared<DataTypeBool>();
+        /// proton: starts. return bool
+        return DataTypeFactory::instance().get("bool");
+        /// proton: ends.
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         const auto & elem = arguments[0];
-        return ColumnBool::create(input_rows_count, isColumnConst(*elem.column));
+        return ColumnUInt8::create(input_rows_count, isColumnConst(*elem.column));
     }
 };
 
 }
 
-void registerFunctionIsConstant(FunctionFactory & factory)
+REGISTER_FUNCTION(IsConstant)
 {
     factory.registerFunction<FunctionIsConstant>();
 }

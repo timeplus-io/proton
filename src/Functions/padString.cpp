@@ -5,7 +5,6 @@
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/Sinks.h>
 #include <Functions/GatherUtils/Sources.h>
-#include <base/bit_cast.h>
 
 namespace DB
 {
@@ -59,10 +58,10 @@ namespace
             {
                 if (num_chars <= step)
                 {
-                    writeSlice(StringSource::Slice{bit_cast<const UInt8 *>(pad_string.data()), numCharsToNumBytes(num_chars)}, res_sink);
+                    writeSlice(StringSource::Slice{std::bit_cast<const UInt8 *>(pad_string.data()), numCharsToNumBytes(num_chars)}, res_sink);
                     break;
                 }
-                writeSlice(StringSource::Slice{bit_cast<const UInt8 *>(pad_string.data()), numCharsToNumBytes(step)}, res_sink);
+                writeSlice(StringSource::Slice{std::bit_cast<const UInt8 *>(pad_string.data()), numCharsToNumBytes(step)}, res_sink);
                 num_chars -= step;
             }
         }
@@ -307,12 +306,15 @@ namespace
     };
 }
 
-void registerFunctionPadString(FunctionFactory & factory)
+REGISTER_FUNCTION(PadString)
 {
-    factory.registerFunction<FunctionPadString<false, false>>(); /// leftPad
-    factory.registerFunction<FunctionPadString<false, true>>();  /// leftPadUTF8
-    factory.registerFunction<FunctionPadString<true, false>>();  /// rightPad
-    factory.registerFunction<FunctionPadString<true, true>>();   /// rightPadUTF8
+    factory.registerFunction<FunctionPadString<false, false>>(); /// left_pad
+    factory.registerFunction<FunctionPadString<false, true>>();  /// lleft_pad_utf8
+    factory.registerFunction<FunctionPadString<true, false>>();  /// right_pad
+    factory.registerFunction<FunctionPadString<true, true>>();   /// right_pad_utf8
+
+    factory.registerAlias("lpad", "left_pad", FunctionFactory::CaseInsensitive);
+    factory.registerAlias("rpad", "right_pad", FunctionFactory::CaseInsensitive);
 }
 
 }

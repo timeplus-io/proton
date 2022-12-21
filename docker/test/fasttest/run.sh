@@ -175,6 +175,10 @@ function clone_submodules
             contrib/NuRaft
             contrib/jemalloc
             contrib/replxx
+            contrib/wyhash
+            contrib/hashidsxx
+            contrib/morton-nd
+            contrib/xxHash
         )
 
         git submodule sync

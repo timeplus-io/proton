@@ -24,7 +24,6 @@ public:
     }
 
     static NamesAndTypesList getNamesAndTypes();
-
 };
 
 }

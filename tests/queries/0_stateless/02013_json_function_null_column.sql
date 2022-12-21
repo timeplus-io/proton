@@ -23,3 +23,4 @@ SELECT JSONExtract('[1]', to_nullable(1), 'nullable(Bool)');
 SELECT JSONExtract('[1]', to_nullable(1), 'nullable(Float)');
 SELECT JSONExtract('["a"]', to_nullable(1), 'nullable(string)');
 SELECT JSONExtract('["a"]', to_nullable(1), 'nullable(int)');
+SELECT JSONExtract('["-a"]', to_nullable(1), 'nullable(int)');

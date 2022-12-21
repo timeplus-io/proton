@@ -58,7 +58,7 @@ public:
         }
         else if (arguments.size() == 2 && checkAndGetDataType<DataTypeString>(arguments[1].get()) == nullptr)
         {
-            throw Exception("Second argument should be String", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception("Second argument should be string", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         return std::make_shared<DataTypeString>();
@@ -99,9 +99,10 @@ public:
     }
 };
 
-void registerFunctionSvg(FunctionFactory & factory)
+REGISTER_FUNCTION(Svg)
 {
     factory.registerFunction<FunctionSvg>();
+    factory.registerAlias("SVG", "svg");
 }
 
 }

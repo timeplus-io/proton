@@ -12,25 +12,43 @@
 #include <Interpreters/Context.h>
 #include <IO/WriteHelpers.h>
 
+/// proton: starts.
+#include <DataTypes/DataTypeFactory.h>
+/// proton: ends.
 namespace DB
 {
 /** Search and replace functions in strings:
-  *
   * position(haystack, needle)     - the normal search for a substring in a string, returns the position (in bytes) of the found substring starting with 1, or 0 if no substring is found.
-  * positionUTF8(haystack, needle) - the same, but the position is calculated at code points, provided that the string is encoded in UTF-8.
-  * positionCaseInsensitive(haystack, needle)
-  * positionCaseInsensitiveUTF8(haystack, needle)
+  * position_utf8(haystack, needle) - the same, but the position is calculated at code points, provided that the string is encoded in UTF-8.
+  * position_case_insensitive(haystack, needle)
+  * position_case_insensitive_utf8(haystack, needle)
   *
   * like(haystack, pattern)        - search by the regular expression LIKE; Returns 0 or 1. Case-insensitive, but only for Latin.
-  * notLike(haystack, pattern)
+  * not_like(haystack, pattern)
+  *
+  * ilike(haystack, pattern) - like 'like' but case-insensitive
+  * not_ilike(haystack, pattern)
   *
   * match(haystack, pattern)       - search by regular expression re2; Returns 0 or 1.
-  * multiMatchAny(haystack, [pattern_1, pattern_2, ..., pattern_n]) -- search by re2 regular expressions pattern_i; Returns 0 or 1 if any pattern_i matches.
-  * multiMatchAnyIndex(haystack, [pattern_1, pattern_2, ..., pattern_n]) -- search by re2 regular expressions pattern_i; Returns index of any match or zero if none;
-  * multiMatchAllIndices(haystack, [pattern_1, pattern_2, ..., pattern_n]) -- search by re2 regular expressions pattern_i; Returns an array of matched indices in any order;
   *
-  * countSubstrings(haystack, needle) -- count number of occurrences of needle in haystack.
-  * countSubstringsCaseInsensitive(haystack, needle)
+  * count_substrings(haystack, needle) -- count number of occurrences of needle in haystack.
+  * count_substrings_case_insensitive(haystack, needle)
+  * count_substrings_case_insensitive_utf8(haystack, needle)
+  *
+  * has_token()
+  * has_token_case_insensitive()
+  *
+  * JSON stuff:
+  * visit_param_extract_bool()
+  * simple_json_extract_bool()
+  * visit_param_extract_float()
+  * simple_json_extract_float()
+  * visit_param_extract_int()
+  * simple_json_extract_int()
+  * visit_param_extract_uint()
+  * simple_json_extract_uint()
+  * visit_param_has()
+  * simple_json_has()
   *
   * Applies regexp re2 and pulls:
   * - the first subpattern, if the regexp has a subpattern;
@@ -49,6 +67,11 @@ namespace ErrorCodes
 template <typename Impl>
 class FunctionsStringSearch : public IFunction
 {
+    /// proton: starts.
+    static constexpr bool result_is_bool = std::is_same_v<typename Impl::ResultType, bool>;
+    using ResultType = std::conditional_t<result_is_bool, UInt8, typename Impl::ResultType>;
+    /// proton: ends.
+
 public:
     static constexpr auto name = Impl::name;
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionsStringSearch>(); }
@@ -70,44 +93,51 @@ public:
 
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override
     {
-        if (!Impl::use_default_implementation_for_constants)
-            return ColumnNumbers{};
-        if (!Impl::supports_start_pos)
-            return ColumnNumbers{1, 2};
-        return ColumnNumbers{1, 2, 3};
+        return Impl::getArgumentsThatAreAlwaysConstant();
     }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() < 2 || 3 < arguments.size())
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 2 or 3.",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                "Number of arguments for function {} doesn't match: passed {}, should be 2 or 3",
+                getName(), arguments.size());
 
         if (!isStringOrFixedString(arguments[0]))
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Illegal type {} of argument of function {}",
+                arguments[0]->getName(), getName());
 
         if (!isString(arguments[1]))
             throw Exception(
-                "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Illegal type {} of argument of function {}",
+                arguments[1]->getName(), getName());
 
         if (arguments.size() >= 3)
         {
             if (!isUnsignedInteger(arguments[2]))
                 throw Exception(
-                    "Illegal type " + arguments[2]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "Illegal type {} of argument of function {}",
+                    arguments[2]->getName(), getName());
         }
 
-        if constexpr (std::is_same_v<typename Impl::ResultType, Bool>)
-            return std::make_shared<DataTypeBool>();
+        /// proton: starts.
+        if constexpr (result_is_bool)
+            return DataTypeFactory::instance().get("bool");
         else
-            return std::make_shared<DataTypeNumber<typename Impl::ResultType>>();
+            return std::make_shared<DataTypeNumber<ResultType>>();
+        /// proton: ends.
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t /*input_rows_count*/) const override
     {
-        using ResultType = typename Impl::ResultType;
+        /// proton: starts.
+        // using ResultType = typename Impl::ResultType;
+        /// proton: ends.
 
         const ColumnPtr & column_haystack = arguments[0].column;
         const ColumnPtr & column_needle = arguments[1].column;
@@ -165,6 +195,14 @@ public:
                 col_needle_const->getValue<String>(),
                 column_start_pos,
                 vec_res);
+        else if (col_haystack_vector_fixed && col_needle_vector)
+            Impl::vectorFixedVector(
+                col_haystack_vector_fixed->getChars(),
+                col_haystack_vector_fixed->getN(),
+                col_needle_vector->getChars(),
+                col_needle_vector->getOffsets(),
+                column_start_pos,
+                vec_res);
         else if (col_haystack_vector_fixed && col_needle_const)
             Impl::vectorFixedConstant(
                 col_haystack_vector_fixed->getChars(),
@@ -180,9 +218,11 @@ public:
                 vec_res);
         else
             throw Exception(
-                "Illegal columns " + arguments[0].column->getName() + " and "
-                    + arguments[1].column->getName() + " of arguments of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+                ErrorCodes::ILLEGAL_COLUMN,
+                "Illegal columns {} and {} of arguments of function {}",
+                arguments[0].column->getName(),
+                arguments[1].column->getName(),
+                getName());
 
         return col_res;
     }

@@ -43,6 +43,9 @@ public:
         for (size_t i = 2; i < args.size() - 1; i += 2)
             dst_array_types.push_back(args[i]);
 
+        // Type of the ELSE branch
+        dst_array_types.push_back(args.back());
+
         return getLeastSupertype(dst_array_types);
     }
 
@@ -87,7 +90,7 @@ public:
         ColumnWithTypeAndName src_array_col{nullptr, src_array_type, ""};
         ColumnWithTypeAndName dst_array_col{nullptr, dst_array_type, ""};
 
-        auto fun_array = FunctionFactory::instance().get("array_cast", context);
+        auto fun_array = FunctionFactory::instance().get("array", context);
 
         src_array_col.column = fun_array->build(src_array_elems)->execute(src_array_elems, src_array_type, input_rows_count);
         dst_array_col.column = fun_array->build(dst_array_elems)->execute(dst_array_elems, dst_array_type, input_rows_count);
@@ -104,12 +107,12 @@ private:
 
 }
 
-void registerFunctionCaseWithExpression(FunctionFactory & factory)
+REGISTER_FUNCTION(CaseWithExpression)
 {
     factory.registerFunction<FunctionCaseWithExpression>();
 
     /// These are obsolete function names.
-    factory.registerFunction<FunctionCaseWithExpression>("caseWithExpr");
+    factory.registerFunction<FunctionCaseWithExpression>("case_with_expr");
 }
 
 }

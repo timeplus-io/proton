@@ -429,7 +429,7 @@ public:
         const auto & column = assert_cast<const ColVecType &>(*columns[0]);
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             this->data(place).addManyConditional(column.getData().data(), flags.data(), row_begin, row_end, delta_col);
         }
         else
@@ -453,7 +453,7 @@ public:
         if (if_argument_pos >= 0)
         {
             /// Merge the 2 sets of flags (null and if) into a single one. This allows us to use parallelizable sums when available
-            const auto * if_flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData().data();
+            const auto * if_flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData().data();
             auto final_flags = std::make_unique<UInt8[]>(row_end);
             for (size_t i = row_begin; i < row_end; ++i)
                 final_flags[i] = (!null_map[i]) & if_flags[i];

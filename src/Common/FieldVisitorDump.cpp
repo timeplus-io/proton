@@ -99,7 +99,7 @@ String FieldVisitorDump::operator() (const Object & x) const
 {
     WriteBufferFromOwnString wb;
 
-    wb << "Object_(";
+    wb << "object_(";
     for (auto it = x.begin(); it != x.end(); ++it)
     {
         if (it != x.begin())

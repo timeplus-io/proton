@@ -120,7 +120,7 @@ ColumnPtr getKeysHierarchyDefaultImplementation(
     return dictionary_hierarchy_array;
 }
 
-ColumnBool::Ptr getKeysIsInHierarchyDefaultImplementation(
+ColumnUInt8::Ptr getKeysIsInHierarchyDefaultImplementation(
     const IDictionary * dictionary,
     ColumnPtr key_column,
     ColumnPtr in_key_column,

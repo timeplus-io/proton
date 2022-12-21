@@ -42,7 +42,11 @@ public:
         return 1;
     }
 
-    bool useDefaultImplementationForLowCardinalityColumns() const override { return false; }
+    bool useDefaultImplementationForLowCardinalityColumns() const override
+    {
+        return false;
+    }
+
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
@@ -79,7 +83,7 @@ public:
 
     static ColumnWithTypeAndName createScalar(ContextPtr context_)
     {
-        if (const auto * block = context_->tryGetLocalScalar(Scalar::scalar_name))
+        if (const auto * block = context_->tryGetSpecialScalar(Scalar::scalar_name))
             return block->getByPosition(0);
         else if (context_->hasQueryContext())
         {
@@ -100,11 +104,6 @@ public:
     }
 
     bool isDeterministic() const override { return false; }
-
-    bool isDeterministicInScopeOfQuery() const override
-    {
-        return true;
-    }
 
     bool isSuitableForConstantFolding() const override { return !is_distributed; }
 
@@ -144,7 +143,7 @@ struct GetShardCount
 
 }
 
-void registerFunctionGetScalar(FunctionFactory & factory)
+REGISTER_FUNCTION(GetScalar)
 {
     factory.registerFunction<FunctionGetScalar>();
     factory.registerFunction<FunctionGetSpecialScalar<GetShardNum>>();

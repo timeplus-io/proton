@@ -15,7 +15,7 @@ class IColumn;
 
 using ColumnRawPtrs = std::vector<const IColumn *>;
 using ColumnRawPtrMap = std::unordered_map<String, const IColumn *>;
-using BoolColumnDataPtr = const ColumnBool::Container *;
+using BoolColumnDataPtr = const ColumnUInt8::Container *;
 
 namespace JoinCommon
 {
@@ -41,14 +41,14 @@ public:
     BoolColumnDataPtr getData()
     {
         if (column)
-            return &assert_cast<const ColumnBool &>(*column).getData();
+            return &assert_cast<const ColumnUInt8 &>(*column).getData();
         return nullptr;
     }
 
     inline bool isRowFiltered(size_t row) const
     {
         if (column)
-            return !assert_cast<const ColumnBool &>(*column).getData()[row];
+            return !assert_cast<const ColumnUInt8 &>(*column).getData()[row];
         return !const_value;
     }
 
@@ -59,6 +59,7 @@ private:
 };
 
 
+bool isNullable(const DataTypePtr & type);
 bool canBecomeNullable(const DataTypePtr & type);
 DataTypePtr convertTypeToNullable(const DataTypePtr & type);
 void convertColumnToNullable(ColumnWithTypeAndName & column);
@@ -97,7 +98,7 @@ void addDefaultValues(IColumn & column, const DataTypePtr & type, size_t count);
 
 bool typesEqualUpToNullability(DataTypePtr left_type, DataTypePtr right_type);
 
-/// Return mask array of type ColumnBool for specified column. Source should have type UInt8 or Nullable(UInt8).
+/// Return mask array of type ColumnUInt8 for specified column. Source should have type UInt8 or Nullable(UInt8).
 JoinMask getColumnAsMask(const Block & block, const String & column_name);
 
 /// Split key and other columns by keys name list

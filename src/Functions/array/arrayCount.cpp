@@ -1,7 +1,8 @@
-#include <DataTypes/DataTypesNumber.h>
 #include <Columns/ColumnsNumber.h>
-#include "FunctionArrayMapped.h"
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
+
+#include "FunctionArrayMapped.h"
 
 
 namespace DB
@@ -16,6 +17,9 @@ namespace ErrorCodes
   */
 struct ArrayCountImpl
 {
+    using column_type = ColumnArray;
+    using data_type = DataTypeArray;
+
     static bool needBoolean() { return true; }
     static bool needExpression() { return false; }
     static bool needOneArray() { return false; }
@@ -27,11 +31,11 @@ struct ArrayCountImpl
 
     static ColumnPtr execute(const ColumnArray & array, ColumnPtr mapped)
     {
-        const ColumnBool * column_filter = typeid_cast<const ColumnBool *>(&*mapped);
+        const ColumnUInt8 * column_filter = typeid_cast<const ColumnUInt8 *>(&*mapped);
 
         if (!column_filter)
         {
-            const auto * column_filter_const = checkAndGetColumnConst<ColumnBool>(&*mapped);
+            const auto * column_filter_const = checkAndGetColumnConst<ColumnUInt8>(&*mapped);
 
             if (!column_filter_const)
                 throw Exception("Unexpected type of filter column", ErrorCodes::ILLEGAL_COLUMN);
@@ -45,7 +49,7 @@ struct ArrayCountImpl
                 size_t pos = 0;
                 for (size_t i = 0; i < offsets.size(); ++i)
                 {
-                    out_counts[i] = offsets[i] - pos;
+                    out_counts[i] = static_cast<UInt32>(offsets[i] - pos);
                     pos = offsets[i];
                 }
 
@@ -69,17 +73,17 @@ struct ArrayCountImpl
                 if (filter[pos])
                     ++count;
             }
-            out_counts[i] = count;
+            out_counts[i] = static_cast<UInt32>(count);
         }
 
         return out_column;
     }
 };
 
-struct NameArrayCount { static constexpr auto name = "array_count"; };
+struct NameArrayCount { static constexpr auto name = "arrayCount"; };
 using FunctionArrayCount = FunctionArrayMapped<ArrayCountImpl, NameArrayCount>;
 
-void registerFunctionArrayCount(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayCount)
 {
     factory.registerFunction<FunctionArrayCount>();
 }

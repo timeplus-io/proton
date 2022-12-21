@@ -9,9 +9,11 @@ namespace DB
 struct NameSimpleJSONExtractUInt   { static constexpr auto name = "simple_json_extract_uint"; };
 using FunctionSimpleJSONExtractUInt = FunctionsStringSearch<ExtractParamImpl<NameSimpleJSONExtractUInt, ExtractNumericType<UInt64>>>;
 
-void registerFunctionVisitParamExtractUInt(FunctionFactory & factory)
+
+REGISTER_FUNCTION(VisitParamExtractUInt)
 {
     factory.registerFunction<FunctionSimpleJSONExtractUInt>();
+    factory.registerAlias("visit_param_extract_uint", "simple_json_extract_uint");
 }
 
 }

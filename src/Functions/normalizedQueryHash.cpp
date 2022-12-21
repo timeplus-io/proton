@@ -4,12 +4,13 @@
 #include <Columns/ColumnsNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Parsers/queryNormalization.h>
+#include <base/find_symbols.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/SipHash.h>
 
 
 /** The function returns 64bit hash value that is identical for similar queries.
-  * See also 'normalizeQuery'. This function is only slightly more efficient.
+  * See also 'normalize_query'. This function is only slightly more efficient.
   */
 
 namespace DB
@@ -96,7 +97,7 @@ public:
 
 }
 
-void registerFunctionNormalizedQueryHash(FunctionFactory & factory)
+REGISTER_FUNCTION(NormalizedQueryHash)
 {
     factory.registerFunction<FunctionNormalizedQueryHash<true>>();
     factory.registerFunction<FunctionNormalizedQueryHash<false>>();

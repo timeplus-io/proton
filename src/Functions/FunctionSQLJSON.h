@@ -27,6 +27,7 @@
 /// proton: starts.
 #include <Columns/ColumnArray.h>
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <base/map.h>
 /// proton: ends.
 
@@ -211,7 +212,7 @@ public:
         /// 2. Create ASTPtr
         /// 3. Parser(Tokens, ASTPtr) -> complete AST
         /// 4. Execute functions: call getNextItem on generator and handle each item
-        uint32_t parse_depth = getContext()->getSettingsRef().max_parser_depth;
+        unsigned parse_depth = static_cast<unsigned>(getContext()->getSettingsRef().max_parser_depth);
 #if USE_SIMDJSON
         if (getContext()->getSettingsRef().allow_simdjson)
             return FunctionSQLJSONHelpers::Executor<Name, Impl, SimdJSONParser>::run(arguments, result_type, input_rows_count, parse_depth);
@@ -241,7 +242,9 @@ class JSONExistsImpl
 public:
     using Element = typename JSONParser::Element;
 
-    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &) { return std::make_shared<DataTypeBool>(); }
+    /// proton: starts. return bool
+    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &) { return DataTypeFactory::instance().get("bool"); }
+    /// proton: ends.
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
@@ -261,7 +264,7 @@ public:
 
         /// insert result, status can be either Ok (if we found the item)
         /// or Exhausted (if we never found the item)
-        ColumnBool & col_bool = assert_cast<ColumnBool &>(dest);
+        ColumnUInt8 & col_bool = assert_cast<ColumnUInt8 &>(dest);
         if (status == VisitorStatus::Ok)
         {
             col_bool.insert(1);
@@ -289,7 +292,7 @@ public:
         GeneratorJSONPath<JSONParser> generator_json_path(query_ptr);
         Element current_element = root;
         VisitorStatus status;
-        Element res;
+
         while ((status = generator_json_path.getNextItem(current_element)) != VisitorStatus::Exhausted)
         {
             if (status == VisitorStatus::Ok)
@@ -369,7 +372,7 @@ public:
             GeneratorJSONPath<JSONParser> generator_json_path(query_ptr);
             Element current_element = root;
             VisitorStatus status;
-            Element res;
+
             while ((status = generator_json_path.getNextItem(current_element)) != VisitorStatus::Exhausted)
             {
                 if (status == VisitorStatus::Ok)

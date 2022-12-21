@@ -7,6 +7,9 @@
 #include <Interpreters/Context_fwd.h>
 #include <base/range.h>
 
+/// proton: starts.
+#include <DataTypes/DataTypeFactory.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -46,9 +49,11 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!isNativeNumber(arguments.front()))
-            throw Exception{"Argument for function " + getName() + " must be number", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            throw Exception{"Argument for function " + getName() + " must be a number", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
-        return std::make_shared<DataTypeBool>();
+        /// proton: starts. return bool
+        return DataTypeFactory::instance().get("bool");
+        /// proton: ends.
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
@@ -58,8 +63,7 @@ public:
         const auto * in = arguments.front().column.get();
 
         ColumnPtr res;
-        if (!((res = execute<Bool>(in))
-            || (res = execute<UInt8>(in))
+        if (!((res = execute<UInt8>(in))
             || (res = execute<UInt16>(in))
             || (res = execute<UInt32>(in))
             || (res = execute<UInt64>(in))
@@ -81,7 +85,7 @@ public:
         {
             const auto size = in->size();
 
-            auto out = ColumnBool::create(size);
+            auto out = ColumnUInt8::create(size);
 
             const auto & in_data = in->getData();
             auto & out_data = out->getData();

@@ -49,7 +49,7 @@ static inline llvm::Type * toNativeType(llvm::IRBuilderBase & builder, const IDa
     }
 
     /// LLVM doesn't have unsigned types, it has unsigned instructions.
-    if (data_type.isInt8() || data_type.isUInt8() || data_type.isBool())
+    if (data_type.isInt8() || data_type.isUInt8())
         return builder.getInt8Ty();
     else if (data_type.isInt16() || data_type.isUInt16() || data_type.isDate())
         return builder.getInt16Ty();
@@ -72,7 +72,7 @@ static inline llvm::Type * toNativeType(llvm::IRBuilderBase & builder, const IDa
 template <typename ToType>
 static inline llvm::Type * toNativeType(llvm::IRBuilderBase & builder)
 {
-    if constexpr (std::is_same_v<ToType, Int8> || std::is_same_v<ToType, UInt8> || std::is_same_v<ToType, Bool>)
+    if constexpr (std::is_same_v<ToType, Int8> || std::is_same_v<ToType, UInt8>)
         return builder.getInt8Ty();
     else if constexpr (std::is_same_v<ToType, Int16> || std::is_same_v<ToType, UInt16>)
         return builder.getInt16Ty();
@@ -91,7 +91,7 @@ static inline llvm::Type * toNativeType(llvm::IRBuilderBase & builder)
 template <typename Type>
 static inline bool canBeNativeType()
 {
-    if constexpr (std::is_same_v<Type, Int8> || std::is_same_v<Type, UInt8> || std::is_same_v<Type, Bool>)
+    if constexpr (std::is_same_v<Type, Int8> || std::is_same_v<Type, UInt8>)
         return true;
     else if constexpr (std::is_same_v<Type, Int16> || std::is_same_v<Type, UInt16>)
         return true;
@@ -271,7 +271,7 @@ static inline llvm::Constant * getColumnNativeValue(llvm::IRBuilderBase & builde
     {
         return llvm::ConstantFP::get(type, assert_cast<const ColumnVector<Float64> &>(column).getElement(index));
     }
-    else if (column_data_type.isNativeUInt() || column_data_type.isDate() || column_data_type.isDateTime() || column_data_type.isDateTime64())
+    else if (column_data_type.isNativeUInt() || column_data_type.isDate() || column_data_type.isDateTime())
     {
         return llvm::ConstantInt::get(type, column.getUInt(index));
     }

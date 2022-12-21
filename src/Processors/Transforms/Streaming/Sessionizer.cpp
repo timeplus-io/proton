@@ -52,7 +52,7 @@ void Sessionizer::sessionize(Chunk & chunk)
     }
 
     start_actions->execute(start_block);
-    block.insert(insert_pos++, {start_block.getColumns()[0], std::make_shared<DataTypeBool>(), ProtonConsts::STREAMING_SESSION_START});
+    block.insert(insert_pos++, {start_block.getColumns()[0], std::make_shared<DataTypeUInt8>(), ProtonConsts::STREAMING_SESSION_START});
 
     Block end_block;
     auto end_required_columns = end_actions->getRequiredColumns();
@@ -76,7 +76,7 @@ void Sessionizer::sessionize(Chunk & chunk)
             end_block.insert(block.getByPosition(pos));
     }
     end_actions->execute(end_block);
-    block.insert(insert_pos++, {end_block.getColumns()[0], std::make_shared<DataTypeBool>(), ProtonConsts::STREAMING_SESSION_END});
+    block.insert(insert_pos++, {end_block.getColumns()[0], std::make_shared<DataTypeUInt8>(), ProtonConsts::STREAMING_SESSION_END});
 
     chunk.setColumns(block.getColumns(), block.rows());
 }
@@ -84,7 +84,7 @@ void Sessionizer::sessionize(Chunk & chunk)
 void Sessionizer::addPredicateColumns(Chunk & chunk)
 {
     auto rows = chunk.getNumRows();
-    auto data_type = std::make_shared<DataTypeBool>();
+    auto data_type = std::make_shared<DataTypeUInt8>();
 
     auto col_start = data_type->createColumnConst(rows, true);
     auto col_end = data_type->createColumnConst(rows, true);

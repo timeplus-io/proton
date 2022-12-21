@@ -45,8 +45,8 @@ String deriveTempName(const String & name)
 ColumnWithTypeAndName condtitionColumnToJoinable(const Block & block, const String & src_column_name)
 {
     size_t res_size = block.rows();
-    auto data_col = ColumnBool::create(res_size, 0);
-    auto null_map = ColumnBool::create(res_size, 0);
+    auto data_col = ColumnUInt8::create(res_size, 0);
+    auto null_map = ColumnUInt8::create(res_size, 0);
 
     if (!src_column_name.empty())
     {
@@ -59,7 +59,7 @@ ColumnWithTypeAndName condtitionColumnToJoinable(const Block & block, const Stri
     }
 
     ColumnPtr res_col = ColumnNullable::create(std::move(data_col), std::move(null_map));
-    DataTypePtr res_col_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeBool>());
+    DataTypePtr res_col_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeUInt8>());
     String res_name = deriveTempName(src_column_name);
 
     if (block.has(res_name))
@@ -465,8 +465,6 @@ MergeJoin::MergeJoin(std::shared_ptr<TableJoin> table_join_, const Block & right
     : table_join(table_join_)
     , size_limits(table_join->sizeLimits())
     , right_sample_block(right_sample_block_)
-    , nullable_right_side(table_join->forceNullableRight())
-    , nullable_left_side(table_join->forceNullableLeft())
     , is_any_join(table_join->strictness() == ASTTableJoin::Strictness::Any)
     , is_all_join(table_join->strictness() == ASTTableJoin::Strictness::All)
     , is_semi_join(table_join->strictness() == ASTTableJoin::Strictness::Semi)
@@ -544,9 +542,6 @@ MergeJoin::MergeJoin(std::shared_ptr<TableJoin> table_join_, const Block & right
             right_columns_to_add.insert(ColumnWithTypeAndName{nullptr, column.type, column.name});
 
     JoinCommon::createMissedColumns(right_columns_to_add);
-
-    if (nullable_right_side)
-        JoinCommon::convertColumnsToNullable(right_columns_to_add);
 
     makeSortAndMerge(key_names_left, left_sort_description, left_merge_description);
     makeSortAndMerge(key_names_right, right_sort_description, right_merge_description);
@@ -710,9 +705,6 @@ void MergeJoin::joinBlock(Block & block, ExtraBlockPtr & not_processed)
         JoinCommon::convertToFullColumnsInplace(block, key_names_left, false);
 
         sortBlock(block, left_sort_description);
-
-        if (nullable_left_side)
-            JoinCommon::convertColumnsToNullable(block);
     }
 
     if (!not_processed && left_blocks_buffer)

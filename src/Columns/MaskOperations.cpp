@@ -215,8 +215,7 @@ MaskInfo extractMaskImpl(
 
     MaskInfo mask_info;
 
-    if (!(extractMaskNumeric<inverted, Bool>(mask, column, null_value, null_bytemap, nulls, mask_info)
-          || extractMaskNumeric<inverted, UInt8>(mask, column, null_value, null_bytemap, nulls, mask_info)
+    if (!(extractMaskNumeric<inverted, UInt8>(mask, column, null_value, null_bytemap, nulls, mask_info)
           || extractMaskNumeric<inverted, UInt16>(mask, column, null_value, null_bytemap, nulls, mask_info)
           || extractMaskNumeric<inverted, UInt32>(mask, column, null_value, null_bytemap, nulls, mask_info)
           || extractMaskNumeric<inverted, UInt64>(mask, column, null_value, null_bytemap, nulls, mask_info)

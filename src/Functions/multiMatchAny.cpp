@@ -13,13 +13,13 @@ struct NameMultiMatchAny
     static constexpr auto name = "multi_match_any";
 };
 
-using FunctionMultiMatchAny = FunctionsMultiStringSearch<
-    MultiMatchAnyImpl<NameMultiMatchAny, Bool, true, false, false>,
-    std::numeric_limits<UInt32>::max()>;
+/// proton: starts. return bool
+using FunctionMultiMatchAny = FunctionsMultiStringSearch<MultiMatchAnyImpl<NameMultiMatchAny, /*ResultType*/ bool, MultiMatchTraits::Find::Any, /*WithEditDistance*/ false>>;
+/// proton: ends.
 
 }
 
-void registerFunctionMultiMatchAny(FunctionFactory & factory)
+REGISTER_FUNCTION(MultiMatchAny)
 {
     factory.registerFunction<FunctionMultiMatchAny>();
 }

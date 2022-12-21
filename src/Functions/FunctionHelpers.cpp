@@ -128,7 +128,7 @@ void validateArgumentsImpl(const IFunction & func,
         }
 
         const auto & arg = arguments[i + argument_offset];
-        const auto descriptor = descriptors[i];
+        const auto & descriptor = descriptors[i];
         if (int error_code = descriptor.isValid(arg.type, arg.column); error_code != 0)
             throw Exception("Illegal type of argument #" + std::to_string(argument_offset + i + 1) // +1 is for human-friendly 1-based indexing
                             + (descriptor.argument_name ? " '" + std::string(descriptor.argument_name) + "'" : String{})
@@ -278,8 +278,8 @@ ColumnPtr wrapInNullable(const ColumnPtr & src, const ColumnsWithTypeAndName & a
             {
                 MutableColumnPtr mutable_result_null_map_column = IColumn::mutate(std::move(result_null_map_column));
 
-                NullMap & result_null_map = assert_cast<ColumnBool &>(*mutable_result_null_map_column).getData();
-                const NullMap & src_null_map = assert_cast<const ColumnBool &>(*null_map_column).getData();
+                NullMap & result_null_map = assert_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
+                const NullMap & src_null_map = assert_cast<const ColumnUInt8 &>(*null_map_column).getData();
 
                 for (size_t i = 0, size = result_null_map.size(); i < size; ++i)
                     result_null_map[i] |= src_null_map[i];

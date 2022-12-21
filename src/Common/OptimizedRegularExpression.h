@@ -106,3 +106,4 @@ private:
 };
 
 using OptimizedRegularExpression = OptimizedRegularExpressionImpl<true>;
+using OptimizedRegularExpressionSingleThreaded = OptimizedRegularExpressionImpl<false>;

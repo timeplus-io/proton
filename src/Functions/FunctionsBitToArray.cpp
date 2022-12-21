@@ -330,7 +330,7 @@ public:
 
 }
 
-void registerFunctionsBitToArray(FunctionFactory & factory)
+REGISTER_FUNCTION(BitToArray)
 {
     factory.registerFunction<FunctionBitPositionsToArray>();
     factory.registerFunction<FunctionBitmaskToArray>();

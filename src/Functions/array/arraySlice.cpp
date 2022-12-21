@@ -19,16 +19,16 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
-/** arraySlice(arr, offset, length) - make slice of array. Offsets and length may be < 0 or Null
+/** array_slice(arr, offset, length) - make slice of array. Offsets and length may be < 0 or Null
   *   - if offset < 0, indexation from right element
   *   - if length < 0, length = len(array) - (positive_index(offset) - 1) + length
   *   indexation:
   *     [ 1,  2,  3,  4,  5,  6]
   *     [-6, -5, -4, -3, -2, -1]
   *   examples:
-  *     arraySlice([1, 2, 3, 4, 5, 6], -4, 2) -> [3, 4]
-  *     arraySlice([1, 2, 3, 4, 5, 6], 2, -1) -> [2, 3, 4, 5] (6 - (2 - 1) + (-1) = 4)
-  *     arraySlice([1, 2, 3, 4, 5, 6], -5, -1) = arraySlice([1, 2, 3, 4, 5, 6], 2, -1) -> [2, 3, 4, 5]
+  *     array_slice([1, 2, 3, 4, 5, 6], -4, 2) -> [3, 4]
+  *     array_slice([1, 2, 3, 4, 5, 6], 2, -1) -> [2, 3, 4, 5] (6 - (2 - 1) + (-1) = 4)
+  *     array_slice([1, 2, 3, 4, 5, 6], -5, -1) = array_slice([1, 2, 3, 4, 5, 6], 2, -1) -> [2, 3, 4, 5]
   */
 class FunctionArraySlice : public IFunction
 {
@@ -150,7 +150,7 @@ public:
 };
 
 
-void registerFunctionArraySlice(FunctionFactory & factory)
+REGISTER_FUNCTION(ArraySlice)
 {
     factory.registerFunction<FunctionArraySlice>();
 }

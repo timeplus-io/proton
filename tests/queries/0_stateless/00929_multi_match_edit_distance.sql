@@ -1,5 +1,4 @@
--- Tags: no-fasttest
--- Tag no-fasttest: Hyperscan
+-- Tags: no-fasttest, use-vectorscan
 
  
 

@@ -114,7 +114,7 @@ void SerializationNullable::serializeBinaryBulkWithMultipleStreams(
     /// First serialize null map.
     settings.path.push_back(Substream::NullMap);
     if (auto * stream = settings.getter(settings.path))
-        SerializationNumber<Bool>().serializeBinaryBulk(col.getNullMapColumn(), *stream, offset, limit);
+        SerializationNumber<UInt8>().serializeBinaryBulk(col.getNullMapColumn(), *stream, offset, limit);
 
     /// Then serialize contents of arrays.
     settings.path.back() = Substream::NullableElements;
@@ -140,7 +140,7 @@ void SerializationNullable::deserializeBinaryBulkWithMultipleStreams(
     }
     else if (auto * stream = settings.getter(settings.path))
     {
-        SerializationNumber<Bool>().deserializeBinaryBulk(col.getNullMapColumn(), *stream, limit, 0);
+        SerializationNumber<UInt8>().deserializeBinaryBulk(col.getNullMapColumn(), *stream, limit, 0);
         addToSubstreamsCache(cache, settings.path, col.getNullMapColumnPtr());
     }
 
@@ -658,7 +658,7 @@ void SerializationNullable::deserializeBinaryBulkWithMultipleStreamsSkip(
     settings.path.push_back(Substream::NullMap);
     if (auto * stream = settings.getter(settings.path))
     {
-        SerializationNumber<Bool>().deserializeBinaryBulkSkip(*stream, limit);
+        SerializationNumber<UInt8>().deserializeBinaryBulkSkip(*stream, limit);
     }
 
     settings.path.back() = Substream::NullableElements;

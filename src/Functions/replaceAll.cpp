@@ -13,16 +13,14 @@ struct NameReplaceAll
     static constexpr auto name = "replace_all";
 };
 
-using FunctionReplaceAll = FunctionStringReplace<ReplaceStringImpl<false>, NameReplaceAll>;
+using FunctionReplaceAll = FunctionStringReplace<ReplaceStringImpl<ReplaceStringTraits::Replace::All>, NameReplaceAll>;
 
 }
 
-void registerFunctionReplaceAll(FunctionFactory & factory)
+REGISTER_FUNCTION(ReplaceAll)
 {
     factory.registerFunction<FunctionReplaceAll>();
-    /// proton: starts.
-    factory.registerFunction<FunctionReplaceAll>("replace", FunctionFactory::CaseSensitive);
-    /// proton: ends.
+    factory.registerAlias("replace", NameReplaceAll::name, FunctionFactory::CaseInsensitive);
 }
 
 }

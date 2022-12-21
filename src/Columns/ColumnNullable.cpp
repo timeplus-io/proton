@@ -82,7 +82,7 @@ void ColumnNullable::updateHashFast(SipHash & hash) const
 MutableColumnPtr ColumnNullable::cloneResized(size_t new_size) const
 {
     MutableColumnPtr new_nested_col = getNestedColumn().cloneResized(new_size);
-    auto new_null_map = ColumnBool::create();
+    auto new_null_map = ColumnUInt8::create();
 
     if (new_size > 0)
     {
@@ -659,7 +659,7 @@ ColumnPtr ColumnNullable::replicate(const Offsets & offsets) const
 
 /// proton: starts.
 template <bool negative>
-void ColumnNullable::applyNullMapImpl(const ColumnBool & map)
+void ColumnNullable::applyNullMapImpl(const ColumnUInt8 & map)
 {
     NullMap & arr1 = getNullMapData();
     const NullMap & arr2 = map.getData();
@@ -671,12 +671,12 @@ void ColumnNullable::applyNullMapImpl(const ColumnBool & map)
         arr1[i] |= negative ^ arr2[i];
 }
 
-void ColumnNullable::applyNullMap(const ColumnBool & map)
+void ColumnNullable::applyNullMap(const ColumnUInt8 & map)
 {
     applyNullMapImpl<false>(map);
 }
 
-void ColumnNullable::applyNegatedNullMap(const ColumnBool & map)
+void ColumnNullable::applyNegatedNullMap(const ColumnUInt8 & map)
 {
     applyNullMapImpl<true>(map);
 }
@@ -725,7 +725,7 @@ ColumnPtr makeNullable(const ColumnPtr & column)
     if (isColumnConst(*column))
         return ColumnConst::create(makeNullable(assert_cast<const ColumnConst &>(*column).getDataColumnPtr()), column->size());
 
-    return ColumnNullable::create(column, ColumnBool::create(column->size(), 0));
+    return ColumnNullable::create(column, ColumnUInt8::create(column->size(), 0));
 }
 
 ColumnPtr makeNullableSafe(const ColumnPtr & column)

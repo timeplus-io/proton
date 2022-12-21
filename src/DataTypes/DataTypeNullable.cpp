@@ -36,7 +36,7 @@ bool DataTypeNullable::onlyNull() const
 
 MutableColumnPtr DataTypeNullable::createColumn() const
 {
-    return ColumnNullable::create(nested_data_type->createColumn(), ColumnBool::create());
+    return ColumnNullable::create(nested_data_type->createColumn(), ColumnUInt8::create());
 }
 
 Field DataTypeNullable::getDefault() const

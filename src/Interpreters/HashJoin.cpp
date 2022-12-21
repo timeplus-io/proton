@@ -209,7 +209,7 @@ ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool n
     return std::move(column);
 }
 
-ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable, const ColumnBool & negative_null_map)
+ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable, const ColumnUInt8 & negative_null_map)
 {
     if (nullable)
     {
@@ -232,8 +232,6 @@ HashJoin::HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_s
     : table_join(table_join_)
     , kind(table_join->kind())
     , strictness(table_join->strictness())
-    , nullable_right_side(table_join->forceNullableRight())
-    , nullable_left_side(table_join->forceNullableLeft())
     , any_take_last_row(any_take_last_row_)
     , asof_inequality(table_join->getAsofInequality())
     , data(std::make_shared<RightTableData>())
@@ -278,9 +276,6 @@ HashJoin::HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_s
 
     JoinCommon::createMissedColumns(sample_block_with_columns_to_add);
 
-    if (nullable_right_side)
-        JoinCommon::convertColumnsToNullable(sample_block_with_columns_to_add);
-
     size_t disjuncts_num = table_join->getClauses().size();
     data->maps.resize(disjuncts_num);
     key_sizes.reserve(disjuncts_num);
@@ -310,11 +305,6 @@ HashJoin::HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_s
 
             if (key_columns.size() <= 1)
                 throw Exception("ASOF join needs at least one equi-join column", ErrorCodes::SYNTAX_ERROR);
-
-            if (right_table_keys.getByName(key_names_right.back()).type->isNullable())
-                /// proton: starts
-                throw Exception("ASOF join over right stream Nullable column is not implemented", ErrorCodes::NOT_IMPLEMENTED);
-                /// proton: ends
 
             size_t asof_size;
             asof_type = AsofRowRefs::getTypeSize(*key_columns.back(), asof_size);
@@ -452,7 +442,7 @@ public:
 private:
     Block read_result;
     Mapped result;
-    ColumnVector<Bool>::Container found;
+    ColumnVector<UInt8>::Container found;
     std::vector<size_t> positions;
 };
 
@@ -726,12 +716,6 @@ void HashJoin::initRightBlockStructure(Block & saved_block_sample)
             saved_block_sample.insert(column);
         }
     }
-
-    if (nullable_right_side)
-    {
-        JoinCommon::convertColumnsToNullable(saved_block_sample, (isFull(kind) && !multiple_disjuncts ? right_table_keys.columns() : 0));
-    }
-
 }
 
 Block HashJoin::structureRightBlock(const Block & block) const
@@ -803,12 +787,12 @@ bool HashJoin::addJoinedBlock(const Block & source_block, bool check_limits)
 
             auto join_mask_col = JoinCommon::getColumnAsMask(block, onexprs[onexpr_idx].condColumnNames().second);
             /// Save blocks that do not hold conditions in ON section
-            ColumnBool::MutablePtr not_joined_map = nullptr;
+            ColumnUInt8::MutablePtr not_joined_map = nullptr;
             if (!multiple_disjuncts && isRightOrFull(kind) && !join_mask_col.isConstant())
             {
                 const auto & join_mask = join_mask_col.getData();
                 /// Save rows that do not hold conditions
-                not_joined_map = ColumnBool::create(block.rows(), 0);
+                not_joined_map = ColumnUInt8::create(block.rows(), 0);
                 for (size_t i = 0, sz = join_mask->size(); i < sz; ++i)
                 {
                     /// Condition hold, do not save row
@@ -1485,9 +1469,6 @@ void HashJoin::joinBlockImpl(
     if constexpr (jf.right || jf.full)
     {
         materializeBlockInplace(block);
-
-        if (nullable_left_side)
-            JoinCommon::convertColumnsToNullable(block);
     }
 
     /** For LEFT/INNER JOIN, the saved blocks do not contain keys.
@@ -1536,21 +1517,21 @@ void HashJoin::joinBlockImpl(
                     continue;
 
                 const auto & col = block.getByName(left_name);
-                bool is_nullable = nullable_right_side || right_key.type->isNullable();
+                bool is_nullable = JoinCommon::isNullable(right_key.type);
                 auto right_col_name = getTableJoin().renamedRightColumnName(right_key.name);
                 ColumnWithTypeAndName right_col(col.column, col.type, right_col_name);
                 if (right_col.type->lowCardinality() != right_key.type->lowCardinality())
                     JoinCommon::changeLowCardinalityInplace(right_col);
                 right_col = JoinStuff::correctNullability(std::move(right_col), is_nullable);
-                block.insert(right_col);
+                block.insert(std::move(right_col));
             }
         }
     }
     else if (has_required_right_keys)
     {
-        /// Some trash to represent IColumn::Filter as ColumnBool needed for ColumnNullable::applyNullMap()
-        auto null_map_filter_ptr = ColumnBool::create();
-        ColumnBool & null_map_filter = assert_cast<ColumnBool &>(*null_map_filter_ptr);
+        /// Some trash to represent IColumn::Filter as ColumnUInt8 needed for ColumnNullable::applyNullMap()
+        auto null_map_filter_ptr = ColumnUInt8::create();
+        ColumnUInt8 & null_map_filter = assert_cast<ColumnUInt8 &>(*null_map_filter_ptr);
         null_map_filter.getData().swap(row_filter);
         const IColumn::Filter & filter = null_map_filter.getData();
 
@@ -1568,7 +1549,7 @@ void HashJoin::joinBlockImpl(
                     continue;
 
                 const auto & col = block.getByName(left_name);
-                bool is_nullable = nullable_right_side || right_key.type->isNullable();
+                bool is_nullable = JoinCommon::isNullable(right_key.type);
 
                 ColumnPtr thin_column = JoinStuff::filterWithBlanks(col.column, filter);
 
@@ -1576,7 +1557,7 @@ void HashJoin::joinBlockImpl(
                 if (right_col.type->lowCardinality() != right_key.type->lowCardinality())
                     JoinCommon::changeLowCardinalityInplace(right_col);
                 right_col = JoinStuff::correctNullability(std::move(right_col), is_nullable, null_map_filter);
-                block.insert(right_col);
+                block.insert(std::move(right_col));
 
                 if constexpr (jf.need_replication)
                     right_keys_to_replicate.push_back(block.getPositionByName(right_key.name));
@@ -1765,8 +1746,6 @@ void HashJoin::joinBlock(Block & block, ExtraBlockPtr & not_processed)
     if (kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full)
     {
         materializeBlockInplace(block);
-        if (nullable_left_side)
-            JoinCommon::convertColumnsToNullable(block);
     }
 
     if (overDictionary())
@@ -2037,7 +2016,7 @@ private:
             const auto * block = it->first;
             ConstNullMapPtr nullmap = nullptr;
             if (it->second)
-                nullmap = &assert_cast<const ColumnBool &>(*it->second).getData();
+                nullmap = &assert_cast<const ColumnUInt8 &>(*it->second).getData();
 
             for (size_t row = 0; row < block->rows(); ++row)
             {
@@ -2102,7 +2081,7 @@ void HashJoin::reuseJoinedData(const HashJoin & join)
 
 const ColumnWithTypeAndName & HashJoin::rightAsofKeyColumn() const
 {
-    /// It should be nullable if nullable_right_side is true
+    /// It should be nullable when right side is nullable
     return savedBlockSample().getByName(table_join->getOnlyClause().key_names_right.back());
 }
 

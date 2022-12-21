@@ -56,14 +56,16 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes &) const override
     {
-        return std::make_shared<DataTypeBool>();
+        /// proton: starts. return bool
+        return DataTypeFactory::instance().get("bool");
+        /// proton: ends.
     }
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & /*result_type*/, size_t input_rows_count) const override
     {
-        auto res_column = ColumnBool::create();
+        auto res_column = ColumnUInt8::create();
         auto & res_data = res_column->getData();
         res_data.reserve(input_rows_count);
 
@@ -108,7 +110,7 @@ template <>
 const char * FunctionPolygonsEquals<CartesianPoint>::name = "polygons_equals_cartesian";
 
 
-void registerFunctionPolygonsEquals(FunctionFactory & factory)
+REGISTER_FUNCTION(PolygonsEquals)
 {
     factory.registerFunction<FunctionPolygonsEquals<CartesianPoint>>();
 }

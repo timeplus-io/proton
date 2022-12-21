@@ -13,7 +13,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
-/** arrayJoin(arr) - a special function - it can not be executed directly;
+/** array_join(arr) - a special function - it can not be executed directly;
   *                     is used only to get the result type of the corresponding expression.
   */
 class FunctionArrayJoin : public IFunction
@@ -38,7 +38,10 @@ public:
     }
 
     /** It could return many different values for single argument. */
-    bool isDeterministic() const override { return false; }
+    bool isDeterministic() const override
+    {
+        return false;
+    }
 
     bool isDeterministicInScopeOfQuery() const override
     {
@@ -69,7 +72,7 @@ public:
 };
 
 
-void registerFunctionArrayJoin(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayJoin)
 {
     factory.registerFunction<FunctionArrayJoin>();
 }

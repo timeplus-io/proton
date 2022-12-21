@@ -13,12 +13,11 @@ struct NameMultiSearchAnyCaseInsensitive
 {
     static constexpr auto name = "multi_search_any_case_insensitive";
 };
-using FunctionMultiSearchCaseInsensitive
-    = FunctionsMultiStringSearch<MultiSearchImpl<NameMultiSearchAnyCaseInsensitive, PositionCaseInsensitiveASCII>>;
+using FunctionMultiSearchCaseInsensitive = FunctionsMultiStringSearch<MultiSearchImpl<NameMultiSearchAnyCaseInsensitive, PositionCaseInsensitiveASCII>>;
 
 }
 
-void registerFunctionMultiSearchAnyCaseInsensitive(FunctionFactory & factory)
+REGISTER_FUNCTION(MultiSearchAnyCaseInsensitive)
 {
     factory.registerFunction<FunctionMultiSearchCaseInsensitive>();
 }

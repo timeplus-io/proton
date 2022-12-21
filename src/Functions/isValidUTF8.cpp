@@ -78,7 +78,7 @@ SOFTWARE.
         */
         const __m128i first_len_tbl = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3);
 
-        /* Map "First Byte" to 8-th item of range stream (0xC2 ~ 0xF4) */
+        /* Map "First Byte" to 8-th item of range table (0xC2 ~ 0xF4) */
         const __m128i first_range_tbl = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8);
 
         /*
@@ -230,7 +230,7 @@ SOFTWARE.
         }
     }
 
-    static void vectorFixedToConstant(const ColumnString::Chars & /*data*/, size_t /*n*/, Bool & /*res*/) {}
+    static void vectorFixedToConstant(const ColumnString::Chars & /*data*/, size_t /*n*/, UInt8 & /*res*/) {}
 
     static void vectorFixedToVector(const ColumnString::Chars & data, size_t n, PaddedPODArray<UInt8> & res)
     {
@@ -254,9 +254,9 @@ struct NameIsValidUTF8
 {
     static constexpr auto name = "is_valid_utf8";
 };
-using FunctionValidUTF8 = FunctionStringOrArrayToT<ValidUTF8Impl, NameIsValidUTF8, Bool>;
+using FunctionValidUTF8 = FunctionStringOrArrayToT<ValidUTF8Impl, NameIsValidUTF8, UInt8>;
 
-void registerFunctionIsValidUTF8(FunctionFactory & factory)
+REGISTER_FUNCTION(IsValidUTF8)
 {
     factory.registerFunction<FunctionValidUTF8>();
 }

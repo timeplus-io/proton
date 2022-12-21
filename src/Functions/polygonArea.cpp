@@ -100,7 +100,7 @@ template <>
 const char * FunctionPolygonArea<SphericalPoint>::name = "polygon_area_spherical";
 
 
-void registerFunctionPolygonArea(FunctionFactory & factory)
+REGISTER_FUNCTION(PolygonArea)
 {
     factory.registerFunction<FunctionPolygonArea<CartesianPoint>>();
     factory.registerFunction<FunctionPolygonArea<SphericalPoint>>();

@@ -129,9 +129,7 @@ private:
     struct equals;
 
 public:
-    /// proton: starts. Store Bool as a UInt8 ValueType
-    using ValueType = std::conditional_t<std::is_same_v<T, Bool>, UInt8, T>;
-    /// proton: ends.
+    using ValueType = T;
     using Container = PaddedPODArray<ValueType>;
 
 private:
@@ -141,7 +139,7 @@ private:
     ColumnVector(const ColumnVector & src) : data(src.data.begin(), src.data.end()) {}
 
     /// Sugar constructor.
-    ColumnVector(std::initializer_list<ValueType> il) : data{il} {}
+    ColumnVector(std::initializer_list<T> il) : data{il} {}
 
 public:
     bool isNumeric() const override { return is_arithmetic_v<T>; }
@@ -225,6 +223,14 @@ public:
         return CompareHelper<T>::compare(data[n], assert_cast<const Self &>(rhs_).data[m], nan_direction_hint);
     }
 
+#if USE_EMBEDDED_COMPILER
+
+    bool isComparatorCompilable() const override;
+
+    llvm::Value * compileComparator(llvm::IRBuilderBase & /*builder*/, llvm::Value * /*lhs*/, llvm::Value * /*rhs*/, llvm::Value * /*nan_direction_hint*/) const override;
+
+#endif
+
     void compareColumn(const IColumn & rhs, size_t rhs_row_num,
                        PaddedPODArray<UInt64> * row_indexes, PaddedPODArray<Int8> & compare_results,
                        int direction, int nan_direction_hint) const override
@@ -257,7 +263,7 @@ public:
     Field operator[](size_t n) const override
     {
         assert(n < data.size()); /// This assert is more strict than the corresponding assert inside PODArray.
-        return static_cast<T>(data[n]); /// proton : we will need cast UInt8 to Bool for that case
+        return data[n];
     }
 
 
@@ -375,12 +381,12 @@ public:
         return data;
     }
 
-    const ValueType & getElement(size_t n) const
+    const T & getElement(size_t n) const
     {
         return data[n];
     }
 
-    ValueType & getElement(size_t n)
+    T & getElement(size_t n)
     {
         return data[n];
     }
@@ -535,7 +541,7 @@ ColumnPtr ColumnVector<T>::indexImpl(const PaddedPODArray<Type> & indexes, size_
 }
 
 /// Prevent implicit template instantiation of ColumnVector for common types
-extern template class ColumnVector<Bool>;
+
 extern template class ColumnVector<UInt8>;
 extern template class ColumnVector<UInt16>;
 extern template class ColumnVector<UInt32>;

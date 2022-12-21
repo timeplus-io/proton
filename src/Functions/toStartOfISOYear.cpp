@@ -8,7 +8,7 @@ namespace DB
 
 using FunctionToStartOfISOYear = FunctionDateOrDateTimeToDateOrDate32<ToStartOfISOYearImpl>;
 
-void registerFunctionToStartOfISOYear(FunctionFactory & factory)
+REGISTER_FUNCTION(ToStartOfISOYear)
 {
     factory.registerFunction<FunctionToStartOfISOYear>();
 }

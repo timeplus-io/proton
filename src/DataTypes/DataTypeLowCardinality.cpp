@@ -55,10 +55,6 @@ namespace
         {
             if (typeid_cast<const DataTypeNumber<T> *>(&keys_type))
                 column = creator(static_cast<ColumnVector<T> *>(nullptr));
-            /// proton: starts.
-            else if (WhichDataType(keys_type).isBool())
-                column = creator(static_cast<ColumnBool *>(nullptr));
-            /// proton: ends.
         }
     };
 }

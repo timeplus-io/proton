@@ -45,6 +45,18 @@ if (COMPILER_GCC)
     add_definitions ("-fno-tree-loop-distribute-patterns")
 endif ()
 
+# proton developers may use platform-dependent code under some macro (e.g. `#ifdef ENABLE_MULTITARGET`).
+# If turned ON, this option defines such macro.
+# See `src/Common/TargetSpecific.h`
+option(ENABLE_MULTITARGET_CODE "Enable platform-dependent code" ON)
+
+if (ENABLE_MULTITARGET_CODE)
+    add_definitions(-DENABLE_MULTITARGET_CODE=1)
+else()
+    add_definitions(-DENABLE_MULTITARGET_CODE=0)
+endif()
+
+
 add_subdirectory (Access)
 add_subdirectory (Backups)
 add_subdirectory (Columns)
@@ -111,8 +123,8 @@ add_headers_and_sources(dbms Storages/Cache)
 
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
 
-list (APPEND dbms_sources Functions/IFunction.cpp Functions/FunctionFactory.cpp Functions/FunctionHelpers.cpp Functions/extractTimeZoneFromFunctionArguments.cpp Functions/replicate.cpp Functions/FunctionsLogical.cpp)
-list (APPEND dbms_headers Functions/IFunction.h Functions/FunctionFactory.h Functions/FunctionHelpers.h Functions/extractTimeZoneFromFunctionArguments.h Functions/replicate.h Functions/FunctionsLogical.h)
+list (APPEND dbms_sources Functions/IFunction.cpp Functions/FunctionFactory.cpp Functions/FunctionHelpers.cpp Functions/extractTimeZoneFromFunctionArguments.cpp Functions/FunctionsLogical.cpp Functions/indexHint.cpp)
+list (APPEND dbms_headers Functions/IFunction.h Functions/FunctionFactory.h Functions/FunctionHelpers.h Functions/extractTimeZoneFromFunctionArguments.h Functions/FunctionsLogical.h Functions/indexHint.h)
 
 list (APPEND dbms_sources
     AggregateFunctions/IAggregateFunction.cpp

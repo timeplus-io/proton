@@ -23,7 +23,7 @@ public:
             throw Exception("Incorrect number of arguments for aggregate function with " + getName() + " suffix",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        if (!isBool(arguments.back()))
+        if (!isUInt8(arguments.back()))
             throw Exception("Illegal type " + arguments.back()->getName() + " of last argument for aggregate function with " + getName() + " suffix",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -82,11 +82,11 @@ private:
             filter_column = nullable_column->getNestedColumnPtr().get();
             const UInt8 * filter_null_map = nullable_column->getNullMapData().data();
 
-            return assert_cast<const ColumnBool &>(*filter_column).getData()[row_num] && !filter_null_map[row_num];
+            return assert_cast<const ColumnUInt8 &>(*filter_column).getData()[row_num] && !filter_null_map[row_num];
         }
         else
         {
-            return assert_cast<const ColumnBool &>(*filter_column).getData()[row_num];
+            return assert_cast<const ColumnUInt8 &>(*filter_column).getData()[row_num];
         }
     }
 
@@ -144,7 +144,7 @@ public:
             filter_null_map = nullable_column->getNullMapData().data();
         }
 
-        filter_values = assert_cast<const ColumnBool *>(filter_column)->getData().data();
+        filter_values = assert_cast<const ColumnUInt8 *>(filter_column)->getData().data();
 
         /// Combine the 2 flag arrays so we can call a simplified version (one check vs 2)
         /// Note that now the null map will contain 0 if not null and not filtered, or 1 for null or filtered (or both)
@@ -248,7 +248,7 @@ public:
 
     static inline bool singleFilter(const IColumn ** columns, size_t row_num, size_t num_arguments)
     {
-        return assert_cast<const ColumnBool &>(*columns[num_arguments - 1]).getData()[row_num];
+        return assert_cast<const ColumnUInt8 &>(*columns[num_arguments - 1]).getData()[row_num];
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override

@@ -42,9 +42,9 @@ namespace
     };
 }
 
-void registerFunctionDateDiffWithin(FunctionFactory & factory)
+REGISTER_FUNCTION(DateDiffWithin)
 {
-    factory.registerFunction<FunctionDateDiffWithin>(FunctionFactory::CaseSensitive);
+    factory.registerFunction<FunctionDateDiffWithin>();
 }
 
 }

@@ -8,7 +8,9 @@ namespace DB
 
 struct HasParam
 {
-    using ResultType = UInt8;
+    /// proton: starts. return bool
+    using ResultType = bool;
+    /// proton: ends.
 
     static UInt8 extract(const UInt8 *, const UInt8 *)
     {
@@ -16,12 +18,13 @@ struct HasParam
     }
 };
 
-struct NameSimpleJSONHas           { static constexpr auto name = "simple_json_has"; };
+struct NameSimpleJSONHas { static constexpr auto name = "simple_json_has"; };
 using FunctionSimpleJSONHas = FunctionsStringSearch<ExtractParamImpl<NameSimpleJSONHas, HasParam>>;
 
-void registerFunctionVisitParamHas(FunctionFactory & factory)
+REGISTER_FUNCTION(VisitParamHas)
 {
     factory.registerFunction<FunctionSimpleJSONHas>();
+    factory.registerAlias("visit_param_has", "simple_json_has");
 }
 
 }

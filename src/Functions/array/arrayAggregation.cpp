@@ -1,11 +1,17 @@
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypesDecimal.h>
-#include <DataTypes/DataTypeDateTime64.h>
-#include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnDecimal.h>
-#include "FunctionArrayMapped.h"
-#include <Functions/FunctionFactory.h>
 #include <base/defines.h>
+
+#include <Columns/ColumnArray.h>
+#include <Columns/ColumnDecimal.h>
+#include <Columns/ColumnsNumber.h>
+
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypesDecimal.h>
+#include <DataTypes/DataTypesNumber.h>
+
+#include <Functions/FunctionFactory.h>
+
+#include "FunctionArrayMapped.h"
 
 
 namespace DB
@@ -83,6 +89,9 @@ using ArrayAggregateResult = typename ArrayAggregateResultImpl<ArrayElement, ope
 template<AggregateOperation aggregate_operation>
 struct ArrayAggregateImpl
 {
+    using column_type = ColumnArray;
+    using data_type = DataTypeArray;
+
     static bool needBoolean() { return false; }
     static bool needExpression() { return false; }
     static bool needOneArray() { return false; }
@@ -174,7 +183,7 @@ struct ArrayAggregateImpl
                 {
                     size_t array_size = offsets[i] - pos;
                     /// Just multiply the value by array size.
-                    res[i] = x * ResultType(array_size);
+                    res[i] = x * static_cast<ResultType>(array_size);
                 }
                 else if constexpr (aggregate_operation == AggregateOperation::min ||
                                 aggregate_operation == AggregateOperation::max)
@@ -214,7 +223,7 @@ struct ArrayAggregateImpl
                         if (unlikely(result_scale > DecimalUtils::max_precision<AggregationType>))
                             throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "Scale {} is out of bounds", result_scale);
 
-                        res[i] = DecimalUtils::convertTo<ResultType>(product, result_scale);
+                        res[i] = DecimalUtils::convertTo<ResultType>(product, static_cast<UInt32>(result_scale));
                     }
                     else
                     {
@@ -323,7 +332,7 @@ struct ArrayAggregateImpl
                 if (unlikely(result_scale > DecimalUtils::max_precision<AggregationType>))
                     throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "Scale {} is out of bounds", result_scale);
 
-                res[i] = DecimalUtils::convertTo<ResultType>(aggregate_value, result_scale);
+                res[i] = DecimalUtils::convertTo<ResultType>(aggregate_value, static_cast<UInt32>(result_scale));
             }
             else
             {
@@ -378,7 +387,7 @@ using FunctionArrayAverage = FunctionArrayMapped<ArrayAggregateImpl<AggregateOpe
 struct NameArrayProduct { static constexpr auto name = "array_product"; };
 using FunctionArrayProduct = FunctionArrayMapped<ArrayAggregateImpl<AggregateOperation::product>, NameArrayProduct>;
 
-void registerFunctionArrayAggregation(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayAggregation)
 {
     factory.registerFunction<FunctionArrayMin>();
     factory.registerFunction<FunctionArrayMax>();

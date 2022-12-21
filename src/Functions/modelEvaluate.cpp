@@ -130,7 +130,7 @@ public:
                 {
                     auto mut_null_map = IColumn::mutate(std::move(null_map));
 
-                    NullMap & result_null_map = assert_cast<ColumnBool &>(*mut_null_map).getData();
+                    NullMap & result_null_map = assert_cast<ColumnUInt8 &>(*mut_null_map).getData();
                     const NullMap & src_null_map = col_nullable->getNullMapColumn().getData();
 
                     for (size_t i = 0, size = result_null_map.size(); i < size; ++i)

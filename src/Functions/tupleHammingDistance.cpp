@@ -14,7 +14,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
-/// tupleHammingDistance function: (Tuple(...), Tuple(...))-> N
+/// tuple_hamming_distance function: (Tuple(...), Tuple(...))-> N
 /// Return the number of non-equal tuple elements
 class FunctionTupleHammingDistance : public ITupleFunction
 {
@@ -139,7 +139,7 @@ public:
     }
 };
 
-void registerFunctionTupleHammingDistance(FunctionFactory & factory)
+REGISTER_FUNCTION(TupleHammingDistance)
 {
     factory.registerFunction<FunctionTupleHammingDistance>();
 }

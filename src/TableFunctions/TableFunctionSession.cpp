@@ -1,6 +1,5 @@
 #include "TableFunctionSession.h"
 
-#include <DataTypes/DataTypeBool.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
@@ -65,12 +64,12 @@ void TableFunctionSession::handleResultType(const ColumnWithTypeAndName & type_a
     }
 
     {
-        DataTypePtr session_start_type = std::make_shared<DataTypeBool>();
+        DataTypePtr session_start_type = std::make_shared<DataTypeUInt8>();
 
         ColumnDescription session_start(ProtonConsts::STREAMING_SESSION_START, session_start_type);
         columns.add(session_start);
 
-        DataTypePtr session_end_type = std::make_shared<DataTypeBool>();
+        DataTypePtr session_end_type = std::make_shared<DataTypeUInt8>();
         ColumnDescription session_end(ProtonConsts::STREAMING_SESSION_END, session_end_type);
         columns.add(session_end);
     }

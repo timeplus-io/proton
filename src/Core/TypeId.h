@@ -61,7 +61,6 @@ TYPEID_MAP(Array)
 
 struct Object;
 TYPEID_MAP(Object)
-TYPEID_MAP(Bool)
 
 #undef TYPEID_MAP
 

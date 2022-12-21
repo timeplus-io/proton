@@ -35,7 +35,7 @@ struct BitRotateLeftImpl
     static inline llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * left, llvm::Value * right, bool)
     {
         if (!left->getType()->isIntegerTy())
-            throw Exception("BitRotateLeftImpl expected an integral type", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("bit_rotate_left expected an integral type", ErrorCodes::LOGICAL_ERROR);
         auto * size = llvm::ConstantInt::get(left->getType(), left->getType()->getPrimitiveSizeInBits());
         /// XXX how is this supposed to behave in signed mode?
         return b.CreateOr(b.CreateShl(left, right), b.CreateLShr(left, b.CreateSub(size, right)));
@@ -48,7 +48,7 @@ using FunctionBitRotateLeft = BinaryArithmeticOverloadResolver<BitRotateLeftImpl
 
 }
 
-void registerFunctionBitRotateLeft(FunctionFactory & factory)
+REGISTER_FUNCTION(BitRotateLeft)
 {
     factory.registerFunction<FunctionBitRotateLeft>();
 }

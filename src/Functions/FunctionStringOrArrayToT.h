@@ -9,7 +9,11 @@
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnMap.h>
 #include <Columns/ColumnsNumber.h>
+#include <Interpreters/Context_fwd.h>
 
+/// proton: starts.
+#include <DataTypes/DataTypeFactory.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -20,10 +24,14 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
-
-template <typename Impl, typename Name, typename ResultType, bool is_suitable_for_short_circuit_arguments_execution = true>
+/// proton: starts.
+template <typename Impl, typename Name, typename ResultType_, bool is_suitable_for_short_circuit_arguments_execution = true>
 class FunctionStringOrArrayToT : public IFunction
 {
+    static constexpr bool result_is_bool = std::is_same_v<ResultType_, bool>;
+    using ResultType = std::conditional_t<result_is_bool, UInt8, ResultType_>;
+/// proton: ends.
+
 public:
     static constexpr auto name = Name::name;
     static FunctionPtr create(ContextPtr)
@@ -54,10 +62,12 @@ public:
             && !isUUID(arguments[0]))
             throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if constexpr (std::is_same_v<ResultType, Bool>)
-            return std::make_shared<DataTypeBool>();
+        /// proton: starts.
+        if (result_is_bool)
+            return DataTypeFactory::instance().get("bool");
         else
             return std::make_shared<DataTypeNumber<ResultType>>();
+        /// proton: ends.
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
@@ -79,7 +89,7 @@ public:
         {
             if (Impl::is_fixed_to_constant)
             {
-                ResultType res = 0;
+                typename ColumnVector<ResultType>::ValueType res = 0;
                 Impl::vectorFixedToConstant(col_fixed->getChars(), col_fixed->getN(), res);
 
                 return result_type->createColumnConst(col_fixed->size(), toField(res));

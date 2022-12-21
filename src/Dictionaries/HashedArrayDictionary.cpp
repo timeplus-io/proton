@@ -145,7 +145,7 @@ Columns HashedArrayDictionary<dictionary_key_type>::getColumns(
 }
 
 template <DictionaryKeyType dictionary_key_type>
-ColumnBool::Ptr HashedArrayDictionary<dictionary_key_type>::hasKeys(const Columns & key_columns, const DataTypes & key_types) const
+ColumnUInt8::Ptr HashedArrayDictionary<dictionary_key_type>::hasKeys(const Columns & key_columns, const DataTypes & key_types) const
 {
     if (dictionary_key_type == DictionaryKeyType::Complex)
         dict_struct.validateKeyTypes(key_types);
@@ -155,7 +155,7 @@ ColumnBool::Ptr HashedArrayDictionary<dictionary_key_type>::hasKeys(const Column
 
     size_t keys_size = extractor.getKeysSize();
 
-    auto result = ColumnBool::create(keys_size, false);
+    auto result = ColumnUInt8::create(keys_size, false);
     auto & out = result->getData();
 
     size_t keys_found = 0;
@@ -226,7 +226,7 @@ ColumnPtr HashedArrayDictionary<dictionary_key_type>::getHierarchy(ColumnPtr key
 }
 
 template <DictionaryKeyType dictionary_key_type>
-ColumnBool::Ptr HashedArrayDictionary<dictionary_key_type>::isInHierarchy(
+ColumnUInt8::Ptr HashedArrayDictionary<dictionary_key_type>::isInHierarchy(
     ColumnPtr key_column [[maybe_unused]],
     ColumnPtr in_key_column [[maybe_unused]],
     const DataTypePtr &) const
@@ -499,11 +499,11 @@ ColumnPtr HashedArrayDictionary<dictionary_key_type>::getAttributeColumn(
 
     bool is_attribute_nullable = attribute.is_index_null.has_value();
 
-    ColumnBool::MutablePtr col_null_map_to;
-    ColumnBool::Container * vec_null_map_to = nullptr;
+    ColumnUInt8::MutablePtr col_null_map_to;
+    ColumnUInt8::Container * vec_null_map_to = nullptr;
     if (attribute.is_index_null)
     {
-        col_null_map_to = ColumnBool::create(keys_size, false);
+        col_null_map_to = ColumnUInt8::create(keys_size, false);
         vec_null_map_to = &col_null_map_to->getData();
     }
 

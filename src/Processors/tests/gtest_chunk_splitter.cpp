@@ -56,7 +56,7 @@ void insertColumnNumber(DB::Chunk & chunk, size_t rows, size_t chunks)
     insertColumnNumber<DB::DataTypeInt128, DB::ColumnInt128, Int128>(chunk, rows, chunks);
     insertColumnNumber<DB::DataTypeInt256, DB::ColumnInt256, Int256>(chunk, rows, chunks);
 
-    /// insertColumnNumber<DB::DataTypeBool, DB::ColumnBool, UInt8>(chunk, rows, chunks);
+    /// insertColumnNumber<DB::DataTypeUInt8, DB::ColumnUInt8, UInt8>(chunk, rows, chunks);
     insertColumnNumber<DB::DataTypeUInt8, DB::ColumnUInt8, UInt8>(chunk, rows, chunks);
     insertColumnNumber<DB::DataTypeUInt16, DB::ColumnUInt16, UInt16>(chunk, rows, chunks);
     insertColumnNumber<DB::DataTypeUInt32, DB::ColumnUInt32, UInt32>(chunk, rows, chunks);

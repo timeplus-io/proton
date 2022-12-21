@@ -42,14 +42,14 @@ public:
         if (!WhichDataType(arg).isUInt64())
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of argument {} of function {}. Must be UInt64",
+                "Illegal type {} of argument {} of function {}. Must be uint64",
                 arg->getName(), 1, getName());
 
         arg = arguments[1].get();
         if (!WhichDataType(arg).isUInt64())
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of argument {} of function {}. Must be UInt64",
+                "Illegal type {} of argument {} of function {}. Must be uint64",
                 arg->getName(), 2, getName());
 
         return std::make_shared<DataTypeUInt8>();
@@ -57,22 +57,26 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
-        const auto * col_hindex_origin = checkAndGetColumn<ColumnUInt64>(arguments[0].column.get());
+        auto non_const_arguments = arguments;
+        for (auto & argument : non_const_arguments)
+            argument.column = argument.column->convertToFullColumnIfConst();
+
+        const auto * col_hindex_origin = checkAndGetColumn<ColumnUInt64>(non_const_arguments[0].column.get());
         if (!col_hindex_origin)
             throw Exception(
                 ErrorCodes::ILLEGAL_COLUMN,
-                "Illegal type {} of argument {} of function {}. Must be UInt64.",
+                "Illegal type {} of argument {} of function {}. Must be uint64.",
                 arguments[0].type->getName(),
                 1,
                 getName());
 
         const auto & data_hindex_origin = col_hindex_origin->getData();
 
-        const auto * col_hindex_dest = checkAndGetColumn<ColumnUInt64>(arguments[1].column.get());
+        const auto * col_hindex_dest = checkAndGetColumn<ColumnUInt64>(non_const_arguments[1].column.get());
         if (!col_hindex_dest)
             throw Exception(
                 ErrorCodes::ILLEGAL_COLUMN,
-                "Illegal type {} of argument {} of function {}. Must be UInt64.",
+                "Illegal type {} of argument {} of function {}. Must be uint64.",
                 arguments[1].type->getName(),
                 2,
                 getName());
@@ -99,7 +103,7 @@ public:
 
 }
 
-void registerFunctionH3IndexesAreNeighbors(FunctionFactory & factory)
+REGISTER_FUNCTION(H3IndexesAreNeighbors)
 {
     factory.registerFunction<FunctionH3IndexesAreNeighbors>();
 }

@@ -13,7 +13,6 @@
 #include <Interpreters/convertFieldToType.h>
 #include <Common/HashTable/HashSet.h>
 #include <Processors/Transforms/ColumnGathererTransform.h>
-/// #include <DataTypes/Serializations/SerializationInfoObject.h>
 
 namespace DB
 {
@@ -122,11 +121,12 @@ public:
             type_indexes.insert(TypeIndex::Int64);
     }
 
-    /// proton: starts.
-    void operator()(const Bool &)
+    void operator()(const bool &)
     {
-        field_types.insert(FieldType::Bool);
+        field_types.insert(FieldType::UInt64);
+        /// proton: starts.
         type_indexes.insert(TypeIndex::Bool);
+        /// proton: ends.
     }
 
     void operator()(const Null &)

@@ -20,16 +20,16 @@ std::pair<std::vector<IColumn::Filter>, SessionInfos> prepareSessionImpl(
     Block block;
 
     /// session_start_column could be a ColumnConst object
-    const typename ColumnBool::Container & session_start_vec = checkAndGetColumn<ColumnBool>(session_start_column.get())->getData();
-    const typename ColumnBool::Container & session_end_vec = checkAndGetColumn<ColumnBool>(session_end_column.get())->getData();
+    const auto & session_start_vec = checkAndGetColumn<ColumnUInt8>(session_start_column.get())->getData();
+    const auto & session_end_vec = checkAndGetColumn<ColumnUInt8>(session_end_column.get())->getData();
 
     IColumn::Filter filter(num_rows, 0);
     SessionInfos sessions_info_to_emit;
     std::vector<IColumn::Filter> session_filters;
     size_t offset = 0;
     Int64 ts_secs = time_vec[0];
-    Bool session_start = session_start_vec[0];
-    Bool session_end = session_end_vec[0];
+    UInt8 session_start = session_start_vec[0];
+    UInt8 session_end = session_end_vec[0];
 
     const DateLUTImpl & time_zone = DateLUT::instance("UTC");
 

@@ -43,7 +43,5 @@ using Float64 = double;
 
 using String = std::string;
 
-using Bool = bool;
-
 using VersionType = Int32;
 }

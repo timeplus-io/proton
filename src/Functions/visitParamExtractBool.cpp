@@ -8,7 +8,9 @@ namespace DB
 
 struct ExtractBool
 {
-    using ResultType = UInt8;
+    /// proton: starts. return bool
+    using ResultType = bool;
+    /// proton: ends.
 
     static UInt8 extract(const UInt8 * begin, const UInt8 * end)
     {
@@ -19,9 +21,10 @@ struct ExtractBool
 struct NameSimpleJSONExtractBool   { static constexpr auto name = "simple_json_extract_bool"; };
 using FunctionSimpleJSONExtractBool = FunctionsStringSearch<ExtractParamImpl<NameSimpleJSONExtractBool, ExtractBool>>;
 
-void registerFunctionVisitParamExtractBool(FunctionFactory & factory)
+REGISTER_FUNCTION(VisitParamExtractBool)
 {
     factory.registerFunction<FunctionSimpleJSONExtractBool>();
+    factory.registerAlias("visit_param_extract_bool", "simple_json_extract_bool");
 }
 
 }

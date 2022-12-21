@@ -38,7 +38,7 @@ ArraysDepths getArraysDepths(const ColumnsWithTypeAndName & arguments)
             if (depths.size() < array_num && prev_array_depth)
                 depths.emplace_back(prev_array_depth);
 
-            prev_array_depth = type_array->getNumberOfDimensions();
+            prev_array_depth = static_cast<DepthType>(type_array->getNumberOfDimensions());
             ++array_num;
         }
         else
@@ -49,23 +49,23 @@ ArraysDepths getArraysDepths(const ColumnsWithTypeAndName & arguments)
             {
                 UInt64 value = assert_cast<const ColumnConst &>(*depth_column).getValue<UInt64>();
                 if (!value)
-                    throw Exception("Incorrect arguments for function arrayEnumerateUniqRanked or arrayEnumerateDenseRanked: depth ("
+                    throw Exception("Incorrect arguments for function array_enumerate_uniq_ranked or array_enumerate_dense_ranked: depth ("
                         + std::to_string(value) + ") cannot be less or equal 0.",
                         ErrorCodes::BAD_ARGUMENTS);
 
                 if (i == 0)
                 {
-                    clear_depth = value;
+                    clear_depth = static_cast<DepthType>(value);
                 }
                 else
                 {
                     if (depths.size() >= array_num)
-                        throw Exception("Incorrect arguments for function arrayEnumerateUniqRanked or arrayEnumerateDenseRanked: depth ("
+                        throw Exception("Incorrect arguments for function array_enumerate_uniq_ranked or array_enumerate_dense_ranked: depth ("
                             + std::to_string(value) + ") for missing array.",
                             ErrorCodes::BAD_ARGUMENTS);
                     if (value > prev_array_depth)
                         throw Exception(
-                            "Arguments for function arrayEnumerateUniqRanked/arrayEnumerateDenseRanked incorrect: depth="
+                            "Arguments for function array_enumerate_uniq_ranked/array_enumerate_dense_ranked incorrect: depth="
                                 + std::to_string(value) + " for array with depth=" + std::to_string(prev_array_depth) + ".",
                             ErrorCodes::BAD_ARGUMENTS);
 
@@ -79,7 +79,7 @@ ArraysDepths getArraysDepths(const ColumnsWithTypeAndName & arguments)
         depths.emplace_back(prev_array_depth);
 
     if (depths.empty())
-        throw Exception("Incorrect arguments for function arrayEnumerateUniqRanked or arrayEnumerateDenseRanked: at least one array should be passed.",
+        throw Exception("Incorrect arguments for function array_enumerate_uniq_ranked or array_enumerate_dense_ranked: at least one array should be passed.",
             ErrorCodes::BAD_ARGUMENTS);
 
     DepthType max_array_depth = 0;
@@ -87,7 +87,7 @@ ArraysDepths getArraysDepths(const ColumnsWithTypeAndName & arguments)
         max_array_depth = std::max(depth, max_array_depth);
 
     if (clear_depth > max_array_depth)
-        throw Exception("Incorrect arguments for function arrayEnumerateUniqRanked or arrayEnumerateDenseRanked: clear_depth ("
+        throw Exception("Incorrect arguments for function array_enumerate_uniq_ranked or array_enumerate_dense_ranked: clear_depth ("
             + std::to_string(clear_depth) + ") can't be larger than max_array_depth (" + std::to_string(max_array_depth) + ").",
             ErrorCodes::BAD_ARGUMENTS);
 

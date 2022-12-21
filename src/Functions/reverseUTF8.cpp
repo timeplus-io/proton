@@ -64,7 +64,7 @@ struct ReverseUTF8Impl
 
     [[noreturn]] static void vectorFixed(const ColumnString::Chars &, size_t, ColumnString::Chars &)
     {
-        throw Exception("Cannot apply function reverseUTF8 to fixed string.", ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception("Cannot apply function reverse_utf8 to fixed string.", ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -76,7 +76,7 @@ using FunctionReverseUTF8 = FunctionStringToString<ReverseUTF8Impl, NameReverseU
 
 }
 
-void registerFunctionReverseUTF8(FunctionFactory & factory)
+REGISTER_FUNCTION(ReverseUTF8)
 {
     factory.registerFunction<FunctionReverseUTF8>();
 }

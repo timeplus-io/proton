@@ -270,7 +270,7 @@ void ColumnUnique<ColumnType>::createNullMask()
         size_t size = getRawColumnPtr()->size();
         if (!nested_null_mask)
         {
-            ColumnBool::MutablePtr null_mask = ColumnBool::create(size, UInt8(0));
+            ColumnUInt8::MutablePtr null_mask = ColumnUInt8::create(size, UInt8(0));
             null_mask->getData()[getNullValueIndex()] = 1;
             nested_null_mask = std::move(null_mask);
             nested_column_nullable = ColumnNullable::create(column_holder, nested_null_mask);
@@ -291,7 +291,7 @@ void ColumnUnique<ColumnType>::updateNullMask()
         size_t size = getRawColumnPtr()->size();
 
         if (nested_null_mask->size() != size)
-            assert_cast<ColumnBool &>(*nested_null_mask).getData().resize_fill(size);
+            assert_cast<ColumnUInt8 &>(*nested_null_mask).getData().resize_fill(size);
     }
 }
 

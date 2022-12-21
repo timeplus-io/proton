@@ -334,15 +334,14 @@ struct WhichDataType
     // shared ptr -> is non-constexpr in gcc
     WhichDataType(const DataTypePtr & data_type) : idx(data_type->getTypeId()) {} /// NOLINT
 
-    constexpr bool isBool() const { return idx == TypeIndex::Bool; }
     constexpr bool isUInt8() const { return idx == TypeIndex::UInt8; }
     constexpr bool isUInt16() const { return idx == TypeIndex::UInt16; }
     constexpr bool isUInt32() const { return idx == TypeIndex::UInt32; }
     constexpr bool isUInt64() const { return idx == TypeIndex::UInt64; }
     constexpr bool isUInt128() const { return idx == TypeIndex::UInt128; }
     constexpr bool isUInt256() const { return idx == TypeIndex::UInt256; }
-    constexpr bool isUInt() const { return isBool() || isUInt8() || isUInt16() || isUInt32() || isUInt64() || isUInt128() || isUInt256(); }
-    constexpr bool isNativeUInt() const { return isBool() || isUInt8() || isUInt16() || isUInt32() || isUInt64(); }
+    constexpr bool isUInt() const { return isUInt8() || isUInt16() || isUInt32() || isUInt64() || isUInt128() || isUInt256(); }
+    constexpr bool isNativeUInt() const { return isUInt8() || isUInt16() || isUInt32() || isUInt64(); }
 
     constexpr bool isInt8() const { return idx == TypeIndex::Int8; }
     constexpr bool isInt16() const { return idx == TypeIndex::Int16; }
@@ -389,7 +388,7 @@ struct WhichDataType
     constexpr bool isNullable() const { return idx == TypeIndex::Nullable; }
     constexpr bool isFunction() const { return idx == TypeIndex::Function; }
     constexpr bool isAggregateFunction() const { return idx == TypeIndex::AggregateFunction; }
-    constexpr bool isSimple() const  { return isInt() || isUInt() || isFloat() || isString() || isBool(); }
+    constexpr bool isSimple() const  { return isInt() || isUInt() || isFloat() || isString(); }
 
     constexpr bool isLowCarnality() const { return idx == TypeIndex::LowCardinality; }
 };
@@ -421,14 +420,6 @@ inline bool isObject(const T & data_type)
 {
     return WhichDataType(data_type).isObject();
 }
-
-/// proton: starts. Support Bool
-template <typename T>
-inline bool isBool(const T & data_type)
-{
-    return WhichDataType(data_type).isBool();
-}
-/// proton: ends.
 
 template <typename T>
 inline bool isUInt8(const T & data_type)

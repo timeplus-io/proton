@@ -1,4 +1,5 @@
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeArray.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnFixedString.h>
@@ -146,7 +147,7 @@ private:
     }
 };
 
-void registerFunctionsStringTokenExtractor(FunctionFactory & factory)
+REGISTER_FUNCTION(StringTokenExtractor)
 {
     factory.registerFunction<FunctionTokenExtractor<TokenExtractorStrategy::ngrams>>();
     factory.registerFunction<FunctionTokenExtractor<TokenExtractorStrategy::tokens>>();

@@ -371,7 +371,7 @@ public:
 private:
     DictionaryAttributeType default_value {};
     const DefaultColumnType * default_values_column = nullptr;
-    const ColumnBool * is_null_map = nullptr;
+    const ColumnUInt8 * is_null_map = nullptr;
     bool use_attribute_default_value = false;
     bool default_value_is_null = false;
 };

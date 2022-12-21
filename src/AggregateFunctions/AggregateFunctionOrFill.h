@@ -124,7 +124,7 @@ public:
     {
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             for (size_t i = row_begin; i < row_end; ++i)
             {
                 if (flags[i] && places[i])
@@ -150,7 +150,7 @@ public:
     {
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             nested_function->addBatchSinglePlace(row_begin, row_end, place, columns, arena, if_argument_pos);
             for (size_t i = row_begin; i < row_end; ++i)
             {
@@ -182,7 +182,7 @@ public:
     {
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             nested_function->addBatchSinglePlaceNotNull(row_begin, row_end, place, columns, null_map, arena, if_argument_pos);
             for (size_t i = row_begin; i < row_end; ++i)
             {

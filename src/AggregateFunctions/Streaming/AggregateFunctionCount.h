@@ -72,7 +72,7 @@ public:
 
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
 
             for (size_t idx = 0; auto filter : flags)
             {
@@ -106,7 +106,7 @@ public:
 
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             for (size_t idx = row_begin; idx < row_end; ++idx)
                 if (flags[idx] && null_map[idx] == 0)
                     count += delta_flags[idx];
@@ -268,7 +268,7 @@ public:
 
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
 
             const auto & null_map = nc.getNullMapData();
 

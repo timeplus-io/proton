@@ -486,7 +486,7 @@ public:
         else if (delta_col == nullptr && if_argument_pos >= 0)
         {
             /// combinator-if
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             for (size_t i = row_begin; i < row_end; ++i)
             {
                 if (flags[i] && places[i])
@@ -496,7 +496,7 @@ public:
         else
         {
             /// combinator-if + changelog
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
             for (size_t i = row_begin; i < row_end; ++i)
             {
@@ -574,7 +574,7 @@ public:
         else if (delta_col == nullptr && if_argument_pos >= 0)
         {
             /// combinator-if
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             for (size_t i = row_begin; i < row_end; ++i)
             {
                 if (flags[i])
@@ -584,7 +584,7 @@ public:
         else
         {
             /// changelog + combinator-if
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
 
             for (size_t i = row_begin; i < row_end; ++i)
@@ -657,7 +657,7 @@ public:
         else if (delta_col == nullptr && if_argument_pos >= 0)
         {
             /// combinator-if
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             for (size_t i = row_begin; i < row_end; ++i)
                 if (!null_map[i] && flags[i])
                     derived->add(place, columns, i, arena);
@@ -665,7 +665,7 @@ public:
         else
         {
             /// changelog + combinator-if
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
 
             for (size_t i = row_begin; i < row_end; ++i)
@@ -713,7 +713,7 @@ public:
         else if (delta_col == nullptr && if_argument_pos >= 0)
         {
             /// combinator-if
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             for (size_t i = row_begin; i < row_end; ++i)
             {
                 if (flags[i])
@@ -723,7 +723,7 @@ public:
         else
         {
             /// changelog + combinator-if
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
             for (size_t i = row_begin; i < row_end; ++i)
             {

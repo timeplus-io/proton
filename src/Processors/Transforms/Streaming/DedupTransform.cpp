@@ -38,7 +38,7 @@ void DedupTransform::transform(Chunk & chunk)
 
     assert(expr_block);
 
-    auto * filter_column = checkAndGetColumn<ColumnBool>(expr_block.getByPosition(0).column.get());
+    auto * filter_column = checkAndGetColumn<ColumnUInt8>(expr_block.getByPosition(0).column.get());
     assert(filter_column);
 
     auto rows = block.rows();

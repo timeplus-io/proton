@@ -34,7 +34,9 @@ enum class ArraySearchType
 {
     Any, // Corresponds to the hasAny array function
     All, // Corresponds to the hasAll array function
-    Substr // Corresponds to the hasSubstr array function
+    Substr, // Corresponds to the hasSubstr array function
+    StartsWith,
+    EndsWith
 };
 
 std::unique_ptr<IArraySource> createArraySource(const ColumnArray & col, bool is_const, size_t total_rows);
@@ -55,11 +57,13 @@ ColumnArray::MutablePtr sliceDynamicOffsetBounded(IArraySource & src, const ICol
 ColumnArray::MutablePtr sliceFromLeftDynamicLength(IArraySource & src, const IColumn & length_column);
 ColumnArray::MutablePtr sliceFromRightDynamicLength(IArraySource & src, const IColumn & length_column);
 
-void sliceHasAny(IArraySource & first, IArraySource & second, ColumnBool & result);
-void sliceHasAll(IArraySource & first, IArraySource & second, ColumnBool & result);
-void sliceHasSubstr(IArraySource & first, IArraySource & second, ColumnBool & result);
+void sliceHasAny(IArraySource & first, IArraySource & second, ColumnUInt8 & result);
+void sliceHasAll(IArraySource & first, IArraySource & second, ColumnUInt8 & result);
+void sliceHasSubstr(IArraySource & first, IArraySource & second, ColumnUInt8 & result);
+void sliceHasStartsWith(IArraySource & first, IArraySource & second, ColumnUInt8 & result);
+void sliceHasEndsWith(IArraySource & first, IArraySource & second, ColumnUInt8 & result);
 
-inline void sliceHas(IArraySource & first, IArraySource & second, ArraySearchType search_type, ColumnBool & result)
+inline void sliceHas(IArraySource & first, IArraySource & second, ArraySearchType search_type, ColumnUInt8 & result)
 {
     switch (search_type)
     {
@@ -72,7 +76,12 @@ inline void sliceHas(IArraySource & first, IArraySource & second, ArraySearchTyp
         case ArraySearchType::Substr:
             sliceHasSubstr(first, second, result);
             break;
-
+        case ArraySearchType::StartsWith:
+            sliceHasStartsWith(first, second, result);
+            break;
+        case ArraySearchType::EndsWith:
+            sliceHasEndsWith(first, second, result);
+            break;
     }
 }
 

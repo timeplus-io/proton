@@ -15,7 +15,7 @@ namespace ErrorCodes
     extern const int SIZES_OF_ARRAYS_DOESNT_MATCH;
 }
 
-/** Function validateNestedArraySizes is used to check the consistency of Nested DataType subcolumns's offsets when Update
+/** Function validate_nested_array_sizes is used to check the consistency of Nested DataType subcolumns's offsets when Update
  *  Arguments: num > 2
  *     The first argument is the condition of WHERE in UPDATE operation, only when this is true, we need to check
  *     The rest arguments are the subcolumns of Nested DataType.
@@ -44,8 +44,8 @@ DataTypePtr FunctionValidateNestedArraySizes::getReturnTypeImpl(const DataTypes 
             "Function " + getName() + " needs more than two arguments; passed " + toString(arguments.size()) + ".",
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    if (!WhichDataType(arguments[0]).isBool())
-        throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + " Must be bool.",
+    if (!WhichDataType(arguments[0]).isUInt8())
+        throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + " Must be uint8 or bool.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     for (size_t i = 1; i < num_args; ++i)
@@ -54,7 +54,7 @@ DataTypePtr FunctionValidateNestedArraySizes::getReturnTypeImpl(const DataTypes 
                 "Illegal type " + arguments[i]->getName() + " of " + toString(i) + " argument of function " + getName() + " Must be array.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-    return std::make_shared<DataTypeBool>();
+    return std::make_shared<DataTypeUInt8>();
 }
 
 ColumnPtr FunctionValidateNestedArraySizes::executeImpl(
@@ -62,10 +62,10 @@ ColumnPtr FunctionValidateNestedArraySizes::executeImpl(
 {
     bool is_condition_const = false;
     bool condition = false;
-    const ColumnBool * condition_column = typeid_cast<const ColumnBool *>(arguments[0].column.get());
+    const ColumnUInt8 * condition_column = typeid_cast<const ColumnUInt8 *>(arguments[0].column.get());
     if (!condition_column)
     {
-        if (checkAndGetColumnConst<ColumnBool>(arguments[0].column.get()))
+        if (checkAndGetColumnConst<ColumnUInt8>(arguments[0].column.get()))
         {
             is_condition_const = true;
             condition = arguments[0].column->getBool(0);
@@ -116,10 +116,10 @@ ColumnPtr FunctionValidateNestedArraySizes::executeImpl(
         }
     }
 
-    return ColumnBool::create(input_rows_count, 1);
+    return ColumnUInt8::create(input_rows_count, 1);
 }
 
-void registerFunctionValidateNestedArraySizes(FunctionFactory & factory)
+REGISTER_FUNCTION(ValidateNestedArraySizes)
 {
     factory.registerFunction<FunctionValidateNestedArraySizes>();
 }

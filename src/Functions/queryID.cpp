@@ -38,7 +38,7 @@ public:
     }
 };
 
-void registerFunctionQueryID(FunctionFactory & factory)
+REGISTER_FUNCTION(QueryID)
 {
     factory.registerFunction<FunctionQueryID>();
 }

@@ -55,7 +55,7 @@ public:
         const auto & type = arguments[0].type;
 
         if (!WhichDataType(type.get()).isString())
-            throw Exception("The only argument for function " + getName() + " must be String. Found "
+            throw Exception("The only argument for function " + getName() + " must be string. Found "
                 + type->getName() + " instead.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
@@ -96,7 +96,7 @@ public:
 
 }
 
-void registerFunctionDemangle(FunctionFactory & factory)
+REGISTER_FUNCTION(Demangle)
 {
     factory.registerFunction<FunctionDemangle>();
 }

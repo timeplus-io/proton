@@ -125,7 +125,7 @@ DataTypePtr checkAndGetReturnType(const DataTypes & arguments, const String & fu
                 "The types of deduplication keys of function '{}' shall be integer, float, datetime, decimal or string but got={}",
                 func_name, arg_type->getName());
 
-    return std::make_shared<DB::DataTypeBool>();
+    return std::make_shared<DB::DataTypeUInt8>();
 }
 
 /// dedup(column1, column2, ..., [limit, [timeout]])
@@ -166,7 +166,7 @@ public:
         if (input_rows_count == 0)
             return result;
 
-        auto * col = assert_cast<ColumnVector<Bool> *>(result.get());
+        auto * col = assert_cast<ColumnVector<UInt8> *>(result.get());
         col->reserve(input_rows_count);
 
         return key_set.populateKeySetsAndCalculateResults(arguments, input_rows_count, std::move(result));
@@ -240,9 +240,9 @@ public:
 };
 }
 
-void registerFunctionDedup(FunctionFactory & factory)
+REGISTER_FUNCTION(Dedup)
 {
-    factory.registerFunction<DedupOverloadResolver>(FunctionDedup::name, FunctionFactory::CaseSensitive);
+    factory.registerFunction<DedupOverloadResolver>(FunctionDedup::name);
 }
 
 }

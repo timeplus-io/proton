@@ -42,7 +42,7 @@ public:
         if (!WhichDataType(arg).isUInt64())
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of argument {} of function {}. Must be UInt64",
+                "Illegal type {} of argument {} of function {}. Must be uint64",
                 arg->getName(), 1, getName());
 
         return std::make_shared<DataTypeUInt8>();
@@ -50,11 +50,15 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
-        const auto * column = checkAndGetColumn<ColumnUInt64>(arguments[0].column.get());
+        auto non_const_arguments = arguments;
+        for (auto & argument : non_const_arguments)
+            argument.column = argument.column->convertToFullColumnIfConst();
+
+        const auto * column = checkAndGetColumn<ColumnUInt64>(non_const_arguments[0].column.get());
         if (!column)
             throw Exception(
                 ErrorCodes::ILLEGAL_COLUMN,
-                "Illegal type {} of argument {} of function {}. Must be UInt64.",
+                "Illegal type {} of argument {} of function {}. Must be uint64.",
                 arguments[0].type->getName(),
                 1,
                 getName());
@@ -80,7 +84,7 @@ public:
 
 }
 
-void registerFunctionH3GetBaseCell(FunctionFactory & factory)
+REGISTER_FUNCTION(H3GetBaseCell)
 {
     factory.registerFunction<FunctionH3GetBaseCell>();
 }

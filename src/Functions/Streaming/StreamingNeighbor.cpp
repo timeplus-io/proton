@@ -495,11 +495,11 @@ namespace
     };
 }
 
-void registerFunctionStreamingNeighbor(FunctionFactory & factory)
+REGISTER_FUNCTION(StreamingNeighbor)
 {
-    factory.registerFunction<NeighborOverloadResolver<NameToStreamingNeighbor>>("__streaming_neighbor", FunctionFactory::CaseSensitive);
-    factory.registerFunction<NeighborOverloadResolver<NameToLag>>("lag", FunctionFactory::CaseSensitive);
-    factory.registerFunction<NeighborOverloadResolver<NameToLags>>("lags", FunctionFactory::CaseSensitive);
+    factory.registerFunction<NeighborOverloadResolver<NameToStreamingNeighbor>>("__streaming_neighbor");
+    factory.registerFunction<NeighborOverloadResolver<NameToLag>>("lag");
+    factory.registerFunction<NeighborOverloadResolver<NameToLags>>("lags");
 }
 
 }

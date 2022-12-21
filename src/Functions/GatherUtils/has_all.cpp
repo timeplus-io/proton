@@ -13,7 +13,7 @@ struct ArrayHasAllSelectArraySourcePair : public ArraySourcePairSelector<ArrayHa
     template <typename FirstSource, typename SecondSource>
     static void callFunction(FirstSource && first,
                              bool is_second_const, bool is_second_nullable, SecondSource && second,
-                             ColumnBool & result)
+                             ColumnUInt8 & result)
     {
         using SourceType = typename std::decay<SecondSource>::type;
 
@@ -38,7 +38,7 @@ struct ArrayHasAllSelectArraySourcePair : public ArraySourcePairSelector<ArrayHa
     template <typename FirstSource, typename SecondSource>
     static void selectSourcePair(bool is_first_const, bool is_first_nullable, FirstSource && first,
                                  bool is_second_const, bool is_second_nullable, SecondSource && second,
-                                 ColumnBool & result)
+                                 ColumnUInt8 & result)
     {
         using SourceType = typename std::decay<FirstSource>::type;
 
@@ -63,7 +63,7 @@ struct ArrayHasAllSelectArraySourcePair : public ArraySourcePairSelector<ArrayHa
 
 }
 
-void sliceHasAll(IArraySource & first, IArraySource & second, ColumnBool & result)
+void sliceHasAll(IArraySource & first, IArraySource & second, ColumnUInt8 & result)
 {
     ArrayHasAllSelectArraySourcePair::select(first, second, result);
 }

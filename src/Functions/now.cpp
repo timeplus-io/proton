@@ -6,7 +6,7 @@
 
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
 
-#include <time.h>
+#include <ctime>
 
 
 namespace DB
@@ -62,9 +62,15 @@ public:
         return std::make_unique<ExecutableFunctionNow>(time_value);
     }
 
-    bool isDeterministic() const override { return false; }
-    bool isDeterministicInScopeOfQuery() const override { return true; }
-    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
+    bool isDeterministic() const override
+    {
+        return false;
+    }
+
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo &) const override
+    {
+        return false;
+    }
 
 private:
     time_t time_value;
@@ -126,9 +132,9 @@ public:
 
 }
 
-void registerFunctionNow(FunctionFactory & factory)
+REGISTER_FUNCTION(Now)
 {
-    factory.registerFunction<NowOverloadResolver>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<NowOverloadResolver>({}, FunctionFactory::CaseInsensitive);
 }
 
 }

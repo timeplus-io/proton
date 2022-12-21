@@ -126,7 +126,7 @@ template <> struct BinaryOperationImpl<Int32, Int64, DivideIntegralImpl<Int32, I
 struct NameIntDiv { static constexpr auto name = "int_div"; };
 using FunctionIntDiv = BinaryArithmeticOverloadResolver<DivideIntegralImpl, NameIntDiv, false>;
 
-void registerFunctionIntDiv(FunctionFactory & factory)
+REGISTER_FUNCTION(IntDiv)
 {
     factory.registerFunction<FunctionIntDiv>();
 }

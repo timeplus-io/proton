@@ -115,10 +115,21 @@ bool canBecomeNullable(const DataTypePtr & type)
     return can_be_inside;
 }
 
+bool isNullable(const DataTypePtr & type)
+{
+    bool is_nullable = type->isNullable();
+    if (const auto * low_cardinality_type = typeid_cast<const DataTypeLowCardinality *>(type.get()))
+        is_nullable |= low_cardinality_type->getDictionaryType()->isNullable();
+    return is_nullable;
+}
+
 /// Add nullability to type.
 /// Note: LowCardinality(T) transformed to LowCardinality(Nullable(T))
 DataTypePtr convertTypeToNullable(const DataTypePtr & type)
 {
+    if (isNullable(type))
+        return type;
+
     if (const auto * low_cardinality_type = typeid_cast<const DataTypeLowCardinality *>(type.get()))
     {
         const auto & dict_type = low_cardinality_type->getDictionaryType();
@@ -425,10 +436,13 @@ void checkTypesOfKeys(const Block & block_left, const Names & key_names_left,
         DataTypePtr right_type = removeNullable(recursiveRemoveLowCardinality(block_right.getByName(key_names_right[i]).type));
 
         if (!left_type->equals(*right_type))
-            throw Exception("Type mismatch of columns to JOIN by: "
-                            + key_names_left[i] + " " + left_type->getName() + " at left, "
-                            + key_names_right[i] + " " + right_type->getName() + " at right",
-                            ErrorCodes::TYPE_MISMATCH);
+        {
+            throw DB::Exception(
+                ErrorCodes::TYPE_MISMATCH,
+                "Type mismatch of columns to JOIN by: {} {} at left, {} {} at right",
+                key_names_left[i], left_type->getName(),
+                key_names_right[i], right_type->getName());
+        }
     }
 }
 
@@ -529,10 +543,10 @@ JoinMask getColumnAsMask(const Block & block, const String & column_name)
             return JoinMask(false);
 
         /// Return nested column with NULL set to false
-        const auto & nest_col = assert_cast<const ColumnBool &>(nullable_col->getNestedColumn());
+        const auto & nest_col = assert_cast<const ColumnUInt8 &>(nullable_col->getNestedColumn());
         const auto & null_map = nullable_col->getNullMapColumn();
 
-        auto res = ColumnBool::create(nullable_col->size(), 0);
+        auto res = ColumnUInt8::create(nullable_col->size(), 0);
         for (size_t i = 0, sz = nullable_col->size(); i < sz; ++i)
             res->getData()[i] = !null_map.getData()[i] && nest_col.getData()[i];
         return JoinMask(std::move(res));

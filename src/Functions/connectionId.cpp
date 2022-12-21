@@ -31,9 +31,9 @@ public:
     }
 };
 
-void registerFunctionConnectionId(FunctionFactory & factory)
+REGISTER_FUNCTION(ConnectionId)
 {
-    factory.registerFunction<FunctionConnectionId>(FunctionFactory::CaseSensitive);
+    factory.registerFunction<FunctionConnectionId>({}, FunctionFactory::CaseSensitive);
 }
 
 }

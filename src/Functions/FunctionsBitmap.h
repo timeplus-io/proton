@@ -20,12 +20,13 @@
 // inside.
 #include <AggregateFunctions/AggregateFunctionGroupBitmapData.h>
 
+
 namespace DB
 {
 namespace ErrorCodes
 {
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int LOGICAL_ERROR;
+    extern const int BAD_ARGUMENTS;
 }
 
 /** Bitmap functions.
@@ -236,7 +237,7 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         const DataTypeAggregateFunction * bitmap_type = typeid_cast<const DataTypeAggregateFunction *>(arguments[0].get());
-        if (!(bitmap_type && bitmap_type->getFunctionName() =="groupBitmap"))
+        if (!(bitmap_type && bitmap_type->getFunctionName() == "group_bitmap"))
             throw Exception(
                 "First argument for function " + getName() + " must be a bitmap but it has type " + arguments[0]->getName() + ".",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -328,7 +329,7 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         const DataTypeAggregateFunction * bitmap_type = typeid_cast<const DataTypeAggregateFunction *>(arguments[0].get());
-        if (!(bitmap_type && bitmap_type->getFunctionName() == "groupBitmap"))
+        if (!(bitmap_type && bitmap_type->getFunctionName() == "group_bitmap"))
             throw Exception(
                 "First argument for function " + getName() + " must be a bitmap but it has type " + arguments[0]->getName() + ".",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -421,7 +422,7 @@ private:
 
         for (size_t i = 0; i < input_rows_count; ++i)
         {
-            const AggregateDataPtr data_ptr_0 = is_column_const[0] ? (*container0)[0] : (*container0)[i];
+            AggregateDataPtr data_ptr_0 = is_column_const[0] ? (*container0)[0] : (*container0)[i];
             const AggregateFunctionGroupBitmapData<T> & bitmap_data_0
                 = *reinterpret_cast<const AggregateFunctionGroupBitmapData<T>*>(data_ptr_0);
             const UInt64 range_start = is_column_const[1] ? (*container1)[0] : (*container1)[i];
@@ -503,7 +504,7 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         const DataTypeAggregateFunction * bitmap_type = typeid_cast<const DataTypeAggregateFunction *>(arguments[0].get());
-        if (!(bitmap_type && bitmap_type->getFunctionName() == "groupBitmap"))
+        if (!(bitmap_type && bitmap_type->getFunctionName() == "group_bitmap"))
             throw Exception(
                 "First argument for function " + getName() + " must be a bitmap but it has type " + arguments[0]->getName() + ".",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -615,7 +616,7 @@ private:
         size_t to_end;
         for (size_t i = 0; i < input_rows_count; ++i)
         {
-            const AggregateDataPtr data_ptr_0 = is_column_const[0] ? (*container0)[0] : (*container0)[i];
+            AggregateDataPtr data_ptr_0 = is_column_const[0] ? (*container0)[0] : (*container0)[i];
             const AggregateFunctionGroupBitmapData<T> & bitmap_data_0
                 = *reinterpret_cast<const AggregateFunctionGroupBitmapData<T> *>(data_ptr_0);
             if (is_column_const[1])
@@ -640,7 +641,7 @@ private:
             }
 
             if (from_end - from_start != to_end - to_start)
-                throw Exception("From array size and to array size mismatch", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("From array size and to array size mismatch", ErrorCodes::BAD_ARGUMENTS);
 
             col_to->insertDefault();
             AggregateFunctionGroupBitmapData<T> & bitmap_data_2
@@ -671,7 +672,7 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         const auto * bitmap_type = typeid_cast<const DataTypeAggregateFunction *>(arguments[0].get());
-        if (!(bitmap_type && bitmap_type->getFunctionName() == "groupBitmap"))
+        if (!(bitmap_type && bitmap_type->getFunctionName() == "group_bitmap"))
             throw Exception(
                 "First argument for function " + getName() + " must be a bitmap but it has type " + arguments[0]->getName() + ".",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -810,7 +811,7 @@ struct BitmapAndnotCardinalityImpl
 template <typename T>
 struct BitmapHasAllImpl
 {
-    using ReturnType = Bool;
+    using ReturnType = UInt8;
     static UInt8 apply(const AggregateFunctionGroupBitmapData<T> & bitmap_data_1, const AggregateFunctionGroupBitmapData<T> & bitmap_data_2)
     {
         return bitmap_data_1.rbs.rb_is_subset(bitmap_data_2.rbs);
@@ -820,7 +821,7 @@ struct BitmapHasAllImpl
 template <typename T>
 struct BitmapHasAnyImpl
 {
-    using ReturnType = Bool;
+    using ReturnType = UInt8;
     static UInt8 apply(const AggregateFunctionGroupBitmapData<T> & bitmap_data_1, const AggregateFunctionGroupBitmapData<T> & bitmap_data_2)
     {
         return bitmap_data_1.rbs.rb_intersect(bitmap_data_2.rbs);
@@ -845,7 +846,7 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         const auto * bitmap_type0 = typeid_cast<const DataTypeAggregateFunction *>(arguments[0].get());
-        if (!(bitmap_type0 && bitmap_type0->getFunctionName() == "groupBitmap"))
+        if (!(bitmap_type0 && bitmap_type0->getFunctionName() == "group_bitmap"))
             throw Exception(
                 "First argument for function " + getName() + " must be a bitmap but it has type " + arguments[0]->getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -856,15 +857,15 @@ public:
                 "Second argument for function " + getName() + " must be an native integer type but it has type " + arguments[1]->getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return std::make_shared<DataTypeNumber<UInt8>>();
+        return std::make_shared<DataTypeUInt8>();
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
-        auto col_to = ColumnVector<UInt8>::create(input_rows_count);
-        typename ColumnVector<UInt8>::Container & vec_to = col_to->getData();
+        auto col_to = ColumnUInt8::create(input_rows_count);
+        typename ColumnUInt8::Container & vec_to = col_to->getData();
         const IDataType * from_type = arguments[0].type.get();
 
         const DataTypeAggregateFunction * aggr_type = typeid_cast<const DataTypeAggregateFunction *>(from_type);
@@ -895,7 +896,7 @@ public:
 private:
     template <typename T>
     void executeIntType(
-            const ColumnsWithTypeAndName & arguments, size_t input_rows_count, typename ColumnVector<UInt8>::Container & vec_to) const
+            const ColumnsWithTypeAndName & arguments, size_t input_rows_count, typename ColumnUInt8::Container & vec_to) const
     {
         const IColumn * column_ptrs[2];
         bool is_column_const[2];
@@ -923,7 +924,7 @@ private:
 
         for (size_t i = 0; i < input_rows_count; ++i)
         {
-            const AggregateDataPtr data_ptr_0 = is_column_const[0] ? (*container0)[0] : (*container0)[i];
+            AggregateDataPtr data_ptr_0 = is_column_const[0] ? (*container0)[0] : (*container0)[i];
             const UInt64 data1 = is_column_const[1] ? (*container1)[0] : (*container1)[i];
             const AggregateFunctionGroupBitmapData<T> & bitmap_data_0
                 = *reinterpret_cast<const AggregateFunctionGroupBitmapData<T> *>(data_ptr_0);
@@ -951,13 +952,13 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         const auto * bitmap_type0 = typeid_cast<const DataTypeAggregateFunction *>(arguments[0].get());
-        if (!(bitmap_type0 && bitmap_type0->getFunctionName() == "groupBitmap"))
+        if (!(bitmap_type0 && bitmap_type0->getFunctionName() == "group_bitmap"))
             throw Exception(
                 "First argument for function " + getName() + " must be a bitmap but it has type " + arguments[0]->getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         const auto * bitmap_type1 = typeid_cast<const DataTypeAggregateFunction *>(arguments[1].get());
-        if (!(bitmap_type1 && bitmap_type1->getFunctionName() == "groupBitmap"))
+        if (!(bitmap_type1 && bitmap_type1->getFunctionName() == "group_bitmap"))
             throw Exception(
                 "Second argument for function " + getName() + " must be a bitmap but it has type " + arguments[1]->getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -1030,8 +1031,8 @@ private:
 
         for (size_t i = 0; i < input_rows_count; ++i)
         {
-            const AggregateDataPtr data_ptr_0 = is_column_const[0] ? container0[0] : container0[i];
-            const AggregateDataPtr data_ptr_1 = is_column_const[1] ? container1[0] : container1[i];
+            AggregateDataPtr data_ptr_0 = is_column_const[0] ? container0[0] : container0[i];
+            AggregateDataPtr data_ptr_1 = is_column_const[1] ? container1[0] : container1[i];
             const AggregateFunctionGroupBitmapData<T> & bitmap_data_1
                 = *reinterpret_cast<const AggregateFunctionGroupBitmapData<T> *>(data_ptr_0);
             const AggregateFunctionGroupBitmapData<T> & bitmap_data_2
@@ -1101,13 +1102,13 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         const auto * bitmap_type0 = typeid_cast<const DataTypeAggregateFunction *>(arguments[0].get());
-        if (!(bitmap_type0 && bitmap_type0->getFunctionName() == "groupBitmap"))
+        if (!(bitmap_type0 && bitmap_type0->getFunctionName() == "group_bitmap"))
             throw Exception(
                 "First argument for function " + getName() + " must be a bitmap but it has type " + arguments[0]->getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         const auto * bitmap_type1 = typeid_cast<const DataTypeAggregateFunction *>(arguments[1].get());
-        if (!(bitmap_type1 && bitmap_type1->getFunctionName() == "groupBitmap"))
+        if (!(bitmap_type1 && bitmap_type1->getFunctionName() == "group_bitmap"))
             throw Exception(
                 "Second argument for function " + getName() + " must be a bitmap but it has type " + arguments[1]->getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -1178,8 +1179,8 @@ private:
 
         for (size_t i = 0; i < input_rows_count; ++i)
         {
-            const AggregateDataPtr data_ptr_0 = is_column_const[0] ? container0[0] : container0[i];
-            const AggregateDataPtr data_ptr_1 = is_column_const[1] ? container1[0] : container1[i];
+            AggregateDataPtr data_ptr_0 = is_column_const[0] ? container0[0] : container0[i];
+            AggregateDataPtr data_ptr_1 = is_column_const[1] ? container1[0] : container1[i];
 
             // bitmapAnd(RoaringBitMap, SmallSet) is slower than bitmapAnd(SmallSet, RoaringBitMap), so we can exchange the position of two arguments for the speed
             auto * bm_1 = reinterpret_cast<AggregateFunctionGroupBitmapData<T> *>(data_ptr_0);

@@ -1,7 +1,8 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Columns/ColumnsNumber.h>
-#include "FunctionArrayMapped.h"
 #include <Functions/FunctionFactory.h>
+
+#include "FunctionArrayMapped.h"
 
 
 namespace DB
@@ -20,6 +21,9 @@ enum class ArrayFirstLastIndexStrategy
 template <ArrayFirstLastIndexStrategy strategy>
 struct ArrayFirstLastIndexImpl
 {
+    using column_type = ColumnArray;
+    using data_type = DataTypeArray;
+
     static bool needBoolean() { return false; }
     static bool needExpression() { return true; }
     static bool needOneArray() { return false; }
@@ -31,11 +35,11 @@ struct ArrayFirstLastIndexImpl
 
     static ColumnPtr execute(const ColumnArray & array, ColumnPtr mapped)
     {
-        const auto * column_filter = typeid_cast<const ColumnBool *>(&*mapped);
+        const auto * column_filter = typeid_cast<const ColumnUInt8 *>(&*mapped);
 
         if (!column_filter)
         {
-            const auto * column_filter_const = checkAndGetColumnConst<ColumnBool>(&*mapped);
+            const auto * column_filter_const = checkAndGetColumnConst<ColumnUInt8>(&*mapped);
 
             if (!column_filter_const)
                 throw Exception("Unexpected type of filter column", ErrorCodes::ILLEGAL_COLUMN);
@@ -57,7 +61,7 @@ struct ArrayFirstLastIndexImpl
                         if constexpr (strategy == ArrayFirstLastIndexStrategy::First)
                             out_index[offset_index] = 1;
                         else
-                            out_index[offset_index] = end_offset - start_offset;
+                            out_index[offset_index] = static_cast<UInt32>(end_offset - start_offset);
                     }
                     else
                     {
@@ -109,7 +113,7 @@ struct ArrayFirstLastIndexImpl
                 }
             }
 
-            out_index[offset_index] = result_index;
+            out_index[offset_index] = static_cast<UInt32>(result_index);
         }
 
         return out_column;
@@ -124,7 +128,7 @@ struct NameArrayLastIndex { static constexpr auto name = "array_last_index"; };
 using ArrayLastIndexImpl = ArrayFirstLastIndexImpl<ArrayFirstLastIndexStrategy::Last>;
 using FunctionArrayLastIndex = FunctionArrayMapped<ArrayLastIndexImpl, NameArrayLastIndex>;
 
-void registerFunctionArrayFirstIndex(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayFirstIndex)
 {
     factory.registerFunction<FunctionArrayFirstIndex>();
     factory.registerFunction<FunctionArrayLastIndex>();

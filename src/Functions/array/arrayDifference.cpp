@@ -1,9 +1,10 @@
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypesDecimal.h>
-#include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnDecimal.h>
-#include "FunctionArrayMapped.h"
+#include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypesDecimal.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
+
+#include "FunctionArrayMapped.h"
 
 
 namespace DB
@@ -20,6 +21,9 @@ namespace ErrorCodes
   */
 struct ArrayDifferenceImpl
 {
+    using column_type = ColumnArray;
+    using data_type = DataTypeArray;
+
     static bool needBoolean() { return false; }
     static bool needExpression() { return false; }
     static bool needOneArray() { return false; }
@@ -43,7 +47,7 @@ struct ArrayDifferenceImpl
         if (which.isDecimal())
             return std::make_shared<DataTypeArray>(expression_return);
 
-        throw Exception("arrayDifference cannot process values of type " + expression_return->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception("array_difference cannot process values of type " + expression_return->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
 
@@ -80,7 +84,7 @@ struct ArrayDifferenceImpl
                 }
                 else
                 {
-                    dst[pos] = curr - prev;
+                    dst[pos] = static_cast<Result>(curr) - static_cast<Result>(prev);
                 }
 
                 prev = curr;
@@ -144,14 +148,14 @@ struct ArrayDifferenceImpl
             executeType<Decimal128, Decimal128>(mapped, array, res))
             return res;
         else
-            throw Exception("Unexpected column for arrayDifference: " + mapped->getName(), ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception("Unexpected column for array_difference: " + mapped->getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
 struct NameArrayDifference { static constexpr auto name = "array_difference"; };
 using FunctionArrayDifference = FunctionArrayMapped<ArrayDifferenceImpl, NameArrayDifference>;
 
-void registerFunctionArrayDifference(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayDifference)
 {
     factory.registerFunction<FunctionArrayDifference>();
 }

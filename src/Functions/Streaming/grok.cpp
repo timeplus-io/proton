@@ -248,8 +248,8 @@ namespace
     };
 }
 
-void registerFunctionGrok(FunctionFactory & factory)
+REGISTER_FUNCTION(Grok)
 {
-    factory.registerFunction<GrokOverloadResolver>(FunctionGrok::name, FunctionFactory::CaseSensitive);
+    factory.registerFunction<GrokOverloadResolver>(FunctionGrok::name);
 }
 }

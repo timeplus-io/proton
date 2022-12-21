@@ -11,7 +11,7 @@ namespace DB
 namespace
 {
 
-/// ifNotFinite(x, y) is equivalent to isFinite(x) ? x : y.
+/// if_not_finite(x, y) is equivalent to is_finite(x) ? x : y.
 class FunctionIfNotFinite : public IFunction
 {
 public:
@@ -65,7 +65,7 @@ private:
 
 }
 
-void registerFunctionIfNotFinite(FunctionFactory & factory)
+REGISTER_FUNCTION(IfNotFinite)
 {
     factory.registerFunction<FunctionIfNotFinite>();
 }

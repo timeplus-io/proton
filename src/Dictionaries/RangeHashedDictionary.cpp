@@ -109,11 +109,11 @@ ColumnPtr RangeHashedDictionary<dictionary_key_type>::getColumn(
     size_t keys_size = key_columns.front()->size();
     bool is_attribute_nullable = attribute.is_value_nullable.has_value();
 
-    ColumnBool::MutablePtr col_null_map_to;
-    ColumnBool::Container * vec_null_map_to = nullptr;
+    ColumnUInt8::MutablePtr col_null_map_to;
+    ColumnUInt8::Container * vec_null_map_to = nullptr;
     if (is_attribute_nullable)
     {
-        col_null_map_to = ColumnBool::create(keys_size, false);
+        col_null_map_to = ColumnUInt8::create(keys_size, false);
         vec_null_map_to = &col_null_map_to->getData();
     }
 
@@ -216,11 +216,11 @@ ColumnPtr RangeHashedDictionary<dictionary_key_type>::getColumnInternal(
     size_t keys_size = key_to_index.size();
     bool is_attribute_nullable = attribute.is_value_nullable.has_value();
 
-    ColumnBool::MutablePtr col_null_map_to;
-    ColumnBool::Container * vec_null_map_to = nullptr;
+    ColumnUInt8::MutablePtr col_null_map_to;
+    ColumnUInt8::Container * vec_null_map_to = nullptr;
     if (is_attribute_nullable)
     {
-        col_null_map_to = ColumnBool::create(keys_size, false);
+        col_null_map_to = ColumnUInt8::create(keys_size, false);
         vec_null_map_to = &col_null_map_to->getData();
     }
 
@@ -302,7 +302,7 @@ ColumnPtr RangeHashedDictionary<dictionary_key_type>::getColumnInternal(
 }
 
 template <DictionaryKeyType dictionary_key_type>
-ColumnBool::Ptr RangeHashedDictionary<dictionary_key_type>::hasKeys(const Columns & key_columns, const DataTypes & key_types) const
+ColumnUInt8::Ptr RangeHashedDictionary<dictionary_key_type>::hasKeys(const Columns & key_columns, const DataTypes & key_types) const
 {
     if (dictionary_key_type == DictionaryKeyType::Complex)
     {
@@ -322,7 +322,7 @@ ColumnBool::Ptr RangeHashedDictionary<dictionary_key_type>::hasKeys(const Column
     DictionaryKeysExtractor<dictionary_key_type> keys_extractor(key_columns_copy, arena_holder.getComplexKeyArena());
     const size_t keys_size = keys_extractor.getKeysSize();
 
-    auto result = ColumnBool::create(keys_size);
+    auto result = ColumnUInt8::create(keys_size);
     auto & out = result->getData();
     size_t keys_found = 0;
 

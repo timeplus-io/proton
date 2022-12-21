@@ -1,8 +1,8 @@
 #pragma once
 
+#include <Common/TargetSpecific.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Columns/ColumnVector.h>
-#include <Common/TargetSpecific.h>
 #include <Functions/IFunction.h>
 #include <Functions/PerformanceAdaptors.h>
 #include <IO/WriteHelpers.h>

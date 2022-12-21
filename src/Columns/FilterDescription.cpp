@@ -30,10 +30,10 @@ ConstantFilterDescription::ConstantFilterDescription(const IColumn & column)
         const ColumnConst & column_const = assert_cast<const ColumnConst &>(column);
         ColumnPtr column_nested = column_const.getDataColumnPtr()->convertToFullColumnIfLowCardinality();
 
-        if (!typeid_cast<const ColumnBool *>(column_nested.get()))
+        if (!typeid_cast<const ColumnUInt8 *>(column_nested.get()))
         {
             const ColumnNullable * column_nested_nullable = checkAndGetColumn<ColumnNullable>(*column_nested);
-            if (!column_nested_nullable || !typeid_cast<const ColumnBool *>(&column_nested_nullable->getNestedColumn()))
+            if (!column_nested_nullable || !typeid_cast<const ColumnUInt8 *>(&column_nested_nullable->getNestedColumn()))
             {
                 throw Exception("Illegal type " + column_nested->getName() + " of column for constant filter. Must be bool or nullable(bool).",
                                 ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
@@ -60,7 +60,7 @@ FilterDescription::FilterDescription(const IColumn & column_)
     const auto & column = data_holder ? *data_holder : column_;
 
     /// proton: starts.
-    if (const ColumnBool * concrete_column = typeid_cast<const ColumnBool *>(&column))
+    if (const ColumnUInt8 * concrete_column = typeid_cast<const ColumnUInt8 *>(&column))
     {
         data = &concrete_column->getData();
         return;
@@ -77,11 +77,11 @@ FilterDescription::FilterDescription(const IColumn & column_)
         ColumnPtr nested_column = nullable_column->getNestedColumnPtr();
         MutableColumnPtr mutable_holder = IColumn::mutate(std::move(nested_column));
 
-        ColumnBool * bool_column = nullptr;
+        ColumnUInt8 * bool_column = nullptr;
         ColumnUInt8 * concrete_column = typeid_cast<ColumnUInt8 *>(mutable_holder.get());
         if (!concrete_column)
         {
-            bool_column = typeid_cast<ColumnBool *>(mutable_holder.get());
+            bool_column = typeid_cast<ColumnUInt8 *>(mutable_holder.get());
             if (!bool_column)
                 throw Exception("Illegal type " + column.getName() + " of column for filter. Must be bool, uint8, nullable(bool) or nullable(uint8).",
                     ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);

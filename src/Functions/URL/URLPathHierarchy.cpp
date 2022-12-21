@@ -19,12 +19,13 @@ public:
     static constexpr auto name = "url_hierarchy";
     static String getName() { return name; }
 
+    static bool isVariadic() { return false; }
     static size_t getNumberOfArguments() { return 1; }
 
     static void checkArguments(const DataTypes & arguments)
     {
         if (!isString(arguments[0]))
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be String.",
+            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be string.",
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -34,6 +35,12 @@ public:
     static size_t getStringsArgumentPosition()
     {
         return 0;
+    }
+
+    /// Returns the position of the possible max_substrings argument. std::nullopt means max_substrings argument is disabled in current function.
+    static std::optional<size_t> getMaxSubstringsArgumentPosition()
+    {
+        return std::nullopt;
     }
 
     /// Called for each next string.
@@ -105,7 +112,7 @@ public:
 struct NameURLHierarchy { static constexpr auto name = "url_hierarchy"; };
 using FunctionURLHierarchy = FunctionTokens<URLHierarchyImpl>;
 
-void registerFunctionURLHierarchy(FunctionFactory & factory)
+REGISTER_FUNCTION(URLHierarchy)
 {
     factory.registerFunction<FunctionURLHierarchy>();
 }

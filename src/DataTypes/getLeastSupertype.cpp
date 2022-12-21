@@ -22,11 +22,6 @@
 #include <DataTypes/typeIndexToTypeName.h>
 #include <base/EnumReflection.h>
 
-/// proton: starts.
-#include <DataTypes/DataTypeBool.h>
-/// proton: ends.
-
-
 namespace DB
 {
 
@@ -191,7 +186,7 @@ DataTypePtr getNumericType(const TypeIndexSet & types)
         {
             /// proton: starts. support bool
             if (min_bit_width_of_integer <= 1)
-                return std::make_shared<DataTypeBool>();
+                return DataTypeFactory::instance().get("bool");
             /// proton: ends.
             else if (min_bit_width_of_integer <= 8)
                 return std::make_shared<DataTypeUInt8>();
@@ -638,13 +633,8 @@ DataTypePtr getLeastSupertype(const TypeIndexSet & types)
         FOR_NUMERIC_TYPES(DISPATCH)
     #undef DISPATCH
 
-        /// proton : bool is not defined in `FOR_NUMERIC_TYPES` macro and
-        /// we can't define bool there since DataTypeBool is defined to bbe different than DataTypeNumber<bool>
-        if (which.isBool())
-            return std::make_shared<DataTypeBool>();
-        else if (which.isString())
+        if (which.isString())
             return std::make_shared<DataTypeString>();
-        /// proton : end
 
         return throwOrReturn<on_error>(types, "because cannot get common type by type indexes with non-simple types", ErrorCodes::NO_COMMON_TYPE);
     }

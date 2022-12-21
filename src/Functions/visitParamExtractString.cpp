@@ -20,9 +20,10 @@ struct ExtractString
 struct NameSimpleJSONExtractString { static constexpr auto name = "simple_json_extract_string"; };
 using FunctionSimpleJSONExtractString = FunctionsStringSearchToString<ExtractParamToStringImpl<ExtractString>, NameSimpleJSONExtractString>;
 
-void registerFunctionVisitParamExtractString(FunctionFactory & factory)
+REGISTER_FUNCTION(VisitParamExtractString)
 {
     factory.registerFunction<FunctionSimpleJSONExtractString>();
+    factory.registerAlias("visit_param_extract_string", "simple_json_extract_string");
 }
 
 }

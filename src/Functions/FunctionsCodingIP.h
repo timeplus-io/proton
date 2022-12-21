@@ -205,7 +205,7 @@ ColumnPtr convertToIPv4(ColumnPtr column, const PaddedPODArray<UInt8> * null_map
         {
             if constexpr (exception_mode == IPStringToNumExceptionMode::Throw)
             {
-                throw Exception("Invalid IPv4 value", ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING);
+                throw Exception("Invalid ipv4 value", ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING);
             }
             else if constexpr (exception_mode == IPStringToNumExceptionMode::Default)
             {

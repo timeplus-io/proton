@@ -169,7 +169,7 @@ TEST(ColumnUnique, DeserializeFromArenaNullableString)
 {
     auto data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>());
     auto column_string = ColumnString::create();
-    auto null_mask = ColumnBool::create();
+    auto null_mask = ColumnUInt8::create();
 
     size_t num_values = 1000000;
     size_t mod_to = 1000;

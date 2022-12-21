@@ -1,5 +1,5 @@
 \N	nullable(string)
-	string
+	String
 \N	nullable(string)
 	nullable(string)
 \N	nullable(nothing)
@@ -11,7 +11,7 @@ b
 
 c
 1
-0
+1
 1
 a
 1
@@ -19,4 +19,5 @@ a
 true
 1
 a
+\N
 \N

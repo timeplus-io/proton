@@ -13,13 +13,13 @@ struct NameMultiFuzzyMatchAny
     static constexpr auto name = "multi_fuzzy_match_any";
 };
 
-using FunctionMultiFuzzyMatchAny = FunctionsMultiStringFuzzySearch<
-    MultiMatchAnyImpl<NameMultiFuzzyMatchAny, Bool, true, false, true>,
-    std::numeric_limits<UInt32>::max()>;
+/// proton: starts. return bool
+using FunctionMultiFuzzyMatchAny = FunctionsMultiStringFuzzySearch<MultiMatchAnyImpl<NameMultiFuzzyMatchAny, /*ResultType*/ bool, MultiMatchTraits::Find::Any, /*WithEditDistance*/ true>>;
+/// proton: ends.
 
 }
 
-void registerFunctionMultiFuzzyMatchAny(FunctionFactory & factory)
+REGISTER_FUNCTION(MultiFuzzyMatchAny)
 {
     factory.registerFunction<FunctionMultiFuzzyMatchAny>();
 }

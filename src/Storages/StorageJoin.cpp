@@ -14,6 +14,7 @@
 #include <Interpreters/castColumn.h>
 #include <Common/quoteString.h>
 #include <Common/Exception.h>
+#include <Interpreters/join_common.h>
 
 #include <Compression/CompressedWriteBuffer.h>
 #include <Processors/Sources/SourceWithProgress.h>
@@ -66,7 +67,7 @@ StorageJoin::StorageJoin(
             /// proton: ends
 
     table_join = std::make_shared<TableJoin>(limits, use_nulls, kind, strictness, key_names);
-    join = std::make_shared<HashJoin>(table_join, metadata_snapshot->getSampleBlock().sortColumns(), overwrite);
+    join = std::make_shared<HashJoin>(table_join, getRightSampleBlock(), overwrite);
     restore();
 }
 
@@ -84,7 +85,7 @@ SinkToStoragePtr StorageJoin::write(const ASTPtr & query, const StorageMetadataP
     return StorageSetOrJoinBase::write(query, metadata_snapshot, context);
 }
 
-void StorageJoin::truncate(const ASTPtr &, const StorageMetadataPtr & metadata_snapshot, ContextPtr context, TableExclusiveLockHolder &)
+void StorageJoin::truncate(const ASTPtr &, const StorageMetadataPtr &, ContextPtr context, TableExclusiveLockHolder &)
 {
     std::lock_guard mutate_lock(mutate_mutex);
     TableLockHolder holder = tryLockTimedWithContext(rwlock, RWLockImpl::Write, context);
@@ -94,7 +95,7 @@ void StorageJoin::truncate(const ASTPtr &, const StorageMetadataPtr & metadata_s
     disk->createDirectories(path + "tmp/");
 
     increment = 0;
-    join = std::make_shared<HashJoin>(table_join, metadata_snapshot->getSampleBlock().sortColumns(), overwrite);
+    join = std::make_shared<HashJoin>(table_join, getRightSampleBlock(), overwrite);
 }
 
 void StorageJoin::checkMutationIsPossible(const MutationCommands & commands, const Settings & /* settings */) const
@@ -120,7 +121,7 @@ void StorageJoin::mutate(const MutationCommands & commands, ContextPtr context)
     auto compressed_backup_buf = CompressedWriteBuffer(*backup_buf);
     auto backup_stream = NativeWriter(compressed_backup_buf, metadata_snapshot->getSampleBlock(), 0);
 
-    auto new_data = std::make_shared<HashJoin>(table_join, metadata_snapshot->getSampleBlock().sortColumns(), overwrite);
+    auto new_data = std::make_shared<HashJoin>(table_join, getRightSampleBlock(), overwrite);
 
     // New scope controls lifetime of InputStream.
     {
@@ -173,10 +174,10 @@ HashJoinPtr StorageJoin::getJoinLocked(std::shared_ptr<TableJoin> analyzed_join,
 
     if ((analyzed_join->forceNullableRight() && !use_nulls) ||
         (!analyzed_join->forceNullableRight() && isLeftOrFull(analyzed_join->kind()) && use_nulls))
-        /// proton: starts
-        throw Exception("Stream " + getStorageID().getNameForLogs() + " needs the same join_use_nulls setting as present in LEFT or FULL JOIN.",
-                        ErrorCodes::INCOMPATIBLE_TYPE_OF_JOIN);
-        /// proton: ends
+        throw Exception(
+            ErrorCodes::INCOMPATIBLE_TYPE_OF_JOIN,
+            "Stream {} needs the same join_use_nulls setting as present in LEFT or FULL JOIN",
+            getStorageID().getNameForLogs());
 
     /// TODO: check key columns
 
@@ -185,7 +186,7 @@ HashJoinPtr StorageJoin::getJoinLocked(std::shared_ptr<TableJoin> analyzed_join,
     /// Qualifies will be added by join implementation (HashJoin)
     analyzed_join->setRightKeys(key_names);
 
-    HashJoinPtr join_clone = std::make_shared<HashJoin>(analyzed_join, metadata_snapshot->getSampleBlock().sortColumns());
+    HashJoinPtr join_clone = std::make_shared<HashJoin>(analyzed_join, getRightSampleBlock());
 
     RWLockImpl::LockHolder holder = tryLockTimedWithContext(rwlock, RWLockImpl::Read, context);
     join_clone->setLock(holder);

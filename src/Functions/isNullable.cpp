@@ -54,9 +54,10 @@ public:
 
 }
 
-void registerCastOverloadResolvers(FunctionFactory & factory)
+REGISTER_FUNCTION(IsNullable)
 {
     factory.registerFunction<FunctionIsNullable>();
 }
+
 }
 

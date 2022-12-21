@@ -34,11 +34,6 @@ void MsgPackRowOutputFormat::serializeField(const IColumn & column, DataTypePtr 
 {
     switch (data_type->getTypeId())
     {
-        case TypeIndex::Bool:
-        {
-            packer.pack_uint8(assert_cast<const ColumnBool &>(column).getElement(row_num));
-            return;
-        }
         case TypeIndex::UInt8:
         {
             packer.pack_uint8(assert_cast<const ColumnUInt8 &>(column).getElement(row_num));

@@ -48,7 +48,7 @@ public:
         else if (which.isEnum16())
             return std::make_shared<DataTypeUInt16>();
 
-        throw Exception("The argument for function " + getName() + " must be Enum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception("The argument for function " + getName() + " must be enum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
@@ -70,13 +70,13 @@ private:
         else if (const auto * type16 = checkAndGetDataType<DataTypeEnum16>(data_type.get()))
             return DataTypeUInt16().createColumnConst(input_rows_count, type16->getValues().size());
         else
-            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The argument for function {} must be Enum", getName());
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The argument for function {} must be enum", getName());
     }
 };
 
 }
 
-void registerFunctionGetSizeOfEnumType(FunctionFactory & factory)
+REGISTER_FUNCTION(GetSizeOfEnumType)
 {
     factory.registerFunction<FunctionGetSizeOfEnumType>();
 }

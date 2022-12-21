@@ -629,7 +629,7 @@ TEST(WeakHash32, ColumnNullable)
 {
     auto col = ColumnUInt64::create();
     auto & data = col->getData();
-    auto mask = ColumnBool::create();
+    auto mask = ColumnUInt8::create();
     auto & mask_data = mask->getData();
     PaddedPODArray<Int64> eq;
 

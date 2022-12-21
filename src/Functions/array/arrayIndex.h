@@ -20,6 +20,9 @@
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <Interpreters/castColumn.h>
 
+/// proton: starts.
+#include <DataTypes/DataTypeFactory.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -36,10 +39,13 @@ using NullMap = PaddedPODArray<UInt8>;
 
 struct HasAction
 {
-    using ResultType = Bool;
+    /// proton: starts. return bool
+    using ResultType = bool;
+
     static constexpr const bool resume_execution = false;
     static constexpr void apply(ResultType& current, size_t) noexcept { current = true; }
     static constexpr void apply(UInt8& current, size_t) noexcept { current = 1; }
+    /// proton: ends.
 };
 
 /// The index is returned starting from 1.
@@ -68,11 +74,13 @@ template <
 struct Main
 {
 private:
-    using Initial = typename ColumnVector<IntegralInitial>::ValueType;
-    using Result = typename ColumnVector<IntegralResult>::ValueType;
+    using Initial = IntegralInitial;
+    using Result = IntegralResult;
 
     using ResultType = typename ConcreteAction::ResultType;
-    using ResultArr = PaddedPODArray<std::conditional_t<std::is_same_v<ResultType, Bool>, UInt8, ResultType>>;
+    /// proton: starts.
+    using ResultArr = PaddedPODArray<std::conditional_t<std::is_same_v<ResultType, bool>, UInt8, ResultType>>;
+    /// proton: ends.
 
     using ArrOffset = ColumnArray::Offset;
     using ArrOffsets = ColumnArray::Offsets;
@@ -196,13 +204,16 @@ public:
 template <typename ConcreteAction>
 struct Null
 {
-    using ResultType
-        = std::conditional_t<std::is_same_v<typename ConcreteAction::ResultType, Bool>, UInt8, typename ConcreteAction::ResultType>;
-    using ResultArr = PaddedPODArray<std::conditional_t<std::is_same_v<ResultType, Bool>, UInt8, ResultType>>;
+    using ResultType = typename ConcreteAction::ResultType;
+    /// proton: starts.
+    using ResultArr = PaddedPODArray<std::conditional_t<std::is_same_v<ResultType, bool>, UInt8, ResultType>>;
+    /// proton: ends.
 
     static void process(
         const ColumnArray::Offsets & offsets,
+        /// proton: starts.
         ResultArr & result,
+        /// proton: ends.
         [[maybe_unused]] const NullMap * null_map_data)
     {
         const size_t size = offsets.size();
@@ -247,7 +258,9 @@ private:
     template <bool IsConst> using OffsetT = std::conditional_t<IsConst, Offset, const ColumnString::Offsets &>;
     using ArrayOffset = ColumnArray::Offset;
     using ResultType = typename ConcreteAction::ResultType;
-    using ResultArr = PaddedPODArray<std::conditional_t<std::is_same_v<ResultType, Bool>, UInt8, ResultType>>;
+    /// proton: starts.
+    using ResultArr = PaddedPODArray<std::conditional_t<std::is_same_v<ResultType, bool>, UInt8, ResultType>>;
+    /// proton: ends.
 
     template <bool IsConst, bool HasNullMapData, bool HasNullMapItem>
     static void processImpl(
@@ -256,7 +269,9 @@ private:
         const ColumnString::Offsets & string_offsets,
         const ColumnString::Chars & item_values,
         OffsetT<IsConst> item_offsets,
+        /// proton: starts.
         ResultArr & result,
+        /// proton: ends.
         [[maybe_unused]] const NullMap * data_map,
         [[maybe_unused]] const NullMap * item_map)
     {
@@ -330,7 +345,10 @@ private:
         const ColumnString::Chars & data, const ColumnArray::Offsets & offsets,
         const ColumnString::Offsets & str_offsets, const ColumnString::Chars & values,
         OffsetT<IsConst> item_offsets,
-        ResultArr & result, const NullMap * data_map, const NullMap * item_map)
+        /// proton: starts.
+        ResultArr & result,
+        /// proton: ends.
+        const NullMap * data_map, const NullMap * item_map)
     {
         if (data_map && item_map)
             processImpl<IsConst, true, true>(data, offsets, str_offsets, values, item_offsets, result, data_map, item_map);
@@ -346,7 +364,10 @@ public:
     static inline void process(
         const ColumnString::Chars & data, const ColumnArray::Offsets & offsets,
         const ColumnString::Offsets & string_offsets, const ColumnString::Chars & item_values,
-        Offset item_offsets, ResultArr & result,
+        Offset item_offsets,
+        /// proton: starts.
+        ResultArr & result,
+        /// proton: ends.
         const NullMap * data_map, const NullMap * item_map)
     {
         invokeCheckNullMaps<true>(data, offsets, string_offsets, item_values, item_offsets, result, data_map, item_map);
@@ -355,7 +376,10 @@ public:
     static inline void process(
         const ColumnString::Chars & data, const ColumnArray::Offsets & offsets,
         const ColumnString::Offsets & string_offsets, const ColumnString::Chars & item_values,
-        const ColumnString::Offsets & item_offsets, ResultArr & result,
+        const ColumnString::Offsets & item_offsets,
+        /// proton: starts.
+        ResultArr & result,
+        /// proton: ends.
         const NullMap * data_map, const NullMap * item_map)
     {
         invokeCheckNullMaps<false>(data, offsets, string_offsets, item_values, item_offsets, result, data_map, item_map);
@@ -421,10 +445,12 @@ public:
                 second_argument_type->getName());
         }
 
-        if constexpr (std::is_same_v<ResultType, Bool>)
-            return std::make_shared<DataTypeBool>();
+        /// proton: starts.
+        if constexpr (std::is_same_v<ResultType, bool>)
+            return DataTypeFactory::instance().get("bool");
         else
             return std::make_shared<DataTypeNumber<ResultType>>();
+        /// proton: ends.
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t /*input_rows_count*/) const override
@@ -439,7 +465,7 @@ public:
                 const auto & map_array_column = map_column.getNestedColumn();
                 auto offsets = map_array_column.getOffsetsPtr();
                 auto keys = map_column.getNestedData().getColumnPtr(0);
-                auto array_column = ColumnArray::create(std::move(keys), std::move(offsets));
+                auto array_column = ColumnArray::create(keys, offsets);
 
                 const auto & type_map = assert_cast<const DataTypeMap &>(*arguments[0].type);
                 auto array_type = std::make_shared<DataTypeArray>(type_map.getKeyType());
@@ -458,7 +484,9 @@ public:
 
 private:
     using ResultType = typename ConcreteAction::ResultType;
-    using ResultColumnType = ColumnVector<ResultType>;
+    /// proton: starts.
+    using ResultColumnType = ColumnVector<std::conditional_t<std::is_same_v<ResultType, bool>, UInt8, ResultType>>;
+    /// proton: ends.
     using ResultColumnPtr = decltype(ResultColumnType::create());
 
     using NullMaps = std::pair<const NullMap *, const NullMap *>;
@@ -579,7 +607,7 @@ private:
         }
     }
 
-#define INTEGRAL_TPL_PACK Bool, UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, Float64
+#define INTEGRAL_TPL_PACK UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, Float64
 
     ColumnPtr executeOnNonNullable(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type) const
     {
@@ -628,10 +656,10 @@ private:
         const NullMap * null_map_item = nullptr;
 
         if (const auto & data_map = arguments[2].column; data_map)
-            null_map_data = &assert_cast<const ColumnBool &>(*data_map).getData();
+            null_map_data = &assert_cast<const ColumnUInt8 &>(*data_map).getData();
 
         if (const auto & item_map = arguments[3].column; item_map)
-            null_map_item = &assert_cast<const ColumnBool &>(*item_map).getData();
+            null_map_item = &assert_cast<const ColumnUInt8 &>(*item_map).getData();
 
         return {null_map_data, null_map_item};
     }
@@ -725,9 +753,7 @@ private:
     /**
      * Catches arguments of type LowCardinality(T) (left) and U (right).
      *
-     * The perftests
-     * https://clickhouse-test-reports.s3.yandex.net/12550/2d27fa0fa8c198a82bf1fe3625050ccf56695976/integration_tests_(release).html
-     * showed that the amount of action needed to convert the non-constant right argument to the index column
+     * The perftests showed that the amount of action needed to convert the non-constant right argument to the index column
      * (similar to the left one's) is significantly higher than converting the array itself to an ordinary column.
      *
      * So, in terms of performance it's more optimal to fall back to default implementation and catch only constant
@@ -749,42 +775,34 @@ private:
 
         const auto [null_map_data, null_map_item] = getNullMaps(arguments);
 
-        const IColumn& col_arg = *arguments[1].column.get();
-
-        if (const ColumnConst * const col_arg_const = checkAndGetColumn<ColumnConst>(col_arg))
+        if (const ColumnConst * col_arg_const = checkAndGetColumn<ColumnConst>(*arguments[1].column))
         {
-            const IColumnUnique& col_lc_dict = col_lc->getDictionary();
-
-            const bool different_inner_types = col_lc_dict.isNullable()
-                ? !col_arg_const->structureEquals(*col_lc_dict.getNestedColumn().get())
-                : true; // Can't compare so ignore this check
-
-            const bool use_cloned_arg = col_arg_const->isNumeric()
-                // outer types do not match
-                && !col_arg_const->structureEquals(col_lc_dict)
-                // inner types do not match (like A and Nullable(B) or A and Const(B));
-                && different_inner_types;
+            const IColumnUnique & col_lc_dict = col_lc->getDictionary();
 
             const DataTypeArray * const array_type = checkAndGetDataType<DataTypeArray>(arguments[0].type.get());
             const DataTypePtr target_type_ptr = recursiveRemoveLowCardinality(array_type->getNestedType());
 
-            const ColumnPtr col_arg_cloned = use_cloned_arg
-                ? castColumn(arguments[1], target_type_ptr)
-                : col_arg_const->getPtr();
+            ColumnPtr col_arg_cloned = castColumn(
+                {col_arg_const->getDataColumnPtr(), arguments[1].type, arguments[1].name}, target_type_ptr);
 
-            const StringRef elem = col_arg_cloned->getDataAt(0);
             ResultColumnPtr col_result = ResultColumnType::create();
-
             UInt64 index = 0;
 
-            if (elem != EMPTY_STRING_REF)
+            if (!col_arg_cloned->isNullAt(0))
             {
+                if (col_arg_cloned->isNullable())
+                    col_arg_cloned = checkAndGetColumn<ColumnNullable>(*col_arg_cloned)->getNestedColumnPtr();
+
+                StringRef elem = col_arg_cloned->getDataAt(0);
+
                 if (std::optional<UInt64> maybe_index = col_lc_dict.getOrFindValueIndex(elem); maybe_index)
+                {
                     index = *maybe_index;
+                }
                 else
                 {
                     const size_t offsets_size = col_array->getOffsets().size();
-                    auto& data = col_result->getData();
+                    auto & data = col_result->getData();
 
                     data.resize_fill(offsets_size);
 
@@ -795,23 +813,23 @@ private:
             Impl::Main<ConcreteAction, true>::vector(
                 col_lc->getIndexes(),
                 col_array->getOffsets(),
-                index,
+                index, /** Assuming low_cardinality has index of null always as zero. */
                 col_result->getData(),
                 null_map_data,
                 null_map_item);
 
             return col_result;
         }
-        else if (col_lc->nestedIsNullable()) // LowCardinality(Nullable(T)) and U
+        else if (col_lc->nestedIsNullable()) // low_cardinality(nullable(T)) and U
         {
             const ColumnPtr left_casted = col_lc->convertToFullColumnIfLowCardinality(); // Nullable(T)
             const ColumnNullable& left_nullable = *checkAndGetColumn<ColumnNullable>(left_casted.get());
 
             const NullMap * const null_map_left_casted = &left_nullable.getNullMapColumn().getData();
 
-            const IColumn& left_ptr = left_nullable.getNestedColumn();
+            const IColumn & left_ptr = left_nullable.getNestedColumn();
 
-            const ColumnPtr right_casted = col_arg.convertToFullColumnIfLowCardinality();
+            const ColumnPtr right_casted = arguments[1].column->convertToFullColumnIfLowCardinality();
             const ColumnNullable * const right_nullable = checkAndGetColumn<ColumnNullable>(right_casted.get());
 
             const NullMap * const null_map_right_casted = right_nullable
@@ -834,17 +852,17 @@ private:
         }
         else // LowCardinality(T) and U, T not Nullable
         {
-            if (col_arg.isNullable())
+            if (arguments[1].column->isNullable())
                 return nullptr;
 
-            if (const auto* const arg_lc = checkAndGetColumn<ColumnLowCardinality>(&col_arg);
+            if (const auto* const arg_lc = checkAndGetColumn<ColumnLowCardinality>(arguments[1].column.get());
                 arg_lc && arg_lc->isNullable())
                 return nullptr;
 
             // LowCardinality(T) and U (possibly LowCardinality(V))
 
             const ColumnPtr left_casted = col_lc->convertToFullColumnIfLowCardinality();
-            const ColumnPtr right_casted = col_arg.convertToFullColumnIfLowCardinality();
+            const ColumnPtr right_casted = arguments[1].column->convertToFullColumnIfLowCardinality();
 
             ExecutionData data =
             {
@@ -1005,7 +1023,7 @@ private:
 
             if (arguments.size() > 2)
                 if (const auto & col = arguments[3].column; col)
-                    null_map = &assert_cast<const ColumnBool &>(*col).getData();
+                    null_map = &assert_cast<const ColumnUInt8 &>(*col).getData();
 
             const size_t size = item_arg->size();
             auto col_res = ResultColumnType::create(size);

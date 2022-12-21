@@ -575,7 +575,6 @@ public:
 
     explicit FunctionToIPv6(ContextPtr context) : Base(context) { }
 
-
     String getName() const override { return name; }
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
@@ -945,7 +944,7 @@ private:
 
 public:
     static constexpr auto name = "ipv4_cidr_to_range";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIPv5CIDRToRange>(); }
+    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIPv4CIDRToRange>(); }
 
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
@@ -1133,7 +1132,7 @@ public:
 struct NameFunctionIPv4NumToString { static constexpr auto name = "ipv4_num_to_string"; };
 struct NameFunctionIPv4NumToStringClassC { static constexpr auto name = "ipv4_num_to_string_class_c"; };
 
-void registerFunctionsCoding(FunctionFactory & factory)
+REGISTER_FUNCTION(Coding)
 {
     factory.registerFunction<FunctionCutIPv6>();
     factory.registerFunction<FunctionIPv4ToIPv6>();
@@ -1162,6 +1161,13 @@ void registerFunctionsCoding(FunctionFactory & factory)
     factory.registerFunction<FunctionToIPv6<IPStringToNumExceptionMode::Throw>>();
     factory.registerFunction<FunctionToIPv6<IPStringToNumExceptionMode::Default>>();
     factory.registerFunction<FunctionToIPv6<IPStringToNumExceptionMode::Null>>();
+
+
+    /// MySQL compatibility aliases:
+    factory.registerAlias("INET_ATON", FunctionIPv4StringToNum<IPStringToNumExceptionMode::Throw>::name, FunctionFactory::CaseInsensitive);
+    factory.registerAlias("INET6_NTOA", FunctionIPv6NumToString::name, FunctionFactory::CaseInsensitive);
+    factory.registerAlias("INET6_ATON", FunctionIPv6StringToNum<IPStringToNumExceptionMode::Throw>::name, FunctionFactory::CaseInsensitive);
+    factory.registerAlias("INET_NTOA", NameFunctionIPv4NumToString::name, FunctionFactory::CaseInsensitive);
 }
 
 }

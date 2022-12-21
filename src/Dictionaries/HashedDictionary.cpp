@@ -80,11 +80,11 @@ ColumnPtr HashedDictionary<dictionary_key_type, sparse>::getColumn(
 
     bool is_attribute_nullable = attribute.is_nullable_set.has_value();
 
-    ColumnBool::MutablePtr col_null_map_to;
-    ColumnBool::Container * vec_null_map_to = nullptr;
+    ColumnUInt8::MutablePtr col_null_map_to;
+    ColumnUInt8::Container * vec_null_map_to = nullptr;
     if (attribute.is_nullable_set)
     {
-        col_null_map_to = ColumnBool::create(size, false);
+        col_null_map_to = ColumnUInt8::create(size, false);
         vec_null_map_to = &col_null_map_to->getData();
     }
 
@@ -164,7 +164,7 @@ ColumnPtr HashedDictionary<dictionary_key_type, sparse>::getColumn(
 }
 
 template <DictionaryKeyType dictionary_key_type, bool sparse>
-ColumnBool::Ptr HashedDictionary<dictionary_key_type, sparse>::hasKeys(const Columns & key_columns, const DataTypes & key_types) const
+ColumnUInt8::Ptr HashedDictionary<dictionary_key_type, sparse>::hasKeys(const Columns & key_columns, const DataTypes & key_types) const
 {
     if (dictionary_key_type == DictionaryKeyType::Complex)
         dict_struct.validateKeyTypes(key_types);
@@ -174,7 +174,7 @@ ColumnBool::Ptr HashedDictionary<dictionary_key_type, sparse>::hasKeys(const Col
 
     size_t keys_size = extractor.getKeysSize();
 
-    auto result = ColumnBool::create(keys_size, false);
+    auto result = ColumnUInt8::create(keys_size, false);
     auto & out = result->getData();
 
     size_t keys_found = 0;
@@ -266,7 +266,7 @@ ColumnPtr HashedDictionary<dictionary_key_type, sparse>::getHierarchy(ColumnPtr 
 }
 
 template <DictionaryKeyType dictionary_key_type, bool sparse>
-ColumnBool::Ptr HashedDictionary<dictionary_key_type, sparse>::isInHierarchy(
+ColumnUInt8::Ptr HashedDictionary<dictionary_key_type, sparse>::isInHierarchy(
     ColumnPtr key_column [[maybe_unused]],
     ColumnPtr in_key_column [[maybe_unused]],
     const DataTypePtr &) const

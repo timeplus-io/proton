@@ -8,7 +8,7 @@ namespace DB
 
 using FunctionToStartOfHour = FunctionDateOrDateTimeToDateTimeOrDateTime64<ToStartOfHourImpl>;
 
-void registerFunctionToStartOfHour(FunctionFactory & factory)
+REGISTER_FUNCTION(ToStartOfHour)
 {
     factory.registerFunction<FunctionToStartOfHour>();
 }

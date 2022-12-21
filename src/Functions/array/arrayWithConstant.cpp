@@ -19,10 +19,10 @@ namespace ErrorCodes
 static constexpr size_t max_arrays_size_in_columns = 1000000000;
 
 
-/* arrayWithConstant(num, const) - make array of constants with length num.
- * arrayWithConstant(3, 'hello') = ['hello', 'hello', 'hello']
- * arrayWithConstant(1, 'hello') = ['hello']
- * arrayWithConstant(0, 'hello') = []
+/* array_with_constant(num, const) - make array of constants with length num.
+ * array_with_constant(3, 'hello') = ['hello', 'hello', 'hello']
+ * array_with_constant(1, 'hello') = ['hello']
+ * array_with_constant(0, 'hello') = []
  */
 
 class FunctionArrayWithConstant : public IFunction
@@ -78,7 +78,7 @@ public:
     }
 };
 
-void registerFunctionArrayWithConstant(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayWithConstant)
 {
     factory.registerFunction<FunctionArrayWithConstant>();
 }

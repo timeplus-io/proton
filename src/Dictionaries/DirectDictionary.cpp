@@ -157,7 +157,7 @@ ColumnPtr DirectDictionary<dictionary_key_type>::getColumn(
 }
 
 template <DictionaryKeyType dictionary_key_type>
-ColumnBool::Ptr DirectDictionary<dictionary_key_type>::hasKeys(
+ColumnUInt8::Ptr DirectDictionary<dictionary_key_type>::hasKeys(
     const Columns & key_columns,
     const DataTypes & key_types [[maybe_unused]]) const
 {
@@ -178,7 +178,7 @@ ColumnBool::Ptr DirectDictionary<dictionary_key_type>::hasKeys(
         requested_key_to_index[requested_key] = i;
     }
 
-    auto result = ColumnBool::create(requested_keys_size, false);
+    auto result = ColumnUInt8::create(requested_keys_size, false);
     auto & result_data = result->getData();
 
     Columns block_key_columns;
@@ -241,7 +241,7 @@ ColumnPtr DirectDictionary<dictionary_key_type>::getHierarchy(
 }
 
 template <DictionaryKeyType dictionary_key_type>
-ColumnBool::Ptr DirectDictionary<dictionary_key_type>::isInHierarchy(
+ColumnUInt8::Ptr DirectDictionary<dictionary_key_type>::isInHierarchy(
     ColumnPtr key_column,
     ColumnPtr in_key_column,
     const DataTypePtr & key_type) const

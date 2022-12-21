@@ -13,11 +13,14 @@ struct NameEmpty
 {
     static constexpr auto name = "empty";
 };
-using FunctionEmpty = FunctionStringOrArrayToT<EmptyImpl<false>, NameEmpty, Bool, false>;
+
+/// proton: starts. return bool
+using FunctionEmpty = FunctionStringOrArrayToT<EmptyImpl<false>, NameEmpty, /*result*/bool, false>;
+/// proton: ends.
 
 }
 
-void registerFunctionEmpty(FunctionFactory & factory)
+REGISTER_FUNCTION(Empty)
 {
     factory.registerFunction<FunctionEmpty>();
 }

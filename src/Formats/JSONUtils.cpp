@@ -127,7 +127,7 @@ namespace JSONUtils
             return nullptr;
 
         if (field.isBool())
-            return DataTypeFactory::instance().get("Nullable(Bool)");
+            return DataTypeFactory::instance().get("nullable(bool)");
 
         if (field.isInt64() || field.isUInt64() || field.isDouble())
             return makeNullable(std::make_shared<DataTypeFloat64>());

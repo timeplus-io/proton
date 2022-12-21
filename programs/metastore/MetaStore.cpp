@@ -11,7 +11,7 @@
 #include <Interpreters/DNSCacheUpdater.h>
 #include <base/defines.h>
 #include <Common/logger_useful.h>
-#include <base/ErrorHandlers.h>
+#include <Common/ErrorHandlers.h>
 #include <base/scope_guard.h>
 #include <Poco/Util/HelpFormatter.h>
 #include <Poco/Version.h>

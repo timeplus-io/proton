@@ -35,7 +35,7 @@ struct BitRotateRightImpl
     static inline llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * left, llvm::Value * right, bool)
     {
         if (!left->getType()->isIntegerTy())
-            throw Exception("BitRotateRightImpl expected an integral type", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("bit_rotate_right expected an integral type", ErrorCodes::LOGICAL_ERROR);
         auto * size = llvm::ConstantInt::get(left->getType(), left->getType()->getPrimitiveSizeInBits());
         return b.CreateOr(b.CreateLShr(left, right), b.CreateShl(left, b.CreateSub(size, right)));
     }
@@ -47,7 +47,7 @@ using FunctionBitRotateRight = BinaryArithmeticOverloadResolver<BitRotateRightIm
 
 }
 
-void registerFunctionBitRotateRight(FunctionFactory & factory)
+REGISTER_FUNCTION(BitRotateRight)
 {
     factory.registerFunction<FunctionBitRotateRight>();
 }

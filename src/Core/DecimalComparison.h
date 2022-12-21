@@ -161,7 +161,7 @@ private:
     template <bool scale_left, bool scale_right>
     static ColumnPtr apply(const ColumnPtr & c0, const ColumnPtr & c1, CompareInt scale)
     {
-        auto c_res = ColumnBool::create();
+        auto c_res = ColumnUInt8::create();
 
         if constexpr (_actual)
         {
@@ -176,10 +176,10 @@ private:
                 A a = c0_const->template getValue<A>();
                 B b = c1_const->template getValue<B>();
                 UInt8 res = apply<scale_left, scale_right>(a, b, scale);
-                return DataTypeBool().createColumnConst(c0->size(), toField(res));
+                return DataTypeUInt8().createColumnConst(c0->size(), toField(res));
             }
 
-            ColumnBool::Container & vec_res = c_res->getData();
+            ColumnUInt8::Container & vec_res = c_res->getData();
             vec_res.resize(c0->size());
 
             if (c0_is_const)

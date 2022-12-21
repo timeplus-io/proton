@@ -32,7 +32,6 @@ bool DataTypeNumberBase<T>::isValueRepresentedByUnsignedInteger() const
 
 
 /// Explicit template instantiations - to avoid code bloat in headers.
-template class DataTypeNumberBase<Bool>;
 template class DataTypeNumberBase<UInt8>;
 template class DataTypeNumberBase<UInt16>;
 template class DataTypeNumberBase<UInt32>;

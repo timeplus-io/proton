@@ -134,7 +134,7 @@ public:
         const DataTypes & key_types,
         const Columns & default_values_columns) const override;
 
-    ColumnBool::Ptr hasKeys(const Columns & key_columns, const DataTypes & key_types) const override;
+    ColumnUInt8::Ptr hasKeys(const Columns & key_columns, const DataTypes & key_types) const override;
 
     Pipe read(const Names & column_names, size_t max_block_size, size_t num_streams) const override;
 
@@ -144,7 +144,7 @@ public:
 
     ColumnPtr getHierarchy(ColumnPtr key_column, const DataTypePtr & key_type) const override;
 
-    ColumnBool::Ptr isInHierarchy(
+    ColumnUInt8::Ptr isInHierarchy(
         ColumnPtr key_column,
         ColumnPtr in_key_column,
         const DataTypePtr & key_type) const override;

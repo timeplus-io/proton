@@ -549,7 +549,6 @@ void ColumnArray::insertRangeFrom(const IColumn & src, size_t start, size_t leng
 
 ColumnPtr ColumnArray::filter(const Filter & filt, ssize_t result_size_hint) const
 {
-    if (typeid_cast<const ColumnBool *>(data.get()))       return filterNumber<Bool>(filt, result_size_hint);
     if (typeid_cast<const ColumnUInt8 *>(data.get()))      return filterNumber<UInt8>(filt, result_size_hint);
     if (typeid_cast<const ColumnUInt16 *>(data.get()))     return filterNumber<UInt16>(filt, result_size_hint);
     if (typeid_cast<const ColumnUInt32 *>(data.get()))     return filterNumber<UInt32>(filt, result_size_hint);
@@ -737,7 +736,7 @@ ColumnPtr ColumnArray::filterNullable(const Filter & filt, ssize_t result_size_h
     const auto & filtered_array_of_nested = assert_cast<const ColumnArray &>(*filtered_array_of_nested_owner);
     const auto & filtered_offsets = filtered_array_of_nested.getOffsetsPtr();
 
-    auto res_null_map = ColumnBool::create();
+    auto res_null_map = ColumnUInt8::create();
 
     filterArraysImplOnlyData(nullable_elems.getNullMapData(), getOffsets(), res_null_map->getData(), filt, result_size_hint);
 
@@ -935,7 +934,6 @@ ColumnPtr ColumnArray::replicate(const Offsets & replicate_offsets) const
     if (replicate_offsets.empty())
         return cloneEmpty();
 
-    if (typeid_cast<const ColumnBool *>(data.get()))     return replicateNumber<Bool>(replicate_offsets);
     if (typeid_cast<const ColumnUInt8 *>(data.get()))    return replicateNumber<UInt8>(replicate_offsets);
     if (typeid_cast<const ColumnUInt16 *>(data.get()))   return replicateNumber<UInt16>(replicate_offsets);
     if (typeid_cast<const ColumnUInt32 *>(data.get()))   return replicateNumber<UInt32>(replicate_offsets);

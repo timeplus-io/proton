@@ -178,8 +178,8 @@ public:
         size_t totalRowsPerGranule() const { return total_rows_per_granule; }
         size_t numRowsToSkipInLastGranule() const { return num_rows_to_skip_in_last_granule; }
         /// Filter you need to apply to newly-read columns in order to add them to block.
-        const ColumnBool * getFilterOriginal() const { return filter_original ? filter_original : filter; }
-        const ColumnBool * getFilter() const { return filter; }
+        const ColumnUInt8 * getFilterOriginal() const { return filter_original ? filter_original : filter; }
+        const ColumnUInt8 * getFilter() const { return filter; }
         ColumnPtr & getFilterHolder() { return filter_holder; }
 
         void addGranule(size_t num_rows_);
@@ -227,8 +227,8 @@ public:
         /// nullptr if prev reader hasn't prewhere_actions. Otherwise filter.size() >= total_rows_per_granule.
         ColumnPtr filter_holder;
         ColumnPtr filter_holder_original;
-        const ColumnBool * filter = nullptr;
-        const ColumnBool * filter_original = nullptr;
+        const ColumnUInt8 * filter = nullptr;
+        const ColumnUInt8 * filter_original = nullptr;
 
         void collapseZeroTails(const IColumn::Filter & filter, IColumn::Filter & new_filter);
         size_t countZeroTails(const IColumn::Filter & filter, NumRows & zero_tails, bool can_read_incomplete_granules) const;

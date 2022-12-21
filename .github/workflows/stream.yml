@@ -16,26 +16,28 @@ jobs:
       command: |
         echo "download cache_address.tar.gz"
         cd $GITHUB_WORKSPACE
-        aws s3 cp --no-progress s3://tp-internal/proton/cache_address.tar.gz .
+        # aws s3 cp --no-progress s3://tp-internal/proton/cache_address.tar.gz .
 
-        echo "uncompress cache_address.tar.gz"
-        mkdir $GITHUB_WORKSPACE/ccache
-        tar -zxf ./cache_address.tar.gz -C $GITHUB_WORKSPACE/ccache
-        rm cache_address.tar.gz
+        # echo "uncompress cache_address.tar.gz"
+        # mkdir $GITHUB_WORKSPACE/ccache
+        # tar -zxf ./cache_address.tar.gz -C $GITHUB_WORKSPACE/ccache
+        # rm cache_address.tar.gz
 
         echo "build proton binary"
-        ./docker/packager/packager --package-type binary --docker-image-version clang-15 --sanitizer address --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        # ./docker/packager/packager --package-type binary --docker-image-version clang-15 --sanitizer address --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+
+        ./docker/packager/packager --package-type binary --docker-image-version clang-15 --sanitizer address --proton-build --output-dir $GITHUB_WORKSPACE/output
         
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"
           exit 127
         fi
 
-        echo "upload cache_address.tar.gz"
-        tar -zcf ./cache_address.tar.gz -C $GITHUB_WORKSPACE/ccache .
-        ls -al .
-        aws s3 cp --no-progress ./cache_address.tar.gz s3://tp-internal/proton/
-        rm -rf $GITHUB_WORKSPACE/ccache
+        # echo "upload cache_address.tar.gz"
+        # tar -zcf ./cache_address.tar.gz -C $GITHUB_WORKSPACE/ccache .
+        # ls -al .
+        # aws s3 cp --no-progress ./cache_address.tar.gz s3://tp-internal/proton/
+        # rm -rf $GITHUB_WORKSPACE/ccache
 
         df -h
 

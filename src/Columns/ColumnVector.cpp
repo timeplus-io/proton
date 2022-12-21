@@ -31,6 +31,12 @@
 #    include <immintrin.h>
 #endif
 
+#if USE_EMBEDDED_COMPILER
+#include <DataTypes/Native.h>
+#include <llvm/IR/IRBuilder.h>
+#endif
+
+
 namespace DB
 {
 
@@ -78,8 +84,8 @@ void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash) const
         throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
                         ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
-    const ValueType * begin = data.data();
-    const ValueType * end = begin + s;
+    const T * begin = data.data();
+    const T * end = begin + s;
     UInt32 * hash_data = hash.getData().data();
 
     while (begin < end)
@@ -189,6 +195,43 @@ namespace
     };
 }
 
+#if USE_EMBEDDED_COMPILER
+
+template <typename T>
+bool ColumnVector<T>::isComparatorCompilable() const
+{
+    /// TODO: for std::is_floating_point_v<T> we need implement is_nan in LLVM IR.
+    return std::is_integral_v<T>;
+}
+
+template <typename T>
+llvm::Value * ColumnVector<T>::compileComparator(llvm::IRBuilderBase & builder, llvm::Value * lhs, llvm::Value * rhs, llvm::Value *) const
+{
+    llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
+
+    if constexpr (std::is_integral_v<T>)
+    {
+        // a > b ? 1 : (a < b ? -1 : 0);
+
+        bool is_signed = std::is_signed_v<T>;
+
+        auto * lhs_greater_than_rhs_result = llvm::ConstantInt::getSigned(b.getInt8Ty(), 1);
+        auto * lhs_less_than_rhs_result = llvm::ConstantInt::getSigned(b.getInt8Ty(), -1);
+        auto * lhs_equals_rhs_result = llvm::ConstantInt::getSigned(b.getInt8Ty(), 0);
+
+        auto * lhs_greater_than_rhs = is_signed ? b.CreateICmpSGT(lhs, rhs) : b.CreateICmpUGT(lhs, rhs);
+        auto * lhs_less_than_rhs = is_signed ? b.CreateICmpSLT(lhs, rhs) : b.CreateICmpULT(lhs, rhs);
+        auto * if_lhs_less_than_rhs_result = b.CreateSelect(lhs_less_than_rhs, lhs_less_than_rhs_result, lhs_equals_rhs_result);
+
+        return b.CreateSelect(lhs_greater_than_rhs, lhs_greater_than_rhs_result, if_lhs_less_than_rhs_result);
+    }
+    else
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Method compileComparator is not supported for type {}", TypeName<T>);
+    }
+}
+
+#endif
 
 template <typename T>
 void ColumnVector<T>::getPermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
@@ -235,7 +278,7 @@ void ColumnVector<T>::getPermutation(IColumn::PermutationSortDirection direction
             {
                 PaddedPODArray<ValueWithIndex<T>> pairs(s);
                 for (UInt32 i = 0; i < static_cast<UInt32>(s); ++i)
-                    pairs[i] = {static_cast<T>(data[i]), i};
+                    pairs[i] = {data[i], i};
 
                 RadixSort<RadixSortTraits<T>>::executeLSD(pairs.data(), s, reverse, res.data());
 
@@ -302,7 +345,7 @@ void ColumnVector<T>::updatePermutation(IColumn::PermutationSortDirection direct
 
                 for (auto * it = begin; it != end; ++it)
                 {
-                    pairs[index] = {static_cast<T>(data[*it]), static_cast<UInt32>(*it)};
+                    pairs[index] = {data[*it], static_cast<UInt32>(*it)};
                     ++index;
                 }
 
@@ -571,7 +614,7 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
 
     const UInt8 * filt_pos = filt.data();
     const UInt8 * filt_end = filt_pos + size;
-    const ValueType * data_pos = data.data();
+    const T * data_pos = data.data();
 
     /** A slightly more optimized version.
       * Based on the assumption that often pieces of consecutive values
@@ -584,10 +627,10 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
 #if USE_MULTITARGET_CODE
     static constexpr bool VBMI2_CAPABLE = sizeof(T) == 1 || sizeof(T) == 2 || sizeof(T) == 4 || sizeof(T) == 8;
     if (VBMI2_CAPABLE && isArchSupported(TargetArch::AVX512VBMI2))
-        TargetSpecific::AVX512VBMI2::doFilterAligned<ValueType, Container, SIMD_ELEMENTS>(filt_pos, filt_end_aligned, data_pos, res_data);
+        TargetSpecific::AVX512VBMI2::doFilterAligned<T, Container, SIMD_ELEMENTS>(filt_pos, filt_end_aligned, data_pos, res_data);
     else
 #endif
-        TargetSpecific::Default::doFilterAligned<ValueType, Container, SIMD_ELEMENTS>(filt_pos, filt_end_aligned, data_pos, res_data);
+        TargetSpecific::Default::doFilterAligned<T, Container, SIMD_ELEMENTS>(filt_pos, filt_end_aligned, data_pos, res_data);
 
     while (filt_pos < filt_end)
     {
@@ -604,7 +647,7 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
 template <typename T>
 void ColumnVector<T>::expand(const IColumn::Filter & mask, bool inverted)
 {
-    expandDataByMask<ValueType>(data, mask, inverted);
+    expandDataByMask<T>(data, mask, inverted);
 }
 
 template <typename T>
@@ -616,7 +659,7 @@ void ColumnVector<T>::applyZeroMap(const IColumn::Filter & filt, bool inverted)
 
     const UInt8 * filt_pos = filt.data();
     const UInt8 * filt_end = filt_pos + size;
-    ValueType * data_pos = data.data();
+    T * data_pos = data.data();
 
     if (inverted)
     {
@@ -884,7 +927,6 @@ ColumnPtr ColumnVector<T>::createWithOffsets(const IColumn::Offsets & offsets, c
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.
-template class ColumnVector<Bool>;
 template class ColumnVector<UInt8>;
 template class ColumnVector<UInt16>;
 template class ColumnVector<UInt32>;

@@ -22,10 +22,6 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeFixedString.h>
 
-/// proton: starts.
-#include <DataTypes/DataTypeBool.h>
-/// proton: ends.
-
 namespace DB
 {
 

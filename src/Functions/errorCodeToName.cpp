@@ -32,7 +32,7 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & types) const override
     {
         if (!isNumber(types.at(0)))
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "The argument of function {} must have simple numeric type, possibly Nullable", name);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "The argument of function {} must have simple numeric type, possibly nullable", name);
 
         return std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>());
     }
@@ -45,7 +45,8 @@ public:
         for (size_t i = 0; i < input_rows_count; ++i)
         {
             const Int64 error_code = input_column.getInt(i);
-            std::string_view error_name = ErrorCodes::getName(error_code);
+            std::string_view error_name =
+                ErrorCodes::getName(static_cast<ErrorCodes::ErrorCode>(error_code));
             col_res->insertData(error_name.data(), error_name.size());
         }
 
@@ -54,7 +55,7 @@ public:
 };
 
 
-void registerFunctionErrorCodeToName(FunctionFactory & factory)
+REGISTER_FUNCTION(ErrorCodeToName)
 {
     factory.registerFunction<FunctionErrorCodeToName>();
 }

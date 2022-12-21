@@ -1,7 +1,8 @@
-#include <DataTypes/DataTypesNumber.h>
 #include <Columns/ColumnsNumber.h>
-#include "FunctionArrayMapped.h"
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
+
+#include "FunctionArrayMapped.h"
 
 
 namespace DB
@@ -14,6 +15,9 @@ namespace ErrorCodes
 template <bool reverse>
 struct ArraySplitImpl
 {
+    using column_type = ColumnArray;
+    using data_type = DataTypeArray;
+
     static bool needBoolean() { return true; }
     static bool needExpression() { return true; }
     static bool needOneArray() { return false; }
@@ -27,7 +31,7 @@ struct ArraySplitImpl
 
     static ColumnPtr execute(const ColumnArray & array, ColumnPtr mapped)
     {
-        const ColumnBool * column_cut = typeid_cast<const ColumnBool *>(&*mapped);
+        const ColumnUInt8 * column_cut = typeid_cast<const ColumnUInt8 *>(&*mapped);
 
         const IColumn::Offsets & in_offsets = array.getOffsets();
         auto column_offsets_2 = ColumnArray::ColumnOffsets::create();
@@ -62,7 +66,7 @@ struct ArraySplitImpl
         }
         else
         {
-            const auto * column_cut_const = checkAndGetColumnConst<ColumnBool>(&*mapped);
+            const auto * column_cut_const = checkAndGetColumnConst<ColumnUInt8>(&*mapped);
 
             if (!column_cut_const)
                 throw Exception("Unexpected type of cut column", ErrorCodes::ILLEGAL_COLUMN);
@@ -112,7 +116,7 @@ struct NameArrayReverseSplit { static constexpr auto name = "array_reverse_split
 using FunctionArraySplit = FunctionArrayMapped<ArraySplitImpl<false>, NameArraySplit>;
 using FunctionArrayReverseSplit = FunctionArrayMapped<ArraySplitImpl<true>, NameArrayReverseSplit>;
 
-void registerFunctionsArraySplit(FunctionFactory & factory)
+REGISTER_FUNCTION(ArraySplit)
 {
     factory.registerFunction<FunctionArraySplit>();
     factory.registerFunction<FunctionArrayReverseSplit>();

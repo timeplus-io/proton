@@ -266,7 +266,7 @@ public:
         /// reverse iteration and stable sorting are needed for events that are qualified by more than one condition.
         for (auto i = events_size; i > 0; --i)
         {
-            auto event = assert_cast<const ColumnVector<ColumnBool> *>(columns[i])->getData()[row_num];
+            auto event = assert_cast<const ColumnVector<ColumnUInt8> *>(columns[i])->getData()[row_num];
             if (event)
             {
                 this->data(place).add(timestamp, i);

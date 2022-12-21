@@ -2,6 +2,7 @@
 
 #include <Common/memcmpSmall.h>
 #include <Common/assert_cast.h>
+#include <Common/TargetSpecific.h>
 
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnConst.h>
@@ -49,6 +50,10 @@
 #pragma GCC diagnostic pop
 #endif
 
+/// proton: starts.
+#include <DataTypes/DataTypeFactory.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -63,7 +68,7 @@ namespace ErrorCodes
 
 
 /** Comparison functions: ==, !=, <, >, <=, >=.
-  * The comparison functions always return false or true (Bool).
+  * The comparison functions always return 0 or 1 (UInt8).
   *
   * You can compare the following types:
   * - numbers and decimals;
@@ -83,8 +88,9 @@ struct NumComparisonImpl
     using ContainerA = PaddedPODArray<A>;
     using ContainerB = PaddedPODArray<B>;
 
-    /// If you don't specify NO_INLINE, the compiler will inline this function, but we don't need this as this function contains tight loop inside.
-    static void NO_INLINE vectorVector(const ContainerA & a, const ContainerB & b, PaddedPODArray<UInt8> & c)
+    MULTITARGET_FUNCTION_AVX2_SSE42(
+    MULTITARGET_FUNCTION_HEADER(static void), vectorVectorImpl, MULTITARGET_FUNCTION_BODY(( /// NOLINT
+        const ContainerA & a, const ContainerB & b, PaddedPODArray<UInt8> & c)
     {
         /** GCC 4.8.2 vectorizes a loop only if it is written in this form.
           * In this case, if you loop through the array index (the code will look simpler),
@@ -104,9 +110,30 @@ struct NumComparisonImpl
             ++b_pos;
             ++c_pos;
         }
+    }))
+
+    static void NO_INLINE vectorVector(const ContainerA & a, const ContainerB & b, PaddedPODArray<UInt8> & c)
+    {
+#if USE_MULTITARGET_CODE
+        if (isArchSupported(TargetArch::AVX2))
+        {
+            vectorVectorImplAVX2(a, b, c);
+            return;
+        }
+        else if (isArchSupported(TargetArch::SSE42))
+        {
+            vectorVectorImplSSE42(a, b, c);
+            return;
+        }
+#endif
+
+        vectorVectorImpl(a, b, c);
     }
 
-    static void NO_INLINE vectorConstant(const ContainerA & a, B b, PaddedPODArray<UInt8> & c)
+
+    MULTITARGET_FUNCTION_AVX2_SSE42(
+    MULTITARGET_FUNCTION_HEADER(static void), vectorConstantImpl, MULTITARGET_FUNCTION_BODY(( /// NOLINT
+        const ContainerA & a, B b, PaddedPODArray<UInt8> & c)
     {
         size_t size = a.size();
         const A * __restrict a_pos = a.data();
@@ -119,6 +146,24 @@ struct NumComparisonImpl
             ++a_pos;
             ++c_pos;
         }
+    }))
+
+    static void NO_INLINE vectorConstant(const ContainerA & a, B b, PaddedPODArray<UInt8> & c)
+    {
+#if USE_MULTITARGET_CODE
+        if (isArchSupported(TargetArch::AVX2))
+        {
+            vectorConstantImplAVX2(a, b, c);
+            return;
+        }
+        else if (isArchSupported(TargetArch::SSE42))
+        {
+            vectorConstantImplSSE42(a, b, c);
+            return;
+        }
+#endif
+
+        vectorConstantImpl(a, b, c);
     }
 
     static void constantVector(A a, const ContainerB & b, PaddedPODArray<UInt8> & c)
@@ -136,7 +181,7 @@ struct NumComparisonImpl
 template <typename Op>
 struct StringComparisonImpl
 {
-    static void NO_INLINE string_vector_string_vector(
+    static void NO_INLINE string_vector_string_vector( /// NOLINT
         const ColumnString::Chars & a_data, const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars & b_data, const ColumnString::Offsets & b_offsets,
         PaddedPODArray<UInt8> & c)
@@ -156,7 +201,7 @@ struct StringComparisonImpl
         }
     }
 
-    static void NO_INLINE string_vector_fixed_string_vector(
+    static void NO_INLINE string_vector_fixed_string_vector( /// NOLINT
         const ColumnString::Chars & a_data, const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars & b_data, ColumnString::Offset b_n,
         PaddedPODArray<UInt8> & c)
@@ -174,7 +219,7 @@ struct StringComparisonImpl
         }
     }
 
-    static void NO_INLINE string_vector_constant(
+    static void NO_INLINE string_vector_constant( /// NOLINT
         const ColumnString::Chars & a_data, const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars & b_data, ColumnString::Offset b_size,
         PaddedPODArray<UInt8> & c)
@@ -192,7 +237,7 @@ struct StringComparisonImpl
         }
     }
 
-    static void fixed_string_vector_string_vector(
+    static void fixed_string_vector_string_vector( /// NOLINT
         const ColumnString::Chars & a_data, ColumnString::Offset a_n,
         const ColumnString::Chars & b_data, const ColumnString::Offsets & b_offsets,
         PaddedPODArray<UInt8> & c)
@@ -200,7 +245,7 @@ struct StringComparisonImpl
         StringComparisonImpl<typename Op::SymmetricOp>::string_vector_fixed_string_vector(b_data, b_offsets, a_data, a_n, c);
     }
 
-    static void NO_INLINE fixed_string_vector_fixed_string_vector_16(
+    static void NO_INLINE fixed_string_vector_fixed_string_vector_16( /// NOLINT
         const ColumnString::Chars & a_data,
         const ColumnString::Chars & b_data,
         PaddedPODArray<UInt8> & c)
@@ -211,7 +256,7 @@ struct StringComparisonImpl
             c[j] = Op::apply(memcmp16(&a_data[i], &b_data[i]), 0);
     }
 
-    static void NO_INLINE fixed_string_vector_constant_16(
+    static void NO_INLINE fixed_string_vector_constant_16( /// NOLINT
         const ColumnString::Chars & a_data,
         const ColumnString::Chars & b_data,
         PaddedPODArray<UInt8> & c)
@@ -222,7 +267,7 @@ struct StringComparisonImpl
             c[j] = Op::apply(memcmp16(&a_data[i], &b_data[0]), 0);
     }
 
-    static void NO_INLINE fixed_string_vector_fixed_string_vector(
+    static void NO_INLINE fixed_string_vector_fixed_string_vector( /// NOLINT
         const ColumnString::Chars & a_data, ColumnString::Offset a_n,
         const ColumnString::Chars & b_data, ColumnString::Offset b_n,
         PaddedPODArray<UInt8> & c)
@@ -249,7 +294,7 @@ struct StringComparisonImpl
         }
     }
 
-    static void NO_INLINE fixed_string_vector_constant(
+    static void NO_INLINE fixed_string_vector_constant( /// NOLINT
         const ColumnString::Chars & a_data, ColumnString::Offset a_n,
         const ColumnString::Chars & b_data, ColumnString::Offset b_size,
         PaddedPODArray<UInt8> & c)
@@ -272,7 +317,7 @@ struct StringComparisonImpl
         }
     }
 
-    static void constant_string_vector(
+    static void constant_string_vector( /// NOLINT
         const ColumnString::Chars & a_data, ColumnString::Offset a_size,
         const ColumnString::Chars & b_data, const ColumnString::Offsets & b_offsets,
         PaddedPODArray<UInt8> & c)
@@ -280,7 +325,7 @@ struct StringComparisonImpl
         StringComparisonImpl<typename Op::SymmetricOp>::string_vector_constant(b_data, b_offsets, a_data, a_size, c);
     }
 
-    static void constant_fixed_string_vector(
+    static void constant_fixed_string_vector( /// NOLINT
         const ColumnString::Chars & a_data, ColumnString::Offset a_size,
         const ColumnString::Chars & b_data, ColumnString::Offset b_n,
         PaddedPODArray<UInt8> & c)
@@ -294,7 +339,7 @@ struct StringComparisonImpl
 template <bool positive>
 struct StringEqualsImpl
 {
-    static void NO_INLINE string_vector_string_vector(
+    static void NO_INLINE string_vector_string_vector( /// NOLINT
         const ColumnString::Chars & a_data, const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars & b_data, const ColumnString::Offsets & b_offsets,
         PaddedPODArray<UInt8> & c)
@@ -317,7 +362,7 @@ struct StringEqualsImpl
         }
     }
 
-    static void NO_INLINE string_vector_fixed_string_vector(
+    static void NO_INLINE string_vector_fixed_string_vector( /// NOLINT
         const ColumnString::Chars & a_data, const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars & b_data, ColumnString::Offset b_n,
         PaddedPODArray<UInt8> & c)
@@ -337,7 +382,7 @@ struct StringEqualsImpl
         }
     }
 
-    static void NO_INLINE string_vector_constant(
+    static void NO_INLINE string_vector_constant( /// NOLINT
         const ColumnString::Chars & a_data, const ColumnString::Offsets & a_offsets,
         const ColumnString::Chars & b_data, ColumnString::Offset b_size,
         PaddedPODArray<UInt8> & c)
@@ -345,19 +390,42 @@ struct StringEqualsImpl
         size_t size = a_offsets.size();
         ColumnString::Offset prev_a_offset = 0;
 
-        for (size_t i = 0; i < size; ++i)
+        if (b_size == 0)
         {
-            auto a_size = a_offsets[i] - prev_a_offset - 1;
+            /*
+             * Add the fast path of string comparison if the string constant is empty
+             * and b_size is 0. If a_size is also 0, both of string a and b are empty
+             * string. There is no need to call memequalSmallAllowOverflow15() for
+             * string comparison.
+             */
+            for (size_t i = 0; i < size; ++i)
+            {
+                auto a_size = a_offsets[i] - prev_a_offset - 1;
 
-            c[i] = positive == memequalSmallAllowOverflow15(
-                a_data.data() + prev_a_offset, a_size,
-                b_data.data(), b_size);
+                if (a_size == 0)
+                    c[i] = positive;
+                else
+                    c[i] = !positive;
 
-            prev_a_offset = a_offsets[i];
+                prev_a_offset = a_offsets[i];
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < size; ++i)
+            {
+                auto a_size = a_offsets[i] - prev_a_offset - 1;
+
+                c[i] = positive == memequalSmallAllowOverflow15(
+                    a_data.data() + prev_a_offset, a_size,
+                    b_data.data(), b_size);
+
+                prev_a_offset = a_offsets[i];
+            }
         }
     }
 
-    static void NO_INLINE fixed_string_vector_fixed_string_vector_16(
+    static void NO_INLINE fixed_string_vector_fixed_string_vector_16( /// NOLINT
         const ColumnString::Chars & a_data,
         const ColumnString::Chars & b_data,
         PaddedPODArray<UInt8> & c)
@@ -370,7 +438,7 @@ struct StringEqualsImpl
                 b_data.data() + i * 16);
     }
 
-    static void NO_INLINE fixed_string_vector_constant_16(
+    static void NO_INLINE fixed_string_vector_constant_16( /// NOLINT
         const ColumnString::Chars & a_data,
         const ColumnString::Chars & b_data,
         PaddedPODArray<UInt8> & c)
@@ -383,7 +451,7 @@ struct StringEqualsImpl
                 b_data.data());
     }
 
-    static void NO_INLINE fixed_string_vector_fixed_string_vector(
+    static void NO_INLINE fixed_string_vector_fixed_string_vector( /// NOLINT
         const ColumnString::Chars & a_data, ColumnString::Offset a_n,
         const ColumnString::Chars & b_data, ColumnString::Offset b_n,
         PaddedPODArray<UInt8> & c)
@@ -409,7 +477,7 @@ struct StringEqualsImpl
         }
     }
 
-    static void NO_INLINE fixed_string_vector_constant(
+    static void NO_INLINE fixed_string_vector_constant( /// NOLINT
         const ColumnString::Chars & a_data, ColumnString::Offset a_n,
         const ColumnString::Chars & b_data, ColumnString::Offset b_size,
         PaddedPODArray<UInt8> & c)
@@ -426,7 +494,7 @@ struct StringEqualsImpl
         }
     }
 
-    static void fixed_string_vector_string_vector(
+    static void fixed_string_vector_string_vector( /// NOLINT
         const ColumnString::Chars & a_data, ColumnString::Offset a_n,
         const ColumnString::Chars & b_data, const ColumnString::Offsets & b_offsets,
         PaddedPODArray<UInt8> & c)
@@ -434,7 +502,7 @@ struct StringEqualsImpl
         string_vector_fixed_string_vector(b_data, b_offsets, a_data, a_n, c);
     }
 
-    static void constant_string_vector(
+    static void constant_string_vector( /// NOLINT
         const ColumnString::Chars & a_data, ColumnString::Offset a_size,
         const ColumnString::Chars & b_data, const ColumnString::Offsets & b_offsets,
         PaddedPODArray<UInt8> & c)
@@ -442,7 +510,7 @@ struct StringEqualsImpl
         string_vector_constant(b_data, b_offsets, a_data, a_size, c);
     }
 
-    static void constant_fixed_string_vector(
+    static void constant_fixed_string_vector( /// NOLINT
         const ColumnString::Chars & a_data, ColumnString::Offset a_size,
         const ColumnString::Chars & b_data, ColumnString::Offset b_n,
         PaddedPODArray<UInt8> & c)
@@ -570,9 +638,9 @@ private:
     {
         if (const ColumnVector<T1> * col_right = checkAndGetColumn<ColumnVector<T1>>(col_right_untyped))
         {
-            auto col_res = ColumnBool::create();
+            auto col_res = ColumnUInt8::create();
 
-            ColumnBool::Container & vec_res = col_res->getData();
+            ColumnUInt8::Container & vec_res = col_res->getData();
             vec_res.resize(col_left->getData().size());
             NumComparisonImpl<typename ColumnVector<T0>::ValueType, typename ColumnVector<T1>::ValueType, Op<T0, T1>>::vectorVector(col_left->getData(), col_right->getData(), vec_res);
 
@@ -580,9 +648,9 @@ private:
         }
         else if (auto col_right_const = checkAndGetColumnConst<ColumnVector<T1>>(col_right_untyped))
         {
-            auto col_res = ColumnBool::create();
+            auto col_res = ColumnUInt8::create();
 
-            ColumnBool::Container & vec_res = col_res->getData();
+            ColumnUInt8::Container & vec_res = col_res->getData();
             vec_res.resize(col_left->size());
             NumComparisonImpl<typename ColumnVector<T0>::ValueType, T1, Op<T0, T1>>::vectorConstant(col_left->getData(), col_right_const->template getValue<T1>(), vec_res);
 
@@ -597,9 +665,9 @@ private:
     {
         if (const ColumnVector<T1> * col_right = checkAndGetColumn<ColumnVector<T1>>(col_right_untyped))
         {
-            auto col_res = ColumnBool::create();
+            auto col_res = ColumnUInt8::create();
 
-            ColumnBool::Container & vec_res = col_res->getData();
+            ColumnUInt8::Container & vec_res = col_res->getData();
             vec_res.resize(col_left->size());
             NumComparisonImpl<T0, typename ColumnVector<T1>::ValueType, Op<T0, T1>>::constantVector(col_left->template getValue<T0>(), col_right->getData(), vec_res);
 
@@ -610,7 +678,7 @@ private:
             UInt8 res = 0;
             NumComparisonImpl<T0, T1, Op<T0, T1>>::constantConstant(col_left->template getValue<T0>(), col_right_const->template getValue<T1>(), res);
 
-            return DataTypeBool().createColumnConst(col_left->size(), toField(res));
+            return DataTypeUInt8().createColumnConst(col_left->size(), toField(res));
         }
 
         return nullptr;
@@ -622,8 +690,7 @@ private:
         ColumnPtr res = nullptr;
         if (const ColumnVector<T0> * col_left = checkAndGetColumn<ColumnVector<T0>>(col_left_untyped))
         {
-            if (   (res = executeNumRightType<T0, Bool>(col_left, col_right_untyped))
-                || (res = executeNumRightType<T0, UInt8>(col_left, col_right_untyped))
+            if (   (res = executeNumRightType<T0, UInt8>(col_left, col_right_untyped))
                 || (res = executeNumRightType<T0, UInt16>(col_left, col_right_untyped))
                 || (res = executeNumRightType<T0, UInt32>(col_left, col_right_untyped))
                 || (res = executeNumRightType<T0, UInt64>(col_left, col_right_untyped))
@@ -645,8 +712,7 @@ private:
         }
         else if (auto col_left_const = checkAndGetColumnConst<ColumnVector<T0>>(col_left_untyped))
         {
-            if (   (res = executeNumConstRightType<T0, Bool>(col_left_const, col_right_untyped))
-                || (res = executeNumConstRightType<T0, UInt8>(col_left_const, col_right_untyped))
+            if (   (res = executeNumConstRightType<T0, UInt8>(col_left_const, col_right_untyped))
                 || (res = executeNumConstRightType<T0, UInt16>(col_left_const, col_right_untyped))
                 || (res = executeNumConstRightType<T0, UInt32>(col_left_const, col_right_untyped))
                 || (res = executeNumConstRightType<T0, UInt64>(col_left_const, col_right_untyped))
@@ -763,8 +829,8 @@ private:
         }
         else
         {
-            auto c_res = ColumnBool::create();
-            ColumnBool::Container & vec_res = c_res->getData();
+            auto c_res = ColumnUInt8::create();
+            ColumnUInt8::Container & vec_res = c_res->getData();
             vec_res.resize(c0->size());
 
             if (c0_string && c1_string)
@@ -840,7 +906,7 @@ private:
         /// If not possible to convert, comparison with =, <, >, <=, >= yields to false and comparison with != yields to true.
         if (converted.isNull())
         {
-            return DataTypeBool().createColumnConst(input_rows_count, IsOperation<Op>::not_equals);
+            return DataTypeUInt8().createColumnConst(input_rows_count, IsOperation<Op>::not_equals);
         }
         else
         {
@@ -1035,12 +1101,12 @@ private:
         {
             UInt8 res = 0;
             GenericComparisonImpl<Op<int, int>>::constantConstant(*c0, *c1, res);
-            return DataTypeBool().createColumnConst(c0->size(), toField(res));
+            return DataTypeUInt8().createColumnConst(c0->size(), toField(res));
         }
         else
         {
-            auto c_res = ColumnBool::create();
-            ColumnBool::Container & vec_res = c_res->getData();
+            auto c_res = ColumnUInt8::create();
+            ColumnUInt8::Container & vec_res = c_res->getData();
             vec_res.resize(c0->size());
 
             if (c0_const)
@@ -1127,11 +1193,12 @@ public:
             /// We useDefaultImplementationForNulls, but it doesn't work for tuples.
             if (has_null)
                 return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
-            if (has_nullable)
-                return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeBool>());
+            if (has_nullable)  /// proton: starts return bool
+                return std::make_shared<DataTypeNullable>(DataTypeFactory::instance().get("bool"));
         }
 
-        return std::make_shared<DataTypeBool>();
+        return DataTypeFactory::instance().get("bool");
+        /// proton: ends.
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
@@ -1157,11 +1224,11 @@ public:
                 || IsOperation<Op>::less_or_equals
                 || IsOperation<Op>::greater_or_equals)
             {
-                result_column = DataTypeBool().createColumnConst(input_rows_count, 1u);
+                result_column = DataTypeUInt8().createColumnConst(input_rows_count, 1u);
             }
             else
             {
-                result_column = DataTypeBool().createColumnConst(input_rows_count, 0u);
+                result_column = DataTypeUInt8().createColumnConst(input_rows_count, 0u);
             }
 
             if (!isColumnConst(*col_left_untyped))
@@ -1188,8 +1255,7 @@ public:
         ColumnPtr res;
         if (left_is_num && right_is_num && !date_and_datetime)
         {
-            if (!((res = executeNumLeftType<Bool>(col_left_untyped, col_right_untyped))
-                || (res = executeNumLeftType<UInt8>(col_left_untyped, col_right_untyped))
+            if (!((res = executeNumLeftType<UInt8>(col_left_untyped, col_right_untyped))
                 || (res = executeNumLeftType<UInt16>(col_left_untyped, col_right_untyped))
                 || (res = executeNumLeftType<UInt32>(col_left_untyped, col_right_untyped))
                 || (res = executeNumLeftType<UInt64>(col_left_untyped, col_right_untyped))

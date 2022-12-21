@@ -250,7 +250,7 @@ Columns CacheDictionary<dictionary_key_type>::getColumns(
 }
 
 template <DictionaryKeyType dictionary_key_type>
-ColumnBool::Ptr CacheDictionary<dictionary_key_type>::hasKeys(const Columns & key_columns, const DataTypes & key_types) const
+ColumnUInt8::Ptr CacheDictionary<dictionary_key_type>::hasKeys(const Columns & key_columns, const DataTypes & key_types) const
 {
     /**
     * Flow of hasKeys. It is similar to getColumns. But there is an important detail, if key is identified with default value in storage
@@ -310,7 +310,7 @@ ColumnBool::Ptr CacheDictionary<dictionary_key_type>::hasKeys(const Columns & ke
         /// All keys were found in storage
 
         if (result_of_fetch_from_storage.default_keys_size == 0)
-            return ColumnBool::create(keys.size(), true);
+            return ColumnUInt8::create(keys.size(), true);
 
         allow_expired_keys_during_aggregation = true;
     }
@@ -320,7 +320,7 @@ ColumnBool::Ptr CacheDictionary<dictionary_key_type>::hasKeys(const Columns & ke
         update_queue.tryPushToUpdateQueueOrThrow(update_unit);
 
         if (result_of_fetch_from_storage.default_keys_size == 0)
-            return ColumnBool::create(keys.size(), true);
+            return ColumnUInt8::create(keys.size(), true);
 
         allow_expired_keys_during_aggregation = true;
     }
@@ -333,7 +333,7 @@ ColumnBool::Ptr CacheDictionary<dictionary_key_type>::hasKeys(const Columns & ke
         requested_keys_to_fetched_columns_during_update_index = std::move(update_unit->requested_keys_to_fetched_columns_during_update_index);
     }
 
-    auto result = ColumnBool::create(keys.size(), false);
+    auto result = ColumnUInt8::create(keys.size(), false);
     auto & data = result->getData();
 
     for (size_t key_index = 0; key_index < keys.size(); ++key_index)
@@ -376,7 +376,7 @@ ColumnPtr CacheDictionary<dictionary_key_type>::getHierarchy(
 }
 
 template <DictionaryKeyType dictionary_key_type>
-ColumnBool::Ptr CacheDictionary<dictionary_key_type>::isInHierarchy(
+ColumnUInt8::Ptr CacheDictionary<dictionary_key_type>::isInHierarchy(
     ColumnPtr key_column [[maybe_unused]],
     ColumnPtr in_key_column [[maybe_unused]],
     const DataTypePtr & key_type [[maybe_unused]]) const

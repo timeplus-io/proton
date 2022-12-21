@@ -122,9 +122,9 @@ public:
 
 }
 
-void registerFunctionStreamingNow(FunctionFactory & factory)
+REGISTER_FUNCTION(StreamingNow)
 {
-    factory.registerFunction<NowOverloadResolver>(FunctionFactory::CaseSensitive);
+    factory.registerFunction<NowOverloadResolver>();
 }
 
 }

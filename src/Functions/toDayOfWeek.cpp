@@ -9,18 +9,12 @@ namespace DB
 
 using FunctionToDayOfWeek = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToDayOfWeekImpl>;
 
-void registerFunctionToDayOfWeek(FunctionFactory & factory)
+REGISTER_FUNCTION(ToDayOfWeek)
 {
     factory.registerFunction<FunctionToDayOfWeek>();
 
     /// MysQL compatibility alias.
-    factory.registerFunction<FunctionToDayOfWeek>("DAYOFWEEK", FunctionFactory::CaseInsensitive);
-
-    /// proton: starts.
-    factory.registerFunction<FunctionToDayOfWeek>("weekday", FunctionFactory::CaseSensitive);
-    /// proton: ends.
+    factory.registerAlias("DAYOFWEEK", "to_day_of_week", FunctionFactory::CaseInsensitive);
 }
 
 }
-
-

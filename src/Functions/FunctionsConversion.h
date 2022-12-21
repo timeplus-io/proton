@@ -184,20 +184,24 @@ struct ConvertImpl
             auto & vec_to = col_to->getData();
             vec_to.resize(input_rows_count);
 
-            ColumnBool::MutablePtr col_null_map_to;
-            ColumnBool::Container * vec_null_map_to [[maybe_unused]] = nullptr;
+            ColumnUInt8::MutablePtr col_null_map_to;
+            ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
             if constexpr (std::is_same_v<Additions, AccurateOrNullConvertStrategyAdditions>)
             {
-                col_null_map_to = ColumnBool::create(input_rows_count, false);
+                col_null_map_to = ColumnUInt8::create(input_rows_count, false);
                 vec_null_map_to = &col_null_map_to->getData();
             }
 
+            bool result_is_bool = isBool(result_type);
             for (size_t i = 0; i < input_rows_count; ++i)
             {
-                if constexpr (std::is_same_v<ToDataType, DataTypeBool>)
+                if constexpr (std::is_same_v<ToDataType, DataTypeUInt8>)
                 {
-                    vec_to[i] = vec_from[i] != FromFieldType(0);
-                    continue;
+                    if (result_is_bool)
+                    {
+                        vec_to[i] = vec_from[i] != FromFieldType(0);
+                        continue;
+                    }
                 }
 
                 if constexpr (std::is_same_v<FromDataType, DataTypeUUID> != std::is_same_v<ToDataType, DataTypeUUID>)
@@ -778,12 +782,12 @@ struct ConvertImpl<DataTypeEnum<FieldType>, DataTypeNumber<FieldType>, Name, Con
     }
 };
 
-static ColumnBool::MutablePtr copyNullMap(ColumnPtr col)
+static ColumnUInt8::MutablePtr copyNullMap(ColumnPtr col)
 {
-    ColumnBool::MutablePtr null_map = nullptr;
+    ColumnUInt8::MutablePtr null_map = nullptr;
     if (const auto * col_null = checkAndGetColumn<ColumnNullable>(col.get()))
     {
-        null_map = ColumnBool::create();
+        null_map = ColumnUInt8::create();
         null_map->insertRangeFrom(col_null->getNullMapColumn(), 0, col_null->size());
     }
     return null_map;
@@ -798,7 +802,7 @@ struct ConvertImpl<FromDataType, DataTypeString, Name, ConvertDefaultBehaviorTag
 
     static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/)
     {
-        ColumnBool::MutablePtr null_map = copyNullMap(arguments[0].column);
+        ColumnUInt8::MutablePtr null_map = copyNullMap(arguments[0].column);
 
         const auto & col_with_type_and_name =  columnGetNested(arguments[0]);
         const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
@@ -878,7 +882,7 @@ struct ConvertImplGenericToString
         static_assert(std::is_same_v<StringColumnType, ColumnString> || std::is_same_v<StringColumnType, ColumnFixedString>,
                 "Can be used only to serialize to ColumnString or ColumnFixedString");
 
-        ColumnBool::MutablePtr null_map = copyNullMap(arguments[0].column);
+        ColumnUInt8::MutablePtr null_map = copyNullMap(arguments[0].column);
 
         const auto & col_with_type_and_name = columnGetNested(arguments[0]);
         const IDataType & type = *col_with_type_and_name.type;
@@ -954,21 +958,6 @@ void parseImpl(typename DataType::FieldType & x, ReadBuffer & rb, const DateLUTI
 {
     readText(x, rb);
 }
-
-/// proton: starts.
-template <>
-inline void parseImpl<DataTypeBool>(DataTypeBool::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
-{
-    Bool tmp{false};
-    /// Expect 1/0, true/false
-    if (*rb.position() == '1' || *rb.position() == '0')
-        readBoolText(tmp, rb);
-    else
-        readBoolTextWord(tmp, rb);
-
-    x = tmp;  /// Bool -> UInt8
-}
-/// proton: ends.
 
 template <>
 inline void parseImpl<DataTypeDate>(DataTypeDate::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
@@ -1072,7 +1061,7 @@ inline bool tryParseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, ReadBuffer &
 
     // Currently there are no functions toIPv{4,6}Or{Null,Zero}
     if (isNativeNumber(result_type) && !(result_type.getName() == "ipv4" || result_type.getName() == "ipv6"))
-        message_buf << ". Note: there are to_" << Poco::toLower(result_type.getName()) << "_or_zero and to_" << Poco::toLower(result_type.getName()) << "_or_null functions, which returns zero/NULL instead of throwing exception.";
+        message_buf << ". Note: there are to_" << Poco::toLower(result_type.getName()) << "_or_zero and to_" << Poco::toLower(result_type.getName()) << "_or_null functions, which returns zero/null instead of throwing exception.";
 
     throw Exception(message_buf.str(), ErrorCodes::CANNOT_PARSE_TEXT);
 }
@@ -1194,11 +1183,11 @@ struct ConvertThroughParsing
 
         typename ColVecTo::Container & vec_to = col_to->getData();
 
-        ColumnBool::MutablePtr col_null_map_to;
-        ColumnBool::Container * vec_null_map_to [[maybe_unused]] = nullptr;
+        ColumnUInt8::MutablePtr col_null_map_to;
+        ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
         if constexpr (exception_mode == ConvertFromStringExceptionMode::Null)
         {
-            col_null_map_to = ColumnBool::create(size);
+            col_null_map_to = ColumnUInt8::create(size);
             vec_null_map_to = &col_null_map_to->getData();
         }
 
@@ -1490,7 +1479,7 @@ struct ConvertImpl<DataTypeFixedString, DataTypeString, Name, ConvertDefaultBeha
 {
     static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type, size_t /*input_rows_count*/)
     {
-        ColumnBool::MutablePtr null_map = copyNullMap(arguments[0].column);
+        ColumnUInt8::MutablePtr null_map = copyNullMap(arguments[0].column);
         const auto & nested =  columnGetNested(arguments[0]);
         if (const ColumnFixedString * col_from = checkAndGetColumn<ColumnFixedString>(nested.column.get()))
         {
@@ -2433,7 +2422,6 @@ struct ToStringMonotonicity
 };
 
 /// proton: starts
-struct NameToBool { static constexpr auto name = "to_bool"; };
 struct NameToInt { static constexpr auto name = "to_int"; };
 struct NameToFloat { static constexpr auto name = "to_float"; };
 /// proton: ends
@@ -2484,12 +2472,10 @@ using FunctionToDecimal256 = FunctionConvert<DataTypeDecimal<Decimal256>, NameTo
 using FunctionToInt = FunctionConvert<DataTypeInt32, NameToInt, ToNumberMonotonicity<Int32>>;
 using FunctionToFloat = FunctionConvert<DataTypeFloat32, NameToFloat, ToNumberMonotonicity<Float32>>;
 using FunctionToDecimal = FunctionConvert<DataTypeDecimal<Decimal32>, NameToDecimal, UnknownMonotonicity>;
-using FunctionToBool = FunctionConvert<DataTypeBool, NameToBool, ToNumberMonotonicity<Bool>>;
 /// proton: ends.
 
 template <typename DataType> struct FunctionTo;
 
-template <> struct FunctionTo<DataTypeBool> { using Type = FunctionToBool; };
 template <> struct FunctionTo<DataTypeUInt8> { using Type = FunctionToUInt8; };
 template <> struct FunctionTo<DataTypeUInt16> { using Type = FunctionToUInt16; };
 template <> struct FunctionTo<DataTypeUInt32> { using Type = FunctionToUInt32; };
@@ -2779,8 +2765,6 @@ public:
 
     String getName() const override { return cast_name; }
 
-    bool isDeterministic() const override { return true; }
-    bool isDeterministicInScopeOfQuery() const override { return true; }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
     bool hasInformationAboutMonotonicity() const override
@@ -2821,7 +2805,7 @@ private:
         return [] (ColumnsWithTypeAndName &, const DataTypePtr & result_type, const ColumnNullable *, size_t input_rows_count)
         {
             ColumnPtr res = result_type->createColumn();
-            ColumnBool::Ptr col_null_map_to = ColumnBool::create(input_rows_count, true);
+            ColumnUInt8::Ptr col_null_map_to = ColumnUInt8::create(input_rows_count, true);
             return ColumnNullable::create(res->cloneResized(input_rows_count), std::move(col_null_map_to));
         };
     }
@@ -2918,7 +2902,7 @@ private:
             /// because Bool column can contain only 0 and 1.
             auto res_column = to_type->createColumn();
             const auto & data_from = checkAndGetColumn<ColumnUInt8>(arguments[0].column.get())->getData();
-            auto & data_to = assert_cast<ColumnBool *>(res_column.get())->getData();
+            auto & data_to = assert_cast<ColumnUInt8 *>(res_column.get())->getData();
             data_to.resize(data_from.size());
             for (size_t i = 0; i != data_from.size(); ++i)
                 data_to[i] = static_cast<bool>(data_from[i]);
@@ -3886,16 +3870,14 @@ private:
                 ret = createWrapper(from_type, checkAndGetDataType<ToDataType>(to_type.get()), requested_result_is_nullable);
                 return true;
             }
-            if constexpr (std::is_same_v<ToDataType, DataTypeBool>) /// proton: starts. bool type conversion
-            {
-                ret = createBoolWrapper<ToDataType>(from_type, checkAndGetDataType<ToDataType>(to_type.get()), requested_result_is_nullable);
-                return true;
-            }
             if constexpr (std::is_same_v<ToDataType, DataTypeUInt8>)
             {
-                ret = createWrapper(from_type, checkAndGetDataType<ToDataType>(to_type.get()), requested_result_is_nullable);
+                if (isBool(to_type))
+                    ret = createBoolWrapper<ToDataType>(from_type, checkAndGetDataType<ToDataType>(to_type.get()), requested_result_is_nullable);
+                else
+                    ret = createWrapper(from_type, checkAndGetDataType<ToDataType>(to_type.get()), requested_result_is_nullable);
                 return true;
-            } /// proton : ends
+            }
             if constexpr (
                 std::is_same_v<ToDataType, DataTypeEnum8> ||
                 std::is_same_v<ToDataType, DataTypeEnum16>)
@@ -4036,7 +4018,7 @@ public:
 
     static MonotonicityForRange getMonotonicityInformation(const DataTypePtr & from_type, const IDataType * to_type)
     {
-        if (const auto * type = checkAndGetDataType<DataTypeBool>(to_type))
+        if (const auto * type = checkAndGetDataType<DataTypeUInt8>(to_type))
             return monotonicityForType(type);
         if (const auto * type = checkAndGetDataType<DataTypeUInt8>(to_type))
             return monotonicityForType(type);

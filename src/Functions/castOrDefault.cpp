@@ -100,7 +100,7 @@ public:
     {
         const ColumnWithTypeAndName & column_to_cast = arguments[0];
         auto non_const_column_to_cast = column_to_cast.column->convertToFullColumnIfConst();
-        ColumnWithTypeAndName column_to_cast_non_const { std::move(non_const_column_to_cast), column_to_cast.type, column_to_cast.name };
+        ColumnWithTypeAndName column_to_cast_non_const { non_const_column_to_cast, column_to_cast.type, column_to_cast.name };
 
         auto cast_result = castColumnAccurateOrNull(column_to_cast_non_const, return_type);
 
@@ -233,8 +233,7 @@ private:
             {
                 throw Exception(ErrorCodes::BAD_ARGUMENTS,
                     "Function {} decimal scale should have native UInt type. Actual {}",
-                    name,
-                    scale_argument.type->getName());
+                    getName(), scale_argument.type->getName());
             }
 
             scale = arguments[additional_argument_index].column->getUInt(0);
@@ -313,6 +312,9 @@ private:
     FunctionCastOrDefault impl;
 };
 
+/// proton: starts.
+struct NameToBoolOrDefault { static constexpr auto name = "to_bool_or_default"; };
+/// proton: ends.
 struct NameToUInt8OrDefault { static constexpr auto name = "to_uint8_or_default"; };
 struct NameToUInt16OrDefault { static constexpr auto name = "to_uint16_or_default"; };
 struct NameToUInt32OrDefault { static constexpr auto name = "to_uint32_or_default"; };
@@ -364,7 +366,7 @@ using FunctionToDecimal256OrDefault = FunctionCastOrDefaultTyped<DataTypeDecimal
 
 using FunctionToUUIDOrDefault = FunctionCastOrDefaultTyped<DataTypeUUID, NameToUUIDOrDefault>;
 
-void registerFunctionCastOrDefault(FunctionFactory & factory)
+REGISTER_FUNCTION(CastOrDefault)
 {
     factory.registerFunction<FunctionCastOrDefault>();
 

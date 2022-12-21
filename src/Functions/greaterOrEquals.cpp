@@ -7,7 +7,7 @@ namespace DB
 
 using FunctionGreaterOrEquals = FunctionComparison<GreaterOrEqualsOp, NameGreaterOrEquals>;
 
-void registerFunctionGreaterOrEquals(FunctionFactory & factory)
+REGISTER_FUNCTION(GreaterOrEquals)
 {
     factory.registerFunction<FunctionGreaterOrEquals>();
 }
@@ -18,7 +18,7 @@ ColumnPtr FunctionComparison<GreaterOrEqualsOp, NameGreaterOrEquals>::executeTup
 {
     return executeTupleLessGreaterImpl(
         FunctionFactory::instance().get("greater", context),
-        FunctionFactory::instance().get("greater_or_equals", context),
+        FunctionFactory::instance().get("greaterOrEquals", context),
         FunctionFactory::instance().get("and", context),
         FunctionFactory::instance().get("or", context),
         FunctionFactory::instance().get("equals", context),

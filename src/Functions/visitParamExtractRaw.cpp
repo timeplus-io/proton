@@ -59,9 +59,10 @@ struct ExtractRaw
 struct NameSimpleJSONExtractRaw    { static constexpr auto name = "simple_json_extract_raw"; };
 using FunctionSimpleJSONExtractRaw = FunctionsStringSearchToString<ExtractParamToStringImpl<ExtractRaw>, NameSimpleJSONExtractRaw>;
 
-void registerFunctionVisitParamExtractRaw(FunctionFactory & factory)
+REGISTER_FUNCTION(VisitParamExtractRaw)
 {
     factory.registerFunction<FunctionSimpleJSONExtractRaw>();
+    factory.registerAlias("visit_param_extract_raw", "simple_json_extract_raw");
 }
 
 }

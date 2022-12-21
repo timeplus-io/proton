@@ -17,8 +17,8 @@
 #cmakedefine01 USE_RAPIDJSON
 #cmakedefine01 USE_DATASKETCHES
 #cmakedefine01 USE_YAML_CPP
-#cmakedefine01 PROTON_SPLIT_BINARY
 #cmakedefine01 USE_BZIP2
+#cmakedefine01 USE_MINIZIP
 #cmakedefine01 USE_SNAPPY
 #cmakedefine01 USE_HIVE
 #cmakedefine01 USE_ODBC
@@ -28,7 +28,7 @@
 #cmakedefine01 USE_S2_GEOMETRY
 #cmakedefine01 USE_FASTOPS
 #cmakedefine01 USE_NLP
-#cmakedefine01 USE_HYPERSCAN
+#cmakedefine01 USE_VECTORSCAN
 #cmakedefine01 USE_AVRO
 #cmakedefine01 USE_CAPNP
 #cmakedefine01 USE_PARQUET
@@ -52,6 +52,7 @@
 #cmakedefine01 USE_ODBC
 #cmakedefine01 USE_BORINGSSL
 #cmakedefine01 USE_BLAKE3
+#cmakedefine01 USE_OPENSSL_INTREE
 
 /// proton: starts.
 #cmakedefine01 USE_BITMAP_FUNCS

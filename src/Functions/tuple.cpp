@@ -52,23 +52,17 @@ public:
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
 
     bool useDefaultImplementationForNulls() const override { return false; }
-    /// tuple_cast(..., nothing, ...) -> tuple(..., nothing, ...)
+    /// tuple(..., Nothing, ...) -> Tuple(..., Nothing, ...)
     bool useDefaultImplementationForNothing() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
     bool useDefaultImplementationForLowCardinalityColumns() const override { return false; }
 
-    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.empty())
             throw Exception("Function " + getName() + " requires at least one argument.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        DataTypes types;
-        types.reserve(arguments.size());
-
-        for (const auto & argument : arguments)
-            types.emplace_back(argument.type);
-
-        return std::make_shared<DataTypeTuple>(types);
+        return std::make_shared<DataTypeTuple>(arguments);
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/) const override
@@ -89,7 +83,7 @@ public:
 
 }
 
-void registerFunctionTuple(FunctionFactory & factory)
+REGISTER_FUNCTION(Tuple)
 {
     factory.registerFunction<FunctionTuple>();
 }

@@ -192,20 +192,13 @@ ColumnPtr fillColumnWithRandomData(
             auto nested_type = typeid_cast<const DataTypeNullable *>(type.get())->getNestedType();
             auto nested_column = fillColumnWithRandomData(nested_type, limit, max_array_length, max_string_length, rng, context);
 
-            auto null_map_column = ColumnBool::create();
+            auto null_map_column = ColumnUInt8::create();
             auto & null_map = null_map_column->getData();
             null_map.resize(limit);
             for (UInt64 i = 0; i < limit; ++i)
                 null_map[i] = rng() % 16 == 0; /// No real motivation for this.
 
             return ColumnNullable::create(std::move(nested_column), std::move(null_map_column));
-        }
-        case TypeIndex::Bool:
-        {
-            auto column = ColumnBool::create();
-            column->getData().resize(limit);
-            fillBufferWithRandomData(reinterpret_cast<char *>(column->getData().data()), limit * sizeof(UInt8), rng);
-            return column;
         }
         case TypeIndex::UInt8:
         {

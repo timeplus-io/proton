@@ -129,7 +129,7 @@ public:
     FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type) const override
     {
         if (isArray(arguments.at(0).type))
-            return FunctionFactory::instance().getImpl("arrayReverse", context)->build(arguments);
+            return FunctionFactory::instance().getImpl("array_reverse", context)->build(arguments);
         else
             return std::make_unique<FunctionToFunctionBaseAdaptor>(
                 FunctionReverse::create(context),
@@ -148,9 +148,9 @@ private:
 
 }
 
-void registerFunctionReverse(FunctionFactory & factory)
+REGISTER_FUNCTION(Reverse)
 {
-    factory.registerFunction<ReverseOverloadResolver>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<ReverseOverloadResolver>({}, FunctionFactory::CaseInsensitive);
 }
 
 }

@@ -11,7 +11,7 @@ using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 class ActionsDAG;
 
 /** Implements WHERE, HAVING operations.
-  * Takes an expression, which adds to the block one ColumnBool column containing the filtering conditions.
+  * Takes an expression, which adds to the block one ColumnUInt8 column containing the filtering conditions.
   * The expression is evaluated and result chunks contain only the filtered rows.
   * If remove_filter_column is true, remove filter column from block.
   */

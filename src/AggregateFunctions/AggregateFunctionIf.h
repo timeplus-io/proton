@@ -42,8 +42,8 @@ public:
         if (num_arguments == 0)
             throw Exception("Aggregate function " + getName() + " require at least one argument", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        if (!isBool(types.back()))
-            throw Exception("Last argument for aggregate function " + getName() + " must be bool", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!isUInt8(types.back()))
+            throw Exception("Last argument for aggregate function " + getName() + " must be uint8 or bool", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     String getName() const override
@@ -113,7 +113,7 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        if (assert_cast<const ColumnBool &>(*columns[num_arguments - 1]).getData()[row_num])
+        if (assert_cast<const ColumnUInt8 &>(*columns[num_arguments - 1]).getData()[row_num])
             nested_func->add(place, columns, row_num, arena);
     }
 

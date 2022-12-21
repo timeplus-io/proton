@@ -10,16 +10,18 @@ namespace
 
 struct NameReplaceRegexpAll
 {
-    static constexpr auto name = "replace_regex";
+    static constexpr auto name = "replace_regexp_all";
 };
 
-using FunctionReplaceRegexpAll = FunctionStringReplace<ReplaceRegexpImpl<false>, NameReplaceRegexpAll>;
+using FunctionReplaceRegexpAll = FunctionStringReplace<ReplaceRegexpImpl<ReplaceRegexpTraits::Replace::All>, NameReplaceRegexpAll>;
 
 }
 
-void registerFunctionReplaceRegexpAll(FunctionFactory & factory)
+REGISTER_FUNCTION(ReplaceRegexpAll)
 {
     factory.registerFunction<FunctionReplaceRegexpAll>();
+    factory.registerAlias("replace_regexp", NameReplaceRegexpAll::name);
+    factory.registerAlias("replace_regex", NameReplaceRegexpAll::name);
 }
 
 }

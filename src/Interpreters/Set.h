@@ -116,7 +116,7 @@ private:
     /// If in the left part columns contains the same types as the elements of the set.
     void executeOrdinary(
         const ColumnRawPtrs & key_columns,
-        ColumnBool::Container & vec_res,
+        ColumnUInt8::Container & vec_res,
         bool negative,
         const PaddedPODArray<UInt8> * null_map) const;
 
@@ -136,7 +136,7 @@ private:
         size_t rows,
         SetVariants & variants,
         ConstNullMapPtr null_map,
-        ColumnBool::Container * out_filter);
+        ColumnUInt8::Container * out_filter);
 
     template <typename Method, bool has_null_map, bool build_filter>
     void insertFromBlockImplCase(
@@ -145,13 +145,13 @@ private:
         size_t rows,
         SetVariants & variants,
         ConstNullMapPtr null_map,
-        ColumnBool::Container * out_filter);
+        ColumnUInt8::Container * out_filter);
 
     template <typename Method>
     void executeImpl(
         Method & method,
         const ColumnRawPtrs & key_columns,
-        ColumnBool::Container & vec_res,
+        ColumnUInt8::Container & vec_res,
         bool negative,
         size_t rows,
         ConstNullMapPtr null_map) const;
@@ -160,7 +160,7 @@ private:
     void executeImplCase(
         Method & method,
         const ColumnRawPtrs & key_columns,
-        ColumnBool::Container & vec_res,
+        ColumnUInt8::Container & vec_res,
         bool negative,
         size_t rows,
         ConstNullMapPtr null_map) const;

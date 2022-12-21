@@ -38,11 +38,11 @@ enum class ExtractAllGroupsResultKind
  *
  * Depending on `Impl::Kind`, result is either grouped by group id (Horizontal) or in order of appearance (Vertical):
  *
- *  SELECT extractAllGroupsVertical('abc=111, def=222, ghi=333', '("[^"]+"|\\w+)=("[^"]+"|\\w+)')
+ *  SELECT extract_all_groups_vertical('abc=111, def=222, ghi=333', '("[^"]+"|\\w+)=("[^"]+"|\\w+)')
  * =>
  *   [['abc', '111'], ['def', '222'], ['ghi', '333']]
  *
- *  SELECT extractAllGroupsHorizontal('abc=111, def=222, ghi=333', '("[^"]+"|\\w+)=("[^"]+"|\\w+)')
+ *  SELECT extract_all_groups_horizontal('abc=111, def=222, ghi=333', '("[^"]+"|\\w+)=("[^"]+"|\\w+)')
  * =>
  *   [['abc', 'def', 'ghi'], ['111', '222', '333']
 */
@@ -55,7 +55,7 @@ public:
     static constexpr auto Kind = Impl::Kind;
     static constexpr auto name = Impl::Name;
 
-    FunctionExtractAllGroups(ContextPtr context_)
+    explicit FunctionExtractAllGroups(ContextPtr context_)
         : context(context_)
     {}
 
@@ -74,7 +74,7 @@ public:
     {
         FunctionArgumentDescriptors args{
             {"haystack", &isStringOrFixedString<IDataType>, nullptr, "const string or const fixed_string"},
-            {"needle", &isStringOrFixedString<IDataType>, isColumnConst, "const String or const fixed_string"},
+            {"needle", &isStringOrFixedString<IDataType>, isColumnConst, "const string or const fixed_string"},
         };
         validateFunctionArgumentTypes(*this, arguments, args);
 
@@ -95,8 +95,8 @@ public:
             throw Exception("Length of 'needle' argument must be greater than 0.", ErrorCodes::BAD_ARGUMENTS);
 
         using StringPiece = typename Regexps::Regexp::StringPieceType;
-        auto holder = Regexps::get<false, false>(needle);
-        const auto & regexp = holder->getRE2();
+        const Regexps::Regexp holder = Regexps::createRegexp<false, false, false>(needle);
+        const auto & regexp = holder.getRE2();
 
         if (!regexp)
             throw Exception("There are no groups in regexp: " + needle, ErrorCodes::BAD_ARGUMENTS);
@@ -129,14 +129,15 @@ public:
             root_offsets_data.resize(input_rows_count);
             for (size_t i = 0; i < input_rows_count; ++i)
             {
-                StringRef current_row = column_haystack->getDataAt(i);
+                std::string_view current_row = column_haystack->getDataAt(i).toView();
 
                 // Extract all non-intersecting matches from haystack except group #0.
-                const auto * pos = current_row.data;
-                const auto * end = pos + current_row.size;
+                const auto * pos = current_row.data();
+                const auto * end = pos + current_row.size();
                 while (pos < end
                     && regexp->Match({pos, static_cast<size_t>(end - pos)},
-                        0, end - pos, regexp->UNANCHORED, matched_groups.data(), matched_groups.size()))
+                        0, end - pos, regexp->UNANCHORED,
+                        matched_groups.data(), static_cast<int>(matched_groups.size())))
                 {
                     // 1 is to exclude group #0 which is whole re match.
                     for (size_t group = 1; group <= groups_count; ++group)
@@ -179,7 +180,8 @@ public:
                 const auto * end = pos + current_row.size;
                 while (pos < end
                     && regexp->Match({pos, static_cast<size_t>(end - pos)},
-                        0, end - pos, regexp->UNANCHORED, matched_groups.data(), matched_groups.size()))
+                        0, end - pos, regexp->UNANCHORED, matched_groups.data(),
+                        static_cast<int>(matched_groups.size())))
                 {
                     // 1 is to exclude group #0 which is whole re match.
                     for (size_t group = 1; group <= groups_count; ++group)

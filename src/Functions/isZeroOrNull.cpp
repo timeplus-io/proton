@@ -6,6 +6,9 @@
 #include <Core/ColumnNumbers.h>
 #include <Columns/ColumnNullable.h>
 
+/// proton: starts.
+#include <DataTypes/DataTypeFactory.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -18,9 +21,9 @@ namespace ErrorCodes
 namespace
 {
 
-/// Returns 1 if argument is zero or NULL.
+/// Returns 1 if argument is zero or null.
 /// It can be used to negate filter in WHERE condition.
-/// "WHERE isZeroOrNull(expr)" will return exactly the same rows that "WHERE expr" will filter out.
+/// "WHERE is_zero_or_null(expr)" will return exactly the same rows that "WHERE expr" will filter out.
 class FunctionIsZeroOrNull : public IFunction
 {
 public:
@@ -45,9 +48,11 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & types) const override
     {
         if (!isNumber(removeNullable(types.at(0))))
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "The argument of function {} must have simple numeric type, possibly Nullable", name);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "The argument of function {} must have simple numeric type, possibly nullable", name);
 
-        return std::make_shared<DataTypeBool>();
+        /// proton: starts. return bool
+        return DataTypeFactory::instance().get("bool");
+        /// proton: ends.
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
@@ -60,36 +65,36 @@ public:
             const NullMap & null_map = input_column_nullable->getNullMapData();
             const IColumn * nested_column = &input_column_nullable->getNestedColumn();
 
-            if (!castTypeToEither<ColumnBool,
+            if (!castTypeToEither<ColumnUInt8,
                 ColumnUInt8, ColumnUInt16, ColumnUInt32, ColumnUInt64,
                 ColumnInt8, ColumnInt16, ColumnInt32, ColumnInt64,
                 ColumnFloat32, ColumnFloat64>(
                 nested_column, [&](const auto & column)
                 {
-                    auto col = ColumnBool::create(input_rows_count);
+                    auto col = ColumnUInt8::create(input_rows_count);
                     processNullable(column.getData(), null_map, col->getData(), input_rows_count);
                     res = std::move(col);
                     return true;
                 }))
             {
-                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "The argument of function {} must have simple numeric type, possibly Nullable", name);
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "The argument of function {} must have simple numeric type, possibly nullable", name);
             }
         }
         else
         {
-            if (!castTypeToEither<ColumnBool,
+            if (!castTypeToEither<ColumnUInt8,
                 ColumnUInt8, ColumnUInt16, ColumnUInt32, ColumnUInt64,
                 ColumnInt8, ColumnInt16, ColumnInt32, ColumnInt64,
                 ColumnFloat32, ColumnFloat64>(
                 input_column.get(), [&](const auto & column)
                 {
-                    auto col = ColumnBool::create(input_rows_count);
+                    auto col = ColumnUInt8::create(input_rows_count);
                     processNotNullable(column.getData(), col->getData(), input_rows_count);
                     res = std::move(col);
                     return true;
                 }))
             {
-                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "The argument of function {} must have simple numeric type, possibly Nullable", name);
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "The argument of function {} must have simple numeric type, possibly nullable", name);
             }
         }
 
@@ -98,27 +103,26 @@ public:
 
 private:
     template <typename InputData>
-    void processNotNullable(const InputData & input_data, ColumnBool::Container & result_data, size_t input_rows_count) const
+    void processNotNullable(const InputData & input_data, ColumnUInt8::Container & result_data, size_t input_rows_count) const
     {
         for (size_t i = 0; i < input_rows_count; ++i)
-            result_data[i] = !input_data[i];
+            result_data[i] = input_data[i] == 0;
     }
 
     template <typename InputData>
     void processNullable(const InputData & input_data, const NullMap & input_null_map,
-        ColumnBool::Container & result_data, size_t input_rows_count) const
+        ColumnUInt8::Container & result_data, size_t input_rows_count) const
     {
         for (size_t i = 0; i < input_rows_count; ++i)
-            result_data[i] = input_null_map[i] || !input_data[i];
+            result_data[i] = input_null_map[i] || input_data[i] == 0;
     }
 };
 
 }
 
-void registerFunctionIsZeroOrNull(FunctionFactory & factory)
+REGISTER_FUNCTION(IsZeroOrNull)
 {
     factory.registerFunction<FunctionIsZeroOrNull>();
 }
 
 }
-

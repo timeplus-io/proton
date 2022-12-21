@@ -1,7 +1,8 @@
-#include <DataTypes/DataTypesNumber.h>
 #include <Columns/ColumnsNumber.h>
-#include "FunctionArrayMapped.h"
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
+
+#include "FunctionArrayMapped.h"
 
 
 namespace DB
@@ -15,6 +16,9 @@ namespace ErrorCodes
   */
 struct ArrayFilterImpl
 {
+    using column_type = ColumnArray;
+    using data_type = DataTypeArray;
+
     static bool needBoolean() { return true; }
     static bool needExpression() { return true; }
     static bool needOneArray() { return false; }
@@ -27,11 +31,11 @@ struct ArrayFilterImpl
     /// If there are several arrays, the first one is passed here.
     static ColumnPtr execute(const ColumnArray & array, ColumnPtr mapped)
     {
-        const ColumnBool * column_filter = typeid_cast<const ColumnBool *>(&*mapped);
+        const ColumnUInt8 * column_filter = typeid_cast<const ColumnUInt8 *>(&*mapped);
 
         if (!column_filter)
         {
-            const auto * column_filter_const = checkAndGetColumnConst<ColumnBool>(&*mapped);
+            const auto * column_filter_const = checkAndGetColumnConst<ColumnUInt8>(&*mapped);
 
             if (!column_filter_const)
                 throw Exception("Unexpected type of filter column", ErrorCodes::ILLEGAL_COLUMN);
@@ -70,7 +74,7 @@ struct ArrayFilterImpl
 struct NameArrayFilter { static constexpr auto name = "array_filter"; };
 using FunctionArrayFilter = FunctionArrayMapped<ArrayFilterImpl, NameArrayFilter>;
 
-void registerFunctionArrayFilter(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayFilter)
 {
     factory.registerFunction<FunctionArrayFilter>();
 }

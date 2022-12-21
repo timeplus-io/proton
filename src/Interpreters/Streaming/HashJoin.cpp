@@ -1084,12 +1084,12 @@ bool HashJoin::addJoinedBlock(const Block & source_block, bool check_limits)
 
         auto join_mask_col = JoinCommon::getColumnAsMask(block, onexpr.condColumnNames().second);
         /// Save blocks that do not hold conditions in ON section
-        ColumnBool::MutablePtr not_joined_map = nullptr;
+        ColumnUInt8::MutablePtr not_joined_map = nullptr;
         if (isRightOrFull(kind) && !join_mask_col.isConstant())
         {
             const auto & join_mask = join_mask_col.getData();
             /// Save rows that do not hold conditions
-            not_joined_map = ColumnBool::create(block.rows(), 0);
+            not_joined_map = ColumnUInt8::create(block.rows(), 0);
             for (size_t i = 0, sz = join_mask->size(); i < sz; ++i)
             {
                 /// Condition hold, do not save row
@@ -1291,9 +1291,9 @@ void HashJoin::joinBlockImpl(Block & block, const Block & block_with_columns_to_
     }
     else if (has_required_right_keys)
     {
-        /// Some trash to represent IColumn::Filter as ColumnBool needed for ColumnNullable::applyNullMap()
-        auto null_map_filter_ptr = ColumnBool::create();
-        ColumnBool & null_map_filter = assert_cast<ColumnBool &>(*null_map_filter_ptr);
+        /// Some trash to represent IColumn::Filter as ColumnUInt8 needed for ColumnNullable::applyNullMap()
+        auto null_map_filter_ptr = ColumnUInt8::create();
+        ColumnUInt8 & null_map_filter = assert_cast<ColumnUInt8 &>(*null_map_filter_ptr);
         null_map_filter.getData().swap(row_filter);
         const IColumn::Filter & filter = null_map_filter.getData();
 

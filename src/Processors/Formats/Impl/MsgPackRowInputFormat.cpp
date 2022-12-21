@@ -110,11 +110,6 @@ static void insertInteger(IColumn & column, DataTypePtr type, UInt64 value)
 
     switch (type->getTypeId())
     {
-        case TypeIndex::Bool:
-        {
-            assert_cast<ColumnBool &>(column).insertValue(value);
-            break;
-        }
         case TypeIndex::UInt8:
         {
             assert_cast<ColumnUInt8 &>(column).insertValue(value);

@@ -1195,7 +1195,7 @@ public:
                 return;
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             for (size_t i = row_begin; i < row_end; ++i)
             {
                 if (flags[i])
@@ -1234,7 +1234,7 @@ public:
 
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             for (size_t i = row_begin; i < row_end; ++i)
             {
                 if (!null_map[i] && flags[i])
