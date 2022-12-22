@@ -44,205 +44,6 @@ namespace DB
 
 constexpr size_t TOP_K_MAX_SIZE = 0xFFFFFF;
 
-template <typename T, bool is_min>
-struct AggregateFunctionMinMaxKData
-{
-    using Container = typename std::vector<T, AllocatorWithMemoryTracking<T>>;
-    using Compare = std::function<bool(const T &, const T &)>;
-    Container values;
-    SpaceSavingArena<T> arena;
-    Compare compare;
-    bool is_sorted = false;
-
-    AggregateFunctionMinMaxKData()
-    {
-        /// We ignore the Nan or NULL, so
-        /// if is min_k, `nan_direction_hint=1` are considered larger than all numbers
-        /// if is max_k, `nan_direction_hint=-1` are considered less than all numbers
-
-        std::make_heap(values.begin(), values.end(), compare);
-    }
-
-    void add(const T & val, UInt64 k)
-    {
-        if (is_sorted)
-        {
-            std::make_heap(values.begin(), values.end(), compare);
-            is_sorted = false;
-        }
-
-        if (values.size() < k)
-        {
-            values.push_back(arena.emplace(val));
-            std::push_heap(values.begin(), values.end(), compare);
-        }
-        else if (compare(val, values.front()))
-        {
-            values.push_back(arena.emplace(val));
-            std::push_heap(values.begin(), values.end(), compare);
-            std::pop_heap(values.begin(), values.end(), compare);
-            arena.free(values.back());
-            values.pop_back();
-        }
-    }
-
-    void reserve(UInt64 k)
-    {
-        if (unlikely(values.capacity() < k))
-            values.reserve(k);
-    }
-
-    typename Container::const_iterator begin() const { return values.begin(); }
-
-    typename Container::const_iterator end() const { return values.end(); }
-
-    size_t size() const { return values.size(); }
-
-    void write(WriteBuffer & wb) const
-    {
-        writeVarUInt(values.size(), wb);
-
-        for (const auto & value : values)
-            writeBinary(value, wb);
-
-        writeBoolText(is_sorted, wb);
-    }
-    void write(WriteBuffer & wb, auto & writers) const
-    {
-        writeVarUInt(values.size(), wb);
-
-        for (const auto & value : values)
-        {
-            assert(writers.size() == value.values.size());
-            for (size_t idx = 0; idx < writers.size(); ++idx)
-                writers[idx](value.values[idx], wb);
-
-            writeVectorBinary(value.string_ref_indexs, wb);
-        }
-
-        writeBoolText(is_sorted, wb);
-    }
-
-    void read(ReadBuffer & rb)
-    {
-        size_t size = 0;
-        readVarUInt(size, rb);
-
-        assert(size < TOP_K_MAX_SIZE);
-
-        /// We free current values before read.
-        for (const auto & value : values)
-            arena.free(value);
-
-        values.resize(size);
-        for (size_t i = 0; i < size; ++i)
-            readBinary(values[i], rb);
-
-        readBoolText(is_sorted, rb);
-    }
-
-    void sort()
-    {
-        if (!is_sorted)
-        {
-            std::sort_heap(values.begin(), values.end(), compare);
-            is_sorted = true;
-        }
-    }
-};
-
-
-template <typename T, bool is_min>
-class AggregateFunctionMinMaxK
-    : public IAggregateFunctionDataHelper<AggregateFunctionMinMaxKData<T, is_min>, AggregateFunctionMinMaxK<T, is_min>>
-{
-protected:
-    using State = AggregateFunctionMinMaxKData<T, is_min>;
-    UInt64 k;
-
-public:
-    AggregateFunctionMinMaxK(UInt64 k_, const DataTypePtr & argument_type_, const Array & params)
-        : IAggregateFunctionDataHelper<AggregateFunctionMinMaxKData<T, is_min>, AggregateFunctionMinMaxK<T, is_min>>(
-            {argument_type_}, params)
-        , k(k_)
-    {
-    }
-
-    String getName() const override { return is_min ? "min_k" : "max_k"; }
-
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(this->argument_types[0]); }
-
-    bool allocatesMemoryInArena() const override { return false; }
-
-    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
-    {
-        auto & top_k = this->data(place);
-        top_k.reserve(k + 1);
-        if constexpr (is_decimal<T>)
-            top_k.add(assert_cast<const ColumnDecimal<T> &>(*columns[0]).getData()[row_num], k);
-        else
-            top_k.add(assert_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num], k);
-    }
-
-    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
-    {
-        auto & top_k = this->data(place);
-        top_k.reserve(k + 1);
-
-        for (const auto & elem : this->data(rhs))
-            top_k.add(elem, k);
-    }
-
-    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> /*version*/) const override
-    {
-        this->data(place).write(buf);
-    }
-
-    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /*version*/, Arena *) const override
-    {
-        auto & top_k = this->data(place);
-        top_k.reserve(k + 1);
-        top_k.read(buf);
-    }
-
-    void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
-    {
-        ColumnArray & arr_to = assert_cast<ColumnArray &>(to);
-        ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
-
-        auto & top_k = this->data(place);
-        size_t size = top_k.size();
-
-        offsets_to.push_back(offsets_to.back() + size);
-
-        if constexpr (is_decimal<T>)
-        {
-            typename ColumnDecimal<T>::Container & data_to = assert_cast<ColumnDecimal<T> &>(arr_to.getData()).getData();
-            size_t old_size = data_to.size();
-            data_to.resize(old_size + size);
-
-            top_k.sort();
-
-            size_t i = 0;
-            for (auto it = top_k.begin(); it != top_k.end(); ++it, ++i)
-                data_to[old_size + i] = *it;
-        }
-        else
-        {
-            typename ColumnVector<T>::Container & data_to = assert_cast<ColumnVector<T> &>(arr_to.getData()).getData();
-            size_t old_size = data_to.size();
-            data_to.resize(old_size + size);
-
-            top_k.sort();
-
-            size_t i = 0;
-            for (auto it = top_k.begin(); it != top_k.end(); ++it, ++i)
-                data_to[old_size + i] = *it;
-        }
-    }
-};
-
-
 /** Template parameter with true value should be used for columns that store their elements in memory continuously.
  *  For such columns minMaxK() can be implemented more efficiently (especially for small numeric arrays).
  */
@@ -275,20 +76,10 @@ struct TupleValue
 {
     std::vector<std::any> values;
     std::vector<size_t> string_ref_indexs;
-    std::vector<TupleOperators::Writer> writers;
 
     TupleValue(std::vector<std::any> values_, std::vector<size_t> string_ref_indexs_)
         : values(std::move(values_)), string_ref_indexs(std::move(string_ref_indexs_))
     {
-    }
-
-    void write(WriteBuffer & buf) const
-    {
-        assert(writers.size() == values.size());
-        for (size_t i = 0; i < writers.size(); ++i)
-            writers[i](values[i], buf);
-
-        writeVectorBinary(string_ref_indexs, buf);
     }
 };
 
@@ -328,14 +119,15 @@ private:
     ArenaWithFreeLists arena;
 };
 
-inline void writeBinary(const TupleValue & x, WriteBuffer & buf)
-{
-    x.write(buf);
-}
-
 template <bool is_min>
-struct AggregateFunctionMinMaxKTupleData : AggregateFunctionMinMaxKData<TupleValue, is_min>
+struct AggregateFunctionMinMaxKTupleData
 {
+    using Container = typename std::vector<TupleValue, AllocatorWithMemoryTracking<TupleValue>>;
+    using Compare = std::function<bool(const TupleValue &, const TupleValue &)>;
+    Container values;
+    SpaceSavingArena<TupleValue> arena;
+    Compare compare;
+    bool is_sorted = false;
     TupleOperators operators;
 
     AggregateFunctionMinMaxKTupleData(TupleOperators && operators_) : operators(operators_)
@@ -387,6 +179,66 @@ struct AggregateFunctionMinMaxKTupleData : AggregateFunctionMinMaxKData<TupleVal
 
         readBoolText(this->is_sorted, rb);
     }
+
+    void write(WriteBuffer & wb) const
+    {
+        writeVarUInt(values.size(), wb);
+
+        for (const auto & value : values)
+        {
+            assert(operators.writers.size() == value.values.size());
+            for (size_t idx = 0; idx < operators.writers.size(); ++idx)
+                operators.writers[idx](value.values[idx], wb);
+
+            writeVectorBinary(value.string_ref_indexs, wb);
+        }
+
+        writeBoolText(is_sorted, wb);
+    }
+
+    void add(const TupleValue & val, UInt64 k)
+    {
+        if (is_sorted)
+        {
+            std::make_heap(values.begin(), values.end(), compare);
+            is_sorted = false;
+        }
+
+        if (values.size() < k)
+        {
+            values.push_back(arena.emplace(val));
+            std::push_heap(values.begin(), values.end(), compare);
+        }
+        else if (compare(val, values.front()))
+        {
+            values.push_back(arena.emplace(val));
+            std::push_heap(values.begin(), values.end(), compare);
+            std::pop_heap(values.begin(), values.end(), compare);
+            arena.free(values.back());
+            values.pop_back();
+        }
+    }
+
+    void sort()
+    {
+        if (!is_sorted)
+        {
+            std::sort_heap(values.begin(), values.end(), compare);
+            is_sorted = true;
+        }
+    }
+
+    void reserve(UInt64 k)
+    {
+        if (unlikely(values.capacity() < k))
+            values.reserve(k);
+    }
+
+    typename Container::const_iterator begin() const { return values.begin(); }
+
+    typename Container::const_iterator end() const { return values.end(); }
+
+    size_t size() const { return values.size(); }
 };
 
 template <bool is_min>
@@ -443,7 +295,7 @@ public:
     {
         auto & top_k = this->data(place);
 
-        for (const auto & elem : this->data(rhs))
+        for (const auto & elem : this->data(rhs).values)
             top_k.add(elem, k);
     }
 
