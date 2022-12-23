@@ -7,9 +7,9 @@ create stream test_collate (x uint32, s nullable(string)) ENGINE=Memory();
 INSERT INTO test_collate VALUES (1, 'Ё'), (1, 'ё'), (1, 'а'), (1, null), (2, 'А'), (2, 'я'), (2, 'Я'), (2, null);
 
 SELECT 'Order by without collate';
-SELECT * FROM test_collate ORDER BY s;
+SELECT * FROM test_collate ORDER BY s, x;
 SELECT 'Order by with collate';
-SELECT * FROM test_collate ORDER BY s COLLATE 'ru';
+SELECT * FROM test_collate ORDER BY s COLLATE 'ru', x;
 
 SELECT 'Order by tuple without collate';
 SELECT * FROM test_collate ORDER BY x, s;

@@ -18,6 +18,19 @@ void registerAggregateFunctionGroupArray(AggregateFunctionFactory &);
 //void registerAggregateFunctionGroupUniqArray(AggregateFunctionFactory &);
 //void registerAggregateFunctionGroupArrayInsertAt(AggregateFunctionFactory &);
 void registerAggregateFunctionsQuantile(AggregateFunctionFactory &);
+//void registerAggregateFunctionsQuantileDeterministic(AggregateFunctionFactory &);
+//void registerAggregateFunctionsQuantileExact(AggregateFunctionFactory &);
+//void registerAggregateFunctionsQuantileExactWeighted(AggregateFunctionFactory &);
+//void registerAggregateFunctionsQuantileExactLow(AggregateFunctionFactory &);
+//void registerAggregateFunctionsQuantileExactHigh(AggregateFunctionFactory &);
+//void registerAggregateFunctionsQuantileExactInclusive(AggregateFunctionFactory &);
+//void registerAggregateFunctionsQuantileExactExclusive(AggregateFunctionFactory &);
+//void registerAggregateFunctionsQuantileTiming(AggregateFunctionFactory &);
+//void registerAggregateFunctionsQuantileTimingWeighted(AggregateFunctionFactory &);
+//void registerAggregateFunctionsQuantileTDigest(AggregateFunctionFactory &);
+//void registerAggregateFunctionsQuantileTDigestWeighted(AggregateFunctionFactory &);
+//void registerAggregateFunctionsQuantileBFloat16(AggregateFunctionFactory &);
+//void registerAggregateFunctionsQuantileBFloat16Weighted(AggregateFunctionFactory &);
 //void registerAggregateFunctionsSequenceMatch(AggregateFunctionFactory &);
 //void registerAggregateFunctionWindowFunnel(AggregateFunctionFactory &);
 //void registerAggregateFunctionRate(AggregateFunctionFactory &);
@@ -59,6 +72,7 @@ void registerAggregateFunctionMoving(AggregateFunctionFactory &);
 //void registerAggregateFunctionExponentialMovingAverage(AggregateFunctionFactory &);
 //void registerAggregateFunctionSparkbar(AggregateFunctionFactory &);
 //void registerAggregateFunctionIntervalLengthSum(AggregateFunctionFactory &);
+//void registerAggregateFunctionAnalysisOfVariance(AggregateFunctionFactory &);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -109,6 +123,19 @@ void registerAggregateFunctions()
         /// registerAggregateFunctionGroupUniqArray(factory);
         /// registerAggregateFunctionGroupArrayInsertAt(factory);
         registerAggregateFunctionsQuantile(factory);
+        /// registerAggregateFunctionsQuantileDeterministic(factory);
+        /// registerAggregateFunctionsQuantileExact(factory);
+        /// registerAggregateFunctionsQuantileExactWeighted(factory);
+        /// registerAggregateFunctionsQuantileExactLow(factory);
+        /// registerAggregateFunctionsQuantileExactHigh(factory);
+        /// registerAggregateFunctionsQuantileExactInclusive(factory);
+        /// registerAggregateFunctionsQuantileExactExclusive(factory);
+        /// registerAggregateFunctionsQuantileTiming(factory);
+        /// registerAggregateFunctionsQuantileTimingWeighted(factory);
+        /// registerAggregateFunctionsQuantileTDigest(factory);
+        /// registerAggregateFunctionsQuantileTDigestWeighted(factory);
+        /// registerAggregateFunctionsQuantileBFloat16(factory);
+        /// registerAggregateFunctionsQuantileBFloat16Weighted(factory);
         /// registerAggregateFunctionsSequenceMatch(factory);
         /// registerAggregateFunctionWindowFunnel(factory);
         /// registerAggregateFunctionRate(factory);
@@ -150,6 +177,7 @@ void registerAggregateFunctions()
         /// registerAggregateFunctionIntervalLengthSum(factory);
         /// registerAggregateFunctionExponentialMovingAverage(factory);
         /// registerAggregateFunctionSparkbar(factory);
+        /// registerAggregateFunctionAnalysisOfVariance(factory);
 
         registerWindowFunctions(factory);
 

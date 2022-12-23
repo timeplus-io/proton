@@ -1106,6 +1106,18 @@ Similar to [RowBinary](#rowbinary), but with added header:
 -   N `String`s specifying column names
 -   N `String`s specifying column types
 
+:::warning
+If setting [input_format_with_names_use_header](../operations/settings/settings.md#input_format_with_names_use_header) is set to 1,
+the columns from input data will be mapped to the columns from the table by their names, columns with unknown names will be skipped if setting [input_format_skip_unknown_fields](../operations/settings/settings.md#input_format_skip_unknown_fields) is set to 1.
+Otherwise, the first row will be skipped.
+If setting [input_format_with_types_use_header](../operations/settings/settings.md#input_format_with_types_use_header) is set to 1,
+the types from input data will be compared with the types of the corresponding columns from the table. Otherwise, the second row will be skipped.
+:::
+
+## RowBinary format settings {#row-binary-format-settings}
+
+- [format_binary_max_string_size](../operations/settings/settings.md#format_binary_max_string_size) - The maximum allowed size for String in RowBinary format. Default value - `1GiB`.
+
 ## Values {#data-format-values}
 
 Prints every row in brackets. Rows are separated by commas. There is no comma after the last row. The values inside the brackets are also comma-separated. Numbers are output in a decimal format without quotes. Arrays are output in square brackets. Strings, dates, and dates with times are output in quotes. Escaping rules and parsing are similar to the [TabSeparated](#tabseparated) format. During formatting, extra spaces aren’t inserted, but during parsing, they are allowed and skipped (except for spaces inside array values, which are not allowed). [NULL](../sql-reference/syntax.md) is represented as `NULL`.

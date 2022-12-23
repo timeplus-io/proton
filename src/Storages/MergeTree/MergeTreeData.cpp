@@ -55,6 +55,7 @@
 #include <Common/typeid_cast.h>
 #include <Processors/Formats/IInputFormat.h>
 #include <AggregateFunctions/AggregateFunctionCount.h>
+#include <Common/scope_guard_safe.h>
 
 #include <boost/algorithm/string/join.hpp>
 
@@ -1093,8 +1094,15 @@ void MergeTreeData::loadDataPartsFromDisk(
     {
         for (size_t thread = 0; thread < num_threads; ++thread)
         {
-            pool.scheduleOrThrowOnError([&, thread]
+            pool.scheduleOrThrowOnError([&, thread, thread_group = CurrentThread::getGroup()]
             {
+                SCOPE_EXIT_SAFE(
+                    if (thread_group)
+                        CurrentThread::detachQueryIfNotDetached();
+                );
+                if (thread_group)
+                    CurrentThread::attachToIfDetached(thread_group);
+
                 while (true)
                 {
                     std::pair<String, DiskPtr> thread_part;
@@ -1621,6 +1629,10 @@ void MergeTreeData::clearPartsFromFilesystem(const DataPartsVector & parts_to_re
         {
             pool.scheduleOrThrowOnError([&, thread_group = CurrentThread::getGroup()]
             {
+                SCOPE_EXIT_SAFE(
+                    if (thread_group)
+                        CurrentThread::detachQueryIfNotDetached();
+                );
                 if (thread_group)
                     CurrentThread::attachToIfDetached(thread_group);
 

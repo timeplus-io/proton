@@ -6,7 +6,7 @@ create stream map_comb(a int, statusMap Map(uint16, uint32))  ;
 
 INSERT INTO map_comb VALUES (1, map(1, 10, 2, 10, 3, 10)),(1, map(3, 10, 4, 10, 5, 10)),(2, map(4, 10, 5, 10, 6, 10)),(2, map(6, 10, 7, 10, 8, 10)),(3, map(1, 10, 2, 10, 3, 10)),(4, map(3, 10, 4, 10, 5, 10)),(5, map(4, 10, 5, 10, 6, 10)),(5, map(6, 10, 7, 10, 8, 10));
 
-SELECT * FROM map_comb ORDER BY a;
+SELECT * FROM map_comb ORDER BY a, statusMap;
 SELECT to_type_name(res), sumMap(statusMap) as res FROM map_comb;
 SELECT to_type_name(res), sumWithOverflowMap(statusMap) as res FROM map_comb;
 SELECT to_type_name(res), sumMapMerge(s) as res FROM (SELECT sumMapState(statusMap) AS s FROM map_comb);

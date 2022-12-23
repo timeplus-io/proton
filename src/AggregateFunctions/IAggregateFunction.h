@@ -338,7 +338,7 @@ public:
         size_t place_offset,
         IColumn & to,
         Arena * arena,
-        bool destroy_place_after_insert) const = 0;
+        bool destroy_place_after_insert = true) const = 0;
 
     /** Destroy batch of aggregate places.
       */
@@ -807,7 +807,7 @@ public:
         size_t place_offset,
         IColumn & to,
         Arena * arena,
-        bool destroy_place_after_insert) const override
+        bool destroy_place_after_insert = true) const override
     {
         size_t batch_index = row_begin;
 
@@ -816,9 +816,10 @@ public:
             for (; batch_index < row_end; ++batch_index)
             {
                 static_cast<const Derived *>(this)->insertResultInto(places[batch_index] + place_offset, to, arena);
-
+                /// For State AggregateFunction ownership of aggregate place is passed to result column after insert,
+                /// so we need to destroy all states up to state of -State combinator.
                 if (destroy_place_after_insert)
-                    static_cast<const Derived *>(this)->destroy(places[batch_index] + place_offset);
+                    static_cast<const Derived *>(this)->destroyUpToState(places[batch_index] + place_offset);
             }
         }
         catch (...)

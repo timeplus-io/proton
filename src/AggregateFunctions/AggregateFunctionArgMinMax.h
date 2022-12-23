@@ -13,10 +13,11 @@ struct Settings;
 namespace ErrorCodes
 {
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+    extern const int CORRUPTED_DATA;
 }
 
 
-/// For possible values for template parameters, see AggregateFunctionMinMaxAny.h
+/// For possible values for template parameters, see 'AggregateFunctionMinMaxAny.h'.
 template <typename ResultData, typename ValueData>
 struct AggregateFunctionArgMinMaxData
 {
@@ -89,6 +90,13 @@ public:
     {
         this->data(place).result.read(buf, *serialization_res, arena);
         this->data(place).value.read(buf, *serialization_val, arena);
+        if (unlikely(this->data(place).value.has() != this->data(place).result.has()))
+            throw Exception(
+                ErrorCodes::CORRUPTED_DATA,
+                "Invalid state of the aggregate function {}: has_value ({}) != has_result ({})",
+                getName(),
+                this->data(place).value.has(),
+                this->data(place).result.has());
     }
 
     bool allocatesMemoryInArena() const override

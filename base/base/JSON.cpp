@@ -15,7 +15,7 @@
 POCO_IMPLEMENT_EXCEPTION(JSONException, Poco::Exception, "JSONException")
 
 
-/// Прочитать беззнаковое целое в простом формате из не-0-terminated строки.
+/// Read unsigned integer in a simple form from a non-0-terminated string.
 static UInt64 readUIntText(const char * buf, const char * end)
 {
     UInt64 x = 0;
@@ -52,7 +52,7 @@ static UInt64 readUIntText(const char * buf, const char * end)
 }
 
 
-/// Прочитать знаковое целое в простом формате из не-0-terminated строки.
+/// Read signed integer in a simple form from a non-0-terminated string.
 static Int64 readIntText(const char * buf, const char * end)
 {
     bool negative = false;
@@ -95,7 +95,7 @@ static Int64 readIntText(const char * buf, const char * end)
 }
 
 
-/// Прочитать число с плавающей запятой в простом формате, с грубым округлением, из не-0-terminated строки.
+/// Read floating point number in simple format, imprecisely, from a non-0-terminated string.
 static double readFloatText(const char * buf, const char * end)
 {
     bool negative = false;
@@ -144,8 +144,8 @@ static double readFloatText(const char * buf, const char * end)
             case 'E':
             {
                 ++buf;
-                Int32 exponent = readIntText(buf, end);
-                x *= preciseExp10(exponent);
+                auto exponent = readIntText(buf, end);
+                x *= preciseExp10(static_cast<double>(exponent));
 
                 run = false;
                 break;
@@ -200,7 +200,7 @@ JSON::ElementType JSON::getType() const
             return TYPE_NUMBER;
         case '"':
         {
-            /// Проверим - это просто строка или name-value pair
+            /// Is it a string or a name-value pair?
             Pos after_string = skipString();
             if (after_string < ptr_end && *after_string == ':')
                 return TYPE_NAME_VALUE_PAIR;
@@ -222,15 +222,13 @@ void JSON::checkPos(Pos pos) const
 
 JSON::Pos JSON::skipString() const
 {
-    //std::cerr << "skipString()\t" << data() << std::endl;
-
     Pos pos = ptr_begin;
     checkPos(pos);
     if (*pos != '"')
         throw JSONException(std::string("JSON: expected \", got ") + *pos);
     ++pos;
 
-    /// fast path: находим следующую двойную кавычку. Если перед ней нет бэкслеша - значит это конец строки (при допущении корректности JSON).
+    /// fast path: find next double quote. If it is not escaped by backslash - then it's an end of string (assuming JSON is valid).
     Pos closing_quote = reinterpret_cast<const char *>(memchr(reinterpret_cast<const void *>(pos), '\"', ptr_end - pos));
     if (nullptr != closing_quote && closing_quote[-1] != '\\')
         return closing_quote + 1;
@@ -262,8 +260,6 @@ JSON::Pos JSON::skipString() const
 
 JSON::Pos JSON::skipNumber() const
 {
-    //std::cerr << "skipNumber()\t" << data() << std::endl;
-
     Pos pos = ptr_begin;
 
     checkPos(pos);
@@ -289,8 +285,6 @@ JSON::Pos JSON::skipNumber() const
 
 JSON::Pos JSON::skipBool() const
 {
-    //std::cerr << "skipBool()\t" << data() << std::endl;
-
     Pos pos = ptr_begin;
     checkPos(pos);
 
@@ -307,16 +301,12 @@ JSON::Pos JSON::skipBool() const
 
 JSON::Pos JSON::skipNull() const
 {
-    //std::cerr << "skipNull()\t" << data() << std::endl;
-
     return ptr_begin + 4;
 }
 
 
 JSON::Pos JSON::skipNameValuePair() const
 {
-    //std::cerr << "skipNameValuePair()\t" << data() << std::endl;
-
     Pos pos = skipString();
     checkPos(pos);
 
@@ -331,8 +321,6 @@ JSON::Pos JSON::skipNameValuePair() const
 
 JSON::Pos JSON::skipArray() const
 {
-    //std::cerr << "skipArray()\t" << data() << std::endl;
-
     if (!isArray())
         throw JSONException("JSON: expected [");
     Pos pos = ptr_begin;
@@ -363,8 +351,6 @@ JSON::Pos JSON::skipArray() const
 
 JSON::Pos JSON::skipObject() const
 {
-    //std::cerr << "skipObject()\t" << data() << std::endl;
-
     if (!isObject())
         throw JSONException("JSON: expected {");
     Pos pos = ptr_begin;
@@ -395,8 +381,6 @@ JSON::Pos JSON::skipObject() const
 
 JSON::Pos JSON::skipElement() const
 {
-    //std::cerr << "skipElement()\t" << data() << std::endl;
-
     ElementType type = getType();
 
     switch (type)
@@ -633,7 +617,7 @@ std::string JSON::getString() const
                         {
                             throw JSONException("JSON: incorrect syntax: incorrect HEX code.");
                         }
-                        buf.resize(buf.size() + 6);    /// максимальный размер UTF8 многобайтовой последовательности
+                        buf.resize(buf.size() + 6);    /// Max size of UTF-8 sequence, including pre-standard mapping of UCS-4 to UTF-8.
                         int res = utf8.convert(unicode,
                                                reinterpret_cast<unsigned char *>(const_cast<char*>(buf.data())) + buf.size() - 6, 6);
                         if (!res)
@@ -746,8 +730,6 @@ JSON::iterator JSON::iterator::begin() const
 
     if (type != TYPE_ARRAY && type != TYPE_OBJECT)
         throw JSONException("JSON: not array or object when calling begin() method.");
-
-    //std::cerr << "begin()\t" << data() << std::endl;
 
     Pos pos = ptr_begin + 1;
     checkPos(pos);

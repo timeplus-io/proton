@@ -66,7 +66,7 @@ class AggregateFunctionTopKDateTimeWithCount : public AggregateFunctionTopKWithC
 };
 
 template <bool is_weighted, bool with_count>
-static IAggregateFunction *
+IAggregateFunction *
 createWithExtraTypes(const DataTypes & argument_types, UInt64 threshold, UInt64 load_factor, const Array & params)
 {
     if (argument_types.empty())

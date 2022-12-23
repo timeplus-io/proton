@@ -26,18 +26,18 @@ static constexpr size_t MAX_ARRAY_SIZE = 1ULL << 30;
 static constexpr size_t MAX_ARRAYS_SIZE = 1ULL << 40;
 
 
-void SerializationArray::serializeBinary(const Field & field, WriteBuffer & ostr) const
+void SerializationArray::serializeBinary(const Field & field, WriteBuffer & ostr, const FormatSettings & settings) const
 {
     const Array & a = field.get<const Array &>();
     writeVarUInt(a.size(), ostr);
     for (size_t i = 0; i < a.size(); ++i)
     {
-        nested->serializeBinary(a[i], ostr);
+        nested->serializeBinary(a[i], ostr, settings);
     }
 }
 
 
-void SerializationArray::deserializeBinary(Field & field, ReadBuffer & istr) const
+void SerializationArray::deserializeBinary(Field & field, ReadBuffer & istr, const FormatSettings & settings) const
 {
     size_t size;
     readVarUInt(size, istr);
@@ -45,11 +45,11 @@ void SerializationArray::deserializeBinary(Field & field, ReadBuffer & istr) con
     Array & arr = field.get<Array &>();
     arr.reserve(size);
     for (size_t i = 0; i < size; ++i)
-        nested->deserializeBinary(arr.emplace_back(), istr);
+        nested->deserializeBinary(arr.emplace_back(), istr, settings);
 }
 
 
-void SerializationArray::serializeBinary(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
+void SerializationArray::serializeBinary(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
 {
     const ColumnArray & column_array = assert_cast<const ColumnArray &>(column);
     const ColumnArray::Offsets & offsets = column_array.getOffsets();
@@ -62,11 +62,11 @@ void SerializationArray::serializeBinary(const IColumn & column, size_t row_num,
 
     const IColumn & nested_column = column_array.getData();
     for (size_t i = offset; i < next_offset; ++i)
-        nested->serializeBinary(nested_column, i, ostr);
+        nested->serializeBinary(nested_column, i, ostr, settings);
 }
 
 
-void SerializationArray::deserializeBinary(IColumn & column, ReadBuffer & istr) const
+void SerializationArray::deserializeBinary(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     ColumnArray & column_array = assert_cast<ColumnArray &>(column);
     ColumnArray::Offsets & offsets = column_array.getOffsets();
@@ -80,7 +80,7 @@ void SerializationArray::deserializeBinary(IColumn & column, ReadBuffer & istr) 
     try
     {
         for (; i < size; ++i)
-            nested->deserializeBinary(nested_column, istr);
+            nested->deserializeBinary(nested_column, istr, settings);
     }
     catch (...)
     {
@@ -150,7 +150,7 @@ namespace
 
         size_t last_offset = 0;
         Field last(last_offset);
-        SerializationNumber<ColumnArray::Offset>().deserializeBinary(last, istr);
+        SerializationNumber<ColumnArray::Offset>().deserializeBinary(last, istr, {});
         return last.get<size_t>();
     }
     /// proton: ends
@@ -603,7 +603,7 @@ void SerializationArray::deserializeBinaryBulkWithMultipleStreamsSkip(size_t lim
 
             /// deserialize the last one
             Field last(last_offset);
-            SerializationNumber<ColumnArray::Offset>().deserializeBinary(last, *stream);
+            SerializationNumber<ColumnArray::Offset>().deserializeBinary(last, *stream, {});
             last_offset = last.get<size_t>();
         }
     }

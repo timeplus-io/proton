@@ -384,7 +384,7 @@ void MergeTreePartition::load(const MergeTreeData & storage, const DiskPtr & dis
     auto file = openForReading(disk, partition_file_path);
     value.resize(partition_key_sample.columns());
     for (size_t i = 0; i < partition_key_sample.columns(); ++i)
-        partition_key_sample.getByPosition(i).type->getDefaultSerialization()->deserializeBinary(value[i], *file);
+        partition_key_sample.getByPosition(i).type->getDefaultSerialization()->deserializeBinary(value[i], *file, {});
 }
 
 void MergeTreePartition::store(const MergeTreeData & storage, const DiskPtr & disk, const String & part_path, MergeTreeDataPartChecksums & checksums) const
@@ -402,7 +402,9 @@ void MergeTreePartition::store(const Block & partition_key_sample, const DiskPtr
     auto out = disk->writeFile(part_path + "partition.dat");
     HashingWriteBuffer out_hashing(*out);
     for (size_t i = 0; i < value.size(); ++i)
-        partition_key_sample.getByPosition(i).type->getDefaultSerialization()->serializeBinary(value[i], out_hashing);
+    {
+        partition_key_sample.getByPosition(i).type->getDefaultSerialization()->serializeBinary(value[i], out_hashing, {});
+    }
 
     out_hashing.next();
     checksums.files["partition.dat"].file_size = out_hashing.count();

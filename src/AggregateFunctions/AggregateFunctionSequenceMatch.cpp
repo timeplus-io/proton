@@ -49,7 +49,7 @@ AggregateFunctionPtr createAggregateFunctionSequenceBase(
         const auto * cond_arg = argument_types[i].get();
         if (!isUInt8(cond_arg))
             throw Exception{"Illegal type " + cond_arg->getName() + " of argument " + toString(i + 1)
-                + " of aggregate function " + name + ", must be uint8",
+                + " of aggregate function " + name + ", must be uint8 or bool",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
     }
 

@@ -43,7 +43,7 @@ namespace detail
     {
         static Ret hash(UInt128 x)
         {
-            return sipHash64(x);
+            return static_cast<Ret>(sipHash64(x));
         }
     };
 
@@ -70,9 +70,9 @@ namespace detail
 }
 
 // Unlike HashTableGrower always grows to power of 2.
-struct UniqCombinedHashTableGrower : public HashTableGrower<>
+struct UniqCombinedHashTableGrower : public HashTableGrowerWithPrecalculation<>
 {
-    void increaseSize() { ++size_degree; }
+    void increaseSize() { increaseSizeDegree(1); }
 };
 
 template <typename Key, UInt8 K>
@@ -131,9 +131,9 @@ public:
     String getName() const override
     {
         if constexpr (std::is_same_v<HashValueType, UInt64>)
-            return "uniq_combined64";
+            return "unique_combined64";
         else
-            return "uniq_combined";
+            return "unique_combined";
     }
 
     DataTypePtr getReturnType() const override
@@ -203,9 +203,9 @@ public:
     String getName() const override
     {
         if constexpr (std::is_same_v<HashValueType, UInt64>)
-            return "uniq_combined64";
+            return "unique_combined64";
         else
-            return "uniq_combined";
+            return "unique_combined";
     }
 
     DataTypePtr getReturnType() const override

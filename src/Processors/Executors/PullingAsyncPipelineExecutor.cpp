@@ -6,6 +6,7 @@
 #include <QueryPipeline/QueryPipeline.h>
 #include <Common/setThreadName.h>
 #include <Common/ThreadPool.h>
+#include <Common/scope_guard_safe.h>
 
 #include <Poco/Event.h>
 
@@ -72,7 +73,11 @@ const Block & PullingAsyncPipelineExecutor::getHeader() const
 
 static void threadFunction(PullingAsyncPipelineExecutor::Data & data, ThreadGroupStatusPtr thread_group, size_t num_threads)
 {
-    setThreadName("QueryPipelineEx");
+    SCOPE_EXIT_SAFE(
+        if (thread_group)
+            CurrentThread::detachQueryIfNotDetached();
+    );
+    setThreadName("QueryPullPipeEx");
 
     try
     {

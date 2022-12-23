@@ -41,7 +41,7 @@ createAggregateFunctionWindowFunnel(const std::string & name, const DataTypes & 
         const auto * cond_arg = arguments[i].get();
         if (!isUInt8(cond_arg))
             throw Exception{"Illegal type " + cond_arg->getName() + " of argument " + toString(i + 1) + " of aggregate function "
-                    + name + ", must be uint8", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                    + name + ", must be uint8 or bool", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
     }
 
     AggregateFunctionPtr res(createWithUnsignedIntegerType<AggregateFunctionWindowFunnel, Data>(*arguments[0], arguments, params));

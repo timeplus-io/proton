@@ -20,6 +20,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/assert_cast.h>
 #include <Common/formatReadable.h>
+#include <Common/scope_guard_safe.h>
 #include <Common/setThreadName.h>
 #include <Common/typeid_cast.h>
 
@@ -2025,6 +2026,10 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
 
     auto converter = [&](size_t thread_id, ThreadGroupStatusPtr thread_group)
     {
+        SCOPE_EXIT_SAFE(
+            if (thread_group)
+                CurrentThread::detachQueryIfNotDetached();
+        );
         if (thread_group)
             CurrentThread::attachToIfDetached(thread_group);
 
@@ -2810,6 +2815,10 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
 
         auto merge_bucket = [&bucket_to_blocks, &result, this](size_t bucket, Arena * aggregates_pool, ThreadGroupStatusPtr thread_group)
         {
+            SCOPE_EXIT_SAFE(
+                if (thread_group)
+                    CurrentThread::detachQueryIfNotDetached();
+            );
             if (thread_group)
                 CurrentThread::attachToIfDetached(thread_group);
 

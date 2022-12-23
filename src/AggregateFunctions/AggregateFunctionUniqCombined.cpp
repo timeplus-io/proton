@@ -131,7 +131,7 @@ namespace
                 return createAggregateFunctionWithHashType<20>(use_64_bit_hash, argument_types, params);
         }
 
-        __builtin_unreachable();
+        UNREACHABLE();
     }
 
 }
@@ -139,12 +139,12 @@ namespace
 void registerAggregateFunctionUniqCombined(AggregateFunctionFactory & factory)
 {
     using namespace std::placeholders;
-    factory.registerFunction("uniq_combined",
+    factory.registerFunction("unique_combined",
         [](const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
         {
             return createAggregateFunctionUniqCombined(false, name, argument_types, parameters);
         });
-    factory.registerFunction("uniq_combined64",
+    factory.registerFunction("unique_combined64",
         [](const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
         {
             return createAggregateFunctionUniqCombined(true, name, argument_types, parameters);

@@ -129,6 +129,7 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.seekable_read = settings.input_format_allow_seeks;
     format_settings.msgpack.number_of_columns = settings.input_format_msgpack_number_of_columns;
     format_settings.max_rows_to_read_for_schema_inference = settings.input_format_max_rows_to_read_for_schema_inference;
+    format_settings.max_binary_string_size = settings.format_binary_max_string_size;
 
     /// proton: starts
     format_settings.rawstore.rawstore_time_extraction_type = settings.rawstore_time_extraction_type;

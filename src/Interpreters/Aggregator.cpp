@@ -28,6 +28,7 @@
 #include <IO/Operators.h>
 #include <Interpreters/JIT/compileFunction.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
+#include <Common/scope_guard_safe.h>
 
 #include <Parsers/ASTSelectQuery.h>
 
@@ -1782,7 +1783,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
             size_t destroy_index = aggregate_functions_destroy_index;
             ++aggregate_functions_destroy_index;
 
-            aggregate_functions[destroy_index]->insertResultIntoBatch(0, places.size(), places.data(), offset, *final_aggregate_column, arena, true);
+            aggregate_functions[destroy_index]->insertResultIntoBatch(0, places.size(), places.data(), offset, *final_aggregate_column, arena);
         }
     }
     catch (...)
@@ -2088,6 +2089,10 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
 
     auto converter = [&](size_t thread_id, ThreadGroupStatusPtr thread_group)
     {
+        SCOPE_EXIT_SAFE(
+            if (thread_group)
+                CurrentThread::detachQueryIfNotDetached();
+        );
         if (thread_group)
             CurrentThread::attachToIfDetached(thread_group);
 
@@ -2797,6 +2802,10 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
 
         auto merge_bucket = [&bucket_to_blocks, &result, this](Int32 bucket, Arena * aggregates_pool, ThreadGroupStatusPtr thread_group)
         {
+            SCOPE_EXIT_SAFE(
+                if (thread_group)
+                    CurrentThread::detachQueryIfNotDetached();
+            );
             if (thread_group)
                 CurrentThread::attachToIfDetached(thread_group);
 

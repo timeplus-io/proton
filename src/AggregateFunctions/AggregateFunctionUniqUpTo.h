@@ -18,11 +18,6 @@
 #include <IO/WriteHelpers.h>
 
 
-#if !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
-#endif
-
 namespace DB
 {
 struct Settings;
@@ -113,7 +108,7 @@ struct AggregateFunctionUniqUpToData
         readBinary(count, rb);
 
         if (count <= threshold)
-            rb.read(data_ptr, count * sizeof(T));
+            rb.readStrict(data_ptr, count * sizeof(T));
     }
 
     /// ALWAYS_INLINE is required to have better code layout for uniqUpTo function
@@ -189,7 +184,7 @@ public:
         return sizeof(AggregateFunctionUniqUpToData<T>) + sizeof(T) * threshold;
     }
 
-    String getName() const override { return "uniq_up_to"; }
+    String getName() const override { return "unique_up_to"; }
 
     DataTypePtr getReturnType() const override
     {
@@ -254,7 +249,7 @@ public:
         return sizeof(AggregateFunctionUniqUpToData<UInt64>) + sizeof(UInt64) * threshold;
     }
 
-    String getName() const override { return "uniq_up_to"; }
+    String getName() const override { return "unique_up_to"; }
 
     DataTypePtr getReturnType() const override
     {
@@ -291,7 +286,3 @@ public:
 
 
 }
-
-#if !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif

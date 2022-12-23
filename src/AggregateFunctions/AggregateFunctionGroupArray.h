@@ -56,7 +56,7 @@ static constexpr const char * getNameByTrait()
         return "group_array_sample";
     // else if (Trait::sampler == Sampler::DETERMINATOR) // TODO
 
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 template <typename T>
@@ -144,7 +144,7 @@ public:
         }
     }
 
-    void create(AggregateDataPtr __restrict place) const override
+    void create(AggregateDataPtr __restrict place) const override /// NOLINT
     {
         [[maybe_unused]] auto a = new (place) Data;
         if constexpr (Trait::sampler == Sampler::RNG)
@@ -270,7 +270,7 @@ public:
         auto & value = this->data(place).value;
 
         value.resize(size, arena);
-        buf.read(reinterpret_cast<char *>(value.data()), size * sizeof(value[0]));
+        buf.readStrict(reinterpret_cast<char *>(value.data()), size * sizeof(value[0]));
 
         if constexpr (Trait::sampler == Sampler::RNG)
         {
@@ -343,7 +343,7 @@ struct GroupArrayNodeBase
 
         Node * node = reinterpret_cast<Node *>(arena->alignedAlloc(sizeof(Node) + size, alignof(Node)));
         node->size = size;
-        buf.read(node->data(), size);
+        buf.readStrict(node->data(), size);
         return node;
     }
 };
@@ -447,7 +447,7 @@ public:
         }
     }
 
-    void create(AggregateDataPtr __restrict place) const override
+    void create(AggregateDataPtr __restrict place) const override /// NOLINT
     {
         [[maybe_unused]] auto a = new (place) Data;
         if constexpr (Trait::sampler == Sampler::RNG)

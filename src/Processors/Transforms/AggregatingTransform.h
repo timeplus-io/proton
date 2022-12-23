@@ -4,6 +4,8 @@
 #include <IO/ReadBufferFromFile.h>
 #include <Compression/CompressedReadBuffer.h>
 #include <Common/Stopwatch.h>
+#include <Common/setThreadName.h>
+#include <Common/scope_guard_safe.h>
 
 namespace DB
 {
@@ -61,6 +63,50 @@ struct ManyAggregatedData
 
         for (auto & mut : mutexes)
             mut = std::make_unique<std::mutex>();
+    }
+
+    ~ManyAggregatedData()
+    {
+        try
+        {
+            if (variants.size() <= 1)
+                return;
+
+            // Aggregation states destruction may be very time-consuming.
+            // In the case of a query with LIMIT, most states won't be destroyed during conversion to blocks.
+            // Without the following code, they would be destroyed in the destructor of AggregatedDataVariants in the current thread (i.e. sequentially).
+            const auto pool = std::make_unique<ThreadPool>(variants.size());
+
+            for (auto && variant : variants)
+            {
+                if (variant->size() < 100'000) // some seemingly reasonable constant
+                    continue;
+
+                // It doesn't make sense to spawn a thread if the variant is not going to actually destroy anything.
+                if (variant->aggregator)
+                {
+                    // variant is moved here and will be destroyed in the destructor of the lambda function.
+                    pool->trySchedule(
+                        [variant = std::move(variant), thread_group = CurrentThread::getGroup()]()
+                        {
+                            SCOPE_EXIT_SAFE(
+                                if (thread_group)
+                                    CurrentThread::detachQueryIfNotDetached();
+                            );
+                            if (thread_group)
+                                CurrentThread::attachToIfDetached(thread_group);
+
+                            setThreadName("AggregDestruct");
+                        });
+                }
+            }
+
+            pool->wait();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
     }
 };
 

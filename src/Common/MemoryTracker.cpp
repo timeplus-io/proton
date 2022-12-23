@@ -188,7 +188,7 @@ void MemoryTracker::allocImpl(Int64 size, bool throw_if_memory_exceeded)
     }
 
     std::bernoulli_distribution sample(sample_probability);
-    if (unlikely(sample_probability && sample(thread_local_rng)))
+    if (unlikely(sample_probability > 0.0 && sample(thread_local_rng)))
     {
         MemoryTrackerBlockerInThread untrack_lock(VariableContext::Global);
         DB::TraceCollector::collect(DB::TraceType::MemorySample, StackTrace(), size);
@@ -278,7 +278,7 @@ void MemoryTracker::free(Int64 size)
     }
 
     std::bernoulli_distribution sample(sample_probability);
-    if (unlikely(sample_probability && sample(thread_local_rng)))
+    if (unlikely(sample_probability > 0.0 && sample(thread_local_rng)))
     {
         MemoryTrackerBlockerInThread untrack_lock(VariableContext::Global);
         DB::TraceCollector::collect(DB::TraceType::MemorySample, StackTrace(), -size);

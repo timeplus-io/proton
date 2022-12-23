@@ -51,7 +51,7 @@ struct MovingData
 template <typename T>
 struct MovingSumData : public MovingData<T>
 {
-    static constexpr auto name = "moving_sum";
+    static constexpr auto name = "group_array_moving_sum";
 
     T NO_SANITIZE_UNDEFINED get(size_t idx, UInt64 window_size) const
     {
@@ -65,7 +65,7 @@ struct MovingSumData : public MovingData<T>
 template <typename T>
 struct MovingAvgData : public MovingData<T>
 {
-    static constexpr auto name = "moving_avg";
+    static constexpr auto name = "group_array_moving_avg";
 
     T NO_SANITIZE_UNDEFINED get(size_t idx, UInt64 window_size) const
     {
@@ -77,11 +77,11 @@ struct MovingAvgData : public MovingData<T>
 };
 
 
-template <typename T, typename Tlimit_num_elems, typename Data>
+template <typename T, typename LimitNumElements, typename Data>
 class MovingImpl final
-    : public IAggregateFunctionDataHelper<Data, MovingImpl<T, Tlimit_num_elems, Data>>
+    : public IAggregateFunctionDataHelper<Data, MovingImpl<T, LimitNumElements, Data>>
 {
-    static constexpr bool limit_num_elems = Tlimit_num_elems::value;
+    static constexpr bool limit_num_elems = LimitNumElements::value;
     UInt64 window_size;
 
 public:
@@ -93,7 +93,7 @@ public:
     using ColumnResult = ColumnVectorOrDecimal<ResultT>;
 
     explicit MovingImpl(const DataTypePtr & data_type_, UInt64 window_size_ = std::numeric_limits<UInt64>::max())
-        : IAggregateFunctionDataHelper<Data, MovingImpl<T, Tlimit_num_elems, Data>>({data_type_}, {})
+        : IAggregateFunctionDataHelper<Data, MovingImpl<T, LimitNumElements, Data>>({data_type_}, {})
         , window_size(window_size_) {}
 
     String getName() const override { return Data::name; }
@@ -144,7 +144,7 @@ public:
         {
             auto & value = this->data(place).value;
             value.resize(size, arena);
-            buf.read(reinterpret_cast<char *>(value.data()), size * sizeof(value[0]));
+            buf.readStrict(reinterpret_cast<char *>(value.data()), size * sizeof(value[0]));
             this->data(place).sum = value.back();
         }
     }

@@ -5,6 +5,7 @@
 #include <Common/setThreadName.h>
 #include <Common/ThreadPool.h>
 #include <iostream>
+#include <Common/scope_guard_safe.h>
 
 namespace DB
 {
@@ -32,7 +33,11 @@ struct CompletedPipelineExecutor::Data
 
 static void threadFunction(CompletedPipelineExecutor::Data & data, ThreadGroupStatusPtr thread_group, size_t num_threads)
 {
-    setThreadName("QueryPipelineEx");
+    SCOPE_EXIT_SAFE(
+        if (thread_group)
+            CurrentThread::detachQueryIfNotDetached();
+    );
+    setThreadName("QueryCompPipeEx");
 
     try
     {

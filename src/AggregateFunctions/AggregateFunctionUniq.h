@@ -63,7 +63,7 @@ struct AggregateFunctionUniqUniquesHashSetDataForVariadic
 };
 
 
-/// uniq_hll12
+/// unique_hll12
 
 template <typename T, bool is_able_to_parallelize_merge_>
 struct AggregateFunctionUniqHLL12Data
@@ -175,7 +175,7 @@ struct AggregateFunctionUniqThetaData
     constexpr static bool is_able_to_parallelize_merge = false;
     constexpr static bool is_variadic = false;
 
-    static String getName() { return "uniq_theta"; }
+    static String getName() { return "unique_theta"; }
 };
 
 template <bool is_exact_, bool argument_is_tuple_>
@@ -371,7 +371,7 @@ public:
 
     bool allocatesMemoryInArena() const override { return false; }
 
-    /// ALWAYS_INLINE is required to have better code layout for uniq_HLL12 function
+    /// ALWAYS_INLINE is required to have better code layout for unique_hll12 function
     void ALWAYS_INLINE add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         detail::Adder<T, Data>::add(this->data(place), columns, num_args, row_num);

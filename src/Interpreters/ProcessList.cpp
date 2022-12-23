@@ -230,7 +230,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
             }
 
             thread_group->memory_tracker.setDescription("(for query)");
-            if (settings.memory_tracker_fault_probability)
+            if (settings.memory_tracker_fault_probability > 0.0)
                 thread_group->memory_tracker.setFaultProbability(settings.memory_tracker_fault_probability);
 
             /// NOTE: Do not set the limit for thread-level memory tracker since it could show unreal values

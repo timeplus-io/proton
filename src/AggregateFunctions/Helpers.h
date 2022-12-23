@@ -174,6 +174,7 @@ static IAggregateFunction * createWithTwoNumericTypesSecond(const IDataType & se
     return nullptr;
 }
 
+/// proton: starts.
 template <template <typename, bool> class AggregateFunctionTemplate, bool bool_param, typename... TArgs>
 static IAggregateFunction * createWithDecimalType(const IDataType & argument_type, TArgs && ... args)
 {
@@ -186,6 +187,7 @@ static IAggregateFunction * createWithDecimalType(const IDataType & argument_typ
         if (which.idx == TypeIndex::DateTime64) return new AggregateFunctionTemplate<DateTime64, bool_param>(std::forward<TArgs>(args)...);
     return nullptr;
 }
+/// proton: ends.
 
 template <template <typename, typename> class AggregateFunctionTemplate, typename... TArgs>
 static IAggregateFunction * createWithTwoNumericTypes(const IDataType & first_type, const IDataType & second_type, TArgs && ... args)

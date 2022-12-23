@@ -60,7 +60,6 @@ public:
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
         auto * numerator_type = toNativeType<Numerator>(b);
-
         auto * numerator_ptr = aggregate_data_ptr;
         auto * numerator_value = b.CreateLoad(numerator_type, numerator_ptr);
 

@@ -1,4 +1,6 @@
+#include <IO/WriteBufferFromString.h>
 #include <IO/ReadBufferFromString.h>
+#include <Common/PODArray.h>
 #include <AggregateFunctions/StatCommon.h>
 #include <iostream>
 

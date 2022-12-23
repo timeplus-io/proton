@@ -96,14 +96,14 @@ createAggregateFunctionSequenceNode(const std::string & name, const DataTypes & 
 
     if (const auto * cond_arg = argument_types[2].get(); cond_arg && !isUInt8(cond_arg))
         throw Exception("Illegal type " + cond_arg->getName() + " of third argument of aggregate function "
-                + name + ", must be uint8", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                + name + ", must be uint8 or bool", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     for (const auto i : collections::range(min_required_args, argument_types.size()))
     {
         const auto * cond_arg = argument_types[i].get();
         if (!isUInt8(cond_arg))
             throw Exception(fmt::format(
-                "Illegal type '{}' of {} argument of aggregate function '{}', must be uint8", cond_arg->getName(), i + 1, name),
+                "Illegal type '{}' of {} argument of aggregate function '{}', must be uint8 or bool", cond_arg->getName(), i + 1, name),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 

@@ -145,7 +145,7 @@ public:
     {
         auto * value_ptr = aggregate_data_ptr;
         Data::compileCreate(builder, value_ptr);
-    }   
+    }
 
     void compileAdd(llvm::IRBuilderBase & builder, llvm::Value * aggregate_data_ptr, const DataTypes &, const std::vector<llvm::Value *> & argument_values) const override
     {

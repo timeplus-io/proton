@@ -90,7 +90,7 @@ AggregateFunctionPtr createAggregateFunctionUniqUpTo(const std::string & name, c
 
 void registerAggregateFunctionUniqUpTo(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("uniq_up_to", {createAggregateFunctionUniqUpTo, {true}});
+    factory.registerFunction("unique_up_to", {createAggregateFunctionUniqUpTo, {true}});
 }
 
 }

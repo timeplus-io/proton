@@ -508,7 +508,7 @@ public:
         /// Then write value / count
         for (const auto & [val, count] : values)
         {
-            serialization.serializeBinary(val, buf);
+            serialization.serializeBinary(val, buf, {});
             writeVarUInt(count, buf);
         }
     }
@@ -525,7 +525,7 @@ public:
             Field value;
             UInt32 count;
 
-            serialization.deserializeBinary(value, buf);
+            serialization.deserializeBinary(value, buf, {});
             readVarUInt(count, buf);
 
             [[maybe_unused]] auto inserted = values.insert(std::move(value), count);

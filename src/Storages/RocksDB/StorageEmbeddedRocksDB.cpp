@@ -241,7 +241,7 @@ public:
         while (it < end && rows_processed < max_block_size)
         {
             WriteBufferFromString wb(serialized_keys[rows_processed]);
-            key_column_type->getDefaultSerialization()->serializeBinary(*it, wb);
+            key_column_type->getDefaultSerialization()->serializeBinary(*it, wb, {});
             wb.finalize();
             slices_keys[rows_processed] = std::move(serialized_keys[rows_processed]);
 
@@ -295,7 +295,7 @@ public:
         size_t idx = 0;
         for (const auto & elem : getPort().getHeader())
         {
-            elem.type->getDefaultSerialization()->deserializeBinary(*columns[idx], idx == primary_key_pos ? key_buffer : value_buffer);
+            elem.type->getDefaultSerialization()->deserializeBinary(*columns[idx], idx == primary_key_pos ? key_buffer : value_buffer, {});
             ++idx;
         }
     }
@@ -587,7 +587,7 @@ void StorageEmbeddedRocksDB::mutate(const MutationCommands & commands, ContextPt
 
         if (const auto * literal = value->template as<ASTLiteral>())
         {
-            sample_block.getByName(primary_key).type->getDefaultSerialization()->serializeBinary(literal->value, *wb_key);
+            sample_block.getByName(primary_key).type->getDefaultSerialization()->serializeBinary(literal->value, *wb_key, {});
             return true;
         }
 
@@ -621,14 +621,14 @@ void StorageEmbeddedRocksDB::mutate(const MutationCommands & commands, ContextPt
             if (elem.name == primary_key)
                 continue;
 
-            elem.type->getDefaultSerialization()->deserializeBinary(replaced_value, old_value_buffer);
+            elem.type->getDefaultSerialization()->deserializeBinary(replaced_value, old_value_buffer, {});
 
             /// if the column in update list, we replace old value to new value.
             auto iter = new_values_index_by_name.find(elem.name);
             if (iter != new_values_index_by_name.end())
                 replaced_value = iter->second;
 
-            elem.type->getDefaultSerialization()->serializeBinary(replaced_value, *wb_value);
+            elem.type->getDefaultSerialization()->serializeBinary(replaced_value, *wb_value, {});
         }
 
         return true;

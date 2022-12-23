@@ -53,6 +53,8 @@
 
     <query>SELECT sum(u64) FROM test_{serialization}_{ratio} GROUP BY id % 11 FORMAT Null</query>
     <query>SELECT uniq(str) FROM test_{serialization}_{ratio} GROUP BY id % 11 FORMAT Null</query>
+    <query>SELECT sum(u64) FROM test_{serialization}_{ratio} FORMAT Null</query>
+    <query>SELECT uniq(str) FROM test_{serialization}_{ratio} FORMAT Null</query>
 
     <!-- <drop_query>DROP TABLE IF EXISTS test_{serialization}_{ratio}</drop_query> -->
 </test>

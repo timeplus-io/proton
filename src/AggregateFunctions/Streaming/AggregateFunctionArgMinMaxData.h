@@ -87,7 +87,7 @@ public:
         {
             /// Write value
             if constexpr (std::is_same_v<ValType, Field>)
-                serialization_val.serializeBinary(val, buf);
+                serialization_val.serializeBinary(val, buf, {});
             else
                 writeBinary(val, buf);
 
@@ -98,7 +98,7 @@ public:
             for (const auto & res_count : *res_counts)
             {
                 if constexpr (std::is_same_v<ResType, Field>)
-                    serialization_res.serializeBinary(res_count.arg, buf);
+                    serialization_res.serializeBinary(res_count.arg, buf, {});
                 else
                     writeBinary(res_count.arg, buf);
 
@@ -122,7 +122,7 @@ public:
 
             /// Deserialize val
             if constexpr (std::is_same_v<ValType, Field>)
-                serialization_val.deserializeBinary(val, buf);
+                serialization_val.deserializeBinary(val, buf, {});
             else
                 readBinary(val, buf);
 
@@ -134,7 +134,7 @@ public:
             {
                 ResType res;
                 if constexpr (std::is_same_v<ResType, Field>)
-                    serialization_res.deserializeBinary(res, buf);
+                    serialization_res.deserializeBinary(res, buf, {});
                 else
                     readBinary(res, buf);
 

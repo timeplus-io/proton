@@ -7,6 +7,7 @@
 
 namespace DB
 {
+
 struct Array;
 
 Array getAggregateFunctionParametersArray(

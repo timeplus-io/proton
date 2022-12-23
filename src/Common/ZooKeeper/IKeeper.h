@@ -395,6 +395,12 @@ public:
     Exception(const Error code_, const std::string & path);
     Exception(const Exception & exc);
 
+    template <typename... Args>
+    Exception(const Error code_, fmt::format_string<Args...> fmt, Args &&... args)
+        : Exception(fmt::format(fmt, std::forward<Args>(args)...), code_)
+    {
+    }
+
     const char * name() const throw() override { return "Coordination::Exception"; }
     const char * className() const throw() override { return "Coordination::Exception"; }
     Exception * clone() const override { return new Exception(*this); }
