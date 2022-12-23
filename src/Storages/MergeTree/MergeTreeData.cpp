@@ -4788,7 +4788,7 @@ std::optional<ProjectionCandidate> MergeTreeData::getQueryProcessingStageWithAgg
                 required_columns.erase(column.name);
 
             {
-                // Prewhere_action should not add missing keys.
+                // prewhere_action should not add missing keys.
                 auto new_prewhere_required_columns = prewhere_actions->foldActionsByProjection(
                         prewhere_required_columns, projection.sample_block_for_keys, candidate.prewhere_info->prewhere_column_name, false);
                 if (new_prewhere_required_columns.empty() && !prewhere_required_columns.empty())
@@ -4800,6 +4800,7 @@ std::optional<ProjectionCandidate> MergeTreeData::getQueryProcessingStageWithAgg
             if (candidate.prewhere_info->row_level_filter)
             {
                 auto row_level_filter_actions = candidate.prewhere_info->row_level_filter->clone();
+                // row_level_filter_action should not add missing keys.
                 auto new_prewhere_required_columns = row_level_filter_actions->foldActionsByProjection(
                     prewhere_required_columns, projection.sample_block_for_keys, candidate.prewhere_info->row_level_column_name, false);
                 if (new_prewhere_required_columns.empty() && !prewhere_required_columns.empty())
@@ -4808,16 +4809,6 @@ std::optional<ProjectionCandidate> MergeTreeData::getQueryProcessingStageWithAgg
                 candidate.prewhere_info->row_level_filter = row_level_filter_actions;
             }
 
-            if (candidate.prewhere_info->alias_actions)
-            {
-                auto alias_actions = candidate.prewhere_info->alias_actions->clone();
-                auto new_prewhere_required_columns
-                    = alias_actions->foldActionsByProjection(prewhere_required_columns, projection.sample_block_for_keys, {}, false);
-                if (new_prewhere_required_columns.empty() && !prewhere_required_columns.empty())
-                    return false;
-                prewhere_required_columns = std::move(new_prewhere_required_columns);
-                candidate.prewhere_info->alias_actions = alias_actions;
-            }
             required_columns.insert(prewhere_required_columns.begin(), prewhere_required_columns.end());
         }
 
@@ -4924,10 +4915,10 @@ std::optional<ProjectionCandidate> MergeTreeData::getQueryProcessingStageWithAgg
     size_t min_sum_marks = std::numeric_limits<size_t>::max();
     if (metadata_snapshot->minmax_count_projection)
         add_projection_candidate(*metadata_snapshot->minmax_count_projection);
-    std::optional<ProjectionCandidate> minmax_conut_projection_candidate;
+    std::optional<ProjectionCandidate> minmax_count_projection_candidate;
     if (!candidates.empty())
     {
-        minmax_conut_projection_candidate.emplace(std::move(candidates.front()));
+        minmax_count_projection_candidate.emplace(std::move(candidates.front()));
         candidates.clear();
     }
     MergeTreeDataSelectExecutor reader(*this);
@@ -4935,17 +4926,20 @@ std::optional<ProjectionCandidate> MergeTreeData::getQueryProcessingStageWithAgg
     auto parts = getDataPartsVector();
 
     // If minmax_count_projection is a valid candidate, check its completeness.
-    if (minmax_conut_projection_candidate)
+    if (minmax_count_projection_candidate)
     {
         DataPartsVector normal_parts;
         query_info.minmax_count_projection_block = getMinMaxCountProjectionBlock(
-            metadata_snapshot, minmax_conut_projection_candidate->required_columns, query_info, parts, normal_parts, query_context);
+            metadata_snapshot,
+            minmax_count_projection_candidate->required_columns,
+            query_info,
+            parts,
+            normal_parts,
+            query_context);
 
-        if (minmax_conut_projection_candidate->prewhere_info)
+        if (minmax_count_projection_candidate->prewhere_info)
         {
-            const auto & prewhere_info = minmax_conut_projection_candidate->prewhere_info;
-            if (prewhere_info->alias_actions)
-                ExpressionActions(prewhere_info->alias_actions, actions_settings).execute(query_info.minmax_count_projection_block);
+            const auto & prewhere_info = minmax_count_projection_candidate->prewhere_info;
 
             if (prewhere_info->row_level_filter)
             {
@@ -4962,7 +4956,7 @@ std::optional<ProjectionCandidate> MergeTreeData::getQueryProcessingStageWithAgg
 
         if (normal_parts.empty())
         {
-            selected_candidate = &*minmax_conut_projection_candidate;
+            selected_candidate = &*minmax_count_projection_candidate;
             selected_candidate->complete = true;
             min_sum_marks = query_info.minmax_count_projection_block.rows();
         }
@@ -4986,7 +4980,7 @@ std::optional<ProjectionCandidate> MergeTreeData::getQueryProcessingStageWithAgg
 
                 if (!normal_result_ptr->error())
                 {
-                    selected_candidate = &*minmax_conut_projection_candidate;
+                    selected_candidate = &*minmax_count_projection_candidate;
                     selected_candidate->merge_tree_normal_select_result_ptr = normal_result_ptr;
                     min_sum_marks = query_info.minmax_count_projection_block.rows() + normal_result_ptr->marks();
                 }

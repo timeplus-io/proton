@@ -72,7 +72,7 @@ struct ScopeStack : WithContext
         NameSet inputs;
 
         Level();
-        Level(Level &&);
+        Level(Level &&) noexcept;
         ~Level();
     };
 
@@ -93,10 +93,7 @@ struct ScopeStack : WithContext
     void addColumn(ColumnWithTypeAndName column);
     void addAlias(const std::string & name, std::string alias);
     void addArrayJoin(const std::string & source_name, std::string result_name);
-    void addFunction(
-            const FunctionOverloadResolverPtr & function,
-            const Names & argument_names,
-            std::string result_name);
+    void addFunction(const FunctionOverloadResolverPtr & function, const Names & argument_names, std::string result_name);
 
     ActionsDAGPtr popLevel();
 

@@ -1575,10 +1575,6 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
             }
 
             preliminary_sort();
-
-            // If there is no global subqueries, we can run subqueries only when receive them on server.
-            if (!query_analyzer->hasGlobalSubqueries() && !subqueries_for_sets.empty())
-                executeSubqueriesInSetsAndJoins(query_plan, subqueries_for_sets);
         }
 
         if (expressions.second_stage || from_aggregation_stage)
@@ -1759,7 +1755,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
         }
     }
 
-    if (!subqueries_for_sets.empty() && (expressions.hasHaving() || query_analyzer->hasGlobalSubqueries()))
+    if (!subqueries_for_sets.empty())
         executeSubqueriesInSetsAndJoins(query_plan, subqueries_for_sets);
 }
 
@@ -1849,15 +1845,6 @@ void InterpreterSelectQuery::addEmptySourceToQueryPlan(
     if (prewhere_info_ptr)
     {
         auto & prewhere_info = *prewhere_info_ptr;
-
-        if (prewhere_info.alias_actions)
-        {
-            pipe.addSimpleTransform([&](const Block & header)
-            {
-                return std::make_shared<ExpressionTransform>(header,
-                    std::make_shared<ExpressionActions>(prewhere_info.alias_actions));
-            });
-        }
 
         if (prewhere_info.row_level_filter)
         {
@@ -2024,7 +2011,7 @@ void InterpreterSelectQuery::addPrewhereAliasActions()
             else
                 column_expr = std::make_shared<ASTIdentifier>(column);
 
-            if (required_columns_from_prewhere.count(column))
+            if (required_columns_from_prewhere.contains(column))
             {
                 required_columns_from_prewhere_expr->children.emplace_back(std::move(column_expr));
 
@@ -2052,7 +2039,7 @@ void InterpreterSelectQuery::addPrewhereAliasActions()
                 if (prewhere_info->remove_prewhere_column && column.name == prewhere_info->prewhere_column_name)
                     continue;
 
-                if (columns_to_remove.count(column.name))
+                if (columns_to_remove.contains(column.name))
                     continue;
 
                 required_columns_all_expr->children.emplace_back(std::make_shared<ASTIdentifier>(column.name));
@@ -2076,7 +2063,7 @@ void InterpreterSelectQuery::addPrewhereAliasActions()
                 prewhere_info->remove_prewhere_column = false;
 
         /// Remove columns which will be added by prewhere.
-        std::erase_if(required_columns, [&](const String & name) { return required_columns_after_prewhere_set.count(name) != 0; });
+        std::erase_if(required_columns, [&](const String & name) { return required_columns_after_prewhere_set.contains(name); });
 
         if (prewhere_info)
         {
@@ -2084,22 +2071,9 @@ void InterpreterSelectQuery::addPrewhereAliasActions()
             for (const auto & name : required_columns)
                 prewhere_info->prewhere_actions->tryRestoreColumn(name);
 
-            auto analyzed_result
-                = TreeRewriter(context).analyze(required_columns_from_prewhere_expr, metadata_snapshot->getColumns().getAllPhysical());
-            prewhere_info->alias_actions
-                = ExpressionAnalyzer(required_columns_from_prewhere_expr, analyzed_result, context).getActionsDAG(true, false);
-
-            /// Add (physical?) columns required by alias actions.
-            auto required_columns_from_alias = prewhere_info->alias_actions->getRequiredColumns();
-            Block prewhere_actions_result = prewhere_info->prewhere_actions->getResultColumns();
-            for (auto & column : required_columns_from_alias)
-                if (!prewhere_actions_result.has(column.name))
-                    if (required_columns.end() == std::find(required_columns.begin(), required_columns.end(), column.name))
-                        required_columns.push_back(column.name);
-
             /// Add physical columns required by prewhere actions.
             for (const auto & column : required_columns_from_prewhere)
-                if (required_aliases_from_prewhere.count(column) == 0)
+                if (!required_aliases_from_prewhere.contains(column))
                     if (required_columns.end() == std::find(required_columns.begin(), required_columns.end(), column))
                         required_columns.push_back(column);
         }
@@ -2226,7 +2200,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         && limit_length <= std::numeric_limits<UInt64>::max() - limit_offset
         && limit_length + limit_offset < max_block_size)
     {
-        max_block_size = std::max(UInt64(1), limit_length + limit_offset);
+        max_block_size = std::max(UInt64{1}, limit_length + limit_offset);
         max_threads_execute_query = max_streams = 1;
     }
 
@@ -3017,11 +2991,11 @@ void InterpreterSelectQuery::executeExtremes(QueryPlan & query_plan)
 
 void InterpreterSelectQuery::executeSubqueriesInSetsAndJoins(QueryPlan & query_plan, SubqueriesForSets & subqueries_for_sets)
 {
-    const auto & input_order_info = query_info.input_order_info
-        ? query_info.input_order_info
-        : (query_info.projection ? query_info.projection->input_order_info : nullptr);
-    if (input_order_info)
-        executeMergeSorted(query_plan, input_order_info->order_key_prefix_descr, 0, "before creating sets for subqueries and joins");
+    // const auto & input_order_info = query_info.input_order_info
+    //     ? query_info.input_order_info
+    //     : (query_info.projection ? query_info.projection->input_order_info : nullptr);
+    // if (input_order_info)
+    //     executeMergeSorted(query_plan, input_order_info->order_key_prefix_descr, 0, "before creating sets for subqueries and joins");
 
     const Settings & settings = context->getSettingsRef();
 

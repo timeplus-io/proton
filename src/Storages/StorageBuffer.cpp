@@ -198,9 +198,7 @@ QueryProcessingStage::Enum StorageBuffer::getQueryProcessingStage(
         auto destination = DatabaseCatalog::instance().getTable(destination_id, local_context);
 
         if (destination.get() == this)
-            /// proton: starts
             throw Exception("Destination stream is myself. Read will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
-            /// proton: ends
 
         /// TODO: Find a way to support projections for StorageBuffer
         query_info.ignore_projections = true;
@@ -245,9 +243,7 @@ void StorageBuffer::read(
         auto destination = DatabaseCatalog::instance().getTable(destination_id, local_context);
 
         if (destination.get() == this)
-            /// proton: starts
             throw Exception("Destination stream is myself. Read will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
-            /// proton: ends
 
         auto destination_lock = destination->lockForShare(local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
 
@@ -284,9 +280,7 @@ void StorageBuffer::read(
             {
                 if (!dest_columns.hasPhysical(column_name))
                 {
-                    /// proton: starts
                     LOG_WARNING(log, "Destination stream {} doesn't have column {}. The default values are used.", destination_id.getNameForLogs(), backQuoteIfNeed(column_name));
-                    /// proton: ends
                     boost::range::remove_erase(columns_intersection, column_name);
                     continue;
                 }
@@ -294,18 +288,14 @@ void StorageBuffer::read(
                 const auto & col = our_columns.getPhysical(column_name);
                 if (!dst_col.type->equals(*col.type))
                 {
-                    /// proton: starts
                     LOG_WARNING(log, "Destination stream {} has different type of column {} ({} != {}). Data from destination stream are converted.", destination_id.getNameForLogs(), backQuoteIfNeed(column_name), dst_col.type->getName(), col.type->getName());
-                    /// proton: ends
                     header_after_adding_defaults.getByName(column_name) = ColumnWithTypeAndName(dst_col.type, column_name);
                 }
             }
 
             if (columns_intersection.empty())
             {
-                /// proton: starts
                 LOG_WARNING(log, "Destination stream {} has no common columns with block in buffer. Block of data is skipped.", destination_id.getNameForLogs());
-                /// proton: ends
             }
             else
             {
@@ -336,9 +326,7 @@ void StorageBuffer::read(
 
                     auto converting = std::make_unique<ExpressionStep>(query_plan.getCurrentDataStream(), actions_dag);
 
-                    /// proton: starts
                     converting->setStepDescription("Convert destination stream columns to Buffer structure");
-                    /// proton: ends
                     query_plan.addStep(std::move(converting));
                 }
             }
@@ -359,9 +347,7 @@ void StorageBuffer::read(
                     nullptr,
                     nullptr);
 
-            /// proton: starts
             adding_limits_and_quota->setStepDescription("Lock destination stream for Buffer");
-            /// proton: ends
             query_plan.addStep(std::move(adding_limits_and_quota));
         }
     }
@@ -396,15 +382,6 @@ void StorageBuffer::read(
         if (query_info.prewhere_info)
         {
             auto actions_settings = ExpressionActionsSettings::fromContext(local_context);
-            if (query_info.prewhere_info->alias_actions)
-            {
-                pipe_from_buffers.addSimpleTransform([&](const Block & header)
-                {
-                    return std::make_shared<ExpressionTransform>(
-                        header,
-                        std::make_shared<ExpressionActions>(query_info.prewhere_info->alias_actions, actions_settings));
-                });
-            }
 
             if (query_info.prewhere_info->row_level_filter)
             {
@@ -597,9 +574,7 @@ public:
         {
             destination = DatabaseCatalog::instance().tryGetTable(storage.destination_id, storage.getContext());
             if (destination.get() == &storage)
-                /// proton: starts
                 throw Exception("Destination stream is myself. Write will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
-                /// proton: ends
         }
 
         size_t bytes = block.bytes();
@@ -707,9 +682,7 @@ bool StorageBuffer::mayBenefitFromIndexForIn(
     auto destination = DatabaseCatalog::instance().getTable(destination_id, query_context);
 
     if (destination.get() == this)
-        /// proton: starts
         throw Exception("Destination stream is myself. Read will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
-        /// proton: ends
 
     return destination->mayBenefitFromIndexForIn(left_in_operand, query_context, destination->getInMemoryMetadataPtr());
 }
@@ -764,19 +737,13 @@ bool StorageBuffer::optimize(
     ContextPtr /*context*/)
 {
     if (partition)
-        /// proton: starts
         throw Exception("Partition cannot be specified when optimizing storage of type Buffer", ErrorCodes::NOT_IMPLEMENTED);
-        /// proton: ends
 
     if (final)
-        /// proton: starts
         throw Exception("FINAL cannot be specified when optimizing storage of type Buffer", ErrorCodes::NOT_IMPLEMENTED);
-        /// proton: ends
 
     if (deduplicate)
-        /// proton: starts
         throw Exception("DEDUPLICATE cannot be specified when optimizing storage of type Buffer", ErrorCodes::NOT_IMPLEMENTED);
-        /// proton: ends
 
     flushAllBuffers(false);
     return true;
@@ -951,9 +918,7 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
 
     if (!table)
     {
-        /// proton: starts
         LOG_ERROR(log, "Destination stream {} doesn't exist. Block of data is discarded.", destination_id.getNameForLogs());
-        /// proton: ends
         return;
     }
     auto destination_metadata_snapshot = table->getInMemoryMetadataPtr();
@@ -977,9 +942,7 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
             auto column = block.getByName(dst_col.name);
             if (!column.type->equals(*dst_col.type))
             {
-                /// proton: starts
                 LOG_WARNING(log, "Destination stream {} have different type of column {} ({} != {}). Block of data is converted.", destination_id.getNameForLogs(), backQuoteIfNeed(column.name), dst_col.type->getName(), column.type->getName());
-                /// proton: ends
                 column.column = castColumn(column, dst_col.type);
                 column.type = dst_col.type;
             }
@@ -990,16 +953,12 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
 
     if (block_to_write.columns() == 0)
     {
-        /// proton: starts
         LOG_ERROR(log, "Destination stream {} have no common columns with block in buffer. Block of data is discarded.", destination_id.getNameForLogs());
-        /// proton: ends
         return;
     }
 
     if (block_to_write.columns() != block.columns())
-        /// proton: starts
         LOG_WARNING(log, "Not all columns from block in buffer exist in destination stream {}. Some columns are discarded.", destination_id.getNameForLogs());
-        /// proton: ends
 
     auto list_of_columns = std::make_shared<ASTExpressionList>();
     insert->columns = list_of_columns;
