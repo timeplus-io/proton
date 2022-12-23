@@ -55,7 +55,7 @@ void MergeTreeWriteAheadLog::init()
 {
     out = disk->writeFile(path, DBMS_DEFAULT_BUFFER_SIZE, WriteMode::Append);
 
-    /// Small hack: in NativeBlockOutputStream header is used only in `getHeader` method.
+    /// Small hack: in NativeWriter header is used only in `getHeader` method.
     /// To avoid complex logic of changing it during ALTERs we leave it empty.
     block_out = std::make_unique<NativeWriter>(*out, Block{}, 0);
     min_block_number = std::numeric_limits<Int64>::max();
@@ -199,7 +199,7 @@ MergeTreeData::MutableDataPartsVector MergeTreeWriteAheadLog::restore(const Stor
 
             part->minmax_idx->update(block, storage.getMinMaxColumnsNames(metadata_snapshot->getPartitionKey()));
             part->partition.create(metadata_snapshot, block, 0, context);
-            part->setColumns(block.getNamesAndTypesList());
+            part->setColumns(block.getNamesAndTypesList(), {});
             if (metadata_snapshot->hasSortingKey())
                 metadata_snapshot->getSortingKey().expression->execute(block);
 

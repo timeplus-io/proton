@@ -80,8 +80,7 @@ void MergedBlockOutputStream::writeSuffixAndFinalizePart(
         serialization_infos.replaceData(new_serialization_infos);
         removeEmptyColumnsFromPart(new_part, part_columns, serialization_infos, checksums);
 
-        new_part->setColumns(part_columns);
-        new_part->setSerializationInfos(serialization_infos);
+        new_part->setColumns(part_columns, serialization_infos);
     }
 
     if (new_part->isStoredOnDisk())
