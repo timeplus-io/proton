@@ -27,7 +27,8 @@ class Logger;
 
 namespace DB
 {
-struct SubqueryForSet;
+
+class SubqueryForSet;
 class InterpreterSelectWithUnionQuery;
 class Context;
 class QueryPlan;
@@ -55,31 +56,32 @@ public:
 
     InterpreterSelectQuery(
         const ASTPtr & query_ptr_,
-        ContextPtr context_,
+        const ContextPtr & context_,
         const SelectQueryOptions &,
         const Names & required_result_column_names_ = Names{});
 
     /// Read data not from the table specified in the query, but from the prepared pipe `input`.
     InterpreterSelectQuery(
         const ASTPtr & query_ptr_,
-        ContextPtr context_,
+        const ContextPtr & context_,
         Pipe input_pipe_,
         const SelectQueryOptions & = {});
 
     /// Read data not from the table specified in the query, but from the specified `storage_`.
     InterpreterSelectQuery(
         const ASTPtr & query_ptr_,
-        ContextPtr context_,
+        const ContextPtr & context_,
         const StoragePtr & storage_,
         const StorageMetadataPtr & metadata_snapshot_ = nullptr,
         const SelectQueryOptions & = {});
 
-    /// Read data not from the table specified in the query, but from the specified `storage_`.
+    /// Reuse existing prepared_sets for another pass of analysis. It's used for projection.
+    /// TODO: Find a general way of sharing sets among different interpreters, such as subqueries.
     InterpreterSelectQuery(
         const ASTPtr & query_ptr_,
-        ContextPtr context_,
+        const ContextPtr & context_,
         const SelectQueryOptions &,
-        PreparedSets prepared_sets_);
+        PreparedSetsPtr prepared_sets_);
 
     ~InterpreterSelectQuery() override;
 
@@ -117,20 +119,20 @@ public:
     /// proton: ends
 
     static void addEmptySourceToQueryPlan(
-        QueryPlan & query_plan, const Block & source_header, const SelectQueryInfo & query_info, ContextPtr context_);
+        QueryPlan & query_plan, const Block & source_header, const SelectQueryInfo & query_info, const ContextPtr & context_);
 
     Names getRequiredColumns() { return required_columns; }
 
 private:
     InterpreterSelectQuery(
         const ASTPtr & query_ptr_,
-        ContextPtr context_,
+        const ContextPtr & context_,
         std::optional<Pipe> input_pipe,
         const StoragePtr & storage_,
         const SelectQueryOptions &,
         const Names & required_result_column_names = {},
         const StorageMetadataPtr & metadata_snapshot_ = nullptr,
-        PreparedSets prepared_sets_ = {});
+        PreparedSetsPtr prepared_sets_ = nullptr);
 
     ASTSelectQuery & getSelectQuery() { return query_ptr->as<ASTSelectQuery &>(); }
 
@@ -142,7 +144,6 @@ private:
     void executeImpl(QueryPlan & query_plan, std::optional<Pipe> prepared_pipe);
 
     /// Different stages of query execution.
-
     void executeFetchColumns(QueryProcessingStage::Enum processing_stage, QueryPlan & query_plan);
     void executeWhere(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool remove_filter);
     void executeAggregation(
@@ -164,7 +165,7 @@ private:
     static void executeProjection(QueryPlan & query_plan, const ActionsDAGPtr & expression);
     void executeDistinct(QueryPlan & query_plan, bool before_order, Names columns, bool pre_distinct);
     void executeExtremes(QueryPlan & query_plan);
-    void executeSubqueriesInSetsAndJoins(QueryPlan & query_plan, std::unordered_map<String, SubqueryForSet> & subqueries_for_sets);
+    void executeSubqueriesInSetsAndJoins(QueryPlan & query_plan);
     void
     executeMergeSorted(QueryPlan & query_plan, const SortDescription & sort_description, UInt64 limit, const std::string & description);
 
@@ -250,7 +251,7 @@ private:
     StorageSnapshotPtr storage_snapshot;
 
     /// Reuse already built sets for multiple passes of analysis, possibly across interpreters.
-    PreparedSets prepared_sets;
+    PreparedSetsPtr prepared_sets;
 };
 
 }

@@ -42,9 +42,6 @@ using ClusterPtr = std::shared_ptr<Cluster>;
 struct MergeTreeDataSelectAnalysisResult;
 using MergeTreeDataSelectAnalysisResultPtr = std::shared_ptr<MergeTreeDataSelectAnalysisResult>;
 
-struct SubqueryForSet;
-using SubqueriesForSets = std::unordered_map<String, SubqueryForSet>;
-
 struct PrewhereInfo
 {
     /// Actions for row level security filter. Applied separately before prewhere_actions.
@@ -122,7 +119,7 @@ struct ProjectionCandidate
     ReadInOrderOptimizerPtr order_optimizer;
     InputOrderInfoPtr input_order_info;
     ManyExpressionActions group_by_elements_actions;
-    std::shared_ptr<SubqueriesForSets> subqueries_for_sets;
+    SortDescription group_by_elements_order_descr;
     MergeTreeDataSelectAnalysisResultPtr merge_tree_projection_select_result_ptr;
     MergeTreeDataSelectAnalysisResultPtr merge_tree_normal_select_result_ptr;
 };
@@ -133,6 +130,11 @@ struct ProjectionCandidate
   */
 struct SelectQueryInfo
 {
+
+    SelectQueryInfo()
+        : prepared_sets(std::make_shared<PreparedSets>())
+    {}
+
     ASTPtr query;
     ASTPtr view_query; /// Optimized VIEW query
     ASTPtr original_query; /// Unmodified query for projection analysis
@@ -155,9 +157,9 @@ struct SelectQueryInfo
 
     /// Prepared sets are used for indices by storage engine.
     /// Example: x IN (1, 2, 3)
-    PreparedSets sets;
+    PreparedSetsPtr prepared_sets;
 
-    /// Cached value of ExpressionAnalysisResult::has_window
+    /// Cached value of ExpressionAnalysisResult
     bool has_window = false;
 
     /// proton: starts.

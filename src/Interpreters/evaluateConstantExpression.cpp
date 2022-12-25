@@ -30,7 +30,7 @@ namespace ErrorCodes
 }
 
 
-std::pair<Field, std::shared_ptr<const IDataType>> evaluateConstantExpression(const ASTPtr & node, ContextPtr context)
+std::pair<Field, std::shared_ptr<const IDataType>> evaluateConstantExpression(const ASTPtr & node, const ContextPtr & context)
 {
     NamesAndTypesList source_columns = {{ "_dummy", std::make_shared<DataTypeUInt8>() }};
     auto ast = node->clone();
@@ -69,7 +69,7 @@ std::pair<Field, std::shared_ptr<const IDataType>> evaluateConstantExpression(co
 }
 
 
-ASTPtr evaluateConstantExpressionAsLiteral(const ASTPtr & node, ContextPtr context)
+ASTPtr evaluateConstantExpressionAsLiteral(const ASTPtr & node, const ContextPtr & context)
 {
     /// If it's already a literal.
     if (node->as<ASTLiteral>())
@@ -77,7 +77,7 @@ ASTPtr evaluateConstantExpressionAsLiteral(const ASTPtr & node, ContextPtr conte
     return std::make_shared<ASTLiteral>(evaluateConstantExpression(node, context).first);
 }
 
-ASTPtr evaluateConstantExpressionOrIdentifierAsLiteral(const ASTPtr & node, ContextPtr context)
+ASTPtr evaluateConstantExpressionOrIdentifierAsLiteral(const ASTPtr & node, const ContextPtr & context)
 {
     if (const auto * id = node->as<ASTIdentifier>())
         return std::make_shared<ASTLiteral>(id->name());
@@ -85,7 +85,7 @@ ASTPtr evaluateConstantExpressionOrIdentifierAsLiteral(const ASTPtr & node, Cont
     return evaluateConstantExpressionAsLiteral(node, context);
 }
 
-ASTPtr evaluateConstantExpressionForDatabaseName(const ASTPtr & node, ContextPtr context)
+ASTPtr evaluateConstantExpressionForDatabaseName(const ASTPtr & node, const ContextPtr & context)
 {
     ASTPtr res = evaluateConstantExpressionOrIdentifierAsLiteral(node, context);
     auto & literal = res->as<ASTLiteral &>();

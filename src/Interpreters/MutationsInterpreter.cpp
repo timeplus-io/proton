@@ -28,6 +28,7 @@
 #include <IO/WriteHelpers.h>
 #include <Processors/QueryPlan/CreatingSetsStep.h>
 #include <DataTypes/NestedUtils.h>
+#include <Interpreters/PreparedSets.h>
 
 
 namespace DB
@@ -171,7 +172,7 @@ ColumnDependencies getAllColumnDependencies(const StorageMetadataPtr & metadata_
         new_updated_columns.clear();
         for (const auto & dependency : new_dependencies)
         {
-            if (!dependencies.count(dependency))
+            if (!dependencies.contains(dependency))
             {
                 dependencies.insert(dependency);
                 if (!dependency.isReadOnly())
@@ -224,7 +225,7 @@ bool isStorageTouchedByMutations(
     ASTPtr select_query = prepareQueryAffectedAST(commands, storage, context_copy);
 
     /// Interpreter must be alive, when we use result of execute() method.
-    /// For some reason it may copy context and and give it into ExpressionTransform
+    /// For some reason it may copy context and give it into ExpressionTransform
     /// after that we will use context from destroyed stack frame in our stream.
     InterpreterSelectQuery interpreter(
         select_query, context_copy, storage, metadata_snapshot, SelectQueryOptions().ignoreLimits().ignoreProjections());
@@ -360,7 +361,7 @@ static void validateUpdateColumns(
             throw Exception("There is no column " + backQuote(column_name) + " in stream", ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
         }
 
-        if (key_columns.count(column_name))
+        if (key_columns.contains(column_name))
             throw Exception("Cannot UPDATE key column " + backQuote(column_name), ErrorCodes::CANNOT_UPDATE_COLUMN);
 
         auto materialized_it = column_to_affected_materialized.find(column_name);
@@ -368,7 +369,7 @@ static void validateUpdateColumns(
         {
             for (const String & materialized : materialized_it->second)
             {
-                if (key_columns.count(materialized))
+                if (key_columns.contains(materialized))
                     throw Exception("Updated column " + backQuote(column_name) + " affects MATERIALIZED column "
                         + backQuote(materialized) + ", which is a key column. Cannot UPDATE it.",
                         ErrorCodes::CANNOT_UPDATE_COLUMN);
@@ -448,7 +449,7 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
                 auto syntax_result = TreeRewriter(context).analyze(query, all_columns);
                 for (const String & dependency : syntax_result->requiredSourceColumns())
                 {
-                    if (updated_columns.count(dependency))
+                    if (updated_columns.contains(dependency))
                         column_to_affected_materialized[dependency].push_back(column.name);
                 }
             }
@@ -911,14 +912,7 @@ QueryPipelineBuilderPtr MutationsInterpreter::addStreamsForLaterStages(const std
             }
         }
 
-        SubqueriesForSets & subqueries_for_sets = stage.analyzer->getSubqueriesForSets();
-        if (!subqueries_for_sets.empty())
-        {
-            const Settings & settings = context->getSettingsRef();
-            SizeLimits network_transfer_limits(
-                    settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode);
-            addCreatingSetsStep(plan, std::move(subqueries_for_sets), network_transfer_limits, context);
-        }
+        addCreatingSetsStep(plan, stage.analyzer->getPreparedSets(), context);
     }
 
     QueryPlanOptimizationSettings do_not_optimize_plan;
@@ -1044,7 +1038,7 @@ bool MutationsInterpreter::Stage::isAffectingAllColumns(const Names & storage_co
 {
     /// is subset
     for (const auto & storage_column : storage_columns)
-        if (!output_columns.count(storage_column))
+        if (!output_columns.contains(storage_column))
             return false;
 
     return true;

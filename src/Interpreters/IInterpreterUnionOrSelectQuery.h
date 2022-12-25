@@ -25,7 +25,7 @@ namespace ErrorCodes
 class IInterpreterUnionOrSelectQuery : public IInterpreter
 {
 public:
-    IInterpreterUnionOrSelectQuery(const ASTPtr & query_ptr_, ContextPtr context_, const SelectQueryOptions & options_)
+    IInterpreterUnionOrSelectQuery(const ASTPtr & query_ptr_, const ContextPtr & context_, const SelectQueryOptions & options_)
         : query_ptr(query_ptr_)
         , context(Context::createCopy(context_))
         , options(options_)
@@ -81,7 +81,7 @@ public:
     virtual bool hasStreamingWindowFunc() const = 0;
     virtual Streaming::HashSemantic getHashSemantic() const = 0;
 
-    /// Return the object column descriptions of the current query to provide subcolumns information to downstream 
+    /// Return the object column descriptions of the current query to provide subcolumns information to downstream
     /// pipeline. If the current query doesn't have any object columns, return empty but non-nullptr ColumnsDescription.
     virtual ColumnsDescriptionPtr getExtendedObjects() const { throw Exception(ErrorCodes::NOT_IMPLEMENTED, "not implemented"); }
 

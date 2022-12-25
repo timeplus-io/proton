@@ -77,7 +77,7 @@ static RocksDBOptions getOptionsFromConfig(const Poco::Util::AbstractConfigurati
 
 // returns keys may be filter by condition
 static bool traverseASTFilter(
-    const String & primary_key, const DataTypePtr & primary_key_type, const ASTPtr & elem, const PreparedSets & sets, FieldVectorPtr & res)
+    const String & primary_key, const DataTypePtr & primary_key_type, const ASTPtr & elem, const PreparedSetsPtr & prepared_sets, FieldVectorPtr & res)
 {
     const auto * function = elem->as<ASTFunction>();
     if (!function)
@@ -87,7 +87,7 @@ static bool traverseASTFilter(
     {
         // one child has the key filter condition is ok
         for (const auto & child : function->arguments->children)
-            if (traverseASTFilter(primary_key, primary_key_type, child, sets, res))
+            if (traverseASTFilter(primary_key, primary_key_type, child, prepared_sets, res))
                 return true;
         return false;
     }
@@ -95,7 +95,7 @@ static bool traverseASTFilter(
     {
         // make sure every child has the key filter condition
         for (const auto & child : function->arguments->children)
-            if (!traverseASTFilter(primary_key, primary_key_type, child, sets, res))
+            if (!traverseASTFilter(primary_key, primary_key_type, child, prepared_sets, res))
                 return false;
         return true;
     }
@@ -110,6 +110,9 @@ static bool traverseASTFilter(
 
         if (function->name == "in")
         {
+            if (!prepared_sets)
+                return false;
+
             ident = args.children.at(0)->as<ASTIdentifier>();
             if (!ident)
                 return false;
@@ -124,16 +127,15 @@ static bool traverseASTFilter(
             else
                 set_key = PreparedSetKey::forLiteral(*value, {primary_key_type});
 
-            auto set_it = sets.find(set_key);
-            if (set_it == sets.end())
-                return false;
-            SetPtr prepared_set = set_it->second;
-
-            if (!prepared_set->hasExplicitSetElements())
+            SetPtr set = prepared_sets->get(set_key);
+            if (!set)
                 return false;
 
-            prepared_set->checkColumnsNumber(1);
-            const auto & set_column = *prepared_set->getSetElements()[0];
+            if (!set->hasExplicitSetElements())
+                return false;
+
+            set->checkColumnsNumber(1);
+            const auto & set_column = *set->getSetElements()[0];
             for (size_t row = 0; row < set_column.size(); ++row)
                 res->push_back(set_column[row]);
             return true;
@@ -175,7 +177,7 @@ static std::pair<FieldVectorPtr, bool> getFilterKeys(
         return {{}, true};
 
     FieldVectorPtr res = std::make_shared<FieldVector>();
-    auto matched_keys = traverseASTFilter(primary_key, primary_key_type, select.where(), query_info.sets, res);
+    auto matched_keys = traverseASTFilter(primary_key, primary_key_type, select.where(), query_info.prepared_sets, res);
     return std::make_pair(res, !matched_keys);
 }
 
@@ -546,13 +548,9 @@ void StorageEmbeddedRocksDB::checkMutationIsPossible(const MutationCommands & co
     for (const auto & command : commands)
     {
         if (command.type != MutationCommand::UPDATE && command.type != MutationCommand::DELETE)
-            /// proton: starts
             throw Exception("The engine EmbeddedRocksDB supports only UPDATE and DELETE mutations", ErrorCodes::NOT_IMPLEMENTED);
-            /// proton: ends
         if (command.partition)
-            /// proton: starts
             throw Exception("The engine EmbeddedRocksDB mutations in partition is not supports", ErrorCodes::NOT_IMPLEMENTED);
-            /// proton: ends
     }
 }
 
@@ -642,9 +640,7 @@ void StorageEmbeddedRocksDB::mutate(const MutationCommands & commands, ContextPt
         wb_key.restart();
         /// get key
         if (!get_key(command, sample_block, &wb_key))
-            /// proton: starts
             throw Exception("The engine EmbeddedRocksDB DELETE mutations key is invalid", ErrorCodes::BAD_ARGUMENTS);
-            /// proton: ends
 
         if (command.type == MutationCommand::DELETE)
         {
@@ -661,18 +657,14 @@ void StorageEmbeddedRocksDB::mutate(const MutationCommands & commands, ContextPt
                 throw Exception("RocksDB get error: " + get_status.ToString(), ErrorCodes::ROCKSDB_ERROR);
 
             if (!update_value(command, sample_block, old_value, &wb_value))
-                /// proton: starts
                 throw Exception("The engine EmbeddedRocksDB UPDATE mutations values is invalid", ErrorCodes::BAD_ARGUMENTS);
-                /// proton: ends
 
             auto update_status = rocksdb_ptr->Put(rocksdb::WriteOptions(), wb_key.str(), wb_value.str());
             if (!update_status.ok())
                 throw Exception("RocksDB write error: " + update_status.ToString(), ErrorCodes::ROCKSDB_ERROR);
         }
         else
-            /// proton: starts
             throw Exception("The engine EmbeddedRocksDB supports only UPDATE and DELETE mutations", ErrorCodes::NOT_IMPLEMENTED);
-            /// proton: ends
     }
 }
 /// proton: ends.

@@ -442,14 +442,14 @@ KeyCondition::KeyCondition(
     bool strict_)
     : key_expr(key_expr_)
     , key_subexpr_names(getAllSubexpressionNames(*key_expr))
-    , prepared_sets(query_info.sets)
+    , prepared_sets(query_info.prepared_sets)
     , single_point(single_point_)
     , strict(strict_)
 {
     for (size_t i = 0, size = key_column_names.size(); i < size; ++i)
     {
         std::string name = key_column_names[i];
-        if (!key_columns.count(name))
+        if (!key_columns.contains(name))
             key_columns[name] = i;
     }
 
@@ -669,6 +669,7 @@ bool KeyCondition::transformConstantWithValidFunctions(
     std::function<bool(IFunctionBase &, const IDataType &)> always_monotonic) const
 {
     const auto & sample_block = key_expr->getSampleBlock();
+
     for (const auto & node : key_expr->getNodes())
     {
         auto it = key_columns.find(node.result_name);
@@ -770,6 +771,7 @@ bool KeyCondition::transformConstantWithValidFunctions(
             }
         }
     }
+
     return false;
 }
 
@@ -892,11 +894,7 @@ bool KeyCondition::tryPrepareSetIndex(
     SetPtr prepared_set;
     if (right_arg->as<ASTSubquery>() || right_arg->as<ASTTableIdentifier>())
     {
-        auto set_it = prepared_sets.find(PreparedSetKey::forSubquery(*right_arg));
-        if (set_it == prepared_sets.end())
-            return false;
-
-        prepared_set = set_it->second;
+        prepared_set = prepared_sets->get(PreparedSetKey::forSubquery(*right_arg));
     }
     else
     {
@@ -904,28 +902,18 @@ bool KeyCondition::tryPrepareSetIndex(
         /// about types in left argument of the IN operator. Instead, we manually iterate through all the sets
         /// and find the one for the right arg based on the AST structure (getTreeHash), after that we check
         /// that the types it was prepared with are compatible with the types of the primary key.
-        auto set_ast_hash = right_arg->getTreeHash();
-        auto set_it = std::find_if(
-            prepared_sets.begin(), prepared_sets.end(),
-            [&](const auto & candidate_entry)
+        for (const auto & set : prepared_sets->getByTreeHash(right_arg->getTreeHash()))
+        {
+            if (set->hasExplicitSetElements())
             {
-                if (candidate_entry.first.ast_hash != set_ast_hash)
-                    return false;
-
-                for (size_t i = 0; i < indexes_mapping.size(); ++i)
-                    if (!candidate_entry.second->areTypesEqual(indexes_mapping[i].tuple_index, data_types[i]))
-                        return false;
-
-                return true;
-        });
-        if (set_it == prepared_sets.end())
-            return false;
-
-        prepared_set = set_it->second;
+                prepared_set = set;
+                break;
+            }
+        }
     }
 
     /// The index can be prepared if the elements of the set were saved in advance.
-    if (!prepared_set->hasExplicitSetElements())
+    if (!prepared_set || !prepared_set->hasExplicitSetElements())
         return false;
 
     prepared_set->checkColumnsNumber(left_args_count);

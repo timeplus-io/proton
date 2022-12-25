@@ -3,7 +3,6 @@
 #include <Columns/FilterDescription.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/DatabaseCatalog.h>
-#include <Interpreters/SubqueryForSet.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/WindowDescription.h>
 #include <Interpreters/join_common.h>
@@ -48,8 +47,7 @@ struct ExpressionAnalyzerData
 {
     ~ExpressionAnalyzerData();
 
-    SubqueriesForSets subqueries_for_sets;
-    PreparedSets prepared_sets;
+    PreparedSetsPtr prepared_sets;
 
     std::unique_ptr<QueryPlan> joined_plan;
 
@@ -101,7 +99,7 @@ public:
     /// Ctor for non-select queries. Generally its usage is:
     /// auto actions = ExpressionAnalyzer(query, syntax, context).getActions();
     ExpressionAnalyzer(const ASTPtr & query_, const TreeRewriterResultPtr & syntax_analyzer_result_, ContextPtr context_)
-        : ExpressionAnalyzer(query_, syntax_analyzer_result_, context_, 0, false /* do glolbal */, false /* is_explain */, {}, {})
+        : ExpressionAnalyzer(query_, syntax_analyzer_result_, context_, 0, false /* do glolbal */, false /* is_explain */, {})
     {
     }
 
@@ -125,9 +123,7 @@ public:
       * That is, you need to call getSetsWithSubqueries after all calls of `append*` or `getActions`
       *  and create all the returned sets before performing the actions.
       */
-    SubqueriesForSets & getSubqueriesForSets() { return subqueries_for_sets; }
-
-    PreparedSets & getPreparedSets() { return prepared_sets; }
+    PreparedSetsPtr getPreparedSets() { return prepared_sets; }
 
     /// Get intermediates for tests
     const ExpressionAnalyzerData & getAnalyzedData() const { return *this; }
@@ -137,14 +133,12 @@ public:
 
     void makeWindowDescriptions(ActionsDAGPtr actions);
 
-    /**
-      * Create Set from a subquery or a table expression in the query. The created set is suitable for using the index.
+    /** Create Set from a subquery or a table expression in the query. The created set is suitable for using the index.
       * The set will not be created if its size hits the limit.
       */
     void tryMakeSetForIndexFromSubquery(const ASTPtr & subquery_or_table_name, const SelectQueryOptions & query_options = {});
 
-    /**
-      * Checks if subquery is not a plain StorageSet.
+    /** Checks if subquery is not a plain StorageSet.
       * Because while making set we will read data from StorageSet which is not allowed.
       * Returns valid SetPtr from StorageSet if the latter is used after IN or nullptr otherwise.
       */
@@ -158,8 +152,7 @@ protected:
         size_t subquery_depth_,
         bool do_global_,
         bool is_explain_,
-        SubqueriesForSets subqueries_for_sets_,
-        PreparedSets prepared_sets_);
+        PreparedSetsPtr prepared_sets_);
 
     ASTPtr query;
     const ExtractedSettings settings;
@@ -305,8 +298,7 @@ public:
         const NameSet & required_result_columns_ = {},
         bool do_global_ = false,
         const SelectQueryOptions & options_ = {},
-        SubqueriesForSets subqueries_for_sets_ = {},
-        PreparedSets prepared_sets_ = {})
+        PreparedSetsPtr prepared_sets_ = nullptr)
         : ExpressionAnalyzer(
             query_,
             syntax_analyzer_result_,
@@ -314,8 +306,7 @@ public:
             options_.subquery_depth,
             do_global_,
             options_.is_explain,
-            std::move(subqueries_for_sets_),
-            std::move(prepared_sets_))
+            prepared_sets_)
         , metadata_snapshot(metadata_snapshot_)
         , required_result_columns(required_result_columns_)
         , query_options(options_)
@@ -328,6 +319,7 @@ public:
     bool hasGlobalSubqueries() { return has_global_subqueries; }
     bool hasTableJoin() const { return syntax->ast_join; }
 
+
     bool useGroupingSetKey() const { return aggregation_keys_list.size() > 1; }
 
     const NamesAndTypesList & aggregationKeys() const { return aggregation_keys; }
@@ -335,7 +327,6 @@ public:
     const NamesAndTypesLists & aggregationKeysList() const { return aggregation_keys_list; }
     const AggregateDescriptions & aggregates() const { return aggregate_descriptions; }
 
-    const PreparedSets & getPreparedSets() const { return prepared_sets; }
     std::unique_ptr<QueryPlan> getJoinedPlan();
 
     /// Tables that will need to be sent to remote servers for distributed query processing.
