@@ -86,8 +86,16 @@ public:
             });
 
         factory.registerRouterHandler(
-            "/proton/v1/ddl/streams(?:\\?\?[^/]*)",
-            "GET/POST",
+            /// PATH: '/proton/v1/ddl/streams [/{databse}] [/{key}] ...'
+            "/proton/v1/ddl/streams(/[\\w\\W]*)?",
+            "GET",
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                return std::make_shared<TabularTableRestRouterHandler>(query_context);
+            });
+
+        factory.registerRouterHandler(
+            "/proton/v1/ddl/streams(?:\\?\?[^/]*)?",
+            "POST",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<TabularTableRestRouterHandler>(query_context);
             });

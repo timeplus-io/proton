@@ -97,6 +97,23 @@ bool TableRestRouterHandler::validatePatch(const Poco::JSON::Object::Ptr & paylo
     return validateSchema(update_schema, payload, error_msg);
 }
 
+std::pair<String, String> parseRequestDatabaseAndNameFromPath(const String & path)
+{
+    /// PATH: '/proton/v1/ddl/streams[/{databse}/{key}] ...'
+    constexpr char prefix[] = "/proton/v1/ddl/streams";
+    assert(path.starts_with(prefix));
+    size_t root_len = strlen(prefix);
+    if (root_len == path.size())
+        return {"", ""};
+
+    ++root_len;  /// skip '/'
+    auto namespace_end = path.find_first_of('/', root_len);
+    if (namespace_end == std::string::npos)
+        return {path.substr(root_len), ""};
+    else
+        return {String(path, root_len, namespace_end - root_len), path.substr(namespace_end + 1)};
+}
+
 std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */) const
 {
     if (!DatabaseCatalog::instance().tryGetDatabase(database))
@@ -104,26 +121,74 @@ std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Ob
             jsonErrorResponse(fmt::format("Databases {} does not exist.", database), ErrorCodes::UNKNOWN_DATABASE),
             HTTPResponse::HTTP_BAD_REQUEST};
 
-    CatalogService::TablePtrs tables;
+    String requested_database, requested_name;
+    std::tie(requested_database, requested_name) =  parseRequestDatabaseAndNameFromPath(this->query_uri.getPath());
+    
+    CatalogService::TablePtrs streams;
     if (!CatalogService::instance(query_context).enabled())
     {
         auto node_identity{query_context->getNodeIdentity()};
         auto this_host{query_context->getHostFQDN()};
-        queryStreams(query_context, [&](Block && block) {
-            tables.reserve(block.rows());
-            for (size_t row = 0; row < block.rows(); ++row)
-                tables.push_back(std::make_shared<CatalogService::Table>(node_identity, this_host, block, row));
-        });
+
+        if (requested_database.empty())
+            queryStreams(query_context, [&](Block && block) {
+                streams.reserve(block.rows());
+                for (size_t row = 0; row < block.rows(); ++row)
+                    streams.push_back(std::make_shared<CatalogService::Table>(node_identity, this_host, block, row));
+            });
+        else if (requested_name.empty())
+        {
+            queryStreamsByDatabasse(query_context, requested_database, [&](Block && block) {
+                streams.reserve(block.rows());
+                for (size_t row = 0; row < block.rows(); ++row)
+                    streams.push_back(std::make_shared<CatalogService::Table>(node_identity, this_host, block, row));
+            });
+            if (streams.empty())
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "database '{}' doesn't exit or does not have any streams", requested_database);
+        }
+        else
+        {
+            queryOneStream(query_context, requested_database, requested_name, [&](Block && block) {
+                streams.reserve(block.rows());
+                for (size_t row = 0; row < block.rows(); ++row)
+                    streams.push_back(std::make_shared<CatalogService::Table>(node_identity, this_host, block, row));
+            });
+            if (streams.empty())
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "No stream named '{}' in database '{}'", requested_name, requested_database);
+        }
     }
     else
     {
-        const auto & catalog_service = CatalogService::instance(query_context);
-        auto database_tables{catalog_service.findTableByDB(database)};
-        tables.swap(database_tables);
+        if (requested_database.empty())
+        {
+            const auto & catalog_service = CatalogService::instance(query_context);
+            for (const auto & Database : catalog_service.databases())
+                if (Database != "system" && Database != "INFORMATION_SCHEMA" && Database != "information_schema")
+                {
+                    auto database_streams = catalog_service.findTableByDB(Database);
+                    for (auto it : database_streams)
+                        streams.emplace_back(it);
+                }
+        }
+        else if (requested_name.empty())
+        {
+            const auto & catalog_service = CatalogService::instance(query_context);
+            streams = catalog_service.findTableByDB(requested_database);
+            if (streams.empty())
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS, "database '{}' doesn't exit or does not have any streams", requested_database);
+        }
+        else
+        {
+            const auto & catalog_service = CatalogService::instance(query_context);
+            streams = catalog_service.findTableByName(requested_database, requested_name);
+            if (streams.empty())
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "No stream named '{}' in database '{}'", requested_name, requested_database);
+        }
     }
 
     Poco::JSON::Object resp;
-    buildTablesJSON(resp, tables);
+    buildTablesJSON(resp, streams);
 
     resp.set("request_id", query_context->getCurrentQueryId());
     std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
