@@ -1065,6 +1065,8 @@
       "steps":[
         {
           "statements": [
+            {"client":"python", "query_id":"35_left_stream_count_0", "query_type": "table","depends_on_stream":"left_stream","wait":1,"query": "select count() from table(left_stream)"},
+            {"client":"python", "query_id":"35_right_stream_count_0", "query_type": "table","depends_on_stream":"right_stream","wait":1,"query": "select count() from table(right_stream)"},               
             {"client":"python","query_id":"1036", "terminate":"manuel", "wait":1,"query_type": "stream","depends_on_stream":"left_stream,right_stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff_within(10s, ts, date_add(tts, 1s))"},
             {"client":"python", "query_type": "table", "wait":2,"depends_on":1036, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
@@ -1078,7 +1080,9 @@
               (1, 's7', '2022-05-23 15:45:20'),
               (1, 's8', '2022-05-23 15:45:21')"
             },
-            {"client":"python", "wait": 8, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1036'"}
+            {"client":"python", "wait": 8, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1036'"},
+            {"client":"python","query_id":"35_left_stream_count_1", "query_type": "table","query": "select count() from table(left_stream)"},
+            {"client":"python","query_id":"35_right_stream_count_1", "query_type": "table","query": "select count() from table(right_stream)"}           
           ]
         }
       ],
