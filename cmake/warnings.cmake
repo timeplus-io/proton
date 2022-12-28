@@ -30,6 +30,7 @@ if (COMPILER_CLANG)
         add_warning(everything)
         no_warning(c++98-compat-pedantic)
         no_warning(c++98-compat)
+        no_warning(c++20-compat)
         no_warning(c99-extensions)
         no_warning(conversion)
         no_warning(ctad-maybe-unsupported) # clang 9+, linux-only

@@ -238,6 +238,14 @@ void MemoryTracker::allocImpl(Int64 size, bool throw_if_memory_exceeded)
         loaded_next->allocImpl(size, throw_if_memory_exceeded);
 }
 
+void MemoryTracker::adjustWithUntrackedMemory(Int64 untracked_memory)
+{
+    if (untracked_memory > 0)
+        allocImpl(untracked_memory, /*throw_if_memory_exceeded*/ false);
+    else
+        free(-untracked_memory);
+}
+
 void MemoryTracker::alloc(Int64 size)
 {
     bool throw_if_memory_exceeded = true;

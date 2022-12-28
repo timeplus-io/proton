@@ -77,6 +77,8 @@ public:
 
     VariableContext level;
 
+    void adjustWithUntrackedMemory(Int64 untracked_memory);
+
     /** Call the following functions before calling of corresponding operations with memory allocators.
       */
     void alloc(Int64 size);

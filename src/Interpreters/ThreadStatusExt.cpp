@@ -46,17 +46,17 @@ void ThreadStatus::applyQuerySettings()
     initQueryProfiler();
 
     untracked_memory_limit = settings.max_untracked_memory;
-    if (settings.memory_profiler_step && settings.memory_profiler_step < UInt64(untracked_memory_limit))
+    if (settings.memory_profiler_step && settings.memory_profiler_step < static_cast<UInt64>(untracked_memory_limit))
         untracked_memory_limit = settings.memory_profiler_step;
 
 #if defined(OS_LINUX)
     /// Set "nice" value if required.
-    Int32 new_os_thread_priority = settings.os_thread_priority;
+    Int32 new_os_thread_priority = static_cast<Int32>(settings.os_thread_priority);
     if (new_os_thread_priority && hasLinuxCapability(CAP_SYS_NICE))
     {
         LOG_TRACE(log, "Setting nice to {}", new_os_thread_priority);
 
-        if (0 != setpriority(PRIO_PROCESS, thread_id, new_os_thread_priority))
+        if (0 != setpriority(PRIO_PROCESS, static_cast<int>(thread_id), new_os_thread_priority))
             throwFromErrno("Cannot 'setpriority'", ErrorCodes::CANNOT_SET_THREAD_PRIORITY);
 
         os_thread_priority = new_os_thread_priority;
@@ -114,7 +114,7 @@ void ThreadStatus::setupState(const ThreadGroupStatusPtr & thread_group_)
         std::lock_guard lock(thread_group->mutex);
 
         /// NOTE: thread may be attached multiple times if it is reused from a thread pool.
-        thread_group->thread_ids.emplace_back(thread_id);
+        thread_group->thread_ids.insert(thread_id);
         thread_group->threads.insert(this);
 
         logs_queue_ptr = thread_group->logs_queue_ptr;
@@ -405,6 +405,13 @@ void ThreadStatus::detachQuery(bool exit_if_already_detached, bool thread_exits)
     query_context.reset();
     thread_trace_context.trace_id = 0;
     thread_trace_context.span_id = 0;
+    /// Avoid leaking of ThreadGroupStatus::finished_threads_counters_memory
+    /// (this is in case someone uses system thread but did not call getProfileEventsCountersAndMemoryForThreads())
+    {
+        std::lock_guard guard(thread_group->mutex);
+        auto stats = std::move(thread_group->finished_threads_counters_memory);
+    }
+
     thread_group.reset();
 
     thread_state = thread_exits ? ThreadState::Died : ThreadState::DetachedFromQuery;
@@ -414,7 +421,7 @@ void ThreadStatus::detachQuery(bool exit_if_already_detached, bool thread_exits)
     {
         LOG_TRACE(log, "Resetting nice");
 
-        if (0 != setpriority(PRIO_PROCESS, thread_id, 0))
+        if (0 != setpriority(PRIO_PROCESS, static_cast<int>(thread_id), 0))
             LOG_ERROR(log, "Cannot 'setpriority' back to zero: {}", errnoToString());
 
         os_thread_priority = 0;
