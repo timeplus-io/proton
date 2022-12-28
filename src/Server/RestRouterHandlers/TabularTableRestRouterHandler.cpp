@@ -75,6 +75,7 @@ void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, c
         if (table->engine == "Stream" || table->engine == "MaterializedView")
             buildRetentionSettings(table_mapping_json, table->database.empty() ? database : table->database, table->name);
 
+        /// ttl of materialized view has already been updated in buildRetentionSettings.
         if (create.storage && create.storage->ttl_table)
             table_mapping_json.set("ttl", queryToString(*create.storage->ttl_table));
 

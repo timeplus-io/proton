@@ -311,7 +311,18 @@ void TableRestRouterHandler::buildRetentionSettings(Poco::JSON::Object & resp_ta
             if (auto * stream = storage->as<StorageStream>())
                 settings = stream->getSettings();
             else if (auto * mv = storage->as<StorageMaterializedView>())
+            {
                 settings = mv->getSettings();
+
+                /// set ttl, only work for single instance environment
+                auto target = mv->getTargetTable();
+                if (target)
+                {
+                    TTLTableDescription ttl = target->getInMemoryMetadataPtr()->getTableTTLs();
+                    if (ttl.definition_ast)
+                        resp_table.set("ttl", queryToString(ttl.definition_ast, true));
+                }
+            }
 
             if (settings)
             {
