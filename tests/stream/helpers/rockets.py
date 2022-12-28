@@ -36,6 +36,8 @@
 #    "('dev2', 78.30000305175781, datetime.datetime(2020, 2, 2, 20, 0), datetime.datetime(2020, 2, 2, 20, 0, 10))"
 #    ]
 # }
+# trace_stream_check:
+#  - trace_stream_check, proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, trace_id = {trace_id}, stream_2_trace = {stream}, trace_result = {res}
 # Errors in debug log:
 #  QUERY_ERROR FATAL
 #  - QUERY_RUN_ERROR CRASH
@@ -936,6 +938,7 @@ def query_run_py(
     query_results_queue=None,
     config=None,
     pyclient=None,
+    logger=None,
     telemetry_shared_list=None,
     logging_level="INFO",
 ):
@@ -957,7 +960,8 @@ def query_run_py(
     #    logger.setLevel(logging.DEBUG)
     query_run_py_run_mode = 'None'
     try:
-        logger = mp.get_logger()
+        if pyclient == None: #if query_run_py is running a standalone process
+            logger = mp.get_logger()
         proton_server = None
         proton_setting = config.get("proton_setting")
         proton_cluster_query_route_mode = config.get("proton_cluster_query_route_mode")
@@ -1049,27 +1053,7 @@ def query_run_py(
         if depends_on_stream != None and isinstance(
             depends_on_stream, str
         ):  # depends_on_stream: a string seperated by "," to indicated streams the query or input depends on
-            # retry = 500
-            # # while not table_exist_py(pyclient, depends_on_stream) and retry > 0:
-            # depends_on_stream_info = table_exist(table_ddl_url, depends_on_stream)
-            # while depends_on_stream_info is None and retry > 0:
-            #     time.sleep(0.02)
-            #     depends_on_stream_info = table_exist(table_ddl_url, depends_on_stream)
-            #     retry -= 1
-            # logger.debug(f"retry remains after retry -=1: {retry}")
-
-            # if retry <= 0:
-            #     logger.debug(
-            #         f"check depends_on_stream 500 times and depends_on_stream={depends_on_stream} does not exist"
-            #     )
-            #     raise Exception(
-            #         f"depends_on_stream = {depends_on_stream} for query_id = {query_id}, query = {query} not found"
-            #     )
-            # else:
-            #     logger.debug(
-            #         f"check depends_on_stream, depends_on_stream={depends_on_stream} found."
-            #     )
-
+    
             depends_on_stream_list = depends_on_stream.split(",")
             depends_on_stream_info_list = depends_on_stream_exist(
                 table_ddl_url, depends_on_stream_list, query_id
@@ -1185,7 +1169,25 @@ def query_run_py(
             time.sleep(wait)
             logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, end wait for {wait} to start run query = {query}")
 
-        # if query_type == "table" and not ("select" in query or "SELECT" in query):
+        try: # do trace_stream logic
+            if "trace_stream" in statement_2_run:
+                trace_stream = statement_2_run["trace_stream"]
+                if "trace_id" in trace_stream and "streams" in trace_stream:
+                    trace_id = trace_stream["trace_id"]
+                    streams_2_trace = trace_stream["streams"].split(",")
+                    if "trace_query" in trace_stream:
+                        trace_query = trace_stream["trace_query"]
+                        for stream in streams_2_trace:
+                            query_2_run = trace_query.replace("$", stream)
+                            res = pyclient.execute(
+                                query_2_run, with_column_types=True, settings=settings
+                            )
+                            logger.info(f"trace_stream_check, proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, trace_id = {trace_id}, stream_2_trace = {stream}, trace_result = {res}")
+        except(BaseException) as error: #catch trace_stream error and log and no impact to the test execution
+            logger.info(f"trace_stream exception, error = {error}")
+            #raise Exception(f"trace_stream exception, error = {error}")
+
+
         if query_type == "table":
             query_result_iter = []
             if "cluster" in proton_setting and (
@@ -1231,46 +1233,6 @@ def query_run_py(
                 logger.debug(
                     f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}"
                 )
-
-            # if 'cluster' not in proton_setting:
-            #     res = pyclient.execute(
-            #         query, with_column_types=True, query_id=query_id, settings=settings
-            #     )
-            #     query_result_iter.append(res[-1])
-            #     if len(res[0]) > 0:
-            #         for item in res[0]:
-            #             query_result_iter.append(item)
-            #     logger.debug(f"query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}")
-            # else:
-            #     if 'kill query' in query or 'KILL QUERY' in query: #todo: better logic for the manual kill query in cluster
-            #         for item in proton_servers:
-            #             proton_server = item.get("host")
-            #             proton_server_native_port = item.get("port")
-            #             if pyclient is not None:
-            #                 pyclient.disconnect()
-            #             logger.debug(f"pyclient disonnected.")
-            #             pyclient = Client(
-            #                 host=proton_server, port=proton_server_native_port
-            #             )  # create python client
-            #             logger.debug(f"query = {query} run on proton_server={proton_server}, proton_server_native_port = {proton_server_native_port}")
-            #             res = pyclient.execute(
-            #                 query, with_column_types=True, query_id=query_id, settings=settings
-            #             )
-            #             query_result_iter.append(res[-1])
-            #             if len(res[0]) > 0:
-            #                 for item in res[0]:
-            #                     query_result_iter.append(item)
-            #         logger.debug(f"query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}")
-            #         pyclient.disconnect()
-            #     else:
-            #         res = pyclient.execute(
-            #             query, with_column_types=True, query_id=query_id, settings=settings
-            #         )
-            #         query_result_iter.append(res[-1])
-            #         if len(res[0]) > 0:
-            #             for item in res[0]:
-            #                 query_result_iter.append(item)
-            #         logger.debug(f"query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}")
 
         else:
             query_result_iter = pyclient.execute_iter(
@@ -1843,6 +1805,7 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                         query_results_queue,
                         config,
                         None,
+                        None,
                         telemetry_shared_list,
                         logging_level,
                     )
@@ -1925,6 +1888,7 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                             query_results_queue=None,
                             config=config,
                             pyclient=statement_client,
+                            logger=logger
                         )
                         print(f"query_execute: query_results = {query_results}")
 
@@ -2877,6 +2841,7 @@ def test_suite_env_setup(client, config, test_suite_name, test_suite_config):
                         query_results_queue=None,
                         config=config,
                         pyclient=client,
+                        logger=logger,
                     )
 
                     logger.debug(f"query_id = {query_id}, query_run_py is called")
