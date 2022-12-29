@@ -37,6 +37,10 @@ public:
         ContextPtr context_,
         bool is_subquery = false);
 
+    virtual void ignoreWithTotals() override;
+
+    bool supportsTransactions() const override { return true; }
+
     /// proton: starts
     bool hasAggregation() const override;
     bool isStreaming() const override;
@@ -48,8 +52,6 @@ public:
     ColumnsDescriptionPtr getExtendedObjects() const override;
     std::set<String> getGroupByColumns() const override;
     /// proton: ends
-
-    virtual void ignoreWithTotals() override;
 
 private:
     std::vector<std::unique_ptr<IInterpreterUnionOrSelectQuery>> nested_interpreters;

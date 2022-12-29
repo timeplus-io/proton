@@ -8,6 +8,7 @@
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/TableOverrideUtils.h>
+#include <Interpreters/MergeTreeTransaction.h>
 #include <Formats/FormatFactory.h>
 #include <Parsers/DumpASTNode.h>
 #include <Parsers/ASTExplainQuery.h>
@@ -378,9 +379,7 @@ QueryPipeline InterpreterExplainQuery::executeImpl()
         {
             if (auto * table_function = ast.getTableFunction()->as<ASTFunction>(); !table_function || table_function->name != "mysql")
             {
-                /// proton: starts
                 throw Exception(ErrorCodes::INCORRECT_QUERY, "EXPLAIN is not supported for the {}() function", table_function->name);
-                /// proton: ends
             }
             auto storage = getContext()->getQueryContext()->executeTableFunction(ast.getTableFunction());
             auto metadata_snapshot = storage->getInMemoryMetadata();
@@ -388,6 +387,23 @@ QueryPipeline InterpreterExplainQuery::executeImpl()
             TableOverrideAnalyzer override_analyzer(ast.getTableOverride());
             override_analyzer.analyze(metadata_snapshot, override_info);
             override_info.appendTo(buf);
+            break;
+        }
+        case ASTExplainQuery::CurrentTransaction:
+        {
+            if (ast.getSettings())
+                throw Exception("Settings are not supported for EXPLAIN CURRENT TRANSACTION query.", ErrorCodes::UNKNOWN_SETTING);
+
+            if (auto txn = getContext()->getCurrentTransaction())
+            {
+                String dump = txn->dumpDescription();
+                buf.write(dump.data(), dump.size());
+            }
+            else
+            {
+                writeCString("<no current transaction>", buf);
+            }
+
             break;
         }
     }

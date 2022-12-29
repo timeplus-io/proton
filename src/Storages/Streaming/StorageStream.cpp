@@ -706,7 +706,7 @@ void StorageStream::readHistory(
         stream_shard->storage->read(
             *plan,
             column_names,
-            stream_shard->storage->getStorageSnapshot(storage_snapshot->metadata),
+            stream_shard->storage->getStorageSnapshot(storage_snapshot->metadata, context_),
             query_info,
             context_,
             processed_stage,
@@ -1154,20 +1154,17 @@ QueryProcessingStage::Enum StorageStream::getQueryProcessingStage(
     }
 }
 
-StorageSnapshotPtr StorageStream::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const
+StorageSnapshotPtr StorageStream::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const
 {
     auto & storage = stream_shards.back()->storage;
 
     std::shared_ptr<StorageSnapshot> storage_snapshot;
     if (!storage)
-    {
         /// for virtual table
-        storage_snapshot = IStorage::getStorageSnapshot(metadata_snapshot)->clone();
-    }
+        storage_snapshot = IStorage::getStorageSnapshot(metadata_snapshot, query_context)->clone();
     else
-    {
-        storage_snapshot = storage->getStorageSnapshot(metadata_snapshot)->clone();
-    }
+        storage_snapshot = storage->getStorageSnapshot(metadata_snapshot, query_context)->clone();
+
     /// Add virtuals, such as `_tp_append_time` and `_tp_process_time
     storage_snapshot->addVirtuals(getVirtuals());
     return storage_snapshot;

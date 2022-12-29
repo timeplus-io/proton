@@ -311,7 +311,7 @@ void StorageMaterializedView::read(
 
     auto lock = storage->lockForShare(local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
     auto target_metadata_snapshot = storage->getInMemoryMetadataPtr();
-    auto target_storage_snapshot = storage->getStorageSnapshot(target_metadata_snapshot);
+    auto target_storage_snapshot = storage->getStorageSnapshot(target_metadata_snapshot, local_context);
 
     if (query_info.order_optimizer)
         query_info.input_order_info = query_info.order_optimizer->getInputOrder(target_metadata_snapshot, local_context);
@@ -574,11 +574,11 @@ void StorageMaterializedView::executeBackgroundPipeline()
     }};
 }
 
-StorageSnapshotPtr StorageMaterializedView::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const
+StorageSnapshotPtr StorageMaterializedView::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const
 {
     if (target_table_storage)
     {
-        auto storage_snapshot = target_table_storage->getStorageSnapshot(metadata_snapshot)->clone();
+        auto storage_snapshot = target_table_storage->getStorageSnapshot(metadata_snapshot, query_context)->clone();
         /// Add virtuals, such as `_tp_version`
         storage_snapshot->addVirtuals(getVirtuals());
         return storage_snapshot;

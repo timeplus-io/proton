@@ -81,7 +81,7 @@ StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr contex
 
         if (storage->as<StorageView>())
         {
-            underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr());
+            underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
             auto select = underlying_storage_snapshot->getMetadataForQuery()->getSelectQuery().inner_query;
             SelectQueryOptions options;
             auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(select, context, options);
@@ -96,7 +96,7 @@ StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr contex
         }
         else
         {
-            underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr());
+            underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
             columns = underlying_storage_snapshot->metadata->getColumns();
         }
     }

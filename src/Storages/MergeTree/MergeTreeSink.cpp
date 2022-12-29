@@ -25,7 +25,7 @@ MergeTreeSink::MergeTreeSink(
     , metadata_snapshot(metadata_snapshot_)
     , max_parts_per_block(max_parts_per_block_)
     , context(context_)
-    , storage_snapshot(storage.getStorageSnapshot(metadata_snapshot))
+    , storage_snapshot(storage.getStorageSnapshot(metadata_snapshot, context))
 {
 }
 
@@ -88,7 +88,7 @@ void MergeTreeSink::consume(Chunk chunk)
         }
 
         /// Part can be deduplicated, so increment counters and add to part log only if it's really added
-        if (storage.renameTempPartAndAdd(temp_part, &storage.increment, nullptr, storage.getDeduplicationLog(), block_dedup_token))
+        if (storage.renameTempPartAndAdd(temp_part, context->getCurrentTransaction().get(), &storage.increment, nullptr, storage.getDeduplicationLog(), block_dedup_token))
         {
             PartLog::addNewPart(storage.getContext(), temp_part, watch.elapsed());
 

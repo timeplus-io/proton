@@ -24,12 +24,15 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/ASTWatchQuery.h>
+#include <Parsers/ASTTransactionControl.h>
+#include <Parsers/ASTExplainQuery.h>
 #include <Parsers/Lexer.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/queryNormalization.h>
 #include <Parsers/queryToString.h>
 #include <Parsers/formatAST.h>
+#include <Parsers/toOneLineQuery.h>
 
 #include <Formats/FormatFactory.h>
 #include <Storages/StorageInput.h>
@@ -48,6 +51,7 @@
 #include <Interpreters/ReplaceQueryParameterVisitor.h>
 #include <Interpreters/SelectQueryOptions.h>
 #include <Interpreters/executeQuery.h>
+#include <Interpreters/TransactionLog.h>
 #include <Interpreters/SelectIntersectExceptQueryVisitor.h>
 #include <Common/ProfileEvents.h>
 
@@ -65,9 +69,8 @@
 
 #include <random>
 
-#include <DistributedMetadata/CatalogService.h>
-
 /// proton: starts
+#include <DistributedMetadata/CatalogService.h>
 #include <Checkpoint/CheckpointCoordinator.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/Streaming/ASTRecoverQuery.h>
@@ -93,6 +96,7 @@ namespace ErrorCodes
 {
     extern const int INTO_OUTFILE_NOT_ALLOWED;
     extern const int QUERY_WAS_CANCELLED;
+    extern const int INVALID_TRANSACTION;
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
     extern const int SYNTAX_ERROR;
@@ -153,38 +157,6 @@ static void checkASTSizeLimits(const IAST & ast, const Settings & settings)
 }
 
 
-static String joinLines(const String & query)
-{
-    /// Care should be taken. We don't join lines inside non-whitespace tokens (e.g. multiline string literals)
-    ///  and we don't join line after comment (because it can be single-line comment).
-    /// All other whitespaces replaced to a single whitespace.
-
-    String res;
-    const char * begin = query.data();
-    const char * end = begin + query.size();
-
-    Lexer lexer(begin, end);
-    Token token = lexer.nextToken();
-    for (; !token.isEnd(); token = lexer.nextToken())
-    {
-        if (token.type == TokenType::Whitespace)
-        {
-            res += ' ';
-        }
-        else if (token.type == TokenType::Comment)
-        {
-            res.append(token.begin, token.end);
-            if (token.end < end && *token.end == '\n')
-                res += '\n';
-        }
-        else
-            res.append(token.begin, token.end);
-    }
-
-    return res;
-}
-
-
 static String prepareQueryForLogging(const String & query, ContextPtr context)
 {
     String res = query;
@@ -207,11 +179,11 @@ static String prepareQueryForLogging(const String & query, ContextPtr context)
 
 
 /// Log query into text log (not into system table).
-static void logQuery(const String & query, ContextPtr context, bool internal)
+static void logQuery(const String & query, ContextPtr context, bool internal, QueryProcessingStage::Enum stage)
 {
     if (internal)
     {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "(internal) {}", joinLines(query));
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "(internal) {} (stage: {})", toOneLineQuery(query), QueryProcessingStage::toString(stage));
     }
     else
     {
@@ -230,12 +202,18 @@ static void logQuery(const String & query, ContextPtr context, bool internal)
         if (!comment.empty())
             comment = fmt::format(" (comment: {})", comment);
 
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "(from {}{}{}){} {}",
+        String transaction_info;
+        if (auto txn = context->getCurrentTransaction())
+            transaction_info = fmt::format(" (TID: {}, TIDH: {})", txn->tid, txn->tid.getHash());
+
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "(from {}{}{}){}{} {} (stage: {})",
             client_info.current_address.toString(),
             (current_user != "default" ? ", user: " + current_user : ""),
             (!initial_query_id.empty() && current_query_id != initial_query_id ? ", initial_query_id: " + initial_query_id : std::string()),
+            transaction_info,
             comment,
-            joinLines(query));
+            toOneLineQuery(query),
+            QueryProcessingStage::toString(stage));
 
         if (client_info.client_trace_context.trace_id != UUID())
         {
@@ -274,13 +252,13 @@ static void logException(ContextPtr context, QueryLogElement & elem)
         comment = fmt::format(" (comment: {})", elem.log_comment);
 
     if (elem.stack_trace.empty())
-        LOG_WARNING(
+        LOG_ERROR(
             &Poco::Logger::get("executeQuery"),
             "{} (from {}){} (in query: {})",
             elem.exception,
             context->getClientInfo().current_address.toString(),
             comment,
-            joinLines(elem.query));
+            toOneLineQuery(elem.query));
     else
         LOG_ERROR(
             &Poco::Logger::get("executeQuery"),
@@ -289,7 +267,7 @@ static void logException(ContextPtr context, QueryLogElement & elem)
             elem.exception,
             context->getClientInfo().current_address.toString(),
             comment,
-            joinLines(elem.query),
+            toOneLineQuery(elem.query),
             elem.stack_trace);
 }
 
@@ -347,6 +325,9 @@ static void onExceptionBeforeStart(const String & query_for_logging, ContextPtr 
     elem.log_comment = settings.log_comment;
     if (elem.log_comment.size() > settings.max_query_size)
         elem.log_comment.resize(settings.max_query_size);
+
+    if (auto txn = context->getCurrentTransaction())
+        elem.tid = txn->tid;
 
     if (settings.calculate_text_stack_trace)
         setExceptionStackTrace(elem);
@@ -496,16 +477,17 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     ASTPtr ast;
     const char * query_end;
 
-    /// Don't limit the size of internal queries.
-    size_t max_query_size = 0;
-    if (!internal) max_query_size = settings.max_query_size;
+    size_t max_query_size = settings.max_query_size;
+    /// Don't limit the size of internal queries or distributed subquery.
+    if (internal || client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
+        max_query_size = 0;
 
     String recovered_query;
     String query_database;
     String query_table;
     try
     {
-        ParserQuery parser(end);
+        ParserQuery parser(end, settings.allow_settings_after_format_in_insert);
 
         /// TODO: parser should fail early when max_query_size limit is reached.
         /// proton: starts
@@ -522,6 +504,14 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             end = recovered_query.data() + recovered_query.size();
         }
         /// proton: ends
+
+        if (auto txn = context->getCurrentTransaction())
+        {
+            chassert(txn->getState() != MergeTreeTransaction::COMMITTING);
+            chassert(txn->getState() != MergeTreeTransaction::COMMITTED);
+            if (txn->getState() == MergeTreeTransaction::ROLLED_BACK && !ast->as<ASTTransactionControl>() && !ast->as<ASTExplainQuery>())
+                throw Exception(ErrorCodes::INVALID_TRANSACTION, "Cannot execute query because current transaction failed. Expecting ROLLBACK statement.");
+        }
 
         /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
         /// to allow settings to take effect.
@@ -573,7 +563,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         String query = String(begin, begin + std::min(end - begin, static_cast<ptrdiff_t>(max_query_size)));
 
         auto query_for_logging = prepareQueryForLogging(query, context);
-        logQuery(query_for_logging, context, internal);
+        logQuery(query_for_logging, context, internal, stage);
 
         if (!internal)
         {
@@ -631,10 +621,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         }
 
         /// MUST go before any modification (except for prepared statements,
-        /// since it substitute parameters and w/o them query does not contain
+        /// since it substitute parameters and without them query does not contain
         /// parameters), to keep query as-is in query_log and server log.
         query_for_logging = prepareQueryForLogging(query, context);
-        logQuery(query_for_logging, context, internal);
+        logQuery(query_for_logging, context, internal, stage);
 
         /// Propagate WITH statement to children ASTSelect.
         if (settings.enable_global_with_statement)
@@ -724,6 +714,14 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         if (async_insert)
         {
+            quota = context->getQuota();
+            if (quota)
+            {
+                quota->used(QuotaType::QUERY_INSERTS, 1);
+                quota->used(QuotaType::QUERIES, 1);
+                quota->checkExceeded(QuotaType::ERRORS);
+            }
+
             queue->push(ast, context);
 
             if (settings.wait_for_async_insert)
@@ -734,20 +732,20 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 res.pipeline = QueryPipeline(Pipe(std::move(source)));
             }
 
-            quota = context->getQuota();
-            if (quota)
-            {
-                quota->used(QuotaType::QUERY_INSERTS, 1);
-                quota->used(QuotaType::QUERIES, 1);
-            }
-
             const auto & table_id = insert_query->table_id;
             if (!table_id.empty())
                 context->setInsertionTable(table_id);
+
+            if (context->getCurrentTransaction() && context->getSettingsRef().throw_on_unsupported_query_inside_transaction)
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Async inserts inside transactions are not supported");
         }
         else
         {
             interpreter = InterpreterFactory::get(ast, context, SelectQueryOptions(stage).setInternal(internal));
+
+            if (context->getCurrentTransaction() && !interpreter->supportsTransactions() &&
+                context->getSettingsRef().throw_on_unsupported_query_inside_transaction)
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Transactions are not supported for this type of query ({})", ast->getID());
 
             if (!interpreter->ignoreQuota())
             {
@@ -773,17 +771,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 limits.size_limits = SizeLimits(settings.max_result_rows, settings.max_result_bytes, settings.result_overflow_mode);
             }
 
-            {
-                std::unique_ptr<OpenTelemetrySpanHolder> span;
-                if (context->query_trace_context.trace_id != UUID())
-                {
-                    auto * raw_interpreter_ptr = interpreter.get();
-                    std::string class_name(demangle(typeid(*raw_interpreter_ptr).name()));
-                    span = std::make_unique<OpenTelemetrySpanHolder>(class_name + "::execute()");
-                }
-                res = interpreter->execute();
-            }
-
             if (const auto * insert_interpreter = typeid_cast<const InterpreterInsertQuery *>(&*interpreter))
             {
                 /// Save insertion table (not table function). TODO: support remote() table function.
@@ -804,6 +791,17 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     }
                     /// proton: ends
                 }
+            }
+
+            {
+                std::unique_ptr<OpenTelemetrySpanHolder> span;
+                if (context->query_trace_context.trace_id != UUID())
+                {
+                    auto * raw_interpreter_ptr = interpreter.get();
+                    std::string class_name(demangle(typeid(*raw_interpreter_ptr).name()));
+                    span = std::make_unique<OpenTelemetrySpanHolder>(class_name + "::execute()");
+                }
+                res = interpreter->execute();
             }
         }
 
@@ -852,6 +850,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             elem.normalized_query_hash = normalizedQueryHash<false>(query_for_logging);
 
             elem.client_info = client_info;
+
+            if (auto txn = context->getCurrentTransaction())
+                elem.tid = txn->tid;
 
             /// proton : starts.
             bool log_insert_queries = ast && ((ast->as<ASTInsertQuery>() && settings.log_insert_query) || !ast->as<ASTInsertQuery>());
@@ -994,7 +995,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         ReadableSize(elem.read_bytes / elapsed_seconds));
                 }
 
-                if (log_queries && elem.type >= log_queries_min_type && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
+                if (log_queries && elem.type >= log_queries_min_type && static_cast<Int64>(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
                 {
                     if (auto query_log = context->getQueryLog())
                         query_log->add(elem);
@@ -1043,6 +1044,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                  log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
                  quota(quota), status_info_to_query_log] () mutable
             {
+                if (auto txn = context->getCurrentTransaction())
+                    txn->onException();
+
                 if (quota)
                     quota->used(QuotaType::ERRORS, 1, /* check_exceeded = */ false);
 
@@ -1070,12 +1074,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     status_info_to_query_log(elem, info, ast, context);
                 }
 
-                if (current_settings.calculate_text_stack_trace && elem.exception_code != ErrorCodes::QUERY_WAS_CANCELLED)
+                if (current_settings.calculate_text_stack_trace && elem.exception_code != ErrorCodes::QUERY_WAS_CANCELLED) /// proton : don't log trace for cancelled query
                     setExceptionStackTrace(elem);
                 logException(context, elem);
 
                 /// In case of exception we log internal queries also
-                if (log_queries && elem.type >= log_queries_min_type && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
+                if (log_queries && elem.type >= log_queries_min_type && static_cast<Int64>(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
                 {
                     if (auto query_log = context->getQueryLog())
                         query_log->add(elem);
@@ -1098,6 +1102,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     }
     catch (...)
     {
+        if (auto txn = context->getCurrentTransaction())
+            txn->onException();
+
         if (!internal)
         {
             if (query_for_logging.empty())
@@ -1273,11 +1280,6 @@ void executeQuery(
             /// It's possible to have queries without input and output.
         }
     }
-    catch (const Exception &)
-    {
-        streams.onException();
-        throw;
-    }
     catch (...)
     {
         streams.onException();
@@ -1300,11 +1302,6 @@ void executeTrivialBlockIO(BlockIO & streams, ContextPtr context)
         streams.pipeline.setProgressCallback(context->getProgressCallback());
         CompletedPipelineExecutor executor(streams.pipeline);
         executor.execute();
-    }
-    catch (const Exception &)
-    {
-        streams.onException();
-        throw;
     }
     catch (...)
     {

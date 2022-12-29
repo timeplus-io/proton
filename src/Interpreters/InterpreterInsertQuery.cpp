@@ -379,6 +379,8 @@ BlockIO InterpreterInsertQuery::execute()
     QueryPipelineBuilder pipeline;
 
     StoragePtr table = getTable(query);
+    checkStorageSupportsTransactionsIfNeeded(table, getContext());
+
     StoragePtr inner_table;
 
     if (query.partition_by && !table->supportsPartitionBy())

@@ -23,6 +23,7 @@
     M(QueryViewsLogElement) \
     M(SessionLogElement) \
     M(TraceLogElement) \
+    M(TransactionsInfoLogElement) \
     M(ZooKeeperLogElement) \
     M(TextLogElement) \
     M(PipelineMetricLogElement)

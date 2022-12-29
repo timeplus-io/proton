@@ -50,7 +50,7 @@ StoragePtr TableFunctionHist::calculateColumnDescriptions(ContextPtr context)
     if (storage->as<StorageView>() || !supportStreamingQuery(storage))
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "table function can't be applied to {} '{}'", storage->getName(), storage_id.getNameForLogs());
 
-    underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr());
+    underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
     columns = underlying_storage_snapshot->getMetadataForQuery()->getColumns();
     return storage;
 }

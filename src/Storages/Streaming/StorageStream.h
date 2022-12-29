@@ -120,7 +120,7 @@ public:
     QueryProcessingStage::Enum getQueryProcessingStage(
         ContextPtr, QueryProcessingStage::Enum to_stage, const StorageSnapshotPtr & storage_snapshot, SelectQueryInfo &) const override;
 
-    StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const override;
+    StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const override;
 
 private:
     /// Partition helpers

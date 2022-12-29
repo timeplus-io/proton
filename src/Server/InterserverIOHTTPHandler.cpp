@@ -3,7 +3,6 @@
 #include <Server/IServer.h>
 
 #include <Compression/CompressedWriteBuffer.h>
-#include <IO/ReadBufferFromIStream.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterserverIOHandler.h>
 #include <Server/HTTP/HTMLForm.h>

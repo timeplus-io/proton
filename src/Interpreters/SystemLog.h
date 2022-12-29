@@ -43,6 +43,7 @@ class OpenTelemetrySpanLog;
 class QueryViewsLog;
 class ZooKeeperLog;
 class SessionLog;
+class TransactionsInfoLog;
 
 /// proton: starts
 class PipelineMetricLog;
@@ -68,17 +69,19 @@ struct SystemLogs
     std::shared_ptr<AsynchronousMetricLog> asynchronous_metric_log;
     /// OpenTelemetry trace spans.
     std::shared_ptr<OpenTelemetrySpanLog> opentelemetry_span_log;
-    
+
     /// proton: starts
     std::shared_ptr<PipelineMetricLog> pipeline_metric_log;   /// Used to log processor metrics used in query pipeline.
     /// proton: ends
-    
+
     /// Used to log queries of materialized and live views
     std::shared_ptr<QueryViewsLog> query_views_log;
     /// Used to log all actions of ZooKeeper client
     std::shared_ptr<ZooKeeperLog> zookeeper_log;
     /// Login, LogOut and Login failure events
     std::shared_ptr<SessionLog> session_log;
+    /// Events related to transactions
+    std::shared_ptr<TransactionsInfoLog> transactions_info_log;
 
     std::vector<ISystemLog *> logs;
 };

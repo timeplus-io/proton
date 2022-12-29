@@ -22,7 +22,6 @@
 #include <Common/ProtonCommon.h>
 
 #include <Common/logger_useful.h>
-#include <Common/ProtonCommon.h>
 
 namespace DB
 {
@@ -389,12 +388,12 @@ void ProxyStream::processWindowAssignmentStep(
     }
 }
 
-StorageSnapshotPtr ProxyStream::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const
+StorageSnapshotPtr ProxyStream::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const
 {
     if (auto nested = getNestedStorage())
-        return nested->getStorageSnapshot(metadata_snapshot);
+        return nested->getStorageSnapshot(metadata_snapshot, std::move(query_context));
 
-    return IStorage::getStorageSnapshot(metadata_snapshot);
+    return IStorage::getStorageSnapshot(metadata_snapshot, std::move(query_context));
 }
 
 bool ProxyStream::isRemote() const

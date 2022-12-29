@@ -10,6 +10,7 @@
 #include <Interpreters/TextLog.h>
 #include <Interpreters/TraceLog.h>
 #include <Interpreters/ZooKeeperLog.h>
+#include <Interpreters/TransactionsInfoLog.h>
 
 /// proton: starts
 #include <Interpreters/PipelineMetricLog.h>

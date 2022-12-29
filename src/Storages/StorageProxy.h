@@ -37,7 +37,7 @@ public:
         SelectQueryInfo & info) const override
     {
         const auto & nested_metadata = getNested()->getInMemoryMetadataPtr();
-        return getNested()->getQueryProcessingStage(context, to_stage, getNested()->getStorageSnapshot(nested_metadata), info);
+        return getNested()->getQueryProcessingStage(context, to_stage, getNested()->getStorageSnapshot(nested_metadata, context), info);
     }
 
     Pipe watch(
@@ -145,7 +145,6 @@ public:
 
     CheckResults checkData(const ASTPtr & query , ContextPtr context) override { return getNested()->checkData(query, context); }
     void checkTableCanBeDropped() const override { getNested()->checkTableCanBeDropped(); }
-    void checkPartitionCanBeDropped(const ASTPtr & partition) override { getNested()->checkPartitionCanBeDropped(partition); }
     bool storesDataOnDisk() const override { return getNested()->storesDataOnDisk(); }
     Strings getDataPaths() const override { return getNested()->getDataPaths(); }
     StoragePolicyPtr getStoragePolicy() const override { return getNested()->getStoragePolicy(); }

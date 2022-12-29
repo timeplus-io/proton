@@ -61,12 +61,12 @@ StoragesInfo::getParts(MergeTreeData::DataPartStateVector & state, bool has_stat
         {
             /// If has_state_column is requested, return all states.
             if (!has_state_column)
-                return data_->getDataPartsVector({State::Active, State::Outdated}, &state_, require_projection_parts);
+                return data_->getDataPartsVectorForInternalUsage({State::Active, State::Outdated}, &state_, require_projection_parts);
 
             return data_->getAllDataPartsVector(&state_, require_projection_parts);
         }
 
-        return data_->getDataPartsVector({State::Active}, &state_, require_projection_parts);
+        return data->getDataPartsVectorForInternalUsage({State::Active}, &state_, require_projection_parts);
     };
 
     /// Specialization for multi-shards of stream
@@ -287,7 +287,7 @@ Pipe StorageSystemPartsBase::read(
 
     while (StoragesInfo info = stream.next())
     {
-        processNextStorage(res_columns, columns_mask, info, has_state_column);
+        processNextStorage(context, res_columns, columns_mask, info, has_state_column);
     }
 
     if (has_state_column)

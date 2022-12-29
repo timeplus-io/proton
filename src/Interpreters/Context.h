@@ -8,7 +8,7 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DatabaseCatalog.h>
-#include <Interpreters/TimeParam.h>
+#include <Interpreters/MergeTreeTransactionHolder.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage_fwd.h>
 #include <Common/MultiVersion.h>
@@ -26,9 +26,12 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+
+#include <thread>
 #include <exception>
 
 /// proton: starts
+#include <Interpreters/TimeParam.h>
 #include <Storages/Streaming/IngestMode.h>
 /// proton: ends
 
@@ -84,6 +87,7 @@ class AsynchronousMetricLog;
 class OpenTelemetrySpanLog;
 class ZooKeeperLog;
 class SessionLog;
+class TransactionsInfoLog;
 class StorageS3Settings;
 class IDatabase;
 class DDLWorker;
@@ -187,7 +191,7 @@ struct SharedContextHolder
     explicit SharedContextHolder(std::unique_ptr<ContextSharedPart> shared_context);
     SharedContextHolder(SharedContextHolder &&) noexcept;
 
-    SharedContextHolder & operator=(SharedContextHolder &&);
+    SharedContextHolder & operator=(SharedContextHolder &&) noexcept;
 
     ContextSharedPart * get() const { return shared.get(); }
     void reset();
@@ -334,6 +338,8 @@ private:
     /// A flag, used to distinguish between user query and internal query to a database engine (MaterializedPostgreSQL).
     bool is_internal_query = false;
 
+    inline static ContextPtr global_context_instance;
+
     /// proton : starts
     /// (database, table, is_view, column name, column type) tuple
     using RequiredColumnTuple = std::tuple<std::string, std::string, bool, std::string, std::string>;
@@ -368,6 +374,10 @@ private:
                                                     /// to DatabaseOnDisk::commitCreateTable(...) or IStorage::alter(...) without changing
                                                     /// thousands of signatures.
                                                     /// And I hope it will be replaced with more common Transaction sometime.
+
+    MergeTreeTransactionPtr merge_tree_transaction;     /// Current transaction context. Can be inside session or query context.
+                                                        /// It's shared with all children contexts.
+    MergeTreeTransactionHolder merge_tree_transaction_holder;   /// It will rollback or commit transaction on Context destruction.
 
     /// proton: starts. Parameters for time predicates of main table
     TimeParam time_param;
@@ -716,6 +726,8 @@ public:
 
     ContextMutablePtr getGlobalContext() const;
 
+    static ContextPtr getGlobalContextInstance() { return global_context_instance; }
+
     bool hasGlobalContext() const { return !global_context.expired(); }
     bool isGlobalContext() const
     {
@@ -848,10 +860,11 @@ public:
     /// proton: starts.
     std::shared_ptr<PipelineMetricLog> getPipelineMetricLog() const;
     /// proton: ends.
-    
+
     std::shared_ptr<OpenTelemetrySpanLog> getOpenTelemetrySpanLog() const;
     std::shared_ptr<ZooKeeperLog> getZooKeeperLog() const;
     std::shared_ptr<SessionLog> getSessionLog() const;
+    std::shared_ptr<TransactionsInfoLog> getTransactionsInfoLog() const;
 
     /// Returns an object used to log operations with parts if it possible.
     /// Provide table name to make required checks.
@@ -941,6 +954,14 @@ public:
 
     IHostContextPtr & getHostContext();
     const IHostContextPtr & getHostContext() const;
+
+    void checkTransactionsAreAllowed(bool explicit_tcl_query = false) const;
+    void initCurrentTransaction(MergeTreeTransactionPtr txn);
+    void setCurrentTransaction(MergeTreeTransactionPtr txn);
+    MergeTreeTransactionPtr getCurrentTransaction() const;
+
+    bool isServerCompletelyStarted() const;
+    void setServerCompletelyStarted();
 
     PartUUIDsPtr getPartUUIDs() const;
     PartUUIDsPtr getIgnoredPartUUIDs() const;

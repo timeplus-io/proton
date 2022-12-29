@@ -71,6 +71,7 @@
 #include <Storages/MergeTree/MergeTreeBackgroundExecutor.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Interpreters/Lemmatizers.h>
+#include <Interpreters/TransactionLog.h>
 #include <filesystem>
 
 /// proton: starts
@@ -125,6 +126,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int INVALID_SETTING_VALUE;
     extern const int UNKNOWN_READ_METHOD;
+    extern const int NOT_IMPLEMENTED;
     /// proton: starts
     extern const int ACCESS_DENIED;
     extern const int INVALID_POLL_ID;
@@ -276,6 +278,7 @@ struct ContextSharedPart
 
     Context::ConfigReloadCallback config_reload_callback;
 
+    bool is_server_completely_started = false;
     ContextSharedPart()
         : access_control(std::make_unique<AccessControl>()), macros(std::make_unique<Macros>())
     {
@@ -342,6 +345,8 @@ struct ContextSharedPart
         if (common_executor)
             common_executor->wait();
 
+        TransactionLog::shutdownIfAny();
+
         std::unique_ptr<SystemLogs> delete_system_logs;
         {
             auto lock = std::lock_guard(mutex);
@@ -388,7 +393,7 @@ struct ContextSharedPart
             zookeeper.reset();
         }
 
-        /// Can be removed w/o context lock
+        /// Can be removed without context lock
         delete_system_logs.reset();
     }
 
@@ -421,7 +426,7 @@ Context::Context(const Context &) = default;
 Context & Context::operator=(const Context &) = default;
 
 SharedContextHolder::SharedContextHolder(SharedContextHolder &&) noexcept = default;
-SharedContextHolder & SharedContextHolder::operator=(SharedContextHolder &&) = default;
+SharedContextHolder & SharedContextHolder::operator=(SharedContextHolder &&) noexcept = default;
 SharedContextHolder::SharedContextHolder() = default;
 SharedContextHolder::~SharedContextHolder() = default;
 SharedContextHolder::SharedContextHolder(std::unique_ptr<ContextSharedPart> shared_context)
@@ -438,6 +443,8 @@ ContextMutablePtr Context::createGlobal(ContextSharedPart * shared)
 
 void Context::initGlobal()
 {
+    assert(!global_context_instance);
+    global_context_instance = shared_from_this();
     DatabaseCatalog::init(shared_from_this());
 }
 
@@ -954,9 +961,7 @@ void Context::addExternalTable(const String & table_name, TemporaryTableHolder &
 
     auto lock = getLock();
     if (external_tables_mapping.end() != external_tables_mapping.find(table_name))
-        /// proton: starts
         throw Exception("Temporary stream " + backQuoteIfNeed(table_name) + " already exists.", ErrorCodes::STREAM_ALREADY_EXISTS);
-        /// proton: ends
     external_tables_mapping.emplace(table_name, std::make_shared<TemporaryTableHolder>(std::move(temporary_table)));
 }
 
@@ -2230,6 +2235,19 @@ std::shared_ptr<ZooKeeperLog> Context::getZooKeeperLog() const
 }
 
 
+std::shared_ptr<TransactionsInfoLog> Context::getTransactionsInfoLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->system_logs)
+        return {};
+
+    return shared->system_logs->transactions_info_log;
+}
+
+
+
+
 CompressionCodecPtr Context::chooseCompressionCodec(size_t part_size, double part_size_ratio) const
 {
     auto lock = getLock();
@@ -2392,9 +2410,7 @@ void Context::checkCanBeDropped(const String & database, const String & table, c
         catch (...)
         {
             /// User should recreate force file on each drop, it shouldn't be protected
-            /// proton: starts
             tryLogCurrentException("Drop stream check", "Can't remove force file to enable stream or partition drop");
-            /// proton: ends
         }
     }
 
@@ -2719,9 +2735,7 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
     if (!storage_id)
     {
         if (exception)
-            /// proton: starts
             exception->emplace("Both stream name and UUID are empty", ErrorCodes::UNKNOWN_STREAM);
-            /// proton: ends
         return storage_id;
     }
 
@@ -2791,10 +2805,57 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
     }
 
     if (exception)
-        /// proton: starts
         exception->emplace("Cannot resolve database name for stream " + storage_id.getNameForLogs(), ErrorCodes::UNKNOWN_STREAM);
-        /// proton: ends
     return StorageID::createEmpty();
+}
+
+void Context::checkTransactionsAreAllowed(bool explicit_tcl_query /* = false */) const
+{
+    if (getConfigRef().getInt("allow_experimental_transactions", 0))
+        return;
+
+    if (explicit_tcl_query)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Transactions are not supported");
+
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "Experimental support for transactions is disabled, "
+                    "however, some query or background task tried to access TransactionLog. "
+                    "If you have not enabled this feature explicitly, then it's a bug.");
+}
+
+void Context::initCurrentTransaction(MergeTreeTransactionPtr txn)
+{
+    merge_tree_transaction_holder = MergeTreeTransactionHolder(txn, false, this);
+    setCurrentTransaction(std::move(txn));
+}
+
+void Context::setCurrentTransaction(MergeTreeTransactionPtr txn)
+{
+    assert(!merge_tree_transaction || !txn);
+    assert(this == session_context.lock().get() || this == query_context.lock().get());
+    merge_tree_transaction = std::move(txn);
+    if (!merge_tree_transaction)
+        merge_tree_transaction_holder = {};
+}
+
+MergeTreeTransactionPtr Context::getCurrentTransaction() const
+{
+    return merge_tree_transaction;
+}
+
+bool Context::isServerCompletelyStarted() const
+{
+    auto lock = getLock();
+    assert(getApplicationType() == ApplicationType::SERVER);
+    return shared->is_server_completely_started;
+}
+
+void Context::setServerCompletelyStarted()
+{
+    auto lock = getLock();
+    assert(global_context.lock().get() == this);
+    assert(!shared->is_server_completely_started);
+    assert(getApplicationType() == ApplicationType::SERVER);
+    shared->is_server_completely_started = true;
 }
 
 PartUUIDsPtr Context::getPartUUIDs() const

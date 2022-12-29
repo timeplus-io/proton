@@ -86,6 +86,7 @@ static void call_default_signal_handler(int sig)
 {
     if (SIG_ERR == signal(sig, SIG_DFL))
         DB::throwFromErrno("Cannot set signal handler.", DB::ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
+
     if (0 != raise(sig))
         DB::throwFromErrno("Cannot send signal.", DB::ErrorCodes::CANNOT_SEND_SIGNAL);
 }
@@ -100,7 +101,6 @@ static const size_t signal_pipe_buf_size =
     + sizeof(UInt32)
     + max_query_id_size + 1    /// query_id + varint encoded length
     + sizeof(void*);
-
 
 using signal_function = void(int, siginfo_t*, void*);
 
@@ -150,7 +150,7 @@ static void signalHandler(int sig, siginfo_t * info, void * context)
     DB::writePODBinary(*info, out);
     DB::writePODBinary(signal_context, out);
     DB::writePODBinary(stack_trace, out);
-    DB::writeBinary(UInt32(getThreadId()), out);
+    DB::writeBinary(static_cast<UInt32>(getThreadId()), out);
     DB::writeStringBinary(query_id, out);
     DB::writePODBinary(DB::current_thread, out);
 
@@ -807,7 +807,7 @@ static void addSignalHandler(const std::vector<int> & signals, signal_function h
 
     if (out_handled_signals)
         std::copy(signals.begin(), signals.end(), std::back_inserter(*out_handled_signals));
-};
+}
 
 
 static void blockSignals(const std::vector<int> & signals)
@@ -829,7 +829,7 @@ static void blockSignals(const std::vector<int> & signals)
 
     if (pthread_sigmask(SIG_BLOCK, &sig_set, nullptr))
         throw Poco::Exception("Cannot block signal.");
-};
+}
 
 extern String getGitHash();
 
@@ -843,7 +843,6 @@ void BaseDaemon::initializeTerminationAndSignalProcessing()
 
     /// Setup signal handlers.
     /// SIGTSTP is added for debugging purposes. To output a stack trace of any running thread at anytime.
-
     addSignalHandler({SIGABRT, SIGSEGV, SIGILL, SIGBUS, SIGSYS, SIGFPE, SIGPIPE, SIGTSTP, SIGTRAP}, signalHandler, &handled_signals);
     addSignalHandler({SIGHUP}, closeLogsSignalHandler, &handled_signals);
     addSignalHandler({SIGINT, SIGQUIT, SIGTERM}, terminateRequestedSignalHandler, &handled_signals);

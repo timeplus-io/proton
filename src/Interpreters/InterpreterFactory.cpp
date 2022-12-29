@@ -19,6 +19,7 @@
 #include <Parsers/ASTUseQuery.h>
 #include <Parsers/ASTWatchQuery.h>
 #include <Parsers/MySQL/ASTCreateQuery.h>
+#include <Parsers/ASTTransactionControl.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
 
 #include <Parsers/Access/ASTCreateQuotaQuery.h>
@@ -62,6 +63,7 @@
 #include <Interpreters/InterpreterSystemQuery.h>
 #include <Interpreters/InterpreterUseQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
+#include <Interpreters/InterpreterTransactionControlQuery.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
 
 #include <Interpreters/Access/InterpreterCreateQuotaQuery.h>
@@ -140,7 +142,7 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     {
         return std::make_unique<InterpreterDropQuery>(query, context);
     }
-    else if (query->as<Streaming::ASTUnsubscribeQuery>())
+    else if (query->as<Streaming::ASTUnsubscribeQuery>()) /// proton
     {
         return std::make_unique<Streaming::InterpreterUnsubscribeQuery>(query, context);
     }
@@ -284,6 +286,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTExternalDDLQuery>())
     {
         return std::make_unique<InterpreterExternalDDLQuery>(query, context);
+    }
+    else if (query->as<ASTTransactionControl>())
+    {
+        return std::make_unique<InterpreterTransactionControlQuery>(query, context);
     }
     else if (query->as<ASTCreateFunctionQuery>())
     {

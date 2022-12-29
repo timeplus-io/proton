@@ -51,7 +51,7 @@ public:
     /// proton: starts.
     bool supportsSubcolumns() const override { return true; }
     bool supportsDynamicSubcolumns() const override { return true; }
-    StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const override;
+    StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const override;
 
 private:
     ContextMutablePtr local_context;

@@ -188,16 +188,12 @@ void StorageView::read(
 static ASTTableExpression * getFirstTableExpression(ASTSelectQuery & select_query)
 {
     if (!select_query.tables() || select_query.tables()->children.empty())
-        /// proton: starts
         throw Exception("Logical error: no stream expression in view select AST", ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
 
     auto * select_element = select_query.tables()->children[0]->as<ASTTablesInSelectQueryElement>();
 
     if (!select_element->table_expression)
-        /// proton: starts
         throw Exception("Logical error: incorrect stream expression", ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
 
     return select_element->table_expression->as<ASTTableExpression>();
 }
@@ -212,9 +208,7 @@ void StorageView::replaceWithSubquery(ASTSelectQuery & outer_query, ASTPtr view_
         if (table_expression->table_function && table_expression->table_function->as<ASTFunction>()->name == "view")
             table_expression->database_and_table_name = std::make_shared<ASTTableIdentifier>("__view");
         else
-            /// proton: starts
             throw Exception("Logical error: incorrect stream expression", ErrorCodes::LOGICAL_ERROR);
-            /// proton: ends
     }
 
     DatabaseAndTableWithAlias db_table(table_expression->database_and_table_name);
@@ -236,9 +230,7 @@ ASTPtr StorageView::restoreViewName(ASTSelectQuery & select_query, const ASTPtr 
     ASTTableExpression * table_expression = getFirstTableExpression(select_query);
 
     if (!table_expression->subquery)
-        /// proton: starts
         throw Exception("Logical error: incorrect stream expression", ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
 
     ASTPtr subquery = table_expression->subquery;
     table_expression->subquery = {};
@@ -251,12 +243,12 @@ ASTPtr StorageView::restoreViewName(ASTSelectQuery & select_query, const ASTPtr 
 }
 
 /// proton: starts.
-StorageSnapshotPtr StorageView::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const
+StorageSnapshotPtr StorageView::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const
 {
     if (hasDynamicSubcolumns(metadata_snapshot->getColumns()))
     {
         auto object_columns
-            = InterpreterSelectWithUnionQuery(getInMemoryMetadataPtr()->getSelectQuery().inner_query, local_context, SelectQueryOptions().analyze())
+            = InterpreterSelectWithUnionQuery(getInMemoryMetadataPtr()->getSelectQuery().inner_query, query_context, SelectQueryOptions().analyze())
                 .getExtendedObjects();
         return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, *object_columns);
     }

@@ -7,6 +7,7 @@
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/MergeTreeTransaction.h>
 #include <IO/HashingWriteBuffer.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDate.h>
@@ -428,7 +429,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
 
     const auto & index_factory = MergeTreeIndexFactory::instance();
     MergedBlockOutputStream out(new_data_part, metadata_snapshot, columns,
-        index_factory.getMany(metadata_snapshot->getSecondaryIndices()), compression_codec);
+        index_factory.getMany(metadata_snapshot->getSecondaryIndices()), compression_codec,
+        context->getCurrentTransaction());
 
     bool sync_on_insert = data_settings->fsync_after_insert;
 
@@ -543,7 +545,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeProjectionPartImpl(
         metadata_snapshot,
         columns,
         {},
-        compression_codec);
+        compression_codec,
+        NO_TRANSACTION_PTR);
 
     out.writeWithPermutation(block, perm_ptr);
     out.writeSuffixAndFinalizePart(new_data_part);

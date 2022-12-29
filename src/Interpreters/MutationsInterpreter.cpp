@@ -759,7 +759,7 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
 
 ASTPtr MutationsInterpreter::prepareInterpreterSelectQuery(std::vector<Stage> & prepared_stages, bool dry_run)
 {
-    auto storage_snapshot = storage->getStorageSnapshot(metadata_snapshot);
+    auto storage_snapshot = storage->getStorageSnapshot(metadata_snapshot, context);
     auto options = GetColumnsOptions(GetColumnsOptions::AllPhysical).withExtendedObjects();
     auto all_columns = storage_snapshot->getColumns(options);
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Interpreters/IInterpreter.h>
-#include <Parsers/ASTAlterQuery.h>
 #include <Parsers/IAST_fwd.h>
 
 
@@ -27,6 +26,8 @@ public:
 
     void extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr & ast, ContextPtr context) const override;
 
+    bool supportsTransactions() const override { return true; }
+
 private:
     AccessRightsElements getRequiredAccess() const;
 
@@ -35,6 +36,7 @@ private:
     BlockIO executeToDatabase(const ASTAlterQuery & alter);
 
     ASTPtr query_ptr;
+
     /// proton: start
     bool alterTableDistributed(const ASTAlterQuery & query);
     /// proton: end

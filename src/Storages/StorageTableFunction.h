@@ -6,6 +6,7 @@
 #include <Common/CurrentThread.h>
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Interpreters/getHeaderForProcessingStage.h>
+#include <Interpreters/Context.h>
 
 
 namespace DB
@@ -103,7 +104,7 @@ public:
         for (const auto & c : column_names)
             cnames += c + " ";
         auto storage = getNested();
-        auto nested_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr());
+        auto nested_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
         auto pipe = storage->read(column_names, nested_snapshot, query_info, context,
                                   processed_stage, max_block_size, num_streams);
         if (!pipe.empty() && add_conversion)
@@ -148,7 +149,7 @@ public:
         if (nested)
             StorageProxy::renameInMemory(new_table_id);
         else
-            IStorage::renameInMemory(new_table_id);
+            IStorage::renameInMemory(new_table_id); /// NOLINT
     }
 
     bool isView() const override { return false; }
