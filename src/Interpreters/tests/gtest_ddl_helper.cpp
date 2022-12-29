@@ -10,6 +10,8 @@
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Util/XMLConfiguration.h>
 
+#include <Common/tests/gtest_global_context.h>
+
 DB::ASTPtr queryToAST(const DB::String & query)
 {
     const char * start = query.data();
@@ -244,7 +246,7 @@ CREATE STREAM default.tests
 )###");
     auto * create = ast->as<DB::ASTCreateQuery>();
     DB::Streaming::checkAndPrepareCreateQueryForStream(*create);
-    EXPECT_EQ(create->columns_list->columns->children.size(), 7);
+    EXPECT_EQ(create->columns_list->columns->children.size(), 6);
 
     DB::ASTFunction * order_by = create->storage->order_by->as<DB::ASTFunction>();
     EXPECT_EQ(order_by->name, "to_start_of_hour");
@@ -264,24 +266,6 @@ CREATE STREAM default.tests
     create = ast->as<DB::ASTCreateQuery>();
     EXPECT_THROW(DB::Streaming::checkAndPrepareCreateQueryForStream(*create), DB::Exception);
 
-    /// ignore input 'order_by' and 'partition_by'
-    ast = queryToAST(R"###(
-CREATE STREAM default.tests
-(
-    `ttl`            datetime DEFAULT now()
-) ENGINE = Stream(2, 1, rand())
-PARTITION BY ttl
-ORDER BY ttl
-TTL ttl + to_interval_day(1)
-)###");
-    create = ast->as<DB::ASTCreateQuery>();
-    DB::Streaming::checkAndPrepareCreateQueryForStream(*create);
-    order_by = create->storage->order_by->as<DB::ASTFunction>();
-    EXPECT_EQ(order_by->name, "to_start_of_hour");
-
-    partition_by = create->storage->partition_by->as<DB::ASTFunction>();
-    EXPECT_EQ(partition_by->name, "to_YYYYMMDD");
-
     /// add event_time_column
     ast = queryToAST(R"###(
 CREATE STREAM default.tests
@@ -298,8 +282,7 @@ SETTINGS event_time_column = 'to_start_of_hour(timestamp)'
 CREATE STREAM default.tests (
   `timestamp` datetime64(3) DEFAULT now64(3),
   `ttl` datetime DEFAULT now(),
-  `_tp_time` datetime64(3,'UTC') DEFAULT to_start_of_hour(timestamp) CODEC(DoubleDelta(), LZ4()),
-  `_tp_index_time` datetime64(3,'UTC') CODEC(DoubleDelta(), LZ4())
+  `_tp_time` datetime64(3,'UTC') DEFAULT to_start_of_hour(timestamp) CODEC(DoubleDelta(), LZ4())
 ) ENGINE = Stream(1, 1, rand())
 PARTITION BY to_YYYYMMDD(_tp_time)
 ORDER BY to_start_of_hour(_tp_time) SETTINGS event_time_column='to_start_of_hour(timestamp)')###"));
@@ -307,9 +290,7 @@ ORDER BY to_start_of_hour(_tp_time) SETTINGS event_time_column='to_start_of_hour
 
 TEST(DDLHelper, prepareEngine)
 {
-    auto shared_context = DB::Context::createShared();
-    auto global_context = DB::Context::createGlobal(shared_context.get());
-    global_context->makeGlobalContext();
+    auto global_context = getContext().context;
 
     Poco::AutoPtr<Poco::Util::AbstractConfiguration> config(new Poco::Util::XMLConfiguration());
     global_context->setConfig(config);

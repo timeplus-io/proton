@@ -12,6 +12,9 @@ TEST(PlacementService, PlaceNodesByDiskSpace)
 {
     std::vector<Int32> default_disks;
     std::vector<Int32> cold_disks;
+    default_disks.reserve(100);
+    cold_disks.reserve(100);
+
     for (int i = 0; i < 100; i++)
     {
         default_disks.push_back(i + 1);

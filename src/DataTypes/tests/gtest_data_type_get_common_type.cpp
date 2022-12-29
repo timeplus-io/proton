@@ -22,7 +22,7 @@ static auto typeFromString(const std::string & str)
 {
     auto & data_type_factory = DataTypeFactory::instance();
     return data_type_factory.get(str);
-};
+}
 
 static auto typesFromString(const std::string & str)
 {
@@ -33,7 +33,7 @@ static auto typesFromString(const std::string & str)
         data_types.push_back(typeFromString(data_type));
 
     return data_types;
-};
+}
 
 struct TypesTestCase
 {
@@ -183,12 +183,12 @@ INSTANTIATE_TEST_SUITE_P(data_type,
 
             {"array(uint8) array(uint8)", "array(uint8)"},
             {"array(uint8) array(int8)", "array(uint8)"},
-            {"array(Float32) array(Int16) array(UInt32)", "array(Int16)"},
+            {"array(float32) array(int16) array(uint32)", "array(int16)"},
             {"array(array(uint8)) array(array(uint8))", "array(array(uint8))"},
             {"array(array(uint8)) array(array(int8))", "array(array(uint8))"},
             {"array(Date) array(DateTime)", "array(Date)"},
-            {"array(String) array(fixed_string(32))", "array(fixed_string(32))"},
-            {"array(String) array(fixed_string(32))", "array(fixed_string(32))"},
+            {"array(string) array(fixed_string(32))", "array(fixed_string(32))"},
+            {"array(string) array(fixed_string(32))", "array(fixed_string(32))"},
 
             {"nullable(nothing) nothing", "nothing"},
             {"nullable(uint8) int8", "uint8"},
@@ -199,9 +199,9 @@ INSTANTIATE_TEST_SUITE_P(data_type,
             {"tuple(int8,uint8) tuple(uint8,int8)", "tuple(uint8,uint8)"},
             {"tuple(nullable(nothing)) tuple(nullable(uint8))", "tuple(nullable(nothing))"},
 
-            {"int8 String", nullptr},
+            {"int8 string", nullptr},
             {"nothing", nullptr},
-            {"fixed_string(16) fixed_string(8) String", nullptr},
+            {"fixed_string(16) fixed_string(8) string", nullptr},
         }
     )
 );

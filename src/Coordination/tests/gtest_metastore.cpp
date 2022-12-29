@@ -165,6 +165,8 @@ TEST(CoordinationTest1, TestMetaRaft1)
 
     std::shared_ptr<KVMultiPutRequest> request = std::make_shared<KVMultiPutRequest>();
     request->kv_pairs = {{"version", "1.0.0"}};
+    const String column_family_for_test = "default";
+    request->column_family = column_family_for_test;
     auto entry = getBufferFromKVRequest(request);
     auto ret = s1.raft_instance->append_entries({entry});
     EXPECT_TRUE(ret->get_accepted()) << "failed to replicate: entry 1" << ret->get_result_code();
@@ -173,7 +175,7 @@ TEST(CoordinationTest1, TestMetaRaft1)
     std::string value;
     do
     {
-        s1.state_machine->getByKey("version", &value);
+        s1.state_machine->getByKey("version", &value, column_family_for_test);
         std::cout << "Waiting s1 to apply entry\n";
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     } while (value != "1.0.0");
@@ -181,6 +183,8 @@ TEST(CoordinationTest1, TestMetaRaft1)
     EXPECT_EQ(value, "1.0.0");
 
     s1.launcher.shutdown(5);
+    s1.state_machine->shutdownStorage();
+    s1.state_manager->flushLogStore();
 }
 
 void testCreateRestoreSnapshot(Coordination::CoordinationSettingsPtr settings, uint64_t total_logs)
@@ -205,10 +209,12 @@ void testCreateRestoreSnapshot(Coordination::CoordinationSettingsPtr settings, u
     uint64_t start_idx = state_machine->last_commit_index();
     uint64_t end_idx = start_idx + total_logs;
     changelog.init(state_machine->last_commit_index() + 1, settings->reserved_log_items);
+    const String column_family_for_test = "default";
     for (size_t i = 1; i < total_logs + 1; ++i)
     {
         std::shared_ptr<KVMultiPutRequest> request = std::make_shared<KVMultiPutRequest>();
         request->kv_pairs = {{"version", std::to_string(i)}};
+        request->column_family = column_family_for_test;
         auto entry = getLogEntryFromKVRequest(0, request);
         uint64_t idx = changelog.append(entry);
         changelog.end_of_append_batch(0, 0);
@@ -276,8 +282,13 @@ void testCreateRestoreSnapshot(Coordination::CoordinationSettingsPtr settings, u
     }
 
     std::string ver;
-    restore_machine->getByKey("version", &ver);
+    restore_machine->getByKey("version", &ver, column_family_for_test);
     EXPECT_EQ(ver, std::to_string(total_logs));
+
+    state_machine->shutdownStorage();
+    restore_machine->shutdownStorage();
+    changelog.flush();
+    restore_changelog.flush();
 }
 
 TEST(CoordinationTest1, TestCreateAndRestoreSnapshots)
@@ -310,10 +321,12 @@ void testLogAndStateMachine1(Coordination::CoordinationSettingsPtr settings, uin
     uint64_t end_idx = start_idx + total_logs;
     DB::KeeperLogStore changelog("./logs", settings->rotate_log_storage_interval, true, false);
     changelog.init(state_machine->last_commit_index() + 1, settings->reserved_log_items);
+    const String column_family_for_test = "default";
     for (size_t i = 1; i < total_logs + 1; ++i)
     {
         std::shared_ptr<KVMultiPutRequest> request = std::make_shared<KVMultiPutRequest>();
         request->kv_pairs = {{"version", std::to_string(i)}};
+        request->column_family = column_family_for_test;
         auto entry = getLogEntryFromKVRequest(0, request);
         uint64_t idx = changelog.append(entry);
         changelog.end_of_append_batch(0, 0);
@@ -366,8 +379,13 @@ void testLogAndStateMachine1(Coordination::CoordinationSettingsPtr settings, uin
     }
 
     std::string ver;
-    restore_machine->getByKey("version", &ver);
+    restore_machine->getByKey("version", &ver, column_family_for_test);
     EXPECT_EQ(ver, std::to_string(total_logs));
+
+    state_machine->shutdownStorage();
+    restore_machine->shutdownStorage();
+    changelog.flush();
+    restore_changelog.flush();
 }
 
 TEST(CoordinationTest1, TestStateMachineAndLogStore)

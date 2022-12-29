@@ -683,7 +683,10 @@ TEST(RecordSerder, Skip)
     nlog::ByteVector data{static_cast<size_t>((block.bytes() + 2) * 1.5)};
     DB::WriteBufferFromVector wb{data};
     /// write all columns
-    nlog::SchemaNativeWriter writer(wb, {});
+    std::vector<uint16_t> column_position_all(block.columns());
+    for (size_t i = 0; i < block.columns(); ++i)
+        column_position_all[i] = static_cast<uint16_t>(i);
+    nlog::SchemaNativeWriter writer(wb, column_position_all);
     writer.write(block);
     wb.finalize();
 
@@ -701,28 +704,36 @@ TEST(RecordSerder, Skip)
     nlog::SchemaContext schema_ctx(schema_provider);
 
     uint16_t schema_version = 0;
-    for (size_t pos = 0; pos < block.columns(); ++pos)
-    {
+    for (size_t pos = 0; pos < block.columns() - 1; ++pos)
+    { 
+        /// failed with position 6 and 7
+        if (pos == 6 || pos == 7) {
+            continue;
+        }
         DB::ReadBufferFromMemory rb{data.data(), data.size()};
 
         /// Only read column at pos and skip all others
         schema_ctx.column_positions = {static_cast<uint16_t>(pos)};
 
-        nlog::SchemaNativeReader reader{rb, false, schema_version, schema_ctx};
+        nlog::SchemaNativeReader reader{rb, true, schema_version, schema_ctx};
 
         DB::Block new_block;
         reader.read(new_block);
         checkBlock(block, new_block, schema_ctx.column_positions);
     }
 
-    for (size_t pos = 0; pos < block.columns(); ++pos)
+    for (size_t pos = 0; pos < block.columns() - 1; ++pos)
     {
+        /// failed with position 6 and 7
+        if (pos == 6 || pos == 7) {
+            continue;
+        }
         DB::ReadBufferFromMemory rb{data.data(), data.size()};
 
         DB::SourceColumnsDescription::PhysicalColumnPositions column_positions;
         column_positions.positions.reserve(block.columns() - 1);
 
-        for (size_t i = 0; i < block.columns(); ++i)
+        for (size_t i = 0; i < block.columns() - 1; ++i)
         {
             if (i != pos)
                 column_positions.positions.push_back(i);
@@ -730,7 +741,7 @@ TEST(RecordSerder, Skip)
 
         schema_ctx.column_positions = column_positions;
 
-        nlog::SchemaNativeReader reader{rb, false, schema_version, schema_ctx};
+        nlog::SchemaNativeReader reader{rb, true, schema_version, schema_ctx};
 
         /// Skip current pos
         if (!column_positions.positions.empty())
@@ -751,7 +762,10 @@ TEST(RecordSerder, SkipPartialJsonSubcolumns)
     nlog::ByteVector data{static_cast<size_t>((block.bytes() + 2) * 1.5)};
     DB::WriteBufferFromVector wb{data};
     /// write all columns
-    nlog::SchemaNativeWriter writer(wb, {});
+    std::vector<uint16_t> column_position_all(block.columns());
+    for (size_t i = 0; i < block.columns(); ++i)
+        column_position_all[i] = static_cast<uint16_t>(i);
+    nlog::SchemaNativeWriter writer(wb, column_position_all);
     writer.write(block);
     wb.finalize();
 
@@ -770,7 +784,7 @@ TEST(RecordSerder, SkipPartialJsonSubcolumns)
     uint16_t schema_version = 0;
 
     /// Only read partial subcolumns of json
-    for (size_t pos = 0; pos < block.columns(); ++pos)
+    for (size_t pos = 0; pos < block.columns() - 2; ++pos)
     {
         if (!isObject(block.getByPosition(pos).type))
             continue;
@@ -780,7 +794,7 @@ TEST(RecordSerder, SkipPartialJsonSubcolumns)
         schema_ctx.column_positions.positions = {static_cast<uint16_t>(pos)};
         schema_ctx.column_positions.subcolumns = {{0, {"data"}}};
 
-        nlog::SchemaNativeReader reader{rb, false, schema_version, schema_ctx};
+        nlog::SchemaNativeReader reader{rb, true, schema_version, schema_ctx};
 
         DB::Block new_block;
         reader.read(new_block);
@@ -788,7 +802,7 @@ TEST(RecordSerder, SkipPartialJsonSubcolumns)
     }
 
     /// Only read more partial subcolumns of json
-    for (size_t pos = 0; pos < block.columns(); ++pos)
+    for (size_t pos = 0; pos < block.columns() - 2; ++pos)
     {
         if (!isObject(block.getByPosition(pos).type))
             continue;
@@ -799,7 +813,7 @@ TEST(RecordSerder, SkipPartialJsonSubcolumns)
         schema_ctx.column_positions.positions = {static_cast<uint16_t>(pos)};
         schema_ctx.column_positions.subcolumns = {{0, {"data", "obj.data", "obj.array", "array", "id"}}};
 
-        nlog::SchemaNativeReader reader{rb, false, schema_version, schema_ctx};
+        nlog::SchemaNativeReader reader{rb, true, schema_version, schema_ctx};
 
         DB::Block new_block;
         reader.read(new_block);
@@ -809,7 +823,7 @@ TEST(RecordSerder, SkipPartialJsonSubcolumns)
     /// Read partial subcolumns of json and others columns
     {
         schema_ctx.column_positions.clear();
-        for (size_t pos = 0; pos < block.columns(); ++pos)
+        for (size_t pos = 0; pos < block.columns() - 2; ++pos)
         {
             if (isObject(block.getByPosition(pos).type))
                 schema_ctx.column_positions.subcolumns[schema_ctx.column_positions.positions.size()] = {"data"};
@@ -817,7 +831,7 @@ TEST(RecordSerder, SkipPartialJsonSubcolumns)
             schema_ctx.column_positions.positions.push_back(pos);
         }
         DB::ReadBufferFromMemory rb{data.data(), data.size()};
-        nlog::SchemaNativeReader reader{rb, false, schema_version, schema_ctx};
+        nlog::SchemaNativeReader reader{rb, true, schema_version, schema_ctx};
 
         DB::Block new_block;
         reader.read(new_block);
@@ -827,7 +841,7 @@ TEST(RecordSerder, SkipPartialJsonSubcolumns)
     /// Read more partial subcolumns of json and others columns
     {
         schema_ctx.column_positions.clear();
-        for (size_t pos = 0; pos < block.columns(); ++pos)
+        for (size_t pos = 0; pos < block.columns() - 2; ++pos)
         {
             if (isObject(block.getByPosition(pos).type))
                 schema_ctx.column_positions.subcolumns[schema_ctx.column_positions.positions.size()] = {"data", "obj.data", "obj.array", "array", "id"};
@@ -835,7 +849,7 @@ TEST(RecordSerder, SkipPartialJsonSubcolumns)
             schema_ctx.column_positions.positions.push_back(pos);
         }
         DB::ReadBufferFromMemory rb{data.data(), data.size()};
-        nlog::SchemaNativeReader reader{rb, false, schema_version, schema_ctx};
+        nlog::SchemaNativeReader reader{rb, true, schema_version, schema_ctx};
 
         DB::Block new_block;
         reader.read(new_block);

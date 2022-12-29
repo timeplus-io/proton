@@ -84,10 +84,22 @@ struct TestSchemaProvider : public nlog::SchemaProvider
     DB::Block header;
 };
 
+struct TestSchemaBigProvider : public nlog::SchemaProvider
+{
+    TestSchemaBigProvider(size_t rows) : header(createRecordBig(rows)->getBlock().cloneEmpty()) { }
+
+    const DB::Block & getSchema(uint16_t /*schema_version*/) const override { return header; }
+
+    DB::Block header;
+};
+
 EmptySchemaProvider empty_schema_provider;
 SchemaContext empty_schema_ctx(empty_schema_provider);
 TestSchemaProvider test_schema_provider;
 SchemaContext test_schema_ctx(test_schema_provider);
+
+TestSchemaBigProvider test_schema_big_provider(1);
+SchemaContext test_schema_big_ctx(test_schema_big_provider);
 
 std::unordered_map<String, std::pair<int64_t, int64_t>> write_bench_results;
 std::unordered_map<String, std::pair<int64_t, int64_t>> read_bench_results;
@@ -95,7 +107,7 @@ std::unordered_map<String, std::pair<int64_t, int64_t>> read_bench_results;
 /// Change this base_iterations to 1000 to do benchmark for longer time
 constexpr int32_t base_iterations = 10;
 
-void writeBench(Record & r, const String & test_case, int32_t n = 10000000)
+void writeBench(Record & r, const String & test_case, int32_t n = 10)
 {
     auto write_loop = [&](DB::CompressionMethodByte codec) {
         r.setCodec(codec);
@@ -119,7 +131,7 @@ void writeBench(Record & r, const String & test_case, int32_t n = 10000000)
     write_bench_results[test_case] = {int64_t(n * block.rows() / duration0.count()), int64_t(n * block.rows() / duration1.count())};
 }
 
-void readBench(Record & r, const SchemaContext & schema_ctx, const String & test_case, int32_t n = 1000000)
+void readBench(Record & r, const SchemaContext & schema_ctx, const String & test_case, int32_t n = 10)
 {
     auto read_loop = [&](DB::CompressionMethodByte codec) {
         r.setCodec(codec);
@@ -437,67 +449,50 @@ TEST(RecordSerde, ReadBenchmarkNativeInSchemaSkip)
 
 TEST(RecordSerde, WriteBenchNativeBig)
 {
-    std::vector<std::pair<int32_t, int32_t>> rows_iterations{
-        {1, 100 * base_iterations}, {10, 100 * base_iterations}, {100, 100 * base_iterations}, {1000, 100 * base_iterations}};
-    for (auto [rows, iterations] : rows_iterations)
-    {
-        auto r = createRecordBig(rows);
-        writeBench(*r, "NativeBig_" + std::to_string(rows), iterations);
-    }
+    constexpr int32_t rows = 1, iterations = base_iterations;
+    auto r = createRecordBig(rows);
+    writeBench(*r, "NativeBig_" + std::to_string(rows), iterations);
 }
 
 TEST(RecordSerde, ReadBenchmarkNativeBig)
 {
-    std::vector<std::pair<int32_t, int32_t>> rows_iterations{
-        {1, 10 * base_iterations}, {10, 10 * base_iterations}, {100, 10 * base_iterations}, {1000, 10 * base_iterations}};
-    for (auto [rows, iterations] : rows_iterations)
-    {
-        auto r = createRecordBig(rows);
-        readBench(*r, empty_schema_ctx, "NativeBig_" + std::to_string(rows), iterations);
-    }
+    constexpr int32_t rows = 1, iterations = base_iterations;
+
+    auto r = createRecordBig(rows);
+    readBench(*r, empty_schema_ctx, "NativeBig_" + std::to_string(rows), iterations);
 }
 
 TEST(RecordSerde, WriteBenchmarkNativeInSchemaBig)
 {
-    std::vector<std::pair<int32_t, int32_t>> rows_iterations{
-        {1, 100 * base_iterations}, {10, 100 * base_iterations}, {100, 100 * base_iterations}, {1000, 100 * base_iterations}};
-    for (auto [rows, iterations] : rows_iterations)
-    {
-        auto r = createRecordBig(rows);
-        /// force a schema
-        r->setSchemaVersion(0);
-        writeBench(*r, "NativeInSchemaBig_" + std::to_string(rows), iterations);
-    }
+    constexpr int32_t rows = 1, iterations = base_iterations;
+
+    auto r = createRecordBig(rows);
+    /// force a schema
+    r->setSchemaVersion(0);
+    writeBench(*r, "NativeInSchemaBig_" + std::to_string(rows), iterations);
 }
 
 TEST(RecordSerde, ReadBenchmarkNativeInSchemaBig)
 {
-    std::vector<std::pair<int32_t, int32_t>> rows_iterations{
-        {1, 100 * base_iterations}, {10, 100 * base_iterations}, {100, 100 * base_iterations}, {1000, 100 * base_iterations}};
-    for (auto [rows, iterations] : rows_iterations)
-    {
-        auto r{createRecordBig(rows)};
-        /// force a schema
-        r->setSchemaVersion(0);
-        test_schema_ctx.column_positions.clear();
-        readBench(*r, test_schema_ctx, "NativeInSchemaBig_" + std::to_string(rows), iterations);
-    }
+    constexpr int32_t rows = 1, iterations = base_iterations;
+
+    auto r{createRecordBig(rows)};
+    /// force a schema
+    r->setSchemaVersion(0);
+
+    test_schema_big_ctx.column_positions.clear();
+    readBench(*r, test_schema_big_ctx, "NativeInSchemaBig_" + std::to_string(rows), iterations);
 }
 
 TEST(RecordSerde, ReadBenchmarkNativeInSchemaSkipBig)
 {
-    std::vector<std::pair<int32_t, int32_t>> rows_iterations{
-        {1, 1000 * base_iterations}, {10, 1000 * base_iterations}, {100, 1000 * base_iterations}, {1000, 1000 * base_iterations}};
-    for (auto [rows, iterations] : rows_iterations)
-    {
-        auto r{createRecordBig(rows)};
-        /// force a schema
-        r->setSchemaVersion(0);
-        /// only read the second column
-        test_schema_ctx.column_positions = {1};
-
-        readBench(*r, test_schema_ctx, "NativeInSchemaSkipBig_" + std::to_string(rows), iterations);
-    }
+    constexpr int32_t rows = 1, iterations = base_iterations;
+    auto r{createRecordBig(rows)};
+    /// force a schema
+    r->setSchemaVersion(0);
+    /// only read the second column
+    test_schema_big_ctx.column_positions = {1};
+    readBench(*r, test_schema_big_ctx, "NativeInSchemaSkipBig_" + std::to_string(rows), iterations);
 }
 
 TEST(RecordSerde, Summary)
@@ -591,7 +586,7 @@ TEST(RecordSerde, Summary)
     {
         auto block{createBlockBig(1)};
 
-        for (auto rows : {1, 10, 100, 1000})
+        for (auto rows : {1})
         {
             auto rows_str = std::to_string(rows);
 
@@ -700,8 +695,8 @@ void compressTest(size_t rows, size_t n, bool only_string)
         uncompressed_bytes += r->serialize().size();
 
     std::chrono::duration<double> uncompressed_duration = std::chrono::high_resolution_clock::now() - t;
-    auto uncompressed_eps = static_cast<uint64_t>(rows/uncompressed_duration.count());
-    auto uncompressed_qps = static_cast<uint64_t>(request_count/uncompressed_duration.count());
+    auto uncompressed_eps = static_cast<uint64_t>(rows / uncompressed_duration.count());
+    auto uncompressed_qps = static_cast<uint64_t>(request_count / uncompressed_duration.count());
 
     r->setCodec(DB::CompressionMethodByte::LZ4);
     count = request_count;
@@ -712,8 +707,8 @@ void compressTest(size_t rows, size_t n, bool only_string)
 
     std::chrono::duration<double> compressed_lz4_duration = std::chrono::high_resolution_clock::now() - t;
     auto lz4_ratio = static_cast<uint64_t>(static_cast<double>(compressed_lz4_bytes) * 10000 / uncompressed_bytes);
-    auto compressed_lz4_eps = static_cast<uint64_t>(rows/compressed_lz4_duration.count());
-    auto compressed_lz4_qps = static_cast<uint64_t>(request_count/compressed_lz4_duration.count());
+    auto compressed_lz4_eps = static_cast<uint64_t>(rows / compressed_lz4_duration.count());
+    auto compressed_lz4_qps = static_cast<uint64_t>(request_count / compressed_lz4_duration.count());
     auto lz4_eps_ratio = static_cast<uint64_t>(static_cast<double>(compressed_lz4_eps) * 10000 / uncompressed_eps);
     auto lz4_qps_ratio = static_cast<uint64_t>(static_cast<double>(compressed_lz4_qps) * 10000 / uncompressed_qps);
 
@@ -725,28 +720,48 @@ void compressTest(size_t rows, size_t n, bool only_string)
         compressed_zstd_bytes += r->serialize().size();
     std::chrono::duration<double> compressed_zstd_duration = std::chrono::high_resolution_clock::now() - t;
     auto zstd_ratio = static_cast<uint64_t>(static_cast<double>(compressed_zstd_bytes) * 10000 / uncompressed_bytes);
-    auto compressed_zstd_eps = static_cast<uint64_t>(rows/compressed_zstd_duration.count());
+    auto compressed_zstd_eps = static_cast<uint64_t>(rows / compressed_zstd_duration.count());
     auto zstd_eps_ratio = static_cast<uint64_t>(static_cast<double>(compressed_zstd_eps) * 10000 / uncompressed_eps);
-    auto compressed_zstd_qps = static_cast<uint64_t>(request_count/compressed_zstd_duration.count());
+    auto compressed_zstd_qps = static_cast<uint64_t>(request_count / compressed_zstd_duration.count());
     auto zstd_qps_ratio = static_cast<uint64_t>(static_cast<double>(compressed_zstd_qps) * 10000 / uncompressed_qps);
 
     std::cout << fmt::format("Total rows={}, per request block rows={}, ", rows, n) << "\n"
-              << fmt::format(" Non -compressed data total bytes: {}, eps: {}, qps: {}", uncompressed_bytes, uncompressed_eps, uncompressed_qps) << "\n"
-              << fmt::format(" LZ4 -compressed data total bytes: {}, eps: {}, qps: {}, compression ratio: {}.{}%, compression eps ratio: {}.{}%, compression qps ratio: {}.{}%", compressed_lz4_bytes, compressed_lz4_eps, compressed_lz4_qps, lz4_ratio/100, lz4_ratio%100, lz4_eps_ratio/100, lz4_eps_ratio%100, lz4_qps_ratio/100, lz4_qps_ratio%100) << "\n"
-              << fmt::format(" ZSTD-compressed data total bytes: {}, eps: {}, qps: {}, compression ratio: {}.{}%, compression eps ratio: {}.{}%, compression qps ratio: {}.{}%", compressed_zstd_bytes, compressed_zstd_eps, compressed_zstd_qps, zstd_ratio/100, zstd_ratio%100, zstd_eps_ratio/100, zstd_eps_ratio%100, zstd_qps_ratio/100, zstd_qps_ratio%100) << "\n\n";
+              << fmt::format(
+                     " Non -compressed data total bytes: {}, eps: {}, qps: {}", uncompressed_bytes, uncompressed_eps, uncompressed_qps)
+              << "\n"
+              << fmt::format(
+                     " LZ4 -compressed data total bytes: {}, eps: {}, qps: {}, compression ratio: {}.{}%, compression eps ratio: {}.{}%, "
+                     "compression qps ratio: {}.{}%",
+                     compressed_lz4_bytes,
+                     compressed_lz4_eps,
+                     compressed_lz4_qps,
+                     lz4_ratio / 100,
+                     lz4_ratio % 100,
+                     lz4_eps_ratio / 100,
+                     lz4_eps_ratio % 100,
+                     lz4_qps_ratio / 100,
+                     lz4_qps_ratio % 100)
+              << "\n"
+              << fmt::format(
+                     " ZSTD-compressed data total bytes: {}, eps: {}, qps: {}, compression ratio: {}.{}%, compression eps ratio: {}.{}%, "
+                     "compression qps ratio: {}.{}%",
+                     compressed_zstd_bytes,
+                     compressed_zstd_eps,
+                     compressed_zstd_qps,
+                     zstd_ratio / 100,
+                     zstd_ratio % 100,
+                     zstd_eps_ratio / 100,
+                     zstd_eps_ratio % 100,
+                     zstd_qps_ratio / 100,
+                     zstd_qps_ratio % 100)
+              << "\n\n";
 }
 
 TEST(RecordSerde, BenchmarkCompressionNative)
 {
     /// Complex
-    compressTest(100000, 1, false);
-    compressTest(100000, 100, false);
-    compressTest(100000, 10000, false);
     compressTest(100000, 100000, false);
 
     /// String
-    compressTest(100000, 1, true);
-    compressTest(100000, 100, true);
-    compressTest(100000, 10000, true);
     compressTest(100000, 100000, true);
 }

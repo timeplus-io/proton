@@ -242,7 +242,8 @@ bool MetaStateMachine::apply_snapshot(nuraft::snapshot & s)
 
     {
         std::lock_guard lock(storage_lock);
-        rocksdb_ptr.reset();
+        this->shutdownStorage();
+        /// note: we move `rocksdb_ptr.reset()` to `shutdownStorage`
         snapshot_manager.restoreFromSnapshot(rocksdb_dir, s.get_last_log_idx());
         initDB();
     }
@@ -427,6 +428,8 @@ void MetaStateMachine::shutdownStorage()
     auto status = rocksdb_ptr->Close();
     if (!status.ok())
         LOG_ERROR(log, "Failed to close rocksdb");
+
+    rocksdb_ptr.reset();
 }
 
 rocksdb::ColumnFamilyHandle * MetaStateMachine::tryGetColumnFamilyHandler(const std::string & column_family) const

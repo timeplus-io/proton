@@ -155,7 +155,7 @@ TEST(SequenceInfo, Merge)
     /// => seqs:
     merged = DB::mergeSequenceInfo(sequences, 2, 3, nullptr);
     EXPECT_TRUE(merged);
-    EXPECT_TRUE(merged->sequence_ranges.empty());
+    EXPECT_EQ(merged->sequence_ranges.size(), 1);
     EXPECT_TRUE(!merged->idempotent_keys);
 
     /// seqs:1,1,0,1
@@ -164,7 +164,7 @@ TEST(SequenceInfo, Merge)
     /// => seqs:
     merged = DB::mergeSequenceInfo(sequences, 3, 3, nullptr);
     EXPECT_TRUE(merged);
-    EXPECT_TRUE(merged->sequence_ranges.empty());
+    EXPECT_EQ(merged->sequence_ranges.size(), 1);
     EXPECT_TRUE(!merged->idempotent_keys);
 
     /// Unordered
@@ -183,10 +183,8 @@ TEST(SequenceInfo, Merge)
     DB::IdempotentKey key1{1, "idem1"};
     DB::IdempotentKey key2{2, "idem2"};
 
-    auto keys1 = std::make_shared<DB::IdempotentKeys>();
-    keys1->push_back(key1);
-    auto keys2 = std::make_shared<DB::IdempotentKeys>();
-    keys2->push_back(key2);
+     DB::IdempotentKeys keys1{key1};//std::make_shared<DB::IdempotentKeys>();
+     DB::IdempotentKeys keys2{key2};
 
     /// seqs:1,1,0,1\nkeys:1,idem1
     /// seqs:2,2,0,1\nkeys:2,idem2
@@ -194,12 +192,12 @@ TEST(SequenceInfo, Merge)
     /// max_idempotent_keys: 0
     /// => seqs:
     ///    keys:
-    seq_info1->idempotent_keys = keys1;
-    seq_info2->idempotent_keys = keys2;
+    seq_info1->idempotent_keys = std::make_shared<DB::IdempotentKeys>(keys1);
+    seq_info2->idempotent_keys = std::make_shared<DB::IdempotentKeys>(keys2);
 
     merged = DB::mergeSequenceInfo(sequences, 3, 0, nullptr);
     EXPECT_TRUE(merged);
-    EXPECT_TRUE(merged->sequence_ranges.empty());
+    EXPECT_EQ(merged->sequence_ranges.size(), 1);
     EXPECT_TRUE(merged->idempotent_keys);
     EXPECT_TRUE(merged->idempotent_keys->empty());
 
@@ -209,9 +207,12 @@ TEST(SequenceInfo, Merge)
     /// max_idempotent_keys: 1
     /// => seqs:
     ///    keys:2,idem2
+    *(seq_info1->idempotent_keys) = keys1;
+    *(seq_info2->idempotent_keys) = keys2;
+
     merged = DB::mergeSequenceInfo(sequences, 3, 1, nullptr);
     EXPECT_TRUE(merged);
-    EXPECT_TRUE(merged->sequence_ranges.empty());
+    EXPECT_EQ(merged->sequence_ranges.size(), 1);
     EXPECT_TRUE(merged->idempotent_keys);
     EXPECT_EQ(merged->idempotent_keys->size(), 1);
     EXPECT_EQ(merged->idempotent_keys->at(0), key2);
@@ -222,9 +223,12 @@ TEST(SequenceInfo, Merge)
     /// max_idempotent_keys: 2
     /// => seqs:
     ///    keys:1,idem1;2,idem2
+    *(seq_info1->idempotent_keys) = keys1;
+    *(seq_info2->idempotent_keys) = keys2;
+
     merged = DB::mergeSequenceInfo(sequences, 3, 2, nullptr);
     EXPECT_TRUE(merged);
-    EXPECT_TRUE(merged->sequence_ranges.empty());
+    EXPECT_EQ(merged->sequence_ranges.size(), 1);
     EXPECT_TRUE(merged->idempotent_keys);
     EXPECT_EQ(merged->idempotent_keys->size(), 2);
     EXPECT_EQ(merged->idempotent_keys->at(0), key1);
@@ -236,9 +240,12 @@ TEST(SequenceInfo, Merge)
     /// max_idempotent_keys: 3
     /// => seqs:
     ///    keys:1,idem1;2,idem2
+    *(seq_info1->idempotent_keys) = keys1;
+    *(seq_info2->idempotent_keys) = keys2;
+
     merged = DB::mergeSequenceInfo(sequences, 3, 3, nullptr);
     EXPECT_TRUE(merged);
-    EXPECT_TRUE(merged->sequence_ranges.empty());
+    EXPECT_EQ(merged->sequence_ranges.size(), 1);
     EXPECT_TRUE(merged->idempotent_keys);
     EXPECT_EQ(merged->idempotent_keys->size(), 2);
     EXPECT_EQ(merged->idempotent_keys->at(0), key1);
@@ -250,10 +257,13 @@ TEST(SequenceInfo, Merge)
     /// max_idempotent_keys: 1
     /// => seqs:
     ///    keys:2,idem2
+    *(seq_info1->idempotent_keys) = keys1;
+    *(seq_info2->idempotent_keys) = keys2;
+
     sequences[0].swap(sequences[1]);
     merged = DB::mergeSequenceInfo(sequences, 3, 1, nullptr);
     EXPECT_TRUE(merged);
-    EXPECT_TRUE(merged->sequence_ranges.empty());
+    EXPECT_EQ(merged->sequence_ranges.size(), 1);
     EXPECT_TRUE(merged->idempotent_keys);
     EXPECT_EQ(merged->idempotent_keys->size(), 1);
     EXPECT_EQ(merged->idempotent_keys->at(0), key2);
@@ -264,10 +274,13 @@ TEST(SequenceInfo, Merge)
     /// max_idempotent_keys: 2
     /// => seqs:
     ///    keys:1,idem1;2,idem2
+    *(seq_info1->idempotent_keys) = keys1;
+    *(seq_info2->idempotent_keys) = keys2;
+
     sequences[0].swap(sequences[1]);
     merged = DB::mergeSequenceInfo(sequences, 3, 2, nullptr);
     EXPECT_TRUE(merged);
-    EXPECT_TRUE(merged->sequence_ranges.empty());
+    EXPECT_EQ(merged->sequence_ranges.size(), 1);
     EXPECT_TRUE(merged->idempotent_keys);
     EXPECT_EQ(merged->idempotent_keys->size(), 2);
     EXPECT_EQ(merged->idempotent_keys->at(0), key1);
@@ -279,10 +292,13 @@ TEST(SequenceInfo, Merge)
     /// max_idempotent_keys: 3
     /// => seqs:
     ///    keys:1,idem1,2,idem2
+    *(seq_info1->idempotent_keys) = keys1;
+    *(seq_info2->idempotent_keys) = keys2;
+
     sequences[0].swap(sequences[1]);
     merged = DB::mergeSequenceInfo(sequences, 3, 3, nullptr);
     EXPECT_TRUE(merged);
-    EXPECT_TRUE(merged->sequence_ranges.empty());
+    EXPECT_EQ(merged->sequence_ranges.size(), 1);
     EXPECT_TRUE(merged->idempotent_keys);
     EXPECT_EQ(merged->idempotent_keys->size(), 2);
     EXPECT_EQ(merged->idempotent_keys->at(0), key1);
@@ -294,15 +310,19 @@ TEST(SequenceInfo, Merge)
     /// max_idempotent_keys: 5
     /// => seqs:
     ///    keys:3,idem3;4,idem4;5,idem5;6,idem6;22,idem22
+
     for (Int32 i = 2; i < 7; ++i)
     {
-        keys1->emplace_back(i, "idem" + std::to_string(i));
+        keys1.emplace_back(i, "idem" + std::to_string(i));
     }
-    keys2->at(0) = DB::IdempotentKey(22, "idem22");
+    keys2.at(0) = DB::IdempotentKey(22, "idem22");
+
+    *(seq_info1->idempotent_keys) = keys1;
+    *(seq_info2->idempotent_keys) = keys2;
 
     merged = DB::mergeSequenceInfo(sequences, 3, 5, nullptr);
     EXPECT_TRUE(merged);
-    EXPECT_TRUE(merged->sequence_ranges.empty());
+    EXPECT_EQ(merged->sequence_ranges.size(), 1);
     EXPECT_TRUE(merged->idempotent_keys);
     EXPECT_EQ(merged->idempotent_keys->size(), 5);
     EXPECT_EQ(merged->idempotent_keys->at(0), DB::IdempotentKey(3, "idem3"));
@@ -317,9 +337,12 @@ TEST(SequenceInfo, Merge)
     /// max_idempotent_keys: 7
     /// => seqs:
     ///    keys:1,idem1,2,idem2,3,idem3;4,idem4;5,idem5;6,idem6;22,idem22
+    *(seq_info1->idempotent_keys) = keys1;
+    *(seq_info2->idempotent_keys) = keys2;
+
     merged = DB::mergeSequenceInfo(sequences, 3, 7, nullptr);
     EXPECT_TRUE(merged);
-    EXPECT_TRUE(merged->sequence_ranges.empty());
+    EXPECT_EQ(merged->sequence_ranges.size(), 1);
     EXPECT_TRUE(merged->idempotent_keys);
     EXPECT_EQ(merged->idempotent_keys->size(), 7);
 

@@ -54,7 +54,38 @@ void checkRecord(
             EXPECT_EQ(col_expected->compareAt(i, i, *col_got.column, -1), 0);
     }
 }
+void checkRecordSub(
+    const nlog::Record & expect,
+    const nlog::Record & actual,
+    const std::vector<uint16_t> & positions,
+    const std::vector<uint16_t> & default_positions = {})
+{
+    EXPECT_EQ(expect.getFlags(), actual.getFlags());
 
+    /// Compare columns
+    for (auto pos : positions)
+    {
+        const auto & col_expected = expect.getBlock().getByPosition(pos);
+        const auto & col_got = actual.getBlock().getByName(col_expected.name);
+
+
+        for (size_t i = 0; i < col_got.column->size(); ++i)
+            if (pos == *(positions.end() - 1))
+                EXPECT_EQ(col_expected.column->compareAt(i, i, *col_got.column, -1), 1);
+            else
+                EXPECT_EQ(col_expected.column->compareAt(i, i, *col_got.column, -1), 0);
+    }
+
+    for (auto pos : default_positions)
+    {
+        const auto & origin = expect.getBlock().getByPosition(pos);
+        auto col_expected = origin.type->createColumn()->cloneResized(expect.getBlock().rows());
+        const auto & col_got = actual.getBlock().getByName(origin.name);
+
+        for (size_t i = 0; i < col_got.column->size(); ++i)
+            EXPECT_EQ(col_expected->compareAt(i, i, *col_got.column, -1), 0);
+    }
+}
 std::vector<uint16_t> SERIALIZED_COLUMN_POSITIONS = {5, 3, 10, 13, 7};
 
 auto prepare()
@@ -140,5 +171,5 @@ TEST(RecordSerde, NativeInSchemaSkipWriteReadAll)
         if (std::find(col_positions.begin(), col_positions.end(), pos) == col_positions.end())
             defaults.push_back(pos);
 
-    checkRecord(*r, *rr, col_positions, defaults);
+    checkRecordSub(*r, *rr, col_positions, defaults);
 }

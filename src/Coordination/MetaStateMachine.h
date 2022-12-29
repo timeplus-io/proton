@@ -56,11 +56,12 @@ public:
         nuraft::ptr<nuraft::buffer> & data_out,
         bool & is_last_obj) override;
 
-    void getByKey(const std::string & key, std::string * value, const std::string & column_family = {}) const;
+    /// note: column_familly should not be empty otherwise rocksdb will crash on various cases
+    void getByKey(const std::string & key, std::string * value, const std::string & column_family) const;
 
-    void multiGetByKeys(const std::vector<std::string> & keys, std::vector<std::string> * values, const std::string & column_family = {}) const;
+    void multiGetByKeys(const std::vector<std::string> & keys, std::vector<std::string> * values, const std::string & column_family) const;
 
-    void rangeGetByPrefix(const std::string & prefix, std::vector<std::pair<std::string, std::string>> * kv_pairs, const std::string & column_family = {}) const;
+    void rangeGetByPrefix(const std::string & prefix, std::vector<std::pair<std::string, std::string>> * kv_pairs, const std::string & column_family) const;
 
     rocksdb::ColumnFamilyHandle * tryGetColumnFamilyHandler(const std::string & column_family) const;
     rocksdb::ColumnFamilyHandle * getColumnFamilyHandler(const std::string & column_family) const;

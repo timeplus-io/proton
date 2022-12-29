@@ -71,10 +71,10 @@ TEST(SerializationObject, FromString)
                 applyVisitor(FieldVisitorToString(), expected[i]));
     };
 
-    check_subcolumn("k1", "Int8", {1, 2});
-    check_subcolumn("k2.k3", "Array(String)", {Array{"aa", "bb"}, Array{"cc", "", ""}});
-    check_subcolumn("k2.k4", "Array(Int8)", {Array{2, 3}, Array{0, 5, 6}});
-    check_subcolumn("k2.k5", "Array(Int8)", {Array{0, 0}, Array{4, 0, 0}});
+    check_subcolumn("k1", "int8", {1, 2});
+    check_subcolumn("k2.k3", "array(string)", {Array{"aa", "bb"}, Array{"cc", "", ""}});
+    check_subcolumn("k2.k4", "array(int8)", {Array{2, 3}, Array{0, 5, 6}});
+    check_subcolumn("k2.k5", "array(int8)", {Array{0, 0}, Array{4, 0, 0}});
 }
 
 #endif

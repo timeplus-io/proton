@@ -14,9 +14,10 @@
 
 using namespace DB;
 
-static int regAggregateFunctions = 0;
 
-void tryRegisterAggregateFunctions()
+[[maybe_unused]]static int regAggregateFunctions = 0;
+/// note: the registerAggregateFunctions will have conflict with gtest_streaming_emit_interpreter.cpp:14
+[[maybe_unused]] void tryRegisterAggregateFunctions()
 {
     if (!regAggregateFunctions)
     {
@@ -147,12 +148,10 @@ struct PatternsForPath
 
 TEST(GraphiteTest, testSelectPattern)
 {
-    tryRegisterAggregateFunctions();
-
     using namespace std::literals;
 
     std::string
-        xml(R"END(<yandex>
+        xml(R"END(<proton>
 <graphite_rollup>
     <pattern>
         <regexp>\.sum$</regexp>
@@ -213,7 +212,7 @@ TEST(GraphiteTest, testSelectPattern)
         </retention>
     </default>
 </graphite_rollup>
-</yandex>
+</proton>
 )END");
 
     // Retentions must be ordered by 'age' descending.
@@ -368,12 +367,10 @@ TEST(GraphiteTest, testBuildTaggedRegex)
 
 TEST(GraphiteTest, testSelectPatternTyped)
 {
-    tryRegisterAggregateFunctions();
-
     using namespace std::literals;
 
     std::string
-        xml(R"END(<yandex>
+        xml(R"END(<proton>
 <graphite_rollup>
     <pattern>
         <rule_type>plain</rule_type>
@@ -491,7 +488,7 @@ TEST(GraphiteTest, testSelectPatternTyped)
         </retention>
     </default>
 </graphite_rollup>
-</yandex>
+</proton>
 )END");
 
     // Retentions must be ordered by 'age' descending.
