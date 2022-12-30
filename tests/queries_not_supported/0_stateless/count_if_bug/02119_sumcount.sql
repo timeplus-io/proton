@@ -36,5 +36,5 @@ SELECT to_type_name(sumCount(v)), sumCount(v) FROM (SELECT now()::DateTime AS v)
 
 -- Sumcount_if
 SELECT sumcount_if(n, n > 10) FROM (SELECT number AS n FROM system.numbers LIMIT 100 );
-SELECT sumcount_if(n, n > 10) FROM (SELECT toNullable(number) AS n FROM system.numbers LIMIT 100);
+SELECT sumcount_if(n, n > 10) FROM (SELECT to_nullable(number) AS n FROM system.numbers LIMIT 100);
 SELECT sumcount_if(n, n > 10) FROM (SELECT If(number % 2 == 0, number, NULL) AS n FROM system.numbers LIMIT 100);

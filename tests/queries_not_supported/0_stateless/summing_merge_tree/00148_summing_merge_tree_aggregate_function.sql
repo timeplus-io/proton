@@ -48,14 +48,14 @@ insert into summing_merge_tree_aggregate_function select 1, 1, uniqState(3), uni
 
 select
     k, sum(c),
-    uniqMerge(u), uniqExactMerge(ue)
+    uniq_merge(u), uniqExactMerge(ue)
 from summing_merge_tree_aggregate_function group by k;
 
 optimize table summing_merge_tree_aggregate_function;
 
 select
     k, sum(c),
-    uniqMerge(u), uniqExactMerge(ue)
+    uniq_merge(u), uniqExactMerge(ue)
 from summing_merge_tree_aggregate_function group by k;
 
 drop stream summing_merge_tree_aggregate_function;
@@ -151,9 +151,9 @@ group by d, k;
 -- prime number 53 to avoid resonanse between %3 and %53
 insert into summing_merge_tree_null select number % 3, 1, number % 53 from numbers(999999);
 
-select k, sum(c), uniqMerge(u) from summing_merge_tree_aggregate_function group by k order by k;
+select k, sum(c), uniq_merge(u) from summing_merge_tree_aggregate_function group by k order by k;
 optimize table summing_merge_tree_aggregate_function;
-select k, sum(c), uniqMerge(u) from summing_merge_tree_aggregate_function group by k order by k;
+select k, sum(c), uniq_merge(u) from summing_merge_tree_aggregate_function group by k order by k;
 
 drop stream summing_merge_tree_aggregate_function;
 drop stream summing_merge_tree_null;

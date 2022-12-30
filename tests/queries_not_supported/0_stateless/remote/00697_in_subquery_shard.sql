@@ -14,7 +14,7 @@ SELECT dummy IN (SELECT 1) FROM remote('127.0.0.{1,2}', system.one);
 SELECT number IN (SELECT to_uint64(array_join([1, 8]))) FROM remote('127.0.0.{1,2}', numbers(10));
 
 SELECT array_exists(x -> (x IN (SELECT 1)), [1]) FROM remote('127.0.0.{1,2}', system.one);
-SELECT sumIf(number, array_exists(x -> (x IN (SELECT 1)), [1])) FROM remote('127.0.0.{1,2}', numbers(10));
+SELECT sum_if(number, array_exists(x -> (x IN (SELECT 1)), [1])) FROM remote('127.0.0.{1,2}', numbers(10));
 
 SET prefer_localhost_replica = 0;
 
@@ -24,4 +24,4 @@ SELECT dummy IN (SELECT 1) FROM remote('127.0.0.{1,2}', system.one);
 SELECT number IN (SELECT to_uint64(array_join([1, 8]))) FROM remote('127.0.0.{1,2}', numbers(10));
 
 SELECT array_exists(x -> (x IN (SELECT 1)), [1]) FROM remote('127.0.0.{1,2}', system.one);
-SELECT sumIf(number, array_exists(x -> (x IN (SELECT 1)), [1])) FROM remote('127.0.0.{1,2}', numbers(10));
+SELECT sum_if(number, array_exists(x -> (x IN (SELECT 1)), [1])) FROM remote('127.0.0.{1,2}', numbers(10));

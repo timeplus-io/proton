@@ -12,7 +12,7 @@ INSERT INTO aggregates
 INSERT INTO aggregates SELECT to_date('2016-10-31') + number AS d, uniq_state(to_uint64(array_join(range(100)))) AS s FROM (SELECT * FROM system.numbers LIMIT 2) GROUP BY d;
 SELECT sleep(3);
 
-SELECT d, uniqMerge(s) FROM aggregates GROUP BY d ORDER BY d;
+SELECT d, uniq_merge(s) FROM aggregates GROUP BY d ORDER BY d;
 
 INSERT INTO aggregates
     SELECT to_date('2016-12-01') AS d, uniq_state(to_uint64(array_join(range(100)))) AS s
@@ -21,6 +21,6 @@ INSERT INTO aggregates
     UNION ALL
     SELECT to_date('2016-12-03') AS d, uniq_state(to_uint64(array_join(range(100)))) AS s;
 SELECT sleep(3);
-SELECT d, uniqMerge(s) FROM aggregates GROUP BY d ORDER BY d;
+SELECT d, uniq_merge(s) FROM aggregates GROUP BY d ORDER BY d;
 
 DROP STREAM aggregates;

@@ -28,8 +28,8 @@ AS SELECT
     'World' AS else_constant,
     to_string(number) AS then_non_constant,
     to_string(-number) AS else_non_constant,
-    nullIf(to_string(number), '5') AS then_non_constant_nullable,
-    nullIf(to_string(-number), '-5') AS else_non_constant_nullable
+    null_if(to_string(number), '5') AS then_non_constant_nullable,
+    null_if(to_string(-number), '-5') AS else_non_constant_nullable
 FROM system.numbers LIMIT 10;
 
 SELECT '---------- constant_true ----------';

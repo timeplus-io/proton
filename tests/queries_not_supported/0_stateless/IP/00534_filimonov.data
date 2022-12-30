@@ -1,4 +1,4 @@
-SELECT toNullable(CAST('\0' AS Nullable(string)));
+SELECT to_nullable(CAST('\0' AS Nullable(string)));
 SELECT assumeNotNull(CAST('\0' AS Nullable(string)));
 SELECT tan(NULL);
 SELECT sin(NULL);
@@ -411,7 +411,7 @@ SELECT visitParamExtractInt('',CAST('\0' AS Nullable(string)));
 SELECT int_div_or_zero(CAST(1 AS int8),CAST( 0  AS Nullable(int8)));
 SELECT greatest(CAST(1 AS int8),CAST( 0  AS Nullable(int8)));
 SELECT greater(CAST(1 AS int8),CAST( 0  AS Nullable(int8)));
-SELECT ifNull(CAST('\0' AS Nullable(string)),'');
+SELECT if_null(CAST('\0' AS Nullable(string)),'');
 SELECT bitShiftRight(CAST(1 AS int8),CAST( 0  AS Nullable(int8)));
 SELECT farmHash64(CAST( 0  AS Nullable(int8)));
 SELECT array_reduce(sumState(0),CAST(1 AS int8));

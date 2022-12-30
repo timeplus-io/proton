@@ -16,6 +16,6 @@ FROM
     SELECT * FROM system.numbers LIMIT 1000
 );
 
-SELECT uniqMerge(Uniq) FROM stored_aggregates;
+SELECT uniq_merge(Uniq) FROM stored_aggregates;
 
 DROP STREAM stored_aggregates;

@@ -175,7 +175,7 @@ insert into test_byte_size_other values(3, 256, 'abcde', tuple(256, 'abcde'), 'a
 select '';
 select 'byteSize for others: Nullable, tuple, low_cardinality';
 select key, byteSize(*), opt_int32, byteSize(opt_int32), opt_str, byteSize(opt_str), tuple, byteSize(tuple), strings, byteSize(strings) from test_byte_size_other order by key;
-select 'constants:', NULL, byteSize(NULL), tuple(0x10000, NULL), byteSize(tuple(0x10000, NULL)), tuple(0x10000, toNullable('a')), byteSize(tuple(0x10000, toNullable('a')));
+select 'constants:', NULL, byteSize(NULL), tuple(0x10000, NULL), byteSize(tuple(0x10000, NULL)), tuple(0x10000, to_nullable('a')), byteSize(tuple(0x10000, to_nullable('a')));
 select 'constants:', toLowCardinality('abced'),to_type_name(toLowCardinality('abced')), byteSize(toLowCardinality('abced'));
 
 drop stream if exists test_byte_size_other;
@@ -199,9 +199,9 @@ insert into test_byte_size_more_complex values(6, [tuple(NULL, []), tuple('a', [
 select '';
 select 'byteSize for complex fields';
 select key, byteSize(*), complex1, byteSize(complex1) from test_byte_size_more_complex order by key;
-select 'constants:', tuple(NULL, []), byteSize(tuple(NULL, [])), tuple(toNullable(to_fixed_string('a',4)), []), byteSize(tuple(toNullable(to_fixed_string('a',4)), [])), tuple(toNullable(to_fixed_string('a',4)), [tuple(NULL, 'a')]), byteSize(tuple(toNullable(to_fixed_string('a',4)), [tuple(NULL, 'a')])), tuple(to_fixed_string('a',4), [tuple(NULL, 'a'), tuple(NULL, 'a')]), byteSize(tuple(toNullable(to_fixed_string('a',4)), [tuple(NULL, 'a'), tuple(NULL, 'a')]));
-select 'constants:', [tuple(NULL, []), tuple(toNullable(to_fixed_string('a',4)), []), tuple(toNullable(to_fixed_string('a',4)), [tuple(NULL, 'a')]), tuple(toNullable(to_fixed_string('a',4)), [tuple(NULL, 'a'), tuple(NULL, 'a')])];
-select 'constants:', to_type_name([tuple(NULL, []), tuple(toNullable(to_fixed_string('a',4)), []), tuple(toNullable(to_fixed_string('a',4)), [tuple(NULL, 'a')]), tuple(toNullable(to_fixed_string('a',4)), [tuple(NULL, 'a'), tuple(NULL, 'a')])]);
-select 'constants:', byteSize([tuple(NULL, []), tuple(toNullable(to_fixed_string('a',4)), []), tuple(toNullable(to_fixed_string('a',4)), [tuple(NULL, 'a')]), tuple(toNullable(to_fixed_string('a',4)), [tuple(NULL, 'a'), tuple(NULL, 'a')])]);
+select 'constants:', tuple(NULL, []), byteSize(tuple(NULL, [])), tuple(to_nullable(to_fixed_string('a',4)), []), byteSize(tuple(to_nullable(to_fixed_string('a',4)), [])), tuple(to_nullable(to_fixed_string('a',4)), [tuple(NULL, 'a')]), byteSize(tuple(to_nullable(to_fixed_string('a',4)), [tuple(NULL, 'a')])), tuple(to_fixed_string('a',4), [tuple(NULL, 'a'), tuple(NULL, 'a')]), byteSize(tuple(to_nullable(to_fixed_string('a',4)), [tuple(NULL, 'a'), tuple(NULL, 'a')]));
+select 'constants:', [tuple(NULL, []), tuple(to_nullable(to_fixed_string('a',4)), []), tuple(to_nullable(to_fixed_string('a',4)), [tuple(NULL, 'a')]), tuple(to_nullable(to_fixed_string('a',4)), [tuple(NULL, 'a'), tuple(NULL, 'a')])];
+select 'constants:', to_type_name([tuple(NULL, []), tuple(to_nullable(to_fixed_string('a',4)), []), tuple(to_nullable(to_fixed_string('a',4)), [tuple(NULL, 'a')]), tuple(to_nullable(to_fixed_string('a',4)), [tuple(NULL, 'a'), tuple(NULL, 'a')])]);
+select 'constants:', byteSize([tuple(NULL, []), tuple(to_nullable(to_fixed_string('a',4)), []), tuple(to_nullable(to_fixed_string('a',4)), [tuple(NULL, 'a')]), tuple(to_nullable(to_fixed_string('a',4)), [tuple(NULL, 'a'), tuple(NULL, 'a')])]);
 
 drop stream if exists test_byte_size_more_complex;

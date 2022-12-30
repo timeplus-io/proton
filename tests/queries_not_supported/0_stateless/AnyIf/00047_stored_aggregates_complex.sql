@@ -35,7 +35,7 @@ GROUP BY d, k1, k2
 ORDER BY d, k1, k2;
 
 SELECT d, k1, k2,
-	sumMerge(Sum), avgMerge(Avg), uniqMerge(Uniq),
+	sumMerge(Sum), avgMerge(Avg), uniq_merge(Uniq),
 	anyMerge(Any), anyIfMerge(AnyIf),
 	quantilesMerge(0.5, 0.9)(Quantiles),
 	groupArrayMerge(GroupArray)
@@ -44,7 +44,7 @@ GROUP BY d, k1, k2
 ORDER BY d, k1, k2;
 
 SELECT d, k1,
-	sumMerge(Sum), avgMerge(Avg), uniqMerge(Uniq),
+	sumMerge(Sum), avgMerge(Avg), uniq_merge(Uniq),
 	anyMerge(Any), anyIfMerge(AnyIf),
 	quantilesMerge(0.5, 0.9)(Quantiles),
 	groupArrayMerge(GroupArray)
@@ -53,7 +53,7 @@ GROUP BY d, k1
 ORDER BY d, k1;
 
 SELECT d,
-	sumMerge(Sum), avgMerge(Avg), uniqMerge(Uniq),
+	sumMerge(Sum), avgMerge(Avg), uniq_merge(Uniq),
 	anyMerge(Any), anyIfMerge(AnyIf),
 	quantilesMerge(0.5, 0.9)(Quantiles),
 	groupArrayMerge(GroupArray)

@@ -10,7 +10,7 @@ set -o pipefail
 
 # NOTE: database = $CLICKHOUSE_DATABASE is unwanted
 verify_sql="SELECT
-    (SELECT sumIf(value, metric = 'PartsInMemory'), sumIf(value, metric = 'PartsCompact'), sumIf(value, metric = 'PartsWide') FROM system.metrics) =
+    (SELECT sum_if(value, metric = 'PartsInMemory'), sum_if(value, metric = 'PartsCompact'), sum_if(value, metric = 'PartsWide') FROM system.metrics) =
     (SELECT count_if(part_type == 'InMemory'), count_if(part_type == 'Compact'), count_if(part_type == 'Wide') FROM system.parts)"
 
 # The query is not atomic - it can compare states between system.parts and system.metrics from different points in time.

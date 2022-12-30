@@ -123,11 +123,11 @@ SELECT '----- isNull, isNotNull -----';
 
 SELECT col1, col2, isNull(col1), isNotNull(col2) FROM test1_00395 ORDER BY col1,col2 ASC;
 
-SELECT '----- ifNull, nullIf -----';
+SELECT '----- if_null, null_if -----';
 
-SELECT col1, col2, ifNull(col1,col2) FROM test1_00395 ORDER BY col1,col2 ASC;
-SELECT col1, col2, nullIf(col1,col2) FROM test1_00395 ORDER BY col1,col2 ASC;
-SELECT nullIf(1, NULL);
+SELECT col1, col2, if_null(col1,col2) FROM test1_00395 ORDER BY col1,col2 ASC;
+SELECT col1, col2, null_if(col1,col2) FROM test1_00395 ORDER BY col1,col2 ASC;
+SELECT null_if(1, NULL);
 
 SELECT '----- coalesce -----';
 

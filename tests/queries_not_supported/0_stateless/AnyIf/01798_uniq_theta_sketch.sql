@@ -124,15 +124,15 @@ FROM
     SELECT * FROM system.numbers LIMIT 1000
 );
 
-SELECT uniqMerge(Uniq), uniqThetaMerge(UniqThetaSketch) FROM stored_aggregates;
+SELECT uniq_merge(Uniq), uniqThetaMerge(UniqThetaSketch) FROM stored_aggregates;
 
-SELECT d, uniqMerge(Uniq), uniqThetaMerge(UniqThetaSketch) FROM stored_aggregates GROUP BY d ORDER BY d;
+SELECT d, uniq_merge(Uniq), uniqThetaMerge(UniqThetaSketch) FROM stored_aggregates GROUP BY d ORDER BY d;
 
 OPTIMIZE STREAM stored_aggregates;
 
-SELECT uniqMerge(Uniq), uniqThetaMerge(UniqThetaSketch) FROM stored_aggregates;
+SELECT uniq_merge(Uniq), uniqThetaMerge(UniqThetaSketch) FROM stored_aggregates;
 
-SELECT d, uniqMerge(Uniq), uniqThetaMerge(UniqThetaSketch) FROM stored_aggregates GROUP BY d ORDER BY d;
+SELECT d, uniq_merge(Uniq), uniqThetaMerge(UniqThetaSketch) FROM stored_aggregates GROUP BY d ORDER BY d;
 
 DROP STREAM stored_aggregates;
 
@@ -162,19 +162,19 @@ GROUP BY d, k1, k2
 ORDER BY d, k1, k2;
 
 SELECT d, k1, k2,
-	uniqMerge(Uniq), uniqThetaMerge(UniqThetaSketch)
+	uniq_merge(Uniq), uniqThetaMerge(UniqThetaSketch)
 FROM stored_aggregates
 GROUP BY d, k1, k2
 ORDER BY d, k1, k2;
 
 SELECT d, k1,
-	uniqMerge(Uniq), uniqThetaMerge(UniqThetaSketch)
+	uniq_merge(Uniq), uniqThetaMerge(UniqThetaSketch)
 FROM stored_aggregates
 GROUP BY d, k1
 ORDER BY d, k1;
 
 SELECT d,
-	uniqMerge(Uniq), uniqThetaMerge(UniqThetaSketch)
+	uniq_merge(Uniq), uniqThetaMerge(UniqThetaSketch)
 FROM stored_aggregates
 GROUP BY d
 ORDER BY d;
@@ -205,9 +205,9 @@ group by d, k;
 -- prime number 53 to avoid resonanse between %3 and %53
 insert into summing_merge_tree_null select number % 3, 1, number % 53 from numbers(999999);
 
-select k, sum(c), uniqMerge(un), uniqThetaMerge(ut) from summing_merge_tree_aggregate_function group by k order by k;
+select k, sum(c), uniq_merge(un), uniqThetaMerge(ut) from summing_merge_tree_aggregate_function group by k order by k;
 optimize table summing_merge_tree_aggregate_function;
-select k, sum(c), uniqMerge(un), uniqThetaMerge(ut) from summing_merge_tree_aggregate_function group by k order by k;
+select k, sum(c), uniq_merge(un), uniqThetaMerge(ut) from summing_merge_tree_aggregate_function group by k order by k;
 
 drop stream summing_merge_tree_aggregate_function;
 drop stream summing_merge_tree_null;

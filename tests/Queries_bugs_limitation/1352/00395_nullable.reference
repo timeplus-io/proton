@@ -57,7 +57,7 @@
 42	42	0	1
 \N	6	1	1
 \N	\N	1	0
------ ifNull, nullIf -----
+----- if_null, null_if -----
 2	7	2
 5	1	5
 9	\N	9

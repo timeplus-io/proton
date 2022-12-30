@@ -39,7 +39,7 @@
 ./tuple
 ./unhex
 ./uniqCombined
-./uniqMergeState
+./uniq_mergeState
 ./uniqUpTo
 ./URLHash
 ./varSamp

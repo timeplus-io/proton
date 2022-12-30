@@ -19,9 +19,9 @@ FROM
 )
 GROUP BY d;
 
-SELECT uniqMerge(Uniq) FROM stored_aggregates;
+SELECT uniq_merge(Uniq) FROM stored_aggregates;
 
-SELECT d, uniqMerge(Uniq) FROM stored_aggregates GROUP BY d ORDER BY d;
+SELECT d, uniq_merge(Uniq) FROM stored_aggregates GROUP BY d ORDER BY d;
 
 INSERT INTO stored_aggregates
 SELECT
@@ -33,15 +33,15 @@ FROM
 )
 GROUP BY d;
 
-SELECT uniqMerge(Uniq) FROM stored_aggregates;
+SELECT uniq_merge(Uniq) FROM stored_aggregates;
 
-SELECT d, uniqMerge(Uniq) FROM stored_aggregates GROUP BY d ORDER BY d;
+SELECT d, uniq_merge(Uniq) FROM stored_aggregates GROUP BY d ORDER BY d;
 
 OPTIMIZE STREAM stored_aggregates;
 
-SELECT uniqMerge(Uniq) FROM stored_aggregates;
+SELECT uniq_merge(Uniq) FROM stored_aggregates;
 
-SELECT d, uniqMerge(Uniq) FROM stored_aggregates GROUP BY d ORDER BY d;
+SELECT d, uniq_merge(Uniq) FROM stored_aggregates GROUP BY d ORDER BY d;
 
 DROP STREAM stored_aggregates;
 

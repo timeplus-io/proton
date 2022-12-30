@@ -31,7 +31,7 @@ FROM table(test.visits);
 SELECT
     StartDate,
     sumMerge(Visits)                AS Visits,
-    uniqMerge(Users)                AS Users
+    uniq_merge(Users)                AS Users
 FROM test.basic
 GROUP BY StartDate
 ORDER BY StartDate;
@@ -40,7 +40,7 @@ ORDER BY StartDate;
 SELECT
     StartDate,
     sumMerge(Visits)                AS Visits,
-    uniqMerge(Users)                AS Users
+    uniq_merge(Users)                AS Users
 FROM test.basic
 WHERE CounterID = 942285
 GROUP BY StartDate

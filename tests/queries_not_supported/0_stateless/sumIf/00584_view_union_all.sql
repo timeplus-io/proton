@@ -14,13 +14,13 @@ SELECT sleep(3);
 SET max_threads = 1;
 
 CREATE VIEW TestView AS
-    SELECT str, key, sumIf(a, 0) AS sum
+    SELECT str, key, sum_if(a, 0) AS sum
     FROM Test_00584
     GROUP BY str, key
 
     UNION ALL
 
-    SELECT str AS str, CAST('ALL' AS enum8('A' = 0, 'B' = 1, 'ALL' = 2)) AS key, sumIf(a, 0) AS sum
+    SELECT str AS str, CAST('ALL' AS enum8('A' = 0, 'B' = 1, 'ALL' = 2)) AS key, sum_if(a, 0) AS sum
     FROM Test_00584
     GROUP BY str;
 

@@ -14,14 +14,14 @@ CREATE MATERIALIZED VIEW goal_view TO goal
     `CounterID` uint32,
     `StartDate` date,
     `GoalID` uint32,
-    `Visits` aggregate_function(sumIf, int8, uint8),
+    `Visits` aggregate_function(sum_if, int8, uint8),
     `GoalReaches` aggregate_function(sum, int8)
 ) AS
 SELECT
     CounterID,
     StartDate,
     GoalID,
-    sumIfState(Sign, _uniq = 1) AS Visits,
+    sum_ifState(Sign, _uniq = 1) AS Visits,
     sumState(Sign) AS GoalReaches
 FROM visits
 ARRAY JOIN
@@ -41,7 +41,7 @@ create stream goal
      `CounterID` uint32,
      `StartDate` date,
      `GoalID` uint32,
-     `Visits` aggregate_function(sumIf, int8, uint8),
+     `Visits` aggregate_function(sum_if, int8, uint8),
      `GoalReaches` aggregate_function(sum, int8)
 ) ENGINE = AggregatingMergeTree PARTITION BY to_start_of_month(StartDate) ORDER BY (CounterID, StartDate, GoalID) SETTINGS index_granularity = 256;
 

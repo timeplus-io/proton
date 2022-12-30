@@ -10,5 +10,5 @@ SELECT sum(DISTINCT y) FROM (SELECT number % 5 AS x, number % 15 AS y FROM numbe
 SELECT count_if(DISTINCT number % 10, number % 5 = 2) FROM numbers(10000);
 EXPLAIN SYNTAX SELECT count_if(DISTINCT number % 10, number % 5 = 2) FROM numbers(10000);
 
-SELECT sumIf(DISTINCT number % 10, number % 5 = 2) FROM numbers(10000);
-EXPLAIN SYNTAX SELECT sumIf(DISTINCT number % 10, number % 5 = 2) FROM numbers(10000);
+SELECT sum_if(DISTINCT number % 10, number % 5 = 2) FROM numbers(10000);
+EXPLAIN SYNTAX SELECT sum_if(DISTINCT number % 10, number % 5 = 2) FROM numbers(10000);

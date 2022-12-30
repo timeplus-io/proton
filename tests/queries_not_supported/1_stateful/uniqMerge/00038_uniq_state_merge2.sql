@@ -1,1 +1,1 @@
-SELECT topLevelDomain(concat('http://', k)) AS tld, sum(u) AS u, uniqMerge(us) AS us FROM (SELECT domain(URL) AS k, uniq(UserID) AS u, uniqState(UserID) AS us from table(test.hits) GROUP BY k) GROUP BY tld ORDER BY u DESC, tld ASC LIMIT 100
+SELECT topLevelDomain(concat('http://', k)) AS tld, sum(u) AS u, uniq_merge(us) AS us FROM (SELECT domain(URL) AS k, uniq(UserID) AS u, uniqState(UserID) AS us from table(test.hits) GROUP BY k) GROUP BY tld ORDER BY u DESC, tld ASC LIMIT 100

@@ -36,7 +36,7 @@ SELECT quantileExactWeighted(0.5)(x, y) FROM
 
 SELECT
     sum(1 + CAST(dummy AS Nullable(uint8))) AS res1, to_type_name(res1) AS t1,
-    sum(1 + nullIf(dummy, 0)) AS res2, to_type_name(res2) AS t2
+    sum(1 + null_if(dummy, 0)) AS res2, to_type_name(res2) AS t2
 FROM remote('127.0.0.{2,3}', system.one);
 
 SELECT CAST(NULL AS Nullable(uint64)) FROM system.numbers LIMIT 2

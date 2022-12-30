@@ -8,7 +8,7 @@ create stream merge_tree_table
     Alternative1 uint64,
     Alternative2 uint64,
     User uint32,
-    CharID uint64 ALIAS multiIf(SomeType IN (3, 4, 11), 0, SomeType IN (7, 8), Alternative1, Alternative2)
+    CharID uint64 ALIAS multi_if(SomeType IN (3, 4, 11), 0, SomeType IN (7, 8), Alternative1, Alternative2)
 )
 ENGINE = MergeTree()
 ORDER BY tuple();
