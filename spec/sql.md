@@ -57,18 +57,18 @@ Table name can be any utf-8 characters and needs backtick quoted if there are sp
 Column name can be any utf-8 characters and needs backtick quoted if there are spaces in between.
 
 Proton supports the following column types
-1. Int8/16/32/64/128/256
-2. UInt8/16/32/64/128/256
-3. Boolean
-4. Decimal(precision, scale) : valid range for precision is [1: 76], valid range for scale is [0: precision]
-5. Float32/64
-6. Date
-7. DateTime
-8. DateTime64(precision, [time_zone])
-9. String
-10. FixedString(N)
-11. Array(T)
-12. UUID
+1. int8/16/32/64/128/256
+2. uint8/16/32/64/128/256
+3. boolean
+4. decimal(precision, scale) : valid range for precision is [1: 76], valid range for scale is [0: precision]
+5. float32/64
+6. date
+7. dateTime
+8. datetime64(precision, [time_zone])
+9. string
+10. fixed_string(N)
+11. array(T)
+12. uuid
 
 When defining the columns, columns can have default value or column expression from which Proton can calculate a default value if user doesn't
 provide an explicit one during ingestion. The column expression can be any valid Proton SQL statements which produces the correct type of result.
@@ -94,7 +94,7 @@ CREATE TABLE default.my_table
 (
     my_int_col Int64 DEFAULT 10 CODEC(NONE),
     my_decimal_col Decimal(10, 3) DEFAULT 0.0,
-    my_datetime_col Datetime64(3, 'UTC') DEFAULT now64(3, 'UTC') CODEC(DoubleDelta),
+    my_datetime_col datetime64(3, 'UTC') DEFAULT now64(3, 'UTC') CODEC(DoubleDelta),
     my_float_col Float64 DEFAULT 1.1 CODEC(Gorilla),
     my_string_col String CODEC(LZ4),
     my_array_col Array(Int32),
@@ -167,7 +167,7 @@ the other hand, scans a snapshot of data which is bounded, processes the data sn
 Proton also supports snapshot based query processing like traditional databases do, which we call `history` mode and also supports
 a combination of streaming query processing and snapshot query processing (See the related sections below for more details).
 
-**Node** in Proton, time is a first class citizen, every table in it has 2 physical timestamp columns: `_tp_time and _tp_index_time` which have DateTime64(3, 'UTC') type.
+**Node** in Proton, time is a first class citizen, every table in it has 2 physical timestamp columns: `_tp_time and _tp_index_time` which have datetime64(3, 'UTC') type.
 We call `_tp_time` event timestamp which is when an event happened. We call `_tp_index_time` data index timestamp which is when the data is indexed in Proton historical store
 for fast snapshot data processing.
 
@@ -206,11 +206,11 @@ has this table structure.
 ```sql
 CREATE TABLE device_utils
 (
-    device String,
-    location String,
-    cpu_usage Float32,
-    timestamp DateTime64(3),
-    _tp_time DateTime64(3, 'UTC')
+    device string,
+    location string,
+    cpu_usage float32,
+    timestamp datetime64(3),
+    _tp_time datetime64(3, 'UTC')
     _index_time DateTime64(3, 'UTC')
 );
 ```

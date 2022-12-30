@@ -10,6 +10,7 @@
 #include <Server/ProtocolServerAdapter.h>
 #include <Storages/MarkCache.h>
 #include <Storages/StorageMergeTree.h>
+#include <Storages/MergeTree/MergeTreeMetadataCache.h>
 #include <IO/UncompressedCache.h>
 #include <IO/MMappedFileCache.h>
 #include <IO/ReadHelpers.h>
@@ -604,6 +605,15 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             new_values["MMapCacheCells"] = mmap_cache->count();
         }
     }
+
+#if USE_ROCKSDB
+    {
+        if (auto metadata_cache = getContext()->tryGetMergeTreeMetadataCache())
+        {
+            new_values["MergeTreeMetadataCacheSize"] = metadata_cache->getEstimateNumKeys();
+        }
+    }
+#endif
 
 #if USE_EMBEDDED_COMPILER
     {

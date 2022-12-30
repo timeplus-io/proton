@@ -366,6 +366,59 @@
     <!-- Path to data directory, with trailing slash. -->
     <path>/var/lib/proton/</path>
 
+    <!-- Multi-disk configuration example: -->
+    <!--
+    <storage_configuration>
+        <disks>
+            <default>
+                <keep_free_space_bytes>0</keep_free_space_bytes>
+            </default>
+            <data>
+                <path>/data/</path>
+                <keep_free_space_bytes>0</keep_free_space_bytes>
+            </data>
+            <s3>
+                <type>s3</type>
+                <endpoint>http://path/to/endpoint</endpoint>
+                <access_key_id>your_access_key_id</access_key_id>
+                <secret_access_key>your_secret_access_key</secret_access_key>
+            </s3>
+            <blob_storage_disk>
+                <type>azure_blob_storage</type>
+                <storage_account_url>http://account.blob.core.windows.net</storage_account_url>
+                <container_name>container</container_name>
+                <account_name>account</account_name>
+                <account_key>pass123</account_key>
+                <metadata_path>/var/lib/clickhouse/disks/blob_storage_disk/</metadata_path>
+                <cache_enabled>true</cache_enabled>
+                <cache_path>/var/lib/clickhouse/disks/blob_storage_disk/cache/</cache_path>
+                <skip_access_check>false</skip_access_check>
+            </blob_storage_disk>
+        </disks>
+
+        <policies>
+            <all>
+                <volumes>
+                    <main>
+                        <disk>default</disk>
+                        <disk>data</disk>
+                        <disk>s3</disk>
+                        <disk>blob_storage_disk</disk>
+
+                        <max_data_part_size_bytes></max_data_part_size_bytes>
+                        <max_data_part_size_ratio></max_data_part_size_ratio>
+                        <perform_ttl_move_on_insert>true</perform_ttl_move_on_insert>
+                        <prefer_not_to_merge>false</prefer_not_to_merge>
+                        <load_balancing>round_robin</load_balancing>
+                    </main>
+                </volumes>
+                <move_factor>0.2</move_factor>
+            </all>
+        </policies>
+    </storage_configuration>
+    -->
+
+
     <!-- Path to temporary data for processing hard queries. -->
     <tmp_path>/var/lib/proton/tmp/</tmp_path>
 
@@ -1291,94 +1344,10 @@
         </tables>
     </rocksdb>
     -->
-    <!-- Multiple clusters of streaming storage are supported -->
-    <!--
-    <cluster_settings>
-        <streaming_storage>
-            <kafka>
-                <default>true</default>
-                <cluster_name>default-sys-kafka-cluster-name</cluster_name>
-                <cluster_id>default-sys-kafka-cluster-id</cluster_id>
-                <security_protocol>PLAINTEXT</security_protocol>
-                <brokers>localhost:9092</brokers>
-                <replication_factor>1</replication_factor>
 
-                <topic_metadata_refresh_interval_ms>300000</topic_metadata_refresh_interval_ms>
-                <message_max_bytes>1000000</message_max_bytes>
-                <statistic_internal_ms>30000</statistic_internal_ms>
-                <debug></debug>
-
-                <enable_idempotence>true</enable_idempotence>
-                <queue_buffering_max_messages>100000</queue_buffering_max_messages>
-                <queue_buffering_max_kbytes>1048576</queue_buffering_max_kbytes>
-                <queue_buffering_max_ms>50</queue_buffering_max_ms>
-                <message_send_max_retries>2</message_send_max_retries>
-                <retry_backoff_ms>100</retry_backoff_ms>
-                <compression_codec>snappy</compression_codec>
-
-                <message_timeout_ms>40000</message_timeout_ms>
-                <message_delivery_async_poll_ms>100</message_delivery_async_poll_ms>
-                <message_delivery_sync_poll_ms>10</message_delivery_sync_poll_ms>
-
-                <group_id>proton</group_id>
-                <check_crcs>false</check_crcs>
-                <auto_commit_interval_ms>5000</auto_commit_interval_ms>
-                <fetch_message_max_bytes>1048576</fetch_message_max_bytes>
-                <fetch_wait_max_ms>500</fetch_wait_max_ms>
-
-                <queued_min_messages>1000000</queued_min_messages>
-                <queued_max_messages_kbytes>65536</queued_max_messages_kbytes>
-
-                <session_timeout_ms>10000</session_timeout_ms>
-                <max_poll_interval_ms>30000</max_poll_interval_ms>
-
-                <dedicated_subscription_pool_size>2</dedicated_subscription_pool_size>
-                <shared_subscription_pool_max_size>10</shared_subscription_pool_max_size>
-                <shared_subscription_flush_threshold_count>10000</shared_subscription_flush_threshold_count>
-                <shared_subscription_flush_threshold_size>10485760</shared_subscription_flush_threshold_size>
-                <shared_subscription_flush_threshold_ms>1000</shared_subscription_flush_threshold_ms>
-            </kafka>
-        </streaming_storage>
-
-        <system_ddls>
-            <name>__system_ddls</name>
-            <replication_factor>1</replication_factor>
-            <data_retention>168</data_retention>
-        </system_ddls>
-
-        <system_catalogs>
-            <name>__system_catalogs</name>
-            <replication_factor>1</replication_factor>
-            <log_roll_size>100</log_roll_size>
-            <log_roll_period>7200</log_roll_period>
-            <client_side_compression>true</client_side_compression>
-        </system_catalogs>
-
-        <system_node_metrics>
-            <name>__system_node_metrics</name>
-            <replication_factor>1</replication_factor>
-            <log_roll_size>100</log_roll_size>
-            <log_roll_period>7200</log_roll_period>
-        </system_node_metrics>
-
-        <system_tasks>
-            <name>__system_tasks</name>
-            <replication_factor>1</replication_factor>
-            <data_retention>24</data_retention>
-        </system_tasks>
-
-        <node_identity>localhost:8123</node_identity>
-
-        <node_roles>
-            <role>placement</role>
-            <role>catalog</role>
-            <role>ddl</role>
-            <role>task</role>
-        </node_roles>
-
-        <schedule_intervals>
-            <node_metrics>5000</node_metrics>
-        </schedule_intervals>
-    </cluster_settings>
-    -->
+    <!-- Uncomment if enable merge tree metadata cache -->
+    <!--merge_tree_metadata_cache>
+        <lru_cache_size>268435456</lru_cache_size>
+        <continue_if_corrupted>true</continue_if_corrupted>
+    </merge_tree_metadata_cache-->
 </proton>

@@ -40,7 +40,7 @@ After build, you can find the compiled `proton` binaries in `build_docker` direc
 - ninja
 
 ### MacOS
-We don't support build proton by using Apple Clang. Please use `brew install llvm` to install 
+We don't support build proton by using Apple Clang. Please use `brew install llvm` to install
 clang-15 / clang++-15.
 
 ### Ad-hoc Build with Default C/C++ Compilers
@@ -80,19 +80,19 @@ curl http://localhost:8123/proton/v1/ddl/tables -X POST -d '{
    "columns": [
       {
          "name": "device",
-         "type": "String"
+         "type": "string"
       },
       {
          "name": "location",
-         "type": "String"
+         "type": "string"
       },
       {
          "name": "temperature",
-         "type": "Float32"
+         "type": "float32"
       },
       {
          "name": "timestamp",
-         "type": "Datetime64(3)",
+         "type": "datetime64(3)",
          "default": "now64(3)"
       }
    ]
@@ -101,7 +101,7 @@ curl http://localhost:8123/proton/v1/ddl/tables -X POST -d '{
 
 ## Ingest Data
 
-### Ingest Data via CLI 
+### Ingest Data via CLI
 
 Run `proton-client` console interactively
 ```shell
@@ -110,11 +110,11 @@ $ proton-client --host proton-server -m
 ```
 
 ```sql
-# Launch proton-client if not yet 
+# Launch proton-client if not yet
 
-INSERT INTO devices (device, location, temperature, timestamp) 
-VALUES 
-('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), 
+INSERT INTO devices (device, location, temperature, timestamp)
+VALUES
+('dev1', 'ca', 57.3, '2020-02-02 20:00:00'),
 ('dev2', 'sh', 37.3, '2020-02-03 12:00:00'),
 ('dev3', 'van', 17.3, '2020-02-02 20:00:00');
 ```
@@ -134,10 +134,10 @@ curl http://localhost:8123/proton/v1/ingest/tables/devices -X POST -H "content-t
 
 ## Query Data
 
-### Query via CLI 
+### Query via CLI
 
 ```sql
-# Launch proton-client if not yet 
+# Launch proton-client if not yet
 
 SELECT * FROM devices
 ```
@@ -145,7 +145,7 @@ SELECT * FROM devices
 ### Query Data via REST API
 
 ```
-curl http://localhost:8123/proton/v1/search -H "content-type: application/json" -d '{"query": "SELECT * FROM devices"}'
+curl http://localhost:8123/proton/v1/search -H "content-type: application/json" -d '{"query": "SELECT * FROM table(devices)"}'
 ```
 
 ### Streaming Query
@@ -155,7 +155,7 @@ Simple tail
 ```
 docker run --rm --network=timeplus-net timeplus/proton \
     proton-client --host proton-server \
-    --query 'SELECT * FROM devices WHERE temperature > 50.0 EMIT STREAM'
+    --query 'SELECT * FROM devices WHERE temperature > 50.0'
 ```
 
 Interactive streaming query
@@ -166,15 +166,13 @@ Interactive streaming query
 
 timeplus :) SELECT device, avg(temperature) as avg_temp
 FROM tumble(devices, INTERVAL 3 SECOND)
-WHERE temperature > 50.0 GROUP BY device, wstart, wend
-EMIT STREAM;
+WHERE temperature > 50.0 GROUP BY device, window_start, window_end
 
 # Use a different time column for windowing
 
 timeplus :) SELECT device, avg(temperature) as avg_temp
 FROM tumble(devices, timestamp, INTERVAL 3 SECOND)
-WHERE temperature > 50.0 GROUP BY device, wstart, wend
-EMIT STREAM;
+WHERE temperature > 50.0 GROUP BY device, window_start, window_end
 ```
 
 For more streaming query, please refer to [Proton Streaming Processing Spec](spec/streaming.md)

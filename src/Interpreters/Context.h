@@ -173,6 +173,12 @@ using ReadTaskCallback = std::function<String()>;
 
 using MergeTreeReadTaskCallback = std::function<std::optional<PartitionReadResponse>(PartitionReadRequest)>;
 
+
+#if USE_ROCKSDB
+class MergeTreeMetadataCache;
+using MergeTreeMetadataCachePtr = std::shared_ptr<MergeTreeMetadataCache>;
+#endif
+
 /// An empty interface for an arbitrary object that may be attached by a shared pointer
 /// to query context, when using ClickHouse as a library.
 struct IHostContext
@@ -767,6 +773,11 @@ public:
     MergeList & getMergeList();
     const MergeList & getMergeList() const;
 
+#if USE_ROCKSDB
+    MergeTreeMetadataCachePtr getMergeTreeMetadataCache() const;
+    MergeTreeMetadataCachePtr tryGetMergeTreeMetadataCache() const;
+#endif
+
 #if USE_NURAFT
     std::shared_ptr<KeeperDispatcher> & getKeeperDispatcher() const;
 #endif
@@ -845,6 +856,10 @@ public:
 
     /// Call after initialization before using trace collector.
     void initializeTraceCollector();
+
+#if USE_ROCKSDB
+    void initializeMergeTreeMetadataCache(const String & dir, size_t size);
+#endif
 
     bool hasTraceCollector() const;
 

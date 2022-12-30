@@ -18,7 +18,7 @@ ColumnPtr FunctionComparison<LessOrEqualsOp, NameLessOrEquals>::executeTupleImpl
 {
     return executeTupleLessGreaterImpl(
         FunctionFactory::instance().get("less", context),
-        FunctionFactory::instance().get("lessOrEquals", context),
+        FunctionFactory::instance().get("less_or_equals", context),
         FunctionFactory::instance().get("and", context),
         FunctionFactory::instance().get("or", context),
         FunctionFactory::instance().get("equals", context),
