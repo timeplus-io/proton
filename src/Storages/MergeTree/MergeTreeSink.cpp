@@ -36,6 +36,24 @@ void MergeTreeSink::onStart()
     storage.delayInsertOrThrowIfNeeded();
 }
 
+void MergeTreeSink::onFinish()
+{
+    finishDelayedChunk();
+}
+
+struct MergeTreeSink::DelayedChunk
+{
+    struct Partition
+    {
+        MergeTreeDataWriter::TemporaryPart temp_part;
+        UInt64 elapsed_ns;
+        String block_dedup_token;
+    };
+
+    std::vector<Partition> partitions;
+};
+
+
 void MergeTreeSink::consume(Chunk chunk)
 {
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
@@ -44,11 +62,16 @@ void MergeTreeSink::consume(Chunk chunk)
 
     auto part_blocks = storage.writer.splitBlockIntoParts(block, max_parts_per_block, metadata_snapshot, context);
 
+    using DelayedPartitions = std::vector<MergeTreeSink::DelayedChunk::Partition>;
+    DelayedPartitions partitions;
+
     /// proton: starts
     Int32 parts = static_cast<Int32>(part_blocks.size());
     Int32 part_index = 0;
 
     const Settings & settings = context->getSettingsRef();
+    size_t streams = 0;
+    bool support_parallel_write = false;
 
     for (auto & current_block : part_blocks)
     {
@@ -70,10 +93,15 @@ void MergeTreeSink::consume(Chunk chunk)
         part_index++;
         /// proton: ends
 
+        UInt64 elapsed_ns = watch.elapsed();
+
         /// If optimize_on_insert setting is true, current_block could become empty after merge
         /// and we didn't create part.
-        if (!temp_part)
+        if (!temp_part.part)
             continue;
+
+        if (!support_parallel_write && temp_part.part->volume->getDisk()->supportParallelWrite())
+            support_parallel_write = true;
 
         if (storage.getDeduplicationLog())
         {
@@ -87,15 +115,59 @@ void MergeTreeSink::consume(Chunk chunk)
             }
         }
 
-        /// Part can be deduplicated, so increment counters and add to part log only if it's really added
-        if (storage.renameTempPartAndAdd(temp_part, context->getCurrentTransaction().get(), &storage.increment, nullptr, storage.getDeduplicationLog(), block_dedup_token))
+        size_t max_insert_delayed_streams_for_parallel_write = DEFAULT_DELAYED_STREAMS_FOR_PARALLEL_WRITE;
+        if (!support_parallel_write || settings.max_insert_delayed_streams_for_parallel_write.changed)
+            max_insert_delayed_streams_for_parallel_write = settings.max_insert_delayed_streams_for_parallel_write;
+
+        /// In case of too much columns/parts in block, flush explicitly.
+        streams += temp_part.streams.size();
+        if (streams > max_insert_delayed_streams_for_parallel_write)
         {
-            PartLog::addNewPart(storage.getContext(), temp_part, watch.elapsed());
+            finishDelayedChunk();
+            delayed_chunk = std::make_unique<MergeTreeSink::DelayedChunk>();
+            delayed_chunk->partitions = std::move(partitions);
+            finishDelayedChunk();
+
+            streams = 0;
+            support_parallel_write = false;
+            partitions = DelayedPartitions{};
+        }
+
+        partitions.emplace_back(MergeTreeSink::DelayedChunk::Partition
+        {
+            .temp_part = std::move(temp_part),
+            .elapsed_ns = elapsed_ns,
+            .block_dedup_token = std::move(block_dedup_token)
+        });
+    }
+
+    finishDelayedChunk();
+    delayed_chunk = std::make_unique<MergeTreeSink::DelayedChunk>();
+    delayed_chunk->partitions = std::move(partitions);
+}
+
+void MergeTreeSink::finishDelayedChunk()
+{
+    if (!delayed_chunk)
+        return;
+
+    for (auto & partition : delayed_chunk->partitions)
+    {
+        partition.temp_part.finalize();
+
+        auto & part = partition.temp_part.part;
+
+        /// Part can be deduplicated, so increment counters and add to part log only if it's really added
+        if (storage.renameTempPartAndAdd(part, context->getCurrentTransaction().get(), &storage.increment, nullptr, storage.getDeduplicationLog(), partition.block_dedup_token))
+        {
+            PartLog::addNewPart(storage.getContext(), part, partition.elapsed_ns);
 
             /// Initiate async merge - it will be done if it's good time for merge and if there are space in 'background_pool'.
             storage.background_operations_assignee.trigger();
         }
     }
+
+    delayed_chunk.reset();
 }
 
 /// proton: starts

@@ -540,6 +540,7 @@ void StreamShard::doCommit(Block block, SequencePair seq_pair, std::shared_ptr<I
                 assignIndexTime(const_cast<ColumnWithTypeAndName *>(moved_block.findByName(ProtonConsts::RESERVED_INDEX_TIME)));
 
                 merge_tree_sink->consume(Chunk(moved_block.getColumns(), moved_block.rows()));
+                merge_tree_sink->onFinish();
                 break;
             }
             catch (...)

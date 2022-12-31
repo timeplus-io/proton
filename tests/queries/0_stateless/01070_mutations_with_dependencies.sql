@@ -1,46 +1,46 @@
--- Tags: no-parallel
-SET query_mode = 'table';
-drop stream if exists ttl;
+-- Tags: no-parallel, no-s3-storage
+
+drop table if exists ttl;
 set mutations_sync = 2;
 
 -- check that ttl info was updated after mutation.
-create stream ttl (i int, a int, s string) engine = MergeTree order by i;
+create table ttl (i Int, a Int, s String) engine = MergeTree order by i;
 insert into ttl values (1, 1, 'a') (2, 1, 'b') (3, 1, 'c') (4, 1, 'd');
 
-alter stream ttl modify ttl a % 2 = 0 ? today() - 10 : to_date('2100-01-01');
-alter stream ttl materialize ttl;
+alter table ttl modify ttl a % 2 = 0 ? today() - 10 : toDate('2100-01-01');
+alter table ttl materialize ttl;
 
 select * from ttl order by i;
-alter stream ttl update a = 0 where i % 2 = 0;
+alter table ttl update a = 0 where i % 2 = 0;
 select * from ttl order by i;
 
-drop stream ttl;
+drop table ttl;
 
 select '===================';
 
 -- check that skip index is updated after column was modified by ttl.
-create stream ttl (i int, a int, s string default 'b' ttl a % 2 = 0 ? today() - 10 : to_date('2100-01-01'),
+create table ttl (i Int, a Int, s String default 'b' ttl a % 2 = 0 ? today() - 10 : toDate('2100-01-01'),
     index ind_s (s) type set(1) granularity 1) engine = MergeTree order by i;
 insert into ttl values (1, 1, 'a') (2, 1, 'a') (3, 1, 'a') (4, 1, 'a');
 
 select count() from ttl where s = 'a';
 
-alter stream ttl update a = 0 where i % 2 = 0;
+alter table ttl update a = 0 where i % 2 = 0;
 
 select count() from ttl where s = 'a';
 select count() from ttl where s = 'b';
 
-drop stream ttl;
+drop table ttl;
 
 -- check only that it doesn't throw exceptions.
-create stream ttl (i int, s string) engine = MergeTree order by i ttl to_date('2000-01-01') TO DISK 'default';
-alter stream ttl materialize ttl;
-drop stream ttl;
+create table ttl (i Int, s String) engine = MergeTree order by i ttl toDate('2000-01-01') TO DISK 'default';
+alter table ttl materialize ttl;
+drop table ttl;
 
-create stream ttl (a int, b int, c int default 42 ttl d, d date, index ind (b * c) type minmax granularity 1)
+create table ttl (a Int, b Int, c Int default 42 ttl d, d Date, index ind (b * c) type minmax granularity 1)
 engine = MergeTree order by a;
 insert into ttl values (1, 2, 3, '2100-01-01');
-alter stream ttl update d = '2000-01-01' where 1;
-alter stream ttl materialize ttl;
+alter table ttl update d = '2000-01-01' where 1;
+alter table ttl materialize ttl;
 select * from ttl;
-drop stream ttl;
+drop table ttl;

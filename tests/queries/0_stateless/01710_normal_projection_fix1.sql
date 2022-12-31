@@ -1,11 +1,11 @@
-SET query_mode = 'table';
-drop stream if exists t;
+-- Tags: no-s3-storage
+drop table if exists t;
 
-create stream t (i int, j int) engine MergeTree order by i;
+create table t (i int, j int) engine MergeTree order by i;
 
 insert into t values (1, 2);
 
-alter stream t add projection x (select * order by j);
+alter table t add projection x (select * order by j);
 
 insert into t values (1, 4);
 
@@ -15,4 +15,4 @@ select i from t prewhere j = 4;
 
 SELECT j = 2, i FROM t PREWHERE j = 2;
 
-drop stream t;
+drop table t;

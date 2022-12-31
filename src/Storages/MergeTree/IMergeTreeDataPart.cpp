@@ -106,7 +106,7 @@ void IMergeTreeDataPart::MinMaxIndex::load(const MergeTreeData & data, const Par
     initialized = true;
 }
 
-void IMergeTreeDataPart::MinMaxIndex::store(
+IMergeTreeDataPart::MinMaxIndex::WrittenFiles IMergeTreeDataPart::MinMaxIndex::store(
     const MergeTreeData & data, const DiskPtr & disk_, const String & part_path, Checksums & out_checksums) const
 {
     auto metadata_snapshot = data.getInMemoryMetadataPtr();
@@ -115,10 +115,10 @@ void IMergeTreeDataPart::MinMaxIndex::store(
     auto minmax_column_names = data.getMinMaxColumnsNames(partition_key);
     auto minmax_column_types = data.getMinMaxColumnsTypes(partition_key);
 
-    store(minmax_column_names, minmax_column_types, disk_, part_path, out_checksums);
+    return store(minmax_column_names, minmax_column_types, disk_, part_path, out_checksums);
 }
 
-void IMergeTreeDataPart::MinMaxIndex::store(
+IMergeTreeDataPart::MinMaxIndex::WrittenFiles IMergeTreeDataPart::MinMaxIndex::store(
     const Names & column_names,
     const DataTypes & data_types,
     const DiskPtr & disk_,
@@ -128,6 +128,8 @@ void IMergeTreeDataPart::MinMaxIndex::store(
     if (!initialized)
         throw Exception("Attempt to store uninitialized MinMax index for part " + part_path + ". This is a bug.",
             ErrorCodes::LOGICAL_ERROR);
+
+    WrittenFiles written_files;
 
     for (size_t i = 0; i < column_names.size(); ++i)
     {
@@ -141,8 +143,11 @@ void IMergeTreeDataPart::MinMaxIndex::store(
         out_hashing.next();
         out_checksums.files[file_name].file_size = out_hashing.count();
         out_checksums.files[file_name].file_hash = out_hashing.getHash();
-        out->finalize();
+        out->preFinalize();
+        written_files.emplace_back(std::move(out));
     }
+
+    return written_files;
 }
 
 void IMergeTreeDataPart::MinMaxIndex::update(const Block & block, const Names & column_names)
@@ -451,6 +456,7 @@ void IMergeTreeDataPart::setColumns(const NamesAndTypesList & new_columns, const
     column_name_to_position.clear();
     column_name_to_position.reserve(new_columns.size());
     size_t pos = 0;
+
     for (const auto & column : columns)
         column_name_to_position.emplace(column.name, pos++);
 
@@ -1471,6 +1477,12 @@ bool IMergeTreeDataPart::assertHasValidVersionMetadata() const
     }
 }
 
+void IMergeTreeDataPart::appendFilesOfColumns(Strings & files)
+{
+    files.push_back("columns.txt");
+    files.push_back(SERIALIZATION_FILE_NAME);
+}
+
 bool IMergeTreeDataPart::shallParticipateInMerges(const StoragePolicyPtr & storage_policy) const
 {
     /// `IMergeTreeDataPart::volume` describes space where current part belongs, and holds
@@ -1491,40 +1503,6 @@ UInt64 IMergeTreeDataPart::calculateTotalSizeOnDisk(const DiskPtr & disk_, const
     for (const auto & file : files)
         res += calculateTotalSizeOnDisk(disk_, fs::path(from) / file);
     return res;
-}
-
-
-void IMergeTreeDataPart::cleanupOldName(const String & old_part_name) const
-{
-    if (name == old_part_name)
-        return;
-
-    storage.unlockSharedData(*this, old_part_name);
-}
-
-std::optional<bool> IMergeTreeDataPart::keepSharedDataInDecoupledStorage() const
-{
-    /// NOTE: It's needed for zero-copy replication
-    if (force_keep_shared_data)
-        return true;
-
-    /// TODO Unlocking in try-catch and ignoring exception look ugly
-    try
-    {
-        return !storage.unlockSharedData(*this);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__, "There is a problem with deleting part " + name + " from filesystem");
-    }
-    return {};
-}
-
-
-void IMergeTreeDataPart::appendFilesOfColumns(Strings & files)
-{
-    files.push_back("columns.txt");
-    files.push_back(SERIALIZATION_FILE_NAME);
 }
 
 void IMergeTreeDataPart::renameTo(const String & new_relative_path, bool remove_new_dir_if_exists) const
@@ -1579,6 +1557,23 @@ catch (...)
     }
     else
         throw;
+}
+
+void IMergeTreeDataPart::cleanupOldName(const String & old_part_name) const
+{
+    if (name == old_part_name)
+        return;
+
+    storage.unlockSharedData(*this, old_part_name);
+}
+
+std::optional<bool> IMergeTreeDataPart::keepSharedDataInDecoupledStorage() const
+{
+    /// NOTE: It's needed for zero-copy replication
+    if (force_keep_shared_data)
+        return true;
+
+    return !storage.unlockSharedData(*this);
 }
 
 void IMergeTreeDataPart::initializePartMetadataManager()
@@ -1685,6 +1680,7 @@ void IMergeTreeDataPart::remove() const
         try
         {
             /// Remove each expected file in directory, then remove directory itself.
+            IDisk::RemoveBatchRequest request;
 
     #if !defined(__clang__)
     #    pragma GCC diagnostic push
@@ -1693,20 +1689,20 @@ void IMergeTreeDataPart::remove() const
             for (const auto & [file, _] : checksums.files)
             {
                 if (projection_directories.find(file) == projection_directories.end())
-                    disk->removeSharedFile(fs::path(to) / file, *keep_shared_data);
+                    request.emplace_back(fs::path(to) / file);
             }
     #if !defined(__clang__)
     #    pragma GCC diagnostic pop
     #endif
 
-            for (const auto & file : {"checksums.txt", "columns.txt"})
-                disk->removeSharedFile(fs::path(to) / file, *keep_shared_data);
+            for (const auto & file : {"checksums.txt", "columns.txt", "sn.txt"})
+                request.emplace_back(fs::path(to) / file);
 
-            disk->removeSharedFileIfExists(fs::path(to) / DEFAULT_COMPRESSION_CODEC_FILE_NAME, *keep_shared_data);
-            disk->removeSharedFileIfExists(fs::path(to) / DELETE_ON_DESTROY_MARKER_FILE_NAME, *keep_shared_data);
-            disk->removeSharedFileIfExists(fs::path(to) / DELETE_ON_DESTROY_MARKER_FILE_NAME, *keep_shared_data);
-            disk->removeSharedFileIfExists(fs::path(to) / TXN_VERSION_METADATA_FILE_NAME, *keep_shared_data);
+            request.emplace_back(fs::path(to) / DEFAULT_COMPRESSION_CODEC_FILE_NAME, true);
+            request.emplace_back(fs::path(to) / DELETE_ON_DESTROY_MARKER_FILE_NAME, true);
+            request.emplace_back(fs::path(to) / TXN_VERSION_METADATA_FILE_NAME, true);
 
+            disk->removeSharedFiles(request, *keep_shared_data);
             disk->removeDirectory(to);
         }
         catch (...)
@@ -1743,22 +1739,24 @@ void IMergeTreeDataPart::projectionRemove(const String & parent_to, bool keep_sh
         try
         {
             /// Remove each expected file in directory, then remove directory itself.
+            IDisk::RemoveBatchRequest request;
 
     #if !defined(__clang__)
     #    pragma GCC diagnostic push
     #    pragma GCC diagnostic ignored "-Wunused-variable"
     #endif
             for (const auto & [file, _] : checksums.files)
-                disk->removeSharedFile(fs::path(to) / file, keep_shared_data);
+                request.emplace_back(fs::path(to) / file);
     #if !defined(__clang__)
     #    pragma GCC diagnostic pop
     #endif
 
-            for (const auto & file : {"checksums.txt", "columns.txt"})
-                disk->removeSharedFile(fs::path(to) / file, keep_shared_data);
-            disk->removeSharedFileIfExists(fs::path(to) / DEFAULT_COMPRESSION_CODEC_FILE_NAME, keep_shared_data);
-            disk->removeSharedFileIfExists(fs::path(to) / DELETE_ON_DESTROY_MARKER_FILE_NAME, keep_shared_data);
+            for (const auto & file : {"checksums.txt", "columns.txt", "sn.txt"})
+                request.emplace_back(fs::path(to) / file);
+            request.emplace_back(fs::path(to) / DEFAULT_COMPRESSION_CODEC_FILE_NAME, true);
+            request.emplace_back(fs::path(to) / DELETE_ON_DESTROY_MARKER_FILE_NAME, true);
 
+            disk->removeSharedFiles(request, keep_shared_data);
             disk->removeSharedRecursive(to, keep_shared_data);
         }
         catch (...)
@@ -2043,18 +2041,10 @@ String IMergeTreeDataPart::getUniqueId() const
     if (!disk->supportZeroCopyReplication())
         throw Exception(fmt::format("Disk {} doesn't support zero-copy replication", disk->getName()), ErrorCodes::LOGICAL_ERROR);
 
-    String id = disk->getUniqueId(fs::path(getFullRelativePath()) / "checksums.txt");
-    return id;
+    return disk->getUniqueId(fs::path(getFullRelativePath()) / FILE_FOR_REFERENCES_CHECK);
 }
 
-
-UInt32 IMergeTreeDataPart::getNumberOfRefereneces() const
-{
-    return volume->getDisk()->getRefCount(fs::path(getFullRelativePath()) / "checksums.txt");
-}
-
-
-String IMergeTreeDataPart::getZeroLevelPartBlockID(const std::string_view token) const
+String IMergeTreeDataPart::getZeroLevelPartBlockID(std::string_view token) const
 {
     if (info.level != 0)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Trying to get block id for non zero level part {}", name);

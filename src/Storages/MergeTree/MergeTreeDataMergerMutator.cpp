@@ -351,7 +351,6 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMerge(
 
 SelectPartsDecision MergeTreeDataMergerMutator::selectAllPartsToMergeWithinPartition(
     FutureMergedMutatedPartPtr future_part,
-    UInt64 & available_disk_space,
     const AllowedMergingPredicate & can_merge,
     const String & partition_id,
     bool final,
@@ -404,6 +403,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectAllPartsToMergeWithinParti
         ++it;
     }
 
+    auto available_disk_space = data.getStoragePolicy()->getMaxUnreservedFreeSpace();
     /// Enough disk space to cover the new merge with a margin.
     auto required_disk_space = sum_bytes * DISK_USAGE_COEFFICIENT_TO_SELECT;
     if (available_disk_space <= required_disk_space)
@@ -431,7 +431,6 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectAllPartsToMergeWithinParti
     LOG_DEBUG(log, "Selected {} parts from {} to {}", parts.size(), parts.front()->name, parts.back()->name);
     future_part->assign(std::move(parts));
 
-    available_disk_space -= required_disk_space;
     return SelectPartsDecision::SELECTED;
 }
 

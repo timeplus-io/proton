@@ -315,8 +315,10 @@ public:
 
         void load(const MergeTreeData & data, const PartMetadataManagerPtr & manager);
 
-        void store(const MergeTreeData & data, const DiskPtr & disk_, const String & part_path, Checksums & checksums) const;
-        void store(const Names & column_names, const DataTypes & data_types, const DiskPtr & disk_, const String & part_path, Checksums & checksums) const;
+        using WrittenFiles = std::vector<std::unique_ptr<WriteBufferFromFileBase>>;
+
+        [[nodiscard]] WrittenFiles store(const MergeTreeData & data, const DiskPtr & disk_, const String & part_path, Checksums & checksums) const;
+        [[nodiscard]] WrittenFiles store(const Names & column_names, const DataTypes & data_types, const DiskPtr & disk_, const String & part_path, Checksums & checksums) const;
 
         void update(const Block & block, const Names & column_names);
         void merge(const MinMaxIndex & other);
@@ -428,6 +430,19 @@ public:
     static inline constexpr auto SERIALIZATION_FILE_NAME = "serialization.json";
 
     static inline constexpr auto TXN_VERSION_METADATA_FILE_NAME = "txn_version.txt";
+
+    /// One of part files which is used to check how many references (I'd like
+    /// to say hardlinks, but it will confuse even more) we have for the part
+    /// for zero copy replication. Sadly it's very complex.
+    ///
+    /// NOTE: it's not a random "metadata" file for part like 'columns.txt'. If
+    /// two relative parts (for example all_1_1_0 and all_1_1_0_100) has equal
+    /// checksums.txt it means that one part was obtained by FREEZE operation or
+    /// it was mutation without any change for source part. In this case we
+    /// really don't need to remove data from remote FS and need only decrement
+    /// reference counter locally.
+    static inline constexpr auto FILE_FOR_REFERENCES_CHECK = "checksums.txt";
+
     /// Checks that all TTLs (table min/max, column ttls, so on) for part
     /// calculated. Part without calculated TTL may exist if TTL was added after
     /// part creation (using alter query with materialize_ttl setting).
@@ -457,10 +472,6 @@ public:
 
     /// Moar hardening: this method is supposed to be used for debug assertions
     bool assertHasValidVersionMetadata() const;
-
-    /// Return hardlink count for part.
-    /// Required for keep data on remote FS when part has shadow copies.
-    UInt32 getNumberOfRefereneces() const;
 
     /// Get checksums of metadata file in part directory
     IMergeTreeDataPart::uint128 getActualChecksumByFile(const String & file_name) const;
@@ -512,6 +523,7 @@ protected:
     String getRelativePathForDetachedPart(const String & prefix) const;
 
     std::optional<bool> keepSharedDataInDecoupledStorage() const;
+
     void initializePartMetadataManager();
 
 

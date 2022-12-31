@@ -41,6 +41,9 @@
 namespace DB
 {
 
+/// Number of streams is not number parts, but number or parts*files, hence 1000.
+const size_t DEFAULT_DELAYED_STREAMS_FOR_PARALLEL_WRITE = 1000;
+
 class AlterCommands;
 class MergeTreePartsMover;
 class MergeTreeDataMergerMutator;
@@ -943,7 +946,7 @@ public:
 
     /// Lock part in zookeeper for shared data in several nodes
     /// Overridden in StorageReplicatedMergeTree
-    virtual void lockSharedData(const IMergeTreeDataPart &) const {}
+    virtual void lockSharedData(const IMergeTreeDataPart &, bool = false) const {} /// NOLINT
 
     /// Unlock shared data part in zookeeper
     /// Overridden in StorageReplicatedMergeTree
@@ -987,7 +990,6 @@ public:
     /// proton: ends
 
 protected:
-
     friend class IMergeTreeDataPart;
     friend class MergeTreeDataMergerMutator;
     friend struct ReplicatedMergeTreeTableMetadata;
@@ -1292,6 +1294,13 @@ private:
         MutableDataPartsVector & parts_from_wal,
         DataPartsLock & part_lock);
 
+    void resetObjectColumnsFromActiveParts(const DataPartsLock & lock);
+    void updateObjectColumns(const DataPartPtr & part, const DataPartsLock & lock);
+
+    /// Create zero-copy exclusive lock for part and disk. Useful for coordination of
+    /// distributed operations which can lead to data duplication. Implemented only in ReplicatedMergeTree.
+    /// virtual std::optional<ZeroCopyLock> tryCreateZeroCopyExclusiveLock(const String &, const DiskPtr &) { return std::nullopt; }
+
     /// proton: starts
     std::atomic<Int64> committed_sn = -1;
     std::atomic<Int64> inmemory_committed_sn = -1;
@@ -1300,9 +1309,6 @@ private:
 
     Int32 shard_num = 0;
     /// proton: ends
-
-    void resetObjectColumnsFromActiveParts(const DataPartsLock & lock);
-    void updateObjectColumns(const DataPartPtr & part, const DataPartsLock & lock);
 };
 
 /// RAII struct to record big parts that are submerging or emerging.

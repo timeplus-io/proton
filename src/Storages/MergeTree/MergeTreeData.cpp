@@ -270,6 +270,14 @@ MergeTreeData::MergeTreeData(
     /// Creating directories, if not exist.
     for (const auto & disk : getDisks())
     {
+        /// TODO: implement it the main issue in DataPartsExchange (not able to send directories metadata)
+        if (supportsReplication() && settings->allow_remote_fs_zero_copy_replication
+            && disk->supportZeroCopyReplication() && metadata_.hasProjections())
+        {
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Projections are not supported when zero-copy replication is enabled for table. "
+                            "Currently disk '{}' supports zero copy replication", disk->getName());
+        }
+
         if (disk->isBroken())
             continue;
 
@@ -795,16 +803,16 @@ void MergeTreeData::MergingParams::check(const StorageInMemoryMetadata & metadat
         }
     }
 
+    /// proton : starts. Require version column
     if (mode == MergingParams::VersionedKV)
-        /// proton : starts. Require version column
         check_version_column(false, "KV");
-        /// proton : ends.
 
     if (mode == MergingParams::ChangelogKV)
     {
         check_sign_column(false, "Changelog");
         check_version_column(false, "Changelog");
     }
+    /// proton : ends.
 
     /// TODO Checks for Graphite mode.
 }
@@ -2183,11 +2191,25 @@ void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, Context
                 "ALTER ADD INDEX is not supported for tables with the old syntax",
                 ErrorCodes::BAD_ARGUMENTS);
         }
-        if (command.type == AlterCommand::ADD_PROJECTION && !is_custom_partitioned)
+        if (command.type == AlterCommand::ADD_PROJECTION)
         {
-            throw Exception(
-                "ALTER ADD PROJECTION is not supported for tables with the old syntax",
-                ErrorCodes::BAD_ARGUMENTS);
+            if (!is_custom_partitioned)
+                throw Exception(
+                    "ALTER ADD PROJECTION is not supported for tables with the old syntax",
+                    ErrorCodes::BAD_ARGUMENTS);
+
+            /// TODO: implement it the main issue in DataPartsExchange (not able to send directories metadata)
+            if (supportsReplication() && getSettings()->allow_remote_fs_zero_copy_replication)
+            {
+                auto storage_policy = getStoragePolicy();
+                auto disks = storage_policy->getDisks();
+                for (const auto & disk : disks)
+                {
+                    if (disk->supportZeroCopyReplication())
+                        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "ALTER ADD PROJECTION is not supported when zero-copy replication is enabled for table. "
+                                        "Currently disk '{}' supports zero copy replication", disk->getName());
+                }
+            }
         }
         if (command.type == AlterCommand::RENAME_COLUMN)
         {
@@ -5987,8 +6009,44 @@ bool MergeTreeData::moveParts(const CurrentlyMovingPartsTaggerPtr & moving_tagge
 
         try
         {
-            cloned_part = parts_mover.clonePart(moving_part);
-            parts_mover.swapClonedPart(cloned_part);
+            /// If zero-copy replication enabled than replicas shouldn't try to
+            /// move parts to another disk simultaneously. For this purpose we
+            /// use shared lock across replicas. NOTE: it's not 100% reliable,
+            /// because we are not checking lock while finishing part move.
+            /// However it's not dangerous at all, we will just have very rare
+            /// copies of some part.
+            ///
+            /// FIXME: this code is related to Replicated merge tree, and not
+            /// common for ordinary merge tree. So it's a bad design and should
+            /// be fixed.
+            auto disk = moving_part.reserved_space->getDisk();
+            if (supportsReplication() && disk->supportZeroCopyReplication() && settings->allow_remote_fs_zero_copy_replication)
+            {
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Zero copy replication is not implemented");
+#if 0
+                /// If we acuqired lock than let's try to move. After one
+                /// replica will actually move the part from disk to some
+                /// zero-copy storage other replicas will just fetch
+                /// metainformation.
+                if (auto lock = tryCreateZeroCopyExclusiveLock(moving_part.part->name, disk); lock)
+                {
+                    cloned_part = parts_mover.clonePart(moving_part);
+                    parts_mover.swapClonedPart(cloned_part);
+                }
+                else
+                {
+                    /// Move will be retried but with backoff.
+                    LOG_DEBUG(log, "Move of part {} postponed, because zero copy mode enabled and someone other moving this part right now", moving_part.part->name);
+                    result = false;
+                    continue;
+                }
+#endif
+            }
+            else /// Ordinary move as it should be
+            {
+                cloned_part = parts_mover.clonePart(moving_part);
+                parts_mover.swapClonedPart(cloned_part);
+            }
             write_part_log({});
         }
         catch (...)

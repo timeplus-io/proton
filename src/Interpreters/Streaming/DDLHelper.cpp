@@ -180,7 +180,10 @@ void checkAndPrepareColumns(ASTCreateQuery & create)
         {
             if (ProtonConsts::RESERVED_EVENT_TIME == column.name)
             {
-                has_event_time = true;
+                /// Alias
+                if (!column.type)
+                    throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Reserved column {} can't be alias", column.name);
+
                 auto type_name = tryGetFunctionName(column.type);
                 if (!type_name || *type_name != "datetime64")
                     throw Exception(
@@ -188,21 +191,32 @@ void checkAndPrepareColumns(ASTCreateQuery & create)
                         "Column {} is reserved, expected type 'datetime64' but actual type '{}'.",
                         ProtonConsts::RESERVED_EVENT_TIME,
                         column.type->getID());
+
+                has_event_time = true;
             }
             else if (ProtonConsts::RESERVED_INDEX_TIME == column.name)
             {
+                /// Alias
+                if (!column.type)
+                    throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Reserved column {} can't be alias", column.name);
+
                 has_index_time = true;
                 auto type_name = tryGetFunctionName(column.type);
                 if (!type_name || *type_name != "datetime64")
                     throw Exception(
                         ErrorCodes::ILLEGAL_COLUMN,
                         "Column {} is reserved, expected type 'datetime64' but actual type '{}'.",
-                        ProtonConsts::RESERVED_INDEX_TIME,
+                        column.name,
                         column.type->getID());
+
+                has_index_time = true;
             }
             else if (ProtonConsts::RESERVED_EVENT_SEQUENCE_ID == column.name)
             {
-                has_sequence_id = true;
+                /// Alias
+                if (!column.type)
+                    throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Reserved column {} can't be alias", column.name);
+
                 auto type_name = tryGetFunctionName(column.type);
                 if (!type_name || *type_name != "int64")
                     throw Exception(
@@ -210,10 +224,15 @@ void checkAndPrepareColumns(ASTCreateQuery & create)
                         "Column {} is reserved, expected type 'int64 ' but actual type '{}'.",
                         ProtonConsts::RESERVED_EVENT_SEQUENCE_ID,
                         column.type->getID());
+
+                has_sequence_id = true;
             }
             else if (ProtonConsts::RESERVED_DELTA_FLAG == column.name)
             {
-                has_delta_flag = true;
+                /// Alias
+                if (!column.type)
+                    throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Reserved column {} can't be alias", column.name);
+
                 auto type_name = tryGetFunctionName(column.type);
                 if (!type_name || *type_name != "int8")
                     throw Exception(
@@ -221,6 +240,8 @@ void checkAndPrepareColumns(ASTCreateQuery & create)
                         "Column {} is reserved, expected type 'int8' but actual type '{}'.",
                         ProtonConsts::RESERVED_DELTA_FLAG,
                         column.type->getID());
+
+                has_delta_flag = true;
             }
             else
                 throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Column {} is reserved, should not used in create query.", column.name);

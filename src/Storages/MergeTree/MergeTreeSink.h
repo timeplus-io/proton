@@ -1,10 +1,11 @@
 #pragma once
 
 #include <Processors/Sinks/SinkToStorage.h>
-#include "SequenceInfo.h"
-
 #include <Storages/StorageInMemoryMetadata.h>
 
+/// proton : starts
+#include "SequenceInfo.h"
+/// proton : ends
 
 namespace DB
 {
@@ -28,6 +29,7 @@ public:
     String getName() const override { return "MergeTreeSink"; }
     void consume(Chunk chunk) override;
     void onStart() override;
+    void onFinish() override;
 
     /// proton: starts
     void setSequenceInfo(const SequenceInfoPtr & seq_info_) { seq_info = seq_info_; }
@@ -44,6 +46,12 @@ private:
     ContextPtr context;
     StorageSnapshotPtr storage_snapshot;
     uint64_t chunk_dedup_seqnum = 0; /// input chunk ordinal number in case of dedup token
+
+    /// We can delay processing for previous chunk and start writing a new one.
+    struct DelayedChunk;
+    std::unique_ptr<DelayedChunk> delayed_chunk;
+
+    void finishDelayedChunk();
 
     /// proton: starts
     SequenceInfoPtr seq_info;

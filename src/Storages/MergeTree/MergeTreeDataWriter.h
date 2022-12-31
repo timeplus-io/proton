@@ -10,7 +10,11 @@
 #include <Interpreters/sortBlock.h>
 
 #include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/MergedBlockOutputStream.h>
+
+/// proton : starts
 #include <Storages/MergeTree/SequenceInfo.h>
+/// proton : ends
 
 
 namespace DB
@@ -44,17 +48,33 @@ public:
 
     static void deduceTypesOfObjectColumns(const StorageSnapshotPtr & storage_snapshot, Block & block);
 
+    /// This structure contains not completely written temporary part.
+    /// Some writes may happen asynchronously, e.g. for blob storages.
+    /// You should call finalize() to wait until all data is written.
+
+    struct TemporaryPart
+    {
+        MergeTreeData::MutableDataPartPtr part;
+
+        struct Stream
+        {
+            std::unique_ptr<MergedBlockOutputStream> stream;
+            MergedBlockOutputStream::Finalizer finalizer;
+        };
+
+        std::vector<Stream> streams;
+
+        void finalize();
+    };
+
     /** All rows must correspond to same partition.
       * Returns part with unique name starting with 'tmp_', yet not added to MergeTreeData.
       * If seq_info is not null, commit the sequence info as well. Added by proton
       */
-    MergeTreeData::MutableDataPartPtr writeTempPart(BlockWithPartition & block, const StorageMetadataPtr & metadata_snapshot, const SequenceInfoPtr & seq_info, ContextPtr context);
-
-    MergeTreeData::MutableDataPartPtr
-    writeTempPart(BlockWithPartition & block, const StorageMetadataPtr & metadata_snapshot, ContextPtr context);
+    TemporaryPart writeTempPart(BlockWithPartition & block, const StorageMetadataPtr & metadata_snapshot, const SequenceInfoPtr & seq_info, ContextPtr context);
 
     /// For insertion.
-    static MergeTreeData::MutableDataPartPtr writeProjectionPart(
+    static TemporaryPart writeProjectionPart(
         MergeTreeData & data,
         Poco::Logger * log,
         Block block,
@@ -62,7 +82,7 @@ public:
         const IMergeTreeDataPart * parent_part);
 
     /// For mutation: MATERIALIZE PROJECTION.
-    static MergeTreeData::MutableDataPartPtr writeTempProjectionPart(
+    static TemporaryPart writeTempProjectionPart(
         MergeTreeData & data,
         Poco::Logger * log,
         Block block,
@@ -71,7 +91,7 @@ public:
         size_t block_num);
 
     /// For WriteAheadLog AddPart.
-    static MergeTreeData::MutableDataPartPtr writeInMemoryProjectionPart(
+    static TemporaryPart writeInMemoryProjectionPart(
         const MergeTreeData & data,
         Poco::Logger * log,
         Block block,
@@ -86,7 +106,7 @@ public:
         const MergeTreeData::MergingParams & merging_params);
 
 private:
-    static MergeTreeData::MutableDataPartPtr writeProjectionPartImpl(
+    static TemporaryPart writeProjectionPartImpl(
         const String & part_name,
         MergeTreeDataPartType part_type,
         const String & relative_path,

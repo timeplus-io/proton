@@ -11,11 +11,11 @@ namespace DB
 template <typename T>
 WriteIndirectBufferFromRemoteFS<T>::WriteIndirectBufferFromRemoteFS(
     std::unique_ptr<T> impl_,
-    IDiskRemote::Metadata metadata_,
-    const String & remote_fs_path_)
+    CreateMetadataCallback && create_callback_,
+    const String & metadata_file_path_)
     : WriteBufferFromFileDecorator(std::move(impl_))
-    , metadata(std::move(metadata_))
-    , remote_fs_path(remote_fs_path_)
+    , create_metadata_callback(std::move(create_callback_))
+    , metadata_file_path(metadata_file_path_)
 {
 }
 
@@ -38,19 +38,8 @@ template <typename T>
 void WriteIndirectBufferFromRemoteFS<T>::finalizeImpl()
 {
     WriteBufferFromFileDecorator::finalizeImpl();
-
-    metadata.addObject(remote_fs_path, count());
-    metadata.save();
+    create_metadata_callback(count());
 }
-
-
-template <typename T>
-void WriteIndirectBufferFromRemoteFS<T>::sync()
-{
-    if (finalized)
-        metadata.save(true);
-}
-
 
 #if USE_AWS_S3
 template

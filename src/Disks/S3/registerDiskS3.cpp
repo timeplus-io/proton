@@ -174,8 +174,12 @@ void registerDiskS3(DiskFactory & factory)
                       ContextPtr context,
                       const DisksMap & /*map*/) -> DiskPtr {
         S3::URI uri(Poco::URI(config.getString(config_prefix + ".endpoint")));
+
+        if (uri.key.empty())
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "No key in S3 uri: {}", uri.uri.toString());
+
         if (uri.key.back() != '/')
-            throw Exception("S3 path must ends with '/', but '" + uri.key + "' doesn't.", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "S3 path must ends with '/', but '{}' doesn't.", uri.key);
 
         auto [metadata_path, metadata_disk] = prepareForLocalMetadata(name, config, config_prefix, context);
 
@@ -198,7 +202,16 @@ void registerDiskS3(DiskFactory & factory)
 
         s3disk->startup();
 
-        if (config.getBool(config_prefix + ".cache_enabled", true))
+
+#ifdef NDEBUG
+        bool use_cache = true;
+#else
+        /// Current S3 cache implementation lead to allocations in destructor of
+        /// read buffer.
+        bool use_cache = false;
+#endif
+
+        if (config.getBool(config_prefix + ".cache_enabled", use_cache))
         {
             String cache_path = config.getString(config_prefix + ".cache_path", context->getPath() + "disks/" + name + "/cache/");
             s3disk = wrapWithCache(s3disk, "s3-cache", cache_path, metadata_path);

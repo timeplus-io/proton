@@ -1,16 +1,17 @@
+-- Tags: no-s3-storage
 select * from system.settings where name = 'send_timeout';
 select * from system.merge_tree_settings order by length(description) limit 1;
 
 with [
     'Seconds',
     'Bool',
-    'int64',
-    'string',
+    'Int64',
+    'String',
     'Char',
     'LogsLevel',
     'URI',
     'Float',
-    'uint64',
+    'UInt64',
     'MaxThreads',
     'Milliseconds',
     'JoinStrictness',
@@ -21,14 +22,14 @@ with [
     'OverflowModeGroupBy',
     'DateTimeInputFormat',
     'DistributedProductMode'
-] as types select has_all( array_distinct(group_array(type)), types) from system.settings;
+] as types select hasAll(arrayDistinct(groupArray(type)), types) from system.settings;
 
 with [
     'Seconds',
     'Bool',
-    'int64',
-    'string',
+    'Int64',
+    'String',
     'Float',
-    'uint64',
+    'UInt64',
     'MaxThreads'
-] as types select has_all( array_distinct(group_array(type)), types) from system.merge_tree_settings;
+] as types select hasAll(arrayDistinct(groupArray(type)), types) from system.merge_tree_settings;
