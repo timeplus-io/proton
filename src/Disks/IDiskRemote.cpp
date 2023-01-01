@@ -12,6 +12,7 @@
 #include <boost/algorithm/string.hpp>
 #include <Common/filesystemHelpers.h>
 #include <Disks/IO/ThreadPoolRemoteFSReader.h>
+#include <Common/FileCache.h>
 
 
 namespace DB
@@ -25,6 +26,7 @@ namespace ErrorCodes
     extern const int PATH_ACCESS_DENIED;;
     extern const int FILE_DOESNT_EXIST;
     extern const int CANNOT_DELETE_DIRECTORY;
+    extern const int MEMORY_LIMIT_EXCEEDED;
 }
 
 
@@ -135,6 +137,9 @@ void IDiskRemote::Metadata::load()
     catch (Exception & e)
     {
         if (e.code() == ErrorCodes::UNKNOWN_FORMAT)
+            throw;
+
+        if (e.code() == ErrorCodes::MEMORY_LIMIT_EXCEEDED)
             throw;
 
         throw Exception(ErrorCodes::UNKNOWN_FORMAT, "Failed to read metadata file");
@@ -277,6 +282,11 @@ void IDiskRemote::removeMetadata(const String & path, RemoteFSPathKeeperPtr fs_p
                 {
                     fs_paths_keeper->addPath(remote_fs_root_path + remote_fs_object_path);
 
+                    if (cache)
+                    {
+                        auto key = cache->hash(remote_fs_object_path);
+                        cache->remove(key);
+                    }
                 }
 
                 return false;
@@ -373,6 +383,7 @@ IDiskRemote::IDiskRemote(
     const String & name_,
     const String & remote_fs_root_path_,
     DiskPtr metadata_disk_,
+    FileCachePtr cache_,
     const String & log_name_,
     size_t thread_pool_size)
     : IDisk(std::make_unique<AsyncExecutor>(log_name_, thread_pool_size))
@@ -380,6 +391,7 @@ IDiskRemote::IDiskRemote(
     , name(name_)
     , remote_fs_root_path(remote_fs_root_path_)
     , metadata_disk(metadata_disk_)
+    , cache(cache_)
 {
 }
 

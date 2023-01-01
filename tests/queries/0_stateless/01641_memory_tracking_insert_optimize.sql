@@ -3,6 +3,11 @@
 SET query_mode = 'table';
 drop stream if exists data_01641;
 
+-- Disable cache for s3 storage tests because it increases memory usage.
+set enable_filesystem_cache=0;
+set remote_filesystem_read_method='read';
+
+
 create stream data_01641 (key int, value string) engine=MergeTree order by (key, repeat(value, 40)) settings old_parts_lifetime=0, min_bytes_for_wide_part=0;
 
 SET max_block_size = 1000, min_insert_block_size_rows = 0, min_insert_block_size_bytes = 0;

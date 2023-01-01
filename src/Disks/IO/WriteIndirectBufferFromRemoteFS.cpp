@@ -8,9 +8,8 @@
 namespace DB
 {
 
-template <typename T>
-WriteIndirectBufferFromRemoteFS<T>::WriteIndirectBufferFromRemoteFS(
-    std::unique_ptr<T> impl_,
+WriteIndirectBufferFromRemoteFS::WriteIndirectBufferFromRemoteFS(
+    std::unique_ptr<WriteBuffer> impl_,
     CreateMetadataCallback && create_callback_,
     const String & metadata_file_path_)
     : WriteBufferFromFileDecorator(std::move(impl_))
@@ -20,8 +19,7 @@ WriteIndirectBufferFromRemoteFS<T>::WriteIndirectBufferFromRemoteFS(
 }
 
 
-template <typename T>
-WriteIndirectBufferFromRemoteFS<T>::~WriteIndirectBufferFromRemoteFS()
+WriteIndirectBufferFromRemoteFS::~WriteIndirectBufferFromRemoteFS()
 {
     try
     {
@@ -34,24 +32,11 @@ WriteIndirectBufferFromRemoteFS<T>::~WriteIndirectBufferFromRemoteFS()
 }
 
 
-template <typename T>
-void WriteIndirectBufferFromRemoteFS<T>::finalizeImpl()
+void WriteIndirectBufferFromRemoteFS::finalizeImpl()
 {
     WriteBufferFromFileDecorator::finalizeImpl();
     create_metadata_callback(count());
 }
 
-#if USE_AWS_S3
-template
-class WriteIndirectBufferFromRemoteFS<WriteBufferFromS3>;
-#endif
-
-#if USE_AZURE_BLOB_STORAGE
-template
-class WriteIndirectBufferFromRemoteFS<WriteBufferFromAzureBlobStorage>;
-#endif
-
-template
-class WriteIndirectBufferFromRemoteFS<WriteBufferFromHTTP>;
 
 }
