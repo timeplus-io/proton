@@ -127,6 +127,20 @@ SeekableReadBufferPtr CachedReadBufferFromRemoteFS::getReadBufferForFileSegment(
 
     auto download_state = file_segment->state();
 
+    if (settings.read_from_filesystem_cache_if_exists_otherwise_bypass_cache)
+    {
+        if (download_state == FileSegment::State::DOWNLOADED)
+        {
+            read_type = ReadType::CACHED;
+            return getCacheReadBuffer(range.left);
+        }
+        else
+        {
+            read_type = ReadType::REMOTE_FS_READ_BYPASS_CACHE;
+            return getRemoteFSReadBuffer(file_segment, read_type);
+        }
+    }
+
     while (true)
     {
         switch (download_state)

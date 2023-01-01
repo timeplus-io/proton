@@ -19,6 +19,7 @@
 #include "Disks/DiskRestartProxy.h"
 #include "Disks/DiskLocal.h"
 #include "Disks/RemoteDisksCommon.h"
+#include <Common/FileCacheFactory.h>
 
 namespace DB
 {
@@ -155,6 +156,8 @@ std::unique_ptr<DiskS3Settings> getSettings(const Poco::Util::AbstractConfigurat
         getClient(config, config_prefix, context),
         config.getUInt64(config_prefix + ".s3_max_single_read_retries", context->getSettingsRef().s3_max_single_read_retries),
         config.getUInt64(config_prefix + ".s3_min_upload_part_size", context->getSettingsRef().s3_min_upload_part_size),
+        config.getUInt64(config_prefix + ".s3_upload_part_size_multiply_factor", context->getSettingsRef().s3_upload_part_size_multiply_factor),
+        config.getUInt64(config_prefix + ".s3_upload_part_size_multiply_parts_count_threshold", context->getSettingsRef().s3_upload_part_size_multiply_parts_count_threshold),
         config.getUInt64(config_prefix + ".s3_max_single_part_upload_size", context->getSettingsRef().s3_max_single_part_upload_size),
         config.getUInt64(config_prefix + ".min_bytes_for_seek", 1024 * 1024),
         config.getBool(config_prefix + ".send_metadata", false),

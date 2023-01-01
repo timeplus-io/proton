@@ -32,9 +32,6 @@
 #include <Storages/System/StorageSystemProcesses.h>
 #include <Storages/System/StorageSystemDistributionQueue.h>
 #include <Storages/System/StorageSystemSettings.h>
-/// proton: starts.
-#include <Storages/Streaming/StorageSystemStreamSettings.h>
-/// proton: ends.
 #include <Storages/System/StorageSystemTableEngines.h>
 #include <Storages/System/StorageSystemTableFunctions.h>
 #include <Storages/System/StorageSystemTables.h>
@@ -62,6 +59,12 @@
 #include <Storages/System/StorageSystemUserDirectories.h>
 #include <Storages/System/StorageSystemPrivileges.h>
 #include <Storages/System/StorageSystemAsynchronousInserts.h>
+#include <Storages/System/StorageSystemFilesystemCache.h>
+#include <Storages/System/StorageSystemRemoteDataPaths.h>
+
+/// proton: starts.
+#include <Storages/Streaming/StorageSystemStreamSettings.h>
+/// proton: ends.
 
 #ifdef OS_LINUX
 #include <Storages/System/StorageSystemStackTrace.h>
@@ -150,6 +153,8 @@ void attachSystemTablesServer(ContextPtr context, IDatabase & system_database)
     attach<StorageSystemGraphite>(context, system_database, "graphite_retentions");
     attach<StorageSystemMacros>(context, system_database, "macros");
     attach<StorageSystemAsynchronousInserts>(context, system_database, "asynchronous_inserts");
+    attach<StorageSystemFilesystemCache>(context, system_database, "filesystem_cache");
+    attach<StorageSystemRemoteDataPaths>(context, system_database, "remote_data_paths");
 }
 
 void attachSystemTablesAsync(ContextPtr context, IDatabase & system_database, AsynchronousMetrics & async_metrics)

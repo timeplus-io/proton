@@ -22,7 +22,7 @@ class WriteBufferFromFileBase;
 class DiskMemory : public IDisk
 {
 public:
-    DiskMemory(const String & name_) : name(name_), disk_path("memory://" + name_ + '/') {}
+    explicit DiskMemory(const String & name_) : name(name_), disk_path("memory://" + name_ + '/') {}
 
     const String & getName() const override { return name; }
 
@@ -71,7 +71,8 @@ public:
     std::unique_ptr<WriteBufferFromFileBase> writeFile(
         const String & path,
         size_t buf_size,
-        WriteMode mode) override;
+        WriteMode mode,
+        const WriteSettings & settings) override;
 
     void removeFile(const String & path) override;
     void removeFileIfExists(const String & path) override;

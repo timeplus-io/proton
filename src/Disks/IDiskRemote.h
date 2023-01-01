@@ -13,7 +13,6 @@
 #include <Common/ThreadPool.h>
 #include <filesystem>
 
-namespace fs = std::filesystem;
 
 namespace CurrentMetrics
 {
@@ -67,11 +66,11 @@ public:
 
     const String & getPath() const final override { return metadata_disk->getPath(); }
 
-    Metadata readMeta(const String & path) const;
+    String getCacheBasePath() const final override;
 
-    Metadata createMeta(const String & path) const;
+    std::vector<String> getRemotePaths(const String & local_path) const final override;
 
-    Metadata readOrCreateMetaForWriting(const String & path, WriteMode mode);
+    void getRemotePathsRecursive(const String & local_path, std::vector<LocalPathWithRemotePaths> & paths_map) override;
 
     /// Methods for working with metadata. For some operations (like hardlink
     /// creation) metadata can be updated concurrently from multiple threads

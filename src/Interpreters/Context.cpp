@@ -56,6 +56,7 @@
 #include <Interpreters/TraceCollector.h>
 #include <IO/UncompressedCache.h>
 #include <IO/MMappedFileCache.h>
+#include <IO/WriteSettings.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Common/StackTrace.h>
@@ -3069,6 +3070,7 @@ ReadSettings Context::getReadSettings() const
     res.remote_fs_read_backoff_max_tries = settings.remote_fs_read_backoff_max_tries;
     res.enable_filesystem_cache = settings.enable_filesystem_cache;
     res.filesystem_cache_max_wait_sec = settings.filesystem_cache_max_wait_sec;
+    res.read_from_filesystem_cache_if_exists_otherwise_bypass_cache = settings.read_from_filesystem_cache_if_exists_otherwise_bypass_cache;
 
     res.remote_read_min_bytes_for_seek = settings.remote_read_min_bytes_for_seek;
 
@@ -3082,6 +3084,15 @@ ReadSettings Context::getReadSettings() const
     res.http_retry_max_backoff_ms = settings.http_retry_max_backoff_ms;
 
     res.mmap_cache = getMMappedFileCache().get();
+
+    return res;
+}
+
+WriteSettings Context::getWriteSettings() const
+{
+    WriteSettings res;
+
+    res.enable_filesystem_cache_on_write_operations = settings.enable_filesystem_cache_on_write_operations;
 
     return res;
 }

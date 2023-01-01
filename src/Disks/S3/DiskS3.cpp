@@ -18,8 +18,11 @@
 #include <Common/quoteString.h>
 #include <Common/thread_local_rng.h>
 #include <Common/getRandomASCIIString.h>
+#include <Common/FileCacheFactory.h>
+#include <Common/FileCache.h>
 
 #include <Interpreters/Context.h>
+#include <Interpreters/threadPoolCallbackRunner.h>
 #include <IO/ReadBufferFromS3.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
@@ -226,7 +229,12 @@ std::unique_ptr<ReadBufferFromFileBase> DiskS3::readFile(const String & path, co
 
     ReadSettings disk_read_settings{read_settings};
     if (cache)
+    {
+        if (IFileCache::isReadOnly())
+            disk_read_settings.read_from_filesystem_cache_if_exists_otherwise_bypass_cache = true;
+
         disk_read_settings.remote_fs_cache = cache;
+    }
 
     auto s3_impl = std::make_unique<ReadBufferFromS3Gather>(
         path, settings->client, bucket, metadata,
@@ -244,7 +252,7 @@ std::unique_ptr<ReadBufferFromFileBase> DiskS3::readFile(const String & path, co
     }
 }
 
-std::unique_ptr<WriteBufferFromFileBase> DiskS3::writeFile(const String & path, size_t buf_size, WriteMode mode)
+std::unique_ptr<WriteBufferFromFileBase> DiskS3::writeFile(const String & path, size_t buf_size, WriteMode mode, const WriteSettings & write_settings)
 {
     auto settings = current_settings.get();
 
@@ -264,14 +272,21 @@ std::unique_ptr<WriteBufferFromFileBase> DiskS3::writeFile(const String & path, 
     LOG_TRACE(log, "{} to file by path: {}. S3 path: {}",
               mode == WriteMode::Rewrite ? "Write" : "Append", backQuote(metadata_disk->getPath() + path), remote_fs_root_path + blob_name);
 
+    bool cache_on_write = cache
+        && fs::path(path).extension() != ".tmp"
+        && write_settings.enable_filesystem_cache_on_write_operations
+        && FileCacheFactory::instance().getSettings(getCacheBasePath()).cache_on_write_operations;
+
     auto s3_buffer = std::make_unique<WriteBufferFromS3>(
         settings->client,
         bucket,
         remote_fs_root_path + blob_name,
         settings->s3_min_upload_part_size,
+        settings->s3_upload_part_size_multiply_factor,
+        settings->s3_upload_part_size_multiply_parts_count_threshold,
         settings->s3_max_single_part_upload_size,
         std::move(object_metadata),
-        buf_size);
+        buf_size, threadPoolCallbackRunner(getThreadPoolWriter()), blob_name, cache_on_write ? cache : nullptr);
 
     auto create_metadata_callback = [this, path, blob_name, mode] (size_t count)
     {
@@ -322,6 +337,8 @@ void DiskS3::createFileOperationObject(const String & operation_name, UInt64 rev
         bucket,
         remote_fs_root_path + key,
         settings->s3_min_upload_part_size,
+        settings->s3_upload_part_size_multiply_factor,
+        settings->s3_upload_part_size_multiply_parts_count_threshold,
         settings->s3_max_single_part_upload_size,
         metadata);
 
@@ -401,6 +418,8 @@ void DiskS3::saveSchemaVersion(const int & version)
         bucket,
         remote_fs_root_path + SCHEMA_VERSION_OBJECT,
         settings->s3_min_upload_part_size,
+        settings->s3_upload_part_size_multiply_factor,
+        settings->s3_upload_part_size_multiply_parts_count_threshold,
         settings->s3_max_single_part_upload_size);
 
     writeIntText(version, buffer);
@@ -1064,6 +1083,8 @@ DiskS3Settings::DiskS3Settings(
     const std::shared_ptr<Aws::S3::S3Client> & client_,
     size_t s3_max_single_read_retries_,
     size_t s3_min_upload_part_size_,
+    size_t s3_upload_part_size_multiply_factor_,
+    size_t s3_upload_part_size_multiply_parts_count_threshold_,
     size_t s3_max_single_part_upload_size_,
     size_t min_bytes_for_seek_,
     bool send_metadata_,
@@ -1073,6 +1094,8 @@ DiskS3Settings::DiskS3Settings(
     : client(client_)
     , s3_max_single_read_retries(s3_max_single_read_retries_)
     , s3_min_upload_part_size(s3_min_upload_part_size_)
+    , s3_upload_part_size_multiply_factor(s3_upload_part_size_multiply_factor_)
+    , s3_upload_part_size_multiply_parts_count_threshold(s3_upload_part_size_multiply_parts_count_threshold_)
     , s3_max_single_part_upload_size(s3_max_single_part_upload_size_)
     , min_bytes_for_seek(min_bytes_for_seek_)
     , send_metadata(send_metadata_)

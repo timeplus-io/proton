@@ -376,14 +376,29 @@ public:
         const String & bucket,
         const String & key,
         size_t min_upload_part_size,
+        size_t upload_part_size_multiply_factor,
+        size_t upload_part_size_multiply_parts_count_threshold,
         size_t max_single_part_upload_size)
         : SinkToStorage(sample_block_, ProcessorID::StorageS3SinkID)
         , sample_block(sample_block_)
         , format_settings(format_settings_)
     {
         write_buf = wrapWriteBufferWithCompressionMethod(
-            std::make_unique<WriteBufferFromS3>(client, bucket, key, min_upload_part_size, max_single_part_upload_size), compression_method, 3);
-        writer = FormatFactory::instance().getOutputFormatParallelIfPossible(format, *write_buf, sample_block, context, {}, format_settings);
+            std::make_unique<WriteBufferFromS3>(
+                client,
+                bucket,
+                key,
+                min_upload_part_size,
+                upload_part_size_multiply_factor,
+                upload_part_size_multiply_parts_count_threshold,
+                max_single_part_upload_size,
+                std::nullopt,
+                DBMS_DEFAULT_BUFFER_SIZE,
+                threadPoolCallbackRunner(IOThreadPool::get())),
+            compression_method,
+            3);
+        writer
+            = FormatFactory::instance().getOutputFormatParallelIfPossible(format, *write_buf, sample_block, context, {}, format_settings);
     }
 
     String getName() const override { return "StorageS3Sink"; }
@@ -431,6 +446,8 @@ public:
         const String & bucket_,
         const String & key_,
         size_t min_upload_part_size_,
+        size_t upload_part_size_multiply_factor_,
+        size_t upload_part_size_multiply_parts_count_threshold_,
         size_t max_single_part_upload_size_)
         : PartitionedSink(partition_by, context_, sample_block_, ProcessorID::StorageS3SinkID)
         , format(format_)
@@ -441,6 +458,8 @@ public:
         , bucket(bucket_)
         , key(key_)
         , min_upload_part_size(min_upload_part_size_)
+        , upload_part_size_multiply_factor(upload_part_size_multiply_factor_)
+        , upload_part_size_multiply_parts_count_threshold(upload_part_size_multiply_parts_count_threshold_)
         , max_single_part_upload_size(max_single_part_upload_size_)
         , format_settings(format_settings_)
     {
@@ -464,6 +483,8 @@ public:
             partition_bucket,
             partition_key,
             min_upload_part_size,
+            upload_part_size_multiply_factor,
+            upload_part_size_multiply_parts_count_threshold,
             max_single_part_upload_size
         );
     }
@@ -478,6 +499,8 @@ private:
     const String bucket;
     const String key;
     size_t min_upload_part_size;
+    size_t upload_part_size_multiply_factor;
+    size_t upload_part_size_multiply_parts_count_threshold;
     size_t max_single_part_upload_size;
     std::optional<FormatSettings> format_settings;
 
@@ -518,6 +541,8 @@ StorageS3::StorageS3(
     const String & format_name_,
     UInt64 max_single_read_retries_,
     UInt64 min_upload_part_size_,
+    UInt64 upload_part_size_multiply_factor_,
+    UInt64 upload_part_size_multiply_parts_count_threshold_,
     UInt64 max_single_part_upload_size_,
     UInt64 max_connections_,
     const ColumnsDescription & columns_,
@@ -534,6 +559,8 @@ StorageS3::StorageS3(
     , format_name(format_name_)
     , max_single_read_retries(max_single_read_retries_)
     , min_upload_part_size(min_upload_part_size_)
+    , upload_part_size_multiply_factor(upload_part_size_multiply_factor_)
+    , upload_part_size_multiply_parts_count_threshold(upload_part_size_multiply_parts_count_threshold_)
     , max_single_part_upload_size(max_single_part_upload_size_)
     , compression_method(compression_method_)
     , name(uri_.storage_name)
@@ -660,14 +687,14 @@ SinkToStoragePtr StorageS3::write(const ASTPtr & query, const StorageMetadataPtr
             client_auth.uri.bucket,
             keys.back(),
             min_upload_part_size,
+            upload_part_size_multiply_factor,
+            upload_part_size_multiply_parts_count_threshold,
             max_single_part_upload_size);
     }
     else
     {
         if (is_key_with_globs)
-            /// proton: starts
             throw Exception(ErrorCodes::DATABASE_ACCESS_DENIED, "S3 key '{}' contains globs, so the stream is in readonly mode", client_auth.uri.key);
-            /// proton: ends
 
         bool truncate_in_insert = local_context->getSettingsRef().s3_truncate_on_insert;
 
@@ -705,6 +732,8 @@ SinkToStoragePtr StorageS3::write(const ASTPtr & query, const StorageMetadataPtr
             client_auth.uri.bucket,
             keys.back(),
             min_upload_part_size,
+            upload_part_size_multiply_factor,
+            upload_part_size_multiply_parts_count_threshold,
             max_single_part_upload_size);
     }
 }
@@ -715,9 +744,7 @@ void StorageS3::truncate(const ASTPtr & /* query */, const StorageMetadataPtr &,
     updateClientAndAuthSettings(local_context, client_auth);
 
     if (is_key_with_globs)
-        /// proton: starts
         throw Exception(ErrorCodes::DATABASE_ACCESS_DENIED, "S3 key '{}' contains globs, so the stream is in readonly mode", client_auth.uri.key);
-        /// proton: ends
 
     Aws::S3::Model::Delete delkeys;
 
@@ -865,13 +892,11 @@ ColumnsDescription StorageS3::getTableStructureFromDataImpl(
         auto file_iterator = createFileIterator(client_auth, keys, is_key_with_globs, distributed_processing, ctx);
         String current_key = (*file_iterator)();
         if (current_key.empty())
-            /// proton: starts
             throw Exception(
                 ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE,
                 "Cannot extract stream structure from {} format file, because there are no files with provided path in S3. You must specify "
                 "stream structure manually",
                 format);
-            /// proton: ends
 
         return wrapReadBufferWithCompressionMethod(
             std::make_unique<ReadBufferFromS3>(client_auth.client, client_auth.uri.bucket, current_key, max_single_read_retries, ctx->getReadSettings()),
@@ -920,6 +945,8 @@ void registerStorageS3Impl(const String & name, StorageFactory & factory)
         S3::URI s3_uri(Poco::URI(configuration.url));
         auto max_single_read_retries = args.getLocalContext()->getSettingsRef().s3_max_single_read_retries;
         auto min_upload_part_size = args.getLocalContext()->getSettingsRef().s3_min_upload_part_size;
+        auto upload_part_size_multiply_factor = args.getLocalContext()->getSettingsRef().s3_upload_part_size_multiply_factor;
+        auto upload_part_size_multiply_parts_count_threshold = args.getLocalContext()->getSettingsRef().s3_upload_part_size_multiply_parts_count_threshold;
         auto max_single_part_upload_size = args.getLocalContext()->getSettingsRef().s3_max_single_part_upload_size;
         auto max_connections = args.getLocalContext()->getSettingsRef().s3_max_connections;
 
@@ -935,6 +962,8 @@ void registerStorageS3Impl(const String & name, StorageFactory & factory)
             configuration.format,
             max_single_read_retries,
             min_upload_part_size,
+            upload_part_size_multiply_factor,
+            upload_part_size_multiply_parts_count_threshold,
             max_single_part_upload_size,
             max_connections,
             args.columns,
