@@ -57,7 +57,7 @@ public:
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
-        unsigned num_streams) override;
+        size_t num_streams) override;
 
     void read(
         QueryPlan & query_plan,
@@ -67,7 +67,7 @@ public:
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
-        unsigned num_streams) override;
+        size_t num_streams) override;
 
     NamesAndTypesList getVirtuals() const override;
 
@@ -223,7 +223,7 @@ private:
         ContextPtr context_,
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
-        unsigned num_streams);
+        size_t num_streams);
 
 public:
     IColumn::Selector createSelector(const ColumnWithTypeAndName & result) const;

@@ -236,12 +236,12 @@ catch (...)
             path));
 }
 
-int waitServersToFinish(std::vector<DB::ProtocolServerAdapter> & servers, size_t seconds_to_wait)
+size_t waitServersToFinish(std::vector<DB::ProtocolServerAdapter> & servers, size_t seconds_to_wait)
 {
-    const int sleep_max_ms = 1000 * seconds_to_wait;
-    const int sleep_one_ms = 100;
-    int sleep_current_ms = 0;
-    int current_connections = 0;
+    const size_t sleep_max_ms = 1000 * seconds_to_wait;
+    const size_t sleep_one_ms = 100;
+    size_t sleep_current_ms = 0;
+    size_t current_connections = 0;
     for (;;)
     {
         current_connections = 0;
@@ -880,7 +880,7 @@ if (ThreadFuzzer::instance().isEffective())
         else
         {
             rlim_t old = rlim.rlim_cur;
-            rlim.rlim_cur = config().getUInt("max_open_files", rlim.rlim_max);
+            rlim.rlim_cur = config().getUInt("max_open_files", static_cast<unsigned>(rlim.rlim_max));
             int rc = setrlimit(RLIMIT_NOFILE, &rlim);
             if (rc != 0)
                 LOG_WARNING(log, "Cannot set max number of file descriptors to {}. Try to specify max_open_files according to your system limits. error: {}", rlim.rlim_cur, strerror(errno));
@@ -1153,7 +1153,7 @@ if (ThreadFuzzer::instance().isEffective())
             size_t max_server_memory_usage = config->getUInt64("max_server_memory_usage", 0);
 
             double max_server_memory_usage_to_ram_ratio = config->getDouble("max_server_memory_usage_to_ram_ratio", 0.9);
-            size_t default_max_server_memory_usage = memory_amount * max_server_memory_usage_to_ram_ratio;
+            size_t default_max_server_memory_usage = static_cast<size_t>(memory_amount * max_server_memory_usage_to_ram_ratio);
 
             if (max_server_memory_usage == 0)
             {
@@ -1257,7 +1257,7 @@ if (ThreadFuzzer::instance().isEffective())
 
     /// Lower cache size on low-memory systems.
     double cache_size_to_ram_max_ratio = config().getDouble("cache_size_to_ram_max_ratio", 0.5);
-    size_t max_cache_size = memory_amount * cache_size_to_ram_max_ratio;
+    size_t max_cache_size = static_cast<size_t>(memory_amount * cache_size_to_ram_max_ratio);
 
     /// Size of cache for uncompressed blocks. Zero means disabled.
     size_t uncompressed_cache_size = config().getUInt64("uncompressed_cache_size", 0);
@@ -1364,7 +1364,7 @@ if (ThreadFuzzer::instance().isEffective())
         if (!servers_to_start_before_tables.empty())
         {
             LOG_DEBUG(log, "Waiting for current connections to servers for tables to finish.");
-            int current_connections = 0;
+            size_t current_connections = 0;
             for (auto & server : servers_to_start_before_tables)
             {
                 server.stop();
@@ -1485,7 +1485,7 @@ if (ThreadFuzzer::instance().isEffective())
         }
 
         double total_memory_tracker_sample_probability = config().getDouble("total_memory_tracker_sample_probability", 0);
-        if (total_memory_tracker_sample_probability)
+        if (total_memory_tracker_sample_probability > 0.0)
         {
             total_memory_tracker.setSampleProbability(total_memory_tracker_sample_probability);
         }
@@ -1657,7 +1657,7 @@ if (ThreadFuzzer::instance().isEffective())
 
             is_cancelled = true;
 
-            int current_connections = 0;
+            size_t current_connections = 0;
             {
                 std::lock_guard lock(servers_lock);
                 for (auto & server : servers)

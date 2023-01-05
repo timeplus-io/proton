@@ -330,7 +330,7 @@ public:
         ContextPtr /*context*/,
         QueryProcessingStage::Enum & /*processed_stage*/,
         size_t /*max_block_size*/,
-        unsigned /*num_streams*/)
+        size_t /*num_streams*/)
     {
         throw Exception("Method watch is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -366,7 +366,7 @@ public:
         ContextPtr /*context*/,
         QueryProcessingStage::Enum /*processed_stage*/,
         size_t /*max_block_size*/,
-        unsigned /*num_streams*/);
+        size_t /*num_streams*/);
 
     /// Other version of read which adds reading step to query plan.
     /// Default implementation creates ReadFromStorageStep and uses usual read.
@@ -378,7 +378,7 @@ public:
         ContextPtr /*context*/,
         QueryProcessingStage::Enum /*processed_stage*/,
         size_t /*max_block_size*/,
-        unsigned /*num_streams*/);
+        size_t /*num_streams*/);
 
     /** Writes the data to a table.
       * Receives a description of the query, which can contain information about the data write method.

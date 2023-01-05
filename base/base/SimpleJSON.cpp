@@ -146,7 +146,7 @@ static double readFloatText(const char * buf, const char * end)
             case 'e':
             case 'E': {
                 ++buf;
-                Int32 exponent = readIntText(buf, end);
+                auto exponent = readIntText(buf, end);
                 x *= preciseExp10(exponent);
 
                 run = false;

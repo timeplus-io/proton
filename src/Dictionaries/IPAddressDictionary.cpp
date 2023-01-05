@@ -772,7 +772,7 @@ void IPAddressDictionary::setAttributeValue(Attribute & attribute, const Field &
         }
         else
         {
-            setAttributeValueImpl<AttributeType>(attribute, value.get<AttributeType>());
+            setAttributeValueImpl<AttributeType>(attribute, static_cast<AttributeType>(value.get<AttributeType>()));
         }
     };
 

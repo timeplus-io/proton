@@ -478,7 +478,7 @@ void StorageRandom::read(
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
-    unsigned num_streams)
+    size_t num_streams)
 {
     Pipe pipe = read(column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 
@@ -493,7 +493,7 @@ Pipe StorageRandom::read(
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
     size_t max_block_size,
-    unsigned num_streams)
+    size_t num_streams)
 {
     storage_snapshot->check(column_names);
 

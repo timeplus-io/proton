@@ -156,7 +156,7 @@ Chunk IRowInputFormat::generate()
             /// Error while trying to obtain verbose diagnostic. Ok to ignore.
         }
 
-        e.setLineNumber(total_rows);
+        e.setLineNumber(static_cast<int>(total_rows));
         e.addMessage(verbose_diagnostic);
         throw;
     }

@@ -298,7 +298,7 @@ AvroDeserializer::DeserializeFn AvroDeserializer::createDeserializeFn(avro::Node
                 return [non_null_union_index, nested_deserialize](IColumn & column, avro::Decoder & decoder)
                 {
                     ColumnNullable & col = assert_cast<ColumnNullable &>(column);
-                    size_t union_index = decoder.decodeUnionIndex();
+                    int union_index = static_cast<int>(decoder.decodeUnionIndex());
                     if (union_index == non_null_union_index)
                     {
                         nested_deserialize(col.getNestedColumn(), decoder);

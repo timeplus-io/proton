@@ -317,7 +317,7 @@ public:
             if (attribute_default_value.isNull())
                 default_value_is_null = true;
             else
-                default_value = attribute_default_value.get<NearestFieldType<DictionaryAttributeType>>();
+                default_value = static_cast<DictionaryAttributeType>(attribute_default_value.get<DictionaryAttributeType>());
         }
         else
         {

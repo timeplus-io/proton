@@ -50,7 +50,7 @@ struct LogConfig
     int32_t initFileSize() const
     {
         if (preallocate)
-            return segment_size;
+            return static_cast<int32_t>(segment_size);
         else
             return 0;
     }

@@ -877,7 +877,7 @@ TEST_P(CoordinationTest, SnapshotableHashMapTrySnapshot)
     EXPECT_EQ(itr->active_in_map, true);
     itr = std::next(itr);
     EXPECT_EQ(itr, map_snp.end());
-    for (size_t i = 0; i < 5; ++i)
+    for (int i = 0; i < 5; ++i)
     {
         EXPECT_TRUE(map_snp.insert("/hello" + std::to_string(i), i).second);
     }

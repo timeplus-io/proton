@@ -9,7 +9,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
 }
 
-MergeType checkAndGetMergeType(UInt64 merge_type)
+MergeType checkAndGetMergeType(UInt32 merge_type)
 {
     if (merge_type == static_cast<UInt64>(MergeType::REGULAR))
         return MergeType::REGULAR;

@@ -304,7 +304,7 @@ ASTPtr ClientBase::parseQuery(const char *& pos, const char * end, bool allow_mu
 
 
 /// Consumes trailing semicolons and tries to consume the same-line trailing comment.
-void ClientBase::adjustQueryEnd(const char *& this_query_end, const char * all_queries_end, int max_parser_depth)
+void ClientBase::adjustQueryEnd(const char *& this_query_end, const char * all_queries_end, uint32_t max_parser_depth)
 {
     // We have to skip the trailing semicolon that might be left
     // after VALUES parsing or just after a normal semicolon-terminated query.
@@ -1389,6 +1389,8 @@ MultiQueryProcessingStage ClientBase::analyzeMultiQueryText(
     if (this_query_begin >= all_queries_end)
         return MultiQueryProcessingStage::QUERIES_END;
 
+    unsigned max_parser_depth = static_cast<unsigned>(global_context->getSettingsRef().max_parser_depth);
+
     // If there are only comments left until the end of file, we just
     // stop. The parser can't handle this situation because it always
     // expects that there is some query that it can parse.
@@ -1398,7 +1400,7 @@ MultiQueryProcessingStage ClientBase::analyzeMultiQueryText(
     // and it makes more sense to treat them as such.
     {
         Tokens tokens(this_query_begin, all_queries_end);
-        IParser::Pos token_iterator(tokens, global_context->getSettingsRef().max_parser_depth);
+        IParser::Pos token_iterator(tokens, max_parser_depth);
         if (!token_iterator.isValid())
             return MultiQueryProcessingStage::QUERIES_END;
     }
@@ -1419,7 +1421,7 @@ MultiQueryProcessingStage ClientBase::analyzeMultiQueryText(
         if (ignore_error)
         {
             Tokens tokens(this_query_begin, all_queries_end);
-            IParser::Pos token_iterator(tokens, global_context->getSettingsRef().max_parser_depth);
+            IParser::Pos token_iterator(tokens, max_parser_depth);
             while (token_iterator->type != TokenType::Semicolon && token_iterator.isValid())
                 ++token_iterator;
             this_query_begin = token_iterator->end;
@@ -1459,7 +1461,7 @@ MultiQueryProcessingStage ClientBase::analyzeMultiQueryText(
     // after we have processed the query. But even this guess is
     // beneficial so that we see proper trailing comments in "echo" and
     // server log.
-    adjustQueryEnd(this_query_end, all_queries_end, global_context->getSettingsRef().max_parser_depth);
+    adjustQueryEnd(this_query_end, all_queries_end, max_parser_depth);
     return MultiQueryProcessingStage::EXECUTE_QUERY;
 }
 
@@ -1943,7 +1945,7 @@ void ClientBase::init(int argc, char ** argv)
     if (options.count("print-profile-events"))
         config().setBool("print-profile-events", true);
     if (options.count("profile-events-delay-ms"))
-        config().setInt("profile-events-delay-ms", options["profile-events-delay-ms"].as<UInt64>());
+        config().setUInt64("profile-events-delay-ms", options["profile-events-delay-ms"].as<UInt64>());
     if (options.count("progress"))
         config().setBool("progress", true);
     if (options.count("echo"))

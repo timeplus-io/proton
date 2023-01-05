@@ -49,13 +49,13 @@ public:
     /// NOTE: Probably you should call wait() if exception was thrown. If some previously scheduled jobs are using some objects,
     /// located on stack of current thread, the stack must not be unwinded until all jobs finished. However,
     /// if ThreadPool is a local object, it will wait for all scheduled jobs in own destructor.
-    void scheduleOrThrowOnError(Job job, int priority = 0);
+    void scheduleOrThrowOnError(Job job, ssize_t priority = 0);
 
     /// Similar to scheduleOrThrowOnError(...). Wait for specified amount of time and schedule a job or return false.
-    bool trySchedule(Job job, int priority = 0, uint64_t wait_microseconds = 0) noexcept;
+    bool trySchedule(Job job, ssize_t priority = 0, uint64_t wait_microseconds = 0) noexcept;
 
     /// Similar to scheduleOrThrowOnError(...). Wait for specified amount of time and schedule a job or throw an exception.
-    void scheduleOrThrow(Job job, int priority = 0, uint64_t wait_microseconds = 0);
+    void scheduleOrThrow(Job job, ssize_t priority = 0, uint64_t wait_microseconds = 0);
 
     /// Wait for all currently active jobs to be done.
     /// You may call schedule and wait many times in arbitrary order.
@@ -95,9 +95,9 @@ private:
     struct JobWithPriority
     {
         Job job;
-        int priority;
+        ssize_t priority;
 
-        JobWithPriority(Job job_, int priority_)
+        JobWithPriority(Job job_, ssize_t priority_)
             : job(job_), priority(priority_) {}
 
         bool operator< (const JobWithPriority & rhs) const
@@ -111,7 +111,7 @@ private:
     std::exception_ptr first_exception;
 
     template <typename ReturnType>
-    ReturnType scheduleImpl(Job job, int priority, std::optional<uint64_t> wait_microseconds);
+    ReturnType scheduleImpl(Job job, ssize_t priority, std::optional<uint64_t> wait_microseconds, bool propagate_opentelemetry_tracing_context = true);
 
     void worker(typename std::list<Thread>::iterator thread_it);
 

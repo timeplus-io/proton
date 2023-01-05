@@ -22,7 +22,8 @@ void CompressedWriteBuffer::nextImpl()
     if (!offset())
         return;
 
-    size_t decompressed_size = offset();
+    chassert(offset() <= INT_MAX);
+    UInt32 decompressed_size = static_cast<UInt32>(offset());
     UInt32 compressed_reserve_size = codec->getCompressedReserveSize(decompressed_size);
     compressed_buffer.resize(compressed_reserve_size);
     UInt32 compressed_size = codec->compress(working_buffer.begin(), decompressed_size, compressed_buffer.data());

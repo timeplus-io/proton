@@ -303,7 +303,7 @@ void WriteBufferFromS3::writePart()
     else
     {
         UploadPartTask task;
-        fillUploadRequest(task.req, part_tags.size() + 1);
+        fillUploadRequest(task.req, static_cast<int>(tags.size() + 1));
         if (file_segments_holder)
         {
             task.cache_files.emplace(std::move(*file_segments_holder));
@@ -359,7 +359,7 @@ void WriteBufferFromS3::completeMultipartUpload()
     for (size_t i = 0; i < part_tags.size(); ++i)
     {
         Aws::S3::Model::CompletedPart part;
-        multipart_upload.AddParts(part.WithETag(part_tags[i]).WithPartNumber(i + 1));
+        multipart_upload.AddParts(part.WithETag(tags[i]).WithPartNumber(static_cast<int>(i + 1)));
     }
 
     req.SetMultipartUpload(multipart_upload);

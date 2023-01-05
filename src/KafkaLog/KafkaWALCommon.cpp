@@ -231,13 +231,13 @@ DescribeResult describeTopic(const String & name, struct rd_kafka_s * rk, Poco::
 std::vector<int64_t>
 getOffsetsForTimestamps(struct rd_kafka_s * rd_handle, const std::string & topic, const std::vector<int64_t> & timestamps, int32_t timeout_ms)
 {
-    int32_t partitions = timestamps.size();
+    int32_t partitions = static_cast<int32_t>(timestamps.size());
 
     assert(rd_handle);
 
     using RdKafkaTopicPartitionListPtr
         = std::unique_ptr<rd_kafka_topic_partition_list_t, decltype(rd_kafka_topic_partition_list_destroy) *>;
-    RdKafkaTopicPartitionListPtr offsets{rd_kafka_topic_partition_list_new(timestamps.size()), rd_kafka_topic_partition_list_destroy};
+    RdKafkaTopicPartitionListPtr offsets{rd_kafka_topic_partition_list_new(static_cast<int>(timestamps.size())), rd_kafka_topic_partition_list_destroy};
 
     for (int32_t partition = 0; auto timestamp : timestamps)
     {

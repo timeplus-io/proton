@@ -475,7 +475,7 @@ int32_t KafkaWALSimpleConsumer::consume(
         LOG_ERROR(
             log, "Failed to consuming topic={} partition={} error={}", ctx.topic, ctx.partition, rd_kafka_err2str(rd_kafka_last_error()));
 
-        return res;
+        return static_cast<int32_t>(res);
     }
 
     return DB::ErrorCodes::OK;

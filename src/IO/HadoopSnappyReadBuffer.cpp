@@ -36,7 +36,7 @@ inline void HadoopSnappyDecoder::copyToBuffer(size_t * avail_in, const char ** n
 
     memcpy(buffer, *next_in, *avail_in);
 
-    buffer_length = *avail_in;
+    buffer_length += *avail_in;
     *next_in += *avail_in;
     *avail_in = 0;
 }

@@ -6,6 +6,7 @@
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <Common/SipHash.h>
+#include <Common/safe_cast.h>
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <cassert>
@@ -85,9 +86,11 @@ namespace
         {
             out.nextIfAtEnd();
             size_t part_size = std::min(size - in_size, out.available());
+            part_size = std::min<size_t>(part_size, INT_MAX);
+
             uint8_t * ciphertext = reinterpret_cast<uint8_t *>(out.position());
             int ciphertext_size = 0;
-            if (!EVP_EncryptUpdate(evp_ctx, ciphertext, &ciphertext_size, &in[in_size], part_size))
+            if (!EVP_EncryptUpdate(evp_ctx, ciphertext, &ciphertext_size, &in[in_size], static_cast<int>(part_size)))
                 throw Exception("Failed to encrypt", ErrorCodes::DATA_ENCRYPTION_ERROR);
 
             in_size += part_size;
@@ -110,7 +113,7 @@ namespace
 
         uint8_t ciphertext[kBlockSize];
         int ciphertext_size = 0;
-        if (!EVP_EncryptUpdate(evp_ctx, ciphertext, &ciphertext_size, padded_data, padded_data_size))
+        if (!EVP_EncryptUpdate(evp_ctx, ciphertext, &ciphertext_size, padded_data, safe_cast<int>(padded_data_size)))
             throw Exception("Failed to encrypt", ErrorCodes::DATA_ENCRYPTION_ERROR);
 
         if (!ciphertext_size)
@@ -142,7 +145,7 @@ namespace
         const uint8_t * in = reinterpret_cast<const uint8_t *>(data);
         uint8_t * plaintext = reinterpret_cast<uint8_t *>(out);
         int plaintext_size = 0;
-        if (!EVP_DecryptUpdate(evp_ctx, plaintext, &plaintext_size, in, size))
+        if (!EVP_DecryptUpdate(evp_ctx, plaintext, &plaintext_size, in, safe_cast<int>(size)))
             throw Exception("Failed to decrypt", ErrorCodes::DATA_ENCRYPTION_ERROR);
         return plaintext_size;
     }
@@ -156,7 +159,7 @@ namespace
 
         uint8_t plaintext[kBlockSize];
         int plaintext_size = 0;
-        if (!EVP_DecryptUpdate(evp_ctx, plaintext, &plaintext_size, padded_data, padded_data_size))
+        if (!EVP_DecryptUpdate(evp_ctx, plaintext, &plaintext_size, padded_data, safe_cast<int>(padded_data_size)))
             throw Exception("Failed to decrypt", ErrorCodes::DATA_ENCRYPTION_ERROR);
 
         if (!plaintext_size)

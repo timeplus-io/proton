@@ -552,7 +552,7 @@ void FlatDictionary::setAttributeValue(Attribute & attribute, const UInt64 key, 
         }
         else
         {
-            container[key] = attribute_value;
+            container[key] = static_cast<ValueType>(attribute_value);
         }
     };
 

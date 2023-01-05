@@ -16,7 +16,7 @@ LogSegment::LogSegment(
     const std::string & file_suffix)
     : base_sn(base_sn_)
     , max_index_size(log_config.max_index_size)
-    , index_interval_bytes(log_config.index_interval_bytes)
+    , index_interval_bytes(static_cast<int32_t>(log_config.index_interval_bytes))
     , log(FileRecords::open(Loglet::logFile(log_dir, base_sn_, file_suffix), file_already_exists, false))
     , max_etimestamp_and_sn_so_far(-1, -1)
     , max_atimestamp_and_sn_so_far(-1, -1)

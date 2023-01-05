@@ -621,7 +621,7 @@ Pipe StorageS3::read(
     ContextPtr local_context,
     QueryProcessingStage::Enum /*processed_stage*/,
     size_t max_block_size,
-    unsigned num_streams)
+    size_t num_streams)
 {
     updateClientAndAuthSettings(local_context, client_auth);
 
@@ -784,10 +784,10 @@ void StorageS3::updateClientAndAuthSettings(ContextPtr ctx, StorageS3::ClientAut
 
     S3::PocoHTTPClientConfiguration client_configuration = S3::ClientFactory::instance().createClientConfiguration(
         settings.region,
-        ctx->getRemoteHostFilter(), ctx->getGlobalContext()->getSettingsRef().s3_max_redirects);
+        ctx->getRemoteHostFilter(), static_cast<unsigned>(ctx->getGlobalContext()->getSettingsRef().s3_max_redirects));
 
     client_configuration.endpointOverride = upd.uri.endpoint;
-    client_configuration.maxConnections = upd.max_connections;
+    client_configuration.maxConnections = static_cast<unsigned>(upd.max_connections);
 
     upd.client = S3::ClientFactory::instance().create(
         client_configuration,

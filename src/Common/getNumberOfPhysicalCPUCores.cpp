@@ -35,7 +35,7 @@ unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
     int cgroup_period = read_from("/sys/fs/cgroup/cpu/cpu.cfs_period_us", -1);
     if (cgroup_quota > -1 && cgroup_period > 0)
     {
-        quota_count = ceil(static_cast<float>(cgroup_quota) / static_cast<float>(cgroup_period));
+        quota_count = static_cast<uint32_t>(ceil(static_cast<float>(cgroup_quota) / static_cast<float>(cgroup_period)));
     }
 
     // Share number (typically a number relative to 1024) (2048 typically expresses 2 CPUs worth of processing)
@@ -49,7 +49,7 @@ unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
     unsigned share_count = default_cpu_count;
     if (cgroup_share > -1)
     {
-        share_count = ceil(static_cast<float>(cgroup_share) / static_cast<float>(PER_CPU_SHARES));
+        share_count = static_cast<uint32_t>(ceil(static_cast<float>(cgroup_share) / static_cast<float>(PER_CPU_SHARES)));
     }
 
     return std::min(default_cpu_count, std::min(share_count, quota_count));

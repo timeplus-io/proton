@@ -79,7 +79,7 @@ LogAppendDescription Log::append(RecordPtr & record)
     {
         auto serialized_bytes{record->serialize()};
         checkSize(serialized_bytes.size());
-        append_info.valid_bytes = serialized_bytes.size();
+        append_info.valid_bytes = static_cast<int32_t>(serialized_bytes.size());
         byte_vec.swap(serialized_bytes);
     }
 
@@ -88,7 +88,7 @@ LogAppendDescription Log::append(RecordPtr & record)
         std::unique_lock lock{lmutex};
         assignSequence(record, byte_vec, append_info);
 
-        auto segment = maybeRoll(byte_vec.size(), append_info);
+        auto segment = maybeRoll(static_cast<uint32_t>(byte_vec.size()), append_info);
 
         LogSequenceMetadata metadata{append_info.seq_metadata.record_sn, segment->baseSequence(), segment->size()};
 

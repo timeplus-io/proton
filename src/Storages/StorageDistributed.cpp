@@ -651,7 +651,7 @@ Pipe StorageDistributed::read(
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     const size_t max_block_size,
-    const unsigned num_streams)
+    const size_t num_streams)
 {
     QueryPlan plan;
     read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
@@ -668,7 +668,7 @@ void StorageDistributed::read(
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     const size_t /*max_block_size*/,
-    const unsigned /*num_streams*/)
+    const size_t /*num_streams*/)
 {
     const auto * select_query = query_info.query->as<ASTSelectQuery>();
     if (select_query->final() && local_context->getSettingsRef().allow_experimental_parallel_reading_from_replicas)
@@ -1336,7 +1336,7 @@ void StorageDistributed::delayInsertOrThrowIfNeeded() const
     {
         /// Step is 5% of the delay and minimal one second.
         /// NOTE: max_delay_to_insert is in seconds, and step is in ms.
-        const size_t step_ms = std::min<double>(1., double(distributed_settings.max_delay_to_insert) * 1'000 * 0.05);
+        const size_t step_ms = static_cast<size_t>(std::min<double>(1., static_cast<double>(distributed_settings.max_delay_to_insert) * 1'000 * 0.05));
         UInt64 delayed_ms = 0;
 
         do {

@@ -1431,8 +1431,8 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     file_buf.next();
 
     double elapsed_seconds = watch.elapsedSeconds();
-    double compressed_bytes = file_buf.count();
-    double uncompressed_bytes = compressed_buf.count();
+    size_t compressed_bytes = file_buf.count();
+    size_t uncompressed_bytes = compressed_buf.count();
 
     {
         std::lock_guard lock(temporary_files.mutex);
@@ -1452,12 +1452,12 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
         rows,
         ReadableSize(uncompressed_bytes),
         ReadableSize(compressed_bytes),
-        uncompressed_bytes / rows,
-        compressed_bytes / rows,
-        uncompressed_bytes / compressed_bytes,
+        static_cast<double>(uncompressed_bytes) / rows,
+        static_cast<double>(compressed_bytes) / rows,
+        static_cast<double>(uncompressed_bytes) / compressed_bytes,
         rows / elapsed_seconds,
-        ReadableSize(uncompressed_bytes / elapsed_seconds),
-        ReadableSize(compressed_bytes / elapsed_seconds));
+        ReadableSize(static_cast<double>(uncompressed_bytes) / elapsed_seconds),
+        ReadableSize(static_cast<double>(compressed_bytes) / elapsed_seconds));
 }
 
 
@@ -1474,7 +1474,7 @@ Block Aggregator::convertOneBucketToBlock(
     Method & method,
     Arena * arena,
     bool final,
-    size_t bucket) const
+    Int32 bucket) const
 {
     Block block = prepareBlockAndFill(data_variants, final, method.data.impls[bucket].size(),
         [bucket, &method, arena, this] (
@@ -1487,7 +1487,7 @@ Block Aggregator::convertOneBucketToBlock(
                 key_columns, aggregate_columns, final_aggregate_columns, arena, final_);
         });
 
-    block.info.bucket_num = bucket;
+    block.info.bucket_num = static_cast<int>(bucket);
     return block;
 }
 
@@ -1495,7 +1495,7 @@ Block Aggregator::mergeAndConvertOneBucketToBlock(
     ManyAggregatedDataVariants & variants,
     Arena * arena,
     bool final,
-    size_t bucket,
+    Int32 bucket,
     std::atomic<bool> * is_cancelled) const
 {
     auto & merged_data = *variants[0];
@@ -1539,7 +1539,7 @@ void Aggregator::writeToTemporaryFileImpl(
             max_temporary_block_size_bytes = block_size_bytes;
     };
 
-    for (size_t bucket = 0; bucket < Method::Data::NUM_BUCKETS; ++bucket)
+    for (UInt32 bucket = 0; bucket < Method::Data::NUM_BUCKETS; ++bucket)
     {
         Block block = convertOneBucketToBlock(data_variants, method, data_variants.aggregates_pool, false, bucket);
         out.write(block);
@@ -3003,19 +3003,19 @@ void NO_INLINE Aggregator::convertBlockToTwoLevelImpl(
         selector[i] = bucket;
     }
 
-    size_t num_buckets = destinations.size();
+    UInt32 num_buckets = static_cast<UInt32>(destinations.size());
 
     for (size_t column_idx = 0; column_idx < columns; ++column_idx)
     {
         const ColumnWithTypeAndName & src_col = source.getByPosition(column_idx);
         MutableColumns scattered_columns = src_col.column->scatter(num_buckets, selector);
 
-        for (size_t bucket = 0, size = num_buckets; bucket < size; ++bucket)
+        for (UInt32 bucket = 0, size = num_buckets; bucket < size; ++bucket)
         {
             if (!scattered_columns[bucket]->empty())
             {
                 Block & dst = destinations[bucket];
-                dst.info.bucket_num = bucket;
+                dst.info.bucket_num = static_cast<int>(bucket);
                 dst.insert({std::move(scattered_columns[bucket]), src_col.type, src_col.name});
             }
 

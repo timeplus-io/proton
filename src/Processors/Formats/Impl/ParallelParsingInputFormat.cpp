@@ -135,7 +135,7 @@ void ParallelParsingInputFormat::onBackgroundException(size_t offset)
         background_exception = std::current_exception();
         if (ParsingException * e = exception_cast<ParsingException *>(background_exception))
             if (e->getLineNumber() != -1)
-                e->setLineNumber(e->getLineNumber() + offset);
+                e->setLineNumber(static_cast<int>(e->getLineNumber() + offset));
     }
     if (is_server)
         tryLogCurrentException(__PRETTY_FUNCTION__);

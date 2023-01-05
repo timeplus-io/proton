@@ -723,7 +723,7 @@ void HTTPHandler::processQuery(
     /// (using Accept-Encoding header) and 'enable_http_compression' setting is turned on.
     used_output.out->setCompression(client_supports_http_compression && settings.enable_http_compression);
     if (client_supports_http_compression)
-        used_output.out->setCompressionLevel(settings.http_zlib_compression_level);
+        used_output.out->setCompressionLevel(static_cast<int>(settings.http_zlib_compression_level));
 
     used_output.out->setSendProgressInterval(settings.http_headers_progress_interval_ms);
 

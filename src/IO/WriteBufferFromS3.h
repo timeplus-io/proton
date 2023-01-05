@@ -116,8 +116,8 @@ private:
     ScheduleFunc schedule;
     std::unique_ptr<PutObjectTask> put_object_task;
     std::list<UploadPartTask> upload_object_tasks;
-    size_t num_added_bg_tasks = 0;
-    size_t num_finished_bg_tasks = 0;
+    int num_added_bg_tasks = 0;
+    int num_finished_bg_tasks = 0;
     std::mutex bg_tasks_mutex;
     std::condition_variable bg_tasks_condvar;
 

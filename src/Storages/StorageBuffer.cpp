@@ -217,7 +217,7 @@ Pipe StorageBuffer::read(
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     const size_t max_block_size,
-    const unsigned num_streams)
+    const size_t num_streams)
 {
     QueryPlan plan;
     read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
@@ -234,7 +234,7 @@ void StorageBuffer::read(
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
-    unsigned num_streams)
+    size_t num_streams)
 {
     const auto & metadata_snapshot = storage_snapshot->metadata;
 

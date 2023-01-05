@@ -98,7 +98,7 @@ void KafkaSource::readAndProcess()
     current_batch.clear();
     current_batch.reserve(header.columns());
 
-    auto res = consumer->consume(&KafkaSource::parseMessage, this, record_consume_batch_count, record_consume_timeout, consume_ctx);
+    auto res = consumer->consume(&KafkaSource::parseMessage, this, static_cast<uint32_t>(record_consume_batch_count), static_cast<int32_t>(record_consume_timeout), consume_ctx);
     if (res != ErrorCodes::OK)
         LOG_ERROR(log, "Failed to consume streaming, topic={} shard={} err={}", consume_ctx.topic, consume_ctx.partition, res);
 

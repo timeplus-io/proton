@@ -46,7 +46,7 @@ public:
         ContextPtr context,
         QueryProcessingStage::Enum & processed_stage,
         size_t max_block_size,
-        unsigned num_streams) override
+        size_t num_streams) override
     {
         return getNested()->watch(column_names, query_info, context, processed_stage, max_block_size, num_streams);
     }
@@ -58,7 +58,7 @@ public:
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
-        unsigned num_streams) override
+        size_t num_streams) override
     {
         return getNested()->read(column_names, storage_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
     }

@@ -568,7 +568,7 @@ void BaseDaemon::closeFDs()
     {
         int max_fd = -1;
 #if defined(_SC_OPEN_MAX)
-        max_fd = sysconf(_SC_OPEN_MAX);
+        max_fd = static_cast<int>(sysconf(_SC_OPEN_MAX));
         if (max_fd == -1)
 #endif
             max_fd = 256; /// bad fallback

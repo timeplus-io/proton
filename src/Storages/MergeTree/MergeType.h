@@ -22,7 +22,7 @@ enum class MergeType
 };
 
 /// Check parsed merge_type from raw int and get enum value.
-MergeType checkAndGetMergeType(UInt64 merge_type);
+MergeType checkAndGetMergeType(UInt32 merge_type);
 
 String toString(MergeType merge_type);
 

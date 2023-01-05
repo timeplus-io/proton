@@ -307,7 +307,7 @@ struct KeeperStorageCreateRequestProcessor final : public KeeperStorageRequestPr
         created_node.stat.ctime = std::chrono::system_clock::now().time_since_epoch() / std::chrono::milliseconds(1);
         created_node.stat.mtime = created_node.stat.ctime;
         created_node.stat.numChildren = 0;
-        created_node.stat.dataLength = request.data.length();
+        created_node.stat.dataLength = static_cast<Int32>(request.data.length());
         created_node.stat.ephemeralOwner = request.is_ephemeral ? session_id : 0;
         created_node.data = request.data;
         created_node.is_sequental = request.is_sequential;
@@ -598,7 +598,7 @@ struct KeeperStorageSetRequestProcessor final : public KeeperStorageRequestProce
                 value.stat.version++;
                 value.stat.mzxid = zxid;
                 value.stat.mtime = std::chrono::system_clock::now().time_since_epoch() / std::chrono::milliseconds(1);
-                value.stat.dataLength = request.data.length();
+                value.stat.dataLength = static_cast<Int32>(request.data.length());
                 value.size_bytes = value.size_bytes + request.data.size() - value.data.size();
                 value.data = request.data;
             });

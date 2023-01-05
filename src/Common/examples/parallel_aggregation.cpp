@@ -492,7 +492,7 @@ int main(int argc, char ** argv)
 
         size_t size_before_merge = 0;
         std::cerr << "Sizes: ";
-        for (size_t i = 0; i < num_threads; ++i)
+        for (unsigned i = 0; i < num_threads; ++i)
         {
             std::cerr << (i == 0 ? "" : ", ") << maps[i].size();
             size_before_merge += maps[i].size();
@@ -545,7 +545,7 @@ int main(int argc, char ** argv)
 
         size_t size_before_merge = 0;
         std::cerr << "Sizes: ";
-        for (size_t i = 0; i < num_threads; ++i)
+        for (unsigned i = 0; i < num_threads; ++i)
         {
             std::cerr << (i == 0 ? "" : ", ") << maps[i].size();
             size_before_merge += maps[i].size();

@@ -96,7 +96,7 @@ Pipe ProxyStream::read(
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
-    unsigned num_streams)
+    size_t num_streams)
 {
     QueryPlan plan;
     read(plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
@@ -112,7 +112,7 @@ void ProxyStream::read(
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
-    unsigned num_streams)
+    size_t num_streams)
 {
     /// issue-1289
     /// If current table function is session / tumble / hop,

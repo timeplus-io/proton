@@ -133,7 +133,7 @@ void KafkaWALConsumer::initHandle()
 int32_t KafkaWALConsumer::addSubscriptions(const TopicPartitionOffsets & partitions_)
 {
     auto topic_partitions = std::unique_ptr<rd_kafka_topic_partition_list_t, decltype(rd_kafka_topic_partition_list_destroy) *>(
-        rd_kafka_topic_partition_list_new(partitions_.size()), rd_kafka_topic_partition_list_destroy);
+        rd_kafka_topic_partition_list_new(static_cast<int>(partitions_.size())), rd_kafka_topic_partition_list_destroy);
 
     for (const auto & partition : partitions_)
     {
@@ -157,7 +157,7 @@ int32_t KafkaWALConsumer::addSubscriptions(const TopicPartitionOffsets & partiti
 int32_t KafkaWALConsumer::removeSubscriptions(const TopicPartitionOffsets & partitions_)
 {
     auto topic_partitions = std::unique_ptr<rd_kafka_topic_partition_list_t, decltype(rd_kafka_topic_partition_list_destroy) *>(
-        rd_kafka_topic_partition_list_new(partitions_.size()), rd_kafka_topic_partition_list_destroy);
+        rd_kafka_topic_partition_list_new(static_cast<int>(partitions_.size())), rd_kafka_topic_partition_list_destroy);
 
     for (const auto & partition : partitions_)
     {
@@ -216,7 +216,7 @@ ConsumeResult KafkaWALConsumer::consume(uint32_t count, int32_t timeout_ms, std:
         }
         else
         {
-            timeout_ms = abs_time - now;
+            timeout_ms = static_cast<int32_t>(abs_time - now);
         }
     }
     return result;
@@ -246,7 +246,7 @@ int32_t KafkaWALConsumer::stopConsume()
 int32_t KafkaWALConsumer::commit(const TopicPartitionOffsets & tpos)
 {
     std::unique_ptr<rd_kafka_topic_partition_list_t, decltype(rd_kafka_topic_partition_list_destroy) *> topic_partition_list(
-        rd_kafka_topic_partition_list_new(tpos.size()), rd_kafka_topic_partition_list_destroy);
+        rd_kafka_topic_partition_list_new(static_cast<int>(tpos.size())), rd_kafka_topic_partition_list_destroy);
 
     for (const auto & tpo : tpos)
     {

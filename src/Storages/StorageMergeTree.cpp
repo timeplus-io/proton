@@ -243,7 +243,7 @@ void StorageMergeTree::read(
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
-    unsigned num_streams)
+    size_t num_streams)
 {
     /// If true, then we will ask initiator if we can read chosen ranges
     bool enable_parallel_reading = local_context->getClientInfo().collaborate_with_initiator;
@@ -263,7 +263,7 @@ Pipe StorageMergeTree::read(
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     const size_t max_block_size,
-    const unsigned num_streams)
+    const size_t num_streams)
 {
     QueryPlan plan;
     read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);

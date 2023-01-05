@@ -56,11 +56,11 @@ bool Bzip2ReadBuffer::nextImpl()
     if (!bz->stream.avail_in)
     {
         in->nextIfAtEnd();
-        bz->stream.avail_in = in->buffer().end() - in->position();
+        bz->stream.avail_in = static_cast<unsigned>(in->buffer().end() - in->position());
         bz->stream.next_in = in->position();
     }
 
-    bz->stream.avail_out = internal_buffer.size();
+    bz->stream.avail_out = static_cast<unsigned>(internal_buffer.size());
     bz->stream.next_out = internal_buffer.begin();
 
     int ret = BZ2_bzDecompress(&bz->stream);

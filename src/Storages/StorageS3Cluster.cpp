@@ -78,7 +78,7 @@ Pipe StorageS3Cluster::read(
     ContextPtr context,
     QueryProcessingStage::Enum processed_stage,
     size_t /*max_block_size*/,
-    unsigned /*num_streams*/)
+    size_t /*num_streams*/)
 {
     StorageS3::updateClientAndAuthSettings(context, client_auth);
 

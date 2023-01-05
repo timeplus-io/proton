@@ -276,7 +276,7 @@ Pipe StorageMaterializedView::read(
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     const size_t max_block_size,
-    const unsigned num_streams)
+    const size_t num_streams)
 {
     QueryPlan plan;
     read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
@@ -292,7 +292,7 @@ void StorageMaterializedView::read(
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     const size_t max_block_size,
-    const unsigned num_streams)
+    const size_t num_streams)
 {
     /// The behavior of querying a MV is same as querying the underlying stream`
     /// In some cases, the view background thread has exception, we check it before users access this view

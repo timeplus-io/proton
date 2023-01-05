@@ -55,20 +55,21 @@ static int compareValuesWithOffset(const IColumn * _compared_column,
         _compared_column);
     const auto * reference_column = assert_cast<const ColumnType *>(
         _reference_column);
+
+    using ValueType = typename ColumnType::ValueType;
     // Note that the storage type of offset returned by get<> is different, so
     // we need to specify the type explicitly.
-    const typename ColumnType::ValueType offset
-            = _offset.get<typename ColumnType::ValueType>();
+    const ValueType offset = static_cast<ValueType>(_offset.get<ValueType>());
     assert(offset >= 0);
 
     const auto compared_value_data = compared_column->getDataAt(compared_row);
-    assert(compared_value_data.size == sizeof(typename ColumnType::ValueType));
-    auto compared_value = unalignedLoad<typename ColumnType::ValueType>(
+    assert(compared_value_data.size == sizeof(ValueType));
+    auto compared_value = unalignedLoad<ValueType>(
         compared_value_data.data);
 
     const auto reference_value_data = reference_column->getDataAt(reference_row);
-    assert(reference_value_data.size == sizeof(typename ColumnType::ValueType));
-    auto reference_value = unalignedLoad<typename ColumnType::ValueType>(
+    assert(reference_value_data.size == sizeof(ValueType));
+    auto reference_value = unalignedLoad<ValueType>(
         reference_value_data.data);
 
     bool is_overflow;
@@ -139,11 +140,11 @@ static int compareValuesWithOffsetFloat(const IColumn * _compared_column,
     // have to do anything.
     if (offset_is_preceding)
     {
-        reference_value -= offset;
+        reference_value -= static_cast<typename ColumnType::ValueType>(offset);
     }
     else
     {
-        reference_value += offset;
+        reference_value += static_cast<typename ColumnType::ValueType>(offset);
     }
 
     const auto result =  compared_value < reference_value ? -1

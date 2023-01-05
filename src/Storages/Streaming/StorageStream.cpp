@@ -622,7 +622,7 @@ void StorageStream::read(
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
-    unsigned num_streams)
+    size_t num_streams)
 {
     auto shards_to_read = getRequiredShardsToRead(context_, query_info);
 
@@ -679,7 +679,7 @@ void StorageStream::readHistory(
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
-    unsigned num_streams)
+    size_t num_streams)
 {
     assert(!shards_to_read.empty());
 
@@ -745,7 +745,7 @@ Pipe StorageStream::read(
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
-    unsigned num_streams)
+    size_t num_streams)
 {
     QueryPlan plan;
     read(plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);

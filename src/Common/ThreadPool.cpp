@@ -82,7 +82,7 @@ void ThreadPoolImpl<Thread>::setQueueSize(size_t value)
 
 template <typename Thread>
 template <typename ReturnType>
-ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, int priority, std::optional<uint64_t> wait_microseconds)
+ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, ssize_t priority, std::optional<uint64_t> wait_microseconds, [[maybe_unused]] bool propagate_opentelemetry_tracing_context)
 {
     auto on_error = [&](const std::string & reason)
     {
@@ -154,19 +154,19 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, int priority, std::opti
 }
 
 template <typename Thread>
-void ThreadPoolImpl<Thread>::scheduleOrThrowOnError(Job job, int priority)
+void ThreadPoolImpl<Thread>::scheduleOrThrowOnError(Job job, ssize_t priority)
 {
     scheduleImpl<void>(std::move(job), priority, std::nullopt);
 }
 
 template <typename Thread>
-bool ThreadPoolImpl<Thread>::trySchedule(Job job, int priority, uint64_t wait_microseconds) noexcept
+bool ThreadPoolImpl<Thread>::trySchedule(Job job, ssize_t priority, uint64_t wait_microseconds) noexcept
 {
     return scheduleImpl<bool>(std::move(job), priority, wait_microseconds);
 }
 
 template <typename Thread>
-void ThreadPoolImpl<Thread>::scheduleOrThrow(Job job, int priority, uint64_t wait_microseconds)
+void ThreadPoolImpl<Thread>::scheduleOrThrow(Job job, ssize_t priority, uint64_t wait_microseconds)
 {
     scheduleImpl<void>(std::move(job), priority, wait_microseconds);
 }

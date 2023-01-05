@@ -159,7 +159,7 @@ void MemoryTracker::allocImpl(Int64 size, bool throw_if_memory_exceeded)
 #endif
 
     std::bernoulli_distribution fault(fault_probability);
-    if (unlikely(fault_probability && fault(thread_local_rng)) && memoryTrackerCanThrow(level, true) && throw_if_memory_exceeded)
+    if (unlikely(fault_probability > 0.0 && fault(thread_local_rng)) && memoryTrackerCanThrow(level, true) && throw_if_memory_exceeded)
     {
         /// Prevent recursion. Exception::ctor -> std::string -> new[] -> MemoryTracker::alloc
         MemoryTrackerBlockerInThread untrack_lock(VariableContext::Global);

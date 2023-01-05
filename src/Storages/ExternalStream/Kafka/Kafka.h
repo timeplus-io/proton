@@ -26,7 +26,7 @@ public:
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
-        unsigned num_streams) override;
+        size_t num_streams) override;
 
     const String & brokers() const { return settings->brokers.value; }
     const String & dataFormat() const { return data_format; }

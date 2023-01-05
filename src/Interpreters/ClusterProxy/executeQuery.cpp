@@ -166,7 +166,7 @@ void executeQuery(
 
         stream_factory.createForShard(shard_info,
             query_ast_for_shard, main_table, table_func_ptr,
-            new_context, plans, remote_shards, shards);
+            new_context, plans, remote_shards, static_cast<UInt32>(shards));
     }
 
     if (!remote_shards.empty())

@@ -57,7 +57,7 @@ ByteVector Record::serialize() const
 
     /// Re-write the prefix length. Memory copy is the actual implementation of DB::writeIntBinary
     /// so borrow the logic here. Please note this is not CPU architecture compatible
-    prefix_length = data.size() - sizeof(prefix_length);
+    prefix_length = static_cast<uint32_t>(data.size() - sizeof(prefix_length));
     memcpy(data.data(), &prefix_length, sizeof(prefix_length));
 
     return data;
@@ -279,7 +279,7 @@ uint32_t Record::ballparkSize() const
         metadata_size += kv.second.size();
     }
 
-    ballpark_size = block.bytes() + metadata_size;
+    ballpark_size = static_cast<uint32_t>(block.bytes() + metadata_size);
     return ballpark_size;
 }
 

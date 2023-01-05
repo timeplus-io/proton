@@ -219,7 +219,7 @@ private:
         // Offset from start to first attribute
         uint8_t attr_offset;
         // Offset within debug info.
-        uint32_t offset;
+        uint64_t offset;
         uint64_t code;
         DIEAbbreviation abbr;
     };
@@ -245,10 +245,10 @@ private:
         uint8_t version;
         uint8_t addr_size;
         // Offset in .debug_info of this compilation unit.
-        uint32_t offset;
-        uint32_t size;
+        uint64_t offset;
+        uint64_t size;
         // Offset in .debug_info for the first DIE in this compilation unit.
-        uint32_t first_die;
+        uint64_t first_die;
         uint64_t abbrev_offset;
         // Only the CompilationUnit that contains the caller functions needs this cache.
         // Indexed by (abbr.code - 1) if (abbr.code - 1) < abbrCache.size();

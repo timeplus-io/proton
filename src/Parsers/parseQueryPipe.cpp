@@ -427,7 +427,7 @@ std::pair<String, ASTPtr> doRewriteQueryPipeAndParse(
     {
         Expected expected;
         Tokens tokens(pos, end, max_query_size);
-        IParser::Pos token_iterator(tokens, max_parser_depth);
+        IParser::Pos token_iterator(tokens, static_cast<uint32_t>(max_parser_depth));
 
         if (token_iterator->isEnd() || token_iterator->type == TokenType::Semicolon)
         {
@@ -484,7 +484,7 @@ std::pair<String, ASTPtr> rewriteQueryPipeAndParse(
 {
     const auto desc = "querypipe";
     Tokens tokens(pos, end, max_query_size);
-    IParser::Pos token_iterator(tokens, max_parser_depth);
+    IParser::Pos token_iterator(tokens, static_cast<uint32_t>(max_parser_depth));
     Expected expected;
 
     /// Parse base query. Base query can be any query. If base query can go through

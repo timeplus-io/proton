@@ -39,7 +39,7 @@ void SchemaNativeWriter::write(const DB::Block & block)
     /// Dimensions
     /// We don't support these many columns and rows in one block
     uint16_t columns = block.columns();
-    uint32_t rows = block.rows();
+    uint32_t rows = static_cast<uint32_t>(block.rows());
 
     assert(columns > 0);
     assert(column_positions.empty() || column_positions.size() == columns);

@@ -31,7 +31,7 @@ public:
         const SelectQueryInfo & query_info,
         ContextPtr context,
         UInt64 max_block_size,
-        unsigned num_streams,
+        size_t num_streams,
         QueryProcessingStage::Enum processed_stage,
         std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read = nullptr,
         bool enable_parallel_reading = false) const;
@@ -44,7 +44,7 @@ public:
         const SelectQueryInfo & query_info,
         ContextPtr context,
         UInt64 max_block_size,
-        unsigned num_streams,
+        size_t num_streams,
         std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read = nullptr,
         MergeTreeDataSelectAnalysisResultPtr merge_tree_select_result_ptr = nullptr,
         bool enable_parallel_reading = false,
@@ -60,7 +60,7 @@ public:
         const StorageMetadataPtr & metadata_snapshot,
         const SelectQueryInfo & query_info,
         ContextPtr context,
-        unsigned num_streams,
+        size_t num_streams,
         std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read = nullptr) const;
 
     /// proton: starts
@@ -70,7 +70,7 @@ public:
         const SelectQueryInfo & query_info,
         ContextPtr context,
         UInt64 max_block_size,
-        unsigned num_streams,
+        size_t num_streams,
         QueryProcessingStage::Enum processed_stage,
         std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read = nullptr,
         bool enable_parallel_reading = false,

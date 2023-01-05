@@ -94,15 +94,15 @@ void MsgPackRowOutputFormat::serializeField(const IColumn & column, DataTypePtr 
         case TypeIndex::String:
         {
             StringRef string = assert_cast<const ColumnString &>(column).getDataAt(row_num);
-            packer.pack_bin(string.size);
-            packer.pack_bin_body(string.data, string.size);
+            packer.pack_bin(static_cast<unsigned>(string.size()));
+            packer.pack_bin_body(string.data(), static_cast<unsigned>(string.size()));
             return;
         }
         case TypeIndex::FixedString:
         {
             StringRef string = assert_cast<const ColumnFixedString &>(column).getDataAt(row_num);
-            packer.pack_bin(string.size);
-            packer.pack_bin_body(string.data, string.size);
+            packer.pack_bin(static_cast<unsigned>(string.size()));
+            packer.pack_bin_body(string.data(), static_cast<unsigned>(string.size()));
             return;
         }
         case TypeIndex::Array:
@@ -113,7 +113,7 @@ void MsgPackRowOutputFormat::serializeField(const IColumn & column, DataTypePtr 
             const ColumnArray::Offsets & offsets = column_array.getOffsets();
             size_t offset = offsets[row_num - 1];
             size_t size = offsets[row_num] - offset;
-            packer.pack_array(size);
+            packer.pack_array(static_cast<unsigned>(size));
             for (size_t i = 0; i < size; ++i)
             {
                 serializeField(nested_column, nested_type, offset + i);
@@ -147,7 +147,7 @@ void MsgPackRowOutputFormat::serializeField(const IColumn & column, DataTypePtr 
             const auto & offsets = nested_column.getOffsets();
             size_t offset = offsets[row_num - 1];
             size_t size = offsets[row_num] - offset;
-            packer.pack_map(size);
+            packer.pack_map(static_cast<unsigned>(size));
             for (size_t i = 0; i < size; ++i)
             {
                 serializeField(*key_column, map_type.getKeyType(), offset + i);

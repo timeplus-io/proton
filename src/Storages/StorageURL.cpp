@@ -402,7 +402,7 @@ Pipe IStorageURLBase::read(
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
-    unsigned num_streams)
+    size_t num_streams)
 {
     auto params = getReadURIParams(column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size);
     bool with_globs = (uri.find('{') != std::string::npos && uri.find('}') != std::string::npos)
@@ -475,7 +475,7 @@ Pipe StorageURLWithFailover::read(
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
-    unsigned /*num_streams*/)
+    size_t /*num_streams*/)
 {
     auto params = getReadURIParams(column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size);
     auto metadata_snapshot = storage_snapshot->getMetadataForQuery();

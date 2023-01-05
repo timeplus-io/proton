@@ -81,7 +81,7 @@ static bool pollFd(int fd, size_t timeout_milliseconds, int events)
 
     while (true)
     {
-        res = poll(&pfd, 1, timeout_milliseconds);
+        res = poll(&pfd, 1, static_cast<int>(timeout_milliseconds));
 
         if (res < 0)
         {
@@ -536,7 +536,7 @@ Pipe ShellCommandSourceCoordinator::createPipe(
         }
         else
         {
-            auto descriptor = i + 2;
+            int descriptor = static_cast<int>(i) + 2;
             auto it = process->write_fds.find(descriptor);
             if (it == process->write_fds.end())
                 throw Exception(ErrorCodes::UNSUPPORTED_METHOD, "Process does not contain descriptor to write {}", descriptor);
