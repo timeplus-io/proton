@@ -81,15 +81,16 @@
 
 /// proton: starts
 #include <Checkpoint/CheckpointCoordinator.h>
-#include <Common/Config/ExternalGrokPatterns.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/DDLService.h>
 #include <DistributedMetadata/PlacementService.h>
 #include <DistributedMetadata/TaskStatusService.h>
+#include <Interpreters/DiskUtilChecker.h>
 #include <KafkaLog/KafkaWALPool.h>
 #include <NativeLog/Server/NativeLog.h>
 #include <Server/RestRouterHandlers/RestRouterFactory.h>
+#include <Common/Config/ExternalGrokPatterns.h>
 
 namespace DB
 {
@@ -370,12 +371,16 @@ void deinitDistributedMetadataServices(DB::ContextMutablePtr global_context)
 
 
 /// Init global singletons to
-void initGlobalSingletons()
+/// proton: starts
+void initGlobalSingletons(DB::ContextMutablePtr & context)
 {
     DB::DataTypeFactory::instance();   /// Fixed occasional crash errors during delayed initialization
     GlobalThreadPool::instance();
+    /// init DiskQuotaChecker
+    DB::DiskUtilChecker::instance(context);
+    DB::ExternalGrokPatterns::instance(context);
 }
-
+/// proton: ends
 }
 
 namespace DB
@@ -1191,7 +1196,6 @@ if (ThreadFuzzer::instance().isEffective())
             global_context->loadOrReloadDictionaries(*config);
             global_context->loadOrReloadModels(*config);
             /// proton: starts
-            //global_context->loadOrReloadUserDefinedExecutableFunctions(*config);
             global_context->loadOrReloadUserDefinedExecutableFunctions();
             /// proton: ends
 
@@ -1421,11 +1425,10 @@ if (ThreadFuzzer::instance().isEffective())
     LOG_INFO(log, "Loading metadata from {}", path_str);
 
     /// proton: start. init Distributed metadata services for Stream table engine
-    initGlobalSingletons();
+    initGlobalSingletons(global_context);
     global_context->setupNodeIdentity();
     global_context->setConfigPath(config_path);
     initGlobalServices(global_context);
-    ExternalGrokPatterns::instance(global_context);
     /// proton: end.
 
     try

@@ -1,8 +1,7 @@
 #include "StorageMaterializedView.h"
 #include "StorageStream.h"
 
-#include <Storages/SelectQueryDescription.h>
-#include <Storages/StorageFactory.h>
+#include <Interpreters/DiskUtilChecker.h>
 
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -27,28 +26,30 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
+#include <Storages/SelectQueryDescription.h>
+#include <Storages/StorageFactory.h>
 #include <Common/ProtonCommon.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
-    extern const int INCORRECT_QUERY;
-    extern const int QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW;
-    extern const int NOT_IMPLEMENTED;
-    extern const int NUMBER_OF_COLUMNS_DOESNT_MATCH;
-    extern const int RESOURCE_NOT_INITED;
+extern const int BAD_ARGUMENTS;
+extern const int INCORRECT_QUERY;
+extern const int QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW;
+extern const int NOT_IMPLEMENTED;
+extern const int NUMBER_OF_COLUMNS_DOESNT_MATCH;
+extern const int RESOURCE_NOT_INITED;
 }
 
 namespace
 {
-    String generateInnerTableName(const StorageID & view_id)
-    {
-        if (view_id.hasUUID())
-            return ".inner.target-id." + toString(view_id.uuid);
-        return ".inner.target." + view_id.getTableName();
-    }
+String generateInnerTableName(const StorageID & view_id)
+{
+    if (view_id.hasUUID())
+        return ".inner.target-id." + toString(view_id.uuid);
+    return ".inner.target." + view_id.getTableName();
+}
 }
 
 class CheckMaterializedViewValidTransform final : public ISimpleTransform
@@ -192,15 +193,16 @@ void StorageMaterializedView::startup()
         if (max_retries <= 0)
         {
             background_status.has_exception = true;
-            background_status.exception
-                = std::make_exception_ptr(Exception(ErrorCodes::RESOURCE_NOT_INITED, "init inner table '{}' failed", getStorageID().getFullTableName()));
+            background_status.exception = std::make_exception_ptr(
+                Exception(ErrorCodes::RESOURCE_NOT_INITED, "init inner table '{}' failed", getStorageID().getFullTableName()));
             LOG_ERROR(log, "Init inner table '{}' failed", getStorageID().getFullTableName());
             return;
         }
 
         try
         {
-            InterpreterSelectWithUnionQuery select_interpreter(metadata_snapshot->getSelectQuery().inner_query, local_context, SelectQueryOptions());
+            InterpreterSelectWithUnionQuery select_interpreter(
+                metadata_snapshot->getSelectQuery().inner_query, local_context, SelectQueryOptions());
             if (!select_interpreter.isStreaming())
                 throw Exception(ErrorCodes::INCORRECT_QUERY, "Streaming View doesn't support historical query");
 
@@ -428,6 +430,9 @@ StoragePtr StorageMaterializedView::getTargetTable()
 
 void StorageMaterializedView::checkValid() const
 {
+    /// check disk quota
+    DiskUtilChecker::instance(nullptr).check();
+
     if (background_status.has_exception)
         throw Exception(
             getExceptionErrorCode(background_status.exception),

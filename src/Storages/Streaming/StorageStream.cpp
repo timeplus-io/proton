@@ -5,6 +5,8 @@
 #include "StreamingStoreSource.h"
 #include "parseHostShards.h"
 
+#include <Interpreters/DiskUtilChecker.h>
+
 #include <Columns/ColumnConst.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <Functions/IFunction.h>
@@ -952,6 +954,8 @@ std::optional<UInt64> StorageStream::totalBytes(const Settings & settings) const
 
 SinkToStoragePtr StorageStream::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_)
 {
+    /// check if exceed the total storage quota if will interrupt any running INSERT query
+    DiskUtilChecker::instance(context_).check();
     return std::make_shared<StreamSink>(*this, metadata_snapshot, context_);
 }
 

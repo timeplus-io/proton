@@ -24,6 +24,9 @@
 #    include <jemalloc/jemalloc.h>
 #endif
 
+/// proton: starts
+#include <Interpreters/DiskUtilChecker.h>
+/// proton: ends
 
 namespace CurrentMetrics
 {
@@ -1311,6 +1314,10 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     /// Free and total space on every configured disk.
     {
         DisksMap disks_map = getContext()->getDisksMap();
+        /// proton: starts. Update disk utilization
+        DiskUtilChecker::instance(nullptr).updateUtils(disks_map);
+        /// proton: ends
+
         for (const auto & [name, disk] : disks_map)
         {
             auto total = disk->getTotalSpace();
