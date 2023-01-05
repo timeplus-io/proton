@@ -6,7 +6,7 @@ on:
     inputs:
       base_proton_tag:
         description: "Base Proton Docker Image Tag"
-        default: "timeplus/proton:prestage"
+        default: "timeplus/proton:develop"
         required: true
 
       tag_suffix:

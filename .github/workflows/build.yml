@@ -42,11 +42,11 @@ jobs:
 
         # build docker image
         docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$GITHUB_SHA
-        docker tag timeplus/proton:$GITHUB_SHA timeplus/proton:prestage-amd64
+        docker tag timeplus/proton:$GITHUB_SHA timeplus/proton:amd64
 
         # push docker image
         docker push timeplus/proton:$GITHUB_SHA
-        docker push timeplus/proton:prestage-amd64
+        docker push timeplus/proton:amd64
 
         # upload build cache
         tar -zcf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache .
@@ -88,11 +88,11 @@ jobs:
 
         # build docker image
         docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$GITHUB_SHA
-        docker tag timeplus/proton:$GITHUB_SHA timeplus/proton:prestage-arm64v8
+        docker tag timeplus/proton:$GITHUB_SHA timeplus/proton:arm64v8
 
         # push docker image
         docker push timeplus/proton:$GITHUB_SHA
-        docker push timeplus/proton:prestage-arm64v8
+        docker push timeplus/proton:arm64v8
 
         # upload build cache
         tar -zcf ./cache-arm.tar.gz -C $GITHUB_WORKSPACE/ccache .
@@ -119,26 +119,21 @@ jobs:
         git config user.name "proton-robot"
         git config user.email "proton_robot@timeplus.io"
         
-        docker pull timeplus/proton:prestage-amd64
+        docker pull timeplus/proton:amd64
+        docker pull timeplus/proton:arm64v8
 
-        docker manifest create timeplus/proton:prestage \
-          timeplus/proton:prestage-amd64 \
-          timeplus/proton:prestage-arm64v8
+        docker manifest create timeplus/proton:develop \
+          timeplus/proton:amd64 \
+          timeplus/proton:arm64v8
 
-        docker manifest push timeplus/proton:prestage
+        docker manifest push timeplus/proton:develop
 
-        docker manifest create timeplus/proton:latest \
-          timeplus/proton:prestage-amd64 \
-          timeplus/proton:prestage-arm64v8
+        PROTON_TAG="$(docker history --no-trunc timeplus/proton:amd64 | grep -Eo 'ARG version=[0-9]+.[0-9]+.[0-9]+' -o | grep -Eo '[0-9]+.[0-9]+.[0-9]+')"
+        docker manifest create timeplus/proton:$PROTON_TAG \
+          timeplus/proton:amd64 \
+          timeplus/proton:arm64v8
 
-        docker manifest push timeplus/proton:latest
-
-        PROTON_TAG="$(docker history --no-trunc timeplus/proton:prestage-amd64 | grep -Eo 'ARG version=[0-9]+.[0-9]+.[0-9]+' -o | grep -Eo '[0-9]+.[0-9]+.[0-9]+')"
-        docker manifest create timeplus/proton:$PROTON_TAG-prestage \
-          timeplus/proton:prestage-amd64 \
-          timeplus/proton:prestage-arm64v8
-
-        docker manifest push timeplus/proton:$PROTON_TAG-prestage
+        docker manifest push timeplus/proton:$PROTON_TAG
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

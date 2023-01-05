@@ -59,7 +59,7 @@ services:
       - proton-cluster-node1  
 
   proton-cluster-node1:
-    image: timeplus/proton:${PROTON_TAG:-prestage}
+    image: timeplus/proton:${PROTON_TAG:-develop}
     logging: *default-logging
     extra_hosts: 
         - "kafka:${KAFKA_IP}"      
@@ -98,7 +98,7 @@ services:
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
 
   proton-cluster-node2:
-    image: timeplus/proton:${PROTON_TAG:-prestage}
+    image: timeplus/proton:${PROTON_TAG:-develop}
     logging: *default-logging
     extra_hosts: 
         - "kafka:${KAFKA_IP}"      
@@ -138,7 +138,7 @@ services:
 
 
   proton-cluster-node3:
-    image: timeplus/proton:${PROTON_TAG:-prestage}
+    image: timeplus/proton:${PROTON_TAG:-develop}
     logging: *default-logging
     extra_hosts: 
         - "kafka:${KAFKA_IP}"      
