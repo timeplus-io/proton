@@ -18,7 +18,7 @@ extern const int OK;
 }
 
 StreamSink::StreamSink(StorageStream & storage_, const StorageMetadataPtr metadata_snapshot_, ContextPtr query_context_)
-    : SinkToStorage(metadata_snapshot_->getSampleBlockNonMaterialized(), ProcessorID::StreamSinkID)
+    : SinkToStorage(query_context_->getSettingsRef().insert_allow_materialized_columns.value ? metadata_snapshot_->getSampleBlock() : metadata_snapshot_->getSampleBlockNonMaterialized(), ProcessorID::StreamSinkID)
     , storage(storage_)
     , metadata_snapshot(metadata_snapshot_)
     /// , storage_snapshot(storage.getStorageSnapshot(metadata_snapshot))
@@ -28,7 +28,7 @@ StreamSink::StreamSink(StorageStream & storage_, const StorageMetadataPtr metada
     /// Check this case here
     const auto & sink_block_header = getHeader();
     auto full_metadata_snapshot = storage_.getInMemoryMetadataPtr(metadata_snapshot->version);
-    auto full_header = full_metadata_snapshot->getSampleBlockNonMaterialized();
+    auto full_header = query_context->getSettingsRef().insert_allow_materialized_columns.value ? full_metadata_snapshot->getSampleBlock() : full_metadata_snapshot->getSampleBlockNonMaterialized();
     if (full_header.columns() != sink_block_header.columns())
     {
         /// light ingest

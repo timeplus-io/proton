@@ -311,7 +311,10 @@ Chain InterpreterInsertQuery::buildChainLightImpl(
         }
         else if (column.default_desc.expression)
         {
-            /// We don't support materialized columns yet: column.default_desc.kind == ColumnDefaultKind::Materialized
+            if (column.default_desc.kind == ColumnDefaultKind::Alias)
+                continue;
+            if (column.default_desc.kind == ColumnDefaultKind::Materialized && !allow_materialized)
+                throw Exception("Cannot insert column " + column.name + ", because it is MATERIALIZED column.", ErrorCodes::ILLEGAL_COLUMN);
             col = header.findByName(column.name);
             assert(col);
             sorted_required_columns.emplace(pos, NameAndTypePair(col->name, col->type));
