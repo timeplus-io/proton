@@ -1,0 +1,13 @@
+SET asterisk_include_reserved_columns=false;
+DROP STREAM IF EXISTS mergetree_00673;
+
+create stream mergetree_00673 (x uint64) ENGINE = MergeTree ORDER BY x;
+INSERT INTO mergetree_00673 VALUES (1);
+
+SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM mergetree_00673 WHERE x IN (SELECT * FROM numbers(10000000))))))))))));
+
+SET force_primary_key = 1;
+
+SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM mergetree_00673 WHERE x IN (SELECT * FROM numbers(10000000))))))))))));
+
+DROP STREAM mergetree_00673;

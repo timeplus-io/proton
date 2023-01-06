@@ -2,7 +2,7 @@
 WITH to_datetime('1970-06-17 07:39:21', 'Africa/Monrovia') as t
 SELECT to_unix_timestamp(t),
        timeZoneOffset(t),
-       formatDateTime(t, '%F %T', 'Africa/Monrovia'),
+       format_datetime(t, '%F %T', 'Africa/Monrovia'),
        to_string(t, 'Africa/Monrovia'),
        to_start_of_minute(t),
        to_start_of_five_minute(t),

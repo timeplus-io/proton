@@ -1,14 +1,14 @@
 SELECT countDigits(to_decimal32(0, 0)), countDigits(to_decimal32(42, 0)), countDigits(to_decimal32(4.2, 1)),
        countDigits(to_decimal64(0, 0)), countDigits(to_decimal64(42, 0)), countDigits(to_decimal64(4.2, 2)),
-       countDigits(toDecimal128(0, 0)), countDigits(toDecimal128(42, 0)), countDigits(toDecimal128(4.2, 3));
+       countDigits(to_decimal128(0, 0)), countDigits(to_decimal128(42, 0)), countDigits(to_decimal128(4.2, 3));
 
 SELECT countDigits(materialize(to_decimal32(4.2, 1))),
        countDigits(materialize(to_decimal64(4.2, 2))),
-       countDigits(materialize(toDecimal128(4.2, 3)));
+       countDigits(materialize(to_decimal128(4.2, 3)));
 
 SELECT countDigits(to_decimal32(1, 9)), countDigits(to_decimal32(-1, 9)),
        countDigits(to_decimal64(1, 18)), countDigits(to_decimal64(-1, 18)),
-       countDigits(toDecimal128(1, 38)), countDigits(toDecimal128(-1, 38));
+       countDigits(to_decimal128(1, 38)), countDigits(to_decimal128(-1, 38));
        
 SELECT countDigits(to_int8(42)), countDigits(to_int8(-42)), countDigits(to_uint8(42)),
        countDigits(to_int16(42)), countDigits(to_int16(-42)), countDigits(to_uint16(42)),
@@ -27,4 +27,4 @@ SELECT countDigits(to_int8(127)), countDigits(to_int8(-128)),  countDigits(to_ui
 
 SELECT countDigits(to_nullable(to_decimal32(4.2, 1))), countDigits(materialize(to_nullable(to_decimal32(4.2, 2)))),
        countDigits(to_nullable(to_decimal64(4.2, 3))), countDigits(materialize(to_nullable(to_decimal64(4.2, 4)))),
-       countDigits(to_nullable(toDecimal128(4.2, 5))), countDigits(materialize(to_nullable(toDecimal128(4.2, 6))));
+       countDigits(to_nullable(to_decimal128(4.2, 5))), countDigits(materialize(to_nullable(to_decimal128(4.2, 6))));

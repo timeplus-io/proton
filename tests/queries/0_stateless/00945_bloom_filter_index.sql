@@ -349,12 +349,12 @@ SELECT id FROM test_bf_indexOf WHERE index_of(ary, 'value1') >= 2 ORDER BY id FO
 SELECT id FROM test_bf_indexOf WHERE 2 <= index_of(ary, 'value1') ORDER BY id FORMAT TSV;
 
 SELECT id FROM test_bf_indexOf WHERE index_of(ary, 'value1') = to_decimal32(0, 2) ORDER BY id FORMAT TSV;
-SELECT id FROM test_bf_indexOf WHERE toDecimal128(0, 2) = index_of(ary, 'value1') ORDER BY id FORMAT TSV;
+SELECT id FROM test_bf_indexOf WHERE to_decimal128(0, 2) = index_of(ary, 'value1') ORDER BY id FORMAT TSV;
 SELECT id FROM test_bf_indexOf WHERE index_of(ary, 'value1') = '0' ORDER BY id FORMAT TSV;
 SELECT id FROM test_bf_indexOf WHERE '0' = index_of(ary, 'value1') ORDER BY id FORMAT TSV;
 
 SELECT id FROM test_bf_indexOf WHERE index_of(ary, 'value1') > to_decimal32(0, 2) ORDER BY id FORMAT TSV;
-SELECT id FROM test_bf_indexOf WHERE index_of(ary, 'value1') < toDecimal128(1, 2) ORDER BY id FORMAT TSV;
+SELECT id FROM test_bf_indexOf WHERE index_of(ary, 'value1') < to_decimal128(1, 2) ORDER BY id FORMAT TSV;
 SELECT id FROM test_bf_indexOf WHERE index_of(ary, 'value1') > '0' ORDER BY id FORMAT TSV;
 SELECT id FROM test_bf_indexOf WHERE index_of(ary, 'value1') < '1' ORDER BY id FORMAT TSV;
 

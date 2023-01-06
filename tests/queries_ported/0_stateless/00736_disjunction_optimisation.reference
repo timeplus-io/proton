@@ -1,0 +1,91 @@
+0
+1	21
+1	22
+1	23
+2	21
+2	22
+2	23
+3	21
+3	22
+3	23
+1	21
+1	22
+1	23
+2	21
+2	22
+2	23
+3	21
+3	22
+3	23
+1	21
+1	22
+1	23
+2	21
+2	22
+2	23
+3	21
+3	22
+3	23
+1	true	21	true	true	true
+1	true	22	false	true	true
+1	true	23	false	false	true
+2	true	21	true	true	true
+2	true	22	false	true	true
+2	true	23	false	false	true
+3	true	21	true	true	true
+3	true	22	false	true	true
+3	true	23	false	false	true
+21	true
+22	true
+23	true
+21	true
+22	true
+23	true
+21	true
+22	true
+23	true
+1	21
+1	22
+1	23
+2	21
+2	22
+2	23
+3	21
+3	22
+3	23
+1	21
+1	22
+1	23
+2	21
+2	22
+2	23
+3	21
+3	22
+3	23
+1	21
+1	22
+1	23
+2	21
+2	22
+2	23
+3	21
+3	22
+3	23
+1	true	21	true	true	true
+1	true	22	false	true	true
+1	true	23	false	false	true
+2	true	21	true	true	true
+2	true	22	false	true	true
+2	true	23	false	false	true
+3	true	21	true	true	true
+3	true	22	false	true	true
+3	true	23	false	false	true
+21	true
+22	true
+23	true
+21	true
+22	true
+23	true
+21	true
+22	true
+23	true

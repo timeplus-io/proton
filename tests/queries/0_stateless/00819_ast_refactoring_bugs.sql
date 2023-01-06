@@ -1,3 +1,4 @@
+SET query_mode='table';
 DROP STREAM IF EXISTS visits1;
 create stream visits1
 (

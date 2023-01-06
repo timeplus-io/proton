@@ -18,7 +18,7 @@ ${CLICKHOUSE_CLIENT} -q "SELECT count() FROM system.warnings WHERE message LIKE 
 ${CLICKHOUSE_CLIENT} --multiple_joins_rewriter_version=42 -q "SELECT message FROM system.warnings WHERE message LIKE '%obsolete setting%'"
 
 # Avoid duplicated warnings
-${CLICKHOUSE_CLIENT} -q "SELECT count() = countDistinct(message) FROM system.warnings"
+${CLICKHOUSE_CLIENT} -q "SELECT count() = count_distinct(message) FROM system.warnings"
 
 # Avoid too many warnings, especially in CI
 ${CLICKHOUSE_CLIENT} -q "SELECT count() < 5 FROM system.warnings"

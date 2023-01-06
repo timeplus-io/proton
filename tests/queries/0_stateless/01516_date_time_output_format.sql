@@ -6,11 +6,11 @@ INSERT INTO test_datetime VALUES ('2020-10-15 00:00:00');
 
 SET date_time_output_format = 'simple';
 SELECT timestamp FROM test_datetime;
-SELECT formatDateTime(to_datetime('2020-10-15 00:00:00', 'Europe/Moscow'), '%Y-%m-%d %R:%S') as formatted_simple FROM test_datetime;
+SELECT format_datetime(to_datetime('2020-10-15 00:00:00', 'Europe/Moscow'), '%Y-%m-%d %R:%S') as formatted_simple FROM test_datetime;
 
 SET date_time_output_format = 'iso';
 SELECT timestamp FROM test_datetime;
-SELECT formatDateTime(to_datetime('2020-10-15 00:00:00', 'Europe/Moscow'), '%Y-%m-%dT%R:%SZ', 'UTC') as formatted_iso FROM test_datetime;;
+SELECT format_datetime(to_datetime('2020-10-15 00:00:00', 'Europe/Moscow'), '%Y-%m-%dT%R:%SZ', 'UTC') as formatted_iso FROM test_datetime;;
 
 SET date_time_output_format = 'unix_timestamp';
 SELECT timestamp FROM test_datetime;

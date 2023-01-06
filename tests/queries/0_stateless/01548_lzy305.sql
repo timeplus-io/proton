@@ -62,7 +62,7 @@ create stream fct_rt_dc_shop_sku_vender_day
     rt_fresh_dc_cost Decimal(18,4),
     rt_fresh_dc_qty Decimal(18,4),
     rt_fresh_dc_shops low_cardinality(nullable(string)),
-    stat_day_num string default formatDateTime(stat_day, '%F')
+    stat_day_num string default format_datetime(stat_day, '%F')
 )
 engine = MergeTree PARTITION BY to_YYYYMM(stat_day) ORDER BY (stat_day, out_shop_id) SETTINGS index_granularity = 8192
 ;

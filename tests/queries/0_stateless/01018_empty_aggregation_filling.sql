@@ -52,12 +52,12 @@ SELECT array_reduce('maxOrNull', array_pop_back(['hello']));
 SELECT array_reduce('maxOrDefault', array_pop_back(array_pop_back([to_datetime('2011-04-05 14:19:19'), null])));
 SELECT array_reduce('maxOrNull', array_pop_back(array_pop_back([to_datetime('2011-04-05 14:19:19'), null])));
 
-SELECT array_reduce('avgOrDefault', array_pop_back([toDecimal128(-123.45, 2)]));
-SELECT array_reduce('avgOrNull', array_pop_back([toDecimal128(-123.45, 2)]));
-SELECT array_reduce('stddevSampOrDefault', array_pop_back([toDecimal128(-123.45, 2)]));
-SELECT array_reduce('stddevSampOrNull', array_pop_back([toDecimal128(-123.45, 2)]));
-SELECT array_reduce('maxOrDefault', array_pop_back([toDecimal128(-123.45, 2)]));
-SELECT array_reduce('maxOrNull', array_pop_back([toDecimal128(-123.45, 2)]));
+SELECT array_reduce('avgOrDefault', array_pop_back([to_decimal128(-123.45, 2)]));
+SELECT array_reduce('avgOrNull', array_pop_back([to_decimal128(-123.45, 2)]));
+SELECT array_reduce('stddevSampOrDefault', array_pop_back([to_decimal128(-123.45, 2)]));
+SELECT array_reduce('stddevSampOrNull', array_pop_back([to_decimal128(-123.45, 2)]));
+SELECT array_reduce('maxOrDefault', array_pop_back([to_decimal128(-123.45, 2)]));
+SELECT array_reduce('maxOrNull', array_pop_back([to_decimal128(-123.45, 2)]));
 
 SELECT '--- Other Types Non-empty ---';
 
@@ -67,9 +67,9 @@ SELECT array_reduce('maxOrNull', ['hello']);
 SELECT array_reduce('maxOrDefault', [to_datetime('2011-04-05 14:19:19'), null]);
 SELECT array_reduce('maxOrNull', [to_datetime('2011-04-05 14:19:19'), null]);
 
-SELECT array_reduce('avgOrDefault', [toDecimal128(-123.45, 2)]);
-SELECT array_reduce('avgOrNull', [toDecimal128(-123.45, 2)]);
-SELECT array_reduce('stddevSampOrDefault', [toDecimal128(-123.45, 2)]);
-SELECT array_reduce('stddevSampOrNull', [toDecimal128(-123.45, 2)]);
-SELECT array_reduce('maxOrDefault', [toDecimal128(-123.45, 2)]);
-SELECT array_reduce('maxOrNull', [toDecimal128(-123.45, 2)]);
+SELECT array_reduce('avgOrDefault', [to_decimal128(-123.45, 2)]);
+SELECT array_reduce('avgOrNull', [to_decimal128(-123.45, 2)]);
+SELECT array_reduce('stddevSampOrDefault', [to_decimal128(-123.45, 2)]);
+SELECT array_reduce('stddevSampOrNull', [to_decimal128(-123.45, 2)]);
+SELECT array_reduce('maxOrDefault', [to_decimal128(-123.45, 2)]);
+SELECT array_reduce('maxOrNull', [to_decimal128(-123.45, 2)]);

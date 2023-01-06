@@ -414,7 +414,7 @@ order by
     revenue desc
 limit 20;
 
-select 11; -- TODO: remove toDecimal()
+select 11; -- TODO: remove to_decimal()
 select
     ps_partkey,
     sum(ps_supplycost * ps_availqty) as value

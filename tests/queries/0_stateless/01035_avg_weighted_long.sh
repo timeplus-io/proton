@@ -7,8 +7,8 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 ${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, weight) FROM (SELECT t.1 AS x, t.2 AS weight FROM (SELECT array_join([(1, 5), (2, 4), (3, 3), (4, 2), (5, 1)]) AS t));"
 ${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, weight) FROM (SELECT t.1 AS x, t.2 AS weight FROM (SELECT array_join([(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)]) AS t));"
-${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, y) FROM (select toDecimal256(1, 0) x, toDecimal256(1, 1) y);"
-${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, y) FROM (select to_decimal32(1, 0) x, toDecimal256(1, 1) y);"
+${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, y) FROM (select to_decimal256(1, 0) x, to_decimal256(1, 1) y);"
+${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, y) FROM (select to_decimal32(1, 0) x, to_decimal256(1, 1) y);"
 
 types=("int8" "int16" "int32" "int64" "uint8" "uint16" "uint32" "uint64" "float32" "float64")
 
@@ -38,7 +38,7 @@ for left in "${dtypes[@]}"
 do
     for right in "${dtypes[@]}"
     do
-        ${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(toDecimal${left}(2, 4), toDecimal${right}(1, 4))"
+        ${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(to_decimal${left}(2, 4), to_decimal${right}(1, 4))"
     done
 done
 

@@ -1,0 +1,46 @@
+0
+false
+true
+false
+true
+false
+true
+-42	-42	true	false	false	false	true	true
+42	42	true	false	false	false	true	true
+-42	-42.42	false	false	true	true	false	true
+42	42.42	false	true	false	true	true	false
+true	true	true
+false	false	false
+-42	false	false	false	false
+42	true	true	true	true
+-42	false	false	false	false
+42	true	true	true	true
+0.42	0.42	0.42
+42.42	42.42	42.42	42.42
+-42.42	-42.42	-42.42	-42.42
+42	42	42
+42	42	42
+42	42	42
+42	42	42
+42	42	42
+42	42	42
+-42	-42.42	-42	-42
+42	42	42	42.42
+-42	-42	-42.42
+0	0	0
+0	0	0
+42	42	42.42
+true	false
+true	false
+true	false
+true	false
+2147483648	false	true
+9223372036854775808	false	true
+false	true
+false	true
+false	true
+false	true
+false	true
+false	true
+-42	-42	-42	-0.42	-0.42	-0.42	-42.42	-42.42	-42.42	-42.42
+42	42	42	0.42	0.42	0.42	42.42	42.42	42.42	42.42

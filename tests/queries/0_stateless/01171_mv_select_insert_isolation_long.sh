@@ -103,10 +103,10 @@ function thread_select_insert()
         INSERT INTO tmp SELECT 2, nm FROM mv;
         INSERT INTO tmp SELECT 3, nm FROM dst;
         INSERT INTO tmp SELECT 4, (*,).1 FROM (SELECT n*m FROM src UNION ALL SELECT nm FROM mv UNION ALL SELECT nm FROM dst);
-        SELECT throwIf((SELECT countDistinct(x) FROM tmp) != 4) FORMAT Null;
+        SELECT throwIf((SELECT count_distinct(x) FROM tmp) != 4) FORMAT Null;
 
         -- now check that all results are the same
-        SELECT throwIf(1 != (SELECT countDistinct(arr) FROM (SELECT x, arraySort(groupArray(nm)) AS arr FROM tmp WHERE x!=4 GROUP BY x))) FORMAT Null;
+        SELECT throwIf(1 != (SELECT count_distinct(arr) FROM (SELECT x, arraySort(groupArray(nm)) AS arr FROM tmp WHERE x!=4 GROUP BY x))) FORMAT Null;
         SELECT throwIf((SELECT count(), sum(nm) FROM tmp WHERE x=4) != (SELECT count(), sum(nm) FROM tmp WHERE x!=4)) FORMAT Null;
         ROLLBACK;"
     done

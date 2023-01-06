@@ -90,8 +90,8 @@ function thread_select()
         $CLICKHOUSE_CLIENT --multiquery --query "
         BEGIN TRANSACTION;
         -- no duplicates
-        SELECT type, throwIf(count(n) != countDistinct(n)) FROM src GROUP BY type FORMAT Null;
-        SELECT type, throwIf(count(n) != countDistinct(n)) FROM dst GROUP BY type FORMAT Null;
+        SELECT type, throwIf(count(n) != count_distinct(n)) FROM src GROUP BY type FORMAT Null;
+        SELECT type, throwIf(count(n) != count_distinct(n)) FROM dst GROUP BY type FORMAT Null;
         -- rows inserted by thread_insert moved together
         SET throw_on_unsupported_query_inside_transaction=0;
         SELECT _table, throwIf(arraySort(groupArrayIf(n, type=1)) != arraySort(groupArrayIf(n, type=2))) FROM merge(currentDatabase(), '') GROUP BY _table FORMAT Null;
@@ -113,7 +113,7 @@ kill -TERM $PID_2
 wait
 wait_for_queries_to_finish
 
-$CLICKHOUSE_CLIENT -q "SELECT type, count(n) = countDistinct(n) FROM merge(currentDatabase(), '') GROUP BY type ORDER BY type"
+$CLICKHOUSE_CLIENT -q "SELECT type, count(n) = count_distinct(n) FROM merge(currentDatabase(), '') GROUP BY type ORDER BY type"
 $CLICKHOUSE_CLIENT -q "SELECT DISTINCT arraySort(groupArrayIf(n, type=1)) = arraySort(groupArrayIf(n, type=2)) FROM merge(currentDatabase(), '') GROUP BY _table ORDER BY _table"
 $CLICKHOUSE_CLIENT -q "SELECT count(n), sum(n) FROM merge(currentDatabase(), '') WHERE type=4"
 $CLICKHOUSE_CLIENT -q "SELECT type, count(n) == max(n), sum(n) == max(n)*(max(n)+1)/2 FROM merge(currentDatabase(), '') WHERE type IN (1, 2) GROUP BY type ORDER BY type"

@@ -10,7 +10,7 @@ select * from (select 0 as k, to_uint64(1) as v) t1 asof join (select 0 as k, to
 
 select * from (select 0 as k, to_decimal32(1, 0) as v) t1 asof join (select 0 as k, to_decimal32(0, 0) as v) t2 using(k, v);
 select * from (select 0 as k, to_decimal64(1, 0) as v) t1 asof join (select 0 as k, to_decimal64(0, 0) as v) t2 using(k, v);
-select * from (select 0 as k, toDecimal128(1, 0) as v) t1 asof join (select 0 as k, toDecimal128(0, 0) as v) t2 using(k, v);
+select * from (select 0 as k, to_decimal128(1, 0) as v) t1 asof join (select 0 as k, to_decimal128(0, 0) as v) t2 using(k, v);
 
 select * from (select 0 as k, to_date(0) as v) t1 asof join (select 0 as k, to_date(0) as v) t2 using(k, v);
 select * from (select 0 as k, to_datetime(0, 'UTC') as v) t1 asof join (select 0 as k, to_datetime(0, 'UTC') as v) t2 using(k, v);

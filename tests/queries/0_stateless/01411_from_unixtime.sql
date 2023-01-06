@@ -1,6 +1,6 @@
-SELECT formatDateTime(FROM_UNIXTIME(123), '%Y-%m-%d %R:%S', 'UTC');
-SELECT formatDateTime(FROM_UNIXTIME(123456789), '%Y-%m-%d %R:%S', 'UTC');
-SELECT formatDateTime(FROM_UNIXTIME(6457477432), '%Y-%m-%d %R:%S', 'UTC');
+SELECT format_datetime(FROM_UNIXTIME(123), '%Y-%m-%d %R:%S', 'UTC');
+SELECT format_datetime(FROM_UNIXTIME(123456789), '%Y-%m-%d %R:%S', 'UTC');
+SELECT format_datetime(FROM_UNIXTIME(6457477432), '%Y-%m-%d %R:%S', 'UTC');
 SELECT FROM_UNIXTIME(5345345, '%C', 'UTC');
 SELECT FROM_UNIXTIME(645123, '%H', 'UTC');
 SELECT FROM_UNIXTIME(1232456, '%Y-%m-%d', 'UTC');

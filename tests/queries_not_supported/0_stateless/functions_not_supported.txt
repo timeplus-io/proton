@@ -44,3 +44,16 @@
 ./URLHash
 ./varSamp
 ./visible_width
+./throwIF
+./avgArray
+./lengthUTF8
+./windowFunnel
+./histogram
+./toDateOrZero
+./maxIntersections
+./toLowCardinality
+./retention
+./groupUniqArrayState
+./boundingRatio
+./sumForEachArray
+./base64Encode

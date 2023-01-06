@@ -1,3 +1,4 @@
+SET query_mode='table';
 DROP STREAM IF EXISTS t1_00856;
 DROP STREAM IF EXISTS t2_00856;
 create stream t1_00856 (n int32) ;

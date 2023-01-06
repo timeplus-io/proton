@@ -1,0 +1,7 @@
+========Before Truncate========
+0
+test_string
+========Execute Truncate========
+0
+========After Truncate========
+test_string

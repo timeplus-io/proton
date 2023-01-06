@@ -1,0 +1,20 @@
+[0,1]	array(decimal(9, 4))
+[0,1]	array(decimal(18, 8))
+[0,1]	array(decimal(38, 8))
+-
+1	decimal(38, 4)
+1	decimal(38, 8)
+1	decimal(38, 8)
+-
+[1,2]	array(decimal(38, 4))
+[1,2]	array(decimal(38, 8))
+[1,2]	array(decimal(38, 8))
+-
+[1,2]	array(decimal(38, 4))
+[1,2]	array(decimal(38, 8))
+[1,2]	array(decimal(38, 8))
+-
+[1]	array(decimal(9, 4))
+[1]	array(decimal(18, 8))
+[1]	array(decimal(38, 8))
+-
