@@ -514,10 +514,8 @@ MergeTreeDataSelectSamplingData MergeTreeDataSelectExecutor::getSampling(
     /// Select all data from first replica and no data from other replicas.
     if (settings.parallel_replicas_count > 1 && !data.supportsSampling() && settings.parallel_replica_offset > 0)
     {
-        /// proton: starts
         LOG_DEBUG(log, "Will use no data on this replica because parallel replicas processing has been requested"
             " (the setting 'max_parallel_replicas') but the stream does not support sampling and this replica is not the first.");
-        /// proton: ends
         sampling.read_nothing = true;
         return sampling;
     }
@@ -858,7 +856,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
             {
                 auto [it, inserted] = merged_indices.try_emplace({index_helper->index.type, index_helper->getGranularity()});
                 if (inserted)
-                    it->second.condition = index_helper->createIndexMergedCondtition(query_info, metadata_snapshot);
+                    it->second.condition = index_helper->createIndexMergedCondition(query_info, metadata_snapshot);
 
                 it->second.addIndex(index_helper);
             }
@@ -1189,12 +1187,10 @@ static void selectColumnNames(
         {
             if (!typeid_cast<const DataTypeTuple *>(data.getPartitionValueType().get()))
             {
-                /// proton: starts
                 throw Exception(
                     ErrorCodes::NO_SUCH_COLUMN_IN_STREAM,
                     "Missing column `_partition_value` because there is no partition column in stream {}",
                     data.getStorageID().getTableName());
-                /// proton: ends
             }
 
             virt_column_names.push_back(name);
@@ -1562,10 +1558,10 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
     UncompressedCache * uncompressed_cache,
     Poco::Logger * log)
 {
-    const std::string & path_prefix = part->getFullRelativePath() + index_helper->getFileName();
-    if (!index_helper->getDeserializedFormat(part->volume->getDisk(), path_prefix))
+    if (!index_helper->getDeserializedFormat(part->getDataPartStorage(), index_helper->getFileName()))
     {
-        LOG_DEBUG(log, "File for index {} does not exist ({}.*). Skipping it.", backQuote(index_helper->index.name), path_prefix);
+        LOG_DEBUG(log, "File for index {} does not exist ({}.*). Skipping it.", backQuote(index_helper->index.name),
+            (fs::path(part->getDataPartStorage().getFullPath()) / index_helper->getFileName()).string());
         return ranges;
     }
 
@@ -1655,7 +1651,7 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingMergedIndex(
 {
     for (const auto & index_helper : indices)
     {
-        if (!part->volume->getDisk()->exists(part->getFullRelativePath() + index_helper->getFileName() + ".idx"))
+        if (!part->getDataPartStorage().exists(index_helper->getFileName() + ".idx"))
         {
             LOG_DEBUG(log, "File for index {} does not exist. Skipping it.", backQuote(index_helper->index.name));
             return ranges;

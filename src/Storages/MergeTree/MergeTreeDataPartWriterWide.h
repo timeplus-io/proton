@@ -18,7 +18,7 @@ class MergeTreeDataPartWriterWide : public MergeTreeDataPartWriterOnDisk
 {
 public:
     MergeTreeDataPartWriterWide(
-        const MergeTreeData::DataPartPtr & data_part,
+        const MergeTreeMutableDataPartPtr & data_part,
         const NamesAndTypesList & columns_list,
         const StorageMetadataPtr & metadata_snapshot,
         const std::vector<MergeTreeIndexPtr> & indices_to_recalc,

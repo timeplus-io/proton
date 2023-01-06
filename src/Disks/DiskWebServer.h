@@ -94,7 +94,7 @@ public:
 
     bool isDirectory(const String & path) const override;
 
-    DiskDirectoryIteratorPtr iterateDirectory(const String & /* path */) override;
+    DirectoryIteratorPtr iterateDirectory(const String & /* path */) const override;
 
     Poco::Timestamp getLastModified(const String &) override { return Poco::Timestamp{}; }
 
@@ -140,7 +140,7 @@ public:
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Disk {} is read-only", getName());
     }
 
-    void removeSharedRecursive(const String &, bool) override
+    void removeSharedRecursive(const String &, bool, const NameSet &) override
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Disk {} is read-only", getName());
     }

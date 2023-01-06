@@ -110,7 +110,7 @@ void StorageSystemPartsColumns::processNextStorage(
         auto index_size_in_bytes = part->getIndexSizeInBytes();
         auto index_size_in_allocated_bytes = part->getIndexSizeInAllocatedBytes();
 
-        using State = IMergeTreeDataPart::State;
+        using State = MergeTreeDataPartState;
 
         size_t column_position = 0;
         for (const auto & column : part->getColumns())
@@ -183,9 +183,9 @@ void StorageSystemPartsColumns::processNextStorage(
             if (columns_mask[src_index++])
                 columns[res_index++]->insert(info.engine);
             if (columns_mask[src_index++])
-                columns[res_index++]->insert(part->volume->getDisk()->getName());
+                columns[res_index++]->insert(part->getDataPartStorage().getDiskName());
             if (columns_mask[src_index++])
-                columns[res_index++]->insert(part->getFullPath());
+                columns[res_index++]->insert(part->getDataPartStorage().getFullPath());
 
             if (columns_mask[src_index++])
                 columns[res_index++]->insert(column.name);

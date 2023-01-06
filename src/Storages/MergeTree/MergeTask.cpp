@@ -1,9 +1,11 @@
+#include "Storages/MergeTree/IDataPartStorage.h"
 #include <Storages/MergeTree/MergeTask.h>
 
 #include <memory>
 #include <fmt/format.h>
 
 #include <Common/logger_useful.h>
+#include <Storages/MergeTree/DataPartStorageOnDisk.h>
 
 #include <DataTypes/ObjectUtils.h>
 #include <DataTypes/Serializations/SerializationInfo.h>
@@ -73,7 +75,7 @@ static void extractMergingAndGatheringColumns(
 
     for (const auto & column : storage_columns)
     {
-        if (key_columns.count(column.name))
+        if (key_columns.contains(column.name))
         {
             merging_columns.emplace_back(column);
             merging_column_names.emplace_back(column.name);
@@ -118,21 +120,30 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::prepare()
 
     ctx->disk = global_ctx->space_reservation->getDisk();
 
-    String local_part_path = global_ctx->data->relative_data_path;
     String local_tmp_part_basename = local_tmp_prefix + global_ctx->future_part->name + local_tmp_suffix;
-    String local_new_part_tmp_path = local_part_path + local_tmp_part_basename + "/";
+    MutableDataPartStoragePtr data_part_storage;
 
-    if (ctx->disk->exists(local_new_part_tmp_path))
-        throw Exception("Directory " + fullPath(ctx->disk, local_new_part_tmp_path) + " already exists", ErrorCodes::DIRECTORY_ALREADY_EXISTS);
-
+    if (global_ctx->parent_part)
     {
-        std::lock_guard lock(global_ctx->mutator->tmp_parts_lock);
-        global_ctx->mutator->tmp_parts.emplace(local_tmp_part_basename);
+        data_part_storage = global_ctx->parent_part->getDataPartStorage().getProjection(local_tmp_part_basename);
     }
-    SCOPE_EXIT(
-        std::lock_guard lock(global_ctx->mutator->tmp_parts_lock);
-        global_ctx->mutator->tmp_parts.erase(local_tmp_part_basename);
-    );
+    else
+    {
+        auto local_single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + global_ctx->future_part->name, ctx->disk, 0);
+
+        data_part_storage = std::make_shared<DataPartStorageOnDisk>(
+            local_single_disk_volume,
+            global_ctx->data->relative_data_path,
+            local_tmp_part_basename);
+
+        data_part_storage->beginTransaction();
+    }
+
+    if (data_part_storage->exists())
+        throw Exception("Directory " + data_part_storage->getFullPath() + " already exists", ErrorCodes::DIRECTORY_ALREADY_EXISTS);
+
+    if (!global_ctx->parent_part)
+        global_ctx->temporary_directory_lock = global_ctx->data->getTemporaryPartDirectoryHolder(local_tmp_part_basename);
 
     global_ctx->all_column_names = global_ctx->metadata_snapshot->getColumns().getNamesOfPhysical();
     global_ctx->storage_columns = global_ctx->metadata_snapshot->getColumns().getAllPhysical();
@@ -151,13 +162,11 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::prepare()
         global_ctx->merging_columns,
         global_ctx->merging_column_names);
 
-    auto local_single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + global_ctx->future_part->name, ctx->disk, 0);
     global_ctx->new_data_part = global_ctx->data->createPart(
         global_ctx->future_part->name,
         global_ctx->future_part->type,
         global_ctx->future_part->part_info,
-        local_single_disk_volume,
-        local_tmp_part_basename,
+        data_part_storage,
         global_ctx->parent_part);
 
     global_ctx->new_data_part->uuid = global_ctx->future_part->uuid;
@@ -241,9 +250,6 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::prepare()
                 std::move(local_merged_column_to_size),
                 global_ctx->merging_column_names,
                 global_ctx->gathering_column_names);
-
-            if (global_ctx->data->getSettings()->fsync_part_directory)
-                global_ctx->sync_guard = ctx->disk->getDirectorySyncGuard(local_new_part_tmp_path);
 
             break;
         }
@@ -911,8 +917,7 @@ MergeAlgorithm MergeTask::ExecuteAndFinalizeHorizontalPart::chooseMergeAlgorithm
     bool is_supported_storage =
         ctx->merging_params.mode == MergeTreeData::MergingParams::Ordinary ||
         ctx->merging_params.mode == MergeTreeData::MergingParams::Collapsing ||
-        ctx->merging_params.mode == MergeTreeData::MergingParams::VersionedKV
-        ||
+        ctx->merging_params.mode == MergeTreeData::MergingParams::VersionedKV ||
         ctx->merging_params.mode == MergeTreeData::MergingParams::ChangelogKV;
 
     bool enough_ordinary_cols = global_ctx->gathering_columns.size() >= data_settings->vertical_merge_algorithm_min_columns_to_activate;

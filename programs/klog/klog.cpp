@@ -74,7 +74,7 @@ Block prepareData(Int32 batch_size)
 
     for (Int32 i = 0; i < batch_size; ++i)
     {
-        time_col_inner->insertValue(1612286044.256326 + i);
+        time_col_inner->insertValue(1612286044.256326 + static_cast<double>(i));
     }
 
     ColumnWithTypeAndName time_col_with_type(std::move(time_col), datetime64_type, ProtonConsts::RESERVED_EVENT_TIME);
@@ -771,13 +771,13 @@ Int64 ingest(KafkaWALPtrs & wals, ResultQueues & result_queues, const BenchmarkS
 struct ConsumeContext : public klog::ConsumeCallbackData
 {
     mutex & stdout_mutex;
-    atomic_int32_t & consumed;
+    atomic_uint64_t & consumed;
     KafkaWALContext & ctx;
     KafkaWALPtr & dwal;
     bool dumpdata;
     DB::Block header;
 
-    ConsumeContext(mutex & stdout_mutex_, atomic_int32_t & consumed_, KafkaWALContext & ctx_, KafkaWALPtr & dwal_, bool dumpdata_)
+    ConsumeContext(mutex & stdout_mutex_, atomic_uint64_t & consumed_, KafkaWALContext & ctx_, KafkaWALPtr & dwal_, bool dumpdata_)
         : stdout_mutex(stdout_mutex_), consumed(consumed_), ctx(ctx_), dwal(dwal_), dumpdata(dumpdata_), header(prepareData(0))
     {
     }
@@ -829,7 +829,7 @@ void consume(KafkaWALPtrs & wals, const BenchmarkSettings & bench_settings)
             ctx.consume_callback_max_messages = bench_settings.consumer_settings.max_messages;
             // ctx.schemas.push_back(table_schema); ? error: no member named 'schemas' in 'DWAL::KafkaWALContext'
 
-            atomic_int32_t consumed = 0;
+            atomic_uint64_t consumed = 0;
             Int32 batch = 100;
             Int32 max_messages = bench_settings.consumer_settings.max_messages;
 
@@ -890,12 +890,12 @@ void incrementalConsume(const BenchmarkSettings & bench_settings, Int32 size)
         wals.back()->startup();
     }
 
-    atomic_int32_t consumed = 0;
+    atomic_uint64_t consumed = 0;
 
     struct CallbackData : public klog::ConsumeCallbackData
     {
         const BenchmarkSettings & settings;
-        atomic_int32_t & consumed;
+        atomic_uint64_t & consumed;
         mutex & stdout_mutex;
         Int32 jobid;
         KafkaWALConsumerMultiplexerPtr & wal;
@@ -903,7 +903,7 @@ void incrementalConsume(const BenchmarkSettings & bench_settings, Int32 size)
 
         CallbackData(
             const BenchmarkSettings & settings_,
-            atomic_int32_t & consumed_,
+            atomic_uint64_t & consumed_,
             mutex & stdout_mutex_,
             KafkaWALConsumerMultiplexerPtr & wal_,
             Int32 jobid_)

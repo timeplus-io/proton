@@ -37,7 +37,6 @@ public:
 
 private:
     FileStreams streams;
-    DiskPtr disk;
 
     void addStreams(
         const NameAndTypePair & name_and_type,

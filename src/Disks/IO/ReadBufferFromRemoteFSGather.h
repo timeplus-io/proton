@@ -26,7 +26,7 @@ friend class ReadIndirectBufferFromRemoteFS;
 
 public:
     ReadBufferFromRemoteFSGather(
-        const RemoteMetadata & metadata_,
+        BlobsPathWithSize blobs_to_read_,
         const ReadSettings & settings_,
         const String & path_);
 
@@ -57,7 +57,7 @@ public:
 protected:
     virtual SeekableReadBufferPtr createImplementationBuffer(const String & path, size_t file_size) = 0;
 
-    RemoteMetadata metadata;
+    BlobsPathWithSize blobs_to_read;
 
     ReadSettings settings;
 
@@ -66,6 +66,8 @@ protected:
     size_t read_until_position = 0;
 
     String current_path;
+
+    String canonical_path;
 
 private:
     bool nextImpl() override;
@@ -89,7 +91,6 @@ private:
      */
     size_t bytes_to_ignore = 0;
 
-    String canonical_path;
 
     Poco::Logger * log;
 };
@@ -104,10 +105,10 @@ public:
         const String & path_,
         std::shared_ptr<Aws::S3::S3Client> client_ptr_,
         const String & bucket_,
-        IDiskRemote::Metadata metadata_,
+        BlobsPathWithSize blobs_to_read_,
         size_t max_single_read_retries_,
         const ReadSettings & settings_)
-        : ReadBufferFromRemoteFSGather(metadata_, settings_, path_)
+        : ReadBufferFromRemoteFSGather(std::move(blobs_to_read_), settings_, path_)
         , client_ptr(std::move(client_ptr_))
         , bucket(bucket_)
         , max_single_read_retries(max_single_read_retries_)
@@ -132,11 +133,11 @@ public:
     ReadBufferFromAzureBlobStorageGather(
         const String & path_,
         std::shared_ptr<Azure::Storage::Blobs::BlobContainerClient> blob_container_client_,
-        IDiskRemote::Metadata metadata_,
+        BlobsPathWithSize blobs_to_read_,
         size_t max_single_read_retries_,
         size_t max_single_download_retries_,
         const ReadSettings & settings_)
-        : ReadBufferFromRemoteFSGather(metadata_, settings_, path_)
+        : ReadBufferFromRemoteFSGather(std::move(blobs_to_read_), settings_, path_)
         , blob_container_client(blob_container_client_)
         , max_single_read_retries(max_single_read_retries_)
         , max_single_download_retries(max_single_download_retries_)
@@ -159,10 +160,10 @@ public:
     ReadBufferFromWebServerGather(
             const String & path_,
             const String & uri_,
-            RemoteMetadata metadata_,
+            BlobsPathWithSize blobs_to_read_,
             ContextPtr context_,
             const ReadSettings & settings_)
-        : ReadBufferFromRemoteFSGather(metadata_, settings_, path_)
+        : ReadBufferFromRemoteFSGather(std::move(blobs_to_read_), settings_, path_)
         , uri(uri_)
         , context(context_)
     {

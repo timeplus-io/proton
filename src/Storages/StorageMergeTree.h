@@ -256,6 +256,8 @@ private:
     /// return any ids.
     std::optional<MergeTreeMutationStatus> getIncompleteMutationsStatus(Int64 mutation_version, std::set<String> * mutation_ids = nullptr) const;
 
+    void fillNewPartName(MutableDataPartPtr & part, DataPartsLock & lock);
+
     void startBackgroundMovesIfNeeded() override;
 
     std::unique_ptr<MergeTreeSettings> getDefaultSettings() const override;

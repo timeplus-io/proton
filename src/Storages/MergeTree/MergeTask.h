@@ -58,7 +58,7 @@ public:
         bool deduplicate_,
         Names deduplicate_by_columns_,
         MergeTreeData::MergingParams merging_params_,
-        const IMergeTreeDataPart * parent_part_,
+        IMergeTreeDataPart * parent_part_,
         String suffix_,
         MergeTreeTransactionPtr txn,
         MergeTreeData * data_,
@@ -133,7 +133,7 @@ private:
         StorageMetadataPtr metadata_snapshot{nullptr};
         FutureMergedMutatedPartPtr future_part{nullptr};
         /// This will be either nullptr or new_data_part, so raw pointer is ok.
-        const IMergeTreeDataPart * parent_part{nullptr};
+        IMergeTreeDataPart * parent_part{nullptr};
         ContextPtr context{nullptr};
         time_t time_of_merge{0};
         ReservationSharedPtr space_reservation{nullptr};
@@ -158,7 +158,6 @@ private:
         QueryPipeline merged_pipeline;
         std::unique_ptr<PullingPipelineExecutor> merging_executor;
 
-        SyncGuardPtr sync_guard{nullptr};
         MergeTreeData::MutableDataPartPtr new_data_part{nullptr};
 
         size_t rows_written{0};
@@ -169,6 +168,8 @@ private:
         IMergedBlockOutputStream::WrittenOffsetColumns written_offset_columns{};
 
         MergeTreeTransactionPtr txn;
+
+        scope_guard temporary_directory_lock;
     };
 
     using GlobalRuntimeContextPtr = std::shared_ptr<GlobalRuntimeContext>;

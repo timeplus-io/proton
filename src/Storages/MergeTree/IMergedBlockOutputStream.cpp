@@ -6,14 +6,13 @@ namespace DB
 {
 
 IMergedBlockOutputStream::IMergedBlockOutputStream(
-    const MergeTreeDataPartPtr & data_part,
+    const MergeTreeMutableDataPartPtr & data_part,
     const StorageMetadataPtr & metadata_snapshot_,
     const NamesAndTypesList & columns_list,
     bool reset_columns_)
     : storage(data_part->storage)
     , metadata_snapshot(metadata_snapshot_)
-    , volume(data_part->volume)
-    , part_path(data_part->isStoredOnDisk() ? data_part->getFullRelativePath() : "")
+    , data_part_storage(data_part->getDataPartStoragePtr())
     , reset_columns(reset_columns_)
 {
     if (reset_columns)
@@ -96,6 +95,7 @@ NameSet IMergedBlockOutputStream::removeEmptyColumnsFromPart(
         if (remove_it != columns.end())
             columns.erase(remove_it);
     }
+
     return remove_files;
 }
 

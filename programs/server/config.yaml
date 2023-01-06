@@ -230,7 +230,7 @@ max_thread_pool_size: 10000
 # On memory constrained environments you may have to set this to value larger than 1.
 max_server_memory_usage_to_ram_ratio: 0.9
 
-# Maximum storage size can be used in bytes
+# Maximum local disk utilization. Once it is hit, all ingest will be errored out
 max_local_disk_usage_ratio: 0.9
 
 # Simple server-wide memory profiler. Collect a stack trace at every peak allocation step (in bytes).
@@ -971,7 +971,7 @@ cluster_settings:
             cluster_id: default-sys-kafka-cluster-id
             security_protocol: PLAINTEXT # support PLAINTEXT, SASL_SSL
             # if security_protocol is SASL_SSL, username and password should be specified.
-            # username: 
+            # username:
             # password:
             # Setup the Kafka brokers here
             brokers: localhost:9092

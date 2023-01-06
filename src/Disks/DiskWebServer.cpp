@@ -90,7 +90,7 @@ void DiskWebServer::initialize(const String & uri_path) const
 }
 
 
-class DiskWebServerDirectoryIterator final : public IDiskDirectoryIterator
+class DiskWebServerDirectoryIterator final : public IDirectoryIterator
 {
 public:
     explicit DiskWebServerDirectoryIterator(std::vector<fs::path> && dir_file_paths_)
@@ -165,10 +165,10 @@ std::unique_ptr<ReadBufferFromFileBase> DiskWebServer::readFile(const String & p
     auto remote_path = fs_path.parent_path() / (escapeForFileName(fs_path.stem()) + fs_path.extension().string());
     remote_path = remote_path.string().substr(url.size());
 
-    RemoteMetadata meta(path, remote_path);
-    meta.remote_fs_objects.emplace_back(std::make_pair(remote_path, iter->second.size));
+    std::vector<BlobPathWithSize> blobs_to_read;
+    blobs_to_read.emplace_back(remote_path, iter->second.size);
 
-    auto web_impl = std::make_unique<ReadBufferFromWebServerGather>(path, url, meta, getContext(), read_settings);
+    auto web_impl = std::make_unique<ReadBufferFromWebServerGather>(url, path, blobs_to_read, getContext(), read_settings);
 
     if (read_settings.remote_fs_method == RemoteFSReadMethod::threadpool)
     {
@@ -183,7 +183,7 @@ std::unique_ptr<ReadBufferFromFileBase> DiskWebServer::readFile(const String & p
 }
 
 
-DiskDirectoryIteratorPtr DiskWebServer::iterateDirectory(const String & path)
+DirectoryIteratorPtr DiskWebServer::iterateDirectory(const String & path) const
 {
     std::vector<fs::path> dir_file_paths;
     if (files.find(path) == files.end())

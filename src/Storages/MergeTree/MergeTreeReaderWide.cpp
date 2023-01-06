@@ -48,8 +48,6 @@ MergeTreeReaderWide::MergeTreeReaderWide(
 {
     try
     {
-        disk = data_part->volume->getDisk();
-
         for (size_t i = 0; i < columns_to_read.size(); ++i)
             addStreams(columns_to_read[i], serializations[i], profile_callback_, clock_type_);
     }
@@ -75,7 +73,7 @@ size_t MergeTreeReaderWide::readRows(
         std::unordered_map<String, ISerialization::SubstreamsCache> caches;
 
         std::unordered_set<std::string> prefetched_streams;
-        if (disk->isRemote() ? settings.read_settings.remote_fs_prefetch : settings.read_settings.local_fs_prefetch)
+        if (data_part->getDataPartStorage().isStoredOnRemoteDisk() ? settings.read_settings.remote_fs_prefetch : settings.read_settings.local_fs_prefetch)
         {
             /// Request reading of data in advance,
             /// so if reading can be asynchronous, it will also be performed in parallel for all columns.
@@ -141,7 +139,7 @@ size_t MergeTreeReaderWide::readRows(
             storage.reportBrokenPart(data_part);
 
         /// Better diagnostics.
-        e.addMessage("(while reading from part " + data_part->getFullPath() + " "
+        e.addMessage("(while reading from part " + data_part->getDataPartStorage().getFullPath() + " "
                      "from mark " + toString(from_mark) + " "
                      "with max_rows_to_read = " + toString(max_rows_to_read) + ")");
         throw;
@@ -177,12 +175,14 @@ void MergeTreeReaderWide::addStreams(
         if (!data_file_exists)
             return;
 
+        bool is_lc_dict = substream_path.size() > 1 && substream_path[substream_path.size() - 2].type == ISerialization::Substream::Type::DictionaryKeys;
+
         streams.emplace(stream_name, std::make_unique<MergeTreeReaderStream>(
-            disk, data_part->getFullRelativePath() + stream_name, DATA_FILE_EXTENSION,
+            data_part->getDataPartStoragePtr(), stream_name, DATA_FILE_EXTENSION,
             data_part->getMarksCount(), all_mark_ranges, settings, mark_cache,
             uncompressed_cache, data_part->getFileSizeOrZero(stream_name + DATA_FILE_EXTENSION),
             &data_part->index_granularity_info,
-            profile_callback, clock_type));
+            profile_callback, clock_type, is_lc_dict));
     };
 
     serialization->enumerateStreams(callback);
@@ -216,7 +216,7 @@ static ReadBuffer * getStream(
     else if (seek_to_mark)
         stream.seekToMark(from_mark);
 
-    return stream.data_buffer;
+    return stream.getDataBuffer();
 }
 
 void MergeTreeReaderWide::deserializePrefix(

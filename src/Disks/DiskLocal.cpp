@@ -169,7 +169,7 @@ private:
 };
 
 
-class DiskLocalDirectoryIterator final : public IDiskDirectoryIterator
+class DiskLocalDirectoryIterator final : public IDirectoryIterator
 {
 public:
     DiskLocalDirectoryIterator() = default;
@@ -315,7 +315,7 @@ void DiskLocal::moveDirectory(const String & from_path, const String & to_path)
     fs::rename(fs::path(disk_path) / from_path, fs::path(disk_path) / to_path);
 }
 
-DiskDirectoryIteratorPtr DiskLocal::iterateDirectory(const String & path)
+DirectoryIteratorPtr DiskLocal::iterateDirectory(const String & path) const
 {
     fs::path meta_path = fs::path(disk_path) / path;
     if (!broken && fs::exists(meta_path) && fs::is_directory(meta_path))
@@ -437,6 +437,14 @@ void DiskLocal::copy(const String & from_path, const std::shared_ptr<IDisk> & to
     }
     else
         copyThroughBuffers(from_path, to_disk, to_path); /// Base implementation.
+}
+
+void DiskLocal::copyDirectoryContent(const String & from_dir, const std::shared_ptr<IDisk> & to_disk, const String & to_dir)
+{
+    if (isSameDiskType(*this, *to_disk))
+        fs::copy(from_dir, to_dir, fs::copy_options::recursive | fs::copy_options::overwrite_existing); /// Use more optimal way.
+    else
+        copyThroughBuffers(from_dir, to_disk, to_dir, /* copy_root_dir */ false); /// Base implementation.
 }
 
 SyncGuardPtr DiskLocal::getDirectorySyncGuard(const String & path) const

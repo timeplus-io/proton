@@ -38,7 +38,10 @@ using BlocksWithPartition = std::vector<BlockWithPartition>;
 class MergeTreeDataWriter
 {
 public:
-    explicit MergeTreeDataWriter(MergeTreeData & data_) : data(data_), log(&Poco::Logger::get(data.getLogName() + " (Writer)")) {}
+    explicit MergeTreeDataWriter(MergeTreeData & data_)
+        : data(data_)
+        , log(&Poco::Logger::get(data.getLogName() + " (Writer)"))
+    {}
 
     /** Split the block to blocks, each of them must be written as separate part.
       *  (split rows by partition)
@@ -64,6 +67,8 @@ public:
 
         std::vector<Stream> streams;
 
+        scope_guard temporary_directory_lock;
+
         void finalize();
     };
 
@@ -79,7 +84,7 @@ public:
         Poco::Logger * log,
         Block block,
         const ProjectionDescription & projection,
-        const IMergeTreeDataPart * parent_part);
+        IMergeTreeDataPart * parent_part);
 
     /// For mutation: MATERIALIZE PROJECTION.
     static TemporaryPart writeTempProjectionPart(
@@ -87,7 +92,7 @@ public:
         Poco::Logger * log,
         Block block,
         const ProjectionDescription & projection,
-        const IMergeTreeDataPart * parent_part,
+        IMergeTreeDataPart * parent_part,
         size_t block_num);
 
     /// For WriteAheadLog AddPart.
@@ -96,7 +101,7 @@ public:
         Poco::Logger * log,
         Block block,
         const ProjectionDescription & projection,
-        const IMergeTreeDataPart * parent_part);
+        IMergeTreeDataPart * parent_part);
 
     static Block mergeBlock(
         const Block & block,
@@ -111,7 +116,7 @@ private:
         MergeTreeDataPartType part_type,
         const String & relative_path,
         bool is_temp,
-        const IMergeTreeDataPart * parent_part,
+        IMergeTreeDataPart * parent_part,
         const MergeTreeData & data,
         Poco::Logger * log,
         Block block,

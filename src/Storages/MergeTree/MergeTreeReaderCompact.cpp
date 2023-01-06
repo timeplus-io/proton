@@ -35,12 +35,13 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
         std::move(settings_),
         std::move(avg_value_size_hints_))
     , marks_loader(
-          data_part->volume->getDisk(),
+          data_part->getDataPartStoragePtr(),
           mark_cache,
-          data_part->index_granularity_info.getMarksFilePath(data_part->getFullRelativePath() + MergeTreeDataPartCompact::DATA_FILE_NAME),
+          data_part->index_granularity_info.getMarksFilePath(MergeTreeDataPartCompact::DATA_FILE_NAME),
           data_part->getMarksCount(),
           data_part->index_granularity_info,
           settings.save_marks_in_cache,
+          settings.read_settings,
           data_part->getColumns().size())
 {
     try
@@ -83,16 +84,19 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
         if (!settings.read_settings.local_fs_buffer_size || !settings.read_settings.remote_fs_buffer_size)
             throw Exception(ErrorCodes::CANNOT_READ_ALL_DATA, "Cannot read to empty buffer.");
 
-        const String full_data_path = data_part->getFullRelativePath() + MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION;
+        const String path = MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION;
+        auto data_part_storage = data_part->getDataPartStoragePtr();
+
         if (uncompressed_cache)
         {
             auto buffer = std::make_unique<CachedCompressedReadBuffer>(
-                fullPath(data_part->volume->getDisk(), full_data_path),
-                [this, full_data_path]()
+                std::string(fs::path(data_part_storage->getFullPath()) / path),
+                [this, path, data_part_storage]()
                 {
-                    return data_part->volume->getDisk()->readFile(
-                        full_data_path,
-                        settings.read_settings);
+                    return data_part_storage->readFile(
+                        path,
+                        settings.read_settings,
+                        std::nullopt, std::nullopt);
                 },
                 uncompressed_cache,
                 /* allow_different_codecs = */ true);
@@ -111,9 +115,10 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
         {
             auto buffer =
                 std::make_unique<CompressedReadBufferFromFile>(
-                    data_part->volume->getDisk()->readFile(
-                        full_data_path,
-                        settings.read_settings),
+                    data_part_storage->readFile(
+                        path,
+                        settings.read_settings,
+                        std::nullopt, std::nullopt),
                     /* allow_different_codecs = */ true);
 
             if (profile_callback_)

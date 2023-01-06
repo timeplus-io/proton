@@ -159,40 +159,47 @@ DiskS3::DiskS3(
     FileCachePtr cache_,
     ContextPtr context_,
     SettingsPtr settings_,
-    GetDiskSettings settings_getter_)
+    GetDiskSettings settings_getter_,
+    String operation_log_suffix_)
     : IDiskRemote(name_, s3_root_path_, metadata_disk_, std::move(cache_), "DiskS3", settings_->thread_pool_size)
     , bucket(std::move(bucket_))
     , current_settings(std::move(settings_))
     , settings_getter(settings_getter_)
     , context(context_)
+    , operation_log_suffix(operation_log_suffix_)
 {
 }
 
-RemoteFSPathKeeperPtr DiskS3::createFSPathKeeper() const
+void DiskS3::removeFromRemoteFS(const std::vector<String> & paths)
 {
     auto settings = current_settings.get();
-    return std::make_shared<S3PathKeeper>(settings->objects_chunk_size_to_delete);
-}
 
-void DiskS3::removeFromRemoteFS(RemoteFSPathKeeperPtr fs_paths_keeper)
-{
-    auto settings = current_settings.get();
-    auto * s3_paths_keeper = dynamic_cast<S3PathKeeper *>(fs_paths_keeper.get());
-
-    if (s3_paths_keeper)
-        s3_paths_keeper->removePaths([&](S3PathKeeper::Chunk && chunk)
+    size_t chunk_size_limit = settings->objects_chunk_size_to_delete;
+    size_t current_position = 0;
+    while (current_position < paths.size())
+    {
+        std::vector<Aws::S3::Model::ObjectIdentifier> current_chunk;
+        String keys;
+        for (; current_position < paths.size() && current_chunk.size() < chunk_size_limit; ++current_position)
         {
-            String keys = S3PathKeeper::getChunkKeys(chunk);
-            LOG_TRACE(log, "Remove AWS keys {}", keys);
-            Aws::S3::Model::Delete delkeys;
-            delkeys.SetObjects(chunk);
-            Aws::S3::Model::DeleteObjectsRequest request;
-            request.SetBucket(bucket);
-            request.SetDelete(delkeys);
-            auto outcome = settings->client->DeleteObjects(request);
-            // Do not throw here, continue deleting other chunks
-            logIfError(outcome, [&](){return "Can't remove AWS keys: " + keys;});
-        });
+            Aws::S3::Model::ObjectIdentifier obj;
+            obj.SetKey(paths[current_position]);
+            current_chunk.push_back(obj);
+
+            if (!keys.empty())
+                keys += ", ";
+            keys += paths[current_position];
+        }
+
+        LOG_TRACE(log, "Remove AWS keys {}", keys);
+        Aws::S3::Model::Delete delkeys;
+        delkeys.SetObjects(current_chunk);
+        Aws::S3::Model::DeleteObjectsRequest request;
+        request.SetBucket(bucket);
+        request.SetDelete(delkeys);
+        auto outcome = settings->client->DeleteObjects(request);
+        logIfError(outcome, [&](){return "Can't remove AWS keys: " + keys;});
+    }
 }
 
 void DiskS3::moveFile(const String & from_path, const String & to_path)
@@ -331,7 +338,7 @@ void DiskS3::shutdown()
 void DiskS3::createFileOperationObject(const String & operation_name, UInt64 revision, const DiskS3::ObjectMetadata & metadata)
 {
     auto settings = current_settings.get();
-    const String key = "operations/r" + revisionToString(revision) + "-" + operation_name;
+    const String key = "operations/r" + revisionToString(revision) + operation_log_suffix + "-" + operation_name;
     WriteBufferFromS3 buffer(
         settings->client,
         bucket,
@@ -805,7 +812,7 @@ void DiskS3::restore()
         bool cleanup_s3 = information.source_bucket != bucket || information.source_path != remote_fs_root_path;
         for (const auto & root : data_roots)
             if (exists(root))
-                removeSharedRecursive(root + '/', !cleanup_s3);
+                removeSharedRecursive(root + '/', !cleanup_s3, {});
 
         restoreFiles(information);
         restoreFileOperations(information);
@@ -909,6 +916,36 @@ void DiskS3::processRestoreFiles(const String & source_bucket, const String & so
     }
 }
 
+void DiskS3::moveRecursiveOrRemove(const String & from_path, const String & to_path, bool send_metadata)
+{
+    if (exists(to_path))
+    {
+        if (send_metadata)
+        {
+            auto revision = ++revision_counter;
+            const ObjectMetadata object_metadata {
+                {"from_path", from_path},
+                {"to_path", to_path}
+            };
+            createFileOperationObject("rename", revision, object_metadata);
+        }
+        if (isDirectory(from_path))
+        {
+            for (auto it = iterateDirectory(from_path); it->isValid(); it->next())
+                moveRecursiveOrRemove(it->path(), fs::path(to_path) / it->name(), false);
+        }
+        else
+        {
+            removeFile(from_path);
+            LOG_WARNING(log, "Collision in S3 operation log: rename from '{}' to '{}', file removed", from_path, to_path);
+        }
+    }
+    else
+    {
+        moveFile(from_path, to_path, send_metadata);
+    }
+}
+
 void DiskS3::restoreFileOperations(const RestoreInformation & restore_information)
 {
     auto settings = current_settings.get();
@@ -951,7 +988,7 @@ void DiskS3::restoreFileOperations(const RestoreInformation & restore_informatio
                 auto to_path = object_metadata["to_path"];
                 if (exists(from_path))
                 {
-                    moveFile(from_path, to_path, send_metadata);
+                    moveRecursiveOrRemove(from_path, to_path, send_metadata);
                     LOG_TRACE(log, "Revision {}. Restored rename {} -> {}", revision, from_path, to_path);
 
                     if (restore_information.detached && isDirectory(to_path))
@@ -1034,9 +1071,10 @@ void DiskS3::restoreFileOperations(const RestoreInformation & restore_informatio
 std::tuple<UInt64, String> DiskS3::extractRevisionAndOperationFromKey(const String & key)
 {
     String revision_str;
+    String suffix;
     String operation;
 
-    re2::RE2::FullMatch(key, key_regexp, &revision_str, &operation);
+    re2::RE2::FullMatch(key, key_regexp, &revision_str, &suffix, &operation);
 
     return {(revision_str.empty() ? UNKNOWN_REVISION : static_cast<UInt64>(std::bitset<64>(revision_str).to_ullong())), operation};
 }
@@ -1077,6 +1115,17 @@ void DiskS3::applyNewSettings(const Poco::Util::AbstractConfiguration & config, 
 
     if (AsyncExecutor * exec = dynamic_cast<AsyncExecutor*>(&getExecutor()))
         exec->setMaxThreads(current_settings.get()->thread_pool_size);
+}
+
+void DiskS3::syncRevision(UInt64 revision)
+{
+    UInt64 local_revision = revision_counter.load();
+    while ((revision > local_revision) && revision_counter.compare_exchange_weak(local_revision, revision));
+}
+
+UInt64 DiskS3::getRevision() const
+{
+    return revision_counter.load();
 }
 
 DiskS3Settings::DiskS3Settings(

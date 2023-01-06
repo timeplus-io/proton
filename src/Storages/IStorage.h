@@ -71,7 +71,7 @@ using DatabaseAndTableName = std::pair<String, String>;
 class IBackup;
 using BackupPtr = std::shared_ptr<const IBackup>;
 class IBackupEntry;
-using BackupEntries = std::vector<std::pair<String, std::unique_ptr<IBackupEntry>>>;
+using BackupEntries = std::vector<std::pair<String, std::shared_ptr<const IBackupEntry>>>;
 using RestoreDataTasks = std::vector<std::function<void()>>;
 
 struct ColumnSize

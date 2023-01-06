@@ -2,6 +2,7 @@
 
 #include <Common/logger_useful.h>
 #include <Common/escapeForFileName.h>
+#include <Storages/MergeTree/DataPartStorageOnDisk.h>
 #include <Parsers/queryToString.h>
 #include <Interpreters/SquashingTransform.h>
 #include <Interpreters/MergeTreeTransaction.h>
@@ -74,7 +75,7 @@ static void splitMutationCommands(
                     mutated_columns.emplace(column_name);
 
                 if (command.type == MutationCommand::Type::MATERIALIZE_COLUMN)
-                     mutated_columns.emplace(command.column_name);
+                    mutated_columns.emplace(command.column_name);
             }
             else if (command.type == MutationCommand::Type::DROP_INDEX || command.type == MutationCommand::Type::DROP_PROJECTION)
             {
@@ -102,7 +103,7 @@ static void splitMutationCommands(
         /// from disk we just don't read dropped columns
         for (const auto & column : part->getColumns())
         {
-            if (!mutated_columns.count(column.name))
+            if (!mutated_columns.contains(column.name))
                 for_interpreter.emplace_back(
                     MutationCommand{.type = MutationCommand::Type::READ_COLUMN, .column_name = column.name, .data_type = column.type});
         }
@@ -139,6 +140,164 @@ static void splitMutationCommands(
     }
 }
 
+/// Get the columns list of the resulting part in the same order as storage_columns.
+static std::pair<NamesAndTypesList, SerializationInfoByName>
+getColumnsForNewDataPart(
+    MergeTreeData::DataPartPtr source_part,
+    const Block & updated_header,
+    NamesAndTypesList storage_columns,
+    const SerializationInfoByName & serialization_infos,
+    const MutationCommands & commands_for_removes)
+{
+    NameSet removed_columns;
+    NameToNameMap renamed_columns_to_from;
+    NameToNameMap renamed_columns_from_to;
+    ColumnsDescription part_columns(source_part->getColumns());
+    NamesAndTypesList system_columns;
+    /// if (source_part->supportLightweightDeleteMutate())
+    ///    system_columns.push_back(LightweightDeleteDescription::FILTER_COLUMN);
+
+    /// Preserve system columns that have persisted values in the source_part
+    for (const auto & column : system_columns)
+    {
+        if (part_columns.has(column.name) && !storage_columns.contains(column.name))
+            storage_columns.emplace_back(column);
+    }
+
+    /// All commands are validated in AlterCommand so we don't care about order
+    for (const auto & command : commands_for_removes)
+    {
+        if (command.type == MutationCommand::UPDATE)
+        {
+            for (const auto & [column_name, _] : command.column_to_update_expression)
+            {
+                /// Allow to update and persist values of system column
+                auto column = system_columns.tryGetByName(column_name);
+                if (column && !storage_columns.contains(column_name))
+                    storage_columns.emplace_back(column_name, column->type);
+            }
+        }
+
+        /// If we don't have this column in source part, than we don't need to materialize it
+        if (!part_columns.has(command.column_name))
+            continue;
+
+        if (command.type == MutationCommand::DROP_COLUMN)
+            removed_columns.insert(command.column_name);
+
+        if (command.type == MutationCommand::RENAME_COLUMN)
+        {
+            renamed_columns_to_from.emplace(command.rename_to, command.column_name);
+            renamed_columns_from_to.emplace(command.column_name, command.rename_to);
+        }
+    }
+
+    SerializationInfoByName new_serialization_infos;
+    for (const auto & [name, info] : serialization_infos)
+    {
+        if (removed_columns.contains(name))
+            continue;
+
+        auto it = renamed_columns_from_to.find(name);
+        if (it != renamed_columns_from_to.end())
+            new_serialization_infos.emplace(it->second, info);
+        else
+            new_serialization_infos.emplace(name, info);
+    }
+
+    /// In compact parts we read all columns, because they all stored in a
+    /// single file
+    if (!isWidePart(source_part))
+        return {updated_header.getNamesAndTypesList(), new_serialization_infos};
+
+    const auto & source_columns = source_part->getColumns();
+    std::unordered_map<String, DataTypePtr> source_columns_name_to_type;
+    for (const auto & it : source_columns)
+        source_columns_name_to_type[it.name] = it.type;
+
+    for (auto it = storage_columns.begin(); it != storage_columns.end();)
+    {
+        if (updated_header.has(it->name))
+        {
+            auto updated_type = updated_header.getByName(it->name).type;
+            if (updated_type != it->type)
+                it->type = updated_type;
+            ++it;
+        }
+        else
+        {
+            auto source_col = source_columns_name_to_type.find(it->name);
+            if (source_col == source_columns_name_to_type.end())
+            {
+                /// Source part doesn't have column but some other column
+                /// was renamed to it's name.
+                auto renamed_it = renamed_columns_to_from.find(it->name);
+                if (renamed_it != renamed_columns_to_from.end())
+                {
+                    source_col = source_columns_name_to_type.find(renamed_it->second);
+                    if (source_col == source_columns_name_to_type.end())
+                        it = storage_columns.erase(it);
+                    else
+                    {
+                        /// Take a type from source part column.
+                        /// It may differ from column type in storage.
+                        it->type = source_col->second;
+                        ++it;
+                    }
+                }
+                else
+                    it = storage_columns.erase(it);
+            }
+            else
+            {
+                /// Check that this column was renamed to some other name
+                bool was_renamed = renamed_columns_from_to.contains(it->name);
+                bool was_removed = removed_columns.contains(it->name);
+
+                /// If we want to rename this column to some other name, than it
+                /// should it's previous version should be dropped or removed
+                if (renamed_columns_to_from.contains(it->name) && !was_renamed && !was_removed)
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        "Incorrect mutation commands, trying to rename column {} to {}, but part {} already has column {}", renamed_columns_to_from[it->name], it->name, source_part->name, it->name);
+
+                /// Column was renamed and no other column renamed to it's name
+                /// or column is dropped.
+                if (!renamed_columns_to_from.contains(it->name) && (was_renamed || was_removed))
+                    it = storage_columns.erase(it);
+                else
+                {
+                    /// Take a type from source part column.
+                    /// It may differ from column type in storage.
+                    it->type = source_col->second;
+                    ++it;
+                }
+            }
+        }
+    }
+
+    return {storage_columns, new_serialization_infos};
+}
+
+
+static ExecuteTTLType shouldExecuteTTL(const StorageMetadataPtr & metadata_snapshot, const ColumnDependencies & dependencies)
+{
+    if (!metadata_snapshot->hasAnyTTL())
+        return ExecuteTTLType::NONE;
+
+    bool has_ttl_expression = false;
+
+    for (const auto & dependency : dependencies)
+    {
+        if (dependency.kind == ColumnDependency::TTL_EXPRESSION)
+            has_ttl_expression = true;
+
+        if (dependency.kind == ColumnDependency::TTL_TARGET)
+            return ExecuteTTLType::NORMAL;
+    }
+    return has_ttl_expression ? ExecuteTTLType::RECALCULATE : ExecuteTTLType::NONE;
+}
+
 
 /// Get skip indices, that should exists in the resulting data part.
 static MergeTreeIndices getIndicesForNewDataPart(
@@ -152,7 +311,7 @@ static MergeTreeIndices getIndicesForNewDataPart(
 
     MergeTreeIndices new_indices;
     for (const auto & index : all_indices)
-        if (!removed_indices.count(index.name))
+        if (!removed_indices.contains(index.name))
             new_indices.push_back(MergeTreeIndexFactory::instance().get(index));
 
     return new_indices;
@@ -169,7 +328,7 @@ static std::vector<ProjectionDescriptionRawPtr> getProjectionsForNewDataPart(
 
     std::vector<ProjectionDescriptionRawPtr> new_projections;
     for (const auto & projection : all_projections)
-        if (!removed_projections.count(projection.name))
+        if (!removed_projections.contains(projection.name))
             new_projections.push_back(&projection);
 
     return new_projections;
@@ -200,7 +359,7 @@ static std::set<MergeTreeIndexPtr> getIndicesToRecalculate(
             source_part->checksums.has(INDEX_FILE_PREFIX + index.name + ".idx") ||
             source_part->checksums.has(INDEX_FILE_PREFIX + index.name + ".idx2");
         // If we ask to materialize and it already exists
-        if (!has_index && materialized_indices.count(index.name))
+        if (!has_index && materialized_indices.contains(index.name))
         {
             if (indices_to_recalc.insert(index_factory.get(index)).second)
             {
@@ -216,7 +375,7 @@ static std::set<MergeTreeIndexPtr> getIndicesToRecalculate(
             const auto & index_cols = index.expression->getRequiredColumns();
             for (const auto & col : index_cols)
             {
-                if (updated_columns.count(col))
+                if (updated_columns.contains(col))
                 {
                     mutate = true;
                     break;
@@ -457,12 +616,9 @@ void finalizeMutatedPart(
     const CompressionCodecPtr & codec,
     ContextPtr context)
 {
-    auto disk = new_data_part->volume->getDisk();
-    auto part_path = fs::path(new_data_part->getFullRelativePath());
-
     if (new_data_part->uuid != UUIDHelpers::Nil)
     {
-        auto out = disk->writeFile(part_path / IMergeTreeDataPart::UUID_FILE_NAME, 4096, WriteMode::Rewrite, context->getWriteSettings());
+        auto out = new_data_part->getDataPartStorage().writeFile(IMergeTreeDataPart::UUID_FILE_NAME, 4096, context->getWriteSettings());
         HashingWriteBuffer out_hashing(*out);
         writeUUIDText(new_data_part->uuid, out_hashing);
         new_data_part->checksums.files[IMergeTreeDataPart::UUID_FILE_NAME].file_size = out_hashing.count();
@@ -472,7 +628,7 @@ void finalizeMutatedPart(
     if (execute_ttl_type != ExecuteTTLType::NONE)
     {
         /// Write a file with ttl infos in json format.
-        auto out_ttl = disk->writeFile(part_path / "ttl.txt", 4096, WriteMode::Rewrite, context->getWriteSettings());
+        auto out_ttl = new_data_part->getDataPartStorage().writeFile("ttl.txt", 4096, context->getWriteSettings());
         HashingWriteBuffer out_hashing(*out_ttl);
         new_data_part->ttl_infos.write(out_hashing);
         new_data_part->checksums.files["ttl.txt"].file_size = out_hashing.count();
@@ -481,7 +637,7 @@ void finalizeMutatedPart(
 
     if (!new_data_part->getSerializationInfos().empty())
     {
-        auto out = disk->writeFile(part_path / IMergeTreeDataPart::SERIALIZATION_FILE_NAME, 4096, WriteMode::Rewrite, context->getWriteSettings());
+        auto out = new_data_part->getDataPartStorage().writeFile(IMergeTreeDataPart::SERIALIZATION_FILE_NAME, 4096, context->getWriteSettings());
         HashingWriteBuffer out_hashing(*out);
         new_data_part->getSerializationInfos().writeJSON(out_hashing);
         new_data_part->checksums.files[IMergeTreeDataPart::SERIALIZATION_FILE_NAME].file_size = out_hashing.count();
@@ -490,18 +646,18 @@ void finalizeMutatedPart(
 
     {
         /// Write file with checksums.
-        auto out_checksums = disk->writeFile(part_path / "checksums.txt", 4096, WriteMode::Rewrite, context->getWriteSettings());
+        auto out_checksums = new_data_part->getDataPartStorage().writeFile("checksums.txt", 4096, context->getWriteSettings());
         new_data_part->checksums.write(*out_checksums);
     } /// close fd
 
     {
-        auto out = disk->writeFile(part_path / IMergeTreeDataPart::DEFAULT_COMPRESSION_CODEC_FILE_NAME, 4096, WriteMode::Rewrite, context->getWriteSettings());
+        auto out = new_data_part->getDataPartStorage().writeFile(IMergeTreeDataPart::DEFAULT_COMPRESSION_CODEC_FILE_NAME, 4096, context->getWriteSettings());
         DB::writeText(queryToString(codec->getFullCodecDesc()), *out);
-    }
+    } /// close fd
 
     {
         /// Write a file with a description of columns.
-        auto out_columns = disk->writeFile(part_path / "columns.txt", 4096, WriteMode::Rewrite, context->getWriteSettings());
+        auto out_columns = new_data_part->getDataPartStorage().writeFile("columns.txt", 4096, context->getWriteSettings());
         new_data_part->getColumns().writeText(*out_columns);
     } /// close fd
 
@@ -511,11 +667,14 @@ void finalizeMutatedPart(
     new_data_part->minmax_idx = source_part->minmax_idx;
     new_data_part->modification_time = time(nullptr);
     new_data_part->loadProjections(false, false);
-    new_data_part->setBytesOnDisk(
-        MergeTreeData::DataPart::calculateTotalSizeOnDisk(new_data_part->volume->getDisk(), part_path));
-    new_data_part->default_codec = codec;
+
+    /// All information about sizes is stored in checksums.
+    /// It doesn't make sense to touch filesystem for sizes.
+    new_data_part->setBytesOnDisk(new_data_part->checksums.getTotalSizeOnDisk());
+    /// Also use information from checksums
     new_data_part->calculateColumnsAndSecondaryIndicesSizesOnDisk();
-    new_data_part->storage.lockSharedData(*new_data_part);
+
+    new_data_part->default_codec = codec;
 }
 
 }
@@ -563,12 +722,7 @@ struct MutationContext
     MutationsInterpreter::MutationKind::MutationKindEnum mutation_kind
         = MutationsInterpreter::MutationKind::MutationKindEnum::MUTATE_UNKNOWN;
 
-    VolumePtr single_disk_volume;
     MergeTreeData::MutableDataPartPtr new_data_part;
-    DiskPtr disk;
-    String new_part_tmp_path;
-
-    SyncGuardPtr sync_guard;
     IMergedBlockOutputStreamPtr out{nullptr};
 
     String mrk_extension;
@@ -586,6 +740,10 @@ struct MutationContext
     ExecuteTTLType execute_ttl_type{ExecuteTTLType::NONE};
 
     MergeTreeTransactionPtr txn;
+
+    MergeTreeData::HardlinkedFiles hardlinked_files;
+
+    scope_guard temporary_directory_lock;
 };
 
 using MutationContextPtr = std::shared_ptr<MutationContext>;
@@ -600,8 +758,7 @@ public:
         MergeTreeData::MutableDataPartsVector && parts_,
         const ProjectionDescription & projection_,
         size_t & block_num_,
-        MutationContextPtr ctx_
-        )
+        MutationContextPtr ctx_)
         : name(std::move(name_))
         , parts(std::move(parts_))
         , projection(projection_)
@@ -832,7 +989,7 @@ void PartMergerWriter::prepare()
         // build in-memory projection because we don't support merging into a new in-memory part.
         // Otherwise we split the materialization into multiple stages similar to the process of
         // INSERT SELECT query.
-        if (ctx->new_data_part->getType() == MergeTreeDataPartType::IN_MEMORY)
+        if (ctx->new_data_part->getType() == MergeTreeDataPartType::InMemory)
             projection_squashes.emplace_back(0, 0);
         else
             projection_squashes.emplace_back(settings.min_insert_block_size_rows, settings.min_insert_block_size_bytes);
@@ -979,7 +1136,7 @@ private:
 
     void prepare()
     {
-        ctx->disk->createDirectories(ctx->new_part_tmp_path);
+        ctx->new_data_part->getDataPartStorage().createDirectories();
 
         /// Note: this is done before creating input streams, because otherwise data.data_parts_mutex
         /// (which is locked in data.getTotalActiveSizeInBytes())
@@ -1104,7 +1261,7 @@ private:
         if (ctx->execute_ttl_type != ExecuteTTLType::NONE)
             ctx->files_to_skip.insert("ttl.txt");
 
-        ctx->disk->createDirectories(ctx->new_part_tmp_path);
+        ctx->new_data_part->getDataPartStorage().createDirectories();
 
         /// We should write version metadata on part creation to distinguish it from parts that were created without transaction.
         TransactionID tid = ctx->txn ? ctx->txn->tid : Tx::PrehistoricTID;
@@ -1113,43 +1270,61 @@ private:
         ctx->new_data_part->version.setCreationTID(tid, nullptr);
         ctx->new_data_part->storeVersionMetadata();
 
+        NameSet hardlinked_files;
         /// Create hardlinks for unchanged files
-        for (auto it = ctx->disk->iterateDirectory(ctx->source_part->getFullRelativePath()); it->isValid(); it->next())
+        for (auto it = ctx->source_part->getDataPartStorage().iterate(); it->isValid(); it->next())
         {
-            if (ctx->files_to_skip.count(it->name()))
+            if (ctx->files_to_skip.contains(it->name()))
                 continue;
 
-            String destination = ctx->new_part_tmp_path;
+            String destination;
             String file_name = it->name();
 
             auto rename_it = std::find_if(ctx->files_to_rename.begin(), ctx->files_to_rename.end(), [&file_name](const auto & rename_pair)
             {
                 return rename_pair.first == file_name;
             });
+
             if (rename_it != ctx->files_to_rename.end())
             {
                 if (rename_it->second.empty())
                     continue;
-                destination += rename_it->second;
+                destination = rename_it->second;
             }
             else
             {
-                destination += it->name();
+                destination = it->name();
             }
 
-            if (!ctx->disk->isDirectory(it->path()))
-                ctx->disk->createHardLink(it->path(), destination);
-            else if (!endsWith(".tmp_proj", it->name())) // ignore projection tmp merge dir
+            if (it->isFile())
+            {
+                ctx->new_data_part->getDataPartStorage().createHardLinkFrom(
+                    ctx->source_part->getDataPartStorage(), it->name(), destination);
+                hardlinked_files.insert(it->name());
+            }
+            else if (!endsWith(it->name(), ".tmp_proj")) // ignore projection tmp merge dir
             {
                 // it's a projection part directory
-                ctx->disk->createDirectories(destination);
-                for (auto p_it = ctx->disk->iterateDirectory(it->path()); p_it->isValid(); p_it->next())
+                ctx->new_data_part->getDataPartStorage().createProjection(destination);
+
+                auto projection_data_part_storage_src = ctx->source_part->getDataPartStorage().getProjection(destination);
+                auto projection_data_part_storage_dst = ctx->new_data_part->getDataPartStorage().getProjection(destination);
+
+                for (auto p_it = projection_data_part_storage_src->iterate(); p_it->isValid(); p_it->next())
                 {
-                    String p_destination = fs::path(destination) / p_it->name();
-                    ctx->disk->createHardLink(p_it->path(), p_destination);
+                    projection_data_part_storage_dst->createHardLinkFrom(
+                        *projection_data_part_storage_src, p_it->name(), p_it->name());
+                    hardlinked_files.insert(p_it->name());
                 }
             }
         }
+
+        /// Tracking of hardlinked files required for zero-copy replication.
+        /// We don't remove them when we delete last copy of source part because
+        /// new part can use them.
+        ctx->hardlinked_files.source_table_shared_id = ctx->source_part->storage.getTableSharedID();
+        ctx->hardlinked_files.source_part_name = ctx->source_part->name;
+        ctx->hardlinked_files.hardlinks_from_source_part = hardlinked_files;
 
         (*ctx->mutate_entry)->columns_written = ctx->storage_columns.size() - ctx->updated_header.columns();
 
@@ -1206,11 +1381,11 @@ private:
 
         for (const auto & [rename_from, rename_to] : ctx->files_to_rename)
         {
-            if (rename_to.empty() && ctx->new_data_part->checksums.files.count(rename_from))
+            if (rename_to.empty() && ctx->new_data_part->checksums.files.contains(rename_from))
             {
                 ctx->new_data_part->checksums.files.erase(rename_from);
             }
-            else if (ctx->new_data_part->checksums.files.count(rename_from))
+            else if (ctx->new_data_part->checksums.files.contains(rename_from))
             {
                 ctx->new_data_part->checksums.files[rename_to] = ctx->new_data_part->checksums.files[rename_from];
                 ctx->new_data_part->checksums.files.erase(rename_from);
@@ -1265,9 +1440,9 @@ MutateTask::MutateTask(
     ctx->metadata_snapshot = metadata_snapshot_;
     ctx->space_reservation = space_reservation_;
     ctx->storage_columns = metadata_snapshot_->getColumns().getAllPhysical();
+    ctx->txn = txn;
     ctx->source_part = ctx->future_part->parts[0];
     ctx->storage_from_source_part = std::make_shared<StorageFromMergeTreeDataPart>(ctx->source_part);
-    ctx->txn = txn;
 
     auto storage_snapshot = ctx->storage_from_source_part->getStorageSnapshot(ctx->metadata_snapshot, context_);
     extendObjectColumns(ctx->storage_columns, *(storage_snapshot->object_columns.get()), /*with_subcolumns=*/ false);
@@ -1327,8 +1502,26 @@ bool MutateTask::prepare()
     if (ctx->source_part->isStoredOnDisk() && !isStorageTouchedByMutations(
         ctx->storage_from_source_part, ctx->metadata_snapshot, ctx->commands_for_part, Context::createCopy(context_for_reading)))
     {
+        NameSet files_to_copy_instead_of_hardlinks;
+        auto settings_ptr = ctx->data->getSettings();
+        /// In zero-copy replication checksums file path in s3 (blob path) is used for zero copy locks in ZooKeeper. If we will hardlink checksums file, we will have the same blob path
+        /// and two different parts (source and new mutated part) will use the same locks in ZooKeeper. To avoid this we copy checksums.txt to generate new blob path.
+        /// Example:
+        ///     part: all_0_0_0/checksums.txt -> /s3/blobs/shjfgsaasdasdasdasdasdas
+        ///     locks path in zk: /zero_copy/tbl_id/s3_blobs_shjfgsaasdasdasdasdasdas/replica_name
+        ///                                         ^ part name don't participate in lock path
+        /// In case of full hardlink we will have:
+        ///     part: all_0_0_0_1/checksums.txt -> /s3/blobs/shjfgsaasdasdasdasdasdas
+        ///     locks path in zk: /zero_copy/tbl_id/s3_blobs_shjfgsaasdasdasdasdasdas/replica_name
+        /// So we need to copy to have a new name
+        bool copy_checksumns = ctx->data->supportsReplication() && settings_ptr->allow_remote_fs_zero_copy_replication && ctx->source_part->isStoredOnRemoteDiskWithZeroCopySupport();
+        if (copy_checksumns)
+            files_to_copy_instead_of_hardlinks.insert(IMergeTreeDataPart::FILE_FOR_REFERENCES_CHECK);
+
         LOG_TRACE(ctx->log, "Part {} doesn't change up to mutation version {}", ctx->source_part->name, ctx->future_part->part_info.mutation);
-        promise.set_value(ctx->data->cloneAndLoadDataPartOnSameDisk(ctx->source_part, "tmp_clone_", ctx->future_part->part_info, ctx->metadata_snapshot, ctx->txn));
+        auto [part, lock] = ctx->data->cloneAndLoadDataPartOnSameDisk(ctx->source_part, "tmp_clone_", ctx->future_part->part_info, ctx->metadata_snapshot, ctx->txn, &ctx->hardlinked_files, false, files_to_copy_instead_of_hardlinks);
+        ctx->temporary_directory_lock = std::move(lock);
+        promise.set_value(std::move(part));
         return false;
     }
     else
@@ -1352,11 +1545,22 @@ bool MutateTask::prepare()
         ctx->mutating_pipeline.setProgressCallback(MergeProgressCallback((*ctx->mutate_entry)->ptr(), ctx->watch_prev_elapsed, *ctx->stage_progress));
     }
 
-    ctx->single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + ctx->future_part->name, ctx->space_reservation->getDisk(), 0);
+    auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + ctx->future_part->name, ctx->space_reservation->getDisk(), 0);
     /// FIXME new_data_part is not used in the case when we clone part with cloneAndLoadDataPartOnSameDisk and return false
     /// Is it possible to handle this case earlier?
+
+    String tmp_part_dir_name = "tmp_mut_" + ctx->future_part->name;
+    ctx->temporary_directory_lock = ctx->data->getTemporaryPartDirectoryHolder(tmp_part_dir_name);
+
+    auto data_part_storage = std::make_shared<DataPartStorageOnDisk>(
+        single_disk_volume,
+        ctx->data->getRelativeDataPath(),
+        tmp_part_dir_name);
+
+    data_part_storage->beginTransaction();
+
     ctx->new_data_part = ctx->data->createPart(
-        ctx->future_part->name, ctx->future_part->type, ctx->future_part->part_info, ctx->single_disk_volume, "tmp_mut_" + ctx->future_part->name);
+        ctx->future_part->name, ctx->future_part->type, ctx->future_part->part_info, data_part_storage);
 
     ctx->new_data_part->uuid = ctx->future_part->uuid;
     ctx->new_data_part->is_temp = true;
@@ -1365,30 +1569,22 @@ bool MutateTask::prepare()
     /// It shouldn't be changed by mutation.
     ctx->new_data_part->index_granularity_info = ctx->source_part->index_granularity_info;
 
-    auto [new_columns, new_infos] = MergeTreeDataMergerMutator::getColumnsForNewDataPart(
+    auto [new_columns, new_infos] = MutationHelpers::getColumnsForNewDataPart(
         ctx->source_part, ctx->updated_header, ctx->storage_columns,
         ctx->source_part->getSerializationInfos(), ctx->commands_for_part);
 
     ctx->new_data_part->setColumns(new_columns, new_infos);
     ctx->new_data_part->partition.assign(ctx->source_part->partition);
 
-    ctx->disk = ctx->new_data_part->volume->getDisk();
-    ctx->new_part_tmp_path = ctx->new_data_part->getFullRelativePath();
-
-    if (ctx->data->getSettings()->fsync_part_directory)
-        ctx->sync_guard = ctx->disk->getDirectorySyncGuard(ctx->new_part_tmp_path);
-
     /// Don't change granularity type while mutating subset of columns
-    ctx->mrk_extension = ctx->source_part->index_granularity_info.is_adaptive ? getAdaptiveMrkExtension(ctx->new_data_part->getType())
-                                                                         : getNonAdaptiveMrkExtension();
+    ctx->mrk_extension = ctx->source_part->index_granularity_info.mark_type.getFileExtension();
 
     const auto data_settings = ctx->data->getSettings();
     ctx->need_sync = needSyncPart(ctx->source_part->rows_count, ctx->source_part->getBytesOnDisk(), *data_settings);
     ctx->execute_ttl_type = ExecuteTTLType::NONE;
 
     if (ctx->mutating_pipeline.initialized())
-        ctx->execute_ttl_type = MergeTreeDataMergerMutator::shouldExecuteTTL(ctx->metadata_snapshot, ctx->interpreter->getColumnDependencies());
-
+        ctx->execute_ttl_type = MutationHelpers::shouldExecuteTTL(ctx->metadata_snapshot, ctx->interpreter->getColumnDependencies());
 
     /// All columns from part are changed and may be some more that were missing before in part
     /// TODO We can materialize compact part without copying data
@@ -1428,7 +1624,28 @@ bool MutateTask::prepare()
             && ctx->files_to_rename.empty())
         {
             LOG_TRACE(ctx->log, "Part {} doesn't change up to mutation version {} (optimized)", ctx->source_part->name, ctx->future_part->part_info.mutation);
-            promise.set_value(ctx->data->cloneAndLoadDataPartOnSameDisk(ctx->source_part, "tmp_mut_", ctx->future_part->part_info, ctx->metadata_snapshot, ctx->txn));
+            /// new_data_part is not used here, another part is created instead (see the comment above)
+            ctx->temporary_directory_lock = {};
+
+            /// In zero-copy replication checksums file path in s3 (blob path) is used for zero copy locks in ZooKeeper. If we will hardlink checksums file, we will have the same blob path
+            /// and two different parts (source and new mutated part) will use the same locks in ZooKeeper. To avoid this we copy checksums.txt to generate new blob path.
+            /// Example:
+            ///     part: all_0_0_0/checksums.txt -> /s3/blobs/shjfgsaasdasdasdasdasdas
+            ///     locks path in zk: /zero_copy/tbl_id/s3_blobs_shjfgsaasdasdasdasdasdas/replica_name
+            ///                                         ^ part name don't participate in lock path
+            /// In case of full hardlink we will have:
+            ///     part: all_0_0_0_1/checksums.txt -> /s3/blobs/shjfgsaasdasdasdasdasdas
+            ///     locks path in zk: /zero_copy/tbl_id/s3_blobs_shjfgsaasdasdasdasdasdas/replica_name
+            /// So we need to copy to have a new name
+            NameSet files_to_copy_instead_of_hardlinks;
+            auto settings_ptr = ctx->data->getSettings();
+            bool copy_checksumns = ctx->data->supportsReplication() && settings_ptr->allow_remote_fs_zero_copy_replication && ctx->source_part->isStoredOnRemoteDiskWithZeroCopySupport();
+            if (copy_checksumns)
+                files_to_copy_instead_of_hardlinks.insert(IMergeTreeDataPart::FILE_FOR_REFERENCES_CHECK);
+
+            auto [part, lock] = ctx->data->cloneAndLoadDataPartOnSameDisk(ctx->source_part, "tmp_mut_", ctx->future_part->part_info, ctx->metadata_snapshot, ctx->txn, &ctx->hardlinked_files, false, files_to_copy_instead_of_hardlinks);
+            ctx->temporary_directory_lock = std::move(lock);
+            promise.set_value(std::move(part));
             return false;
         }
 
@@ -1438,5 +1655,9 @@ bool MutateTask::prepare()
     return true;
 }
 
+const MergeTreeData::HardlinkedFiles & MutateTask::getHardlinkedFiles() const
+{
+    return ctx->hardlinked_files;
+}
 
 }

@@ -3,6 +3,7 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
+#include <Storages/MergeTree/MergeTreeDataPartState.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/copyData.h>
@@ -10,6 +11,7 @@
 #include <Poco/JSON/Object.h>
 #include <Poco/JSON/Stringifier.h>
 #include <Poco/JSON/Parser.h>
+#include "Storages/MergeTree/DataPartStorageOnDisk.h"
 #include <sys/time.h>
 
 namespace DB
@@ -51,11 +53,23 @@ MergeTreeWriteAheadLog::~MergeTreeWriteAheadLog()
         sync_cv.wait(lock, [this] { return !sync_scheduled; });
 }
 
+
+void MergeTreeWriteAheadLog::dropAllWriteAheadLogs(DiskPtr disk_to_drop, std::string relative_data_path)
+{
+    std::vector<std::string> files;
+    disk_to_drop->listFiles(relative_data_path, files);
+    for (const auto & file : files)
+    {
+        if (file.starts_with(WAL_FILE_NAME))
+            disk_to_drop->removeFile(fs::path(relative_data_path) / file);
+    }
+}
+
 void MergeTreeWriteAheadLog::init()
 {
     out = disk->writeFile(path, DBMS_DEFAULT_BUFFER_SIZE, WriteMode::Append);
 
-    /// Small hack: in NativeBlockOutputStream header is used only in `getHeader` method.
+    /// Small hack: in NativeWriter header is used only in `getHeader` method.
     /// To avoid complex logic of changing it during ALTERs we leave it empty.
     block_out = std::make_unique<NativeWriter>(*out, Block{}, 0);
     min_block_number = std::numeric_limits<Int64>::max();
@@ -115,7 +129,10 @@ void MergeTreeWriteAheadLog::rotate(const std::unique_lock<std::mutex> &)
     init();
 }
 
-MergeTreeData::MutableDataPartsVector MergeTreeWriteAheadLog::restore(const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
+MergeTreeData::MutableDataPartsVector MergeTreeWriteAheadLog::restore(
+    const StorageMetadataPtr & metadata_snapshot,
+    ContextPtr context,
+    std::unique_lock<std::mutex> & parts_lock)
 {
     std::unique_lock lock(write_mutex);
 
@@ -152,17 +169,20 @@ MergeTreeData::MutableDataPartsVector MergeTreeWriteAheadLog::restore(const Stor
             else if (action_type == ActionType::ADD_PART)
             {
                 auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + part_name, disk, 0);
+                auto data_part_storage = std::make_shared<DataPartStorageOnDisk>(single_disk_volume, storage.getRelativeDataPath(), part_name);
 
                 part = storage.createPart(
                     part_name,
-                    MergeTreeDataPartType::IN_MEMORY,
+                    MergeTreeDataPartType::InMemory,
                     MergeTreePartInfo::fromPartName(part_name, storage.format_version),
-                    single_disk_volume,
-                    part_name);
+                    data_part_storage);
 
                 part->uuid = metadata.part_uuid;
 
                 block = block_in.read();
+
+                if (storage.getActiveContainingPart(part->info, MergeTreeDataPartState::Active, parts_lock))
+                    continue;
             }
             else
             {
@@ -216,6 +236,7 @@ MergeTreeData::MutableDataPartsVector MergeTreeWriteAheadLog::restore(const Stor
                 if (projection_block.rows())
                     part->addProjectionPart(projection.name, std::move(temp_part.part));
             }
+
             part_out.finalizePart(part, false);
 
             min_block_number = std::min(min_block_number, part->info.min_block);
@@ -227,6 +248,15 @@ MergeTreeData::MutableDataPartsVector MergeTreeWriteAheadLog::restore(const Stor
     MergeTreeData::MutableDataPartsVector result;
     std::copy_if(parts.begin(), parts.end(), std::back_inserter(result),
         [&dropped_parts](const auto & part) { return dropped_parts.count(part->name) == 0; });
+
+    /// All parts in WAL had been already committed into the disk -> clear the WAL
+    if (result.empty())
+    {
+        LOG_DEBUG(log, "WAL file '{}' had been completely processed. Removing.", path);
+        disk->removeFile(path);
+        init();
+        return {};
+    }
 
     return result;
 }

@@ -10,7 +10,7 @@ class IBackup;
 using BackupPtr = std::shared_ptr<const IBackup>;
 using BackupMutablePtr = std::shared_ptr<IBackup>;
 class IBackupEntry;
-using BackupEntryPtr = std::unique_ptr<IBackupEntry>;
+using BackupEntryPtr = std::shared_ptr<const IBackupEntry>;
 using BackupEntries = std::vector<std::pair<String, BackupEntryPtr>>;
 using RestoreDataTask = std::function<void()>;
 using RestoreDataTasks = std::vector<RestoreDataTask>;

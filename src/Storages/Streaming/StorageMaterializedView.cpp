@@ -431,7 +431,7 @@ StoragePtr StorageMaterializedView::getTargetTable()
 void StorageMaterializedView::checkValid() const
 {
     /// check disk quota
-    DiskUtilChecker::instance(nullptr).check();
+    DiskUtilChecker::instance(getContext()).check();
 
     if (background_status.has_exception)
         throw Exception(

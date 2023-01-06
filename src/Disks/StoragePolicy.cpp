@@ -24,7 +24,6 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
     extern const int EXCESSIVE_ELEMENT_IN_CONFIG;
     extern const int NO_ELEMENTS_IN_CONFIG;
-    extern const int UNKNOWN_DISK;
     extern const int UNKNOWN_POLICY;
     extern const int UNKNOWN_VOLUME;
     extern const int LOGICAL_ERROR;
@@ -179,7 +178,7 @@ DiskPtr StoragePolicy::getAnyDisk() const
 }
 
 
-DiskPtr StoragePolicy::getDiskByName(const String & disk_name) const
+DiskPtr StoragePolicy::tryGetDiskByName(const String & disk_name) const
 {
     for (auto && volume : volumes)
         for (auto && disk : volume->getDisks())
@@ -265,11 +264,11 @@ VolumePtr StoragePolicy::getVolume(size_t index) const
 }
 
 
-VolumePtr StoragePolicy::getVolumeByName(const String & volume_name) const
+VolumePtr StoragePolicy::tryGetVolumeByName(const String & volume_name) const
 {
     auto it = volume_index_by_volume_name.find(volume_name);
     if (it == volume_index_by_volume_name.end())
-        throw Exception("No such volume " + backQuote(volume_name) + " in storage policy " + backQuote(name), ErrorCodes::UNKNOWN_VOLUME);
+        return nullptr;
     return getVolume(it->second);
 }
 
@@ -296,13 +295,12 @@ void StoragePolicy::checkCompatibleWith(const StoragePolicyPtr & new_storage_pol
 }
 
 
-size_t StoragePolicy::getVolumeIndexByDisk(const DiskPtr & disk_ptr) const
+std::optional<size_t> StoragePolicy::tryGetVolumeIndexByDiskName(const String & disk_name) const
 {
-    auto it = volume_index_by_disk_name.find(disk_ptr->getName());
+    auto it = volume_index_by_disk_name.find(disk_name);
     if (it != volume_index_by_disk_name.end())
         return it->second;
-    else
-        throw Exception("No disk " + backQuote(disk_ptr->getName()) + " in policy " + backQuote(name), ErrorCodes::UNKNOWN_DISK);
+    return {};
 }
 
 

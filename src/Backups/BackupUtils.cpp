@@ -644,7 +644,7 @@ BackupEntries makeBackupEntries(const Elements & elements, const ContextPtr & co
     ::sort(
         backup_entries.begin(),
         backup_entries.end(),
-        [](const std::pair<String, std::unique_ptr<IBackupEntry>> & lhs, const std::pair<String, std::unique_ptr<IBackupEntry>> & rhs)
+        [](const std::pair<String, std::shared_ptr<const IBackupEntry>> & lhs, const std::pair<String, std::shared_ptr<const IBackupEntry>> & rhs)
         {
             return lhs.first < rhs.first;
         });
