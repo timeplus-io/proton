@@ -15,7 +15,6 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
-#include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/DataTypeFactory.h>
@@ -633,7 +632,11 @@ DataTypePtr getLeastSupertype(const TypeIndexSet & types)
         FOR_NUMERIC_TYPES(DISPATCH)
     #undef DISPATCH
 
-        if (which.isString())
+        /// proton : bool is not defined in `FOR_NUMERIC_TYPES` macro and we can't define bol there
+        /// since `DataTypeBool` has DatatypeNumber<UInt8> underlying representation instead of DataTypeNumber<bool>
+        if (which.isBool())
+            return std::make_shared<DataTypeNumber<UInt8>>();
+        else if (which.isString())
             return std::make_shared<DataTypeString>();
 
         return throwOrReturn<on_error>(types, "because cannot get common type by type indexes with non-simple types", ErrorCodes::NO_COMMON_TYPE);

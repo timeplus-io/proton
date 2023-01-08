@@ -334,6 +334,7 @@ struct WhichDataType
     // shared ptr -> is non-constexpr in gcc
     WhichDataType(const DataTypePtr & data_type) : idx(data_type->getTypeId()) {} /// NOLINT
 
+    constexpr bool isBool() const { return idx == TypeIndex::Bool; } /// proton : added by proton
     constexpr bool isUInt8() const { return idx == TypeIndex::UInt8; }
     constexpr bool isUInt16() const { return idx == TypeIndex::UInt16; }
     constexpr bool isUInt32() const { return idx == TypeIndex::UInt32; }

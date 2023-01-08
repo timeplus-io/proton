@@ -1,8 +1,6 @@
 {
     "test_suite_name": "json",
     "tag":"smoke",
-
-
     "test_suite_config":{
         "setup": {
             "statements": [
@@ -11,21 +9,21 @@
                 {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json_obj"},
                 {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json_conversion"},
                 {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json_nested"},
+                {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json_bool"},
                 {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_d (id int, location string)"},
                 {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_str (json string, timestamp datetime64(3) default now64(3))"},
                 {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_obj (json json, timestamp datetime64(3) default now64(3))"},
                 {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_conversion (id int, json json)"},
                 {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_nested (id int, arr array(json))"},
+                {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_bool (b bool)"},
                 {"client":"python", "query_type": "table","depends_on_stream": "test_json_d", "wait":2, "query":"insert into test_json_d(id, location)values(1, '{\"id\":\"dev1\", \"location\":\"roof\"}')(2, '{\"id\":\"dev2\", \"location\":\"window\"}')(3, '{\"id\":\"dev3\", \"location\":\"floor\"}')(4, '{\"id\":\"dev4\", \"location\":\"ground\"}')"}
             ]
         },
         "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
-
     },
     "commments":
         "Tests covering the steam query smoke cases.",
     "tests": [
-
         {
             "id": 0,
             "tags": ["json"],
@@ -53,13 +51,11 @@
                         ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:01')
                         ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:10\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:10')"
                     }
-
                     ]}
             ],
 
             "expected_results": [{"query_id":"1202", "expected_results":[
                 ["1"]
-
                 ]}
             ]
         },
@@ -90,13 +86,10 @@
                         ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:01')
                         ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:10\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:10')"
                     }
-
                     ]}
             ],
-
             "expected_results": [{"query_id":"1202", "expected_results":[
                 ["1"]
-
                 ]}
             ]
         },
@@ -115,7 +108,6 @@
                     {"client":"python", "query_id":"1204", "query_type": "table" ,"depends_on_stream": "test_json_obj", "query":"select json.data.id, json.data.value, json.tag from table(test_json_obj)"}
                     ]}
             ],
-
             "expected_results": [
                 {"query_id":"1203", "expected_results":[["dev1", 100, "building"]]},
                 {"query_id":"1204", "expected_results":[["dev1", 100, "building"]]}
@@ -142,6 +134,23 @@
             "expected_results": [
                 {"query_id":"1205", "expected_results":[[1, "1", "b", "v1", "v2"], [2, "2", "3", "v1", "v2"]]},
                 {"query_id":"1206", "expected_results":[[1, "1", "b", "v1", "v2"], [2, "2", "3", "v1", "v2"]]}
+            ]
+        },
+        {
+            "id": 4,
+            "tags": ["json"],
+            "name": "bool field",
+            "description": "json bool field",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","depends_on_stream": "test_json_bool", "wait":1, "query":
+                    "insert into test_json_bool(b) values (true), (false)"
+                    },
+                    {"client":"python", "query_id":"1207", "depends_on_stream": "test_json_bool", "query":"select min(b), max(b) from test_json_bool limit 1 settings seek_to='earliest'"}
+                ]}
+            ],
+            "expected_results": [
+                {"query_id":"1207", "expected_results":[["False", "True"]]}
             ]
         }
     ]
