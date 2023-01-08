@@ -33,6 +33,9 @@ static IAggregateFunction * createAggregateFunctionCountedValue(
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
 
+    if (which.isBool())
+        return new AggregateFunctionTemplate<Data<CountedValuesDataFixed<UInt8, maximum>>>(argument_type, settings);
+
     if (which.idx == TypeIndex::Date)
         return new AggregateFunctionTemplate<Data<CountedValuesDataFixed<DataTypeDate::FieldType, maximum>>>(argument_type, settings);
     if (which.idx == TypeIndex::DateTime)

@@ -29,6 +29,9 @@ createAggregateFunctionCountedArgMinMaxSecond(const DataTypePtr & res_type, cons
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
 
+    if (which.isBool())
+        return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResType, UInt8, maximum>>(res_type, val_type, settings);
+
     if (which.idx == TypeIndex::Date)
         return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResType, DataTypeDate::FieldType, maximum>>(
             res_type, val_type, settings);
@@ -67,6 +70,9 @@ static IAggregateFunction * createAggregateFunctionCountedArgMinMax(
         return createAggregateFunctionCountedArgMinMaxSecond<TYPE, maximum>(res_type, val_type, settings);
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
+
+    if (which.isBool())
+        return createAggregateFunctionCountedArgMinMaxSecond<UInt8, maximum>(res_type, val_type, settings);
 
     if (which.idx == TypeIndex::Date)
         return createAggregateFunctionCountedArgMinMaxSecond<DataTypeDate::FieldType, maximum>(res_type, val_type, settings);

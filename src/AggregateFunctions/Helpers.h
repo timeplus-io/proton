@@ -19,6 +19,12 @@ static IAggregateFunction * createWithNumericType(const IDataType & argument_typ
 #undef DISPATCH
     if (which.idx == TypeIndex::Enum8) return new AggregateFunctionTemplate<Int8>(std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::Enum16) return new AggregateFunctionTemplate<Int16>(std::forward<TArgs>(args)...);
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return new AggregateFunctionTemplate<UInt8>(std::forward<TArgs>(args)...);
+    /// proton : ends
+
     return nullptr;
 }
 
@@ -32,6 +38,12 @@ static IAggregateFunction * createWithNumericType(const IDataType & argument_typ
 #undef DISPATCH
     if (which.idx == TypeIndex::Enum8) return new AggregateFunctionTemplate<Data<Int8>>(std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::Enum16) return new AggregateFunctionTemplate<Data<Int16>>(std::forward<TArgs>(args)...);
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return new AggregateFunctionTemplate<Data<UInt8>>(std::forward<TArgs>(args)...);
+    /// proton : ends
+
     return nullptr;
 }
 
@@ -45,6 +57,12 @@ static IAggregateFunction * createWithNumericType(const IDataType & argument_typ
 #undef DISPATCH
     if (which.idx == TypeIndex::Enum8) return new AggregateFunctionTemplate<Int8, bool_param>(std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::Enum16) return new AggregateFunctionTemplate<Int16, bool_param>(std::forward<TArgs>(args)...);
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return new AggregateFunctionTemplate<UInt8, bool_param>(std::forward<TArgs>(args)...);
+    /// proton : ends
+
     return nullptr;
 }
 
@@ -58,6 +76,12 @@ static IAggregateFunction * createWithNumericType(const IDataType & argument_typ
 #undef DISPATCH
     if (which.idx == TypeIndex::Enum8) return new AggregateFunctionTemplate<Int8, Data>(std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::Enum16) return new AggregateFunctionTemplate<Int16, Data>(std::forward<TArgs>(args)...);
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return new AggregateFunctionTemplate<UInt8, Data>(std::forward<TArgs>(args)...);
+    /// proton : ends
+
     return nullptr;
 }
 
@@ -71,6 +95,12 @@ static IAggregateFunction * createWithNumericType(const IDataType & argument_typ
 #undef DISPATCH
     if (which.idx == TypeIndex::Enum8) return new AggregateFunctionTemplate<Int8, Data<Int8>>(std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::Enum16) return new AggregateFunctionTemplate<Int16, Data<Int16>>(std::forward<TArgs>(args)...);
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return new AggregateFunctionTemplate<UInt8, Data<UInt8>>(std::forward<TArgs>(args)...);
+    /// proton : ends
+
     return nullptr;
 }
 
@@ -84,6 +114,12 @@ static IAggregateFunction * createWithNumericType(const IDataType & argument_typ
 #undef DISPATCH
     if (which.idx == TypeIndex::Enum8) return new AggregateFunctionTemplate<Int8, Data<Int8, bool_param>>(std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::Enum16) return new AggregateFunctionTemplate<Int16, Data<Int16, bool_param>>(std::forward<TArgs>(args)...);
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return new AggregateFunctionTemplate<UInt8, Data<UInt8, bool_param>>(std::forward<TArgs>(args)...);
+    /// proton : ends
+
     return nullptr;
 }
 
@@ -91,6 +127,7 @@ template <template <typename, typename> class AggregateFunctionTemplate, templat
 static IAggregateFunction * createWithUnsignedIntegerType(const IDataType & argument_type, TArgs && ... args)
 {
     WhichDataType which(argument_type);
+    if (which.idx == TypeIndex::Bool) return new AggregateFunctionTemplate<UInt8, Data<UInt8>>(std::forward<TArgs>(args)...); /// proton : added by proton
     if (which.idx == TypeIndex::UInt8) return new AggregateFunctionTemplate<UInt8, Data<UInt8>>(std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::UInt16) return new AggregateFunctionTemplate<UInt16, Data<UInt16>>(std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::UInt32) return new AggregateFunctionTemplate<UInt32, Data<UInt32>>(std::forward<TArgs>(args)...);
@@ -114,6 +151,11 @@ static IAggregateFunction * createWithBasicNumberOrDateOrDateTime(const IDataTyp
         return new AggregateFunctionTemplate<UInt16, Data<UInt16>>(std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::DateTime)
         return new AggregateFunctionTemplate<UInt32, Data<UInt32>>(std::forward<TArgs>(args)...);
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return new AggregateFunctionTemplate<UInt8, Data<UInt8>>(std::forward<TArgs>(args)...);
+    /// proton : ends
 
     return nullptr;
 }
@@ -171,6 +213,12 @@ static IAggregateFunction * createWithTwoNumericTypesSecond(const IDataType & se
 #undef DISPATCH
     if (which.idx == TypeIndex::Enum8) return new AggregateFunctionTemplate<FirstType, Int8>(std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::Enum16) return new AggregateFunctionTemplate<FirstType, Int16>(std::forward<TArgs>(args)...);
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return new AggregateFunctionTemplate<FirstType, UInt8>(std::forward<TArgs>(args)...);
+    /// proton : ends
+
     return nullptr;
 }
 
@@ -202,6 +250,12 @@ static IAggregateFunction * createWithTwoNumericTypes(const IDataType & first_ty
         return createWithTwoNumericTypesSecond<Int8, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::Enum16)
         return createWithTwoNumericTypesSecond<Int16, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return createWithTwoNumericTypesSecond<UInt8, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
+    /// proton : ends
+
     return nullptr;
 }
 
@@ -213,6 +267,12 @@ static IAggregateFunction * createWithTwoBasicNumericTypesSecond(const IDataType
     if (which.idx == TypeIndex::TYPE) return new AggregateFunctionTemplate<FirstType, TYPE>(std::forward<TArgs>(args)...);
     FOR_BASIC_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return new AggregateFunctionTemplate<FirstType, UInt8>(std::forward<TArgs>(args)...);
+    /// proton : ends
+
     return nullptr;
 }
 
@@ -225,6 +285,12 @@ static IAggregateFunction * createWithTwoBasicNumericTypes(const IDataType & fir
         return createWithTwoBasicNumericTypesSecond<TYPE, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
     FOR_BASIC_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return createWithTwoBasicNumericTypesSecond<UInt8, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
+    /// proton : ends
+
     return nullptr;
 }
 
@@ -242,6 +308,11 @@ static IAggregateFunction * createWithTwoNumericOrDateTypesSecond(const IDataTyp
     /// expects that DataTypeDate based on UInt16, DataTypeDateTime based on UInt32
     if (which.idx == TypeIndex::Date) return new AggregateFunctionTemplate<FirstType, UInt16>(std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::DateTime) return new AggregateFunctionTemplate<FirstType, UInt32>(std::forward<TArgs>(args)...);
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return new AggregateFunctionTemplate<FirstType, UInt8>(std::forward<TArgs>(args)...);
+    /// proton : ends
 
     return nullptr;
 }
@@ -265,6 +336,12 @@ static IAggregateFunction * createWithTwoNumericOrDateTypes(const IDataType & fi
         return createWithTwoNumericOrDateTypesSecond<UInt16, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::DateTime)
         return createWithTwoNumericOrDateTypesSecond<UInt32, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return createWithTwoNumericOrDateTypesSecond<UInt8, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
+    /// proton : ends
+
     return nullptr;
 }
 

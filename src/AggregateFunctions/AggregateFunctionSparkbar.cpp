@@ -40,6 +40,11 @@ AggregateFunctionPtr createAggregateFunctionSparkbarImpl(const std::string & nam
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
 
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return AggregateFunctionPtr(createWithUIntegerOrTimeType<AggregateFunctionSparkbar, UInt8>(name, x_argument_type, std::forward<TArgs>(args)...));
+    /// proton : ends
+
     throw Exception("The second argument type must be numeric for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 

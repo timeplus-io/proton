@@ -39,6 +39,11 @@ AggregateFunctionPtr createAggregateFunctionQuantile(
     if (which.idx == TypeIndex::Date) return std::make_shared<Function<DataTypeDate::FieldType, false>>(argument_types, params);
     if (which.idx == TypeIndex::DateTime) return std::make_shared<Function<DataTypeDateTime::FieldType, false>>(argument_types, params);
 
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return std::make_shared<Function<UInt8, true>>(argument_types, params);
+    /// proton : ends
+
     throw Exception("Illegal type " + argument_type->getName() + " of argument for aggregate function " + name,
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }

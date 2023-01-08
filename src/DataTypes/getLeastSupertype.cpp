@@ -632,12 +632,13 @@ DataTypePtr getLeastSupertype(const TypeIndexSet & types)
         FOR_NUMERIC_TYPES(DISPATCH)
     #undef DISPATCH
 
-        /// proton : bool is not defined in `FOR_NUMERIC_TYPES` macro and we can't define bol there
+        /// proton : starts. bool is not defined in `FOR_NUMERIC_TYPES` macro and we can't define bol there
         /// since `DataTypeBool` has DatatypeNumber<UInt8> underlying representation instead of DataTypeNumber<bool>
         if (which.isBool())
             return std::make_shared<DataTypeNumber<UInt8>>();
         else if (which.isString())
             return std::make_shared<DataTypeString>();
+        /// proton : ends
 
         return throwOrReturn<on_error>(types, "because cannot get common type by type indexes with non-simple types", ErrorCodes::NO_COMMON_TYPE);
     }

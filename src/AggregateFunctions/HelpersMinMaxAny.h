@@ -29,6 +29,11 @@ static IAggregateFunction * createAggregateFunctionSingleValue(const String & na
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
 
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return new AggregateFunctionTemplate<Data<SingleValueDataFixed<UInt8>>>(argument_type);
+    /// proton : ends
+
     if (which.idx == TypeIndex::Date)
         return new AggregateFunctionTemplate<Data<SingleValueDataFixed<DataTypeDate::FieldType>>>(argument_type);
     if (which.idx == TypeIndex::DateTime)
@@ -59,6 +64,11 @@ static IAggregateFunction * createAggregateFunctionArgMinMaxSecond(const DataTyp
         return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataFixed<TYPE>>>>(res_type, val_type); /// NOLINT
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataFixed<UInt8>>>>(res_type, val_type);
+    /// proton : ends
 
     if (which.idx == TypeIndex::Date)
         return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataFixed<DataTypeDate::FieldType>>>>(res_type, val_type);
@@ -93,6 +103,11 @@ static IAggregateFunction * createAggregateFunctionArgMinMax(const String & name
         return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<TYPE>>(res_type, val_type); /// NOLINT
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
+
+    /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
+    if (which.isBool())
+        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<UInt8>>(res_type, val_type);
+    /// proton : ends
 
     if (which.idx == TypeIndex::Date)
         return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<DataTypeDate::FieldType>>(res_type, val_type);
