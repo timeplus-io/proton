@@ -28,9 +28,19 @@ ShufflingStep::ShufflingStep(const DataStream & input_stream_, std::vector<size_
 
 void ShufflingStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
 {
-    /// FIXME: @output_num - more figured automatically
     size_t output_num = max_thread;
-    pipeline.addTransform(std::make_shared<ShufflingTransform>(pipeline.getHeader(), pipeline.getNumStreams(), output_num, key_positions));
+    if (pipeline.getNumStreams() > 1)
+    {
+        /// M -> N
+        pipeline.addShufflingTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
+            return std::make_shared<ShufflingTransform>(pipeline.getHeader(), output_num, key_positions);
+        });
+    }
+    else
+    {
+        /// 1 -> N
+        pipeline.addTransform(std::make_shared<ShufflingTransform>(pipeline.getHeader(), output_num, key_positions));
+    }
 }
 
 }

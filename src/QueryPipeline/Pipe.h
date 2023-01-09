@@ -80,6 +80,12 @@ public:
     void addSimpleTransform(const ProcessorGetter & getter);
     void addSimpleTransform(const ProcessorGetterWithStreamKind & getter);
 
+    /// proton: starts.
+    /// Add shuffling transform. It should have single input with compatible header.
+    /// Output ports should have same headers. (used for shuffling)
+    void addShufflingTransform(const ProcessorGetter & getter);
+    /// proton: ends.
+
     /// Add chain to every output port.
     void addChains(std::vector<Chain> chains);
 

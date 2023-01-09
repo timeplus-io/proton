@@ -135,6 +135,14 @@ void QueryPipelineBuilder::addTransform(ProcessorPtr transform, InputPort * tota
     pipe.addTransform(std::move(transform), totals, extremes);
 }
 
+/// proton: starts.
+void QueryPipelineBuilder::addShufflingTransform(const Pipe::ProcessorGetter & getter)
+{
+    checkInitializedAndNotCompleted();
+    pipe.addShufflingTransform(getter);
+}
+/// proton: ends.
+
 void QueryPipelineBuilder::addChains(std::vector<Chain> chains)
 {
     checkInitializedAndNotCompleted();

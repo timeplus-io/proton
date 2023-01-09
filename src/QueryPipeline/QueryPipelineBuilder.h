@@ -59,6 +59,12 @@ public:
     void addTransform(ProcessorPtr transform);
     void addTransform(ProcessorPtr transform, InputPort * totals, InputPort * extremes);
 
+    /// proton: starts.
+    /// Add shuffling transform. It should have single input with compatible header.
+    /// Output ports should have same headers. (used for shuffling)
+    void addShufflingTransform(const Pipe::ProcessorGetter & getter);
+    /// proton: ends.
+
     void addChains(std::vector<Chain> chains);
     void addChain(Chain chain);
 
