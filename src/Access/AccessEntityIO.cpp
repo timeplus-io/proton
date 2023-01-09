@@ -31,7 +31,7 @@
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
 #include <boost/range/algorithm/copy.hpp>
-#include <boost/range/algorithm_ext/push_back.hpp>
+#include <base/insertAtEnd.h>
 
 namespace DB
 {
@@ -79,7 +79,7 @@ String serializeAccessEntity(const IAccessEntity & entity)
     ASTs queries;
     queries.push_back(InterpreterShowCreateAccessEntityQuery::getAttachQuery(entity));
     if ((entity.getType() == AccessEntityType::USER) || (entity.getType() == AccessEntityType::ROLE))
-        boost::range::push_back(queries, InterpreterShowGrantsQuery::getAttachGrantQueries(entity));
+        insertAtEnd(queries, InterpreterShowGrantsQuery::getAttachGrantQueries(entity));
 
     /// Serialize the list of ATTACH queries to a string.
     WriteBufferFromOwnString buf;

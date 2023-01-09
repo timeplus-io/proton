@@ -32,7 +32,6 @@
 
 #include <Parsers/ASTSelectQuery.h>
 
-#include <Parsers/ASTSelectQuery.h>
 /// proton: starts
 #include <Interpreters/CompiledAggregateFunctionsHolder.h>
 #include <Common/VersionRevision.h>

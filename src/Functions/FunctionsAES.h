@@ -23,7 +23,7 @@
 #include <functional>
 #include <initializer_list>
 
-#include <string.h>
+#include <cstring>
 
 namespace DB
 {

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <fmt/format.h>
-#include <assert.h>
+#include <cassert>
 #include <filesystem>
 
 namespace DB

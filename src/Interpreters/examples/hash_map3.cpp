@@ -4,7 +4,7 @@
 #define DBMS_HASH_MAP_COUNT_COLLISIONS
 
 
-#include <string.h>
+#include <cstring>
 
 #include <cstdlib>
 

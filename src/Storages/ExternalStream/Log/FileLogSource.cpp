@@ -6,7 +6,7 @@
 #include <base/ClockUtils.h>
 #include <Common/logger_useful.h>
 
-#include <errno.h>
+#include <cerrno>
 #include <fcntl.h>
 #include <unistd.h>
 

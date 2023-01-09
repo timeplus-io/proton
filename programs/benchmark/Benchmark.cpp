@@ -1,8 +1,8 @@
 #include <unistd.h>
-#include <stdlib.h>
+#include <cstdlib>
 #include <fcntl.h>
-#include <signal.h>
-#include <time.h>
+#include <csignal>
+#include <ctime>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -119,7 +119,7 @@ public:
     void initialize(Poco::Util::Application & self [[maybe_unused]]) override
     {
         std::string home_path;
-        const char * home_path_cstr = getenv("HOME");
+        const char * home_path_cstr = getenv("HOME"); /// NOLINT(concurrency-mt-unsafe)
         if (home_path_cstr)
             home_path = home_path_cstr;
 

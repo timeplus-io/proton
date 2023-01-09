@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <vector>
 #include <stdint.h>
-#include <string.h>
+#include <cstring>
 #include <base/types.h>
 #include <Poco/Unicode.h>
 #include <Common/StringSearcher.h>

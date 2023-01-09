@@ -17,7 +17,7 @@
 #include <Common/logger_useful.h>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/range/algorithm/set_algorithm.hpp>
-#include <assert.h>
+#include <cassert>
 
 
 namespace DB
@@ -586,7 +586,7 @@ bool ContextAccess::checkAdminOptionImplHelper(const Container & role_ids, const
     for (auto it = std::begin(role_ids); it != std::end(role_ids); ++it, ++i)
     {
         const UUID & role_id = *it;
-        if (info->enabled_roles_with_admin_option.count(role_id))
+        if (info->enabled_roles_with_admin_option.contains(role_id))
             continue;
 
         if (throw_if_denied)
@@ -595,7 +595,7 @@ bool ContextAccess::checkAdminOptionImplHelper(const Container & role_ids, const
             if (!role_name)
                 role_name = "ID {" + toString(role_id) + "}";
 
-            if (info->enabled_roles.count(role_id))
+            if (info->enabled_roles.contains(role_id))
                 show_error("Not enough privileges. "
                            "Role " + backQuote(*role_name) + " is granted, but without ADMIN option. "
                            "To execute this query it's necessary to have the role " + backQuoteIfNeed(*role_name) + " granted with ADMIN option.",

@@ -4,7 +4,7 @@
 
 #include <Common/Exception.h>
 
-#include <errno.h>
+#include <cerrno>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -120,7 +120,7 @@ int64_t AppendOnlyFile::read(std::span<char> dst, uint64_t offset)
     return read(dst.data(), dst.size(), offset);
 }
 
-int64_t AppendOnlyFile::zeroCopyTo(uint64_t offset, uint64_t count, int32_t target_fd)
+int64_t AppendOnlyFile::zeroCopyTo(uint64_t offset, uint64_t count, int32_t target_fd) /// NOLINT(readability-convert-member-functions-to-static)
 {
     (void)offset;
     (void)count;
@@ -128,7 +128,7 @@ int64_t AppendOnlyFile::zeroCopyTo(uint64_t offset, uint64_t count, int32_t targ
     return 0;
 }
 
-int64_t AppendOnlyFile::zeroCopyFrom(int32_t source_fd, uint64_t offset, uint64_t count)
+int64_t AppendOnlyFile::zeroCopyFrom(int32_t source_fd, uint64_t offset, uint64_t count) /// NOLINT(readability-convert-member-functions-to-static)
 {
     (void)source_fd;
     (void)offset;

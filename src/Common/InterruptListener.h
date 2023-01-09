@@ -1,7 +1,7 @@
 #pragma once
 
 #include <signal.h>
-#include <errno.h>
+#include <cerrno>
 #include <Common/Exception.h>
 
 

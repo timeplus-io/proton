@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-#include <string.h>
+#include <cstring>
 
 using namespace nlog;
 using namespace std;

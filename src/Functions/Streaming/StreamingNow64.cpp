@@ -8,7 +8,7 @@
 
 #include <Common/assert_cast.h>
 
-#include <time.h>
+#include <ctime>
 
 
 namespace DB
@@ -131,7 +131,7 @@ public:
                                 ". Expected const integer.",
                                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-            scale = argument.column->get64(0);
+            scale = static_cast<UInt32>(argument.column->get64(0));
         }
         if (arguments.size() == 2)
         {
@@ -153,7 +153,7 @@ public:
         for (const auto & arg : arguments)
             arg_types.push_back(arg.type);
 
-        return std::make_unique<FunctionBaseNow64>(scale, std::move(arg_types), std::move(result_type));
+        return std::make_unique<FunctionBaseNow64>(scale, std::move(arg_types), result_type);
     }
 };
 

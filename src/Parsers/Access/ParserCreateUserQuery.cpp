@@ -15,7 +15,7 @@
 #include <Parsers/parseIdentifierOrStringLiteral.h>
 #include <base/range.h>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/range/algorithm_ext/push_back.hpp>
+#include <base/insertAtEnd.h>
 
 
 namespace DB
@@ -218,11 +218,11 @@ namespace
     }
 
 
-    bool parseHosts(IParserBase::Pos & pos, Expected & expected, const String & prefix, AllowedClientHosts & hosts)
+    bool parseHosts(IParserBase::Pos & pos, Expected & expected, std::string_view prefix, AllowedClientHosts & hosts)
     {
         return IParserBase::wrapParseImpl(pos, [&]
         {
-            if (!prefix.empty() && !ParserKeyword{prefix.c_str()}.ignore(pos, expected))
+            if (!prefix.empty() && !ParserKeyword{prefix}.ignore(pos, expected))
                 return false;
 
             if (!ParserKeyword{"HOST"}.ignore(pos, expected))
@@ -232,7 +232,7 @@ namespace
             if (!parseHostsWithoutPrefix(pos, expected, res_hosts))
                 return false;
 
-            hosts.add(std::move(res_hosts));
+            hosts.add(res_hosts);
             return true;
         });
     }
@@ -271,7 +271,7 @@ namespace
             if (!elements_p.parse(pos, new_settings_ast, expected))
                 return false;
 
-            settings = std::move(new_settings_ast->as<const ASTSettingsProfileElements &>().elements);
+            settings = std::move(new_settings_ast->as<ASTSettingsProfileElements &>().elements);
             return true;
         });
     }
@@ -396,7 +396,8 @@ bool ParserCreateUserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         {
             if (!settings)
                 settings = std::make_shared<ASTSettingsProfileElements>();
-            boost::range::push_back(settings->elements, std::move(new_settings));
+
+            insertAtEnd(settings->elements, std::move(new_settings));
             continue;
         }
 

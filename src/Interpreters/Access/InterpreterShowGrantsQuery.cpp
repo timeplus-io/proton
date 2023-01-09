@@ -11,7 +11,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <Interpreters/Context.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
-#include <boost/range/algorithm_ext/push_back.hpp>
+#include <base/insertAtEnd.h>
 #include <base/sort.h>
 
 
@@ -159,7 +159,7 @@ ASTs InterpreterShowGrantsQuery::getGrantQueries() const
 
     ASTs grant_queries;
     for (const auto & entity : entities)
-        boost::range::push_back(grant_queries, getGrantQueries(*entity, access_control));
+        insertAtEnd(grant_queries, getGrantQueries(*entity, access_control));
 
     return grant_queries;
 }

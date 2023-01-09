@@ -1,6 +1,6 @@
 #pragma once
 
-#include <string.h>
+#include <cstring>
 #include <memory>
 #include <vector>
 #include <boost/noncopyable.hpp>
@@ -488,7 +488,7 @@ public:
                 pp = recycle(pp, stats);
             }
 
-            prev_p->prev = nullptr;
+            prev_p->prev = nullptr; /// NOLINT(clang-analyzer-cplusplus.NewDelete)
 
             if (p == head)
                 head = new MemoryChunk(page_size, nullptr, 0, 0);
@@ -496,7 +496,7 @@ public:
 
         assert(head);
 
-        stats.head_chunk_size = head->size();
+        stats.head_chunk_size = head->size(); /// NOLINT(clang-analyzer-core.CallAndMessage)
         stats.bytes = size_in_bytes;
         stats.chunks = chunks;
         stats.free_list_hits = free_list_hits;

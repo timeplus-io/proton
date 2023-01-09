@@ -4,7 +4,7 @@
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <errno.h>
+#include <cerrno>
 #include <pwd.h>
 #include <unistd.h>
 #include <Poco/Version.h>
@@ -105,7 +105,6 @@ extern const int UNSUPPORTED;
 #    include <sys/mman.h>
 #    include <sys/ptrace.h>
 #    include <Common/hasLinuxCapability.h>
-#    include <unistd.h>
 #    include <sys/syscall.h>
 #endif
 
@@ -155,7 +154,7 @@ static bool jemallocOptionEnabled(const char *name)
     return value;
 }
 #else
-static bool jemallocOptionEnabled(const char *) { return 0; }
+static bool jemallocOptionEnabled(const char *) { return false; }
 #endif
 
 int mainServer(int argc, char ** argv)
@@ -179,7 +178,7 @@ int mainServer(int argc, char ** argv)
     if (argc > 0)
     {
         /// proton: starts.
-        const char * env_watchdog = getenv("PROTON_WATCHDOG_ENABLE");
+        const char * env_watchdog = getenv("PROTON_WATCHDOG_ENABLE"); /// NOLINT(concurrency-mt-unsafe)
         /// proton: ends.
         if (env_watchdog)
         {
@@ -678,8 +677,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->addWarningMessage("Server was built in debug mode. It will work slowly.");
 #endif
 
-if (ThreadFuzzer::instance().isEffective())
-    global_context->addWarningMessage("ThreadFuzzer is enabled. Application will run slowly and unstable.");
+    if (ThreadFuzzer::instance().isEffective())
+        global_context->addWarningMessage("ThreadFuzzer is enabled. Application will run slowly and unstable.");
 
 #if defined(SANITIZER)
     global_context->addWarningMessage("Server was built with sanitizer. It will work slowly.");
@@ -888,7 +887,7 @@ if (ThreadFuzzer::instance().isEffective())
             rlim.rlim_cur = config().getUInt("max_open_files", static_cast<unsigned>(rlim.rlim_max));
             int rc = setrlimit(RLIMIT_NOFILE, &rlim);
             if (rc != 0)
-                LOG_WARNING(log, "Cannot set max number of file descriptors to {}. Try to specify max_open_files according to your system limits. error: {}", rlim.rlim_cur, strerror(errno));
+                LOG_WARNING(log, "Cannot set max number of file descriptors to {}. Try to specify max_open_files according to your system limits. error: {}", rlim.rlim_cur, strerror(errno)); /// NOLINT(concurrency-mt-unsafe)
             else
                 LOG_DEBUG(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
         }

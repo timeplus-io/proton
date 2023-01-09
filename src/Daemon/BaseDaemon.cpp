@@ -13,9 +13,9 @@
 #if defined(OS_LINUX)
     #include <sys/prctl.h>
 #endif
-#include <errno.h>
-#include <string.h>
-#include <signal.h>
+#include <cerrno>
+#include <cstring>
+#include <csignal>
 #include <unistd.h>
 
 #include <typeinfo>
@@ -518,7 +518,7 @@ BaseDaemon::~BaseDaemon()
     /// Reset signals to SIG_DFL to avoid trying to write to the signal_pipe that will be closed after.
     for (int sig : handled_signals)
     {
-        signal(sig, SIG_DFL);
+        signal(sig, SIG_DFL); /// NOLINT(cert-err33-c)
     }
     signal_pipe.close();
 }
@@ -666,7 +666,7 @@ void BaseDaemon::initialize(Application & self)
     if (config().has("timezone"))
     {
         const std::string config_timezone = config().getString("timezone");
-        if (0 != setenv("TZ", config_timezone.data(), 1))
+        if (0 != setenv("TZ", config_timezone.data(), 1)) /// NOLINT(concurrency-mt-unsafe)
             throw Poco::Exception("Cannot setenv TZ variable");
 
         tzset();
@@ -945,13 +945,13 @@ void BaseDaemon::handleSignal(int signal_id)
         onInterruptSignals(signal_id);
     }
     else
-        throw DB::Exception(std::string("Unsupported signal: ") + strsignal(signal_id), 0);
+        throw DB::Exception(std::string("Unsupported signal: ") + strsignal(signal_id), 0); /// NOLINT(concurrency-mt-unsafe)
 }
 
 void BaseDaemon::onInterruptSignals(int signal_id)
 {
     is_cancelled = true;
-    LOG_INFO(&logger(), "Received termination signal ({})", strsignal(signal_id));
+    LOG_INFO(&logger(), "Received termination signal ({})", strsignal(signal_id)); /// NOLINT(concurrency-mt-unsafe)
 
     if (sigint_signals_counter >= 2)
     {
@@ -1057,7 +1057,7 @@ void BaseDaemon::setupWatchdog()
                     break;
             }
             else if (errno != EINTR)
-                throw Poco::Exception("Cannot waitpid, errno: " + std::string(strerror(errno)));
+                throw Poco::Exception("Cannot waitpid, errno: " + std::string(strerror(errno))); /// NOLINT(concurrency-mt-unsafe)
         } while (true);
 
         if (errno == ECHILD)

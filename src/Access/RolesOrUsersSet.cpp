@@ -7,7 +7,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <boost/range/algorithm/set_algorithm.hpp>
-#include <boost/range/algorithm_ext/push_back.hpp>
+#include <base/insertAtEnd.h>
 #include <base/sort.h>
 
 
@@ -22,8 +22,8 @@ namespace ErrorCodes
 RolesOrUsersSet::RolesOrUsersSet() = default;
 RolesOrUsersSet::RolesOrUsersSet(const RolesOrUsersSet & src) = default;
 RolesOrUsersSet & RolesOrUsersSet::operator =(const RolesOrUsersSet & src) = default;
-RolesOrUsersSet::RolesOrUsersSet(RolesOrUsersSet && src) = default;
-RolesOrUsersSet & RolesOrUsersSet::operator =(RolesOrUsersSet && src) = default;
+RolesOrUsersSet::RolesOrUsersSet(RolesOrUsersSet && src) noexcept = default;
+RolesOrUsersSet & RolesOrUsersSet::operator =(RolesOrUsersSet && src) noexcept = default;
 
 
 RolesOrUsersSet::RolesOrUsersSet(AllTag)
@@ -233,7 +233,7 @@ bool RolesOrUsersSet::match(const UUID & id) const
 
 bool RolesOrUsersSet::match(const UUID & user_id, const boost::container::flat_set<UUID> & enabled_roles) const
 {
-    if (!all && !ids.count(user_id))
+    if (!all && !ids.contains(user_id))
     {
         bool found_enabled_role = std::any_of(
             enabled_roles.begin(), enabled_roles.end(), [this](const UUID & enabled_role) { return ids.count(enabled_role); });
@@ -241,7 +241,7 @@ bool RolesOrUsersSet::match(const UUID & user_id, const boost::container::flat_s
             return false;
     }
 
-    if (except_ids.count(user_id))
+    if (except_ids.contains(user_id))
         return false;
 
     bool in_except_list = std::any_of(

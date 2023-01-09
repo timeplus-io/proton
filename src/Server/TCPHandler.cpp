@@ -3,7 +3,7 @@
 #include <memory>
 #include <vector>
 #include <string_view>
-#include <string.h>
+#include <cstring>
 #include <base/types.h>
 #include <base/scope_guard.h>
 #include <Poco/Net/NetException.h>
@@ -950,7 +950,7 @@ void TCPHandler::sendProfileEvents()
     for (auto const & name_and_type : column_names_and_types)
         temp_columns.emplace_back(name_and_type.type, name_and_type.name);
 
-    Block block(std::move(temp_columns));
+    Block block(std::move(temp_columns)); /// NOLINT(performance-move-const-arg)
 
     MutableColumns columns = block.mutateColumns();
     auto thread_group = CurrentThread::getGroup();

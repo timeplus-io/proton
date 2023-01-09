@@ -3,7 +3,7 @@
 #include <optional>
 #include <base/types.h>
 #include <signal.h>
-#include <time.h>
+#include <ctime>
 
 #include "config.h"
 

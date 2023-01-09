@@ -11,7 +11,7 @@
 #include <Access/Common/RowPolicyDefs.h>
 #include <base/range.h>
 #include <boost/container/flat_set.hpp>
-#include <boost/range/algorithm_ext/push_back.hpp>
+#include <base/insertAtEnd.h>
 
 
 namespace DB
@@ -154,7 +154,7 @@ namespace
             for (auto filter_type : collections::range(RowPolicyFilterType::MAX))
             {
                 const auto & type_info = RowPolicyFilterTypeInfo::get(filter_type);
-                if (commands.count(type_info.command))
+                if (commands.contains(type_info.command))
                 {
                     if (type_info.is_check && check)
                         res_filters.emplace_back(filter_type, *check);
@@ -264,7 +264,7 @@ bool ParserCreateRowPolicyQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
         std::vector<std::pair<RowPolicyFilterType, ASTPtr>> new_filters;
         if (parseForClauses(pos, expected, alter, new_filters))
         {
-            boost::range::push_back(filters, std::move(new_filters));
+            insertAtEnd(filters, std::move(new_filters));
             continue;
         }
 

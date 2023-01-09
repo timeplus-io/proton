@@ -60,10 +60,7 @@
 #include <Interpreters/Streaming/WindowCommon.h>
 #include <Common/ProtonCommon.h>
 #include <Functions/FunctionFactory.h>
-#include <Interpreters/Streaming/HashJoin.h>
-#include <Interpreters/Streaming/WindowCommon.h>
 #include <Storages/Streaming/ProxyStream.h>
-#include <Common/ProtonCommon.h>
 /// proton: ends
 
 namespace DB

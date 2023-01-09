@@ -1,4 +1,6 @@
-#include <signal.h>
+// NOLINTBEGIN(readability-inconsistent-declaration-parameter-name)
+
+#include <csignal>
 #include <sys/time.h>
 #if defined(OS_LINUX)
 #   include <sys/sysinfo.h>
@@ -58,7 +60,7 @@ ThreadFuzzer::ThreadFuzzer()
 template <typename T>
 static void initFromEnv(T & what, const char * name)
 {
-    const char * env = getenv(name);
+    const char * env = getenv(name); // NOLINT(concurrency-mt-unsafe)
     if (!env)
         return;
     what = parse<T>(env);
@@ -67,7 +69,7 @@ static void initFromEnv(T & what, const char * name)
 template <typename T>
 static void initFromEnv(std::atomic<T> & what, const char * name)
 {
-    const char * env = getenv(name);
+    const char * env = getenv(name); // NOLINT(concurrency-mt-unsafe)
     if (!env)
         return;
     what.store(parse<T>(env), std::memory_order_relaxed);
@@ -295,3 +297,5 @@ FOR_EACH_WRAPPED_FUNCTION(MAKE_WRAPPER)
 #    undef MAKE_WRAPPER
 #endif
 }
+
+// NOLINTEND(readability-inconsistent-declaration-parameter-name)

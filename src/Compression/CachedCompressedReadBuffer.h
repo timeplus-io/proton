@@ -1,7 +1,7 @@
 #pragma once
 
 #include <memory>
-#include <time.h>
+#include <ctime>
 #include <IO/ReadBufferFromFileBase.h>
 #include "CompressedReadBufferBase.h"
 #include <IO/UncompressedCache.h>

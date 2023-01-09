@@ -3,7 +3,7 @@
 #include <Compression/CompressedReadBufferBase.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <IO/ReadSettings.h>
-#include <time.h>
+#include <ctime>
 #include <memory>
 
 

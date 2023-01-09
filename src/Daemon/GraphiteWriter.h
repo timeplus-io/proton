@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include <time.h>
+#include <ctime>
 #include <Poco/Net/StreamSocket.h>
 #include <Poco/Net/SocketStream.h>
 #include <Poco/Util/Application.h>

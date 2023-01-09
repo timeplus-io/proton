@@ -1,4 +1,4 @@
-#include <stdlib.h>
+#include <cstdlib>
 #include <fcntl.h>
 #include <map>
 #include <iostream>
@@ -291,7 +291,7 @@ bool Client::executeMultiQuery(const String & all_queries_text)
                 if (insert_ast && insert_ast->data)
                 {
                     this_query_end = insert_ast->end;
-                    adjustQueryEnd(this_query_end, all_queries_end, global_context->getSettingsRef().max_parser_depth);
+                    adjustQueryEnd(this_query_end, all_queries_end, static_cast<UInt32>(global_context->getSettingsRef().max_parser_depth));
                 }
 
                 // Report error.
@@ -367,7 +367,7 @@ void Client::initialize(Poco::Util::Application & self)
 {
     Poco::Util::Application::initialize(self);
 
-    const char * home_path_cstr = getenv("HOME");
+    const char * home_path_cstr = getenv("HOME"); /// NOLINT(concurrency-mt-unsafe)
     if (home_path_cstr)
         home_path = home_path_cstr;
 
@@ -771,7 +771,7 @@ bool Client::processWithFuzzing(const String & full_query)
                     stderr,
                     "Found error: IAST::clone() is broken for some AST node. This is a bug. The original AST ('dump before fuzz') and its cloned copy ('dump of cloned AST') refer to the same nodes, which must never happen. This means that their parent node doesn't implement clone() correctly.");
 
-                exit(1);
+                exit(1); /// NOLINT(concurrency-mt-unsafe)
             }
 
             auto fuzzed_text = ast_to_process->formatForErrorMessage();
@@ -921,7 +921,7 @@ bool Client::processWithFuzzing(const String & full_query)
                     fmt::print(stderr, "Text-3 (AST-3 formatted):\n'{}'\n", text_3);
                     fmt::print(stderr, "Text-3 must be equal to Text-2, but it is not.\n");
 
-                    exit(1);
+                    exit(1); /// NOLINT(concurrency-mt-unsafe)
                 }
             }
         }
@@ -1049,7 +1049,7 @@ void Client::processOptions(const OptionsDescription & options_description,
             auto exit_code = e.code() % 256;
             if (exit_code == 0)
                 exit_code = 255;
-            exit(exit_code);
+            exit(exit_code); /// NOLINT(concurrency-mt-unsafe)
         }
     }
     send_external_tables = true;

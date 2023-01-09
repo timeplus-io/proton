@@ -1,7 +1,7 @@
 #pragma once
 
 
-#include <string.h>
+#include <cstring>
 #if !defined(OS_DARWIN) && !defined(OS_FREEBSD)
 #include <malloc.h>
 #endif

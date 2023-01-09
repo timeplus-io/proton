@@ -22,7 +22,7 @@
 #include <Interpreters/Streaming/DDLHelper.h>
 /// proton: ends
 
-#include <boost/range/algorithm_ext/push_back.hpp>
+#include <base/insertAtEnd.h>
 
 #include <algorithm>
 
@@ -219,7 +219,7 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccess() const
     AccessRightsElements required_access;
     const auto & alter = query_ptr->as<ASTAlterQuery &>();
     for (const auto & child : alter.command_list->children)
-        boost::range::push_back(required_access, getRequiredAccessForCommand(child->as<ASTAlterCommand&>(), alter.getDatabase(), alter.getTable()));
+        insertAtEnd(required_access, getRequiredAccessForCommand(child->as<ASTAlterCommand&>(), alter.getDatabase(), alter.getTable()));
     return required_access;
 }
 

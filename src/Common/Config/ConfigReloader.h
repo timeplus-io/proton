@@ -2,7 +2,7 @@
 
 #include "ConfigProcessor.h"
 #include <Common/ThreadPool.h>
-#include <time.h>
+#include <ctime>
 #include <string>
 #include <thread>
 #include <mutex>

@@ -10,7 +10,7 @@
 #include <Access/Quota.h>
 #include <Access/Common/AccessFlags.h>
 #include <base/range.h>
-#include <boost/range/algorithm_ext/push_back.hpp>
+#include <base/insertAtEnd.h>
 
 
 namespace DB

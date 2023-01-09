@@ -7,7 +7,7 @@
 #include <Poco/UTF8Encoding.h>
 
 #include <string>
-#include <string.h>
+#include <cstring>
 
 
 #include <iostream>
@@ -336,7 +336,7 @@ SimpleJSON::Pos SimpleJSON::skipBool(Pos begin) const
 }
 /// proton: ends
 
-SimpleJSON::Pos SimpleJSON::skipNull() const
+SimpleJSON::Pos SimpleJSON::skipNull() const // NOLINT(readability-convert-member-functions-to-static)
 {
     //std::cerr << "skipNull()\t" << data() << std::endl;
 
@@ -346,7 +346,7 @@ SimpleJSON::Pos SimpleJSON::skipNull() const
 }
 
 /// proton: starts
-SimpleJSON::Pos SimpleJSON::skipNull(Pos begin) const
+SimpleJSON::Pos SimpleJSON::skipNull(Pos begin) const // NOLINT(readability-convert-member-functions-to-static)
 {
     return begin + 4;
 }

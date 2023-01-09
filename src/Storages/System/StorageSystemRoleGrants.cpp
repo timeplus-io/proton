@@ -10,7 +10,7 @@
 #include <Access/Role.h>
 #include <Access/User.h>
 #include <Interpreters/Context.h>
-#include <boost/range/algorithm_ext/push_back.hpp>
+#include <base/insertAtEnd.h>
 
 
 namespace DB
@@ -34,7 +34,7 @@ void StorageSystemRoleGrants::fillData(MutableColumns & res_columns, ContextPtr 
     context->checkAccess(AccessType::SHOW_USERS | AccessType::SHOW_ROLES);
     const auto & access_control = context->getAccessControl();
     std::vector<UUID> ids = access_control.findAll<User>();
-    boost::range::push_back(ids, access_control.findAll<Role>());
+    insertAtEnd(ids, access_control.findAll<Role>());
 
     size_t column_index = 0;
     auto & column_user_name = assert_cast<ColumnString &>(assert_cast<ColumnNullable &>(*res_columns[column_index]).getNestedColumn());

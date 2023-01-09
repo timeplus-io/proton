@@ -2,7 +2,7 @@
 
 #include <Common/intExp.h>
 
-#include <time.h>
+#include <ctime>
 
 namespace DB
 {

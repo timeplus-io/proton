@@ -11,7 +11,7 @@
 #include <Access/User.h>
 #include <Access/SettingsProfile.h>
 #include <Interpreters/Context.h>
-#include <boost/range/algorithm_ext/push_back.hpp>
+#include <base/insertAtEnd.h>
 
 
 namespace DB
@@ -40,8 +40,8 @@ void StorageSystemSettingsProfileElements::fillData(MutableColumns & res_columns
     context->checkAccess(AccessType::SHOW_SETTINGS_PROFILES);
     const auto & access_control = context->getAccessControl();
     std::vector<UUID> ids = access_control.findAll<User>();
-    boost::range::push_back(ids, access_control.findAll<Role>());
-    boost::range::push_back(ids, access_control.findAll<SettingsProfile>());
+    insertAtEnd(ids, access_control.findAll<Role>());
+    insertAtEnd(ids, access_control.findAll<SettingsProfile>());
 
     size_t i = 0;
     auto & column_profile_name = assert_cast<ColumnString &>(assert_cast<ColumnNullable &>(*res_columns[i]).getNestedColumn());
