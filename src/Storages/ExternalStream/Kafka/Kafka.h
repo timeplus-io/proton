@@ -3,6 +3,8 @@
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 
+#include <Storages/Streaming/SeekToInfo.h>
+
 namespace DB
 {
 
@@ -39,7 +41,7 @@ public:
 private:
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
-    std::vector<Int64> getOffsets(const String & seek_to) const;
+    std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info) const;
     void validate();
 
 private:

@@ -4,6 +4,7 @@
 #include "StreamingBlockReaderNativeLog.h"
 #include "StreamingStoreSource.h"
 #include "parseHostShards.h"
+#include "storageUtil.h"
 
 #include <Interpreters/DiskUtilChecker.h>
 
@@ -457,11 +458,11 @@ void StorageStream::readConcat(
     std::vector<QueryPlanPtr> plans;
     for (auto & stream_shard : shards_to_read)
     {
-        auto create_streaming_source = [this, header, storage_snapshot, stream_shard, context_](Int64 & max_sn_in_parts) {
+        auto create_streaming_source = [this, header, storage_snapshot, stream_shard, &query_info, context_](Int64 & max_sn_in_parts) {
             if (max_sn_in_parts < 0)
             {
                 /// Fallback to seek streaming store
-                auto offsets = stream_shard->getOffsets(context_->getSettingsRef().seek_to.value);
+                auto offsets = stream_shard->getOffsets(query_info.seek_to_info);
                 LOG_INFO(log, "Fused read fallbacks to seek stream for shard={} since there are no historical data", stream_shard->shard);
 
                 return std::make_shared<StreamingStoreSource>(
@@ -502,7 +503,7 @@ void StorageStream::readConcat(
             else
             {
                 /// Fallback to seek streaming store
-                auto offsets = stream_shard->getOffsets(context_->getSettingsRef().seek_to.value);
+                auto offsets = stream_shard->getOffsets(query_info.seek_to_info);
                 LOG_INFO(
                     log,
                     "Fused read fallbacks to seek stream since sequence gaps are found for shard={}, max_sn_in_parts={}, "
@@ -557,7 +558,7 @@ void StorageStream::readConcat(
 void StorageStream::readStreaming(
     const StreamShardPtrs & shards_to_read,
     QueryPlan & query_plan,
-    SelectQueryInfo & /*query_info*/,
+    SelectQueryInfo & query_info,
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
     ContextPtr context_)
@@ -568,11 +569,12 @@ void StorageStream::readStreaming(
     Pipes pipes;
     pipes.reserve(shards_to_read.size());
 
+    assert(query_info.seek_to_info);
     const auto & settings_ref = context_->getSettingsRef();
     /// 1) Checkpointed queries shall not be multiplexed
     /// 2) Queries which seek to a specific timestamp shall not be multiplexed
     auto share_resource_group = (settings_ref.query_resource_group.value == "shared")
-        && (settings_ref.seek_to.value == "latest" || settings_ref.seek_to.value.empty())
+        && (query_info.seek_to_info->getSeekTo().empty() || query_info.seek_to_info->getSeekTo() == "latest")
         && (settings_ref.exec_mode == ExecuteMode::NORMAL);
 
     if (share_resource_group)
@@ -598,7 +600,7 @@ void StorageStream::readStreaming(
         else
             header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
 
-        auto offsets = stream_shards.back()->getOffsets(settings_ref.seek_to.value);
+        auto offsets = stream_shards.back()->getOffsets(query_info.seek_to_info);
         for (auto stream_shard : shards_to_read)
             pipes.emplace_back(
                 std::make_shared<StreamingStoreSource>(stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log));
@@ -608,7 +610,7 @@ void StorageStream::readStreaming(
         log,
         "Starting reading {} streams by seeking to '{}' in {} resource group",
         pipes.size(),
-        settings_ref.seek_to.value,
+        query_info.seek_to_info->getSeekTo(),
         share_resource_group ? "shared" : "dedicated");
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
@@ -832,9 +834,10 @@ StorageStream::ShardsToRead StorageStream::getRequiredShardsToRead(ContextPtr co
     ShardsToRead result;
     if (query_info.syntax_analyzer_result->streaming)
     {
+        assert(query_info.seek_to_info);
         const auto & settings_ref = context_->getSettingsRef();
         bool require_back_fill_from_historical = isChangelogKvMode() || isVersionedKvMode()
-            || (settings_ref.seek_to.value == "earliest" && settings_ref.enable_backfill_from_historical_store.value);
+            || (query_info.seek_to_info->getSeekTo() == "earliest" && settings_ref.enable_backfill_from_historical_store.value);
         result.mode = require_back_fill_from_historical ? QueryMode::STREAMING_CONCAT : QueryMode::STREAMING;
     }
     else

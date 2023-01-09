@@ -108,7 +108,7 @@ private:
 
     std::vector<Int64> sequencesForTimestamps(std::vector<Int64> timestamps, bool append_time = false) const;
 
-    std::vector<Int64> getOffsets(const String & seek_to) const;
+    std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info) const;
 
     static void consumeCallback(nlog::RecordPtrs records, klog::ConsumeCallbackData * data);
 

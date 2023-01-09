@@ -13,15 +13,15 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/Streaming/ASTEmitQuery.h>
 #include <Parsers/queryToString.h>
-#include <Common/logger_useful.h>
 #include <Common/IntervalKind.h>
 #include <Common/ProtonCommon.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int SYNTAX_ERROR;
+extern const int SYNTAX_ERROR;
 }
 
 namespace Streaming
@@ -40,9 +40,7 @@ bool hasAggregates(const ASTPtr & query, const ASTSelectQuery & select_query)
 }
 }
 
-EmitInterpreter::LastXRule::LastXRule(
-    const Settings & settings_, BaseScaleInterval & last_interval_bs_, bool & tail_, Poco::Logger * log_)
-    : settings(settings_), last_interval_bs(last_interval_bs_), tail(tail_), log(log_)
+EmitInterpreter::LastXRule::LastXRule(const Settings & settings_, Poco::Logger * log_) : settings(settings_), log(log_)
 {
 }
 
@@ -64,6 +62,7 @@ void EmitInterpreter::LastXRule::operator()(ASTPtr & query_)
     if (!last_interval)
         return;
 
+    /// FIXME, for now, we may be don't need this syntax `LAST 1h ON PROC TIME`
     proc_time = emit->proc_time;
 
     /// The order of window aggr / global aggr / tail matters
@@ -76,7 +75,7 @@ void EmitInterpreter::LastXRule::operator()(ASTPtr & query_)
     handleTail(*select_query);
 }
 
-bool EmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & select_query) const
+bool EmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & select_query)
 {
     assert(last_interval);
     auto table_expression = getTableExpression(select_query, 0);
@@ -107,7 +106,7 @@ bool EmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & select_query)
         addEventTimePredicate(select_query);
 
     auto window_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(interval_ast->as<ASTFunction>()));
-    last_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(last_interval->as<ASTFunction>()));
+    auto last_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(last_interval->as<ASTFunction>()));
     if (window_interval_bs.scale != last_interval_bs.scale)
         throw Exception(
             ErrorCodes::SYNTAX_ERROR,
@@ -115,34 +114,7 @@ bool EmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & select_query)
             IntervalKind(window_interval_bs.src_kind).toString(),
             IntervalKind(last_interval_bs.src_kind).toString());
 
-    /// calculate settings keep_windows = ceil(last_interval / window_interval)
-    //    UInt64 keep_windows
-    //        = (std::abs(last_interval_bs.num_units) + std::abs(window_interval_bs.num_units) - 1) / std::abs(window_interval_bs.num_units);
-    //    if (keep_windows == 0 || keep_windows > settings.max_windows)
-    //        throw Exception(
-    //            "Too big range. Try make the last range smaller or make the hop/tumble window size bigger to make 'range / window_size' less "
-    //            "than or equal to "
-    //                + std::to_string(settings.max_windows),
-    //            ErrorCodes::SYNTAX_ERROR);
-
-    const auto & old_settings = select_query.settings();
-    ASTPtr new_settings = old_settings ? old_settings->clone() : std::make_shared<ASTSetQuery>();
-    auto & ast_set = new_settings->as<ASTSetQuery &>();
-
-    if (ast_set.changes.tryGet("keep_windows"))
-        throw Exception("The `emit last` policy conflicts with the existing 'keep_windows' setting", ErrorCodes::SYNTAX_ERROR);
-
-    ast_set.is_standalone = false;
-    //    ast_set.changes.emplace_back("keep_windows", keep_windows);
-
-    if (ast_set.changes.tryGet("seek_to"))
-        throw Exception("The `emit last` policy conflicts with the existing 'seek_to' setting", ErrorCodes::SYNTAX_ERROR);
-
-    /// Seek to -3600s for example
-    ast_set.changes.emplace_back("seek_to", "-" + last_interval_bs.toString());
-
     select_query.setExpression(ASTSelectQuery::Expression::EMIT, std::move(new_emit));
-    select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(new_settings));
 
     if (log)
         LOG_INFO(log, "(LastXForWindow) processed query: {}", queryToString(query, true));
@@ -174,7 +146,7 @@ bool EmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & select_query)
     new_emit_query->last_interval.reset();
 
     ASTPtr periodic_interval;
-    last_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(last_interval->as<ASTFunction>()));
+    auto last_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(last_interval->as<ASTFunction>()));
     if (new_emit_query->periodic_interval)
     {
         /// check periodic_interval is appropriate value by settings.max_windows
@@ -246,24 +218,13 @@ bool EmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & select_query)
     select_query.setExpression(ASTSelectQuery::Expression::GROUP_BY, std::move(new_groupby));
     select_query.setExpression(ASTSelectQuery::Expression::EMIT, std::move(new_emit));
 
-    const auto & old_settings = select_query.settings();
-    ASTPtr new_settings = old_settings ? old_settings->clone() : std::make_shared<ASTSetQuery>();
-    auto & ast_set = new_settings->as<ASTSetQuery &>();
-    ast_set.is_standalone = false;
-    if (ast_set.changes.tryGet("seek_to"))
-        throw Exception("The `emit last` policy conflicts with the existing 'seek_to' setting", ErrorCodes::SYNTAX_ERROR);
-
-    /// Seek to -3600s for example
-    ast_set.changes.emplace_back("seek_to", "-" + last_interval_bs.toString());
-    select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(new_settings));
-
     if (log)
         LOG_INFO(log, "(LastXForGlobal) processed query: {}", queryToString(query, true));
 
     return true;
 }
 
-void EmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_query) const
+void EmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_query)
 {
     assert(last_interval);
     assert(emit_query);
@@ -272,32 +233,22 @@ void EmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_query) const
         /// We will need add `_tp_time > now64(3,'UTC') - last_interval` to WHERE
         addEventTimePredicate(select_query);
 
-    tail = true;
     ASTPtr new_emit = emit_query->clone();
     auto new_emit_query = new_emit->as<ASTEmitQuery>();
     assert(new_emit_query);
     new_emit_query->last_interval.reset();
 
-    last_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(last_interval->as<ASTFunction>()));
-
-    const auto & old_settings = select_query.settings();
-    ASTPtr new_settings = old_settings ? old_settings->clone() : std::make_shared<ASTSetQuery>();
-    auto & ast_set = new_settings->as<ASTSetQuery &>();
-    ast_set.is_standalone = false;
-    if (ast_set.changes.tryGet("seek_to"))
-        throw Exception("The `emit last` policy conflicts with the existing 'seek_to' setting", ErrorCodes::SYNTAX_ERROR);
-
-    /// Seek to -3600s for example
-    ast_set.changes.emplace_back("seek_to", "-" + last_interval_bs.toString());
-
     select_query.setExpression(ASTSelectQuery::Expression::EMIT, std::move(new_emit));
-    select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(new_settings));
 
     if (log)
         LOG_INFO(log, "(LastXForWindow) processed query: {}", queryToString(query, true));
 }
 
-/// Add `_tp_time >= now64(3, 'UTC') to WHERE clause
+/// Add `_tp_time >= now64(3, 'UTC') - last_interval` to WHERE clause, to do two things:
+/// 1) Proton seeks streaming storage back to `now64(3, 'UTC') - @last_interval` to backfill the 1 hour data.
+///  (this now64(3, 'UTC') is materialized when query is issued)
+/// 2) Proton filters data by using `_tp_time > now64(3, 'UTC') - @last_interval`, now() is streaming processed.
+///  (this filter is also continuously applied to new data)
 void EmitInterpreter::LastXRule::addEventTimePredicate(ASTSelectQuery & select_query) const
 {
     auto now = makeASTFunction("now64", std::make_shared<ASTLiteral>(UInt64(3)), std::make_shared<ASTLiteral>("UTC"));
@@ -306,10 +257,10 @@ void EmitInterpreter::LastXRule::addEventTimePredicate(ASTSelectQuery & select_q
 
     auto where = select_query.where();
     if (!where)
-        /// 1. If where clause is empty, then add `WHERE _tp_time >= now64(3, 'UTC') - 'INTERVAL 1 HOUR'
+        /// 1. If where clause is empty, then add `WHERE _tp_time >= now64(3, 'UTC') - 1h
         select_query.setExpression(ASTSelectQuery::Expression::WHERE, greater);
     else
-        /// 2. If where clause is already there , then add `WHERE (existing predicates) AND (_tp_time >= now64(3, 'UTC'))
+        /// 2. If where clause is already there , then add `WHERE (existing predicates) AND (_tp_time >= now64(3, 'UTC') - 1h)
         select_query.setExpression(ASTSelectQuery::Expression::WHERE, makeASTFunction("and", where, greater));
 }
 

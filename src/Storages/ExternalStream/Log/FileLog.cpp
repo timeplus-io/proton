@@ -7,6 +7,7 @@
 #include <NativeLog/Record/Record.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/IStorage.h>
+#include <Storages/SelectQueryInfo.h>
 #include <Storages/Streaming/storageUtil.h>
 
 #include <boost/algorithm/string.hpp>
@@ -85,14 +86,12 @@ FileLog::FileLog(IStorage * storage, std::unique_ptr<ExternalStreamSettings> set
 Pipe FileLog::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & /*query_info*/,
+    SelectQueryInfo & query_info,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
     size_t max_block_size,
     size_t /*num_streams*/)
 {
-    auto [time_based, start_timestamps] = parseSeekTo(context->getSettingsRef().seek_to.value, 1, false);
-
     Block header;
 
     if (!column_names.empty())
@@ -104,7 +103,13 @@ Pipe FileLog::read(
         header.insert({any_one_column.type->createColumn(), any_one_column.type, any_one_column.name});
     }
 
-    auto saved_start_timestamp = start_timestamps[0];
+    assert(query_info.seek_to_info);
+    auto saved_start_timestamp = query_info.seek_to_info->getSeekPoints()[0];
+
+    /// SeekToInfo parsed with UTC timezone, we should re-parse with local timezone.
+    /// FIXME better implementation
+    if (query_info.seek_to_info->getSeekToType() == SeekToType::RELATIVE_TIME)
+        saved_start_timestamp = SeekToInfo::parse(query_info.seek_to_info->getSeekTo(), false).second[0];
 
     return Pipe(std::make_shared<FileLogSource>(
         this,

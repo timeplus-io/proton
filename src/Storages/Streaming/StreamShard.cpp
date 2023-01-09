@@ -957,16 +957,18 @@ Int64 StreamShard::maxCommittedSN() const
     return storage->maxCommittedSN();
 }
 
-std::vector<Int64> StreamShard::getOffsets(const String & seek_to) const
+std::vector<Int64> StreamShard::getOffsets(const SeekToInfoPtr & seek_to_info) const
 {
-    auto [time_based_seek, timestamps_or_sns] = parseSeekTo(seek_to, shards, true);
-    if (!time_based_seek)
-        return timestamps_or_sns;
+    assert(seek_to_info);
+    seek_to_info->replicateForShards(shards);
+
+    if (!seek_to_info->isTimeBased())
+        return seek_to_info->getSeekPoints();
 
     if (kafka)
-        return kafka->log->offsetsForTimestamps(kafka->topic(), timestamps_or_sns, shards);
+        return kafka->log->offsetsForTimestamps(kafka->topic(), seek_to_info->getSeekPoints(), shards);
     else
-        return sequencesForTimestamps(std::move(timestamps_or_sns));
+        return sequencesForTimestamps(seek_to_info->getSeekPoints());
 }
 
 std::vector<Int64> StreamShard::sequencesForTimestamps(std::vector<Int64> timestamps, bool append_time) const

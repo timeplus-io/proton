@@ -93,6 +93,7 @@
 #include <Interpreters/Streaming/Aggregator.h>
 #include <Interpreters/Streaming/EmitInterpreter.h>
 #include <Interpreters/Streaming/PartitionByVisitor.h>
+#include <Interpreters/Streaming/EventPredicateVisitor.h>
 #include <Parsers/ASTWindowDefinition.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStepWithSubstream.h>
@@ -263,6 +264,24 @@ namespace
     };
 
     using StreamingFunctionVisitor = InDepthNodeVisitor<OneTypeMatcher<StreamingFunctionData, StreamingFunctionData::ignoreSubquery>, false>;
+
+    /// Add where expression: <event_time> >= to_datetime64(utc_ms/1000, 3, 'UTC')
+    void addEventTimePredicate(ASTSelectQuery & select, Int64 utc_ms)
+    {
+        auto greater = makeASTFunction(
+            "greater_or_equals",
+            std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME),
+            makeASTFunction(
+                "to_datetime64",
+                makeASTFunction("divide", std::make_shared<ASTLiteral>(utc_ms), std::make_shared<ASTLiteral>(1000)),
+                std::make_shared<ASTLiteral>(UInt64(3)),
+                std::make_shared<ASTLiteral>("UTC")));
+
+        if (auto where = select.where())
+            select.setExpression(ASTSelectQuery::Expression::WHERE, makeASTFunction("and", greater, where));
+        else
+            select.setExpression(ASTSelectQuery::Expression::WHERE, greater);
+    }
 
     std::vector<size_t> keyPositionsForSubstreams(const Block & header, const SelectQueryInfo & query_info)
     {
@@ -480,7 +499,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     // Only propagate WITH elements to subqueries if we're not a subquery
     if (!options.is_subquery)
     {
-        if (context->getSettingsRef().enable_global_with_statement)
+        if (settings.enable_global_with_statement)
             ApplyWithAliasVisitor().visit(query_ptr);
         ApplyWithSubqueryVisitor().visit(query_ptr);
     }
@@ -500,7 +519,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         Streaming::EmitInterpreter::handleRules(
                     /* streaming query */ query_ptr,
                     /* rules */ Streaming::EmitInterpreter::checkEmitAST,
-                                Streaming::EmitInterpreter::LastXRule(settings, last_interval_bs, last_tail, log));
+                                Streaming::EmitInterpreter::LastXRule(settings, log));
 
         /// After handling, update setting for context.
         if (getSelectQuery().settings())
@@ -604,7 +623,10 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     /// proton: starts.
     analyzeStreamingMode();
     analyzeChangelogMode();
-    /// proton : ends
+
+    /// Before analyzing, handle settings seek_to
+    handleSeekToSetting();
+    /// proton: ends.
 
     joined_tables.rewriteDistributedInAndJoins(query_ptr);
 
@@ -762,10 +784,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
                         required_columns.push_back(name);
             }
 
-            if (last_tail && last_interval_bs.num_units > 0 && isStreaming())
-                if (std::find(required_columns.begin(), required_columns.end(), ProtonConsts::RESERVED_EVENT_TIME) == required_columns.end())
-                    required_columns.push_back(ProtonConsts::RESERVED_EVENT_TIME);
-
             if (isChangelog())
             {
                 if (std::find(required_columns.begin(), required_columns.end(), ProtonConsts::RESERVED_DELTA_FLAG) == required_columns.end())
@@ -790,6 +808,12 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
             source_header = storage_snapshot->getSampleBlockForColumns(required_columns);
         }
+
+        /// proton: starts.
+        /// Analyze event predicates in WHERE clause like `WHERE _tp_time > 2023-01-01 00:01:01` or `WHERE _tp_sn > 1000` 
+        /// and create `SeekToInfo` objects to represent these predicates for streaming store rewinding in a streaming query.
+        analyzeEventPredicateAsSeekTo();
+        /// proton: ends.
 
         /// Calculate structure of the result.
         result_header = getSampleBlockImpl();
@@ -1545,9 +1569,6 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
 
             if (!query_info.projection && expressions.hasWhere())
                 executeWhere(query_plan, expressions.before_where, expressions.remove_where_filter);
-
-            if (last_tail && last_interval_bs.num_units > 0)
-                executeLastXTail(query_plan, last_interval_bs);
 
             if (expressions.need_aggregate)
             {
@@ -3044,17 +3065,6 @@ void InterpreterSelectQuery::initSettings()
 }
 
 /// proton: starts
-void InterpreterSelectQuery::executeLastXTail(QueryPlan & query_plan, const Streaming::BaseScaleInterval & last_interval_bs_) const
-{
-    if (!isStreaming())
-        return;
-
-    auto proc_filter_step = std::make_unique<Streaming::ProcessTimeFilterStep>(query_plan.getCurrentDataStream(), last_interval_bs_, ProtonConsts::RESERVED_EVENT_TIME);
-
-    proc_filter_step->setStepDescription("ProcessTimeFilter");
-    query_plan.addStep(std::move(proc_filter_step));
-}
-
 void InterpreterSelectQuery::executeStreamingOrder(QueryPlan & query_plan)
 {
     const Settings & settings = context->getSettingsRef();
@@ -3495,6 +3505,48 @@ void InterpreterSelectQuery::checkEmitVersion()
         else if (!streaming)
             throw Exception(ErrorCodes::UNSUPPORTED, "emit_version() shall be only used in streaming query");
     }
+}
+
+void InterpreterSelectQuery::handleSeekToSetting()
+{
+    const auto & seek_to = context->getSettingsRef().seek_to.value;
+
+    assert(!query_info.seek_to_info);
+    query_info.seek_to_info = std::make_shared<SeekToInfo>(seek_to);
+
+    if (!isStreaming() && !seek_to.empty())
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It doesn't support `seek_to` setting in historical table query");
+
+    if (query_info.seek_to_info->isTimeBased())
+    {
+        const auto & seek_points = query_info.seek_to_info->getSeekPoints();
+        if (seek_points.size() != 1)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It doesn't support time based `seek_to` settings for multiple shards");
+
+        /// Here we rewrite WHERE predicates of SELECT query.
+        /// Example : SELECT * FROM stream SETTINGS seek_to='2022-01-01 00:01:01' =>
+        /// SELECT * FROM stream WHERE _tp_time >= '2022-01-01 00:01:01'
+        addEventTimePredicate(getSelectQuery(), seek_points[0]);
+    }
+    else
+    {
+        /// Do nothing here. For sequence number based seek_to, it will be handled in StorageStream directly
+    }
+}
+
+void InterpreterSelectQuery::analyzeEventPredicateAsSeekTo()
+{
+    /// If a streaming query already has `seek_to` query setting like
+    /// `SELECT * FROM my_stream WHERE _tp_time > '2023-01-01 00:01:01' SETTINGS seek_to=2022-01-01 00:01:01`. 
+    /// `seek_to` in query setting dominates event time predicate in where clause.
+    /// We choose this design because we like query backward compatibility and `seek_to` to be an internal workaround to do a streaming store rewinding.
+    if (!isStreaming() || !context->getSettingsRef().seek_to.value.empty())
+        return;
+
+    EventPredicateVisitor::Data data(context);
+    EventPredicateVisitor(data).visit(query_ptr);
+    if (data.seek_to_info)
+        query_info.seek_to_info = data.seek_to_info;
 }
 
 void InterpreterSelectQuery::analyzeStreamingMode()

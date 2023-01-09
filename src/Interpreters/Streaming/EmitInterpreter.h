@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Parsers/IAST_fwd.h>
-#include <boost/noncopyable.hpp>
 #include <Core/Settings.h>
 #include <Poco/Logger.h>
 
@@ -19,8 +18,6 @@ class ASTSelectQuery;
 
 namespace Streaming
 {
-class BaseScaleInterval;
-
 class EmitInterpreter final
 {
 public:
@@ -41,30 +38,25 @@ public:
     class LastXRule final
     {
     public:
-        LastXRule(const Settings & settings_, BaseScaleInterval & last_interval_bs_, bool & tail_, Poco::Logger * log_ = nullptr);
+        LastXRule(const Settings & settings_, Poco::Logger * log_ = nullptr);
         void operator()(ASTPtr & query);
-
-        bool isTail() const { return tail; }
-        const BaseScaleInterval & lastInterval() const { return last_interval_bs; }
 
     private:
         /// Last X streaming processing for window(Tumble/Hop...)
         /// we shall convert last_interval to settings "keep_windows = `ceil(last_interval / window_interval)`" for AST
-        bool handleWindowAggr(ASTSelectQuery & query) const;
+        bool handleWindowAggr(ASTSelectQuery & query);
 
         /// Last X streaming processing for global aggregation
         /// we shall convert global aggregation to hop table window for AST
         bool handleGlobalAggr(ASTSelectQuery & query);
 
         /// Last X streaming tail
-        void handleTail(ASTSelectQuery & query) const;
+        void handleTail(ASTSelectQuery & query);
 
         void addEventTimePredicate(ASTSelectQuery & query) const;
 
     private:
         const Settings & settings;
-        BaseScaleInterval & last_interval_bs;
-        bool & tail;
         Poco::Logger * log;
 
         ASTPtr query;

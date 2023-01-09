@@ -32,14 +32,11 @@ static bool checkLastXRule(const String & last_x_query, const String & check_que
     DB::Settings settings;
     settings.set("max_keep_windows", max_keep_windows);
 
-    bool tail = false;
-    DB::Streaming::BaseScaleInterval last_interval_bs{};
-
     DB::ParserQuery last_x_parser(last_x_query.end().base());
     DB::ASTPtr last_x_ast = parseQuery(last_x_parser, last_x_query.begin().base(), last_x_query.end().base(), "", 0, 0);
     DB::Streaming::EmitInterpreter::handleRules(
         last_x_ast->as<DB::ASTSelectWithUnionQuery &>().list_of_selects->children.at(0),
-        DB::Streaming::EmitInterpreter::LastXRule(settings, last_interval_bs, tail));
+        DB::Streaming::EmitInterpreter::LastXRule(settings));
 
     DB::ParserQuery check_parser(check_query.end().base());
     DB::ASTPtr check_ast = parseQuery(check_parser, check_query.begin().base(), check_query.end().base(), "", 0, 0);
@@ -70,18 +67,16 @@ static bool checkLastXRule(const String & last_x_query, const String & check_que
         }
 
         auto ast = check_data.elems[elem.first];
-        if (elem.second->getTreeHash() != ast->getTreeHash())
+        auto tree_str = serializeAST(*elem.second);
+        auto check_str = serializeAST(*ast);
+        if (tree_str != check_str)
         {
-            std::cerr << fmt::format(
-                "> > > Dismatched elem(ID={}), Last X Tree '{}' and Check Tree '{}'\n",
-                elem.first,
-                serializeAST(*elem.second),
-                serializeAST(*ast));
+            std::cerr << fmt::format("> > > Dismatched elem(ID={}):\nLast X Tree '{}'\nCheck Tree '{}'\n", elem.first, tree_str, check_str);
             continue;
         }
     }
 
-    return last_x_ast->getTreeHash() == check_ast->getTreeHash();
+    return serializeAST(*last_x_ast) == serializeAST(*check_ast);
 }
 
 static bool check_func = false;
@@ -128,7 +123,7 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleTumbleWindow)
             "window_end emit stream LAST 1m",
             /* check query */
             "SELECT device, avg(temperature) FROM tumble(default.devices, now(), interval 5 second) where 1=1 and _tp_time >= (now64(3, "
-            "'UTC') - 1m) group by device, window_end emit stream settings seek_to='-60s'"),
+            "'UTC') -1m) group by device, window_end emit stream"),
         true)
         << "Last-X Tumble Window";
 }
@@ -142,7 +137,7 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleHopWindow)
             "device, window_end emit stream LAST 1m",
             /* check query */
             "SELECT device, avg(temperature) FROM hop(default.devices, now(), interval 10 second, interval 1 minute) where 1=1 and "
-            "_tp_time >= (now64(3, 'UTC') - 1m) group by device, window_end emit stream settings seek_to='-60s'"),
+            "_tp_time >= (now64(3, 'UTC') -1m) group by device, window_end emit stream"),
         true)
         << "Last-X Hop Window";
 }
@@ -181,8 +176,8 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleMaxKeepWindows)
             /* lastX query */
             "SELECT device, avg(temperature) FROM default.devices where 1=1 group by device emit stream LAST 2m",
             /* check query */
-            "SELECT device, avg(temperature) FROM hop(default.devices, now(), interval 1 second, interval 120 second) where 1=1 and "
-            "_tp_time >= (now64(3, 'UTC') - 120s) group by device, window_end emit stream settings seek_to='-120s'",
+            "SELECT device, avg(temperature) FROM hop(default.devices, now(), to_interval_second(1), to_interval_second(120)) where 1=1 "
+            "and _tp_time >= (now64(3, 'UTC') - 120s) group by device, window_end emit stream",
             /* max_keep_windows */
             120),
         true);
@@ -196,8 +191,8 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleGlobalAggr)
             "SELECT device, avg(temperature) FROM default.devices where 1=1 group by device emit stream PERIODIC interval 5 second AND "
             "LAST 1m",
             /* check query */
-            "SELECT device, avg(temperature) FROM hop(default.devices, now(), interval 5 second, interval 60 second) where 1=1 and "
-            "_tp_time >= (now64(3, 'UTC') - 60s) group by device, window_end emit stream settings seek_to='-60s'"),
+            "SELECT device, avg(temperature) FROM hop(default.devices, now(), interval 5 second, to_interval_second(60)) where 1=1 and "
+            "_tp_time >= (now64(3, 'UTC') - to_interval_second(60)) group by device, window_end emit stream"),
         true)
         << "Last-X Global Aggregation for table";
 
@@ -207,8 +202,9 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleGlobalAggr)
             "SELECT device, avg(temperature) FROM table(default.devices) where 1=1 group by device emit stream PERIODIC interval 5 second "
             "AND LAST 1m",
             /* check query */
-            "SELECT device, avg(temperature) FROM hop(table(default.devices), now(), interval 5 second, interval 60 second) where 1=1 and "
-            "_tp_time >= (now64(3, 'UTC') - 60s) group by device, window_end emit stream settings seek_to='-60s'"),
+            "SELECT device, avg(temperature) FROM hop(table(default.devices), now(), interval 5 second, to_interval_second(60)) where 1=1 "
+            "and "
+            "_tp_time >= (now64(3, 'UTC') - to_interval_second(60)) group by device, window_end emit stream"),
         true)
         << "Last-X Global Aggregation for table_function";
 
@@ -218,8 +214,8 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleGlobalAggr)
             "SELECT device, avg(temperature) FROM (select * from default.devices) where 1=1 group by device emit stream PERIODIC interval "
             "5 second AND LAST 1m",
             /* check query */
-            "SELECT device, avg(temperature) FROM hop((select * from default.devices), now(), interval 5 second, interval 60 second) where "
-            "1=1 and _tp_time >= (now64(3, 'UTC') - 60s) group by device, window_end emit stream settings seek_to='-60s'"),
+            "SELECT device, avg(temperature) FROM hop((select * from default.devices), now(), interval 5 second, to_interval_second(60)) "
+            "where 1=1 and _tp_time >= (now64(3, 'UTC') - to_interval_second(60)) group by device, window_end emit stream"),
         true)
         << "Last-X Global Aggregation for subquery";
 }
@@ -232,8 +228,8 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleGlobalAggr2)
             /* lastX query */
             "SELECT device, avg(temperature) FROM default.devices where 1=1 group by device emit stream LAST 2m",
             /* check query */
-            "SELECT device, avg(temperature) FROM hop(default.devices, now(), interval 1 second, interval 120 second) where 1=1 and "
-            "_tp_time >= (now64(3, 'UTC') - 120s) group by device, window_end emit stream settings seek_to='-120s'",
+            "SELECT device, avg(temperature) FROM hop(default.devices, now(), to_interval_second(1), to_interval_second(120)) where 1=1 "
+            "and _tp_time >= (now64(3, 'UTC') - 120s) group by device, window_end emit stream",
             /* max_keep_windows */
             120),
         true);
@@ -243,8 +239,8 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleGlobalAggr2)
             /* lastX query */
             "SELECT device, avg(temperature) FROM default.devices where 1=1 group by device emit stream LAST 1y and periodic 1q",
             /* check query */
-            "SELECT device, avg(temperature) FROM hop(default.devices, now(), interval 1 quarter, interval 4 quarter) where 1=1 and "
-            "_tp_time >= (now64(3, 'UTC') - 4q) group by device, window_end emit stream settings seek_to='-12M'"),
+            "SELECT device, avg(temperature) FROM hop(default.devices, now(), 1q, to_interval_quarter(4)) where 1=1 and _tp_time >= "
+            "(now64(3, 'UTC') - 4q) group by device, window_end emit stream"),
         true);
 }
 
@@ -255,7 +251,7 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleTailMode)
         checkLastXRule(
             /* lastX query */ "SELECT * FROM default.devices where 1=1 emit stream LAST 1h",
             /* check query */
-            "SELECT * FROM default.devices where 1=1 and _tp_time >= (now64(3, 'UTC') - 1h) emit stream settings seek_to='-3600s'"),
+            "SELECT * FROM default.devices where 1=1 and _tp_time >= (now64(3, 'UTC') - 1h) emit stream"),
         true)
         << "Last-X Tail";
 }
@@ -267,8 +263,7 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleTailModeWithWhere)
         checkLastXRule(
             /* lastX query */ "SELECT * FROM default.devices WHERE device='dev1' emit stream LAST 1h",
             /* check query */
-            "SELECT * FROM default.devices WHERE device='dev1' and _tp_time >= (now64(3, 'UTC') - 1h) emit stream settings "
-            "seek_to='-3600s'"),
+            "SELECT * FROM default.devices WHERE device='dev1' and _tp_time >= (now64(3, 'UTC') - 1h) emit stream"),
         true)
         << "Last-X Tail with where";
 }

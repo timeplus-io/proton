@@ -9,6 +9,10 @@
 
 #include <memory>
 
+/// proton: starts.
+#include <Storages/Streaming/SeekToInfo.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -163,6 +167,8 @@ struct SelectQueryInfo
     bool has_window = false;
 
     /// proton: starts.
+    SeekToInfoPtr seek_to_info;  /// Rewind info for streaming store in streaming query
+
     bool has_aggregate_over = false;
     bool has_non_aggregate_over = false;
     Names partition_by_keys;

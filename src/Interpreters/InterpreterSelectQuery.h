@@ -173,7 +173,6 @@ private:
     String generateFilterActions(ActionsDAGPtr & actions, const Names & prerequisite_columns = {}) const;
 
     /// proton: starts
-    void executeLastXTail(QueryPlan & query_plan, const Streaming::BaseScaleInterval & last_interval_bs_) const;
     void executeStreamingWindow(QueryPlan & query_plan);
     void executeStreamingOrder(QueryPlan & query_plan);
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
@@ -183,6 +182,8 @@ private:
     void buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const;
     void buildStreamingProcessingQueryPlanForSessionWindow(QueryPlan & query_plan) const;
     void checkEmitVersion();
+    void handleSeekToSetting();
+    void analyzeEventPredicateAsSeekTo();
     void checkAndPrepareStreamingFunctions();
     void analyzeStreamingMode(); /// analyze whether it is streaming query
     void analyzeChangelogMode(); /// analyze whether it is changelog query
@@ -226,8 +227,6 @@ private:
     /// proton: starts
     /// A copy of required_columns before adding the additional ones for streaming processing
     Names required_columns_after_streaming_window;
-    bool last_tail = false;
-    Streaming::BaseScaleInterval last_interval_bs;
     bool emit_version = false;
     std::optional<bool> is_streaming;
     std::optional<bool> is_changelog;

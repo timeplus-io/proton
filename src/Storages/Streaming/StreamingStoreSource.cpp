@@ -94,7 +94,10 @@ void StreamingStoreSource::readAndProcess()
                     /// The current column to return is a virtual column which needs be calculated lively
                     assert(columns_desc.virtual_col_calcs[pos.virtualPosition()]);
                     auto ts = columns_desc.virtual_col_calcs[pos.virtualPosition()](record);
-                    auto virtual_column = columns_desc.virtual_col_types[pos.virtualPosition()]->createColumnConst(rows, ts);
+                    /// NOTE: The `FilterTransform` will try optimizing filter ConstColumn to always_false or always_true,
+                    /// for exmaple: `_tp_sn < 1`, if filter first data _tp_sn is 0, it will be optimized always_true.
+                    /// So we can not create a constant column, since the virtual column data isn't constants value in fact.
+                    auto virtual_column = columns_desc.virtual_col_types[pos.virtualPosition()]->createColumnConst(rows, ts)->convertToFullColumnIfConst();
                     columns.push_back(std::move(virtual_column));
                     break;
                 }

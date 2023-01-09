@@ -7,7 +7,7 @@
 #include <KafkaLog/KafkaWALSettings.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/IStorage.h>
-#include <Storages/Streaming/storageUtil.h>
+#include <Storages/SelectQueryInfo.h>
 #include <Common/logger_useful.h>
 #include <Common/ProtonCommon.h>
 
@@ -46,7 +46,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
 Pipe Kafka::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & /*query_info*/,
+    SelectQueryInfo & query_info,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
     size_t max_block_size,
@@ -57,7 +57,7 @@ Pipe Kafka::read(
     Pipes pipes;
     pipes.reserve(shards);
 
-    const auto & settings_ref = context->getSettingsRef();
+    // const auto & settings_ref = context->getSettingsRef();
     /*auto share_resource_group = (settings_ref.query_resource_group.value == "shared") && (settings_ref.seek_to.value == "latest");
     if (share_resource_group)
     {
@@ -79,13 +79,13 @@ Pipe Kafka::read(
         else
             header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_APPEND_TIME});
 
-        auto offsets = getOffsets(settings_ref.seek_to.value);
+        auto offsets = getOffsets(query_info.seek_to_info);
 
         for (Int32 i = 0; i < shards; ++i)
             pipes.emplace_back(std::make_shared<KafkaSource>(this, header, storage_snapshot, context, i, offsets[i], max_block_size, log));
     }
 
-    LOG_INFO(log, "Starting reading {} streams by seeking to {} in dedicated resource group", pipes.size(), settings_ref.seek_to.value);
+    LOG_INFO(log, "Starting reading {} streams by seeking to {} in dedicated resource group", pipes.size(), query_info.seek_to_info->getSeekTo());
 
     return Pipe::unitePipes(std::move(pipes));
 }
@@ -104,19 +104,19 @@ void Kafka::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()));
 }
 
-std::vector<Int64> Kafka::getOffsets(const String & seek_to) const
+std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info) const
 {
-    auto [time_based, timestamps_or_sns] = parseSeekTo(seek_to, shards, true);
-
-    if (!time_based)
+    assert(seek_to_info);
+    seek_to_info->replicateForShards(shards);
+    if (!seek_to_info->isTimeBased())
     {
-        return timestamps_or_sns;
+        return seek_to_info->getSeekPoints();
     }
     else
     {
         klog::KafkaWALAuth auth = {.security_protocol = securityProtocol(), .username = username(), .password = password()};
         auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
-        return consumer->offsetsForTimestamps(settings->topic.value, timestamps_or_sns);
+        return consumer->offsetsForTimestamps(settings->topic.value, seek_to_info->getSeekPoints());
     }
 }
 
