@@ -5,7 +5,7 @@ ARG apt_archive="http://archive.ubuntu.com"
 RUN sed -i "s|http://archive.ubuntu.com|$apt_archive|g" /etc/apt/sources.list
 
 ARG repository="deb https://repo.clickhouse.com/deb/stable/ main/"
-ARG version=1.1.35
+ARG version=1.1.36
 
 
 RUN apt-get update \
