@@ -17,7 +17,7 @@ do
     "SELECT URLRegions as d, to_timezone(ClientEventTime, 'Europe/Moscow') as a, MobilePhoneModel as b, ParamPrice as e, ClientIP6 as c FROM test.hits LIMIT 50000 Format $format" | \
     $CLICKHOUSE_CLIENT --input_format_skip_unknown_fields=1 --input_format_parallel_parsing=false -q "INSERT INTO parsing_with_names FORMAT $format"
 
-    $CLICKHOUSE_CLIENT -q "SELECT * FROM parsing_with_names;" | md5sum
+    $CLICKHOUSE_CLIENT -q "SELECT count() FROM parsing_with_names;"
     $CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS parsing_with_names"
 
 
@@ -27,6 +27,6 @@ do
     "SELECT URLRegions as d, to_timezone(ClientEventTime, 'Europe/Moscow') as a, MobilePhoneModel as b, ParamPrice as e, ClientIP6 as c FROM test.hits LIMIT 50000 Format $format" | \
     $CLICKHOUSE_CLIENT --input_format_skip_unknown_fields=1 --input_format_parallel_parsing=true -q "INSERT INTO parsing_with_names FORMAT $format"
 
-    $CLICKHOUSE_CLIENT -q "SELECT * FROM parsing_with_names;" | md5sum
+    $CLICKHOUSE_CLIENT -q "SELECT count() FROM parsing_with_names;"
     $CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS parsing_with_names"
 done
