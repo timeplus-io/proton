@@ -337,9 +337,10 @@ void DataPartStorageOnDisk::clearDirectory(
                 request.emplace_back(fs::path(dir) / file);
         }
 
-        for (const auto & file : {"checksums.txt", "columns.txt", "sn.txt"})
+        for (const auto & file : {"checksums.txt", "columns.txt"})
             request.emplace_back(fs::path(dir) / file);
 
+        request.emplace_back(fs::path(dir) / "sn.txt", true);
         request.emplace_back(fs::path(dir) / "default_compression_codec.txt", true);
         request.emplace_back(fs::path(dir) / "delete-on-destroy.txt", true);
 
