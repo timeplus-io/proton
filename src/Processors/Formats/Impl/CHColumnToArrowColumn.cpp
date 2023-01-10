@@ -180,7 +180,7 @@ namespace DB
         for (size_t i = 0; i != column_tuple->tupleSize(); ++i)
         {
             ColumnPtr nested_column = column_tuple->getColumnPtr(i);
-            fillArrowArray(column_name + "." + std::to_string(i), nested_column, nested_types[i], null_bytemap, builder.field_builder(i), format_name, start, end, dictionary_values);
+            fillArrowArray(column_name + "." + std::to_string(i), nested_column, nested_types[i], null_bytemap, builder.field_builder(static_cast<int>(i)), format_name, start, end, dictionary_values);
         }
 
         for (size_t i = start; i != end; ++i)
@@ -321,7 +321,7 @@ namespace DB
             else
             {
                 StringRef string_ref = internal_column.getDataAt(string_i);
-                status = builder.Append(string_ref.data, string_ref.size);
+                status = builder.Append(string_ref.data, static_cast<int>(string_ref.size));
             }
             checkStatus(status, write_column->getName(), format_name);
         }

@@ -2973,7 +2973,7 @@ void Context::initializeBackgroundExecutorsIfNeeded()
     if (shared->is_background_executors_initialized)
         return;
 
-    const size_t max_merges_and_mutations = getSettingsRef().background_pool_size * getSettingsRef().background_merges_mutations_concurrency_ratio;
+    const size_t max_merges_and_mutations = static_cast<size_t>(getSettingsRef().background_pool_size * getSettingsRef().background_merges_mutations_concurrency_ratio.value);
 
     /// With this executor we can execute more tasks than threads we have
     shared->merge_mutate_executor = MergeMutateBackgroundExecutor::create

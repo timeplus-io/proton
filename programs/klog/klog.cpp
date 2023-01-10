@@ -74,7 +74,7 @@ Block prepareData(Int32 batch_size)
 
     for (Int32 i = 0; i < batch_size; ++i)
     {
-        time_col_inner->insertValue(1612286044.256326 + static_cast<double>(i));
+        time_col_inner->insertValue(static_cast<Int64>(1612286044.256326 + static_cast<double>(i)));
     }
 
     ColumnWithTypeAndName time_col_with_type(std::move(time_col), datetime64_type, ProtonConsts::RESERVED_EVENT_TIME);
@@ -613,7 +613,7 @@ void ingestAsync(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_m
         }
 
         auto latency = chrono::duration_cast<chrono::microseconds>(chrono::steady_clock::now() - start).count();
-        d->result_queue.push_back(latency);
+        d->result_queue.push_back(static_cast<Int32>(latency));
 
         delete d;
     };
@@ -717,7 +717,7 @@ void ingestSync(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_mu
         }
 
         auto latency = chrono::duration_cast<chrono::microseconds>(std::chrono::steady_clock::now() - start).count();
-        result_queue.push_back(latency);
+        result_queue.push_back(static_cast<Int32>(latency));
         /// cout << "producing record with sequence number : " << result.sn << " (partition, partition_key)=" << result.partitions << ":" << i << "\n";
     }
 
@@ -840,7 +840,7 @@ void consume(KafkaWALPtrs & wals, const BenchmarkSettings & bench_settings)
                 for (; consumed < max_messages;)
                 {
                     auto count = (max_messages - consumed) > batch ? batch : (max_messages - consumed);
-                    auto result{wal->consume(count, 50, ctx)};
+                    auto result{wal->consume(static_cast<uint32_t>(count), 50, ctx)};
 
                     if (result.err == 0)
                     {

@@ -157,19 +157,19 @@ void MetaStoreServer::startup()
     }
     else
     {
-        params.heart_beat_interval_ = coordination_settings->heart_beat_interval_ms.totalMilliseconds();
-        params.election_timeout_lower_bound_ = coordination_settings->election_timeout_lower_bound_ms.totalMilliseconds();
-        params.election_timeout_upper_bound_ = coordination_settings->election_timeout_upper_bound_ms.totalMilliseconds();
+        params.heart_beat_interval_ = static_cast<nuraft::int32>(coordination_settings->heart_beat_interval_ms.totalMilliseconds());
+        params.election_timeout_lower_bound_ = static_cast<nuraft::int32>(coordination_settings->election_timeout_lower_bound_ms.totalMilliseconds());
+        params.election_timeout_upper_bound_ = static_cast<nuraft::int32>(coordination_settings->election_timeout_upper_bound_ms.totalMilliseconds());
     }
 
-    params.reserved_log_items_ = coordination_settings->reserved_log_items;
-    params.snapshot_distance_ = coordination_settings->snapshot_distance;
-    params.stale_log_gap_ = coordination_settings->stale_log_gap;
-    params.fresh_log_gap_ = coordination_settings->fresh_log_gap;
-    params.client_req_timeout_ = coordination_settings->operation_timeout_ms.totalMilliseconds();
+    params.reserved_log_items_ = static_cast<nuraft::int32>(coordination_settings->reserved_log_items);
+    params.snapshot_distance_ = static_cast<nuraft::int32>(coordination_settings->snapshot_distance);
+    params.stale_log_gap_ = static_cast<nuraft::int32>(coordination_settings->stale_log_gap);
+    params.fresh_log_gap_ = static_cast<nuraft::int32>(coordination_settings->fresh_log_gap);
+    params.client_req_timeout_ = static_cast<nuraft::int32>(coordination_settings->operation_timeout_ms.totalMilliseconds());
     params.auto_forwarding_ = coordination_settings->auto_forwarding;
-    params.auto_forwarding_req_timeout_ = coordination_settings->operation_timeout_ms.totalMilliseconds() * 2;
-    params.max_append_size_ = coordination_settings->max_requests_batch_size;
+    params.auto_forwarding_req_timeout_ = static_cast<nuraft::int32>(coordination_settings->operation_timeout_ms.totalMilliseconds() * 2);
+    params.max_append_size_ = static_cast<nuraft::int32>(coordination_settings->max_requests_batch_size);
 
     params.return_method_ = nuraft::raft_params::blocking;
 

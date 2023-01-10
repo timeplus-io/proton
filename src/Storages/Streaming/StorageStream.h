@@ -237,7 +237,7 @@ public:
     Int32 getReplicationFactor() const { return replication_factor; }
 
     size_t getRandomShardIndex() const;
-    size_t getNextShardIndex() const;
+    Int32 getNextShardIndex() const;
 
     void getIngestionStatuses(const std::vector<UInt64> & block_ids, std::vector<IngestingBlocks::IngestStatus> & statuses) const;
 
@@ -347,7 +347,7 @@ private:
     mutable pcg64 rng;
 
     /// For ingest
-    mutable std::atomic_uint_fast64_t next_shard = 0;
+    mutable std::atomic_uint_fast32_t next_shard = 0;
 
     /// Outstanding async ingest records
     UInt64 max_outstanding_blocks;

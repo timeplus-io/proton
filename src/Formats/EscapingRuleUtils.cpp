@@ -257,7 +257,7 @@ static bool evaluateConstantExpressionFromString(StringRef field, DataTypePtr & 
     ParserExpression parser;
     Expected expected;
     Tokens tokens(field.data, field.data + field.size);
-    IParser::Pos token_iterator(tokens, context->getSettingsRef().max_parser_depth);
+    IParser::Pos token_iterator(tokens, static_cast<uint32_t>(context->getSettingsRef().max_parser_depth));
     ASTPtr ast;
 
     /// FIXME: Our parser cannot parse maps in the form of '{key : value}' that is used in text formats.

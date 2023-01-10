@@ -58,7 +58,7 @@ ProcessTimeFilter::ProcessTimeFilter(const String & column_name_, BaseScaleInter
         throw Exception(ErrorCodes::UNKNOWN_IDENTIFIER, "Missing target column '{}' for process time filtering", column_name);
 
     timestamp_col_data_type = column_with_type->type;
-    timestamp_col_pos = header.getPositionByName(column_name);
+    timestamp_col_pos = static_cast<UInt32>(header.getPositionByName(column_name));
 
     if (isDateTime64(column_with_type->type))
     {
@@ -68,7 +68,7 @@ ProcessTimeFilter::ProcessTimeFilter(const String & column_name_, BaseScaleInter
         scale = type->getScale();
         is_datetime64 = true;
 
-        multiplier = intExp10(scale);
+        multiplier = static_cast<Int32>(intExp10(scale));
     }
     else if (isDateTime(column_with_type->type))
     {

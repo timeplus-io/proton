@@ -410,11 +410,11 @@ ALWAYS_INLINE Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_u
         case IntervalKind::Nanosecond:
         case IntervalKind::Microsecond:
         case IntervalKind::Millisecond:
-            return AddTime<IntervalKind::Second>::execute(time_sec, num_units, time_zone);
+            return static_cast<Int64>(AddTime<IntervalKind::Second>::execute(static_cast<UInt32>(time_sec), num_units, time_zone));
 
 #define CASE_WINDOW_KIND(KIND) \
     case IntervalKind::KIND: { \
-        return AddTime<IntervalKind::KIND>::execute(time_sec, num_units, time_zone); \
+        return static_cast<Int64>(AddTime<IntervalKind::KIND>::execute(static_cast<UInt32>(time_sec), num_units, time_zone)); \
     }
         CASE_WINDOW_KIND(Second)
         CASE_WINDOW_KIND(Minute)
@@ -431,9 +431,9 @@ ALWAYS_INLINE Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_u
 
 ALWAYS_INLINE Int64 addTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone, Int64 scale)
 {
-    auto time_sec = dt / common::exp10_i64(scale);
-    auto ts_fractional = dt % common::exp10_i64(scale);
-    return addTime(time_sec, kind, num_units, time_zone) * common::exp10_i64(scale) + ts_fractional;
+    auto time_sec = dt / common::exp10_i64(static_cast<int>(scale));
+    auto ts_fractional = dt % common::exp10_i64(static_cast<int>(scale));
+    return addTime(time_sec, kind, num_units, time_zone) * common::exp10_i64(static_cast<int>(scale)) + ts_fractional;
 }
 
 ASTPtr makeASTInterval(Int64 num_units, IntervalKind kind)

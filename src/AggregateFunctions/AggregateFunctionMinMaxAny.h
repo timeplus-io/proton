@@ -542,8 +542,8 @@ public:
         if (unlikely(MAX_STRING_SIZE < size))
             throw Exception(ErrorCodes::LOGICAL_ERROR, "String size is too big ({}), it's a bug", size);
 
-        /// For serialization we use signed Int32 (for historical reasons), -1 means "no value"
-        Int32 size_to_write = size ? size : -1;
+        /// proton : fixing historical `-1` means "no value" issue. Use `0` for "no value"
+        UInt32 size_to_write = size ? size : 0;
         writeBinary(size_to_write, buf);
         if (has())
             buf.write(getData(), size);
@@ -556,9 +556,9 @@ public:
             if (unlikely(MAX_STRING_SIZE < size_to_reserve))
                 throw Exception(ErrorCodes::TOO_LARGE_STRING_SIZE, "String size is too big ({})", size_to_reserve);
 
-            size_t rounded_capacity = roundUpToPowerOfTwoOrZero(size_to_reserve);
+            UInt32 rounded_capacity = static_cast<UInt32>(roundUpToPowerOfTwoOrZero(size_to_reserve));
             chassert(rounded_capacity <= MAX_STRING_SIZE + 1);  /// rounded_capacity <= 2^31
-            capacity = static_cast<UInt32>(rounded_capacity);
+            capacity = rounded_capacity;
 
             /// Don't free large_data here.
             large_data = arena->alloc(capacity);
@@ -567,32 +567,31 @@ public:
 
     void read(ReadBuffer & buf, const ISerialization & /*serialization*/, Arena * arena)
     {
-        /// For serialization we use signed Int32 (for historical reasons), -1 means "no value"
-        Int32 rhs_size_signed;
+        /// proton : fixing historical `-1` means "no value" issue. Use `0` for "no value"
+        UInt32 rhs_size_signed;
         readBinary(rhs_size_signed, buf);
 
-        if (rhs_size_signed < 0)
+        if (rhs_size_signed == 0)
         {
             /// Don't free large_data here.
             size = 0;
             return;
         }
 
-        UInt32 rhs_size = rhs_size_signed;
-        if (rhs_size <= MAX_SMALL_STRING_SIZE)
+        if (rhs_size_signed <= MAX_SMALL_STRING_SIZE)
         {
             /// Reserve one byte more for null-character
-            Int64 rhs_size_to_reserve = rhs_size;
+            UInt32 rhs_size_to_reserve = rhs_size_signed;
             rhs_size_to_reserve += 1; /// Avoid overflow
             allocateLargeDataIfNeeded(rhs_size_to_reserve, arena);
-            size = rhs_size;
+            size = rhs_size_signed;
             buf.readStrict(small_data, size);
         }
         else
         {
             /// Reserve one byte more for null-character
-            allocateLargeDataIfNeeded(rhs_size + 1, arena);
-            size = rhs_size;
+            allocateLargeDataIfNeeded(rhs_size_signed + 1, arena);
+            size = rhs_size_signed;
             buf.readStrict(large_data, size);
         }
 

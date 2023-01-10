@@ -18,11 +18,11 @@ StreamingStoreSource::StreamingStoreSource(
     Poco::Logger * log_)
     : StreamingStoreSourceBase(header, storage_snapshot_, std::move(context_), log_, ProcessorID::StreamingStoreSourceID)
 {
-    if (query_context->getSettingsRef().record_consume_batch_count != 0)
-        record_consume_batch_count = query_context->getSettingsRef().record_consume_batch_count;
+    if (query_context->getSettingsRef().record_consume_batch_count.value != 0)
+        record_consume_batch_count = static_cast<UInt32>(query_context->getSettingsRef().record_consume_batch_count.value);
 
-    if (query_context->getSettingsRef().record_consume_timeout != 0)
-        record_consume_timeout = query_context->getSettingsRef().record_consume_timeout;
+    if (query_context->getSettingsRef().record_consume_timeout.value != 0)
+        record_consume_timeout = static_cast<Int32>(query_context->getSettingsRef().record_consume_timeout.value);
 
     if (stream_shard_->isLogStoreKafka())
     {

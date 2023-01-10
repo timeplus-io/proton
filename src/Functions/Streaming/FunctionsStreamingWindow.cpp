@@ -225,10 +225,10 @@ struct WindowImpl<TUMBLE>
             auto components = DecimalUtils::split(time_data[i], scale);
             components.fractional = 0;
 
-            components.whole = ToStartOfTransform<unit>::execute(components.whole, num_units, time_zone);
+            components.whole = ToStartOfTransform<unit>::execute(static_cast<UInt32>(components.whole), num_units, time_zone);
             start_data[i] = DecimalUtils::decimalFromComponents(components, scale);
 
-            components.whole = AddTime<unit>::execute(components.whole, num_units, time_zone);
+            components.whole = AddTime<unit>::execute(static_cast<UInt32>(components.whole), num_units, time_zone);
             end_data[i] = DecimalUtils::decimalFromComponents(components, scale);
         }
         MutableColumns result;
@@ -251,7 +251,7 @@ struct WindowImpl<TUMBLE>
         for (size_t i = 0; i != size; ++i)
         {
             auto whole = DecimalUtils::getWholePart(time_data[i], time_column.getScale());
-            start_data[i] = ToStartOfTransform<unit>::execute(whole, num_units, time_zone);
+            start_data[i] = ToStartOfTransform<unit>::execute(static_cast<UInt32>(whole), num_units, time_zone);
             end_data[i] = AddTime<unit>::execute(start_data[i], num_units, time_zone);
         }
         MutableColumns result;
@@ -459,7 +459,7 @@ struct WindowImpl<HOP>
             auto components = DecimalUtils::split(time_data[i], scale);
             components.fractional = 0;
 
-            UInt32 event_ts = components.whole;
+            UInt32 event_ts = static_cast<UInt32>(components.whole);
             /// Note: hop_num_units as the starting of the `last` window of the hopping
             UInt32 wstart = ToStartOfTransform<unit>::execute(event_ts, hop_num_units, time_zone);
             UInt32 wend = AddTime<unit>::execute(wstart, window_num_units, time_zone);
@@ -514,7 +514,7 @@ struct WindowImpl<HOP>
 
         for (size_t i = 0; i < size; ++i)
         {
-            UInt32 whole = DecimalUtils::getWholePart(time_data[i], scale);
+            UInt32 whole = static_cast<UInt32>(DecimalUtils::getWholePart(time_data[i], scale));
             UInt16 event_ts = ToStartOfTransform<unit>::execute(whole, 1, time_zone);
             UInt16 wstart = ToStartOfTransform<unit>::execute(event_ts, hop_num_units, time_zone);
             UInt16 wend = AddTime<unit>::execute(wstart, window_num_units, time_zone);

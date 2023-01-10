@@ -162,7 +162,7 @@ std::pair<String, Int32> MetaStoreHandler::doMultiGet(const Poco::JSON::Object::
 {
     std::vector<String> request_keys;
     auto json_arguments = payload->getArray("keys");
-    for (size_t i = 0; i < json_arguments->size(); i++)
+    for (unsigned int i = 0; i < json_arguments->size(); i++)
         request_keys.emplace_back(json_arguments->get(i).toString());
 
     return doGet(payload, namespace_, request_keys);
@@ -192,7 +192,7 @@ std::pair<String, Int32> MetaStoreHandler::doMultiDelete(const Poco::JSON::Objec
 {
     std::vector<String> request_keys;
     const auto json_arguments = payload->getArray("keys");
-    for (size_t i = 0; i < json_arguments->size(); i++)
+    for (unsigned int i = 0; i < json_arguments->size(); i++)
         request_keys.emplace_back(json_arguments->get(i).toString());
 
     return doDelete(payload, namespace_, request_keys);

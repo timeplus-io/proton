@@ -75,7 +75,7 @@ BlocksWithShard StreamSink::doShardBlock(Block block) const
 
 BlocksWithShard StreamSink::shardBlock(Block block) const
 {
-    size_t shard = 0;
+    Int32 shard = 0;
     if (storage.shards > 1)
     {
         if (storage.sharding_key_expr && !storage.rand_sharding_key)
@@ -130,7 +130,7 @@ void StreamSink::consume(Chunk chunk)
     for (auto & current_block : blocks)
     {
         record->getBlock().swap(current_block.block);
-        record->setShard(current_block.shard);
+        record->setShard(static_cast<int32_t>(current_block.shard));
 
         if (!idem_key.empty())
             record->setIdempotentKey(idem_key);

@@ -158,7 +158,7 @@ bool LocalServer::executeMultiQuery(const String & all_queries_text)
                 if (insert_ast && insert_ast->data)
                 {
                     this_query_end = insert_ast->end;
-                    adjustQueryEnd(this_query_end, all_queries_end, global_context->getSettingsRef().max_parser_depth);
+                    adjustQueryEnd(this_query_end, all_queries_end, static_cast<uint32_t>(global_context->getSettingsRef().max_parser_depth.value));
                 }
 
                 // Report error.

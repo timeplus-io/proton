@@ -196,9 +196,9 @@ void finalizeSession(AggregatedDataVariants & variants, const SessionInfo & info
         if (params->params.time_col_is_datetime64)
         {
             window_start_col_ptr->insert(DecimalUtils::decimalFromComponents<DateTime64>(
-                info.win_start / common::exp10_i64(info.scale), info.win_start % common::exp10_i64(info.scale), info.scale));
+                info.win_start / common::exp10_i64(static_cast<int>(info.scale)), info.win_start % common::exp10_i64(static_cast<int>(info.scale)), static_cast<UInt32>(info.scale)));
             window_end_col_ptr->insert(DecimalUtils::decimalFromComponents<DateTime64>(
-                info.win_end / common::exp10_i64(info.scale), info.win_end % common::exp10_i64(info.scale), info.scale));
+                info.win_end / common::exp10_i64(static_cast<int>(info.scale)), info.win_end % common::exp10_i64(static_cast<int>(info.scale)), static_cast<UInt32>(info.scale)));
         }
         else
         {

@@ -381,7 +381,7 @@ HedgedConnectionsFactory::State HedgedConnectionsFactory::setBestUsableReplica(C
             && result.is_usable
             && !replicas[i].is_ready
             && (!skip_replicas_with_two_level_aggregation_incompatibility || !isTwoLevelAggregationIncompatible(&*result.entry)))
-            indexes.push_back(static_cast<int>(i));
+            indexes.push_back(static_cast<Int32>(i));
     }
 
     if (indexes.empty())

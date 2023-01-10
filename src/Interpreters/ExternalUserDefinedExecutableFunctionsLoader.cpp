@@ -146,7 +146,7 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
         try
         {
             auto json_arguments = parser.parse(arg_str).extract<Poco::JSON::Array::Ptr>();
-            for (size_t i = 0; i < json_arguments->size(); i++)
+            for (unsigned int i = 0; i < json_arguments->size(); i++)
             {
                 UserDefinedExecutableFunctionConfiguration::Argument argument;
                 argument.name = json_arguments->getObject(i)->get("name").toString();

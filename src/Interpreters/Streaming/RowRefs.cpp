@@ -234,7 +234,10 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(
 
         bool is_right_strict = range_join_ctx.right_inequality == ASOF::Inequality::Less;
 
-        key -= range_join_ctx.upper_bound;
+        if constexpr (is_decimal<T>)
+            key -= static_cast<typename T::NativeType>(range_join_ctx.upper_bound);
+        else
+            key -= static_cast<T>(range_join_ctx.upper_bound);
 
         decltype(m->begin()) lower_iter;
         if (is_right_strict)
@@ -242,8 +245,16 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(
         else
             lower_iter = m->lower_bound(key);
 
-        key += range_join_ctx.upper_bound; /// restore
-        key -= range_join_ctx.lower_bound; /// upper bound
+        if constexpr (is_decimal<T>)
+        {
+            key += static_cast<typename T::NativeType>(range_join_ctx.upper_bound); /// restore
+            key -= static_cast<typename T::NativeType>(range_join_ctx.lower_bound); /// upper bound
+        }
+        else
+        {
+            key += static_cast<T>(range_join_ctx.upper_bound); /// restore
+            key -= static_cast<T>(range_join_ctx.lower_bound); /// upper bound
+        }
 
         if (lower_iter == m->end() || lower_iter->first > key)
             /// all keys in the map < key - upper_bound or
@@ -306,7 +317,10 @@ const RowRef * RangeAsofRowRefs::findAsof(
 
         bool is_right_strict = range_join_ctx.right_inequality == ASOF::Inequality::Less;
 
-        key -= range_join_ctx.upper_bound;
+        if constexpr (is_decimal<T>)
+            key -= static_cast<typename T::NativeType>(range_join_ctx.upper_bound);
+        else
+            key -= static_cast<T>(range_join_ctx.upper_bound);
 
         decltype(m->begin()) lower_iter;
         if (is_right_strict)
@@ -320,8 +334,16 @@ const RowRef * RangeAsofRowRefs::findAsof(
 
         assert(lower_iter->first >= key);
 
-        key += range_join_ctx.upper_bound; // restore
-        key -= range_join_ctx.lower_bound;
+        if constexpr (is_decimal<T>)
+        {
+            key += static_cast<typename T::NativeType>(range_join_ctx.upper_bound); // restore
+            key -= static_cast<typename T::NativeType>(range_join_ctx.lower_bound);
+        }
+        else
+        {
+            key += static_cast<T>(range_join_ctx.upper_bound); // restore
+            key -= static_cast<T>(range_join_ctx.lower_bound);
+        }
 
         /// >= key
         auto upper_iter = m->lower_bound(key);

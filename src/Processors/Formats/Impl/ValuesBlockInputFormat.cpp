@@ -594,7 +594,7 @@ DataTypes ValuesSchemaReader::readRowAndGetDataTypes()
     buf.rollbackToCheckpoint();
 
     Tokens tokens(buf.position(), buf.buffer().end());
-    IParser::Pos token_iterator(tokens, context->getSettingsRef().max_parser_depth);
+    IParser::Pos token_iterator(tokens, static_cast<uint32_t>(context->getSettingsRef().max_parser_depth));
 
     DataTypes data_types;
     bool finish = false;

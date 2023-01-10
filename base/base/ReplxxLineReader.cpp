@@ -360,7 +360,7 @@ void ReplxxLineReader::openEditor()
             str.reserve(t.tellg());
             t.seekg(0, std::ios::beg);
             str.assign((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
-            rx.set_state(replxx::Replxx::State(str.c_str(), static_cast<int>(str.size())));
+            rx.set_state(replxx::Replxx::State(str.c_str(), static_cast<Int32>(str.size())));
         }
         catch (...)
         {

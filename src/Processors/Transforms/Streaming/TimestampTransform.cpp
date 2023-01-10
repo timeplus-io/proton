@@ -240,7 +240,7 @@ void TimestampTransform::handleProcessingTimeFunc()
             {
                 auto get_scale = [&]() {
                     if (auto * literal = func_node->arguments->children[0]->as<ASTLiteral>())
-                        scale = literal->value.safeGet<UInt64>();
+                        scale = static_cast<Int32>(literal->value.safeGet<UInt64>());
                     else
                         throw Exception(
                             "Only support integral literal scale argument for now64() transformed timestamp column",

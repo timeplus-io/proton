@@ -495,7 +495,7 @@ unsigned OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject
             subject_size,
             RegexType::UNANCHORED,
             pieces.data(),
-            static_cast<int>(pieces.size())))
+            static_cast<Int32>(pieces.size())))
         {
             return 0;
         }

@@ -1501,7 +1501,7 @@ size_t StorageStream::getRandomShardIndex() const
     return std::uniform_int_distribution<size_t>(0, shards - 1)(rng);
 }
 
-size_t StorageStream::getNextShardIndex() const
+Int32 StorageStream::getNextShardIndex() const
 {
     return next_shard++ % shards;
 }

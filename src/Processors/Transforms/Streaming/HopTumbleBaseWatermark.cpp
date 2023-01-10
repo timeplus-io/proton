@@ -503,7 +503,7 @@ ALWAYS_INLINE std::pair<Int64, Int64> HopTumbleBaseWatermark::getWindow(Int64 ti
 
 #define CASE_WINDOW_KIND(KIND) \
     case IntervalKind::KIND: { \
-        auto w_start = ToStartOfTransform<IntervalKind::KIND>::execute(time_sec, interval, *timezone); \
+        auto w_start = ToStartOfTransform<IntervalKind::KIND>::execute(static_cast<UInt32>(time_sec), interval, *timezone); \
         return {w_start, AddTime<IntervalKind::KIND>::execute(w_start, interval, *timezone)}; \
     }
 

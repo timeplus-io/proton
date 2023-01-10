@@ -399,9 +399,9 @@ void DDLService::createTable(nlog::Record & record)
     String database = block.getByName("database").column->getDataAt(0).toString();
     String table = block.getByName("table").column->getDataAt(0).toString();
     String uuid = block.getByName("uuid").column->getDataAt(0).toString();
-    Int32 shards = block.getByName("shards").column->getInt(0);
-    Int32 replication_factor = block.getByName("replication_factor").column->getInt(0);
-    Int32 logstore_replication_factor = block.getByName("logstore_replication_factor").column->getInt(0);
+    Int32 shards = static_cast<Int32>(block.getByName("shards").column->getInt(0));
+    Int32 replication_factor = static_cast<Int32>(block.getByName("replication_factor").column->getInt(0));
+    Int32 logstore_replication_factor = static_cast<Int32>(block.getByName("logstore_replication_factor").column->getInt(0));
 
     /// FIXME : check with catalog to see if this DDL is fulfilled
     /// Build a data structure to cached last 10000 DDLs, check against this data structure
@@ -657,7 +657,7 @@ void DDLService::executeSystemCommand(nlog::Record & record, const String & meth
     ASTSystemQuery::Type type{block.getByName("type").column->getUInt(0)};
     String replica = block.getByName("replica").column->getDataAt(0).toString();
     String old_replica = block.getByName("old_replica").column->getDataAt(0).toString();
-    Int32 shard = block.getByName("shard").column->getInt(0);
+    Int32 shard = static_cast<Int32>(block.getByName("shard").column->getInt(0));
     String query_id = block.getByName("query_id").column->getDataAt(0).toString();
     String user = block.getByName("user").column->getDataAt(0).toString();
     String payload = block.getByName("payload").column->getDataAt(0).toString();
@@ -695,7 +695,7 @@ void DDLService::executeSystemCommand(nlog::Record & record, const String & meth
             failDDL(query_id, user, payload, "stream not found");
             return;
         }
-        String create = getPayloadFromQuery(tables[0]->create_table_query, global_context->getSettingsRef().max_parser_depth, log);
+        String create = getPayloadFromQuery(tables[0]->create_table_query, static_cast<int>(global_context->getSettingsRef().max_parser_depth), log);
         if (create.empty())
         {
             LOG_ERROR(
@@ -799,7 +799,7 @@ bool DDLService::replaceReplica(const String & replica, const String & target, c
             continue;
         }
 
-        String create = getPayloadFromQuery(storage->create_table_query, global_context->getSettingsRef().max_parser_depth, log);
+        String create = getPayloadFromQuery(storage->create_table_query, static_cast<int>(global_context->getSettingsRef().max_parser_depth), log);
         if (create.empty())
         {
             err = fmt::format(
@@ -974,7 +974,7 @@ DDLService::getTargetURIs(nlog::Record & record, const String & database, const 
         Block & block = record.getBlock();
         String replica = block.getByName("replica").column->getDataAt(0).toString();
         ASTSystemQuery::Type type{block.getByName("type").column->getUInt(0)};
-        Int32 shard = block.getByName("shard").column->getInt(0);
+        Int32 shard = static_cast<Int32>(block.getByName("shard").column->getInt(0));
         auto node = catalog.nodeByIdentity(replica);
         if (node->host.empty())
             return {};

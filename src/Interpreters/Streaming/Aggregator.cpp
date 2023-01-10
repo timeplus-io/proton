@@ -1242,8 +1242,8 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     file_buf.next();
 
     double elapsed_seconds = watch.elapsedSeconds();
-    double compressed_bytes = file_buf.count();
-    double uncompressed_bytes = compressed_buf.count();
+    size_t compressed_bytes = file_buf.count();
+    size_t uncompressed_bytes = compressed_buf.count();
 
     {
         std::lock_guard lock(temporary_files.mutex);
@@ -1263,12 +1263,12 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
         rows,
         ReadableSize(uncompressed_bytes),
         ReadableSize(compressed_bytes),
-        uncompressed_bytes / rows,
-        compressed_bytes / rows,
-        uncompressed_bytes / compressed_bytes,
+        static_cast<double>(uncompressed_bytes) / rows,
+        static_cast<double>(compressed_bytes) / rows,
+        static_cast<double>(uncompressed_bytes) / compressed_bytes,
         rows / elapsed_seconds,
-        ReadableSize(uncompressed_bytes / elapsed_seconds),
-        ReadableSize(compressed_bytes / elapsed_seconds));
+        ReadableSize(static_cast<double>(uncompressed_bytes) / elapsed_seconds),
+        ReadableSize(static_cast<double>(compressed_bytes) / elapsed_seconds));
 }
 
 
@@ -1300,7 +1300,7 @@ Block Aggregator::convertOneBucketToBlock(
                 key_columns, aggregate_columns, final_aggregate_columns, arena, final_, action_);
         });
 
-    block.info.bucket_num = bucket;
+    block.info.bucket_num = static_cast<Int32>(bucket);
     return block;
 }
 
@@ -2822,7 +2822,7 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
             if (thread_group)
                 CurrentThread::attachToIfDetached(thread_group);
 
-            for (Block & block : bucket_to_blocks[bucket])
+            for (Block & block : bucket_to_blocks[static_cast<int>(bucket)])
             {
             #define M(NAME) \
                 else if (result.type == AggregatedDataVariants::Type::NAME) \
@@ -3029,7 +3029,7 @@ void NO_INLINE Aggregator::convertBlockToTwoLevelImpl(
             if (!scattered_columns[bucket]->empty())
             {
                 Block & dst = destinations[bucket];
-                dst.info.bucket_num = bucket;
+                dst.info.bucket_num = static_cast<Int32>(bucket);
                 dst.insert({std::move(scattered_columns[bucket]), src_col.type, src_col.name});
             }
 
@@ -3322,7 +3322,7 @@ void Aggregator::checkpoint(AggregatedDataVariants & data_variants, WriteBuffer 
 
     /// assert(!blocks.empty());
 
-    UInt32 num_blocks = blocks.size();
+    UInt32 num_blocks = static_cast<UInt32>(blocks.size());
     writeIntBinary(num_blocks, wb);
     SimpleNativeWriter writer(wb, ProtonRevision::getVersionRevision());
     for (const auto & block : blocks)
@@ -3593,7 +3593,7 @@ VersionType Aggregator::getVersionFromRevision(UInt64 revision) const
     if (version)
         return *version;
 
-    return revision;
+    return static_cast<VersionType>(revision);
 }
 
 VersionType Aggregator::getVersion() const

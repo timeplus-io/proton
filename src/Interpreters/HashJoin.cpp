@@ -435,7 +435,7 @@ public:
     FindResult findKey(const TableJoin &, size_t row, const Arena &)
     {
         result.block = &read_result;
-        result.row_num = positions[row];
+        result.row_num = static_cast<Mapped::SizeT>(positions[row]);
         return FindResult(&result, found[row], 0);
     }
 

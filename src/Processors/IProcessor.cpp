@@ -127,7 +127,7 @@ VersionType IProcessor::getVersionFromRevision(UInt64 revision) const
     if (version)
         return *version;
 
-    return revision;
+    return static_cast<VersionType>(revision);
 }
 
 VersionType IProcessor::getVersion() const

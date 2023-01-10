@@ -134,7 +134,7 @@ class FunctionDedup : public IFunction
 public:
     static constexpr auto name = "__dedup";
 
-    FunctionDedup(UInt32 max_entries, Int64 timeout, size_t limit_args) : key_set(max_entries, timeout, limit_args) { }
+    FunctionDedup(UInt32 max_entries, Int32 timeout, UInt32 limit_args) : key_set(max_entries, timeout, limit_args) { }
 
     String getName() const override { return name; }
 
@@ -190,7 +190,7 @@ public:
     FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type) const override
     {
         UInt32 limit = 10000;
-        Int64 limit_sec = -1;
+        Int32 limit_sec = -1;
         UInt32 limit_args = 0;
 
         /// dedup(column1, column2, ..., [timeout, [limit]])
@@ -199,7 +199,7 @@ public:
             const auto * limit_col = checkAndGetColumn<ColumnConst>(arguments[pos].column.get());
             if (limit_col && isInteger(arguments[pos].type))
             {
-                limit = limit_col->getUInt(0);
+                limit = static_cast<UInt32>(limit_col->getUInt(0));
                 ++limit_args;
                 return true;
             }
@@ -210,7 +210,7 @@ public:
             const auto * limit_col = checkAndGetColumn<ColumnConst>(arguments[pos].column.get());
             if (limit_col && isInterval(arguments[pos].type))
             {
-                limit_sec = limit_col->getInt(0);
+                limit_sec = static_cast<Int32>(limit_col->getInt(0));
                 ++limit_args;
             }
         };

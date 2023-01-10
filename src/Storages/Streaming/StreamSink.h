@@ -18,9 +18,9 @@ using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
 struct BlockWithShard
 {
     Block block;
-    size_t shard;
+    int32_t shard;
 
-    BlockWithShard(Block && block_, size_t shard_) : block(std::move(block_)), shard(shard_) { }
+    BlockWithShard(Block && block_, int32_t shard_) : block(std::move(block_)), shard(shard_) { }
 };
 
 using BlocksWithShard = std::vector<BlockWithShard>;

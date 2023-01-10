@@ -264,7 +264,8 @@ enum class HyperLogLogMode
 /// of Algorithms).
 template <
     UInt8 precision,
-    typename Hash = IntHash32<UInt64>,
+    typename Key = UInt64,
+    typename Hash = IntHash32<Key>,
     typename HashValueType = UInt32,
     typename DenominatorType = double,
     typename BiasEstimator = TrivialBiasEstimator,
@@ -409,7 +410,8 @@ private:
 
     inline HashValueType getHash(Value key) const
     {
-        return Hash::operator()(key);
+        return static_cast<HashValueType>(
+            Hash::operator()(static_cast<Key>(key)));
     }
 
     /// Update maximum rank for current bucket.
@@ -532,6 +534,7 @@ private:
 template
 <
     UInt8 precision,
+    typename Key,
     typename Hash,
     typename HashValueType,
     typename DenominatorType,
@@ -542,6 +545,7 @@ template
 details::LogLUT<precision> HyperLogLogCounter
 <
     precision,
+    Key,
     Hash,
     HashValueType,
     DenominatorType,
@@ -555,6 +559,7 @@ details::LogLUT<precision> HyperLogLogCounter
 /// Serialization format must not be changed.
 using HLL12 = HyperLogLogCounter<
     12,
+    UInt64,
     IntHash32<UInt64>,
     UInt32,
     double,

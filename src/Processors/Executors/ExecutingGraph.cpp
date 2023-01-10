@@ -471,7 +471,7 @@ void ExecutingGraph::initCheckpointNodes()
 
     for (auto & node : nodes)
     {
-        node->processor->setLogicID(node->processors_id);
+        node->processor->setLogicID(static_cast<UInt32>(node->processors_id));
 
         if (node->back_edges.empty())
         {

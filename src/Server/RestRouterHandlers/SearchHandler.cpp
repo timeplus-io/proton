@@ -172,7 +172,7 @@ std::shared_ptr<WriteBufferFromHTTPServerResponse> SearchHandler::getOutputBuffe
         response, false, keep_alive_timeout, client_supports_http_compression, http_response_compression_method);
 
     if (client_supports_http_compression)
-        out->setCompressionLevel(settings.http_zlib_compression_level);
+        out->setCompressionLevel(static_cast<int>(settings.http_zlib_compression_level.value));
 
     return out;
 }

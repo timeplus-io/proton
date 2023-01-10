@@ -142,7 +142,7 @@ void ORCBlockInputFormat::prepareReader()
     {
         /// LIST type require 2 indices, STRUCT - the number of elements + 1,
         /// so we should recursively count the number of indices we need for this type.
-        int indexes_count = countIndicesForType(schema->field(i)->type());
+        int indexes_count = static_cast<int>(countIndicesForType(schema->field(i)->type()));
         const auto & name = schema->field(i)->name();
         if (getPort().getHeader().has(name) || nested_table_names.contains(name))
         {

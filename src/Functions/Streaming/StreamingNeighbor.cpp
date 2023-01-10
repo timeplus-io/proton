@@ -202,7 +202,7 @@ namespace
         mutable ColumnsCache prev_offset_columns;
 
     public:
-        explicit FunctionStreamingNeighbor(Int64 offset_, Int64 count_) : prev_offset(std::abs(offset_)), count(count_), prev_offset_columns(prev_offset + count - 1)
+        explicit FunctionStreamingNeighbor(Int64 offset_, Int64 count_) : prev_offset(static_cast<UInt32>(std::abs(offset_))), count(count_), prev_offset_columns(prev_offset + count - 1)
         {
             /// Protection from possible overflow.
             if constexpr (std::is_same_v<Name, NameToLag> || std::is_same_v<Name, NameToLags>)

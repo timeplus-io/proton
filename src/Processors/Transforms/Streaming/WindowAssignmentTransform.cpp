@@ -204,9 +204,9 @@ void WindowAssignmentTransform::calculateColumns(const Block & input_header, con
     for (const auto & col_with_type : output_header)
     {
         if (col_with_type.name == ProtonConsts::STREAMING_WINDOW_START)
-            wstart_pos = pos;
+            wstart_pos = static_cast<Int32>(pos);
         else if (col_with_type.name == ProtonConsts::STREAMING_WINDOW_END)
-            wend_pos = pos;
+            wend_pos = static_cast<Int32>(pos);
         else
             input_column_positions.push_back(input_header.getPositionByName(col_with_type.name));
 

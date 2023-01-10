@@ -110,8 +110,9 @@ StorageMergeTree::StorageMergeTree(
     , reader(*this)
     , writer(*this)
     , merger_mutator(*this,
-        getContext()->getSettingsRef().background_merges_mutations_concurrency_ratio *
-        getContext()->getSettingsRef().background_pool_size)
+        static_cast<size_t>(
+            getContext()->getSettingsRef().background_merges_mutations_concurrency_ratio.value *
+            getContext()->getSettingsRef().background_pool_size.value))
 {
     loadDataParts(has_force_restore_data_flag);
 

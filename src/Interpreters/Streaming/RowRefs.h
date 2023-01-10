@@ -39,7 +39,7 @@ struct RowRefWithRefCount
 
     RowRefWithRefCount() : blocks(nullptr), row_num(0) { }
     RowRefWithRefCount(JoinBlockList * blocks_, JoinBlockList::iterator block_iter_, size_t row_num_)
-        : blocks(blocks_), block_iter(block_iter_), row_num(row_num_)
+        : blocks(blocks_), block_iter(block_iter_), row_num(static_cast<SizeT>(row_num_))
     {
         assert(blocks_);
     }

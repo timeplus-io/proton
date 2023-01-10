@@ -13,7 +13,7 @@ struct RefCountBlock
     /// init ref count to row count for RowRefsWithCount case
     /// When refcount drops to zero, which means nobody is referencing any row
     /// in the block so the block will be GCed
-    RefCountBlock(Block && block_) : block(std::move(block_)), refcnt(block.rows()) { }
+    RefCountBlock(Block && block_) : block(std::move(block_)), refcnt(static_cast<uint32_t>(block.rows())) { }
 
     RefCountBlock(RefCountBlock && other) : block(std::move(other.block)), refcnt(other.refcnt) { }
 

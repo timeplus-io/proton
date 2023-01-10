@@ -101,7 +101,7 @@ VersionType Port::getVersionFromRevision(UInt64 revision) const
     if (version)
         return *version;
 
-    return revision;
+    return static_cast<VersionType>(revision);
 }
 
 VersionType Port::getVersion() const

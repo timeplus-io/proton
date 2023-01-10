@@ -815,7 +815,7 @@ void StreamShard::initKafkaLog()
     auto kafka_log = std::make_unique<KafkaLogContext>(
         toString(storage_id.uuid),
         shards,
-        ssettings->logstore_replication_factor,
+        ssettings->logstore_replication_factor.value,
         context->getSettingsRef().async_ingest_block_timeout_ms,
         log);
 
@@ -827,17 +827,17 @@ void StreamShard::initKafkaLog()
             "Invalid logstore_auto_offset_reset, only 'earliest' and 'latest' are supported", ErrorCodes::INVALID_CONFIG_PARAMETER);
 
     Int32 dwal_request_required_acks = 1;
-    auto acks = ssettings->logstore_request_required_acks.value;
-    if (acks >= -1 && acks <= ssettings->logstore_replication_factor)
+    auto acks = static_cast<Int32>(ssettings->logstore_request_required_acks.value);
+    if (acks >= -1 && acks <= ssettings->logstore_replication_factor.value)
         dwal_request_required_acks = acks;
     else
         throw Exception(
-            "Invalid logstore_request_required_acks, shall be in [-1, " + std::to_string(ssettings->logstore_replication_factor)
+            "Invalid logstore_request_required_acks, shall be in [-1, " + std::to_string(ssettings->logstore_replication_factor.value)
                 + "] range",
             ErrorCodes::INVALID_CONFIG_PARAMETER);
 
     Int32 dwal_request_timeout_ms = 30000;
-    auto timeout = ssettings->logstore_request_timeout_ms.value;
+    auto timeout = static_cast<Int32>(ssettings->logstore_request_timeout_ms.value);
     if (timeout > 0)
         dwal_request_timeout_ms = timeout;
 
@@ -854,9 +854,9 @@ void StreamShard::initKafkaLog()
         /// To ensure the replica can consume records inserted after its down time.
         kafka->consume_ctx.enforce_offset = true;
         kafka->consume_ctx.auto_offset_reset = ssettings->logstore_auto_offset_reset.value;
-        kafka->consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshold_ms.value;
-        kafka->consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshold_count;
-        kafka->consume_ctx.consume_callback_max_bytes = ssettings->distributed_flush_threshold_bytes;
+        kafka->consume_ctx.consume_callback_timeout_ms = static_cast<int32_t>(ssettings->distributed_flush_threshold_ms.value);
+        kafka->consume_ctx.consume_callback_max_rows = static_cast<int32_t>(ssettings->distributed_flush_threshold_count.value);
+        kafka->consume_ctx.consume_callback_max_bytes = static_cast<int32_t>(ssettings->distributed_flush_threshold_bytes.value);
         kafka->log->initConsumerTopicHandle(kafka->consume_ctx);
     }
 
@@ -888,10 +888,10 @@ void StreamShard::initNativeLog()
     const auto & storage_id = storage_stream->getStorageID();
 
     nlog::CreateStreamRequest request{storage_id.getTableName(), storage_id.uuid, shards, static_cast<UInt8>(replication_factor)};
-    request.flush_messages = ssettings->logstore_flush_messages.value;
-    request.flush_ms = ssettings->logstore_flush_ms.value;
-    request.retention_bytes = ssettings->logstore_retention_bytes;
-    request.retention_ms = ssettings->logstore_retention_ms;
+    request.flush_messages = static_cast<int32_t>(ssettings->logstore_flush_messages.value);
+    request.flush_ms = static_cast<int32_t>(ssettings->logstore_flush_ms.value);
+    request.retention_bytes = ssettings->logstore_retention_bytes.value;
+    request.retention_ms = ssettings->logstore_retention_ms.value;
 
     auto list_resp{native_log.listStreams(storage_id.getDatabaseName(), nlog::ListStreamsRequest(storage_id.getTableName()))};
     if (list_resp.hasError() || list_resp.streams.empty())
@@ -1028,10 +1028,10 @@ void StreamShard::updateNativeLog()
     const auto & storage_id = storage->getStorageID();
 
     std::map<std::string, std::int32_t> flush_settings
-        = {{"flush_messages", ssettings->logstore_flush_messages}, {"flush_ms", ssettings->logstore_flush_ms}};
+        = {{"flush_messages", ssettings->logstore_flush_messages.value}, {"flush_ms", ssettings->logstore_flush_ms.value}};
 
     std::map<std::string, std::int64_t> retention_settings
-        = {{"retention_bytes", ssettings->logstore_retention_bytes}, {"retention_ms", ssettings->logstore_retention_ms}};
+        = {{"retention_bytes", ssettings->logstore_retention_bytes.value}, {"retention_ms", ssettings->logstore_retention_ms.value}};
 
     nlog::UpdateStreamRequest request{storage_id.getTableName(), storage_id.uuid, std::move(flush_settings), std::move(retention_settings)};
 

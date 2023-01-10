@@ -177,7 +177,7 @@ void ReadFromRemote::addLazyPipe(Pipes & pipes, const ClusterProxy::IStreamFacto
         /// InterpreterSelectQuery directly and it will be too ugly to pass ParallelReplicasCoordinator or some callback there.
         if (!context->getClientInfo().collaborate_with_initiator && (try_results.empty() || local_delay < max_remote_delay))
         {
-            auto plan = createLocalPlan(query, header, context, stage, shard_num, shard_count);
+            auto plan = createLocalPlan(query, header, context, stage, static_cast<UInt32>(shard_num), shard_count);
 
             return QueryPipelineBuilder::getPipe(std::move(*plan->buildQueryPipeline(
                 QueryPlanOptimizationSettings::fromContext(context),

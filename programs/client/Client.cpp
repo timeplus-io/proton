@@ -291,7 +291,7 @@ bool Client::executeMultiQuery(const String & all_queries_text)
                 if (insert_ast && insert_ast->data)
                 {
                     this_query_end = insert_ast->end;
-                    adjustQueryEnd(this_query_end, all_queries_end, static_cast<UInt32>(global_context->getSettingsRef().max_parser_depth));
+                    adjustQueryEnd(this_query_end, all_queries_end, static_cast<UInt32>(global_context->getSettingsRef().max_parser_depth.value));
                 }
 
                 // Report error.

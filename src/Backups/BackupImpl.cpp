@@ -121,13 +121,13 @@ void BackupImpl::writeBackupMetadata()
     {
         String prefix = index ? "contents.file[" + std::to_string(index) + "]." : "contents.file.";
         config->setString(prefix + "name", name);
-        config->setUInt(prefix + "size", info.size);
+        config->setUInt(prefix + "size", static_cast<unsigned int>(info.size));
         if (info.size)
         {
             config->setString(prefix + "checksum", getHexUIntLowercase(info.checksum));
             if (info.base_size)
             {
-                config->setUInt(prefix + "base_size", info.base_size);
+                config->setUInt(prefix + "base_size", static_cast<unsigned int>(info.base_size));
                 if (info.base_size != info.size)
                     config->setString(prefix + "base_checksum", getHexUIntLowercase(info.base_checksum));
             }

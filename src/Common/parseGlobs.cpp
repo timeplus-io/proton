@@ -53,13 +53,13 @@ std::string makeRegexpPatternFromGlobs(const std::string & initial_str_with_glob
             bool leading_zeros = buffer[0] == '0';
             size_t num_len = std::to_string(range_end).size();
             if (leading_zeros)
-                oss_for_replacing << std::setfill('0') << std::setw(static_cast<int>(num_len));
+                oss_for_replacing << std::setfill('0') << std::setw(static_cast<Int32>(num_len));
             oss_for_replacing << range_begin;
             for (size_t i = range_begin + 1; i <= range_end; ++i)
             {
                 oss_for_replacing << '|';
                 if (leading_zeros)
-                    oss_for_replacing << std::setfill('0') << std::setw(static_cast<int>(num_len));
+                    oss_for_replacing << std::setfill('0') << std::setw(static_cast<Int32>(num_len));
                 oss_for_replacing << i;
             }
         }

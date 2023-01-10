@@ -113,7 +113,7 @@ bool UDFHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & 
         return false;
     }
     const auto & args = payload->getArray("arguments");
-    for (size_t i = 0; i < args->size(); i++)
+    for (unsigned int i = 0; i < args->size(); i++)
     {
         if (!args->getObject(i)->has("name") || !args->getObject(i)->has("type"))
         {

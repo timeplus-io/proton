@@ -77,7 +77,7 @@ static ColumnWithTypeAndName readColumnWithNumericData(std::shared_ptr<arrow::Ch
     auto & column_data = static_cast<VectorType &>(*internal_column).getData();
     column_data.reserve(arrow_column->length());
 
-    for (int chunk_i = 0, num_chunks = static_cast<size_t>(arrow_column->num_chunks()); chunk_i < num_chunks; ++chunk_i)
+    for (int chunk_i = 0, num_chunks = arrow_column->num_chunks(); chunk_i < num_chunks; ++chunk_i)
     {
         std::shared_ptr<arrow::Array> chunk = arrow_column->chunk(chunk_i);
         if (chunk->length() == 0)
@@ -420,7 +420,7 @@ static ColumnWithTypeAndName readColumnFromArrowColumn(
             auto arrow_type = arrow_column->type();
             auto * arrow_struct_type = assert_cast<arrow::StructType *>(arrow_type.get());
             std::vector<arrow::ArrayVector> nested_arrow_columns(arrow_struct_type->num_fields());
-            for (size_t chunk_i = 0, num_chunks = static_cast<size_t>(arrow_column->num_chunks()); chunk_i < num_chunks; ++chunk_i)
+            for (int chunk_i = 0, num_chunks = arrow_column->num_chunks(); chunk_i < num_chunks; ++chunk_i)
             {
                 arrow::StructArray & struct_chunk = dynamic_cast<arrow::StructArray &>(*(arrow_column->chunk(chunk_i)));
                 for (int i = 0; i < arrow_struct_type->num_fields(); ++i)
@@ -451,7 +451,7 @@ static ColumnWithTypeAndName readColumnFromArrowColumn(
             if (!dict_values)
             {
                 arrow::ArrayVector dict_array;
-                for (size_t chunk_i = 0, num_chunks = static_cast<size_t>(arrow_column->num_chunks()); chunk_i < num_chunks; ++chunk_i)
+                for (int chunk_i = 0, num_chunks = arrow_column->num_chunks(); chunk_i < num_chunks; ++chunk_i)
                 {
                     arrow::DictionaryArray & dict_chunk = dynamic_cast<arrow::DictionaryArray &>(*(arrow_column->chunk(chunk_i)));
                     dict_array.emplace_back(dict_chunk.dictionary());
@@ -468,7 +468,7 @@ static ColumnWithTypeAndName readColumnFromArrowColumn(
             }
 
             arrow::ArrayVector indexes_array;
-            for (size_t chunk_i = 0, num_chunks = static_cast<size_t>(arrow_column->num_chunks()); chunk_i < num_chunks; ++chunk_i)
+            for (int chunk_i = 0, num_chunks = arrow_column->num_chunks(); chunk_i < num_chunks; ++chunk_i)
             {
                 arrow::DictionaryArray & dict_chunk = dynamic_cast<arrow::DictionaryArray &>(*(arrow_column->chunk(chunk_i)));
                 indexes_array.emplace_back(dict_chunk.indices());

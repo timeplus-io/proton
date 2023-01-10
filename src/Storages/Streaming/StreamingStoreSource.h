@@ -38,8 +38,8 @@ private:
 
     std::unique_ptr<StreamingBlockReaderNativeLog> nativelog_reader;
 
-    UInt64 record_consume_batch_count = 1000;
-    Int64 record_consume_timeout = 100;
+    UInt32 record_consume_batch_count = 1000;
+    Int32 record_consume_timeout = 100;
 };
 
 using StreamingStoreSourcePtr = std::shared_ptr<StreamingStoreSource>;
