@@ -33,7 +33,8 @@ static void test(size_t data_size)
         DB::HashingReadBuffer buf(source);
 
         std::vector<char> read_buf(data_size);
-        buf.read(read_buf.data(), data_size);
+        auto n = buf.read(read_buf.data(), data_size);
+        (void)n;
 
         bool failed_to_read = false;
         for (size_t i = 0; i < data_size; ++i)

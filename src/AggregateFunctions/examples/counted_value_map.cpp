@@ -17,7 +17,7 @@ void perf(std::string_view map_name)
         std::random_device rd;
         std::mt19937 gen(rd());
 
-        std::uniform_int_distribution<> distrib(0, 2 * n);
+        std::uniform_int_distribution<> distrib(0, 2 * static_cast<int>(n));
 
         uint64_t loop = 10;
         uint64_t s = 0;

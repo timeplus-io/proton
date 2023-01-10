@@ -39,7 +39,7 @@ void doInsertColumnNumber(DB::Block & block, size_t rows, DB::DataTypePtr data_t
     auto * col_ptr = typeid_cast<ColumnType *>(col.get());
 
     for (size_t i = 0; i < rows; ++i)
-        col_ptr->insert(IntegerType(i + 100));
+        col_ptr->insert(IntegerType(static_cast<int>(i) + 100));
 
     DB::ColumnWithTypeAndName col_with_name{std::move(col), data_type, typeid(*col_ptr).name()};
     block.insert(std::move(col_with_name));
