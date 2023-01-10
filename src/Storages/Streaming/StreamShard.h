@@ -4,13 +4,12 @@
 #include "StreamCallbackData.h"
 #include "StreamingStoreSourceMultiplexer.h"
 
-#include <base/ClockUtils.h>
-#include <Interpreters/Streaming/FunctionDescription.h>
 #include <KafkaLog/KafkaWAL.h>
 #include <KafkaLog/KafkaWALConsumerMultiplexer.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
+#include <base/ClockUtils.h>
 #include <Common/ThreadPool.h>
 
 #include <pcg_random.hpp>

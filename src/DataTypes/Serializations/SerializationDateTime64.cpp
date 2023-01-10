@@ -10,6 +10,10 @@
 #include <IO/WriteHelpers.h>
 #include <IO/parseDateTimeBestEffort.h>
 
+/// proton : starts
+#include <base/ClockUtils.h>
+/// proton : ends
+
 namespace DB
 {
 
@@ -101,6 +105,11 @@ void SerializationDateTime64::deserializeTextQuoted(IColumn & column, ReadBuffer
     {
         readIntText(x, istr);
     }
+
+    /// proton : starts
+    rescale(x.value);
+    /// proton : ends
+
     assert_cast<ColumnType &>(column).getData().push_back(x);    /// It's important to do this at the end - for exception safety.
 }
 
@@ -123,6 +132,11 @@ void SerializationDateTime64::deserializeTextJSON(IColumn & column, ReadBuffer &
     {
         readIntText(x, istr);
     }
+
+    /// proton : starts
+    rescale(x.value);
+    /// proton : ends
+
     assert_cast<ColumnType &>(column).getData().push_back(x);
 }
 
@@ -150,7 +164,37 @@ void SerializationDateTime64::deserializeTextCSV(IColumn & column, ReadBuffer & 
     if (maybe_quote == '\'' || maybe_quote == '\"')
         assertChar(maybe_quote, istr);
 
+    /// proton : starts
+    rescale(x.value);
+    /// proton : ends
+
     assert_cast<ColumnType &>(column).getData().push_back(x);
 }
 
+/// proton : starts. When real scale is different the expected scale of the datetime64 type
+/// the timestamp will be interpreted wrongly. The following logic is trying to fix it
+/// by rescaling. This rescaling is wrong in theory since it is possible
+/// users insert a long future datetime in theory, but in practice, it shall be fine.
+/// FIXME, we don't support rescale other scales other than ms/us/ns
+void SerializationDateTime64::rescale(Int64 & x) const
+{
+    if (scale == 0 || scale == 3 || scale == 6 || scale == 9)
+    {
+        UInt64 real_scale = static_cast<UInt64>(x / UTCSeconds::now());
+        if (real_scale > 100ul && real_scale < 10'000ul)
+            real_scale = 3;
+        else if (real_scale > 100'000ul && real_scale < 10'000'000ul)
+            real_scale = 6;
+        else if (real_scale > 100'000'000ul && real_scale < 10'000'000'000ul)
+            real_scale = 9;
+        else
+            real_scale = 0;
+
+        if (scale > real_scale)
+            x *= common::exp10_i64(static_cast<int>(scale - real_scale));
+        else if (scale < real_scale)
+            x /= common::exp10_i64(static_cast<int>(real_scale - scale));
+    }
+}
+/// proton : ends
 }

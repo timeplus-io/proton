@@ -489,6 +489,7 @@ void removeUnneededColumnsFromSelectClause(const ASTSelectQuery * select_query, 
     ///     select x, obj.a from (select x from table)
     /// (After handling unknown subcolumns)
     ///     select x, obj.a from (select x, obj.a from table)
+    /// proton FIXME, we actually don't support this now.
     for (auto & [name, count] : required_columns_with_duplicate_count)
         while (count--)
             new_elements.push_back(std::make_shared<ASTIdentifier>(name));
@@ -1074,7 +1075,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
         const String & column_name = it->name;
         unknown_required_source_columns.erase(column_name);
 
-        if (!required.count(column_name))
+        if (!required.contains(column_name))
             it = source_columns.erase(it);
         else
             ++it;

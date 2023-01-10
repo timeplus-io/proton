@@ -590,8 +590,6 @@ void StorageStream::readStreaming(
     }
     else
     {
-        /// auto consumer = klog::KafkaWALPool::instance(context_->getGlobalContext()).getOrCreateStreaming(eamingStorageClusterId());
-
         /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
         /// We will need add one
         Block header;

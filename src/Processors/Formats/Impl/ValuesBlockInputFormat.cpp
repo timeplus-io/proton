@@ -345,7 +345,7 @@ bool ValuesBlockInputFormat::parseExpression(IColumn & column, size_t column_idx
 {
     const Block & header = getPort().getHeader();
     const IDataType & type = *header.getByPosition(column_idx).type;
-    auto settings = context->getSettingsRef();
+    const auto & settings = context->getSettingsRef();
 
     /// We need continuous memory containing the expression to use Lexer
     skipToNextRow(buf.get(), 0, 1);

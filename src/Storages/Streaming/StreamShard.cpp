@@ -147,14 +147,14 @@ void StreamShard::startup()
             {
                 /// Shared mode, register callback
                 addSubscriptionKafka();
-                LOG_INFO(log, "Tailing streaming store in shared subscription mode");
+                LOG_INFO(log, "Tailing Kafka streaming store in shared subscription mode");
             }
             else
             {
                 /// Dedicated mode has dedicated poll thread
                 poller.emplace(1);
                 poller->scheduleOrThrowOnError([this] { backgroundPollKafka(); });
-                LOG_INFO(log, "Tailing streaming store in dedicated subscription mode");
+                LOG_INFO(log, "Tailing Kafka streaming store in dedicated subscription mode");
             }
         }
         else
@@ -162,7 +162,7 @@ void StreamShard::startup()
             /// Dedicated mode has dedicated poll thread. nativelog only supports dedicate mode for now
             poller.emplace(1);
             poller->scheduleOrThrowOnError([this] { backgroundPollNativeLog(); });
-            LOG_INFO(log, "Tailing streaming store in dedicated subscription mode");
+            LOG_INFO(log, "Tailing NativeLog streaming store in dedicated subscription mode");
         }
     }
 }
@@ -807,6 +807,8 @@ void StreamShard::initKafkaLog()
     if (!klog::KafkaWALPool::instance(context).enabled())
         return;
 
+    LOG_INFO(log, "KafkaLog for shard={}", shard);
+
     auto ssettings = storage_stream->getSettings();
 
     const auto & storage_id = storage_stream->getStorageID();
@@ -879,6 +881,8 @@ void StreamShard::initNativeLog()
 
         return;
     }
+
+    LOG_INFO(log, "NativeLog for shard={}", shard);
 
     auto ssettings = storage_stream->getSettings();
     const auto & storage_id = storage_stream->getStorageID();
