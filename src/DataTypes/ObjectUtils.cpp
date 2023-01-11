@@ -662,7 +662,7 @@ using Node = SubcolumnsTreeWithColumns::Node;
 /// Creates data type and column from tree of subcolumns.
 ColumnWithTypeAndDimensions createTypeFromNode(const Node & node)
 {
-    auto collect_tuple_elemets = [](const auto & children)
+    auto collect_tuple_elements = [](const auto & children)
     {
         if (children.empty())
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot create type from empty Tuple or Nested node");
@@ -692,7 +692,7 @@ ColumnWithTypeAndDimensions createTypeFromNode(const Node & node)
     }
     else if (node.kind == Node::NESTED)
     {
-        auto [tuple_names, tuple_columns] = collect_tuple_elemets(node.children);
+        auto [tuple_names, tuple_columns] = collect_tuple_elements(node.children);
 
         Columns offsets_columns;
         offsets_columns.reserve(tuple_columns[0].array_dimensions + 1);
@@ -740,7 +740,7 @@ ColumnWithTypeAndDimensions createTypeFromNode(const Node & node)
     }
     else
     {
-        auto [tuple_names, tuple_columns] = collect_tuple_elemets(node.children);
+        auto [tuple_names, tuple_columns] = collect_tuple_elements(node.children);
 
         size_t num_elements = tuple_columns.size();
         Columns tuple_elements_columns(num_elements);

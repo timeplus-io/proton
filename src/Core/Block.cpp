@@ -816,6 +816,15 @@ Block Block::deepClone() const
 
     return result;
 }
+
+bool Block::hasDynamicSubcolumns() const
+{
+    for (const auto & col : *this)
+        if (col.type->hasDynamicSubcolumns())
+            return true;
+
+    return false;
+}
 /// proton: ends
 
 }

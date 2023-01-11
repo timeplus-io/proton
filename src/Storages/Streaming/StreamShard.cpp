@@ -642,6 +642,8 @@ void StreamShard::commit(nlog::RecordPtrs records, SequenceRanges missing_sequen
     Block block;
     auto keys = std::make_shared<IdempotentKeys>();
 
+    Int64 start_sn = -1;
+
     for (auto & rec : records)
     {
         if (likely(rec->opcode() == nlog::OpCode::ADD_DATA_BLOCK))
@@ -659,13 +661,38 @@ void StreamShard::commit(nlog::RecordPtrs records, SequenceRanges missing_sequen
             }
             else
             {
-                /// First block
+                /// restart first block
                 block.swap(rec->getBlock());
-                assert(!rec->getBlock());
+                start_sn = rec->getSN();
             }
 
             if (rec->hasIdempotentKey())
                 keys->emplace_back(rec->getSN(), std::move(rec->idempotentKey()));
+
+            /// If block contains JSON column, we will need commit to avoid block merge
+            if (block.hasDynamicSubcolumns())
+            {
+                /// There are several cases we will need consider, [..] means commit as a group
+                /// 1. all json blocks: [json_block], [json_block], [json_block], [json_block], [json_block]
+                /// 2. all non-json blocks: [block], [block], [block], [block], [block]
+                /// 3. interleaved-1: [json_block], [block, json_block], [block, json_block]
+                /// 4. interleaved-2: [block, json_block], [block, json_block], [block]
+                assert(start_sn >= 0 && rec->getSN() >= start_sn);
+
+                LOG_DEBUG(
+                    log, "Committing rows={} bytes={} for shard={} containing json column to file system", block.rows(), block.bytes(), shard);
+
+                doCommit(
+                    std::move(block),
+                    std::make_pair(start_sn, rec->getSN()),
+                    std::move(keys),
+                    missing_sequence_ranges
+                );
+
+                /// Explicitly clear since std::move in theory can be implemented as no move
+                block.clear();
+                keys = std::make_shared<IdempotentKeys>();
+            }
         }
         else if (rec->opcode() == nlog::OpCode::ALTER_DATA_BLOCK)
         {
@@ -677,11 +704,15 @@ void StreamShard::commit(nlog::RecordPtrs records, SequenceRanges missing_sequen
     LOG_DEBUG(
         log, "Committing records={} rows={} bytes={} for shard={} to file system", records.size(), block.rows(), block.bytes(), shard);
 
-    doCommit(
-        std::move(block),
-        std::make_pair(records.front()->getSN(), records.back()->getSN()),
-        std::move(keys),
-        std::move(missing_sequence_ranges));
+    if (block)
+    {
+        assert(start_sn >= 0 && records.back()->getSN() >= start_sn);
+        doCommit(
+            std::move(block),
+            std::make_pair(start_sn, records.back()->getSN()),
+            std::move(keys),
+            std::move(missing_sequence_ranges));
+    }
 }
 
 inline void StreamShard::finalCommit()

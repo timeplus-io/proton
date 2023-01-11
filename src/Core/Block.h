@@ -163,6 +163,8 @@ public:
     Block deepClone() const;
 
     bool hasWatermark() const { return info.hasWatermark(); }
+
+    bool hasDynamicSubcolumns() const;
     /// proton: ends
 
 private:
