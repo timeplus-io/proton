@@ -49,7 +49,8 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & context)
+static MergeTreeReaderSettings getMergeTreeReaderSettings(
+    const ContextPtr & context, const SelectQueryInfo & query_info)
 {
     const auto & settings = context->getSettingsRef();
     return
@@ -57,6 +58,7 @@ static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & con
         .read_settings = context->getReadSettings(),
         .save_marks_in_cache = true,
         .checksum_on_read = settings.checksum_on_read,
+        .read_in_order = query_info.input_order_info != nullptr,
     };
 }
 
@@ -87,7 +89,7 @@ ReadFromMergeTree::ReadFromMergeTree(
         getPrewhereInfo(query_info_),
         data_.getPartitionValueType(),
         virt_column_names_)})
-    , reader_settings(getMergeTreeReaderSettings(context_))
+    , reader_settings(getMergeTreeReaderSettings(context_, query_info_))
     , prepared_parts(std::move(parts_))
     , real_column_names(std::move(real_column_names_))
     , virt_column_names(std::move(virt_column_names_))
@@ -146,7 +148,6 @@ Pipe ReadFromMergeTree::readFromPool(
         sum_marks,
         min_marks_for_concurrent_read,
         std::move(parts_with_range),
-        data,
         storage_snapshot,
         prewhere_info,
         required_columns,
@@ -946,7 +947,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
             total_marks_pk += part->index_granularity.getMarksCountWithoutFinal();
         parts_before_pk = parts.size();
 
-        auto reader_settings = getMergeTreeReaderSettings(context);
+        auto reader_settings = getMergeTreeReaderSettings(context, query_info);
         result.parts_with_ranges = MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipIndexes(
             std::move(parts),
             metadata_snapshot,

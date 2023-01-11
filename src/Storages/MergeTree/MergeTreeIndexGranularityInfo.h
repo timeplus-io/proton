@@ -44,6 +44,8 @@ public:
 
     MergeTreeIndexGranularityInfo(const MergeTreeData & storage, MergeTreeDataPartType type_);
 
+    MergeTreeIndexGranularityInfo(MergeTreeDataPartType type_, bool is_adaptive_, size_t index_granularity_, size_t index_granularity_bytes_);
+
     MergeTreeIndexGranularityInfo(const MergeTreeData & storage, MarkType mark_type_);
 
     void changeGranularityIfRequired(const IDataPartStorage & data_part_storage);

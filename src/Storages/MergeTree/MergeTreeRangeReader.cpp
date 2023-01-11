@@ -83,7 +83,7 @@ MergeTreeRangeReader::DelayedStream::DelayedStream(
         : current_mark(from_mark), current_offset(0), num_delayed_rows(0)
         , current_task_last_mark(current_task_last_mark_)
         , merge_tree_reader(merge_tree_reader_)
-        , index_granularity(&(merge_tree_reader->data_part->index_granularity))
+        , index_granularity(&(merge_tree_reader->data_part_info_for_read->getIndexGranularity()))
         , continue_reading(false), is_finished(false)
 {
 }
@@ -181,7 +181,7 @@ MergeTreeRangeReader::Stream::Stream(
         : current_mark(from_mark), offset_after_current_mark(0)
         , last_mark(to_mark)
         , merge_tree_reader(merge_tree_reader_)
-        , index_granularity(&(merge_tree_reader->data_part->index_granularity))
+        , index_granularity(&(merge_tree_reader->data_part_info_for_read->getIndexGranularity()))
         , current_mark_index_granularity(index_granularity->getMarkRows(from_mark))
         , stream(from_mark, current_task_last_mark, merge_tree_reader)
 {
@@ -474,7 +474,7 @@ size_t numZerosInTail(const UInt8 * begin, const UInt8 * end)
             count += 64;
         else
         {
-            count += __builtin_clzll(val);
+            count += std::countl_zero(val);
             return count;
         }
     }
@@ -508,7 +508,7 @@ size_t numZerosInTail(const UInt8 * begin, const UInt8 * end)
             count += 64;
         else
         {
-            count += __builtin_clzll(val);
+            count += std::countl_zero(val);
             return count;
         }
     }
@@ -584,7 +584,7 @@ size_t MergeTreeRangeReader::ReadResult::numZerosInTail(const UInt8 * begin, con
             count += 64;
         else
         {
-            count += __builtin_clzll(val);
+            count += std::countl_zero(val);
             return count;
         }
     }
@@ -652,12 +652,11 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     bool last_reader_in_chain_,
     const Names & non_const_virtual_column_names_)
     : merge_tree_reader(merge_tree_reader_)
-    , index_granularity(&(merge_tree_reader->data_part->index_granularity))
+    , index_granularity(&(merge_tree_reader->data_part_info_for_read->getIndexGranularity()))
     , prev_reader(prev_reader_)
     , prewhere_info(prewhere_info_)
     , last_reader_in_chain(last_reader_in_chain_)
     , is_initialized(true)
-    , non_const_virtual_column_names(non_const_virtual_column_names_)
 {
     if (prev_reader)
         sample_block = prev_reader->getSampleBlock();
@@ -665,10 +664,12 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     for (const auto & name_and_type : merge_tree_reader->getColumns())
         sample_block.insert({name_and_type.type->createColumn(), name_and_type.type, name_and_type.name});
 
-    for (const auto & column_name : non_const_virtual_column_names)
+    for (const auto & column_name : non_const_virtual_column_names_)
     {
         if (sample_block.has(column_name))
             continue;
+
+        non_const_virtual_column_names.push_back(column_name);
 
         if (column_name == "_part_offset")
             sample_block.insert(ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), column_name));
@@ -944,7 +945,8 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
     result.addRows(stream.finalize(result.columns));
 
     /// Last granule may be incomplete.
-    result.adjustLastGranule();
+    if (!result.rowsPerGranule().empty())
+        result.adjustLastGranule();
 
     for (const auto & column_name : non_const_virtual_column_names)
     {

@@ -85,6 +85,20 @@ protected:
     static void
     injectVirtualColumns(Chunk & chunk, MergeTreeReadTask * task, const DataTypePtr & partition_value_type, const Names & virtual_columns);
 
+    static std::unique_ptr<PrewhereExprInfo> getPrewhereActions(PrewhereInfoPtr prewhere_info, const ExpressionActionsSettings & actions_settings);
+
+    static void initializeRangeReadersImpl(
+         MergeTreeRangeReader & range_reader,
+         std::deque<MergeTreeRangeReader> & pre_range_readers,
+         PrewhereInfoPtr prewhere_info,
+         const PrewhereExprInfo * prewhere_actions,
+         IMergeTreeReader * reader,
+         /// bool has_lightweight_delete,
+         const MergeTreeReaderSettings & reader_settings,
+         const std::vector<std::unique_ptr<IMergeTreeReader>> & pre_reader_for_step,
+         /// const PrewhereExprStep & lightweight_delete_filter_step,
+         const Names & non_const_virtual_column_names);
+
     void initializeRangeReaders(MergeTreeReadTask & task);
 
 protected:
