@@ -202,8 +202,10 @@ void EventPredicateMatcher::visit(ASTPtr & ast, Data & data)
     if (left_is_event_col)
     {
         if (seekLeft(func->name))
-            data.seek_to_info
-                = std::make_shared<SeekToInfo>(right_arg->getColumnName(), std::vector<Int64>{seek_point}, SeekToType::ABSOLUTE_TIME);
+            data.seek_to_info = std::make_shared<SeekToInfo>(
+                right_arg->getColumnName(),
+                std::vector<Int64>{seek_point},
+                seek_by == SeekBy::EventTime ? SeekToType::ABSOLUTE_TIME : SeekToType::SEQUENCE_NUMBER);
         else
             data.seek_to_info
                 = std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER);
@@ -211,8 +213,10 @@ void EventPredicateMatcher::visit(ASTPtr & ast, Data & data)
     else
     {
         if (seekRight(func->name))
-            data.seek_to_info
-                = std::make_shared<SeekToInfo>(left_arg->getColumnName(), std::vector<Int64>{seek_point}, SeekToType::ABSOLUTE_TIME);
+            data.seek_to_info = std::make_shared<SeekToInfo>(
+                left_arg->getColumnName(),
+                std::vector<Int64>{seek_point},
+                seek_by == SeekBy::EventTime ? SeekToType::ABSOLUTE_TIME : SeekToType::SEQUENCE_NUMBER);
         else
             data.seek_to_info
                 = std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER);
