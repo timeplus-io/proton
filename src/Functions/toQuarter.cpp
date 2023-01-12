@@ -13,7 +13,7 @@ REGISTER_FUNCTION(ToQuarter)
 {
     factory.registerFunction<FunctionToQuarter>();
     /// MysQL compatibility alias.
-    factory.registerAlias("QUARTER", "to_quarter", FunctionFactory::CaseInsensitive);
+    factory.registerAlias("quarter", "to_quarter", FunctionFactory::CaseInsensitive);
 }
 
 }

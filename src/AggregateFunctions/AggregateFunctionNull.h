@@ -354,14 +354,15 @@ public:
         AggregateDataPtr __restrict place,
         const IColumn ** columns,
         Arena * arena,
-        ssize_t if_argument_pos = -1) const override
+        ssize_t if_argument_pos = -1,
+        const IColumn * delta_col = nullptr) const override
     {
         const ColumnNullable * column = assert_cast<const ColumnNullable *>(columns[0]);
         const IColumn * nested_column = &column->getNestedColumn();
         const UInt8 * null_map = column->getNullMapData().data();
 
         this->nested_function->addBatchSinglePlaceNotNull(
-            row_begin, row_end, this->nestedPlace(place), &nested_column, null_map, arena, if_argument_pos);
+            row_begin, row_end, this->nestedPlace(place), &nested_column, null_map, arena, if_argument_pos, delta_col);
 
         if constexpr (result_is_nullable)
             if (!memoryIsByte(null_map, row_begin, row_end, 1))
@@ -463,7 +464,8 @@ public:
         AggregateDataPtr __restrict place,
         const IColumn ** columns,
         Arena * arena,
-        ssize_t if_argument_pos) const final
+        ssize_t if_argument_pos,
+        const IColumn * delta_col) const final
     {
         /// We are going to merge all the flags into a single one to be able to call the nested batching functions
         std::vector<const UInt8 *> nullable_filters;
@@ -553,7 +555,7 @@ public:
 
         this->setFlag(place);
         this->nested_function->addBatchSinglePlaceNotNull(
-            row_begin, row_end, this->nestedPlace(place), nested_columns, final_flags_ptr, arena, -1);
+            row_begin, row_end, this->nestedPlace(place), nested_columns, final_flags_ptr, arena, -1, delta_col);
     }
 
 

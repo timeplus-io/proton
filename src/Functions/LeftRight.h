@@ -37,8 +37,8 @@ class FunctionLeftRight : public IFunction
 {
 public:
     static constexpr auto name = direction == SubstringDirection::Left
-        ? (is_utf8 ? "leftUTF8" : "left")
-        : (is_utf8 ? "rightUTF8" : "right");
+        ? (is_utf8 ? "left_utf8" : "left")
+        : (is_utf8 ? "right_utf8" : "right");
 
     static FunctionPtr create(ContextPtr)
     {

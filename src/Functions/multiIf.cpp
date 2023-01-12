@@ -338,8 +338,8 @@ REGISTER_FUNCTION(MultiIf)
     factory.registerFunction<FunctionMultiIf>();
 
     /// These are obsolete function names.
-    factory.registerFunction<FunctionMultiIf>("caseWithoutExpr");
-    factory.registerFunction<FunctionMultiIf>("caseWithoutExpression");
+    factory.registerFunction<FunctionMultiIf>("case_without_expr");
+    factory.registerFunction<FunctionMultiIf>("case_without_expression");
 }
 
 }

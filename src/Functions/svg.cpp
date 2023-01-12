@@ -101,8 +101,7 @@ public:
 
 REGISTER_FUNCTION(Svg)
 {
-    factory.registerFunction<FunctionSvg>();
-    factory.registerAlias("SVG", "svg");
+    factory.registerFunction<FunctionSvg>({}, FunctionFactory::CaseInsensitive);
 }
 
 }

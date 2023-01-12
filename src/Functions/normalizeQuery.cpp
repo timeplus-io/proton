@@ -20,7 +20,7 @@ namespace
 template <bool keep_names>
 struct Impl
 {
-    static constexpr auto name = keep_names ? "normalize_query_keepNames" : "normalize_query";
+    static constexpr auto name = keep_names ? "normalize_query_keep_names" : "normalize_query";
     static void vector(const ColumnString::Chars & data,
         const ColumnString::Offsets & offsets,
         ColumnString::Chars & res_data,

@@ -330,7 +330,7 @@ private:
             std::forward<Call>(call)(MonthWriter<Time>());
         else if (date_part == "week")
             std::forward<Call>(call)(WeekWriter<Time>());
-        else if (date_part == "dayofyear")
+        else if (date_part == "day_of_year")
             std::forward<Call>(call)(DayOfYearWriter<Time>());
         else if (date_part == "day")
             std::forward<Call>(call)(DayWriter<Time>());

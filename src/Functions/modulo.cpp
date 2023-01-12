@@ -172,7 +172,7 @@ REGISTER_FUNCTION(Modulo)
     factory.registerAlias("mod", "modulo", FunctionFactory::CaseInsensitive);
 }
 
-struct NameModuloLegacy { static constexpr auto name = "moduloLegacy"; };
+struct NameModuloLegacy { static constexpr auto name = "modulo_legacy"; };
 using FunctionModuloLegacy = BinaryArithmeticOverloadResolver<ModuloLegacyImpl, NameModuloLegacy, false>;
 
 REGISTER_FUNCTION(ModuloLegacy)
