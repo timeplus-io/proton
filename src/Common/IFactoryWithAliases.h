@@ -27,9 +27,9 @@ protected:
 
     String getAliasToOrName(const String & name) const
     {
-        if (aliases.count(name))
+        if (aliases.contains(name))
             return aliases.at(name);
-        else if (String name_lowercase = Poco::toLower(name); case_insensitive_aliases.count(name_lowercase))
+        else if (String name_lowercase = Poco::toLower(name); case_insensitive_aliases.contains(name_lowercase))
             return case_insensitive_aliases.at(name_lowercase);
         else
             return name;
@@ -93,7 +93,7 @@ public:
     bool isCaseInsensitive(const String & name) const
     {
         String name_lowercase = Poco::toLower(name);
-        return getCaseInsensitiveMap().count(name_lowercase) || case_insensitive_aliases.count(name_lowercase);
+        return getCaseInsensitiveMap().contains(name_lowercase) || case_insensitive_aliases.contains(name_lowercase);
     }
 
     const String & aliasTo(const String & name) const
@@ -108,12 +108,12 @@ public:
 
     bool isAlias(const String & name) const
     {
-        return aliases.count(name) || case_insensitive_aliases.count(name);
+        return aliases.contains(name) || case_insensitive_aliases.contains(name);
     }
 
     bool hasNameOrAlias(const String & name) const
     {
-        return getMap().count(name) || getCaseInsensitiveMap().count(name) || isAlias(name);
+        return getMap().contains(name) || getCaseInsensitiveMap().contains(name) || isAlias(name);
     }
 
     /// Return the canonical name (the name used in registration) if it's different from `name`.

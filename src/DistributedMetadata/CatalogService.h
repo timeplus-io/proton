@@ -129,7 +129,7 @@ private:
     using StorageContainer = std::unordered_map<DatabaseTable, StoragePtr, boost::hash<DatabaseTable>>;
     using ClusterContainer = std::unordered_map<DatabaseTable, ClusterPtr, boost::hash<DatabaseTable>>;
 
-    TableContainer buildCatalog(const NodePtr & node, const Block & bock);
+    TableContainer buildCatalog(const NodePtr & node, const Block & block);
     void mergeCatalog(const NodePtr & node, TableContainer snapshot);
     void removeCatalogForNode(const NodePtr & node, const Block & block);
 

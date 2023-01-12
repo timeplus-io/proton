@@ -624,7 +624,7 @@ void HTTPHandler::processQuery(
         if (name.empty())
             return true;
 
-        if (reserved_param_names.count(name))
+        if (reserved_param_names.contains(name))
             return true;
 
         for (const String & suffix : reserved_param_suffixes)
@@ -1039,7 +1039,7 @@ PredefinedQueryHandler::PredefinedQueryHandler(
 
 bool PredefinedQueryHandler::customizeQueryParam(ContextMutablePtr context, const std::string & key, const std::string & value)
 {
-    if (receive_params.count(key))
+    if (receive_params.contains(key))
     {
         context->setQueryParameter(key, value);
         return true;
@@ -1099,7 +1099,7 @@ std::string PredefinedQueryHandler::getQuery(HTTPServerRequest & request, HTMLFo
 HTTPRequestHandlerFactoryPtr createDynamicHandlerFactory(IServer & server, const std::string & config_prefix)
 {
     const auto & query_param_name = server.config().getString(config_prefix + ".handler.query_param_name", "query");
-    auto factory = std::make_shared<HandlingRuleHTTPHandlerFactory<DynamicQueryHandler>>(server, std::move(query_param_name));
+    auto factory = std::make_shared<HandlingRuleHTTPHandlerFactory<DynamicQueryHandler>>(server, query_param_name);
 
     factory->addFiltersFromConfig(server.config(), config_prefix);
 

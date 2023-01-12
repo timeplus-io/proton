@@ -54,13 +54,13 @@ static bool checkLastXRule(const String & last_x_query, const String & check_que
 
     for (const auto & elem : last_x_data.elems)
     {
-        if ((elem.first == special_key_1 && check_data.elems.count(special_key_2))
-            || (elem.first == special_key_2 && check_data.elems.count(special_key_1)))
+        if ((elem.first == special_key_1 && check_data.elems.contains(special_key_2))
+            || (elem.first == special_key_2 && check_data.elems.contains(special_key_1)))
         {
             return true;
         }
 
-        if (check_data.elems.count(elem.first) == 0)
+        if (!check_data.elems.contains(elem.first))
         {
             std::cerr << fmt::format("> > > Last X Tree has extra elem(ID={}): {}\n", elem.first, serializeAST(*elem.second));
             continue;

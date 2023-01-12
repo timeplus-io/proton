@@ -953,7 +953,7 @@ void AlterCommands::apply(StorageInMemoryMetadata & metadata, ContextPtr context
         metadata_copy.table_ttl = TTLTableDescription::getTTLForTableFromAST(
             metadata_copy.table_ttl.definition_ast, metadata_copy.columns, context, metadata_copy.primary_key);
 
-    metadata = std::move(metadata_copy);
+    metadata = std::move(metadata_copy); /// NOLINT(performance-move-const-arg)
 }
 
 
@@ -1040,7 +1040,7 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
                     continue;
             }
 
-            if (renamed_columns.count(column_name))
+            if (renamed_columns.contains(column_name))
                 throw Exception{"Cannot rename and modify the same column " + backQuote(column_name) + " in a single ALTER query",
                                 ErrorCodes::NOT_IMPLEMENTED};
 
@@ -1196,7 +1196,7 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
                 throw Exception{"Cannot rename to " + backQuote(command.rename_to) + ": column with this name already exists",
                                 ErrorCodes::DUPLICATE_COLUMN};
 
-            if (modified_columns.count(column_name))
+            if (modified_columns.contains(column_name))
                 throw Exception{"Cannot rename and modify the same column " + backQuote(column_name) + " in a single ALTER query",
                                 ErrorCodes::NOT_IMPLEMENTED};
 

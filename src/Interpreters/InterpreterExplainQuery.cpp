@@ -184,7 +184,7 @@ struct ExplainSettings : public Settings
 
     bool has(const std::string & name_) const
     {
-        return boolean_settings.count(name_) > 0;
+        return boolean_settings.contains(name_);
     }
 
     void setBooleanSetting(const std::string & name_, bool value)

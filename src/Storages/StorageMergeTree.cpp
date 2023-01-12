@@ -1013,7 +1013,7 @@ bool StorageMergeTree::merge(
 bool StorageMergeTree::partIsAssignedToBackgroundOperation(const DataPartPtr & part) const
 {
     std::lock_guard background_processing_lock(currently_processing_in_background_mutex);
-    return currently_merging_mutating_parts.count(part);
+    return currently_merging_mutating_parts.contains(part);
 }
 
 std::shared_ptr<MergeMutateSelectedEntry> StorageMergeTree::selectPartsToMutate(
@@ -1045,7 +1045,7 @@ std::shared_ptr<MergeMutateSelectedEntry> StorageMergeTree::selectPartsToMutate(
     auto mutations_end_it = current_mutations_by_version.end();
     for (const auto & part : getDataPartsVectorForInternalUsage())
     {
-        if (currently_merging_mutating_parts.count(part))
+        if (currently_merging_mutating_parts.contains(part))
             continue;
 
         auto mutations_begin_it = current_mutations_by_version.upper_bound(getUpdatedDataVersion(part, currently_processing_in_background_mutex_lock));
@@ -1899,7 +1899,7 @@ void StorageMergeTree::fillNewPartName(MutableDataPartPtr & part, DataPartsLock 
 void StorageMergeTree::locateSNFile()
 {
     auto disks{getStoragePolicy()->getDisks()};
-    for (auto disk : disks)
+    for (const auto & disk : disks)
     {
         auto sn_file_path = relative_data_path + MergeTreeData::COMMITTED_SN_FILE_NAME;
         if (disk->exists(sn_file_path))

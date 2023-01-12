@@ -571,7 +571,7 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
 /// proton: starts
 AggregatedDataVariants::Type Aggregator::chooseAggregationMethodTimeBucketTwoLevel(
     const DataTypes & types_removed_nullable, bool has_nullable_key,
-    bool has_low_cardinality, size_t num_fixed_contiguous_keys, size_t keys_bytes)
+    bool has_low_cardinality, size_t num_fixed_contiguous_keys, size_t keys_bytes) const
 {
     if (params.group_by != Params::GroupBy::WINDOW_END
         && params.group_by != Params::GroupBy::WINDOW_START)
@@ -2801,7 +2801,7 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
     result.keys_size = params.keys_size;
     result.key_sizes = key_sizes;
 
-    bool has_blocks_with_unknown_bucket = bucket_to_blocks.count(-1);
+    bool has_blocks_with_unknown_bucket = bucket_to_blocks.contains(-1);
 
     /// First, parallel the merge for the individual buckets. Then we continue merge the data not allocated to the buckets.
     if (has_two_level)

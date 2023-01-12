@@ -490,7 +490,7 @@ void MergeTreeData::checkProperties(
                         "added to the sorting key. You can add expressions that use only the newly added columns",
                         ErrorCodes::BAD_ARGUMENTS);
 
-                if (new_metadata.columns.getDefaults().count(col))
+                if (new_metadata.columns.getDefaults().contains(col))
                     throw Exception("Newly added column " + backQuoteIfNeed(col) + " has a default expression, so adding "
                         "expressions that use it to the sorting key is forbidden",
                         ErrorCodes::BAD_ARGUMENTS);
@@ -1243,6 +1243,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
 
             if (!defined_disk_names.contains(disk_name)
                 && disk->exists(relative_data_path))
+
             {
                 for (const auto it = disk->iterateDirectory(relative_data_path); it->isValid(); it->next())
                 {
@@ -3016,7 +3017,7 @@ void MergeTreeData::removePartsFromWorkingSet(
 
     for (const auto & part : remove)
     {
-        if (!data_parts_by_info.count(part->info))
+        if (!data_parts_by_info.contains(part->info))
             throw Exception("Part " + part->getNameWithState() + " not found in data_parts", ErrorCodes::LOGICAL_ERROR);
 
         part->assertState({DataPartState::PreActive, DataPartState::Active, DataPartState::Outdated});
@@ -3148,6 +3149,7 @@ void MergeTreeData::forgetPartAndMoveToDetached(const MergeTreeData::DataPartPtr
     /// Important to own part pointer here (not const reference), because it will be removed from data_parts_indexes
     /// few lines below.
     DataPartPtr part = *it_part; // NOLINT
+
 
     if (part->getState() == DataPartState::Active)
     {
@@ -4046,7 +4048,8 @@ RestoreDataTasks MergeTreeData::restoreDataPartsFromBackup(const BackupPtr & bac
     Strings part_names = backup->listFiles(data_path_in_backup);
     for (const String & part_name : part_names)
     {
-        const auto part_info = MergeTreePartInfo::tryParsePartName(part_name, format_version);
+        auto part_info = MergeTreePartInfo::tryParsePartName(part_name, format_version);
+
         if (!part_info)
             continue;
 
@@ -6092,7 +6095,7 @@ MergeTreeData::CurrentlyMovingPartsTagger::~CurrentlyMovingPartsTagger()
     for (const auto & moving_part : parts_to_move)
     {
         /// Something went completely wrong
-        if (!data.currently_moving_parts.count(moving_part.part))
+        if (!data.currently_moving_parts.contains(moving_part.part))
             std::terminate();
         data.currently_moving_parts.erase(moving_part.part);
     }

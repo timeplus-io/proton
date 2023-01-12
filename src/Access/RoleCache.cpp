@@ -17,7 +17,7 @@ namespace
                       bool is_current_role,
                       bool with_admin_option)
     {
-        if (roles_info.enabled_roles.count(role_id))
+        if (roles_info.enabled_roles.contains(role_id))
         {
             if (is_current_role)
                 roles_info.current_roles.emplace(role_id);
@@ -26,7 +26,7 @@ namespace
             return;
         }
 
-        if (skip_ids.count(role_id))
+        if (skip_ids.contains(role_id))
             return;
 
         auto role = get_role_function(role_id);

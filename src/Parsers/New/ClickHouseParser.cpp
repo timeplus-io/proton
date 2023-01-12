@@ -3316,7 +3316,7 @@ ClickHouseParser::DictionaryAttrDfntContext* ClickHouseParser::dictionaryAttrDfn
         case 1: {
           setState(600);
 
-          if (!(!_localctx->attrs.count("default"))) throw FailedPredicateException(this, "!$attrs.count(\"default\")");
+          if (!(!_localctx->attrs.contains("default"))) throw FailedPredicateException(this, "!$attrs.count(\"default\")");
           setState(601);
           match(ClickHouseParser::DEFAULT);
           setState(602);
@@ -3328,7 +3328,7 @@ ClickHouseParser::DictionaryAttrDfntContext* ClickHouseParser::dictionaryAttrDfn
         case 2: {
           setState(605);
 
-          if (!(!_localctx->attrs.count("expression"))) throw FailedPredicateException(this, "!$attrs.count(\"expression\")");
+          if (!(!_localctx->attrs.contains("expression"))) throw FailedPredicateException(this, "!$attrs.count(\"expression\")");
           setState(606);
           match(ClickHouseParser::EXPRESSION);
           setState(607);
@@ -3340,7 +3340,7 @@ ClickHouseParser::DictionaryAttrDfntContext* ClickHouseParser::dictionaryAttrDfn
         case 3: {
           setState(610);
 
-          if (!(!_localctx->attrs.count("hierarchical"))) throw FailedPredicateException(this, "!$attrs.count(\"hierarchical\")");
+          if (!(!_localctx->attrs.contains("hierarchical"))) throw FailedPredicateException(this, "!$attrs.count(\"hierarchical\")");
           setState(611);
           match(ClickHouseParser::HIERARCHICAL);
           _localctx->attrs.insert("hierarchical");
@@ -3350,7 +3350,7 @@ ClickHouseParser::DictionaryAttrDfntContext* ClickHouseParser::dictionaryAttrDfn
         case 4: {
           setState(613);
 
-          if (!(!_localctx->attrs.count("injective"))) throw FailedPredicateException(this, "!$attrs.count(\"injective\")");
+          if (!(!_localctx->attrs.contains("injective"))) throw FailedPredicateException(this, "!$attrs.count(\"injective\")");
           setState(614);
           match(ClickHouseParser::INJECTIVE);
           _localctx->attrs.insert("injective");
@@ -3360,7 +3360,7 @@ ClickHouseParser::DictionaryAttrDfntContext* ClickHouseParser::dictionaryAttrDfn
         case 5: {
           setState(616);
 
-          if (!(!_localctx->attrs.count("is_object_id"))) throw FailedPredicateException(this, "!$attrs.count(\"is_object_id\")");
+          if (!(!_localctx->attrs.contains("is_object_id"))) throw FailedPredicateException(this, "!$attrs.count(\"is_object_id\")");
           setState(617);
           match(ClickHouseParser::IS_OBJECT_ID);
           _localctx->attrs.insert("is_object_id");
@@ -3487,7 +3487,7 @@ ClickHouseParser::DictionaryEngineClauseContext* ClickHouseParser::dictionaryEng
         case 1: {
           setState(627);
 
-          if (!(!_localctx->clauses.count("source"))) throw FailedPredicateException(this, "!$clauses.count(\"source\")");
+          if (!(!_localctx->clauses.contains("source"))) throw FailedPredicateException(this, "!$clauses.count(\"source\")");
           setState(628);
           sourceClause();
           _localctx->clauses.insert("source");
@@ -3497,7 +3497,7 @@ ClickHouseParser::DictionaryEngineClauseContext* ClickHouseParser::dictionaryEng
         case 2: {
           setState(631);
 
-          if (!(!_localctx->clauses.count("lifetime"))) throw FailedPredicateException(this, "!$clauses.count(\"lifetime\")");
+          if (!(!_localctx->clauses.contains("lifetime"))) throw FailedPredicateException(this, "!$clauses.count(\"lifetime\")");
           setState(632);
           lifetimeClause();
           _localctx->clauses.insert("lifetime");
@@ -3507,7 +3507,7 @@ ClickHouseParser::DictionaryEngineClauseContext* ClickHouseParser::dictionaryEng
         case 3: {
           setState(635);
 
-          if (!(!_localctx->clauses.count("layout"))) throw FailedPredicateException(this, "!$clauses.count(\"layout\")");
+          if (!(!_localctx->clauses.contains("layout"))) throw FailedPredicateException(this, "!$clauses.count(\"layout\")");
           setState(636);
           layoutClause();
           _localctx->clauses.insert("layout");
@@ -3517,7 +3517,7 @@ ClickHouseParser::DictionaryEngineClauseContext* ClickHouseParser::dictionaryEng
         case 4: {
           setState(639);
 
-          if (!(!_localctx->clauses.count("range"))) throw FailedPredicateException(this, "!$clauses.count(\"range\")");
+          if (!(!_localctx->clauses.contains("range"))) throw FailedPredicateException(this, "!$clauses.count(\"range\")");
           setState(640);
           rangeClause();
           _localctx->clauses.insert("range");
@@ -3527,7 +3527,7 @@ ClickHouseParser::DictionaryEngineClauseContext* ClickHouseParser::dictionaryEng
         case 5: {
           setState(643);
 
-          if (!(!_localctx->clauses.count("settings"))) throw FailedPredicateException(this, "!$clauses.count(\"settings\")");
+          if (!(!_localctx->clauses.contains("settings"))) throw FailedPredicateException(this, "!$clauses.count(\"settings\")");
           setState(644);
           dictionarySettingsClause();
           _localctx->clauses.insert("settings");
@@ -5413,7 +5413,7 @@ ClickHouseParser::EngineClauseContext* ClickHouseParser::engineClause() {
         case 1: {
           setState(760);
 
-          if (!(!_localctx->clauses.count("orderByClause"))) throw FailedPredicateException(this, "!$clauses.count(\"orderByClause\")");
+          if (!(!_localctx->clauses.contains("orderByClause"))) throw FailedPredicateException(this, "!$clauses.count(\"orderByClause\")");
           setState(761);
           orderByClause();
           _localctx->clauses.insert("orderByClause");
@@ -5423,7 +5423,7 @@ ClickHouseParser::EngineClauseContext* ClickHouseParser::engineClause() {
         case 2: {
           setState(764);
 
-          if (!(!_localctx->clauses.count("partitionByClause"))) throw FailedPredicateException(this, "!$clauses.count(\"partitionByClause\")");
+          if (!(!_localctx->clauses.contains("partitionByClause"))) throw FailedPredicateException(this, "!$clauses.count(\"partitionByClause\")");
           setState(765);
           partitionByClause();
           _localctx->clauses.insert("partitionByClause");
@@ -5433,7 +5433,7 @@ ClickHouseParser::EngineClauseContext* ClickHouseParser::engineClause() {
         case 3: {
           setState(768);
 
-          if (!(!_localctx->clauses.count("primaryKeyClause"))) throw FailedPredicateException(this, "!$clauses.count(\"primaryKeyClause\")");
+          if (!(!_localctx->clauses.contains("primaryKeyClause"))) throw FailedPredicateException(this, "!$clauses.count(\"primaryKeyClause\")");
           setState(769);
           primaryKeyClause();
           _localctx->clauses.insert("primaryKeyClause");
@@ -5443,7 +5443,7 @@ ClickHouseParser::EngineClauseContext* ClickHouseParser::engineClause() {
         case 4: {
           setState(772);
 
-          if (!(!_localctx->clauses.count("sampleByClause"))) throw FailedPredicateException(this, "!$clauses.count(\"sampleByClause\")");
+          if (!(!_localctx->clauses.contains("sampleByClause"))) throw FailedPredicateException(this, "!$clauses.count(\"sampleByClause\")");
           setState(773);
           sampleByClause();
           _localctx->clauses.insert("sampleByClause");
@@ -5453,7 +5453,7 @@ ClickHouseParser::EngineClauseContext* ClickHouseParser::engineClause() {
         case 5: {
           setState(776);
 
-          if (!(!_localctx->clauses.count("ttlClause"))) throw FailedPredicateException(this, "!$clauses.count(\"ttlClause\")");
+          if (!(!_localctx->clauses.contains("ttlClause"))) throw FailedPredicateException(this, "!$clauses.count(\"ttlClause\")");
           setState(777);
           ttlClause();
           _localctx->clauses.insert("ttlClause");
@@ -5463,7 +5463,7 @@ ClickHouseParser::EngineClauseContext* ClickHouseParser::engineClause() {
         case 6: {
           setState(780);
 
-          if (!(!_localctx->clauses.count("settingsClause"))) throw FailedPredicateException(this, "!$clauses.count(\"settingsClause\")");
+          if (!(!_localctx->clauses.contains("settingsClause"))) throw FailedPredicateException(this, "!$clauses.count(\"settingsClause\")");
           setState(781);
           settingsClause();
           _localctx->clauses.insert("settingsClause");
@@ -18609,11 +18609,11 @@ bool ClickHouseParser::sempred(RuleContext *context, size_t ruleIndex, size_t pr
 
 bool ClickHouseParser::dictionaryAttrDfntSempred(DictionaryAttrDfntContext *_localctx, size_t predicateIndex) {
   switch (predicateIndex) {
-    case 0: return !_localctx->attrs.count("default");
-    case 1: return !_localctx->attrs.count("expression");
-    case 2: return !_localctx->attrs.count("hierarchical");
-    case 3: return !_localctx->attrs.count("injective");
-    case 4: return !_localctx->attrs.count("is_object_id");
+    case 0: return !_localctx->attrs.contains("default");
+    case 1: return !_localctx->attrs.contains("expression");
+    case 2: return !_localctx->attrs.contains("hierarchical");
+    case 3: return !_localctx->attrs.contains("injective");
+    case 4: return !_localctx->attrs.contains("is_object_id");
 
   default:
     break;
@@ -18623,11 +18623,11 @@ bool ClickHouseParser::dictionaryAttrDfntSempred(DictionaryAttrDfntContext *_loc
 
 bool ClickHouseParser::dictionaryEngineClauseSempred(DictionaryEngineClauseContext *_localctx, size_t predicateIndex) {
   switch (predicateIndex) {
-    case 5: return !_localctx->clauses.count("source");
-    case 6: return !_localctx->clauses.count("lifetime");
-    case 7: return !_localctx->clauses.count("layout");
-    case 8: return !_localctx->clauses.count("range");
-    case 9: return !_localctx->clauses.count("settings");
+    case 5: return !_localctx->clauses.contains("source");
+    case 6: return !_localctx->clauses.contains("lifetime");
+    case 7: return !_localctx->clauses.contains("layout");
+    case 8: return !_localctx->clauses.contains("range");
+    case 9: return !_localctx->clauses.contains("settings");
 
   default:
     break;
@@ -18637,12 +18637,12 @@ bool ClickHouseParser::dictionaryEngineClauseSempred(DictionaryEngineClauseConte
 
 bool ClickHouseParser::engineClauseSempred(EngineClauseContext *_localctx, size_t predicateIndex) {
   switch (predicateIndex) {
-    case 10: return !_localctx->clauses.count("orderByClause");
-    case 11: return !_localctx->clauses.count("partitionByClause");
-    case 12: return !_localctx->clauses.count("primaryKeyClause");
-    case 13: return !_localctx->clauses.count("sampleByClause");
-    case 14: return !_localctx->clauses.count("ttlClause");
-    case 15: return !_localctx->clauses.count("settingsClause");
+    case 10: return !_localctx->clauses.contains("orderByClause");
+    case 11: return !_localctx->clauses.contains("partitionByClause");
+    case 12: return !_localctx->clauses.contains("primaryKeyClause");
+    case 13: return !_localctx->clauses.contains("sampleByClause");
+    case 14: return !_localctx->clauses.contains("ttlClause");
+    case 15: return !_localctx->clauses.contains("settingsClause");
 
   default:
     break;

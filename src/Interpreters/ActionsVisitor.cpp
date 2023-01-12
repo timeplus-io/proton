@@ -131,7 +131,7 @@ static Block createBlockFromCollection(const Collection & collection, const Data
 
             if (i == tuple_size)
                 for (i = 0; i < tuple_size; ++i)
-                    columns[i]->insert(std::move(tuple_values[i]));
+                    columns[i]->insert(tuple_values[i]);
         }
     }
 
@@ -445,7 +445,7 @@ public:
         return *node;
     }
 
-    bool contains(const std::string & name) const { return map.count(name) > 0; }
+    bool contains(const std::string & name) const { return map.contains(name); }
 };
 
 ActionsMatcher::Data::Data(

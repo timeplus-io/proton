@@ -765,7 +765,7 @@ public:
         bool & no_more_keys) const;
 
     bool executeOnBlock(Columns columns,
-        size_t row_start, size_t row_end,
+        size_t row_begin, size_t row_end,
         AggregatedDataVariants & result,
         ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
         bool & no_more_keys) const;
@@ -939,7 +939,7 @@ private:
     /// proton: starts
     AggregatedDataVariants::Type chooseAggregationMethodTimeBucketTwoLevel(
         const DataTypes & types_removed_nullable, bool has_nullable_key,
-        bool has_low_cardinality, size_t num_fixed_contiguous_keys, size_t keys_bytes);
+        bool has_low_cardinality, size_t num_fixed_contiguous_keys, size_t keys_bytes) const;
     /// proton: ends
 
     /** Create states of aggregate functions for one key.

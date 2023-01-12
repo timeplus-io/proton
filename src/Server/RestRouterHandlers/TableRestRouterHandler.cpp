@@ -162,11 +162,11 @@ std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Ob
         if (requested_database.empty())
         {
             const auto & catalog_service = CatalogService::instance(query_context);
-            for (const auto & Database : catalog_service.databases())
-                if (Database != "system" && Database != "INFORMATION_SCHEMA" && Database != "information_schema")
+            for (const auto & database : catalog_service.databases())
+                if (database != "system" && database != "INFORMATION_SCHEMA" && database != "information_schema")
                 {
-                    auto database_streams = catalog_service.findTableByDB(Database);
-                    for (auto it : database_streams)
+                    auto database_streams = catalog_service.findTableByDB(database);
+                    for (const auto &it : database_streams)
                         streams.emplace_back(it);
                 }
         }
@@ -299,12 +299,12 @@ std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON:
     return {processQuery(query), HTTPResponse::HTTP_OK};
 }
 
-void TableRestRouterHandler::buildRetentionSettings(Poco::JSON::Object & resp_table, const String & db, const String & table) const
+void TableRestRouterHandler::buildRetentionSettings(Poco::JSON::Object & resp_table, const String & database, const String & table) const
 {
-    auto table_id = query_context->resolveStorageID(StorageID(db, table), Context::ResolveOrdinary);
+    auto table_id = query_context->resolveStorageID(StorageID(database, table), Context::ResolveOrdinary);
     if (nlog::NativeLog::instance(query_context).enabled())
     {
-        auto storage = DatabaseCatalog::instance().tryGetTable(StorageID(db, table), query_context);
+        auto storage = DatabaseCatalog::instance().tryGetTable(StorageID(database, table), query_context);
         if (storage)
         {
             MergeTreeSettingsPtr settings;
@@ -336,7 +336,7 @@ void TableRestRouterHandler::buildRetentionSettings(Poco::JSON::Object & resp_ta
     else
     {
         UUID table_uuid = table_id.uuid;
-        auto storage = DatabaseCatalog::instance().tryGetTable(StorageID(db, table), query_context);
+        auto storage = DatabaseCatalog::instance().tryGetTable(StorageID(database, table), query_context);
         if (storage)
         {
             if (auto * mv = storage->as<StorageMaterializedView>())
@@ -352,7 +352,7 @@ void TableRestRouterHandler::buildRetentionSettings(Poco::JSON::Object & resp_ta
             auto klog = klog::KafkaWALPool::instance(query_context).getMeta();
             const auto & params = klog->get(toString(table_uuid));
             for (const auto & [k, v] : ProtonConsts::LOG_STORE_SETTING_NAME_TO_KAFKA)
-                if (params.count(v))
+                if (params.contains(v))
                     resp_table.set(k, std::stoll(params.at(v)));
         }
     }
@@ -400,7 +400,7 @@ void TableRestRouterHandler::buildTablePlacements(Poco::JSON::Object & resp_tabl
     resp_table.set("shards", shards);
 }
 
-String TableRestRouterHandler::getEngineExpr(const Poco::JSON::Object::Ptr & payload) const
+String TableRestRouterHandler::getEngineExpr(const Poco::JSON::Object::Ptr & payload) const /// NOLINT(readability-convert-member-functions-to-static)
 {
     const auto & shards = getStringValueFrom(payload, "shards", "1");
     const auto & replication_factor = getStringValueFrom(payload, "replication_factor", "1");

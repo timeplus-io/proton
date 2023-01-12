@@ -163,7 +163,7 @@ void loadMetadata(ContextMutablePtr context, const std::vector<String> & builtin
     for (const auto & builtin_db : builtin_databases)
     {
         bool create_default_db_if_not_exists = !builtin_db.empty();
-        bool metadata_dir_for_default_db_already_exists = databases.count(builtin_db);
+        bool metadata_dir_for_default_db_already_exists = databases.contains(builtin_db);
         if (create_default_db_if_not_exists && !metadata_dir_for_default_db_already_exists)
             databases.emplace(builtin_db, std::filesystem::path(path) / escapeForFileName(builtin_db));
     }

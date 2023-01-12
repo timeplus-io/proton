@@ -356,7 +356,7 @@ bool CatalogService::tableExists(const String & identity, const String & databas
 
     auto iter_by_name = indexed_by_name.find({database, table});
     if (iter_by_name != indexed_by_name.end())
-        return iter_by_name->second.count(identity);
+        return iter_by_name->second.contains(identity);
 
     return false;
 }
@@ -445,7 +445,7 @@ bool CatalogService::deleteReplicaInCluster(const String & identity, const Strin
 {
     bool only_one_table = !table.empty();
 
-    if (!indexed_by_node.count(identity))
+    if (!indexed_by_node.contains(identity))
         return false;
 
     Block block;

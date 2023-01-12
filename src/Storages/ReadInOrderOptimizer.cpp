@@ -49,7 +49,7 @@ InputOrderInfoPtr ReadInOrderOptimizer::getInputOrder(const StorageMetadataPtr &
 
     for (size_t i = 0; i < prefix_size; ++i)
     {
-        if (forbidden_columns.count(required_sort_description[i].column_name))
+        if (forbidden_columns.contains(required_sort_description[i].column_name))
             break;
 
         /// Optimize in case of exact match with order key element

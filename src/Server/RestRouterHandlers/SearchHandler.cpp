@@ -198,7 +198,7 @@ void SearchHandler::setQuerySettings() const
         if (name.empty())
             return true;
 
-        if (reserved_param_names.count(name))
+        if (reserved_param_names.contains(name))
             return true;
 
         return false;

@@ -38,7 +38,7 @@ struct KeepFunctionMatcher
             return;
         }
 
-        if (!data.key_names_to_keep.count(function_node->getColumnName()))
+        if (!data.key_names_to_keep.contains(function_node->getColumnName()))
         {
             Visitor(data).visit(function_node->arguments);
         }

@@ -153,7 +153,7 @@ void RequiredSourceColumnsMatcher::visit(const ASTIdentifier & node, const ASTPt
     if (node.name().empty())
         throw Exception("Expected not empty name", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    if (!data.private_aliases.count(node.name()))
+    if (!data.private_aliases.contains(node.name()))
         data.addColumnIdentifier(node);
 }
 

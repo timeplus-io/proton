@@ -166,7 +166,7 @@ void SettingsProfilesCache::substituteProfiles(
 
         auto profile_id = *element.parent_profile;
         element.parent_profile.reset();
-        if (substituted_profiles_set.count(profile_id))
+        if (substituted_profiles_set.contains(profile_id))
             continue;
 
         auto profile_it = all_profiles.find(profile_id);

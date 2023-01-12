@@ -186,7 +186,7 @@ namespace
                     }
                 }
             }
-            else if (streaming_only_func.count(func.name))
+            else if (streaming_only_func.contains(func.name))
                 throw Exception(ErrorCodes::FUNCTION_NOT_ALLOWED, "{} function is private and is not supposed to be used directly in a query", func.name);
         }
 
@@ -450,7 +450,7 @@ static bool shouldIgnoreQuotaAndLimits(const StorageID & table_id)
     if (table_id.database_name == DatabaseCatalog::SYSTEM_DATABASE)
     {
         static const boost::container::flat_set<String> tables_ignoring_quota{"quotas", "quota_limits", "quota_usage", "quotas_usage", "one"};
-        if (tables_ignoring_quota.count(table_id.table_name))
+        if (tables_ignoring_quota.contains(table_id.table_name))
             return true;
     }
     return false;

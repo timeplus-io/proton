@@ -227,7 +227,7 @@ public:
                 }
 
                 /// Check for duplicated changelog ids
-                if (logs.count(record.header.index) != 0)
+                if (logs.contains(record.header.index))
                     std::erase_if(logs, [record] (const auto & item) { return item.first >= record.header.index; });
 
                 result.total_entries_read_from_log += 1;
@@ -692,7 +692,7 @@ void Changelog::applyEntriesFromBuffer(uint64_t index, nuraft::buffer & buffer)
         buffer.get(buf_local);
 
         LogEntryPtr log_entry = nuraft::log_entry::deserialize(*buf_local);
-        if (i == 0 && logs.count(cur_index))
+        if (i == 0 && logs.contains(cur_index))
             writeAt(cur_index, log_entry);
         else
             appendEntry(cur_index, log_entry);

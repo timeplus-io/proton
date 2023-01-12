@@ -503,7 +503,7 @@ public:
     String getName() const override
     { return overflow ? "sum_map_filtered_with_overflow" : "sum_map_filtered"; }
 
-    bool keepKey(const T & key) const { return keys_to_keep.count(key); }
+    bool keepKey(const T & key) const { return keys_to_keep.contains(key); }
 };
 
 

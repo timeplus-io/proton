@@ -528,7 +528,7 @@ void getArrayJoinedColumns(ASTPtr & query, TreeRewriterResult & result, const AS
         String result_name = expr->getAliasOrColumnName();
 
         /// This is an array.
-        if (!expr->as<ASTIdentifier>() || source_columns_set.count(source_name))
+        if (!expr->as<ASTIdentifier>() || source_columns_set.contains(source_name))
         {
             result.array_join_result_to_source[result_name] = source_name;
         }
@@ -862,16 +862,16 @@ using RewriteShardNumVisitor = InDepthNodeVisitor<RewriteShardNum, true>;
 void collectRequiredColumns(ConstStoragePtr & storage, const NameSet & required, ContextPtr context)
 {
     StorageID id = storage->getStorageID();
-    auto & tableColumns = storage->getInMemoryMetadataPtr()->getColumns();
+    const auto & table_columns = storage->getInMemoryMetadataPtr()->getColumns();
     auto ctx = context->getQueryContext();
 
     for (const auto & name: required)
     {
         /// FIXME: NestedColumn ?
-        if (!tableColumns.has(name))
+        if (!table_columns.has(name))
             continue;
 
-        auto & column = tableColumns.get(name);
+        const auto & column = table_columns.get(name);
         ctx->addRequiredColumns(
             std::make_tuple(id.getDatabaseName(), id.getTableName(), storage->isView(), column.name, column.type->getName()));
     }
@@ -945,7 +945,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     /// proton : starts
     if (storage)
     {
-        if (auto * proxy = storage->as<Streaming::ProxyStream>())
+        if (const auto * proxy = storage->as<Streaming::ProxyStream>())
         {
             /// We will need add session start/end columns to the required output column even though users doesn't explicitly SELECT them
             /// because we will need access them for down stream processing like aggregation / filtering etc.
@@ -971,10 +971,10 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
         for (const auto & joined_column : analyzed_join->columnsFromJoinedTable())
         {
             const auto & name = joined_column.name;
-            if (available_columns.count(name))
+            if (available_columns.contains(name))
                 continue;
 
-            if (required.count(name))
+            if (required.contains(name))
             {
                 /// Optimisation: do not add columns needed only in JOIN ON section.
                 if (columns_context.nameInclusion(name) > analyzed_join->rightKeyInclusion(name))
@@ -993,7 +993,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
             array_join_sources.insert(result_source.second);
 
         for (const auto & column_name_type : source_columns)
-            if (array_join_sources.count(column_name_type.name))
+            if (array_join_sources.contains(column_name_type.name))
                 required.insert(column_name_type.name);
     }
 

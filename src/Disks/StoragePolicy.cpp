@@ -281,7 +281,7 @@ void StoragePolicy::checkCompatibleWith(const StoragePolicyPtr & new_storage_pol
 
     for (const auto & volume : getVolumes())
     {
-        if (new_volume_names.count(volume->getName()) == 0)
+        if (!new_volume_names.contains(volume->getName()))
             throw Exception("New storage policy " + backQuote(name) + " shall contain volumes of old one", ErrorCodes::BAD_ARGUMENTS);
 
         std::unordered_set<String> new_disk_names;
@@ -289,7 +289,7 @@ void StoragePolicy::checkCompatibleWith(const StoragePolicyPtr & new_storage_pol
             new_disk_names.insert(disk->getName());
 
         for (const auto & disk : volume->getDisks())
-            if (new_disk_names.count(disk->getName()) == 0)
+            if (!new_disk_names.contains(disk->getName()))
                 throw Exception("New storage policy " + backQuote(name) + " shall contain disks of old one", ErrorCodes::BAD_ARGUMENTS);
     }
 }
@@ -385,7 +385,7 @@ StoragePolicySelectorPtr StoragePolicySelector::updateFromConfig(const Poco::Uti
     /// First pass, check.
     for (const auto & [name, policy] : policies)
     {
-        if (result->policies.count(name) == 0)
+        if (!result->policies.contains(name))
             throw Exception("Storage policy " + backQuote(name) + " is missing in new configuration", ErrorCodes::BAD_ARGUMENTS);
 
         policy->checkCompatibleWith(result->policies[name]);

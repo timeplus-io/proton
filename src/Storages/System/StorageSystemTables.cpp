@@ -509,8 +509,8 @@ protected:
                     loading_dependencies_tables.reserve(info.dependencies.size());
                     for (auto && dependency : info.dependencies)
                     {
-                        loading_dependencies_databases.push_back(std::move(dependency.database));
-                        loading_dependencies_tables.push_back(std::move(dependency.table));
+                        loading_dependencies_databases.push_back(dependency.database);
+                        loading_dependencies_tables.push_back(dependency.table);
                     }
 
                     Array loading_dependent_databases;
@@ -519,8 +519,8 @@ protected:
                     loading_dependent_tables.reserve(info.dependencies.size());
                     for (auto && dependent : info.dependent_database_objects)
                     {
-                        loading_dependent_databases.push_back(std::move(dependent.database));
-                        loading_dependent_tables.push_back(std::move(dependent.table));
+                        loading_dependent_databases.push_back(dependent.database);
+                        loading_dependent_tables.push_back(dependent.table);
                     }
 
                     if (columns_mask[src_index++])
@@ -575,7 +575,7 @@ Pipe StorageSystemTables::read(
     std::vector<UInt8> columns_mask(sample_block.columns());
     for (size_t i = 0, size = columns_mask.size(); i < size; ++i)
     {
-        if (names_set.count(sample_block.getByPosition(i).name))
+        if (names_set.contains(sample_block.getByPosition(i).name))
         {
             columns_mask[i] = 1;
             res_block.insert(sample_block.getByPosition(i));

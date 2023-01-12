@@ -443,7 +443,7 @@ bool ColumnsDescription::hasNested(const String & column_name) const
 
 bool ColumnsDescription::hasSubcolumn(const String & column_name) const
 {
-    return subcolumns.get<0>().count(column_name);
+    return subcolumns.get<0>().contains(column_name);
 }
 
 const ColumnDescription & ColumnsDescription::get(const String & column_name) const
@@ -824,7 +824,7 @@ void ColumnsDescription::addOrUpdateSubcolumns(
         }
         else
             subcolumns.get<0>().modify(
-                it, [moved_subcolumn = std::move(subcolumn)](auto & column) { column = std::move(moved_subcolumn); });
+                it, [moved_subcolumn = std::move(subcolumn)](auto & column) { column = std::move(moved_subcolumn); }); /// NOLINT(performance-move-const-arg)
     }
 }
 /// proton: ends.

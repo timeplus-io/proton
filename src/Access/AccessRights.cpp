@@ -576,7 +576,7 @@ private:
         {
             for (const auto & [child_name, child] : *node_go->children)
             {
-                if (node && node->children && node->children->count(child_name))
+                if (node && node->children && node->children->contains(child_name))
                     continue; /// already processed
                 boost::container::small_vector<std::string_view, 3> child_full_name = full_name;
                 child_full_name.push_back(child_name);
@@ -706,8 +706,8 @@ private:
 
 AccessRights::AccessRights() = default;
 AccessRights::~AccessRights() = default;
-AccessRights::AccessRights(AccessRights && src) = default;
-AccessRights & AccessRights::operator =(AccessRights && src) = default;
+AccessRights::AccessRights(AccessRights && src) noexcept = default;
+AccessRights & AccessRights::operator =(AccessRights && src) noexcept = default;
 
 
 AccessRights::AccessRights(const AccessRights & src)

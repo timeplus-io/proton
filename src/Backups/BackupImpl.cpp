@@ -147,7 +147,7 @@ void BackupImpl::readBackupMetadata()
     auto in = readFileImpl(".backup");
     String str;
     readStringUntilEOF(str, *in);
-    std::istringstream stream(std::move(str)); // STYLE_CHECK_ALLOW_STD_STRING_STREAM
+    std::istringstream stream(str); // STYLE_CHECK_ALLOW_STD_STRING_STREAM
     Poco::AutoPtr<Poco::Util::XMLConfiguration> config{new Poco::Util::XMLConfiguration()};
     config->load(stream);
 
@@ -217,7 +217,7 @@ Strings BackupImpl::listFiles(const String & prefix, const String & terminator) 
 bool BackupImpl::fileExists(const String & file_name) const
 {
     std::lock_guard lock{mutex};
-    return file_infos.count(file_name) != 0;
+    return file_infos.contains(file_name);
 }
 
 size_t BackupImpl::getFileSize(const String & file_name) const

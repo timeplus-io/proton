@@ -27,7 +27,7 @@ namespace ErrorCodes
     extern const int STREAM_IS_DROPPED;
 }
 
-bool StorageSystemPartsBase::hasStateColumn(const Names & column_names, const StorageSnapshotPtr & storage_snapshot) const
+bool StorageSystemPartsBase::hasStateColumn(const Names & column_names, const StorageSnapshotPtr & storage_snapshot) const /// NOLINT(readability-convert-member-functions-to-static)
 {
     bool has_state_column = false;
     Names real_column_names;
@@ -73,7 +73,7 @@ StoragesInfo::getParts(MergeTreeData::DataPartStateVector & state, bool has_stat
     if (auto * stream = storage->as<StorageStream>())
     {
         MergeTreeData::DataPartsVector parts;
-        for (auto stream_shard : stream->getStreamShards())
+        for (const auto & stream_shard : stream->getStreamShards())
         {
             assert(stream_shard);
             if (stream_shard->getStorage())
@@ -275,7 +275,7 @@ Pipe StorageSystemPartsBase::read(
     std::vector<UInt8> columns_mask(sample.columns());
     for (size_t i = 0; i < sample.columns(); ++i)
     {
-        if (names_set.count(sample.getByPosition(i).name))
+        if (names_set.contains(sample.getByPosition(i).name))
         {
             columns_mask[i] = 1;
             header.insert(sample.getByPosition(i));
