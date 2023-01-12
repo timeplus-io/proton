@@ -614,10 +614,10 @@ public:
 
 void registerFunctionsBinaryRepr(FunctionFactory & factory)
 {
-    factory.registerFunction<EncodeToBinaryRepr<HexImpl>>(FunctionFactory::CaseInsensitive);
-    factory.registerFunction<DecodeFromBinaryRepr<UnhexImpl>>(FunctionFactory::CaseInsensitive);
-    factory.registerFunction<EncodeToBinaryRepr<BinImpl>>(FunctionFactory::CaseInsensitive);
-    factory.registerFunction<DecodeFromBinaryRepr<UnbinImpl>>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<EncodeToBinaryRepr<HexImpl>>({}, FunctionFactory::CaseInsensitive);
+    factory.registerFunction<DecodeFromBinaryRepr<UnhexImpl>>({}, FunctionFactory::CaseInsensitive);
+    factory.registerFunction<EncodeToBinaryRepr<BinImpl>>({}, FunctionFactory::CaseInsensitive);
+    factory.registerFunction<DecodeFromBinaryRepr<UnbinImpl>>({}, FunctionFactory::CaseInsensitive);
 }
 
 }

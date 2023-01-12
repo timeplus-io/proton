@@ -33,7 +33,7 @@ public:
     {
         if (options.shard_num)
         {
-            context->addLocalScalar(
+            context->addSpecialScalar(
                 "_shard_num",
                 Block{{DataTypeUInt32().createColumnConst(1, *options.shard_num), std::make_shared<DataTypeUInt32>(), "_shard_num"}});
 
@@ -44,7 +44,7 @@ public:
         }
 
         if (options.shard_count)
-            context->addLocalScalar(
+            context->addSpecialScalar(
                 "_shard_count",
                 Block{{DataTypeUInt32().createColumnConst(1, *options.shard_count), std::make_shared<DataTypeUInt32>(), "_shard_count"}});
 
@@ -67,7 +67,7 @@ public:
 
     virtual void ignoreWithTotals() = 0;
 
-    virtual ~IInterpreterUnionOrSelectQuery() override = default;
+    ~IInterpreterUnionOrSelectQuery() override = default;
 
     Block getSampleBlock() { return result_header; }
 

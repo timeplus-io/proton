@@ -69,7 +69,7 @@ static bool worthConvertingToLiteral(const Block & scalar)
 {
     const auto * scalar_type_name = scalar.safeGetByPosition(0).type->getFamilyName();
     static const std::set<std::string_view> useless_literal_types = {"array", "tuple", "aggregate_function", "function", "set", "low_cardinality"};
-    return !useless_literal_types.count(scalar_type_name);
+    return !useless_literal_types.contains(scalar_type_name);
 }
 
 void ExecuteScalarSubqueriesMatcher::visit(const ASTSubquery & subquery, ASTPtr & ast, Data & data)
@@ -82,7 +82,7 @@ void ExecuteScalarSubqueriesMatcher::visit(const ASTSubquery & subquery, ASTPtr 
     {
         scalar = data.getContext()->getQueryContext()->getScalar(scalar_query_hash_str);
     }
-    else if (data.scalars.count(scalar_query_hash_str))
+    else if (data.scalars.contains(scalar_query_hash_str))
     {
         scalar = data.scalars[scalar_query_hash_str];
     }
