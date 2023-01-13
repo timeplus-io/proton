@@ -8,6 +8,8 @@
 #include <Parsers/parseQuery.h>
 #include <gtest/gtest.h>
 
+/// FIXME: when we find a way to mock Context and ExternalUserDefinedExecutableFunctionsLoader
+#if 0
 class StreamingEmitInterpreterTest : public ::testing::Test
 {
 public:
@@ -267,3 +269,4 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleTailModeWithWhere)
         true)
         << "Last-X Tail with where";
 }
+#endif

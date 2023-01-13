@@ -11,7 +11,7 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/ExternalModelsLoader.h>
-#include <Interpreters/ExternalUserDefinedExecutableFunctionsLoader.h>
+#include <Interpreters/ExternalUserDefinedFunctionsLoader.h>
 #include <Interpreters/EmbeddedDictionaries.h>
 #include <Interpreters/ActionLocksManager.h>
 #include <Interpreters/InterpreterRenameQuery.h>

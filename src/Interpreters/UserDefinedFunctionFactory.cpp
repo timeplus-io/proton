@@ -1,25 +1,20 @@
-#include "UserDefinedExecutableFunctionFactory.h"
-
-#include <filesystem>
-
-#include <Common/filesystemHelpers.h>
-
-#include <IO/WriteHelpers.h>
-
-#include <Processors/Sources/ShellCommandSource.h>
-#include <Formats/formatBlock.h>
-
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionHelpers.h>
-#include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <Interpreters/ExternalUserDefinedExecutableFunctionsLoader.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/castColumn.h>
-
-#include <Processors/Formats/IOutputFormat.h>
+#include "UserDefinedFunctionFactory.h"
 
 /// proton: starts
+#include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/AggregateFunctionJavaScriptAdapter.h>
+#include <AggregateFunctions/IAggregateFunction.h>
+#include <Formats/formatBlock.h>
+#include <Functions/FunctionFactory.h>
+#include <Functions/FunctionHelpers.h>
 #include <IO/ReadBufferFromString.h>
+#include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/ExternalUserDefinedFunctionsLoader.h>
+#include <Interpreters/V8Utils.h>
+#include <Interpreters/castColumn.h>
+#include <Processors/Formats/IOutputFormat.h>
+#include <Processors/Sources/ShellCommandSource.h>
 #include <Common/sendRequest.h>
 
 #include <Poco/Net/HTTPRequest.h>
@@ -46,7 +41,7 @@ class UserDefinedFunction final : public IFunction
 public:
 
     explicit UserDefinedFunction(
-        ExternalUserDefinedExecutableFunctionsLoader::UserDefinedExecutableFunctionPtr executable_function_,
+        ExternalUserDefinedFunctionsLoader::UserDefinedExecutableFunctionPtr executable_function_,
         ContextPtr context_)
         : executable_function(std::move(executable_function_))
         , context(context_)
@@ -150,6 +145,15 @@ public:
             throw;
         }
     }
+
+    /// FIXME, refactor out new user defined function for JavaScript
+    ColumnPtr executeJavaScript(ColumnsWithTypeAndName columns, const DataTypePtr & result_type, size_t input_rows_count) const
+    {
+        auto result_column = result_type->createColumn();
+        result_column->reserve(input_rows_count);
+        result_column->insertManyDefaults(input_rows_count);
+        return result_column;
+    }
     /// proton: ends
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
@@ -183,16 +187,23 @@ public:
             column_with_type = std::move(column_to_cast);
         }
 
-        Block arguments_block(arguments_copy);
         ColumnPtr result_col_ptr;
         switch (configuration.type)
         {
-            case UserDefinedExecutableFunctionConfiguration::FuncType::EXECUTABLE:
+            case UserDefinedFunctionConfiguration::FuncType::EXECUTABLE: {
+                Block arguments_block(arguments_copy);
                 result_col_ptr = executeLocal(arguments_block, result_type, input_rows_count);
                 break;
-            case UserDefinedExecutableFunctionConfiguration::FuncType::REMOTE:
+            }
+            case UserDefinedFunctionConfiguration::FuncType::REMOTE: {
+                Block arguments_block(arguments_copy);
                 result_col_ptr = executeRemote(arguments_block, result_type, input_rows_count);
                 break;
+            }
+            case UserDefinedFunctionConfiguration::FuncType::JAVASCRIPT: {
+                result_col_ptr = executeJavaScript(std::move(arguments_copy), result_type, input_rows_count);
+                break;
+            }
             default:
                 throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "UDF type {} does not support yet.", configuration.type);
         }
@@ -211,29 +222,116 @@ public:
     }
 
 private:
-
-    ExternalUserDefinedExecutableFunctionsLoader::UserDefinedExecutableFunctionPtr executable_function;
+    ExternalUserDefinedFunctionsLoader::UserDefinedExecutableFunctionPtr executable_function;
     ContextPtr context;
     Poco::Logger * log;
 };
 
-UserDefinedExecutableFunctionFactory & UserDefinedExecutableFunctionFactory::instance()
+UserDefinedFunctionFactory & UserDefinedFunctionFactory::instance()
 {
-    static UserDefinedExecutableFunctionFactory result;
+    static UserDefinedFunctionFactory result;
     return result;
 }
 
-FunctionOverloadResolverPtr UserDefinedExecutableFunctionFactory::get(const String & function_name, ContextPtr context)
+FunctionOverloadResolverPtr UserDefinedFunctionFactory::get(const String & function_name, ContextPtr context)
 {
-    const auto & loader = context->getExternalUserDefinedExecutableFunctionsLoader();
+    /// proton: starts
+    const auto & loader = ExternalUserDefinedFunctionsLoader::instance(context);
+    /// proton: ends
     auto executable_function = std::static_pointer_cast<const UserDefinedExecutableFunction>(loader.load(function_name));
     auto function = std::make_shared<UserDefinedFunction>(std::move(executable_function), std::move(context));
     return std::make_unique<FunctionToOverloadResolverAdaptor>(std::move(function));
 }
 
-FunctionOverloadResolverPtr UserDefinedExecutableFunctionFactory::tryGet(const String & function_name, ContextPtr context)
+/// proton: starts
+AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
+    const String & function_name, const DataTypes & types, const Array & parameters, AggregateFunctionProperties & /*properties*/)
 {
-    const auto & loader = context->getExternalUserDefinedExecutableFunctionsLoader();
+    const auto & loader = ExternalUserDefinedFunctionsLoader::instance(nullptr);
+    auto load_result = loader.getLoadResult(function_name);
+
+    if (load_result.object)
+    {
+        auto executable_function = std::static_pointer_cast<const UserDefinedExecutableFunction>(load_result.object);
+        const auto & config = executable_function->getConfiguration();
+
+        if (!config.is_aggregation)
+            return nullptr;
+
+        /// check arguments
+        if (types.size() != config.arguments.size())
+            throw Exception(
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                "expect {} arguments but get {} for UDF {}",
+                config.arguments.size(),
+                types.size(),
+                config.name);
+
+        for (int i = 0; i < config.arguments.size(); i++)
+        {
+            if (types[i]->getTypeId() != config.arguments[i].type->getTypeId())
+                throw Exception(
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "argument {} of UDF {}: expect type '{}' but get '{}'",
+                    i,
+                    config.name,
+                    config.arguments[i].type->getName(),
+                    types[i]->getName());
+        }
+
+        ContextPtr query_context;
+        if (CurrentThread::isInitialized())
+            query_context = CurrentThread::get().getQueryContext();
+
+        if (!query_context || !query_context->getSettingsRef().javascript_max_memory_bytes)
+        {
+            LOG_ERROR(&Poco::Logger::get("UserDefinedExecutableFunctionFactory"), "query_context is invalid");
+            return nullptr;
+        }
+
+        return std::make_shared<AggregateFunctionJavaScriptAdapter>(
+            config, types, parameters, query_context->getSettingsRef().javascript_max_memory_bytes);
+    }
+
+    return nullptr;
+}
+
+bool UserDefinedFunctionFactory::hasUserDefinedEmitStrategy(const String & function_name)
+{
+    const auto & loader = ExternalUserDefinedFunctionsLoader::instance(nullptr);
+    auto load_result = loader.getLoadResult(function_name);
+
+    if (load_result.object)
+    {
+        const auto executable_function = std::static_pointer_cast<const UserDefinedExecutableFunction>(load_result.object);
+        const auto & config = executable_function->getConfiguration();
+
+        return config.has_user_defined_emit_strategy;
+    }
+    return false;
+}
+
+bool UserDefinedFunctionFactory::isAggregateFunctionName(const String & function_name)
+{
+    const auto & loader = ExternalUserDefinedFunctionsLoader::instance(nullptr);
+    auto load_result = loader.getLoadResult(function_name);
+
+    if (load_result.object)
+    {
+        const auto executable_function = std::static_pointer_cast<const UserDefinedExecutableFunction>(load_result.object);
+        const auto & config = executable_function->getConfiguration();
+
+        return config.is_aggregation;
+    }
+    return false;
+}
+/// proton: ends
+
+FunctionOverloadResolverPtr UserDefinedFunctionFactory::tryGet(const String & function_name, ContextPtr context)
+{
+    /// proton: starts
+    const auto & loader = ExternalUserDefinedFunctionsLoader::instance(context);
+    /// proton: ends
     auto load_result = loader.getLoadResult(function_name);
 
     if (load_result.object)
@@ -246,18 +344,22 @@ FunctionOverloadResolverPtr UserDefinedExecutableFunctionFactory::tryGet(const S
     return nullptr;
 }
 
-bool UserDefinedExecutableFunctionFactory::has(const String & function_name, ContextPtr context)
+bool UserDefinedFunctionFactory::has(const String & function_name, ContextPtr context)
 {
-    const auto & loader = context->getExternalUserDefinedExecutableFunctionsLoader();
+    /// proton: starts
+    const auto & loader = ExternalUserDefinedFunctionsLoader::instance(context);
+    /// proton: ends
     auto load_result = loader.getLoadResult(function_name);
 
     bool result = load_result.object != nullptr;
     return result;
 }
 
-std::vector<String> UserDefinedExecutableFunctionFactory::getRegisteredNames(ContextPtr context)
+std::vector<String> UserDefinedFunctionFactory::getRegisteredNames(ContextPtr context)
 {
-    const auto & loader = context->getExternalUserDefinedExecutableFunctionsLoader();
+    /// proton: starts
+    const auto & loader = ExternalUserDefinedFunctionsLoader::instance(context);
+    /// proton: ends
     auto loaded_objects = loader.getLoadedObjects();
 
     std::vector<std::string> registered_names;

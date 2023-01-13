@@ -20,6 +20,9 @@
 
 #include <Functions/FunctionFactory.h>
 
+/// proton: starts
+#include <Interpreters/UserDefinedFunctionFactory.h>
+/// proton: ends
 
 namespace DB
 {
@@ -190,6 +193,11 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
         return combinator->transformAggregateFunction(nested_function, out_properties, argument_types, parameters);
     }
 
+    /// proton: starts. Check user defined aggr function
+    auto aggr = UserDefinedFunctionFactory::getAggregateFunction(name, argument_types, parameters, out_properties);
+    if (aggr)
+        return aggr;
+    /// proton: ends
 
     String extra_info;
     if (FunctionFactory::instance().hasNameOrAlias(name))
@@ -267,7 +275,9 @@ bool AggregateFunctionFactory::isAggregateFunctionName(const String & name) cons
     if (AggregateFunctionCombinatorPtr combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix(name))
         return isAggregateFunctionName(name.substr(0, name.size() - combinator->getName().size()));
 
-    return false;
+    /// proton: starts
+    return UserDefinedFunctionFactory::instance().isAggregateFunctionName(name);
+    /// proton: ends
 }
 
 AggregateFunctionFactory & AggregateFunctionFactory::instance()

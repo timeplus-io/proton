@@ -81,6 +81,7 @@
 
 /// proton: starts
 #include <Checkpoint/CheckpointCoordinator.h>
+#include <Common/Config/ExternalGrokPatterns.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/DDLService.h>
@@ -90,7 +91,8 @@
 #include <KafkaLog/KafkaWALPool.h>
 #include <NativeLog/Server/NativeLog.h>
 #include <Server/RestRouterHandlers/RestRouterFactory.h>
-#include <Common/Config/ExternalGrokPatterns.h>
+
+#include <v8.h>
 
 namespace DB
 {
@@ -595,6 +597,23 @@ std::string Server::getDefaultCorePath() const
 {
     return getCanonicalPath(config().getString("path", DBMS_DEFAULT_PATH)) + "cores";
 }
+
+/// proton: starts
+/// init v8 engine for the whole proton process
+void Server::initV8()
+{
+    /// init default platform which enable a work thread pool and the default pool size is: the number of CPU processors -1
+    platform = v8::platform::NewDefaultPlatform();
+    v8::V8::InitializePlatform(platform.get());
+    v8::V8::Initialize();
+}
+
+void Server::disposeV8()
+{
+    v8::V8::Dispose();
+    v8::V8::ShutdownPlatform();
+}
+/// proton: ends
 
 void Server::defineOptions(Poco::Util::OptionSet & options)
 {
@@ -1423,7 +1442,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     LOG_INFO(log, "Loading metadata from {}", path_str);
 
-    /// proton: start. init Distributed metadata services for Stream table engine
+    /// proton: start.
+    /// initialize v8 engine
+    initV8();
+    /// init Distributed metadata services for Stream table engine
     initGlobalSingletons(global_context);
     global_context->setupNodeIdentity();
     global_context->setConfigPath(config_path);
@@ -1689,6 +1711,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             /// proton: start.
             deinitDistributedMetadataServices(global_context);
+
+            /// dispose v8 engine
+            disposeV8();
             /// proton: end.
 
             dns_cache_updater.reset();

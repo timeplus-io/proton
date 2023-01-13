@@ -56,11 +56,11 @@
 #include <Parsers/formatAST.h>
 
 /// proton: starts
+#include <Functions/FunctionFactory.h>
 #include <Interpreters/Streaming/HashJoin.h>
 #include <Interpreters/Streaming/WindowCommon.h>
-#include <Common/ProtonCommon.h>
-#include <Functions/FunctionFactory.h>
 #include <Storages/Streaming/ProxyStream.h>
+#include <Common/ProtonCommon.h>
 /// proton: ends
 
 namespace DB
@@ -1437,7 +1437,9 @@ bool SelectQueryExpressionAnalyzer::appendGroupBy(ExpressionActionsChain & chain
     return true;
 }
 
-void SelectQueryExpressionAnalyzer::appendAggregateFunctionsArguments(ExpressionActionsChain & chain, bool only_types)
+/// proton: starts
+bool SelectQueryExpressionAnalyzer::appendAggregateFunctionsArguments(ExpressionActionsChain & chain, bool only_types)
+/// proton: ends
 {
     const auto * select_query = getAggregatingQuery();
 
@@ -1464,6 +1466,10 @@ void SelectQueryExpressionAnalyzer::appendAggregateFunctionsArguments(Expression
         if (node->arguments)
             for (auto & argument : node->arguments->children)
                 getRootActions(argument, only_types, step.actions());
+
+    /// proton: starts
+    return data.has_user_defined_emit_strategy;
+    /// proton: ends
 }
 
 void SelectQueryExpressionAnalyzer::appendWindowFunctionsArguments(
@@ -1949,7 +1955,9 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                     && storage && query.groupBy();
 
             query_analyzer.appendGroupBy(chain, only_types || !first_stage, optimize_aggregation_in_order, group_by_elements_actions);
-            query_analyzer.appendAggregateFunctionsArguments(chain, only_types || !first_stage);
+            /// proton: starts
+            has_own_emit_strategy = query_analyzer.appendAggregateFunctionsArguments(chain, only_types || !first_stage);
+            /// proton: ends
 
             /// proton: starts.
             bool may_have_streaming_aggr_over = query_analyzer.syntax->streaming && has_window;

@@ -2,11 +2,11 @@
 
 #include <Common/quoteString.h>
 
-#include <Functions/FunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <Interpreters/UserDefinedSQLObjectsLoader.h>
-#include <Interpreters/UserDefinedExecutableFunctionFactory.h>
+#include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/UserDefinedFunctionFactory.h>
+#include <Interpreters/UserDefinedSQLObjectsLoader.h>
 
 
 namespace DB
@@ -43,7 +43,7 @@ void UserDefinedSQLFunctionFactory::registerFunction(ContextPtr context, const S
         throw Exception(ErrorCodes::FUNCTION_ALREADY_EXISTS, "The aggregate function '{}' already exists", function_name);
     }
 
-    if (UserDefinedExecutableFunctionFactory::instance().has(function_name, context))
+    if (UserDefinedFunctionFactory::instance().has(function_name, context))
     {
         if (if_not_exists)
             return;
@@ -89,7 +89,7 @@ void UserDefinedSQLFunctionFactory::unregisterFunction(ContextPtr context, const
         AggregateFunctionFactory::instance().hasNameOrAlias(function_name))
         throw Exception(ErrorCodes::CANNOT_DROP_FUNCTION, "Cannot drop system function '{}'", function_name);
 
-    if (UserDefinedExecutableFunctionFactory::instance().has(function_name, context))
+    if (UserDefinedFunctionFactory::instance().has(function_name, context))
         throw Exception(ErrorCodes::CANNOT_DROP_FUNCTION, "Cannot drop user defined executable function '{}'", function_name);
 
     std::lock_guard lock(mutex);

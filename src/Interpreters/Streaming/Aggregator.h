@@ -641,6 +641,7 @@ public:
             WINDOW_START,
             WINDOW_END,
             SESSION,
+            USER_DEFINED,
             OTHER,
         };
         GroupBy group_by = GroupBy::OTHER;
@@ -769,6 +770,14 @@ public:
         AggregatedDataVariants & result,
         ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
         bool & no_more_keys) const;
+
+    /// proton: starts. Process one row, Return true if it shoud emit the aggregating result
+    bool executeOnEachRow(Columns columns, UInt64 num_rows, AggregatedDataVariants & result,
+                          ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns,    /// Passed to not create them anew for each block
+                          bool & no_more_keys, Block & final_block) const;
+
+
+    /// proton: ends
 
     /// Used for aggregate projection.
     bool mergeOnBlock(Block block, AggregatedDataVariants & result, bool & no_more_keys) const;
@@ -984,9 +993,9 @@ private:
         AggregateFunctionInstruction * aggregate_instructions,
         AggregateDataPtr overflow_row) const;
 
-    /// For case when there are no keys (all aggregate into one row).
+    /// For case when there are no keys (all aggregate into one row). For UDA with own strategy, return 'true' means the UDA should emit after execution
     template <bool use_compiled_functions>
-    void executeWithoutKeyImpl(
+    bool executeWithoutKeyImpl(
         AggregatedDataWithoutKey & res,
         size_t row_begin,
         size_t row_end,
@@ -1000,6 +1009,38 @@ private:
         AggregateFunctionInstruction * aggregate_instructions,
         Arena * arena,
         const IColumn * delta_col);
+
+    /// proton: starts
+    /// Process one data block, aggregate the data into a hash table.
+    template <typename Method>
+    Block executeByRow(
+        Method & method,
+        Arena * aggregates_pool,
+        size_t rows,
+        ColumnRawPtrs & key_columns,
+        AggregateFunctionInstruction * aggregate_instructions,
+        bool no_more_keys,
+        AggregateDataPtr overflow_row) const;
+
+    /// Specialization for a particular value no_more_keys.
+    template <bool no_more_keys, bool use_compiled_functions, typename Method>
+    Block executeByRowImpl(
+        Method & method,
+        typename Method::State & state,
+        Arena * aggregates_pool,
+        size_t rows,
+        ColumnRawPtrs & key_columns,
+        AggregateFunctionInstruction * aggregate_instructions,
+        AggregateDataPtr overflow_row) const;
+
+    void finalizeState(
+        ColumnRawPtrs & key_columns,
+        AggregateFunctionInstruction * aggregate_functions_instructions,
+        AggregateDataPtr & aggregate_state,
+        Arena * aggregates_pool,
+        size_t cur_row,
+        Block & final_block) const;
+    /// proton: ends
 
     template <typename Method>
     void writeToTemporaryFileImpl(

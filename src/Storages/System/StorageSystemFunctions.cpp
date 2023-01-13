@@ -1,13 +1,13 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeEnum.h>
-#include <Parsers/queryToString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/UserDefinedFunctionFactory.h>
 #include <Interpreters/UserDefinedSQLFunctionFactory.h>
-#include <Interpreters/UserDefinedExecutableFunctionFactory.h>
+#include <Parsers/queryToString.h>
 #include <Storages/System/StorageSystemFunctions.h>
 
 namespace DB
@@ -34,7 +34,7 @@ namespace
         res_columns[0]->insert(name);
         res_columns[1]->insert(is_aggregate);
 
-        if constexpr (std::is_same_v<Factory, UserDefinedSQLFunctionFactory> || std::is_same_v<Factory, UserDefinedExecutableFunctionFactory>)
+        if constexpr (std::is_same_v<Factory, UserDefinedSQLFunctionFactory> || std::is_same_v<Factory, UserDefinedFunctionFactory>)
         {
             res_columns[2]->insert(false);
             res_columns[3]->insertDefault();
@@ -109,7 +109,7 @@ void StorageSystemFunctions::fillData(MutableColumns & res_columns, ContextPtr c
         fillRow(res_columns, function_name, UInt64(0), create_query, FunctionOrigin::SQL_USER_DEFINED, user_defined_sql_functions_factory);
     }
 
-    const auto & user_defined_executable_functions_factory = UserDefinedExecutableFunctionFactory::instance();
+    const auto & user_defined_executable_functions_factory = UserDefinedFunctionFactory::instance();
     const auto & user_defined_executable_functions_names = user_defined_executable_functions_factory.getRegisteredNames(context);
     for (const auto & function_name : user_defined_executable_functions_names)
     {

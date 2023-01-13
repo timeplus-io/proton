@@ -899,9 +899,272 @@ void NO_INLINE Aggregator::executeImplBatch(
     }
 }
 
+/// proton: starts. Prepare aggregate states for each row, return the unique_ptr of AggregateDatePtr array
+template <typename Method>
+Block NO_INLINE Aggregator::executeByRow(
+    Method & method,
+    Arena * aggregates_pool,
+    size_t rows,
+    ColumnRawPtrs & key_columns,
+    AggregateFunctionInstruction * aggregate_instructions,
+    bool no_more_keys,
+    AggregateDataPtr overflow_row) const
+{
+    typename Method::State state(key_columns, key_sizes, aggregation_state_cache);
+
+    if (!no_more_keys)
+    {
+#if USE_EMBEDDED_COMPILER
+//        if (compiled_aggregate_functions_holder)
+//        {
+//            return prepareAggregateStatesImpl<false, true>(method, state, aggregates_pool, rows, aggregate_instructions, overflow_row);
+//        }
+//        else
+#endif
+        {
+            return executeByRowImpl<false, false>(method, state, aggregates_pool, rows, key_columns, aggregate_instructions, overflow_row);
+        }
+    }
+    else
+    {
+        return executeByRowImpl<true, false>(method, state, aggregates_pool, rows, key_columns, aggregate_instructions, overflow_row);
+    }
+}
+
+template <bool no_more_keys, bool use_compiled_functions, typename Method>
+Block NO_INLINE Aggregator::executeByRowImpl(
+    Method & method,
+    typename Method::State & state,
+    Arena * aggregates_pool,
+    size_t rows,
+    ColumnRawPtrs & key_columns,
+    AggregateFunctionInstruction * aggregate_instructions,
+    AggregateDataPtr overflow_row) const
+{
+    /// Optimization for special case when there are no aggregate functions.
+    if (params.aggregates_size == 0)
+        throw Exception(ErrorCodes::TOO_MANY_ROWS, "for executeEachRowOnBlock, at least one aggregate is required");
+
+    /// TODO: Optimization for special case when aggregating by 8bit key.
+
+
+    Block header = getHeader(true, true);
+    Block final_block = header.cloneEmpty();
+    /// For all rows.
+    std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[rows]);
+    for (size_t i = 0; i < rows; ++i)
+    {
+        AggregateDataPtr aggregate_data = nullptr;
+
+        if constexpr (!no_more_keys)
+        {
+            auto emplace_result = state.emplaceKey(method.data, i, *aggregates_pool);
+
+            /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
+            if (emplace_result.isInserted())
+            {
+                /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+                emplace_result.setMapped(nullptr);
+
+                aggregate_data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+
+                ///TODO: handle complied_aggregate_functions
+#if USE_EMBEDDED_COMPILER
+//                if constexpr (use_compiled_functions)
+//                {
+//                    const auto & compiled_aggregate_functions = compiled_aggregate_functions_holder->compiled_aggregate_functions;
+//                    compiled_aggregate_functions.create_aggregate_states_function(aggregate_data);
+//                    if (compiled_aggregate_functions.functions_count != aggregate_functions.size())
+//                    {
+//                        static constexpr bool skip_compiled_aggregate_functions = true;
+//                        createAggregateStates<skip_compiled_aggregate_functions>(aggregate_data);
+//                    }
+//
+//#if defined(MEMORY_SANITIZER)
+//
+//                    /// We compile only functions that do not allocate some data in Arena. Only store necessary state in AggregateData place.
+//                    for (size_t aggregate_function_index = 0; aggregate_function_index < aggregate_functions.size(); ++aggregate_function_index)
+//                    {
+//                        if (!is_aggregate_function_compiled[aggregate_function_index])
+//                            continue;
+//
+//                        auto aggregate_data_with_offset = aggregate_data + offsets_of_aggregate_states[aggregate_function_index];
+//                        auto data_size = params.aggregates[aggregate_function_index].function->sizeOfData();
+//                        __msan_unpoison(aggregate_data_with_offset, data_size);
+//                    }
+//#endif
+//                }
+//                else
+#endif
+                {
+                    createAggregateStates(aggregate_data);
+                }
+
+                emplace_result.setMapped(aggregate_data);
+            }
+            else
+                aggregate_data = emplace_result.getMapped();
+
+            assert(aggregate_data != nullptr);
+        }
+        else
+        {
+            /// Add only if the key already exists.
+            auto find_result = state.findKey(method.data, i, *aggregates_pool);
+            if (find_result.isFound())
+                aggregate_data = find_result.getMapped();
+            else
+                aggregate_data = overflow_row;
+        }
+
+        places[i] = aggregate_data;
+    }
+
+    /// For all rows, Add data to aggregate functions
+    for (size_t cur_row = 0; cur_row < rows; ++cur_row)
+    {
+        for (size_t i = 0; i < aggregate_functions.size(); ++i)
+        {
+            ///TODO: handle complied_aggregate_functions
+#if USE_EMBEDDED_COMPILER
+            if constexpr (use_compiled_functions)
+                if (is_aggregate_function_compiled[i])
+                    continue;
+#endif
+            AggregateFunctionInstruction & inst = aggregate_instructions[i];
+
+            /// function with '-Array' suffix
+            if (inst.offsets)
+            {
+                size_t current_offset = 0;
+                size_t next_offset = inst.offsets[cur_row];
+                for (size_t j = current_offset; j < next_offset; ++j)
+                    if (places[cur_row])
+                        inst.batch_that->add(places[cur_row] + inst.state_offset, inst.batch_arguments, j, aggregates_pool);
+                current_offset = next_offset;
+            }
+            else
+            {
+                if (inst.delta_column == nullptr)
+                {
+                    inst.batch_that->add(places[cur_row] + inst.state_offset, inst.batch_arguments, cur_row, aggregates_pool);
+                }
+                else if (inst.delta_column != nullptr)
+                {
+                    /// changelog
+                    const auto & delta_flags = assert_cast<const ColumnInt8 &>(*(inst.delta_column)).getData();
+                    if (places[cur_row])
+                    {
+                        if (delta_flags[cur_row] >= 0)
+                            inst.batch_that->add(places[cur_row] + inst.state_offset, inst.batch_arguments, cur_row, aggregates_pool);
+                        else
+                            inst.batch_that->negate(places[cur_row] + inst.state_offset, inst.batch_arguments, cur_row, aggregates_pool);
+                    }
+                }
+            }
+        }
+    }
+
+
+    /// For all rows, Flush cached data and finalize result if required
+    for (size_t cur_row = 0; cur_row < rows; ++cur_row)
+    {
+        bool should_emit = false;
+        for (size_t i = 0; i < aggregate_functions.size(); ++i)
+        {
+            AggregateFunctionInstruction & inst = aggregate_instructions[i];
+
+            /// function with '-Array' suffix
+            if (inst.offsets)
+            {
+                size_t current_offset = 0;
+                size_t next_offset = inst.offsets[cur_row];
+                for (size_t j = current_offset; j < next_offset; ++j)
+                {
+                    bool emit = false;
+                    if (places[i])
+                        emit = inst.batch_that->flush(places[cur_row] + inst.state_offset);
+                    if (emit)
+                        should_emit = true;
+                }
+                current_offset = next_offset;
+            }
+            else
+            {
+                should_emit = inst.batch_that->flush(places[cur_row] + inst.state_offset);
+            }
+
+            /// check whether or not it should emit, if it should emit, call finalize() method to get the result_block
+            if (should_emit)
+                finalizeState(key_columns, aggregate_instructions, places[cur_row], aggregates_pool, cur_row, final_block);
+        }
+    }
+
+    return final_block;
+}
+
+void Aggregator::finalizeState(
+    ColumnRawPtrs & key_columns,
+    AggregateFunctionInstruction * aggregate_functions_instructions,
+    AggregateDataPtr & aggregate_state,
+    Arena * aggregates_pool,
+    size_t cur_row,
+    Block & final_block) const
+{
+    MutableColumns final_key_columns(params.keys_size);
+    MutableColumns final_aggregate_columns(params.aggregates_size);
+
+    /// fill key columns
+    for (size_t i = 0; i < params.keys_size; ++i)
+    {
+        final_key_columns[i] = final_block.safeGetByPosition(i).type->createColumn();
+        final_key_columns[i]->reserve(1);
+        final_key_columns[i]->insertFrom(*key_columns[i], cur_row);
+    }
+
+    /// fill aggregate columns
+    for (size_t i = 0; i < params.aggregates_size; ++i)
+    {
+        AggregateFunctionInstruction & inst = aggregate_functions_instructions[i];
+
+        final_aggregate_columns[i] = inst.batch_that->getReturnType()->createColumn();
+        final_aggregate_columns[i]->reserve(1);
+        inst.batch_that->insertResultInto(aggregate_state + inst.state_offset, *final_aggregate_columns[i], aggregates_pool);
+    }
+
+    Block merged_block = final_block.cloneEmpty();
+    for (size_t i = 0; i < params.keys_size; ++i)
+        merged_block.getByPosition(i).column = std::move(final_key_columns[i]);
+
+    for (size_t i = 0; i < params.aggregates_size; ++i)
+    {
+        const auto & aggregate_column_name = params.aggregates[i].column_name;
+        merged_block.getByName(aggregate_column_name).column = std::move(final_aggregate_columns[i]);
+    }
+
+    /// Change the size of the columns-constants in the block.
+    size_t num_columns = final_block.columns();
+    for (size_t i = 0; i < num_columns; ++i)
+        if (isColumnConst(*merged_block.getByPosition(i).column))
+            merged_block.getByPosition(i).column = merged_block.getByPosition(i).column->cut(0, 1);
+
+    if (final_block.rows() > 0)
+    {
+        assertBlocksHaveEqualStructure(merged_block, final_block, "merging buckets for streaming two level hashtable");
+        for (size_t i = 0, size = final_block.columns(); i < size; ++i)
+        {
+            const auto source_column = merged_block.getByPosition(i).column;
+            auto mutable_column = IColumn::mutate(std::move(final_block.getByPosition(i).column));
+            mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
+            final_block.getByPosition(i).column = std::move(mutable_column);
+        }
+    }
+    else
+        final_block = std::move(merged_block);
+}
 
 template <bool use_compiled_functions>
-void NO_INLINE Aggregator::executeWithoutKeyImpl(
+bool NO_INLINE Aggregator::executeWithoutKeyImpl(
     AggregatedDataWithoutKey & res,
     size_t row_begin,
     size_t row_end,
@@ -947,8 +1210,10 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
 #endif
 
     /// Adding values
+    bool should_emit = false;
     for (size_t i = 0; i < aggregate_functions.size(); ++i)
     {
+        bool emit = false;
         AggregateFunctionInstruction * inst = aggregate_instructions + i;
 
 #if USE_EMBEDDED_COMPILER
@@ -956,7 +1221,6 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
             if (is_aggregate_function_compiled[i])
                 continue;
 #endif
-
         if (inst->offsets)
             inst->batch_that->addBatchSinglePlace(
                 inst->offsets[static_cast<ssize_t>(row_begin) - 1],
@@ -975,7 +1239,13 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
                 arena,
                 -1,
                 inst->delta_column);
+
+        emit = inst->batch_that->shouldEmit(res + inst->state_offset);
+        if (emit && !should_emit)
+            should_emit = emit;
     }
+
+    return should_emit;
 }
 
 
@@ -1204,6 +1474,125 @@ bool Aggregator::executeOnBlock(
     return true;
 }
 
+/// proton: starts
+bool Aggregator::executeOnEachRow(
+    Columns columns,
+    UInt64 num_rows,
+    AggregatedDataVariants & result,
+    ColumnRawPtrs & key_columns,
+    AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
+    bool & no_more_keys,
+    Block & final_block) const
+{
+    /// `result will destroy the states of aggregate functions in the destructor
+    result.aggregator = this;
+
+    /// How to perform the aggregation?
+    if (result.empty())
+    {
+        /// proton: starts. First init the key_sizes, and then the method since method init
+        /// may depend on the key_sizes
+        result.keys_size = params.keys_size;
+        result.key_sizes = key_sizes;
+        result.init(method_chosen);
+        /// proton: ends
+        LOG_TRACE(log, "Aggregation method: {}", result.getMethodName());
+    }
+
+    /** Constant columns are not supported directly during aggregation.
+      * To make them work anyway, we materialize them.
+      */
+    Columns materialized_columns;
+
+    /// Remember the columns we will work with
+    for (size_t i = 0; i < params.keys_size; ++i)
+    {
+        materialized_columns.push_back(columns.at(params.keys[i])->convertToFullColumnIfConst());
+        key_columns[i] = materialized_columns.back().get();
+
+        if (!result.isLowCardinality())
+        {
+            auto column_no_lc = recursiveRemoveLowCardinality(key_columns[i]->getPtr());
+            if (column_no_lc.get() != key_columns[i])
+            {
+                materialized_columns.emplace_back(std::move(column_no_lc));
+                key_columns[i] = materialized_columns.back().get();
+            }
+        }
+    }
+
+    NestedColumnsHolder nested_columns_holder;
+    AggregateFunctionInstructions aggregate_functions_instructions;
+    prepareAggregateInstructions(columns, aggregate_columns, materialized_columns, aggregate_functions_instructions, nested_columns_holder);
+
+    initStatesForWithoutKeyOrOverflow(result);
+
+    /// We select one of the aggregation methods and call it.
+
+    /// For the case when there are no keys (all aggregate into one row).
+    if (result.type == AggregatedDataVariants::Type::without_key)
+    {
+        /// TODO: Enable compilation after investigation
+        // #if USE_EMBEDDED_COMPILER
+        //         if (compiled_aggregate_functions_holder)
+        //         {
+        //             executeWithoutKeyImpl<true>(result.without_key, num_rows, aggregate_functions_instructions.data(), result.aggregates_pool);
+        //         }
+        //         else
+        // #endif
+        {
+            if(executeWithoutKeyImpl<false>(result.without_key, 0, num_rows, aggregate_functions_instructions.data(), result.aggregates_pool))
+            {
+                Block header = getHeader(true, true);
+                final_block = header.cloneEmpty();
+                ColumnRawPtrs empty_key_columns;
+                finalizeState(empty_key_columns, aggregate_functions_instructions.data(), result.without_key, result.aggregates_pool, 0, final_block);
+            }
+        }
+    }
+    else
+    {
+        /// This is where data is written that does not fit in `max_rows_to_group_by` with `group_by_overflow_mode = any`.
+        AggregateDataPtr overflow_row_ptr = params.overflow_row ? result.without_key : nullptr;
+
+#define M(NAME, IS_TWO_LEVEL) \
+    else if (result.type == AggregatedDataVariants::Type::NAME) final_block = executeByRow( \
+        *result.NAME, \
+        result.aggregates_pool, \
+        num_rows, \
+        key_columns, \
+        aggregate_functions_instructions.data(), \
+        no_more_keys, \
+        overflow_row_ptr);
+
+        if (false)
+        {
+        } // NOLINT
+        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
+#undef M
+    }
+
+    size_t result_size = result.sizeWithoutOverflowRow();
+//    Int64 current_memory_usage = 0;
+//    if (auto * memory_tracker_child = CurrentThread::getMemoryTracker())
+//        if (auto * memory_tracker = memory_tracker_child->getParent())
+//            current_memory_usage = memory_tracker->get();
+
+    /** FIXME: Converting to a two-level data structure.
+      * It allows you to make, in the subsequent, an effective merge - either economical from memory or parallel.
+      */
+
+    /// Checking the constraints.
+    if (!checkLimits(result_size, no_more_keys))
+        return false;
+
+    /** FIXME: Flush data to disk if too much RAM is consumed.
+      * Data can only be flushed to disk if a two-level aggregation structure is used.
+      */
+
+    return true;
+}
+/// proton: ends
 
 void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, const String & tmp_path) const
 {

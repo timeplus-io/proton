@@ -3,6 +3,7 @@
 #include <Processors/Transforms/Streaming/GlobalAggregatingTransformWithSubstream.h>
 #include <Processors/Transforms/Streaming/SessionAggregatingTransformWithSubstream.h>
 #include <Processors/Transforms/Streaming/TumbleHopAggregatingTransformWithSubstream.h>
+#include <Processors/Transforms/Streaming/UserDefinedEmitStrategyAggregatingTransformWithSubstream.h>
 
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
@@ -65,6 +66,8 @@ void AggregatingStepWithSubstream::transformPipeline(QueryPipelineBuilder & pipe
             return std::make_shared<TumbleHopAggregatingTransformWithSubstream>(header, transform_params);
         else if (transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION)
             return std::make_shared<SessionAggregatingTransformWithSubstream>(header, transform_params);
+        else if (transform_params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
+            return std::make_shared<UserDefinedEmitStrategyAggregatingTransformWithSubstream>(header, transform_params);
         else
             return std::make_shared<GlobalAggregatingTransformWithSubstream>(header, transform_params);
     });

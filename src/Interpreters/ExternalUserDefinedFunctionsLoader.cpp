@@ -1,13 +1,13 @@
-#include "ExternalUserDefinedExecutableFunctionsLoader.h"
+#include "ExternalUserDefinedFunctionsLoader.h"
 
 #include <boost/algorithm/string/split.hpp>
 
 #include <DataTypes/DataTypeFactory.h>
 
-#include <Interpreters/UserDefinedExecutableFunction.h>
-#include <Interpreters/UserDefinedExecutableFunctionFactory.h>
-#include <Functions/FunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Functions/FunctionFactory.h>
+#include <Interpreters/UserDefinedExecutableFunction.h>
+#include <Interpreters/UserDefinedFunctionFactory.h>
 
 /// proton: starts
 #include <Poco/JSON/Parser.h>
@@ -26,8 +26,8 @@ namespace ErrorCodes
     /// proton: ends
 }
 
-ExternalUserDefinedExecutableFunctionsLoader::ExternalUserDefinedExecutableFunctionsLoader(ContextPtr global_context_)
-    : ExternalLoader("external user defined function", &Poco::Logger::get("ExternalUserDefinedExecutableFunctionsLoader"))
+ExternalUserDefinedFunctionsLoader::ExternalUserDefinedFunctionsLoader(ContextPtr global_context_)
+    : ExternalLoader("external user defined function", &Poco::Logger::get("ExternalUserDefinedFunctionsLoader"))
     , WithContext(global_context_)
 {
     setConfigSettings({"function", "name", "database", "uuid"});
@@ -36,22 +36,32 @@ ExternalUserDefinedExecutableFunctionsLoader::ExternalUserDefinedExecutableFunct
     enableAlwaysLoadEverything(true);
 }
 
-ExternalUserDefinedExecutableFunctionsLoader::UserDefinedExecutableFunctionPtr ExternalUserDefinedExecutableFunctionsLoader::getUserDefinedFunction(const std::string & user_defined_function_name) const
+ExternalUserDefinedFunctionsLoader::UserDefinedExecutableFunctionPtr
+ExternalUserDefinedFunctionsLoader::getUserDefinedFunction(const std::string & user_defined_function_name) const
 {
     return std::static_pointer_cast<const UserDefinedExecutableFunction>(load(user_defined_function_name));
 }
 
-ExternalUserDefinedExecutableFunctionsLoader::UserDefinedExecutableFunctionPtr ExternalUserDefinedExecutableFunctionsLoader::tryGetUserDefinedFunction(const std::string & user_defined_function_name) const
+ExternalUserDefinedFunctionsLoader::UserDefinedExecutableFunctionPtr
+ExternalUserDefinedFunctionsLoader::tryGetUserDefinedFunction(const std::string & user_defined_function_name) const
 {
     return std::static_pointer_cast<const UserDefinedExecutableFunction>(tryLoad(user_defined_function_name));
 }
 
-void ExternalUserDefinedExecutableFunctionsLoader::reloadFunction(const std::string & user_defined_function_name) const
+void ExternalUserDefinedFunctionsLoader::reloadFunction(const std::string & user_defined_function_name) const
 {
     loadOrReload(user_defined_function_name);
 }
 
-ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create(const std::string & name,
+/// proton: starts
+ExternalUserDefinedFunctionsLoader & ExternalUserDefinedFunctionsLoader::instance(ContextPtr context)
+{
+    static ExternalUserDefinedFunctionsLoader loader{context};
+    return loader;
+}
+/// proton: ends
+
+ExternalLoader::LoadablePtr ExternalUserDefinedFunctionsLoader::create(const std::string & name,
     const Poco::Util::AbstractConfiguration & config,
     const std::string & key_in_config,
     const std::string &) const
@@ -64,19 +74,25 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
 
     /// proton: starts
     String type = config.getString(key_in_config + ".type");
-    UserDefinedExecutableFunctionConfiguration::FuncType func_type;
+    UserDefinedFunctionConfiguration::FuncType func_type;
     String command_value;
+    String source;
     String command;
     Poco::URI url;
     if (type == "executable")
     {
-        func_type = UserDefinedExecutableFunctionConfiguration::FuncType::EXECUTABLE;
+        func_type = UserDefinedFunctionConfiguration::FuncType::EXECUTABLE;
         command_value = config.getString(key_in_config + ".command", "");
     }
     else if (type == "remote")
     {
-        func_type = UserDefinedExecutableFunctionConfiguration::FuncType::REMOTE;
+        func_type = UserDefinedFunctionConfiguration::FuncType::REMOTE;
         url = Poco::URI(config.getString(key_in_config + ".url"));
+    }
+    else if (type == "javascript")
+    {
+        func_type = UserDefinedFunctionConfiguration::FuncType::JAVASCRIPT;
+        source = config.getString(key_in_config + ".source", "");
     }
     else
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
@@ -112,6 +128,8 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
 
     /// proton: starts
     String format = config.getString(key_in_config + ".format", "ArrowStream");
+    bool is_aggr_function = config.getBool(key_in_config + ".is_aggregation", false);
+    bool has_user_defined_emit_strategy = config.getBool(key_in_config + ".has_user_defined_finalization_strategy", false);
     /// proton: ends
     DataTypePtr result_type = DataTypeFactory::instance().get(config.getString(key_in_config + ".return_type"));
     bool send_chunk_header = config.getBool(key_in_config + ".send_chunk_header", false);
@@ -138,7 +156,7 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
 
     /// proton: starts
     /// Below implementation only available for JSON configuration, because Poco::Util::AbstractConfiguration cannot work well with Array
-    std::vector<UserDefinedExecutableFunctionConfiguration::Argument> arguments;
+    std::vector<UserDefinedFunctionConfiguration::Argument> arguments;
     String arg_str = config.getRawString(key_in_config + ".arguments", "");
     if (!arg_str.empty())
     {
@@ -148,7 +166,7 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
             auto json_arguments = parser.parse(arg_str).extract<Poco::JSON::Array::Ptr>();
             for (unsigned int i = 0; i < json_arguments->size(); i++)
             {
-                UserDefinedExecutableFunctionConfiguration::Argument argument;
+                UserDefinedFunctionConfiguration::Argument argument;
                 argument.name = json_arguments->getObject(i)->get("name").toString();
                 argument.type = DataTypeFactory::instance().get(json_arguments->getObject(i)->get("type").toString());
                 arguments.emplace_back(std::move(argument));
@@ -161,12 +179,12 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
     }
 
     /// handler auth_method
-    UserDefinedExecutableFunctionConfiguration::AuthMethod auth_method = UserDefinedExecutableFunctionConfiguration::AuthMethod::NONE;
-    UserDefinedExecutableFunctionConfiguration::AuthContext auth_ctx;
+    UserDefinedFunctionConfiguration::AuthMethod auth_method = UserDefinedFunctionConfiguration::AuthMethod::NONE;
+    UserDefinedFunctionConfiguration::AuthContext auth_ctx;
     String method = config.getString(key_in_config + ".auth_method", "none");
     if (method == "none")
     {
-        auth_method = UserDefinedExecutableFunctionConfiguration::AuthMethod::NONE;
+        auth_method = UserDefinedFunctionConfiguration::AuthMethod::NONE;
     }
     else if (method == "auth_header")
     {
@@ -179,7 +197,7 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
                         method);
     /// proton: ends
 
-    UserDefinedExecutableFunctionConfiguration function_configuration
+    UserDefinedFunctionConfiguration function_configuration
     {
         /// proton: starts.
         .type = std::move(func_type), //-V1030
@@ -187,6 +205,9 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
         .auth_method = std::move(auth_method),
         .auth_context = std::move(auth_ctx),
         .arguments = std::move(arguments),
+        .source = std::move(source),
+        .is_aggregation = std::move(is_aggr_function),
+        .has_user_defined_emit_strategy = has_user_defined_emit_strategy,
         .name = std::move(name), //-V1030
         .command = std::move(command), //-V1030
         /// proton: ends

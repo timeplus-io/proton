@@ -169,6 +169,12 @@ public:
     {
         merge(place, rhs, arena);
     }
+
+    /// Whether or not the aggregation should emit. So far only meaningful for user defined aggregate function
+    virtual bool shouldEmit(AggregateDataPtr __restrict /*place*/) const { return false; }
+
+    /// Usually called after every batch to flush cached data to function. Only meaning for UDA for now.
+    virtual bool flush(AggregateDataPtr __restrict /*place*/) const { return false; }
     /// proton : ends
 
     /// Serializes state (to transmit it over the network, for example).
@@ -459,14 +465,17 @@ public:
         const IColumn * delta_col = nullptr) const override
     {
         const auto * derived = static_cast<const Derived *>(this);
+        const ColumnUInt8::Container * if_flags = nullptr;
 
         //// FIXME, too much branch
         if (delta_col == nullptr && if_argument_pos < 0)
         {
             /// Fast path, non-changelog, non combinator-if
             for (size_t i = row_begin; i < row_end; ++i)
+            {
                 if (places[i])
                     derived->add(places[i] + place_offset, columns, i, arena);
+            }
         }
         else if (delta_col != nullptr && if_argument_pos < 0)
         {
@@ -486,17 +495,27 @@ public:
         else if (delta_col == nullptr && if_argument_pos >= 0)
         {
             /// combinator-if
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            if_flags = &assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            const auto & flags = *if_flags;
             for (size_t i = row_begin; i < row_end; ++i)
             {
                 if (flags[i] && places[i])
                     derived->add(places[i] + place_offset, columns, i, arena);
             }
+
+
+            /// For UDA
+            for (size_t i = row_begin; i < row_end; ++i)
+            {
+                if (flags[i] && places[i])
+                    derived->flush(places[i] + place_offset);
+            }
         }
         else
         {
             /// combinator-if + changelog
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            if_flags = &assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            const auto & flags = *if_flags;
             const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
             for (size_t i = row_begin; i < row_end; ++i)
             {
@@ -508,6 +527,13 @@ public:
                         derived->negate(places[i] + place_offset, columns, i, arena);
                 }
             }
+        }
+
+        /// For UDA.
+        for (size_t i = row_begin; i < row_end; ++i)
+        {
+            if (places[i] && (!if_flags || (*if_flags)[i]))
+                derived->flush(places[i] + place_offset);
         }
     }
     /// proton : ends
@@ -598,6 +624,10 @@ public:
                 }
             }
         }
+
+        /// For UDA
+        if (place)
+            derived->flush(place);
     }
     /// proton : ends
 
@@ -679,6 +709,10 @@ public:
                 }
             }
         }
+
+        /// For UDA
+        if (place)
+            derived->flush(place);
     }
 
     void addBatchSinglePlaceFromInterval( /// NOLINT
@@ -736,6 +770,10 @@ public:
                 }
             }
         }
+
+        /// For UDA
+        if (place)
+            derived->flush(place);
     }
     /// proton : ends
 

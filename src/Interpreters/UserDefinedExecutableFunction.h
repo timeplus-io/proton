@@ -1,62 +1,24 @@
 #pragma once
 
-#include <string>
-
-#include <DataTypes/IDataType.h>
-#include <Processors/Sources/ShellCommandSource.h>
+/// proton: starts
 #include <Interpreters/IExternalLoadable.h>
+#include <Processors/Sources/ShellCommandSource.h>
+#include "UserDefinedFunctionConfiguration.h"
 
+#include <string>
+/// proton: ends
 
 namespace DB
 {
 
-struct UserDefinedExecutableFunctionConfiguration
-{
-    /// proton: starts.
-    enum FuncType
-    {
-        EXECUTABLE = 0,
-        REMOTE = 1,
-        UNKNOWN = 999
-    };
-    /// 'type' can be 'executable' or 'remote'
-    FuncType type;
-    /// url of remote endpoint, only available when 'type' is 'remote'
-    Poco::URI url;
-    enum AuthMethod
-    {
-        NONE = 0,
-        AUTH_HEADER = 1
-    };
-    AuthMethod auth_method;
-    struct AuthContext
-    {
-        /// authorization header name, only available when 'type' is 'remote' and 'auth_method' is AUTH_HEADER
-        std::string key_name;
-        /// authorization header value, only available when 'type' is 'remote' and 'auth_method' is AUTH_HEADER
-        std::string key_value;
-    };
-    AuthContext auth_context;
-    struct Argument
-    {
-        std::string name;
-        DataTypePtr type;
-    };
-    std::vector<Argument> arguments;
-    /// proton: ends
-    std::string name;
-    /// executable file name, only available when 'type' is 'remote'
-    std::string command;
-    std::vector<std::string> command_arguments;
-    DataTypePtr result_type;
-};
+class ShellCommandSourceCoordinator;
 
 class UserDefinedExecutableFunction final : public IExternalLoadable
 {
 public:
 
     UserDefinedExecutableFunction(
-        const UserDefinedExecutableFunctionConfiguration & configuration_,
+        const UserDefinedFunctionConfiguration & configuration_,
         std::shared_ptr<ShellCommandSourceCoordinator> coordinator_,
         const ExternalLoadableLifetime & lifetime_);
 
@@ -85,7 +47,7 @@ public:
         return std::make_shared<UserDefinedExecutableFunction>(configuration, coordinator, lifetime);
     }
 
-    const UserDefinedExecutableFunctionConfiguration & getConfiguration() const
+    const UserDefinedFunctionConfiguration & getConfiguration() const
     {
         return configuration;
     }
@@ -106,9 +68,8 @@ public:
     }
 
 private:
-    UserDefinedExecutableFunctionConfiguration configuration;
+    UserDefinedFunctionConfiguration configuration;
     std::shared_ptr<ShellCommandSourceCoordinator> coordinator;
     ExternalLoadableLifetime lifetime;
 };
-
 }

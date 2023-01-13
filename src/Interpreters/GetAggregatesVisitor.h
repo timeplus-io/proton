@@ -4,10 +4,10 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
 /// proton: starts.
+#include <Interpreters/UserDefinedFunctionFactory.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSubquery.h>
-#include <Parsers/ASTFunction.h>
 /// proton: ends.
 
 namespace DB
@@ -36,6 +36,8 @@ public:
         /// proton: starts. for streaming query, we refine window_function into aggregate_over and non_aggregate_over
         std::vector<const ASTFunction *> aggregate_overs {};
         std::vector<const ASTFunction *> non_aggregate_overs {};
+        /// use user defined emit strategy or not
+        bool has_user_defined_emit_strategy = false;
         /// proton: ends.
     };
 
@@ -72,6 +74,10 @@ public:
 private:
     static void visit(const ASTFunction & node, const ASTPtr &, Data & data)
     {
+        /// proton: starts.
+        if (!data.has_user_defined_emit_strategy)
+            data.has_user_defined_emit_strategy = hasUserDefinedEmitStrategy(node, data);
+
         if (isAggregateFunction(node))
         {
             if (data.assert_no_aggregates)
@@ -115,6 +121,13 @@ private:
             && AggregateFunctionFactory::instance().isAggregateFunctionName(
                 node.name);
     }
+
+    /// proton: starts
+    static bool hasUserDefinedEmitStrategy(const ASTFunction & node, const Data & data)
+    {
+        return UserDefinedFunctionFactory::instance().hasUserDefinedEmitStrategy(node.name);
+    }
+    /// proton: ends
 };
 
 using GetAggregatesVisitor = GetAggregatesMatcher::Visitor;

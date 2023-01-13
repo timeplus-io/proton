@@ -42,6 +42,9 @@ public:
 
     Poco::JSON::Array::Ptr list() const;
 
+    /// Get the version of config key
+    uint32_t getVersion(const std::string & definition_entity_name);
+
 private:
     std::shared_ptr<MetaStoreDispatcher> metastore_dispatcher;
 

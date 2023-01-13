@@ -28,18 +28,18 @@
 
 #include <Processors/QueryPlan/QueryPlan.h>
 
-#include <Interpreters/Context.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Interpreters/misc.h>
 #include <Interpreters/ActionsVisitor.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/DatabaseAndTableWithAlias.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/Set.h>
-#include <Interpreters/evaluateConstantExpression.h>
+#include <Interpreters/UserDefinedFunctionFactory.h>
 #include <Interpreters/convertFieldToType.h>
+#include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/interpretSubquery.h>
-#include <Interpreters/DatabaseAndTableWithAlias.h>
-#include <Interpreters/IdentifierSemantic.h>
-#include <Interpreters/UserDefinedExecutableFunctionFactory.h>
+#include <Interpreters/misc.h>
 
 
 /// proton: starts
@@ -915,7 +915,7 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
     if (AggregateFunctionFactory::instance().isAggregateFunctionName(node.name))
         return;
 
-    FunctionOverloadResolverPtr function_builder = UserDefinedExecutableFunctionFactory::instance().tryGet(node.name, data.getContext());
+    FunctionOverloadResolverPtr function_builder = UserDefinedFunctionFactory::instance().tryGet(node.name, data.getContext());
 
     if (!function_builder)
     {

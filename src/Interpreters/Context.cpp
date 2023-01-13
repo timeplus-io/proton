@@ -42,7 +42,7 @@
 #include <Dictionaries/Embedded/GeoDictionariesLoader.h>
 #include <Interpreters/EmbeddedDictionaries.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
-#include <Interpreters/ExternalUserDefinedExecutableFunctionsLoader.h>
+#include <Interpreters/ExternalUserDefinedFunctionsLoader.h>
 #include <Interpreters/ExternalModelsLoader.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ProcessList.h>
@@ -197,7 +197,9 @@ struct ContextSharedPart
 
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries;    /// Metrica's dictionaries. Have lazy initialization.
     mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
-    mutable std::optional<ExternalUserDefinedExecutableFunctionsLoader> external_user_defined_executable_functions_loader;
+    /// proton: starts
+    /// mutable std::optional<ExternalUserDefinedFunctionsLoader> external_user_defined_executable_functions_loader;
+    /// proton: ends
     mutable std::optional<ExternalModelsLoader> external_models_loader;
 
     ExternalLoaderXMLConfigRepository * external_models_config_repository = nullptr;
@@ -333,8 +335,9 @@ struct ContextSharedPart
             access_control->stopPeriodicReloadingUsersConfigs();
         if (external_dictionaries_loader)
             external_dictionaries_loader->enablePeriodicUpdates(false);
-        if (external_user_defined_executable_functions_loader)
-            external_user_defined_executable_functions_loader->enablePeriodicUpdates(false);
+        /// proton: starts
+        ExternalUserDefinedFunctionsLoader::instance(nullptr).enablePeriodicUpdates(false);
+        /// proton: ends
         if (external_models_loader)
             external_models_loader->enablePeriodicUpdates(false);
 
@@ -389,7 +392,9 @@ struct ContextSharedPart
             delete_system_logs = std::move(system_logs);
             embedded_dictionaries.reset();
             external_dictionaries_loader.reset();
-            external_user_defined_executable_functions_loader.reset();
+            /// proton: starts
+            /// external_user_defined_executable_functions_loader.reset();
+            /// proton: ends
             models_repository_guard.reset();
             external_models_loader.reset();
             buffer_flush_schedule_pool.reset();
@@ -1431,22 +1436,24 @@ ExternalDictionariesLoader & Context::getExternalDictionariesLoaderUnlocked()
     return *shared->external_dictionaries_loader;
 }
 
-const ExternalUserDefinedExecutableFunctionsLoader & Context::getExternalUserDefinedExecutableFunctionsLoader() const
+const ExternalUserDefinedFunctionsLoader & Context::getExternalUserDefinedExecutableFunctionsLoader() const
 {
     return const_cast<Context *>(this)->getExternalUserDefinedExecutableFunctionsLoader();
 }
 
-ExternalUserDefinedExecutableFunctionsLoader & Context::getExternalUserDefinedExecutableFunctionsLoader()
+ExternalUserDefinedFunctionsLoader & Context::getExternalUserDefinedExecutableFunctionsLoader()
 {
     std::lock_guard lock(shared->external_user_defined_executable_functions_mutex);
     return getExternalUserDefinedExecutableFunctionsLoaderUnlocked();
 }
 
-ExternalUserDefinedExecutableFunctionsLoader & Context::getExternalUserDefinedExecutableFunctionsLoaderUnlocked()
+ExternalUserDefinedFunctionsLoader & Context::getExternalUserDefinedExecutableFunctionsLoaderUnlocked()
 {
-    if (!shared->external_user_defined_executable_functions_loader)
-        shared->external_user_defined_executable_functions_loader.emplace(getGlobalContext());
-    return *shared->external_user_defined_executable_functions_loader;
+    return ExternalUserDefinedFunctionsLoader::instance(getGlobalContextInstance());
+
+//    if (!shared->external_user_defined_executable_functions_loader)
+//        shared->external_user_defined_executable_functions_loader.emplace(getGlobalContext());
+//    return *shared->external_user_defined_executable_functions_loader;
 }
 
 const ExternalModelsLoader & Context::getExternalModelsLoader() const

@@ -109,6 +109,8 @@ enum class ProcessorID : UInt32
     TumbleHopAggregatingTransformWithSubstreamID = 1'008,
     SessionAggregatingTransformWithSubstreamID = 1'009,
     GlobalAggregatingTransformWithSubstreamID = 1'010,
+    UserDefinedEmitStrategyAggregatingTransformID = 1'011,
+    UserDefinedEmitStrategyAggregatingTransformWithSubstreamID = 1'012,
 
     /// Format Input Processors
     ParallelParsingInputFormatID = 4'000,
@@ -525,6 +527,12 @@ inline ProcessorID toProcessID(UInt32 v)
             break;
         case 1'010:
             pid = ProcessorID::GlobalAggregatingTransformWithSubstreamID;
+            break;
+        case 1'011:
+            pid = ProcessorID::UserDefinedEmitStrategyAggregatingTransformID;
+            break;
+        case 1'012:
+            pid = ProcessorID::UserDefinedEmitStrategyAggregatingTransformWithSubstreamID;
             break;
 
         /// Format Input Processors

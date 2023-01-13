@@ -810,7 +810,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         }
 
         /// proton: starts.
-        /// Analyze event predicates in WHERE clause like `WHERE _tp_time > 2023-01-01 00:01:01` or `WHERE _tp_sn > 1000` 
+        /// Analyze event predicates in WHERE clause like `WHERE _tp_time > 2023-01-01 00:01:01` or `WHERE _tp_sn > 1000`
         /// and create `SeekToInfo` objects to represent these predicates for streaming store rewinding in a streaming query.
         analyzeEventPredicateAsSeekTo();
         /// proton: ends.
@@ -3107,7 +3107,9 @@ void InterpreterSelectQuery::executeStreamingAggregation(
 
     /// If `window_start/end` are in aggregation columns, move them to the beginning
     /// of the aggregation columns for later window extraction
-    Streaming::Aggregator::Params::GroupBy streaming_group_by = Streaming::Aggregator::Params::GroupBy::OTHER;
+    Streaming::Aggregator::Params::GroupBy streaming_group_by = analysis_result.has_own_emit_strategy
+        ? Streaming::Aggregator::Params::GroupBy::USER_DEFINED
+        : Streaming::Aggregator::Params::GroupBy::OTHER;
     ssize_t time_col_pos = -1;
     String time_col_name;
 
@@ -3537,7 +3539,7 @@ void InterpreterSelectQuery::handleSeekToSetting()
 void InterpreterSelectQuery::analyzeEventPredicateAsSeekTo()
 {
     /// If a streaming query already has `seek_to` query setting like
-    /// `SELECT * FROM my_stream WHERE _tp_time > '2023-01-01 00:01:01' SETTINGS seek_to=2022-01-01 00:01:01`. 
+    /// `SELECT * FROM my_stream WHERE _tp_time > '2023-01-01 00:01:01' SETTINGS seek_to=2022-01-01 00:01:01`.
     /// `seek_to` in query setting dominates event time predicate in where clause.
     /// We choose this design because we like query backward compatibility and `seek_to` to be an internal workaround to do a streaming store rewinding.
     if (!isStreaming() || !context->getSettingsRef().seek_to.value.empty())

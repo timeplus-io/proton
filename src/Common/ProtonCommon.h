@@ -59,6 +59,8 @@ const String JSON_VALUES_PREFIX = "__json_values_";
 
 /// PREFIX of UDF config files
 const String UDF_XML_PATTERN = "*_function.xml";
+/// UDF VERSION used by this version of proton
+const uint32_t UDF_VERSION = 1;
 
 /// Storage modes
 const String APPEND_MODE = "append";

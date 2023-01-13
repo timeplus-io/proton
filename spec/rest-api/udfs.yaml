@@ -240,10 +240,19 @@ components:
           type: string
         type:
           type: string
-          description: executable for local executable or script in S3 or 'remote' for remote web service endpoint, for example "https://function.lambda.us-west-1.aws.com"
+          description: valid UDF types 'executable', 'remote', 'javascript' and they are case sensitive. 'executable' for local executable or script in S3 or 'remote' for remote web service endpoint, for example "https://function.lambda.us-west-1.aws.com". 'javascript' is for UDF or UDA written in javascript.
         return_type:
           type: string
           description: return type of the UDF.
+        is_aggregation:
+          type: boolean
+          description: whether it is an aggregation function. Only valid when type is 'javascript'
+        has_user_defined_finalization_strategy:
+          type: boolean
+          description: whether the function has its own emit strategy for aggregation. only valid when type is 'javascript' and 'is_aggregation' is true.
+        source:
+          type: string
+          description: the code of function, only valid when for 'javascript' UDF
         arguments:
           description: UDF support any number of arguments.
           type: array

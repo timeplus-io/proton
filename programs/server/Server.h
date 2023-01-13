@@ -4,6 +4,7 @@
 
 #include <Daemon/BaseDaemon.h>
 
+
 /** Server provides three interfaces:
   * 1. HTTP - simple interface for any applications.
   * 2. TCP - interface for native clickhouse-client and for server to server internal communications.
@@ -20,6 +21,11 @@ namespace Poco
     {
         class ServerSocket;
     }
+}
+
+namespace v8
+{
+    class Platform;
 }
 
 namespace DB
@@ -54,6 +60,12 @@ public:
 
     void defineOptions(Poco::Util::OptionSet & _options) override;
 
+    /// proton: starts
+    void initV8();
+
+    void disposeV8();
+    /// proton: ends
+
 protected:
     int run() override;
 
@@ -67,6 +79,11 @@ protected:
 
 private:
     ContextMutablePtr global_context;
+
+    /// proton: starts
+    std::unique_ptr<v8::Platform> platform;
+    /// proton: ends
+
     Poco::Net::SocketAddress socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, [[maybe_unused]] bool secure = false) const;
 
     using CreateServerFunc = std::function<ProtocolServerAdapter(UInt16)>;

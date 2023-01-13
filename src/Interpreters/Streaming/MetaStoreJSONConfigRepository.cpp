@@ -32,6 +32,22 @@ MetaStoreJSONConfigRepository::MetaStoreJSONConfigRepository(
 {
 }
 
+uint32_t MetaStoreJSONConfigRepository::getVersion(const std::string & definition_entity_name)
+{
+    try
+    {
+        Poco::JSON::Object::Ptr status = readConfigKey(fmt::format("{}/{}", STATUS_PREFIX, definition_entity_name));
+        if (status->has("version"))
+            return status->getValue<uint32_t>("version");
+
+        return 0;
+    }
+    catch (...)
+    {
+        return 0;
+    }
+}
+
 Poco::Timestamp MetaStoreJSONConfigRepository::getUpdateTime(const std::string & definition_entity_name)
 {
     Poco::JSON::Object::Ptr status = readConfigKey(fmt::format("{}/{}", STATUS_PREFIX, definition_entity_name));
@@ -97,6 +113,9 @@ void MetaStoreJSONConfigRepository::save(const std::string & key, const Poco::JS
 
     /// create status
     Poco::JSON::Object status;
+    uint32_t version = ProtonConsts::UDF_VERSION;
+
+    status.set("version", version);
     status.set("update_time", Poco::Timestamp().epochMicroseconds());
     std::stringstream status_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     status.stringify(status_str_stream, 0);

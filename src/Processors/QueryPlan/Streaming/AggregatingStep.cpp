@@ -3,6 +3,7 @@
 #include <Processors/Transforms/Streaming/GlobalAggregatingTransform.h>
 #include <Processors/Transforms/Streaming/SessionAggregatingTransform.h>
 #include <Processors/Transforms/Streaming/TumbleHopAggregatingTransform.h>
+#include <Processors/Transforms/Streaming/UserDefinedEmitStrategyAggregatingTransform.h>
 
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
@@ -88,6 +89,9 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
                 || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
                 return std::make_shared<TumbleHopAggregatingTransform>(
                     header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
+            else if (transform_params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
+                return std::make_shared<UserDefinedEmitStrategyAggregatingTransform>(
+                    header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
             else
                 return std::make_shared<GlobalAggregatingTransform>(
                     header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
@@ -105,6 +109,8 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
                 return std::make_shared<TumbleHopAggregatingTransform>(header, transform_params);
             else if (transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION)
                 return std::make_shared<SessionAggregatingTransform>(header, transform_params);
+            else if (transform_params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
+                return std::make_shared<UserDefinedEmitStrategyAggregatingTransform>(header, transform_params);
             else
                 return std::make_shared<GlobalAggregatingTransform>(header, transform_params);
         });

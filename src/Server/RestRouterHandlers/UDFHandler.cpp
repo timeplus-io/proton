@@ -1,7 +1,9 @@
 #include "UDFHandler.h"
 
+#include <DataTypes/ConvertV8DataTypes.h>
 #include <Interpreters/Streaming/ASTToJSONUtils.h>
 #include <Interpreters/Streaming/MetaStoreJSONConfigRepository.h>
+#include <Interpreters/V8Utils.h>
 #include "SchemaValidator.h"
 
 #include <numeric>
@@ -10,40 +12,40 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int BAD_REQUEST_PARAMETER;
+extern const int BAD_REQUEST_PARAMETER;
 }
 
 namespace
 {
-    String buildResponse(const String & query_id)
-    {
-        Poco::JSON::Object resp;
-        resp.set("request_id", query_id);
+String buildResponse(const String & query_id)
+{
+    Poco::JSON::Object resp;
+    resp.set("request_id", query_id);
 
-        std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-        resp.stringify(resp_str_stream, 0);
-        return resp_str_stream.str();
-    }
+    std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
+    resp.stringify(resp_str_stream, 0);
+    return resp_str_stream.str();
+}
 
-    String buildResponse(const Poco::JSON::Array::Ptr & object, const String & query_id)
-    {
-        Poco::JSON::Object resp;
-        resp.set("request_id", query_id);
-        resp.set("data", object);
-        std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-        resp.stringify(resp_str_stream, 0);
-        return resp_str_stream.str();
-    }
+String buildResponse(const Poco::JSON::Array::Ptr & object, const String & query_id)
+{
+    Poco::JSON::Object resp;
+    resp.set("request_id", query_id);
+    resp.set("data", object);
+    std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
+    resp.stringify(resp_str_stream, 0);
+    return resp_str_stream.str();
+}
 
-    String buildResponse(const Poco::JSON::Object::Ptr & object, const String & query_id)
-    {
-        Poco::JSON::Object resp;
-        resp.set("request_id", query_id);
-        resp.set("data", object);
-        std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-        resp.stringify(resp_str_stream, 0);
-        return resp_str_stream.str();
-    }
+String buildResponse(const Poco::JSON::Object::Ptr & object, const String & query_id)
+{
+    Poco::JSON::Object resp;
+    resp.set("request_id", query_id);
+    resp.set("data", object);
+    std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
+    resp.stringify(resp_str_stream, 0);
+    return resp_str_stream.str();
+}
 }
 
 std::pair<String, Int32> UDFHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*/) const
@@ -100,9 +102,25 @@ bool UDFHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & 
             return false;
         }
     }
+    else if (type == "javascript")
+    {
+        if (!payload->has("source"))
+        {
+            error_msg = "Missing 'source' property for 'javascript' UDF";
+            return false;
+        }
+
+        /// check whether the source can be compiled
+        if (payload->has("is_aggregation") && payload->getValue<bool>("is_aggregation"))
+            /// UDA
+            V8::validateAggregationFunctionSource(payload->get("name"), {"add", "finalize", "merge"}, payload->get("source"));
+        else
+            /// UDF
+            V8::validateStatelessFunctionSource(payload->get("name"), payload->get("source"));
+    }
     else
     {
-        error_msg = fmt::format("Invalid type {}, only support 'remote' or 'executable'", type);
+        error_msg = fmt::format("Invalid type {}, only support 'remote', 'executable' or 'javascript'", type);
         return false;
     }
 
@@ -112,12 +130,19 @@ bool UDFHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & 
         error_msg = "Missing argument definition.";
         return false;
     }
+
     const auto & args = payload->getArray("arguments");
     for (unsigned int i = 0; i < args->size(); i++)
     {
+        if (!args->getObject(i))
+        {
+            error_msg = "Invalid argument, `arguments` are expected to contain 'name' and 'type' information.";
+            return false;
+        }
+
         if (!args->getObject(i)->has("name") || !args->getObject(i)->has("type"))
         {
-            error_msg = "Invalid argument, missing argument name or argument type.";
+            error_msg = "Invalid argument, missing argument 'name or 'type'.";
             return false;
         }
     }
