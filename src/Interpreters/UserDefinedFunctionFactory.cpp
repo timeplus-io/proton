@@ -1,8 +1,10 @@
 #include "UserDefinedFunctionFactory.h"
 
 /// proton: starts
-#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionJavaScriptAdapter.h>
+#include <Interpreters/V8Utils.h>
+
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Formats/formatBlock.h>
 #include <Functions/FunctionFactory.h>
@@ -11,7 +13,6 @@
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExternalUserDefinedFunctionsLoader.h>
-#include <Interpreters/V8Utils.h>
 #include <Interpreters/castColumn.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/ShellCommandSource.h>
@@ -146,12 +147,41 @@ public:
         }
     }
 
-    /// FIXME, refactor out new user defined function for JavaScript
-    ColumnPtr executeJavaScript(ColumnsWithTypeAndName columns, const DataTypePtr & result_type, size_t input_rows_count) const
+    ColumnPtr executeJavaScript(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t /*input_rows_count*/) const
     {
+        auto coordinator = executable_function->getCoordinator();
+        const auto & config = executable_function->getConfiguration();
+        auto js_ctx = coordinator->getJavaScriptContext(config, context);
+
+        assert(arguments[0].column);
+        size_t row_num = arguments[0].column->size();
+        MutableColumns columns;
+        for (auto & arg : arguments)
+            columns.emplace_back(IColumn::mutate(arg.column));
+
         auto result_column = result_type->createColumn();
-        result_column->reserve(input_rows_count);
-        result_column->insertManyDefaults(input_rows_count);
+        result_column->reserve(row_num);
+
+        v8::Isolate * isolate = js_ctx->isolate.get();
+        assert(isolate);
+        auto execute = [&](v8::Local<v8::Context> & ctx, v8::TryCatch & try_catch) {
+            /// First, get local function of UDF
+            v8::Local<v8::Function> local_func = v8::Local<v8::Function>::New(isolate, js_ctx->func);
+
+            /// Second, convert the input column into the corresponding object used by UDF
+            auto argv = V8::prepareArguments(isolate, config.arguments, columns);
+
+            /// Third, execute the UDF and get result
+            v8::Local<v8::Value> res;
+            if (!local_func->CallAsFunction(ctx, ctx->Global(), static_cast<int>(config.arguments.size()), argv.data()).ToLocal(&res))
+                V8::throwException(isolate, try_catch, ErrorCodes::REMOTE_CALL_FAILED, "call JavaScript UDF '{}' failed", config.name);
+
+            /// Forth, insert the result to result_column
+            V8::insertResult(isolate, *result_column, result_type, true, res);
+        };
+
+        V8::run(isolate, js_ctx->context, execute);
+        SCOPE_EXIT(coordinator->release(std::move(js_ctx)));
         return result_column;
     }
     /// proton: ends

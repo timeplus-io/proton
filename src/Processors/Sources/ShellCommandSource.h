@@ -17,6 +17,8 @@
 
 /// proton: starts
 #include <NativeLog/Base/Concurrent/BlockingQueue.h>
+
+#include <v8.h>
 /// proton: ends
 
 
@@ -31,6 +33,12 @@ using ProcessPool = BorrowedObjectPool<ShellCommandHolderPtr>;
 class UDFExecutionContext;
 using UDFExecutionContextPtr = std::unique_ptr<UDFExecutionContext>;
 using UDFExecutionContextPool = BorrowedObjectPool<UDFExecutionContextPtr>;
+
+class JavaScriptExecutionContext;
+using JavaScriptExecutionContextPtr = std::unique_ptr<JavaScriptExecutionContext>;
+using JavaScriptExecutionContextPool = BorrowedObjectPool<JavaScriptExecutionContextPtr>;
+
+struct UserDefinedFunctionConfiguration;
 
 struct ShellCommandSourceConfiguration
 {
@@ -47,6 +55,7 @@ struct ShellCommandSourceConfiguration
 class TimeoutReadBufferFromFileDescriptor;
 class TimeoutWriteBufferFromFileDescriptor;
 
+/// proton: starts
 /// The execution context used in UDF execution. It stores the running status of UDF, including
 /// - subprocess of UDF
 /// - input/output format used to convert and transfer input block and result
@@ -86,6 +95,30 @@ public:
 
     ~UDFExecutionContext();
 };
+
+/// JS UDF Execution Context, holds the v8::isolate and JSUserDefinedFunction, which will be dispose when a query ends
+class JavaScriptExecutionContext
+{
+public:
+    struct IsolateDeleter
+    {
+    public:
+        void operator()(v8::Isolate * isolate_) const { isolate_->Dispose(); }
+    };
+
+    explicit JavaScriptExecutionContext(const UserDefinedFunctionConfiguration & config, ContextPtr ctx);
+
+    std::unique_ptr<v8::Isolate, JavaScriptExecutionContext::IsolateDeleter> isolate;
+    v8::Persistent<v8::Context> context;
+    v8::Persistent<v8::Function> func;
+
+    ~JavaScriptExecutionContext()
+    {
+        func.Reset();
+        context.Reset();
+    }
+};
+/// proton: ends
 
 class ShellCommandSourceCoordinator
 {
@@ -173,6 +206,9 @@ public:
         Block result_header,
         ContextPtr context);
     void release(UDFExecutionContextPtr && ctx);
+
+    JavaScriptExecutionContextPtr getJavaScriptContext(const UserDefinedFunctionConfiguration & config, ContextPtr context);
+    void release(JavaScriptExecutionContextPtr && ctx);
     static void sendData(UDFExecutionContextPtr & ctx, const Block & block);
     ColumnPtr pull(UDFExecutionContextPtr & ctx, const DataTypePtr & result_type, size_t result_rows_count);
     ColumnPtr pull(InputFormatPtr & in_format, const DataTypePtr & result_type, size_t result_rows_count);
@@ -185,7 +221,11 @@ private:
     Configuration configuration;
 
     std::shared_ptr<ProcessPool> process_pool = nullptr;
+
+    /// proton: starts
     std::shared_ptr<UDFExecutionContextPool> udf_ctx_pool = nullptr;
+    std::shared_ptr<JavaScriptExecutionContextPool> js_ctx_pool = nullptr;
+    /// proton: ends
 };
 
 }

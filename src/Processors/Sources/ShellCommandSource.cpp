@@ -14,6 +14,8 @@
 #include <Interpreters/Context.h>
 
 /// proton: starts
+#include <Interpreters/UserDefinedFunctionConfiguration.h>
+#include <Interpreters/V8Utils.h>
 #include <Processors/Formats/IRowInputFormat.h>
 /// proton: ends
 
@@ -461,10 +463,9 @@ ShellCommandSourceCoordinator::ShellCommandSourceCoordinator(const Configuration
 {
     /// proton: starts.
     constexpr size_t max_pool_size = 100;
-    process_pool = std::make_shared<ProcessPool>(
-        configuration.pool_size ? configuration.pool_size : max_pool_size);
-    udf_ctx_pool = std::make_shared<UDFExecutionContextPool>(
-        configuration.pool_size ? configuration.pool_size : max_pool_size);
+    process_pool = std::make_shared<ProcessPool>(configuration.pool_size ? configuration.pool_size : max_pool_size);
+    udf_ctx_pool = std::make_shared<UDFExecutionContextPool>(configuration.pool_size ? configuration.pool_size : max_pool_size);
+    js_ctx_pool = std::make_shared<JavaScriptExecutionContextPool>(configuration.pool_size ? configuration.pool_size : max_pool_size);
     /// proton: ends.
 }
 
@@ -506,7 +507,7 @@ Pipe ShellCommandSourceCoordinator::createPipe(
 
                 return std::make_unique<ShellCommandHolder>(std::move(func));
             },
-            configuration.max_command_execution_time_seconds * 10000);
+            configuration.max_command_execution_time_seconds * 1000);
 
         if (!result)
             throw Exception(
@@ -604,6 +605,29 @@ UDFExecutionContext::~UDFExecutionContext()
     process = nullptr;
 }
 
+JavaScriptExecutionContext::JavaScriptExecutionContext(const UserDefinedFunctionConfiguration & config, ContextPtr ctx)
+{
+    v8::Isolate::CreateParams isolate_params;
+    isolate_params.array_buffer_allocator_shared
+        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
+    isolate = std::unique_ptr<v8::Isolate, IsolateDeleter>(v8::Isolate::New(isolate_params), IsolateDeleter());
+    auto * isolate_ = isolate.get();
+
+    /// check heap limit
+    V8::checkHeapLimit(isolate_, ctx->getSettingsRef().javascript_max_memory_bytes);
+
+    auto init_functions = [&](v8::Local<v8::Context> & ctx, v8::TryCatch & try_catch, v8::Local<v8::Value> &) {
+        v8::Local<v8::Value> function_val;
+        if (!ctx->Global()->Get(ctx, V8::to_v8(isolate_, config.name)).ToLocal(&function_val) || !function_val->IsFunction())
+            throw Exception(ErrorCodes::UDF_COMPILE_ERROR, "the JavaScript UDF {} is invalid", config.name);
+        func.Reset(isolate_, function_val.As<v8::Function>());
+
+        context.Reset(isolate_, ctx);
+    };
+
+    V8::compileSource(isolate_, config.name, config.source, init_functions);
+}
+
 UDFExecutionContextPtr ShellCommandSourceCoordinator::getUDFContext(
     const std::string & command, const std::vector<std::string> & arguments, Block input_header, Block result_header, ContextPtr context)
 {
@@ -678,7 +702,7 @@ UDFExecutionContextPtr ShellCommandSourceCoordinator::getUDFContext(
     };
 
     UDFExecutionContextPtr ctx;
-    bool result = udf_ctx_pool->tryBorrowObject(ctx, create_context, configuration.max_command_execution_time_seconds * 10000);
+    bool result = udf_ctx_pool->tryBorrowObject(ctx, create_context, configuration.max_command_execution_time_seconds * 1000);
 
     if (!result)
         throw Exception(
@@ -702,6 +726,29 @@ void ShellCommandSourceCoordinator::release(UDFExecutionContextPtr && ctx)
         /// return subprocess to pool
         udf_ctx_pool->returnObject(std::move(ctx));
     }
+}
+
+JavaScriptExecutionContextPtr
+ShellCommandSourceCoordinator::getJavaScriptContext(const UserDefinedFunctionConfiguration & config, ContextPtr context)
+{
+    JavaScriptExecutionContextPtr ctx;
+
+    auto create_context = [&config, &context]() { return std::make_unique<JavaScriptExecutionContext>(config, context); };
+    bool result = js_ctx_pool->tryBorrowObject(ctx, create_context, configuration.max_command_execution_time_seconds * 1000);
+
+    if (!result)
+        throw Exception(
+            ErrorCodes::TIMEOUT_EXCEEDED,
+            "Could not get Javascript UDF '{}' from pool, it exceeded {} seconds and get timeout",
+            config.name,
+            configuration.max_command_execution_time_seconds);
+
+    return ctx;
+}
+
+void ShellCommandSourceCoordinator::release(JavaScriptExecutionContextPtr && ctx)
+{
+    js_ctx_pool->returnObject(std::move(ctx));
 }
 
 void ShellCommandSourceCoordinator::sendData(UDFExecutionContextPtr & ctx, const Block & block)
@@ -738,10 +785,10 @@ ColumnPtr ShellCommandSourceCoordinator::pull(InputFormatPtr & in_format, const 
 
 void ShellCommandSourceCoordinator::stopProcessPool()
 {
-    if (udf_ctx_pool->borrowedObjectsSize() > 0 || udf_ctx_pool->allocatedObjectsSize() == 0)
-        return;
+    if (udf_ctx_pool->borrowedObjectsSize() == 0 && udf_ctx_pool->allocatedObjectsSize() > 0)
+        udf_ctx_pool->clearUp();
 
-    udf_ctx_pool->clearUp();
+    js_ctx_pool->clearUp();
 }
 /// proton: ends
 

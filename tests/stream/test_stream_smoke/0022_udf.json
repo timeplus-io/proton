@@ -1,0 +1,341 @@
+{
+  "test_suite_name": "udf",
+  "tag": "smoke",
+  "test_suite_config":{
+    "table_schemas":[
+      {
+        "name": "types",
+        "type": "table",
+        "columns": [
+          {
+            "name": "i",
+            "type": "int"
+          },
+          {
+            "name": "f32",
+            "type": "float32"
+          },
+          {
+            "name": "s",
+            "type": "string"
+          },
+          {
+            "name": "dt",
+            "type": "datetime64(6)",
+            "default": "now64(6)"
+          }
+        ]
+      }
+
+    ],
+    "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
+  },
+  "comments": "Tests covering udf related cases",
+  "tests": [
+    {
+      "id": 0,
+      "tags": ["udf"],
+      "name": "scalar_udf_basic",
+      "description": "scalar udf with 1 param",
+      "steps":[
+        {
+          "statements": [
+            {
+              "client": "rest",
+              "rest_type": "raw",
+              "query_type": "table",
+              "query_id": "2200",
+              "query_url": "/proton/v1/udfs",
+              "http_method": "POST",
+              "data": {
+                "type": "javascript",
+                "name": "add_five",
+                "arguments": [{"name": "value", "type": "float32"}],
+                "return_type": "float32",
+                "source": "{function add_five(value){for(let i=0;i<value.length;i++){value[i]=value[i]+5}return value}}"
+              }
+            },
+            {"client":"python","query_id":"2201", "depends_on_stream":"types", "wait":5, "query_end_timer":2, "query_type": "stream", "query":"select add_five(f32) from types"}
+          ]
+        },
+
+        {
+          "inputs": [
+            {"table_name": "types", "depends_on":"2201", "wait":3, "data": [[1, 1.0, "s1", "2020-02-02 20:00:00"], [2, 2.0, "s2", "2020-02-02 20:00:00"]]}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"2201",
+          "expected_results":[
+            [6], [7]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "tags": ["udf"],
+      "name": "uda_without_emit_strategy",
+      "description": "sec_large - uda without emit strategy",
+      "steps":[
+        {
+          "statements": [
+            {
+              "client": "rest",
+              "rest_type": "raw",
+              "query_type": "table",
+              "query_id": "2200",
+              "query_url": "/proton/v1/udfs",
+              "http_method": "POST",
+              "data": {
+                "type": "javascript",
+                "name": "sec_large",
+                "arguments": [
+                  {
+                    "name": "value",
+                    "type": "float32"
+                  }
+                ],
+                "is_aggr_function": true,
+                "has_own_emit_strategy": false,
+                "return_type": "float32",
+                "source": "{max:-1.0,sec:-1.0,add:function(values){for(let i=0;i<values.length;i++){if(values[i]>this.max){this.sec=this.max;this.max=values[i]}if(values[i]<this.max&&values[i]>this.sec)this.sec=values[i]}},finalize:function(){return[this.sec]},serialize:function(){let s={'max':this.max,'sec':this.sec};return JSON.stringify(s)},deserialize:function(state_str){let s=JSON.parse(state_str);this.max=s['max'];this.sec=s['sec']},merge:function(state_str){let s=JSON.parse(state_str);if(s['sec']>=this.max){this.max=s['max'];this.sec=s['sec']}else if(s['max']>=this.max){this.sec=this.max;this.max=s['max']}else if(s['max']>this.sec){this.sec=s['max']}}};"
+              }
+            },
+            {"client":"python","query_id":"2201", "depends_on_stream":"types", "wait":5, "query_end_timer":2, "query_type": "stream", "query":"select s, sec_large(f32) from types group by s order by s"}
+          ]
+        },
+
+        {
+          "inputs": [
+            {"table_name": "types", "depends_on":"2201", "wait":3, "data": [[1, 1.0, "s1", "2020-02-02 20:00:00"], [2, 2.0, "s2", "2020-02-02 20:00:00"]]},
+            {"table_name": "types", "data": [[3, 3.0, "s1", "2020-02-02 20:00:00"], [4, 4.0, "s2", "2020-02-02 20:00:00"]]}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"2201",
+          "expected_results":[
+            ["s1", 1.0], ["s2", 2.0]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "tags": ["udf"],
+      "name": "with_emit_strategy",
+      "description": "stock - with emit strategy",
+      "steps":[
+        {
+          "statements": [
+            {
+              "client": "rest",
+              "rest_type": "raw",
+              "query_type": "table",
+              "query_id": "2200",
+              "query_url": "/proton/v1/udfs",
+              "http_method": "POST",
+              "data": {
+                "type": "javascript",
+                "name": "stock",
+                "arguments": [
+                  {
+                    "name": "rowtime",
+                    "type": "datetime64(6)"
+                  },
+                  {
+                    "name": "price",
+                    "type": "float32"
+                  }
+                ],
+                "is_aggr_function": true,
+                "has_own_emit_strategy": true,
+                "return_type": "tuple(start_price float32, bottom_ts datetime64(1), end_price float32, down_duration uint64)",
+                "source": "{bottom_ts:new Date(),last_down_price:-1.0,start_price:-1.0,down_duration:1,result:[],add:function(rowtime,price){var emit=false;for(let i=0;i<rowtime.length;i++){if(this.start_price<0||(this.last_down_price<0&&price[i]>=this.start_price)){this.start_price=price[i];this.bottom_ts=rowtime[i];this.down_duration=1}else if((this.last_down_price<0&&price[i]<this.start_price)||(price[i]<this.last_down_price)){this.last_down_price=price[i];this.bottom_ts=rowtime[i];this.down_duration=this.down_duration+1}else if(price[i]>this.last_down_price){this.result.push({'start_price':this.start_price,'bottom_ts':this.bottom_ts,'end_price':price[i],'down_duration':this.down_duration});emit=true;this.bottom_ts=rowtime[i];this.start_price=price[i];this.last_down_price=-1.0;this.down_duration=1}else{this.down_duration=this.down_duration+1}}return emit},finalize:function(){var old_result=this.result;this.result=[];return old_result},merge:function(){}};"}
+            },
+            {"client":"python","query_id":"2201", "depends_on_stream":"types", "wait":5, "query_end_timer":2, "query_type": "stream", "query":"select s, st.1, st.2, st.3, st.4 from (select s, stock(dt, f32) as st from types group by s) order by s"}
+          ]
+        },
+
+        {
+          "inputs": [
+            {"table_name": "types", "depends_on":"2201", "wait":3, "data": [[1, 10.0, "s1", "2020-02-02 20:00:00"], [2, 20.0, "s2", "2020-02-02 20:00:00"]]},
+            {"table_name": "types", "data": [[3, 3.0, "s1", "2020-02-02 20:00:01"], [4, 4.0, "s2", "2020-02-02 20:00:01"]]},
+            {"table_name": "types", "data": [[3, 5.0, "s1", "2020-02-02 20:00:02"], [4, 6.0, "s2", "2020-02-02 20:00:02"]]}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"2201",
+          "expected_results":[
+            ["s1", 10.0, "2020-02-02 20:00:01", 5.0, 2], ["s2", 20.0, "2020-02-02 20:00:01", 6.0, 2]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "tags": ["udf"],
+      "name": "no_key_with_emit_strategy",
+      "description": "stock - no key, with emit strategy",
+      "steps":[
+        {
+          "statements": [
+            {
+              "client": "rest",
+              "rest_type": "raw",
+              "query_type": "table",
+              "query_id": "2200",
+              "query_url": "/proton/v1/udfs",
+              "http_method": "POST",
+              "data": {
+                "type": "javascript",
+                "name": "stock",
+                "arguments": [
+                  {
+                    "name": "rowtime",
+                    "type": "datetime64(6)"
+                  },
+                  {
+                    "name": "price",
+                    "type": "float32"
+                  }
+                ],
+                "is_aggr_function": true,
+                "has_own_emit_strategy": true,
+                "return_type": "tuple(start_price float32, bottom_ts datetime64(1), end_price float32, down_duration uint64)",
+                "source": "{bottom_ts:new Date(),last_down_price:-1.0,start_price:-1.0,down_duration:1,result:[],add:function(rowtime,price){var emit=false;for(let i=0;i<rowtime.length;i++){if(this.start_price<0||(this.last_down_price<0&&price[i]>=this.start_price)){this.start_price=price[i];this.bottom_ts=rowtime[i];this.down_duration=1}else if((this.last_down_price<0&&price[i]<this.start_price)||(price[i]<this.last_down_price)){this.last_down_price=price[i];this.bottom_ts=rowtime[i];this.down_duration=this.down_duration+1}else if(price[i]>this.last_down_price){this.result.push({'start_price':this.start_price,'bottom_ts':this.bottom_ts,'end_price':price[i],'down_duration':this.down_duration});emit=true;this.bottom_ts=rowtime[i];this.start_price=price[i];this.last_down_price=-1.0;this.down_duration=1}else{this.down_duration=this.down_duration+1}}return emit},finalize:function(){var old_result=this.result;this.result=[];return old_result},merge:function(){}};"}
+            },
+            {"client":"python","query_id":"2201", "depends_on_stream":"types", "wait":5, "query_end_timer":2, "query_type": "stream", "query":"select st.1, st.2, st.3, st.4 from (select stock(dt, f32) as st from types)"}
+          ]
+        },
+
+        {
+          "inputs": [
+            {"table_name": "types", "depends_on":"2201", "wait":3, "data": [[1, 10.0, "s1", "2020-02-02 20:00:00"], [2, 20.0, "s2", "2020-02-02 20:00:01"]]},
+            {"table_name": "types", "data": [[3, 3.0, "s1", "2020-02-02 20:00:01"], [4, 4.0, "s2", "2020-02-02 20:00:02"]]},
+            {"table_name": "types", "data": [[3, 5.0, "s1", "2020-02-02 20:00:03"], [4, 6.0, "s2", "2020-02-02 20:00:04"]]}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"2201",
+          "expected_results":[
+            [20.0, "2020-02-02 20:00:01", 4.0, 2]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "tags": ["udf"],
+      "name": "uda_substream_without_emit_strategy",
+      "description": "sec_large - uda without emit strategy (substream)",
+      "steps":[
+        {
+          "statements": [
+            {
+              "client": "rest",
+              "rest_type": "raw",
+              "query_type": "table",
+              "query_id": "2200",
+              "query_url": "/proton/v1/udfs",
+              "http_method": "POST",
+              "data": {
+                "type": "javascript",
+                "name": "sec_large",
+                "arguments": [
+                  {
+                    "name": "value",
+                    "type": "float32"
+                  }
+                ],
+                "is_aggr_function": true,
+                "has_own_emit_strategy": false,
+                "return_type": "float32",
+                "source": "{max:-1.0,sec:-1.0,add:function(values){for(let i=0;i<values.length;i++){if(values[i]>this.max){this.sec=this.max;this.max=values[i]}if(values[i]<this.max&&values[i]>this.sec)this.sec=values[i]}},finalize:function(){return[this.sec]},serialize:function(){let s={'max':this.max,'sec':this.sec};return JSON.stringify(s)},deserialize:function(state_str){let s=JSON.parse(state_str);this.max=s['max'];this.sec=s['sec']},merge:function(state_str){let s=JSON.parse(state_str);if(s['sec']>=this.max){this.max=s['max'];this.sec=s['sec']}else if(s['max']>=this.max){this.sec=this.max;this.max=s['max']}else if(s['max']>this.sec){this.sec=s['max']}}};"
+              }
+            },
+            {"client":"python","query_id":"2201", "depends_on_stream":"types", "wait":5, "query_end_timer":2, "query_type": "stream", "query":"select s, sec_large(f32) over (partition by i) from types group by s order by s"}
+          ]
+        },
+
+        {
+          "inputs": [
+            {"table_name": "types", "depends_on":"2201", "wait":3, "data": [[1, 1.0, "s1", "2020-02-02 20:00:00"], [2, 2.0, "s2", "2020-02-02 20:00:00"]]},
+            {"table_name": "types", "data": [[3, 3.0, "s1", "2020-02-02 20:00:00"], [2, 4.0, "s2", "2020-02-02 20:00:00"]]}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"2201",
+          "expected_results":[
+            ["s1", -1], ["s2", 2.0], ["s1", -1], ["s2", 2.0]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "tags": ["udf"],
+      "name": "substream_with_emit_strategy",
+      "description": "stock - with emit strategy (substream)",
+      "steps":[
+        {
+          "statements": [
+            {
+              "client": "rest",
+              "rest_type": "raw",
+              "query_type": "table",
+              "query_id": "2200",
+              "query_url": "/proton/v1/udfs",
+              "http_method": "POST",
+              "data": {
+                "type": "javascript",
+                "name": "stock",
+                "arguments": [
+                  {
+                    "name": "rowtime",
+                    "type": "datetime64(6)"
+                  },
+                  {
+                    "name": "price",
+                    "type": "float32"
+                  }
+                ],
+                "is_aggr_function": true,
+                "has_own_emit_strategy": true,
+                "return_type": "tuple(start_price float32, bottom_ts datetime64(1), end_price float32, down_duration uint64)",
+                "source": "{bottom_ts:new Date(),last_down_price:-1.0,start_price:-1.0,down_duration:1,result:[],add:function(rowtime,price){var emit=false;for(let i=0;i<rowtime.length;i++){if(this.start_price<0||(this.last_down_price<0&&price[i]>=this.start_price)){this.start_price=price[i];this.bottom_ts=rowtime[i];this.down_duration=1}else if((this.last_down_price<0&&price[i]<this.start_price)||(price[i]<this.last_down_price)){this.last_down_price=price[i];this.bottom_ts=rowtime[i];this.down_duration=this.down_duration+1}else if(price[i]>this.last_down_price){this.result.push({'start_price':this.start_price,'bottom_ts':this.bottom_ts,'end_price':price[i],'down_duration':this.down_duration});emit=true;this.bottom_ts=rowtime[i];this.start_price=price[i];this.last_down_price=-1.0;this.down_duration=1}else{this.down_duration=this.down_duration+1}}return emit},finalize:function(){var old_result=this.result;this.result=[];return old_result},merge:function(){}};"}
+            },
+            {"client":"python","query_id":"2201", "depends_on_stream":"types", "wait":5, "query_end_timer":2, "query_type": "stream", "query":"select s, st.1, st.2, st.3, st.4 from (select s, stock(dt, f32) over (partition by i) as st from types group by s) order by s"}
+          ]
+        },
+
+        {
+          "inputs": [
+            {"table_name": "types", "depends_on":"2201", "wait":3, "data": [[1, 10.0, "s1", "2020-02-02 20:00:00"], [4, 20.0, "s2", "2020-02-02 20:00:00"]]},
+            {"table_name": "types", "data": [[3, 6.0, "s1", "2020-02-02 20:00:01"], [4, 4.0, "s2", "2020-02-02 20:00:01"]]},
+            {"table_name": "types", "data": [[3, 5.0, "s1", "2020-02-02 20:00:02"], [4, 6.0, "s2", "2020-02-02 20:00:02"]]},
+            {"table_name": "types", "data": [[3, 8.0, "s1", "2020-02-02 20:00:03"], [4, 6.0, "s2", "2020-02-02 20:00:03"]]}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"2201",
+          "expected_results":[
+            ["s2", 20.0, "2020-02-02 20:00:01", 6.0, 2], ["s1", 6.0, "2020-02-02 20:00:02", 8.0, 2]
+          ]
+        }
+      ]
+    }
+  ]
+}
