@@ -152,6 +152,7 @@ public:
         auto coordinator = executable_function->getCoordinator();
         const auto & config = executable_function->getConfiguration();
         auto js_ctx = coordinator->getJavaScriptContext(config, context);
+        SCOPE_EXIT(coordinator->release(std::move(js_ctx)));
 
         assert(arguments[0].column);
         size_t row_num = arguments[0].column->size();
@@ -181,7 +182,6 @@ public:
         };
 
         V8::run(isolate, js_ctx->context, execute);
-        SCOPE_EXIT(coordinator->release(std::move(js_ctx)));
         return result_column;
     }
     /// proton: ends
