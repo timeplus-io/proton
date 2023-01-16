@@ -128,6 +128,7 @@ list (APPEND dbms_headers Functions/IFunction.h Functions/FunctionFactory.h Func
 
 list (APPEND dbms_sources
     AggregateFunctions/IAggregateFunction.cpp
+    AggregateFunctions/AggregateFunctionJavaScriptAdapter.cpp
     AggregateFunctions/AggregateFunctionFactory.cpp
     AggregateFunctions/AggregateFunctionCombinatorFactory.cpp
     AggregateFunctions/AggregateFunctionState.cpp
@@ -136,6 +137,7 @@ list (APPEND dbms_sources
 
 list (APPEND dbms_headers
     AggregateFunctions/IAggregateFunction.h
+    AggregateFunctions/AggregateFunctionJavaScriptAdapter.h
     AggregateFunctions/IAggregateFunctionCombinator.h
     AggregateFunctions/AggregateFunctionFactory.h
     AggregateFunctions/AggregateFunctionCombinatorFactory.h
