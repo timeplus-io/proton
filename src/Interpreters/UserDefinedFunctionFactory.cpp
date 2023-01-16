@@ -1,10 +1,8 @@
 #include "UserDefinedFunctionFactory.h"
 
 /// proton: starts
-#include <AggregateFunctions/AggregateFunctionJavaScriptAdapter.h>
-#include <Interpreters/V8Utils.h>
-
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/AggregateFunctionJavaScriptAdapter.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Formats/formatBlock.h>
 #include <Functions/FunctionFactory.h>
@@ -16,6 +14,7 @@
 #include <Interpreters/castColumn.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/ShellCommandSource.h>
+#include <V8/Utils.h>
 #include <Common/sendRequest.h>
 
 #include <Poco/Net/HTTPRequest.h>
@@ -263,9 +262,7 @@ UserDefinedFunctionFactory & UserDefinedFunctionFactory::instance()
 
 FunctionOverloadResolverPtr UserDefinedFunctionFactory::get(const String & function_name, ContextPtr context)
 {
-    /// proton: starts
     const auto & loader = ExternalUserDefinedFunctionsLoader::instance(context);
-    /// proton: ends
     auto executable_function = std::static_pointer_cast<const UserDefinedExecutableFunction>(loader.load(function_name));
     auto function = std::make_shared<UserDefinedFunction>(std::move(executable_function), std::move(context));
     return std::make_unique<FunctionToOverloadResolverAdaptor>(std::move(function));
@@ -324,21 +321,6 @@ AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
     return nullptr;
 }
 
-bool UserDefinedFunctionFactory::hasUserDefinedEmitStrategy(const String & function_name)
-{
-    const auto & loader = ExternalUserDefinedFunctionsLoader::instance(nullptr);
-    auto load_result = loader.getLoadResult(function_name);
-
-    if (load_result.object)
-    {
-        const auto executable_function = std::static_pointer_cast<const UserDefinedExecutableFunction>(load_result.object);
-        const auto & config = executable_function->getConfiguration();
-
-        return config.has_user_defined_emit_strategy;
-    }
-    return false;
-}
-
 bool UserDefinedFunctionFactory::isAggregateFunctionName(const String & function_name)
 {
     const auto & loader = ExternalUserDefinedFunctionsLoader::instance(nullptr);
@@ -357,9 +339,7 @@ bool UserDefinedFunctionFactory::isAggregateFunctionName(const String & function
 
 FunctionOverloadResolverPtr UserDefinedFunctionFactory::tryGet(const String & function_name, ContextPtr context)
 {
-    /// proton: starts
     const auto & loader = ExternalUserDefinedFunctionsLoader::instance(context);
-    /// proton: ends
     auto load_result = loader.getLoadResult(function_name);
 
     if (load_result.object)
@@ -374,9 +354,7 @@ FunctionOverloadResolverPtr UserDefinedFunctionFactory::tryGet(const String & fu
 
 bool UserDefinedFunctionFactory::has(const String & function_name, ContextPtr context)
 {
-    /// proton: starts
     const auto & loader = ExternalUserDefinedFunctionsLoader::instance(context);
-    /// proton: ends
     auto load_result = loader.getLoadResult(function_name);
 
     bool result = load_result.object != nullptr;
@@ -385,9 +363,7 @@ bool UserDefinedFunctionFactory::has(const String & function_name, ContextPtr co
 
 std::vector<String> UserDefinedFunctionFactory::getRegisteredNames(ContextPtr context)
 {
-    /// proton: starts
     const auto & loader = ExternalUserDefinedFunctionsLoader::instance(context);
-    /// proton: ends
     auto loaded_objects = loader.getLoadedObjects();
 
     std::vector<std::string> registered_names;

@@ -46,8 +46,7 @@ struct UserDefinedFunctionConfiguration
     std::string source;
     /// whether the UDF is a aggregation function
     bool is_aggregation = false;
-    /// whether the UDF has own emit strategy only valid when the UDF is an aggregation function
-    bool has_user_defined_emit_strategy = false;
+
     /// proton: ends
     std::string name;
     /// executable file name, only available when 'type' is 'executable'

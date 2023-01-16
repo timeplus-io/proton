@@ -29,8 +29,6 @@ public:
     static AggregateFunctionPtr
     getAggregateFunction(const String & name, const DataTypes & types, const Array & parameters, AggregateFunctionProperties & properties);
 
-    static bool hasUserDefinedEmitStrategy(const String & function_name);
-
     static bool isAggregateFunctionName(const String & function_name);
     /// proton: ends
 
@@ -39,7 +37,6 @@ public:
     static bool has(const String & function_name, ContextPtr context);
 
     static std::vector<String> getRegisteredNames(ContextPtr context);
-
 };
 
 }

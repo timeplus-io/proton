@@ -9,7 +9,6 @@ class UserDefinedEmitStrategyAggregatingTransform final : public AggregatingTran
 public:
     UserDefinedEmitStrategyAggregatingTransform(Block header, AggregatingTransformParamsPtr params_);
 
-    /// For Parallel aggregating.
     UserDefinedEmitStrategyAggregatingTransform(
         Block header,
         AggregatingTransformParamsPtr params_,
@@ -20,10 +19,10 @@ public:
 
     ~UserDefinedEmitStrategyAggregatingTransform() override = default;
 
-    String getName() const override { return "UserDefinedAggregatingTransform"; }
+    String getName() const override { return "UserDefinedEmitStrategyAggregatingTransform"; }
 
 private:
-    void consume(Chunk chunk) override;
+    void finalize(const ChunkContextPtr & chunk_ctx) override;
 };
 
 }

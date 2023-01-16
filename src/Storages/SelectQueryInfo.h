@@ -171,6 +171,7 @@ struct SelectQueryInfo
 
     bool has_aggregate_over = false;
     bool has_non_aggregate_over = false;
+    bool has_javascript_uda = false; /// Used to guide query concurrency
     Names partition_by_keys;
 
     bool hasPartitionByKeys() const { return !partition_by_keys.empty(); }

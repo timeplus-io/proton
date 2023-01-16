@@ -18,24 +18,26 @@ GlobalAggregatingTransformWithSubstream::GlobalAggregatingTransformWithSubstream
 
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
-void GlobalAggregatingTransformWithSubstream::finalize(SubstreamContext & ctx, ChunkContextPtr chunk_ctx)
+void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx)
 {
+    assert(substream_ctx);
+
     /// If there is no new data, don't emit aggr result
-    if (!ctx.hasNewData())
+    if (!substream_ctx->hasNewData())
         return;
 
     auto start = MonotonicMilliseconds::now();
-    doFinalize(ctx, chunk_ctx);
+    doFinalize(substream_ctx, chunk_ctx);
     auto end = MonotonicMilliseconds::now();
 
     LOG_INFO(log, "Took {} milliseconds to finalize aggregation", end - start);
 }
 
-void GlobalAggregatingTransformWithSubstream::doFinalize(SubstreamContext & ctx, ChunkContextPtr & chunk_ctx)
+void GlobalAggregatingTransformWithSubstream::doFinalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx)
 {
-    SCOPE_EXIT({ ctx.resetRowCounts(); });
+    SCOPE_EXIT({ substream_ctx->resetRowCounts(); });
 
-    auto & variants = ctx.variants;
+    auto & variants = substream_ctx->variants;
     if (variants.empty())
         return;
 
@@ -47,7 +49,7 @@ void GlobalAggregatingTransformWithSubstream::doFinalize(SubstreamContext & ctx,
         block = std::move(results.back());
 
         if (params->emit_version)
-            emitVersion(ctx, block);
+            emitVersion(block, substream_ctx);
     }
     else
     {

@@ -1437,9 +1437,7 @@ bool SelectQueryExpressionAnalyzer::appendGroupBy(ExpressionActionsChain & chain
     return true;
 }
 
-/// proton: starts
-bool SelectQueryExpressionAnalyzer::appendAggregateFunctionsArguments(ExpressionActionsChain & chain, bool only_types)
-/// proton: ends
+void SelectQueryExpressionAnalyzer::appendAggregateFunctionsArguments(ExpressionActionsChain & chain, bool only_types)
 {
     const auto * select_query = getAggregatingQuery();
 
@@ -1466,10 +1464,6 @@ bool SelectQueryExpressionAnalyzer::appendAggregateFunctionsArguments(Expression
         if (node->arguments)
             for (auto & argument : node->arguments->children)
                 getRootActions(argument, only_types, step.actions());
-
-    /// proton: starts
-    return data.has_user_defined_emit_strategy;
-    /// proton: ends
 }
 
 void SelectQueryExpressionAnalyzer::appendWindowFunctionsArguments(
@@ -1947,6 +1941,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
         bool has_streaming_aggregate_over = false;
         bool has_streaming_non_aggregate_over = false;
         /// proton: ends.
+
         if (need_aggregate)
         {
             /// TODO correct conditions
@@ -1955,9 +1950,8 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                     && storage && query.groupBy();
 
             query_analyzer.appendGroupBy(chain, only_types || !first_stage, optimize_aggregation_in_order, group_by_elements_actions);
-            /// proton: starts
-            has_own_emit_strategy = query_analyzer.appendAggregateFunctionsArguments(chain, only_types || !first_stage);
-            /// proton: ends
+
+            query_analyzer.appendAggregateFunctionsArguments(chain, only_types || !first_stage);
 
             /// proton: starts.
             bool may_have_streaming_aggr_over = query_analyzer.syntax->streaming && has_window;

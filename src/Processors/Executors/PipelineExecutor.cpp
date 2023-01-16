@@ -319,6 +319,7 @@ void PipelineExecutor::executeImpl(size_t num_threads, ExecuteMode exec_mode_)
     initializeExecution(num_threads);
 
     /// proton : starts
+    LOG_DEBUG(log, "Using {} threads to execute pipeline", num_threads);
     execute_threads = num_threads;
     registerCheckpoint(exec_mode_);
     /// proton : ends

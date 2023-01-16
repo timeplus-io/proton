@@ -758,28 +758,21 @@ public:
     using AggregateColumnsConstData = std::vector<const ColumnAggregateFunction::Container *>;
     using AggregateFunctionsPlainPtrs = std::vector<const IAggregateFunction *>;
 
-    /// Process one block. Return false if the processing should be aborted (with group_by_overflow_mode = 'break').
-    bool executeOnBlock(const Block & block,
+    /// Process one block. Return {should_abort, need_finalization} pair
+    /// should_abort: if the processing should be aborted (with group_by_overflow_mode = 'break') return true, otherwise false.
+    /// need_finalization : only for UDA aggregation. If there is no UDA, always false
+    std::pair<bool, bool> executeOnBlock(const Block & block,
         AggregatedDataVariants & result,
         ColumnRawPtrs & key_columns,
         AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
         bool & no_more_keys) const;
 
-    bool executeOnBlock(Columns columns,
+    std::pair<bool, bool> executeOnBlock(Columns columns,
         size_t row_begin, size_t row_end,
         AggregatedDataVariants & result,
         ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
         bool & no_more_keys) const;
 
-    /// proton: starts. Process one row, Return true if it shoud emit the aggregating result
-    bool executeOnEachRow(Columns columns, UInt64 num_rows, AggregatedDataVariants & result,
-                          ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns,    /// Passed to not create them anew for each block
-                          bool & no_more_keys, Block & final_block) const;
-
-
-    /// proton: ends
-
-    /// Used for aggregate projection.
     bool mergeOnBlock(Block block, AggregatedDataVariants & result, bool & no_more_keys) const;
 
     /** Convert the aggregation data structure into a block.
@@ -806,10 +799,12 @@ public:
       *          );
       */
     BlocksList convertToBlocks(AggregatedDataVariants & data_variants, bool final, ConvertAction action, size_t max_threads) const;
+
     BlocksList convertToBlocksFinal(AggregatedDataVariants & data_variants, ConvertAction action, size_t max_threads) const
     {
         return convertToBlocks(data_variants, true, action, max_threads);
     }
+
     BlocksList convertToBlocksIntermediate(AggregatedDataVariants & data_variants, ConvertAction action, size_t max_threads) const
     {
         return convertToBlocks(data_variants, false, action, max_threads);
@@ -881,6 +876,7 @@ private:
     friend class GlobalAggregatingTransform;
     friend class TumbleHopAggregatingTransform;
     friend class TumbleHopAggregatingTransformWithSubstream;
+    friend class UserDefinedEmitStrategyAggregatingTransform;
 
     mutable std::optional<VersionType> version;
     /// proton: ends
@@ -961,7 +957,7 @@ private:
       */
     void destroyAllAggregateStates(AggregatedDataVariants & result) const;
 
-    void executeImpl(
+    bool executeImpl(
         AggregatedDataVariants & result,
         size_t row_begin,
         size_t row_end,
@@ -972,7 +968,7 @@ private:
 
     /// Process one data block, aggregate the data into a hash table.
     template <typename Method>
-    void executeImpl(
+    bool executeImpl(
         Method & method,
         Arena * aggregates_pool,
         size_t row_begin,
@@ -984,7 +980,7 @@ private:
 
     /// Specialization for a particular value no_more_keys.
     template <bool no_more_keys, bool use_compiled_functions, typename Method>
-    void executeImplBatch(
+    bool executeImplBatch(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
@@ -1009,38 +1005,6 @@ private:
         AggregateFunctionInstruction * aggregate_instructions,
         Arena * arena,
         const IColumn * delta_col);
-
-    /// proton: starts
-    /// Process one data block, aggregate the data into a hash table.
-    template <typename Method>
-    Block executeByRow(
-        Method & method,
-        Arena * aggregates_pool,
-        size_t rows,
-        ColumnRawPtrs & key_columns,
-        AggregateFunctionInstruction * aggregate_instructions,
-        bool no_more_keys,
-        AggregateDataPtr overflow_row) const;
-
-    /// Specialization for a particular value no_more_keys.
-    template <bool no_more_keys, bool use_compiled_functions, typename Method>
-    Block executeByRowImpl(
-        Method & method,
-        typename Method::State & state,
-        Arena * aggregates_pool,
-        size_t rows,
-        ColumnRawPtrs & key_columns,
-        AggregateFunctionInstruction * aggregate_instructions,
-        AggregateDataPtr overflow_row) const;
-
-    void finalizeState(
-        ColumnRawPtrs & key_columns,
-        AggregateFunctionInstruction * aggregate_functions_instructions,
-        AggregateDataPtr & aggregate_state,
-        Arena * aggregates_pool,
-        size_t cur_row,
-        Block & final_block) const;
-    /// proton: ends
 
     template <typename Method>
     void writeToTemporaryFileImpl(

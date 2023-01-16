@@ -122,31 +122,40 @@ void AggregatingTransform::work()
 
 void AggregatingTransform::consume(Chunk chunk)
 {
+    bool should_abort = false, need_finalization = false;
+
     auto num_rows = chunk.getNumRows();
     if (num_rows > 0)
     {
         /// There indeed has cases where num_rows of a chunk is greater than 0, but
         /// the columns are empty : select count() from stream where a != 0.
         /// So `executeOrMergeColumns` accepts num_rows as parameter
-        if (!executeOrMergeColumns(chunk.detachColumns(), num_rows))
+        if (std::tie(should_abort, need_finalization) = executeOrMergeColumns(chunk.detachColumns(), num_rows); should_abort)
             is_consume_finished = true;
     }
 
     /// Since checkpoint barrier is always standalone, it can't coexist with watermark,
     /// we handle watermark and checkpoint barrier separately
-    if (chunk.hasWatermark())
+    if (chunk.hasWatermark() || need_finalization)
+    {
+        /// Watermark and need_finalization shall not be true at the same time
+        /// since when UDA has user defined emit strategy, watermark is disabled
+        assert(!(chunk.hasWatermark() && need_finalization));
         finalize(chunk.getChunkContext());
+    }
     else if (chunk.requestCheckpoint())
         checkpointAlignment(chunk);
 }
 
-bool AggregatingTransform::executeOrMergeColumns(Columns columns, size_t num_rows)
+std::pair<bool, bool> AggregatingTransform::executeOrMergeColumns(Columns columns, size_t num_rows)
 {
     if (params->only_merge)
     {
         auto block = getInputs().front().getHeader().cloneWithColumns(columns);
         materializeBlockInplace(block);
-        return params->aggregator.mergeOnBlock(block, variants, no_more_keys);
+        /// FIXME
+        auto success = params->aggregator.mergeOnBlock(block, variants, no_more_keys);
+        return {!success, false};
     }
     else
         return params->aggregator.executeOnBlock(std::move(columns), 0, num_rows, variants, key_columns, aggregate_columns, no_more_keys);
@@ -161,7 +170,7 @@ void AggregatingTransform::emitVersion(Block & block)
          ProtonConsts::RESERVED_EMIT_VERSION});
 }
 
-void AggregatingTransform::setCurrentChunk(Chunk chunk, ChunkContextPtr chunk_ctx)
+void AggregatingTransform::setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx)
 {
     if (has_input)
         throw Exception("Current chunk was already set.", ErrorCodes::LOGICAL_ERROR);

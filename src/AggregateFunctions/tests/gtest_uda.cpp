@@ -20,11 +20,12 @@ String ARGS_CEP1 = R"###([{ "name": "value","type": "int64"}])###";
 String RETURN_CEP1 = "uint32";
 String UDA_CEP1 = R"###(
 {
-    last_down_price: -1.0,
-    down_duration: 0,
-    result: [],
-
-    add: function(prices) {
+    initialize : function() {
+        this.last_down_price = -1.0;
+        this.down_duration = 0;
+        this.result = [];
+    },
+    process: function(prices) {
         var emit = false;
         for (let i = 0; i < prices.length; i++) {
             if (this.last_down_price < 0 || prices[i] <= this.last_down_price) {
@@ -44,8 +45,7 @@ String UDA_CEP1 = R"###(
         this.result = [];
         return old_result;
     },
-    merge: function(state_str) {
-    }
+    has_customized_emit : true
 }
 )###";
 
@@ -53,10 +53,11 @@ String ARGS_UDA1 = R"###([{ "name": "value","type": "int64"}])###";
 String RETURN_UDA1 = "float32";
 String UDA1 = R"###(
 {
-    max: -1.0,
-    sec: -1.0,
-
-    add: function (values) {
+    initialize: function() {
+        this.max = -1.0;
+        this.sec = -1.0;
+    },
+    process: function (values) {
         for (let i = 0; i < values.length; i++) {
             if (values[i] > this.max) {
                 this.sec = this.max;
@@ -152,7 +153,6 @@ createUDFConfig(const String & name, const String & arg_str, const String & retu
         .arguments = std::move(arguments),
         .source = source,
         .is_aggregation = true,
-        .has_user_defined_emit_strategy = true,
         .name = name, //-V1030
         .result_type = std::move(result_type), //-V1030
     };
@@ -180,6 +180,8 @@ TEST_F(UDATestCase, add)
     Array params;
     size_t max_heap_size = 100 * 1024 * 1024;
     auto aggr_function = AggregateFunctionJavaScriptAdapter(config, types, params, max_heap_size);
+
+    ASSERT_TRUE(aggr_function.hasUserDefinedEmit());
 
     std::unique_ptr<AggregateFunctionJavaScriptAdapter::Data[], AggregateFunctionJavaScriptAdapter::DataDeleter> places{
         static_cast<AggregateFunctionJavaScriptAdapter::Data *>(malloc(aggr_function.sizeOfData())),

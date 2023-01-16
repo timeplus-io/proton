@@ -11,11 +11,10 @@ public:
 
     ~UserDefinedEmitStrategyAggregatingTransformWithSubstream() override = default;
 
-    String getName() const override { return "UserDefinedAggregatingTransformWithSubstream"; }
+    String getName() const override { return "UserDefinedEmitStrategyAggregatingTransformWithSubstream"; }
 
 private:
-    void consume(SubstreamContext & ctx, Chunk chunk) override;
+    void finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx) override;
 };
-
 }
 }

@@ -133,7 +133,10 @@ void ShufflingTransform::consume(Chunk chunk)
     }
     else
     {
-        /// FIXME: for an empty chunk, we still transform to each output, only used for global aggregation watermark
+        /// Shuffling is at the very upstream, down stream substream watermark transform still
+        /// depends on this empty timer chunk to calculate watermark for global aggregation
+        /// When we fix the timer issue systematically, the pipeline system shall have minimum
+        /// empty block flowing around and we don't need this anymore
         for (size_t output_idx = 0; output_idx < outputs.size(); ++output_idx)
             shuffled_output_chunks[output_idx].push(chunk.clone());
     }

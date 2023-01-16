@@ -19,9 +19,9 @@ protected:
     SubstreamContextPtr getOrCreateSubstreamContext(const SubstreamID & id) override;
 
 private:
-    void consume(SubstreamContext & ctx, Chunk chunk) override;
+    void consume(Chunk chunk, const SubstreamContextPtr & substream_ctx) override;
 
-    void finalizeSession(SubstreamContext & ctx, const SessionInfo & info, Block & merged_block);
+    void finalizeSession(const SubstreamContextPtr & substream_ctx, const SessionInfo & info, Block & merged_block);
 
     void emitGlobalOversizeSessionsIfPossible(const Chunk & chunk, Block & merged_block);
 

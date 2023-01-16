@@ -6,13 +6,6 @@
 
 namespace DB
 {
-
-namespace ErrorCodes
-{
-extern const int LOGICAL_ERROR;
-extern const int NOT_IMPLEMENTED;
-}
-
 namespace Streaming
 {
 
@@ -41,20 +34,32 @@ UserDefinedEmitStrategyAggregatingTransform::UserDefinedEmitStrategyAggregatingT
     assert(params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED);
 }
 
-void UserDefinedEmitStrategyAggregatingTransform::consume(Chunk chunk)
+void UserDefinedEmitStrategyAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 {
-    Block merged_block;
-    auto num_rows = chunk.getNumRows();
-    if (num_rows > 0)
-    {
-        Columns columns = chunk.detachColumns();
+    /// We don't need care other data variants, just finalize what we have
+    auto & variants = *many_data->variants[current_variant];
+    if (variants.empty())
+        return;
 
-        if (!params->aggregator.executeOnEachRow(columns, num_rows, variants, key_columns, aggregate_columns, no_more_keys, merged_block))
-            is_consume_finished = true;
+    Block block;
+    if (params->final)
+    {
+        auto results = params->aggregator.convertToBlocksFinal(variants, ConvertAction::STREAMING_EMIT, 1);
+        assert(results.size() == 1);
+        block = std::move(results.back());
+
+        if (params->emit_version)
+            emitVersion(block);
+    }
+    else
+    {
+        auto results = params->aggregator.convertToBlocksIntermediate(variants, ConvertAction::STREAMING_EMIT, 1);
+        assert(results.size() == 1);
+        block = std::move(results.back());
     }
 
-    if (merged_block.rows() > 0)
-        setCurrentChunk(convertToChunk(merged_block), nullptr);
+    if (block)
+        setCurrentChunk(convertToChunk(block), chunk_ctx);
 }
 }
 }

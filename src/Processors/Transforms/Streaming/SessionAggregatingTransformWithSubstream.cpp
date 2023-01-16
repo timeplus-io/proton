@@ -18,15 +18,17 @@ SessionAggregatingTransformWithSubstream::SessionAggregatingTransformWithSubstre
     assert(params->params.group_by == Aggregator::Params::GroupBy::SESSION);
 }
 
-void SessionAggregatingTransformWithSubstream::consume(SubstreamContext & ctx, Chunk chunk)
+void SessionAggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamContextPtr & substream_ctx)
 {
+    assert(substream_ctx);
+
     Block merged_block;
     auto num_rows = chunk.getNumRows();
     if (num_rows > 0)
     {
         /// Get session info
         assert(chunk.hasChunkContext());
-        SessionInfo & session_info = ctx.getField<SessionInfo>();
+        SessionInfo & session_info = substream_ctx->getField<SessionInfo>();
 
         Columns columns = chunk.detachColumns();
 
@@ -63,16 +65,16 @@ void SessionAggregatingTransformWithSubstream::consume(SubstreamContext & ctx, C
         auto session_end_to_emit = std::next(session_begin_to_emit, sessions_info_to_emit.size());
         size_t index_to_emit = 0;
         std::for_each(session_begin_to_emit, session_end_to_emit, [&](auto & columns_to_process) {
-            if (!executeOrMergeColumns(ctx, std::move(columns_to_process)))
+            if (auto [should_abort, _] = executeOrMergeColumns(std::move(columns_to_process), substream_ctx); should_abort)
                 is_consume_finished = true;
 
-            finalizeSession(ctx, sessions_info_to_emit[index_to_emit++], merged_block);
+            finalizeSession(substream_ctx, sessions_info_to_emit[index_to_emit++], merged_block);
         });
 
         /// To process session (not emit)
         assert(std::distance(session_end_to_emit, session_columns.end()) <= 1);
         std::for_each(session_end_to_emit, session_columns.end(), [&](auto & columns_to_process) {
-            if (!executeOrMergeColumns(ctx, std::move(columns_to_process)))
+            if (auto [should_abort, _] = executeOrMergeColumns(std::move(columns_to_process), substream_ctx); should_abort)
                 is_consume_finished = true;
         });
     }
@@ -87,15 +89,15 @@ void SessionAggregatingTransformWithSubstream::consume(SubstreamContext & ctx, C
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
 /// Only for streaming aggregation case
-void SessionAggregatingTransformWithSubstream::finalizeSession(SubstreamContext & ctx, const SessionInfo & info, Block & merged_block)
+void SessionAggregatingTransformWithSubstream::finalizeSession(const SubstreamContextPtr & substream_ctx, const SessionInfo & info, Block & merged_block)
 {
-    SCOPE_EXIT({ ctx.resetRowCounts(); });
+    SCOPE_EXIT({ substream_ctx->resetRowCounts(); });
 
     auto start = MonotonicMilliseconds::now();
 
     assert(!info.active);
-    assert(ctx.getField<SessionInfo>().id == info.id);
-    auto & variants = ctx.variants;
+    assert(substream_ctx->getField<SessionInfo>().id == info.id);
+    auto & variants = substream_ctx->variants;
 
     if (variants.empty())
         return;
@@ -104,7 +106,7 @@ void SessionAggregatingTransformWithSubstream::finalizeSession(SubstreamContext 
     SessionHelper::finalizeSession(variants, info, merged_block, params);
 
     if (params->emit_version && params->final)
-        emitVersion(ctx, merged_block);
+        emitVersion(merged_block, substream_ctx);
 
     auto end = MonotonicMilliseconds::now();
     LOG_INFO(log, "Took {} milliseconds to finalize aggregation for session-{}{}", end - start, info.id, info.string());
@@ -146,7 +148,7 @@ void SessionAggregatingTransformWithSubstream::emitGlobalOversizeSessionsIfPossi
             {
                 LOG_INFO(log, "Found oversize session-{}{}, will finalizing ...", info.id, info.string());
                 info.active = false;
-                finalizeSession(*substream_ctx, info, merged_block);
+                finalizeSession(substream_ctx, info, merged_block);
             }
         }
 

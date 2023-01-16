@@ -1,6 +1,5 @@
 #pragma once
 
-#include <DataTypes/ConvertV8DataTypes.h>
 #include <Interpreters/UserDefinedFunctionConfiguration.h>
 #include <base/types.h>
 
@@ -34,8 +33,7 @@ void throwException(v8::Isolate * isolate, v8::TryCatch & try_catch, int code, c
     else
     {
         v8::String::Utf8Value error(isolate, try_catch.Exception());
-        String msg = fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...);
-        throw Exception(code, "{}:{}", msg, std::string(*error, error.length()));
+        throw Exception(code, "{}:{}", fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...), String(*error, error.length()));
     }
 }
 

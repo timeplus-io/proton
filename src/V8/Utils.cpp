@@ -1,10 +1,8 @@
-#include "V8Utils.h"
-
-#include <DataTypes/ConvertV8DataTypes.h>
+#include <V8/ConvertDataTypes.h>
+#include <V8/Utils.h>
 
 #include <Core/DecimalFunctions.h>
 #include <Functions/FunctionsConversion.h>
-
 
 #define FOR_BASIC_NUMERIC_TYPES(M) \
     M(UInt8) \

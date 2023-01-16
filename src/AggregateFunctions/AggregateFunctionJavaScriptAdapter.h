@@ -13,8 +13,8 @@ struct JavaScriptAggrFunctionState
     v8::Isolate * isolate; /// The ownership of isolate is the AggregateFunctionAdapter, no need to delete
     v8::Persistent<v8::Context> context;
     v8::Persistent<v8::Object> object;
-    v8::Persistent<v8::Function> init_func;
-    v8::Persistent<v8::Function> add_func;
+    v8::Persistent<v8::Function> initialize_func;
+    v8::Persistent<v8::Function> process_func;
     v8::Persistent<v8::Function> finalize_func;
     v8::Persistent<v8::Function> merge_func;
     v8::Persistent<v8::Function> serialize_func;
@@ -24,7 +24,7 @@ struct JavaScriptAggrFunctionState
     MutableColumns columns;
 
     /// Whether the current group should emit
-    bool should_emit = false;
+    bool should_finalize = false;
 
     /// JavaScript UDA code looks like:
     ///     {
@@ -34,12 +34,13 @@ struct JavaScriptAggrFunctionState
     ///        stateN: ...,
     ///
     ///        // Definitions of functions
-    ///        init: function() {...}, // optional. Called when the function object is created
-    ///        add: function (...) {...},  // required. the main function, with the same name of UDF, proton calls this function with batch of input rows
+    ///        initialize: function() {...}, // optional. Called when the function object is created
+    ///        process: function (...) {...},  // required. the main function, with the same name of UDF, proton calls this function with batch of input rows
     ///        finalize: function (...) {...},  // required. the main function which returns the aggregation results to caller
     ///        serialize: function() {...},  // required. returns the serialized state of all internal states of UDA in string
     ///        deserialize: function() {...}, // required. recover the aggregation function state with the persisted internal state
     ///        merge: function(state_str) {...}  // required. merge two JavaScript UDA aggregation states into one. Used for multiple shards processing
+    ///        has_customized_emit : false /// Define if the the aggregation has user defined emit strategy
     ///     }
     JavaScriptAggrFunctionState(
         const std::string & name,
@@ -78,23 +79,15 @@ private:
     std::unique_ptr<v8::Isolate, AggregateFunctionJavaScriptAdapter::IsolateDeleter> isolate;
     size_t num_arguments;
     size_t max_v8_heap_size_in_bytes;
+    std::string source;
+    bool has_user_defined_emit_strategy = false;
 
 public:
     AggregateFunctionJavaScriptAdapter(
         const UserDefinedFunctionConfiguration & config_,
         const DataTypes & types,
         const Array & params_,
-        size_t max_v8_heap_size_in_bytes_)
-        : IAggregateFunctionHelper<AggregateFunctionJavaScriptAdapter>(types, params_)
-        , config(config_)
-        , num_arguments(types.size())
-        , max_v8_heap_size_in_bytes(max_v8_heap_size_in_bytes_)
-    {
-        v8::Isolate::CreateParams isolate_params;
-        isolate_params.array_buffer_allocator_shared
-            = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
-        isolate = std::unique_ptr<v8::Isolate, IsolateDeleter>(v8::Isolate::New(isolate_params), IsolateDeleter());
-    }
+        size_t max_v8_heap_size_in_bytes_);
 
     String getName() const override;
 
@@ -121,10 +114,14 @@ public:
     void merge(AggregateDataPtr __restrict /*place*/, ConstAggregateDataPtr /*rhs*/, Arena *) const override;
 
     /// Whether or not the aggregation should emit
-    bool shouldEmit(AggregateDataPtr __restrict /*place*/) const override;
+    bool shouldFinalize(AggregateDataPtr __restrict /*place*/) const override;
 
     /// Send the cached rows to User Defined Aggregate function
     bool flush(AggregateDataPtr __restrict /*place*/) const override;
+
+    bool hasUserDefinedEmit() const override { return has_user_defined_emit_strategy; }
+
+    UDFType udfType() const override { return UDFType::Javascript; }
 
     /// Serialize the result related field of Aggregate Data
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> /* version */) const override;

@@ -18,6 +18,10 @@
 #include <vector>
 #include <type_traits>
 
+/// proton : starts
+#include <Common/UDFType.h>
+/// proton : ends
+
 namespace llvm
 {
     class LLVMContext;
@@ -170,11 +174,18 @@ public:
         merge(place, rhs, arena);
     }
 
-    /// Whether or not the aggregation should emit. So far only meaningful for user defined aggregate function
-    virtual bool shouldEmit(AggregateDataPtr __restrict /*place*/) const { return false; }
+    /// Whether or not the aggregation should do finalization. So far only meaningful for user defined aggregate function
+    virtual bool shouldFinalize(AggregateDataPtr __restrict /*place*/) const { return false; }
 
     /// Usually called after every batch to flush cached data to function. Only meaning for UDA for now.
     virtual bool flush(AggregateDataPtr __restrict /*place*/) const { return false; }
+
+    /// UDA may has its own emit strategy instead of depending on system watermark
+    virtual bool hasUserDefinedEmit() const { return false; }
+
+    virtual UDFType udfType() const { return UDFType::Native; }
+
+    bool isUserDefined() const { return udfType() != UDFType::Native; }
     /// proton : ends
 
     /// Serializes state (to transmit it over the network, for example).
@@ -465,7 +476,6 @@ public:
         const IColumn * delta_col = nullptr) const override
     {
         const auto * derived = static_cast<const Derived *>(this);
-        const ColumnUInt8::Container * if_flags = nullptr;
 
         //// FIXME, too much branch
         if (delta_col == nullptr && if_argument_pos < 0)
@@ -495,27 +505,17 @@ public:
         else if (delta_col == nullptr && if_argument_pos >= 0)
         {
             /// combinator-if
-            if_flags = &assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            const auto & flags = *if_flags;
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             for (size_t i = row_begin; i < row_end; ++i)
             {
                 if (flags[i] && places[i])
                     derived->add(places[i] + place_offset, columns, i, arena);
             }
-
-
-            /// For UDA
-            for (size_t i = row_begin; i < row_end; ++i)
-            {
-                if (flags[i] && places[i])
-                    derived->flush(places[i] + place_offset);
-            }
         }
         else
         {
             /// combinator-if + changelog
-            if_flags = &assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            const auto & flags = *if_flags;
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
             const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
             for (size_t i = row_begin; i < row_end; ++i)
             {
@@ -527,13 +527,6 @@ public:
                         derived->negate(places[i] + place_offset, columns, i, arena);
                 }
             }
-        }
-
-        /// For UDA.
-        for (size_t i = row_begin; i < row_end; ++i)
-        {
-            if (places[i] && (!if_flags || (*if_flags)[i]))
-                derived->flush(places[i] + place_offset);
         }
     }
     /// proton : ends
@@ -624,10 +617,6 @@ public:
                 }
             }
         }
-
-        /// For UDA
-        if (place)
-            derived->flush(place);
     }
     /// proton : ends
 
@@ -709,10 +698,6 @@ public:
                 }
             }
         }
-
-        /// For UDA
-        if (place)
-            derived->flush(place);
     }
 
     void addBatchSinglePlaceFromInterval( /// NOLINT
@@ -770,10 +755,6 @@ public:
                 }
             }
         }
-
-        /// For UDA
-        if (place)
-            derived->flush(place);
     }
     /// proton : ends
 

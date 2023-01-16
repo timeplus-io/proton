@@ -187,6 +187,7 @@ private:
     void checkAndPrepareStreamingFunctions();
     void analyzeStreamingMode(); /// analyze whether it is streaming query
     void analyzeChangelogMode(); /// analyze whether it is changelog query
+    void checkUDA();
 
     ColumnsDescriptionPtr getExtendedObjects() const override;
     /// proton: ends
@@ -228,6 +229,7 @@ private:
     /// A copy of required_columns before adding the additional ones for streaming processing
     Names required_columns_after_streaming_window;
     bool emit_version = false;
+    bool has_user_defined_emit_strategy = false;
     std::optional<bool> is_streaming;
     std::optional<bool> is_changelog;
     /// proton: ends

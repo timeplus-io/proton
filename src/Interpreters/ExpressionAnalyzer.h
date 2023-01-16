@@ -219,9 +219,6 @@ struct ExpressionAnalysisResult
 
     bool use_grouping_set_key = false;
 
-    /// proton: starts. Whether the query should use user defined emit strategy
-    bool has_own_emit_strategy = false;
-    /// proton: ends
     ActionsDAGPtr before_array_join;
     ArrayJoinActionPtr array_join;
     ActionsDAGPtr before_join;
@@ -382,9 +379,7 @@ private:
     ActionsDAGPtr appendPrewhere(ExpressionActionsChain & chain, bool only_types, const Names & additional_required_columns);
     bool appendWhere(ExpressionActionsChain & chain, bool only_types);
     bool appendGroupBy(ExpressionActionsChain & chain, bool only_types, bool optimize_aggregation_in_order, ManyExpressionActions &);
-    /// proton: starts. return true, if user defined aggregate function has own emit strategy
-    bool appendAggregateFunctionsArguments(ExpressionActionsChain & chain, bool only_types);
-    /// proton: ends
+    void appendAggregateFunctionsArguments(ExpressionActionsChain & chain, bool only_types);
     void appendWindowFunctionsArguments(ExpressionActionsChain & chain, bool only_types);
 
     /// After aggregation:

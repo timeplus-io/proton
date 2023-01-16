@@ -16,9 +16,9 @@ public:
     String getName() const override { return "GlobalAggregatingTransformWithSubstream"; }
 
 private:
-    void finalize(SubstreamContext & ctx, ChunkContextPtr chunk_ctx) override;
+    void finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx) override;
 
-    inline void doFinalize(SubstreamContext & ctx, ChunkContextPtr & chunk_ctx);
+    inline void doFinalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx);
 };
 
 }

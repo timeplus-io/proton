@@ -1,10 +1,9 @@
 #include "UDFHandler.h"
+#include "SchemaValidator.h"
 
-#include <DataTypes/ConvertV8DataTypes.h>
 #include <Interpreters/Streaming/ASTToJSONUtils.h>
 #include <Interpreters/Streaming/MetaStoreJSONConfigRepository.h>
-#include <Interpreters/V8Utils.h>
-#include "SchemaValidator.h"
+#include <V8/Utils.h>
 
 #include <numeric>
 
@@ -13,6 +12,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int BAD_REQUEST_PARAMETER;
+extern const int UDF_INVALID_NAME;
 }
 
 namespace
@@ -45,6 +45,30 @@ String buildResponse(const Poco::JSON::Object::Ptr & object, const String & quer
     std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     resp.stringify(resp_str_stream, 0);
     return resp_str_stream.str();
+}
+
+/// FIXME, refactor out to a util since SQL needs this validation as well
+/// Valid UDF function name is [a-zA-Z0-9_] and has to start with _ or [a-zA-Z]
+void validateUDFName(const String & func_name)
+{
+    if (func_name.empty())
+        throw Exception(ErrorCodes::UDF_INVALID_NAME, "UDF name must not be empy");
+
+    /// At least one alphabetic
+    bool has_alphabetic = false;
+    for (auto ch : func_name)
+    {
+        if(!std::isalnum(ch) && ch != '_')
+            throw Exception(ErrorCodes::UDF_INVALID_NAME, "UDF name can contain only alphabetic, numbers and underscores");
+
+        has_alphabetic = std::isalpha(ch);
+    }
+
+    if (!has_alphabetic)
+        throw Exception(ErrorCodes::UDF_INVALID_NAME, "UDF name shall contain at lest one alphabetic");
+
+    if (!std::isalpha(func_name[0]) && func_name[0] != '_')
+        throw Exception(ErrorCodes::UDF_INVALID_NAME, "UDF name's first char shall be an alphabetic or underscore");
 }
 }
 
@@ -110,13 +134,16 @@ bool UDFHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & 
             return false;
         }
 
+        const auto & func_name = payload->get("name").toString();
+        validateUDFName(func_name);
+
         /// check whether the source can be compiled
         if (payload->has("is_aggregation") && payload->getValue<bool>("is_aggregation"))
             /// UDA
-            V8::validateAggregationFunctionSource(payload->get("name"), {"add", "finalize", "merge"}, payload->get("source"));
+            V8::validateAggregationFunctionSource(func_name, {"process", "finalize"}, payload->get("source"));
         else
             /// UDF
-            V8::validateStatelessFunctionSource(payload->get("name"), payload->get("source"));
+            V8::validateStatelessFunctionSource(func_name, payload->get("source"));
     }
     else
     {

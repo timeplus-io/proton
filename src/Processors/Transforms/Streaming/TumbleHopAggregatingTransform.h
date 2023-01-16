@@ -23,13 +23,13 @@ public:
     String getName() const override { return "TumbleHopAggregatingTransform"; }
 
 private:
-    void finalize(ChunkContextPtr chunk_ctx) override;
+    void finalize(const ChunkContextPtr & chunk_ctx) override;
 
-    inline void doFinalize(const WatermarkBound & watermark, ChunkContextPtr & chunk_ctx);
+    inline void doFinalize(const WatermarkBound & watermark, const ChunkContextPtr & chunk_ctx);
 
     inline void initialize(ManyAggregatedDataVariantsPtr & data);
 
-    void convertTwoLevel(ManyAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkContextPtr & chunk_ctx);
+    void convertTwoLevel(ManyAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, const ChunkContextPtr & chunk_ctx);
 
     inline void removeBuckets();
 };

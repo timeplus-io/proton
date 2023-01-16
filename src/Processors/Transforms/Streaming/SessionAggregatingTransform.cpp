@@ -62,7 +62,7 @@ void SessionAggregatingTransform::consume(Chunk chunk)
         size_t index_to_emit = 0;
         std::for_each(session_begin_to_emit, session_end_to_emit, [&](auto & columns_to_process) {
             auto process_rows = columns_to_process[0]->size();
-            if (!executeOrMergeColumns(std::move(columns_to_process), process_rows))
+            if (auto [should_abort, _] = executeOrMergeColumns(std::move(columns_to_process), process_rows); should_abort)
                 is_consume_finished = true;
 
             finalizeSession(sessions_info_to_emit[index_to_emit++], merged_block);
@@ -72,7 +72,7 @@ void SessionAggregatingTransform::consume(Chunk chunk)
         assert(std::distance(session_end_to_emit, session_columns.end()) <= 1);
         std::for_each(session_end_to_emit, session_columns.end(), [&](auto & columns_to_process) {
             auto process_rows = columns_to_process[0]->size();
-            if (!executeOrMergeColumns(std::move(columns_to_process), process_rows))
+            if (auto [should_abort, _] = executeOrMergeColumns(std::move(columns_to_process), process_rows); should_abort)
                 is_consume_finished = true;
         });
     }

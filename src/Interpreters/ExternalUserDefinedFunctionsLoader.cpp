@@ -129,7 +129,6 @@ ExternalLoader::LoadablePtr ExternalUserDefinedFunctionsLoader::create(const std
     /// proton: starts
     String format = config.getString(key_in_config + ".format", "ArrowStream");
     bool is_aggr_function = config.getBool(key_in_config + ".is_aggregation", false);
-    bool has_user_defined_emit_strategy = config.getBool(key_in_config + ".has_user_defined_finalization_strategy", false);
     /// proton: ends
     DataTypePtr result_type = DataTypeFactory::instance().get(config.getString(key_in_config + ".return_type"));
     bool send_chunk_header = config.getBool(key_in_config + ".send_chunk_header", false);
@@ -207,7 +206,6 @@ ExternalLoader::LoadablePtr ExternalUserDefinedFunctionsLoader::create(const std
         .arguments = std::move(arguments),
         .source = std::move(source),
         .is_aggregation = std::move(is_aggr_function),
-        .has_user_defined_emit_strategy = has_user_defined_emit_strategy,
         .name = std::move(name), //-V1030
         .command = std::move(command), //-V1030
         /// proton: ends

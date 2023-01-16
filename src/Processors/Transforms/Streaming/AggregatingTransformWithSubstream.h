@@ -48,14 +48,15 @@ public:
     void work() override;
 
 private:
-    virtual void consume(SubstreamContext & ctx, Chunk chunk);
+    virtual void consume(Chunk chunk, const SubstreamContextPtr & substream_ctx);
 
-    virtual void finalize(SubstreamContext &, ChunkContextPtr) { }
+    virtual void finalize(const SubstreamContextPtr &, const ChunkContextPtr &) { }
 
 protected:
-    void emitVersion(SubstreamContext & ctx, Block & block);
-    bool executeOrMergeColumns(SubstreamContext & ctx, Columns columns);
-    void setCurrentChunk(Chunk chunk, ChunkContextPtr chunk_ctx);
+    void emitVersion(Block & block, const SubstreamContextPtr & substream_ctx);
+    /// return {should_abort, need_finalization} pair
+    std::pair<bool, bool> executeOrMergeColumns(Columns columns, const SubstreamContextPtr & substream_ctx);
+    void setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx);
 
     virtual SubstreamContextPtr getOrCreateSubstreamContext(const SubstreamID & id);
     bool removeSubstreamContext(const SubstreamID & id);

@@ -67,56 +67,82 @@ IProcessor::Status AggregatingTransformWithSubstream::prepare()
 
 void AggregatingTransformWithSubstream::work()
 {
-    Int64 start_ns = MonotonicNanoseconds::now();
-    metrics.processed_bytes += current_chunk.bytes();
+    /// When `chunk` gets here, it generally has 2 cases
+    /// 0. Chunk with rows with chunk context (watermark or ckpt request)
+    /// 1. Chunk with rows without chunk context (watermark or ckpt request)
+    /// 2. Chunk without rows but with chunk context (watermark or ckpt request)
+    /// 3. Chunk without watermark and without chunk context (shall be UDA with its own emit strategy only)
+    /// For case 3, nobody has interests in dealing with it
+    auto num_rows = current_chunk.getNumRows();
+    if (num_rows == 0 && !current_chunk.hasChunkContext())
+    {
+        /// Remember to reset `read_current_chunk`
+        read_current_chunk = false;
+        return;
+    }
 
-    assert(current_chunk.hasChunkContext());
+    Int64 start_ns = MonotonicNanoseconds::now();
+    auto chunk_bytes = current_chunk.bytes();
+    metrics.processed_bytes += chunk_bytes;
 
     if (likely(!is_consume_finished))
     {
-        auto & substream_ctx = *getOrCreateSubstreamContext(current_chunk.getSubstreamID());
-        auto num_rows = current_chunk.getNumRows();
+        SubstreamContextPtr substream_ctx = nullptr;
+        if (const auto & substream_id = current_chunk.getSubstreamID(); substream_id != Streaming::INVALID_SUBSTREAM_ID)
+            substream_ctx = getOrCreateSubstreamContext(substream_id);
+
         if (num_rows > 0)
         {
-            substream_ctx.addRowCount(num_rows);
+            substream_ctx->addRowCount(num_rows);
             src_rows += num_rows;
-            src_bytes += current_chunk.bytes();
+            src_bytes += chunk_bytes;
         }
 
-        consume(substream_ctx, std::move(current_chunk));
-
-        read_current_chunk = false;
+        consume(std::move(current_chunk), substream_ctx);
     }
+
+    /// Remember to reset `read_current_chunk`
+    read_current_chunk = false;
 
     metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
 }
 
-void AggregatingTransformWithSubstream::consume(SubstreamContext & ctx, Chunk chunk)
+void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamContextPtr & substream_ctx)
 {
+    bool done = false, need_finalization = false;
+
     if (chunk.hasRows())
     {
-        if (!executeOrMergeColumns(ctx, chunk.detachColumns()))
+        assert(substream_ctx);
+        if (std::tie(done, need_finalization) = executeOrMergeColumns(chunk.detachColumns(), substream_ctx); done)
             is_consume_finished = true;
     }
 
     /// Since checkpoint barrier is always standalone, it can't coexist with watermark,
     /// we handle watermark and checkpoint barrier separately
-    if (chunk.hasWatermark())
-        finalize(ctx, chunk.getChunkContext());
+    if (chunk.hasWatermark() || need_finalization)
+    {
+        /// Watermark and need_finalization shall not be true at the same time
+        /// since when UDA has user defined emit strategy, watermark is disabled
+        assert(!(chunk.hasWatermark() && need_finalization));
+        finalize(substream_ctx, chunk.getChunkContext());
+    }
     // else if (chunk.requestCheckpoint())
     //     checkpointAlignment(chunk);
 }
 
-void AggregatingTransformWithSubstream::emitVersion(SubstreamContext & ctx, Block & block)
+void AggregatingTransformWithSubstream::emitVersion(Block & block, const SubstreamContextPtr & substream_ctx)
 {
-    Int64 version = ctx.version++;
+    assert(substream_ctx);
+
+    Int64 version = substream_ctx->version++;
     block.insert(
         {params->version_type->createColumnConst(block.rows(), version)->convertToFullColumnIfConst(),
          params->version_type,
          ProtonConsts::RESERVED_EMIT_VERSION});
 }
 
-void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, ChunkContextPtr chunk_ctx)
+void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx)
 {
     if (has_input)
         throw Exception("Current chunk was already set.", ErrorCodes::LOGICAL_ERROR);
@@ -141,8 +167,10 @@ void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, ChunkContex
     }
 }
 
-bool AggregatingTransformWithSubstream::executeOrMergeColumns(SubstreamContext & substream_ctx, Columns columns)
+std::pair<bool, bool> AggregatingTransformWithSubstream::executeOrMergeColumns(Columns columns, const SubstreamContextPtr & substream_ctx)
 {
+    assert(substream_ctx);
+
     /// When the workflow reaches here, the upstream (WatermarkTransformWithSubstream) already splits data
     /// according to partition keys
     auto num_rows = columns[0]->size();
@@ -150,7 +178,7 @@ bool AggregatingTransformWithSubstream::executeOrMergeColumns(SubstreamContext &
     assert(!params->only_merge);
 
     return params->aggregator.executeOnBlock(
-        std::move(columns), 0, num_rows, substream_ctx.variants, key_columns, aggregate_columns, no_more_keys);
+        std::move(columns), 0, num_rows, substream_ctx->variants, key_columns, aggregate_columns, no_more_keys);
 }
 
 SubstreamContextPtr AggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)

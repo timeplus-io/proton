@@ -813,7 +813,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         /// Analyze event predicates in WHERE clause like `WHERE _tp_time > 2023-01-01 00:01:01` or `WHERE _tp_sn > 1000`
         /// and create `SeekToInfo` objects to represent these predicates for streaming store rewinding in a streaming query.
         analyzeEventPredicateAsSeekTo();
-        /// proton: ends.
 
         /// Calculate structure of the result.
         result_header = getSampleBlockImpl();
@@ -832,6 +831,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
         if (result_header.findByName(ProtonConsts::STREAMING_TIMESTAMP_ALIAS))
             result_header.erase(ProtonConsts::STREAMING_TIMESTAMP_ALIAS);
+        /// proton: ends.
     };
 
     /// proton: starts. Add timestamp column to group by
@@ -919,6 +919,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
     /// proton: starts
     checkForStreamingQuery();
+    checkUDA();
     /// proton: ends
 
     if (query_info.projection)
@@ -2381,9 +2382,18 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         /// 2) Sharding expr keys
         if (query_info.hasPartitionByKeys())
         {
+            /// We like to limit the shuffling concurrency for JavaScript UDA
+            size_t shuffle_output_streams = context->getSettingsRef().max_threads.value;
+            auto controlled_concurrency = context->getSettingsRef().javascript_uda_max_concurrency.value;
+            if (query_info.has_javascript_uda)
+            {
+                shuffle_output_streams = std::min(shuffle_output_streams, controlled_concurrency);
+                LOG_INFO(log, "Limit shuffling output stream to {} for JavaScript UDA", shuffle_output_streams);
+            }
+
             auto substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
             query_plan.addStep(std::make_unique<Streaming::ShufflingStep>(
-                query_plan.getCurrentDataStream(), std::move(substream_key_positions), context->getSettingsRef().max_threads));
+                query_plan.getCurrentDataStream(), std::move(substream_key_positions), shuffle_output_streams));
         }
 
         /// If we only fetch columns, don't need add streaming processing step, e.g. `WatermarkStep` etc.
@@ -3102,14 +3112,19 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     if (options.is_projection_query)
         return;
 
+    auto streaming_group_by = has_user_defined_emit_strategy ? Streaming::Aggregator::Params::GroupBy::USER_DEFINED
+                                                             : Streaming::Aggregator::Params::GroupBy::OTHER;
+
+    if (query_analyzer->aggregates().size() > 1 && has_user_defined_emit_strategy)
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "User defined aggregation function with emit strategy shall be used together with other aggregation function");
+
     const auto & header_before_aggregation = query_plan.getCurrentDataStream().header;
     ColumnNumbers keys;
 
     /// If `window_start/end` are in aggregation columns, move them to the beginning
     /// of the aggregation columns for later window extraction
-    Streaming::Aggregator::Params::GroupBy streaming_group_by = analysis_result.has_own_emit_strategy
-        ? Streaming::Aggregator::Params::GroupBy::USER_DEFINED
-        : Streaming::Aggregator::Params::GroupBy::OTHER;
     ssize_t time_col_pos = -1;
     String time_col_name;
 
@@ -3347,7 +3362,7 @@ bool InterpreterSelectQuery::hasGlobalAggregation() const
 
 bool InterpreterSelectQuery::shouldApplyWatermark() const
 {
-    if (!isStreaming())
+    if (!isStreaming() || has_user_defined_emit_strategy)
         return false;
 
     if (hasStreamingWindowFunc())
@@ -3721,5 +3736,33 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
                 definition.getDefaultWindowName());
     }
 }
+
+void InterpreterSelectQuery::checkUDA()
+{
+    for (const auto & aggr_func_desc : query_analyzer->aggregates())
+    {
+        if (aggr_func_desc.function->hasUserDefinedEmit())
+            has_user_defined_emit_strategy = true;
+
+        if (aggr_func_desc.function->udfType() == UDFType::Javascript)
+            query_info.has_javascript_uda = true;
+    }
+
+    for (const auto & [_, window_desc] : query_analyzer->windowDescriptions())
+    {
+        for (const auto & window_func : window_desc.window_functions)
+        {
+            if (!window_func.aggregate_function)
+                continue;
+
+            if (window_func.aggregate_function->hasUserDefinedEmit())
+                has_user_defined_emit_strategy = true;
+
+            if (window_func.aggregate_function->udfType() == UDFType::Javascript)
+                query_info.has_javascript_uda = true;
+        }
+    }
+}
+
 /// proton: ends
 }

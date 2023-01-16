@@ -18,7 +18,6 @@
 #include <Interpreters/Context.h>
 #include <Processors/ConcatProcessor.h>
 #include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/CreatingSetsStep.h>
 #include <Processors/QueryPlan/FilterStep.h>
 #include <Processors/QueryPlan/ExpressionStep.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
@@ -27,19 +26,15 @@
 #include <Processors/Sources/SourceFromSingleChunk.h>
 
 #include <Core/UUID.h>
-#include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeArray.h>
 #include <Storages/VirtualColumnUtils.h>
 
 #include <Interpreters/InterpreterSelectQuery.h>
 
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
-#include <IO/WriteBufferFromOStream.h>
 
 /// proton: starts.
 #include <Common/ProtonCommon.h>
@@ -145,7 +140,20 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read,
     bool enable_parallel_reading) const
 {
-    return doRead(column_names_to_return, storage_snapshot, query_info, context, max_block_size, num_streams, processed_stage, max_block_numbers_to_read, enable_parallel_reading);
+    /// proton: starts. For query containing JavaScript UDA, limit the concurrency to 2
+    size_t max_num_streams = num_streams;
+    if (query_info.has_javascript_uda)
+    {
+        auto controlled_num_streams = context->getSettingsRef().javascript_uda_max_concurrency.value;
+        if (max_num_streams > controlled_num_streams)
+        {
+            max_num_streams = controlled_num_streams;
+            LOG_INFO(log, "Limit JavaScript UDA table query's concurrency to {}", max_num_streams);
+        }
+    }
+    /// proton : ends
+
+    return doRead(column_names_to_return, storage_snapshot, query_info, context, max_block_size, max_num_streams, processed_stage, max_block_numbers_to_read, enable_parallel_reading);
 }
 
 QueryPlanPtr MergeTreeDataSelectExecutor::doRead(

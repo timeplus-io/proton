@@ -23,15 +23,15 @@ public:
     String getName() const override { return "GlobalAggregatingTransform"; }
 
 private:
-    void finalize(ChunkContextPtr chunk_ctx) override;
+    void finalize(const ChunkContextPtr & chunk_ctx) override;
 
-    inline void doFinalize(ChunkContextPtr & chunk_ctx);
+    inline void doFinalize(const ChunkContextPtr & chunk_ctx);
 
-    inline bool initialize(ManyAggregatedDataVariantsPtr & data, ChunkContextPtr & chunk_ctx);
+    inline bool initialize(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx);
 
-    void convertSingleLevel(ManyAggregatedDataVariantsPtr & data, ChunkContextPtr & chunk_ctx);
+    void convertSingleLevel(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx);
 
-    void convertTwoLevel(ManyAggregatedDataVariantsPtr & data, ChunkContextPtr & chunk_ctx);
+    void convertTwoLevel(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx);
 };
 
 }

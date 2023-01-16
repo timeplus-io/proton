@@ -33,7 +33,7 @@ GlobalAggregatingTransform::GlobalAggregatingTransform(
 
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
-void GlobalAggregatingTransform::finalize(ChunkContextPtr chunk_ctx)
+void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 {
     /// If there is no new data, don't emit aggr result
     if (!many_data->hasNewData())
@@ -66,7 +66,7 @@ void GlobalAggregatingTransform::finalize(ChunkContextPtr chunk_ctx)
     }
 }
 
-void GlobalAggregatingTransform::doFinalize(ChunkContextPtr & chunk_ctx)
+void GlobalAggregatingTransform::doFinalize(const ChunkContextPtr & chunk_ctx)
 {
     /// FIXME spill to disk, overflow_row etc cases
     auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(many_data->variants);
@@ -86,7 +86,7 @@ void GlobalAggregatingTransform::doFinalize(ChunkContextPtr & chunk_ctx)
 }
 
 /// Logic borrowed from ConvertingAggregatedToChunksTransform::initialize
-bool GlobalAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & data, ChunkContextPtr & chunk_ctx)
+bool GlobalAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx)
 {
     AggregatedDataVariantsPtr & first = data->at(0);
 
@@ -112,7 +112,7 @@ bool GlobalAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & data
 }
 
 /// Logic borrowed from ConvertingAggregatedToChunksTransform::mergeSingleLevel
-void GlobalAggregatingTransform::convertSingleLevel(ManyAggregatedDataVariantsPtr & data, ChunkContextPtr & chunk_ctx)
+void GlobalAggregatingTransform::convertSingleLevel(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx)
 {
     AggregatedDataVariantsPtr & first = data->at(0);
 
@@ -137,7 +137,7 @@ void GlobalAggregatingTransform::convertSingleLevel(ManyAggregatedDataVariantsPt
     setCurrentChunk(convertToChunk(block), chunk_ctx);
 }
 
-void GlobalAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr & data, ChunkContextPtr & chunk_ctx)
+void GlobalAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx)
 {
     /// FIXME
     (void)chunk_ctx;

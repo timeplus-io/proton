@@ -1071,6 +1071,15 @@ void NO_INLINE Aggregator::executeImplBatch(
             inst->batch_that->addBatchSparse(row_begin, row_end, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool);
         else
             inst->batch_that->addBatch(row_begin, row_end, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool);
+
+        /// proton : starts.
+        if (inst->batch_that->isUserDefined())
+        {
+            /// It is ok to re-flush if it is flush already, then we don't need maintain a map to check if it is ready flushed
+            for (size_t i = row_begin; i < row_end; ++i)
+                inst->batch_that->flush(places[i]);
+        }
+        /// proton : ends
     }
 }
 
@@ -1153,6 +1162,11 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
                 res + inst->state_offset,
                 inst->batch_arguments,
                 arena);
+
+        /// proton : starts
+        if (inst->batch_that->isUserDefined())
+            inst->batch_that->flush(res + inst->state_offset);
+        /// proton : end
     }
 }
 
@@ -1177,6 +1191,11 @@ void NO_INLINE Aggregator::executeOnIntervalWithoutKeyImpl(
             inst->batch_that->addBatchSinglePlaceFromInterval(inst->offsets[row_begin], inst->offsets[row_end - 1], res + inst->state_offset, inst->batch_arguments, arena);
         else
             inst->batch_that->addBatchSinglePlaceFromInterval(row_begin, row_end, res + inst->state_offset, inst->batch_arguments, arena);
+
+        /// proton : starts
+        if (inst->batch_that->isUserDefined())
+            inst->batch_that->flush(res + inst->state_offset);
+        /// proton : ends
     }
 }
 

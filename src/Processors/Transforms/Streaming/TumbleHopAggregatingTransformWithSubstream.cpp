@@ -20,16 +20,18 @@ TumbleHopAggregatingTransformWithSubstream::TumbleHopAggregatingTransformWithSub
 
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
-void TumbleHopAggregatingTransformWithSubstream::finalize(SubstreamContext & ctx, ChunkContextPtr chunk_ctx)
+void TumbleHopAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx)
 {
-    SCOPE_EXIT({ ctx.resetRowCounts(); });
+    assert(substream_ctx);
+
+    SCOPE_EXIT({ substream_ctx->resetRowCounts(); });
     auto watermark = chunk_ctx->getWatermark();
 
     /// Finalize current watermark
     if (watermark.valid())
     {
         auto start = MonotonicMilliseconds::now();
-        doFinalize(ctx, watermark, chunk_ctx);
+        doFinalize(watermark, substream_ctx, chunk_ctx);
         auto end = MonotonicMilliseconds::now();
 
         LOG_DEBUG(
@@ -40,13 +42,15 @@ void TumbleHopAggregatingTransformWithSubstream::finalize(SubstreamContext & ctx
             watermark.watermark);
 
         /// Do memory arena recycling by last finalized watermark
-        params->aggregator.removeBucketsBefore(ctx.variants, watermark);
+        params->aggregator.removeBucketsBefore(substream_ctx->variants, watermark);
     }
 }
 
-void TumbleHopAggregatingTransformWithSubstream::doFinalize(SubstreamContext & ctx, const WatermarkBound & watermark, ChunkContextPtr & chunk_ctx)
+void TumbleHopAggregatingTransformWithSubstream::doFinalize(const WatermarkBound & watermark, const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx)
 {
-    auto & data_variant = ctx.variants;
+    assert(substream_ctx);
+
+    auto & data_variant = substream_ctx->variants;
 
     if (data_variant.empty())
         return;
@@ -64,7 +68,7 @@ void TumbleHopAggregatingTransformWithSubstream::doFinalize(SubstreamContext & c
             block = params->aggregator.convertOneBucketToBlockFinal(data_variant, ConvertAction::STREAMING_EMIT, bucket);
 
             if (params->emit_version)
-                emitVersion(ctx, block);
+                emitVersion(block, substream_ctx);
         }
         else
             block = params->aggregator.convertOneBucketToBlockIntermediate(data_variant, ConvertAction::STREAMING_EMIT, bucket);

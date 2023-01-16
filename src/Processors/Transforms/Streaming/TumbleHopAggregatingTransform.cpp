@@ -35,7 +35,7 @@ TumbleHopAggregatingTransform::TumbleHopAggregatingTransform(
 
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
-void TumbleHopAggregatingTransform::finalize(ChunkContextPtr chunk_ctx)
+void TumbleHopAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 {
     assert(chunk_ctx);
 
@@ -103,7 +103,7 @@ void TumbleHopAggregatingTransform::finalize(ChunkContextPtr chunk_ctx)
     }
 }
 
-void TumbleHopAggregatingTransform::doFinalize(const WatermarkBound & watermark, ChunkContextPtr & chunk_ctx)
+void TumbleHopAggregatingTransform::doFinalize(const WatermarkBound & watermark, const ChunkContextPtr & chunk_ctx)
 {
     /// FIXME spill to disk, overflow_row etc cases
     auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(many_data->variants);
@@ -131,7 +131,7 @@ void TumbleHopAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & d
 }
 
 void TumbleHopAggregatingTransform::convertTwoLevel(
-    ManyAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkContextPtr & chunk_ctx)
+    ManyAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, const ChunkContextPtr & chunk_ctx)
 {
     /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
     /// one project window for streaming processing

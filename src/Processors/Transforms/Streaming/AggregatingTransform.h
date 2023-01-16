@@ -118,15 +118,16 @@ public:
 private:
     virtual void consume(Chunk chunk);
 
-    virtual void finalize(ChunkContextPtr) { }
+    virtual void finalize(const ChunkContextPtr &) { }
 
     inline IProcessor::Status preparePushToOutput();
     void checkpointAlignment(Chunk & chunk);
 
 protected:
     void emitVersion(Block & block);
-    bool executeOrMergeColumns(Columns columns, size_t num_rows);
-    void setCurrentChunk(Chunk chunk, ChunkContextPtr chunk_ctx);
+    /// return {should_abort, need_finalization} pair
+    std::pair<bool, bool> executeOrMergeColumns(Columns columns, size_t num_rows);
+    void setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx);
 
 protected:
     /// To read the data that was flushed into the temporary data file.
