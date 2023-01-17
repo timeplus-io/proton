@@ -346,12 +346,16 @@ void checkHeapLimit(v8::Isolate * isolate, size_t max_v8_heap_size_in_bytes)
     isolate->GetHeapStatistics(&heap_statistics);
 
     auto used = heap_statistics.used_heap_size();
-    if (used > max_v8_heap_size_in_bytes)
+    auto total = heap_statistics.total_available_size();
+    auto limit = std::min(static_cast<size_t>(0.9 * total), max_v8_heap_size_in_bytes);
+    if (used > limit)
         throw Exception(
             ErrorCodes::UDF_MEMORY_THRESHOLD_EXCEEDED,
-            "Current V8 heap size used={} bytes, exceed the javascript_max_memory_bytes={} bytes",
+            "Current V8 heap size used={} bytes, total={} bytes, javascript_max_memory_bytes={}, exceed the limit={} bytes",
             used,
-            max_v8_heap_size_in_bytes);
+            total,
+            max_v8_heap_size_in_bytes,
+            limit);
 }
 }
 }
