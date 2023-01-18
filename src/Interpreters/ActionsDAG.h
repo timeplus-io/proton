@@ -104,7 +104,7 @@ private:
 
 public:
     ActionsDAG() = default;
-    ActionsDAG(ActionsDAG &&) = default;
+    ActionsDAG(ActionsDAG &&) noexcept = default;
     ActionsDAG(const ActionsDAG &) = delete;
     ActionsDAG & operator=(const ActionsDAG &) = delete;
     explicit ActionsDAG(const NamesAndTypesList & inputs_);

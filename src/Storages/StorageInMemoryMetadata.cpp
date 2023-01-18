@@ -91,7 +91,7 @@ void StorageInMemoryMetadata::setSecondaryIndices(IndicesDescription secondary_i
 
 void StorageInMemoryMetadata::setConstraints(ConstraintsDescription constraints_)
 {
-    constraints = std::move(constraints_);
+    constraints = std::move(constraints_); /// NOLINT(performance-move-const-arg)
 }
 
 void StorageInMemoryMetadata::setProjections(ProjectionsDescription projections_)

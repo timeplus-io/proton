@@ -122,7 +122,7 @@ FetchDataDescription LogSegment::read(int64_t start_sn, uint64_t max_size, uint6
 }
 
 /// trim to sn, returns bytes trimmed
-int64_t LogSegment::trim(int64_t sn)
+int64_t LogSegment::trim(int64_t sn) /// NOLINT(readability-convert-member-functions-to-static)
 {
     (void)sn;
     return 0;
@@ -224,7 +224,7 @@ void LogSegment::changeFileSuffix(const std::string & new_suffix)
 
         fs::path new_file(file);
         new_file += new_suffix;
-        log->renameTo(std::move(new_file), err);
+        log->renameTo(new_file, err); /// clang-tidy: bugprone-use-after-move
 
         if (err)
             LOG_ERROR(logger, "Failed to rename file from {} to {}, error={}", file.c_str(), new_file.c_str(), err.message());
@@ -236,7 +236,7 @@ void LogSegment::changeFileSuffix(const std::string & new_suffix)
         std::error_code err;
         fs::path new_index_dir(index_dir);
         new_index_dir += new_suffix;
-        indexes.renameTo(std::move(new_index_dir), err);
+        indexes.renameTo(new_index_dir, err); /// clang-tidy: bugprone-use-after-move
 
         if (err)
             LOG_ERROR(logger, "Failed to rename file from {} to {}, error={}", index_dir.c_str(), new_index_dir.c_str(), err.message());

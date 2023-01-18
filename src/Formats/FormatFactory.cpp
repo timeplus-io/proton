@@ -284,7 +284,7 @@ OutputFormatPtr FormatFactory::getOutputFormatParallelIfPossible(
     {
         auto formatter_creator = [output_getter, sample, callback, format_settings]
         (WriteBuffer & output) -> OutputFormatPtr
-        { return output_getter(output, sample, {std::move(callback)}, format_settings);};
+        { return output_getter(output, sample, {std::move(callback)}, format_settings);}; /// NOLINT(performance-move-const-arg)
 
         ParallelFormattingOutputFormat::Params builder{buf, sample, formatter_creator, settings.max_threads};
 
@@ -469,7 +469,7 @@ String FormatFactory::getFormatFromFileDescriptor(int fd)
 {
 #ifdef OS_LINUX
     char buf[32] = {'\0'};
-    snprintf(buf, sizeof(buf), "/proc/self/fd/%d", fd);
+    snprintf(buf, sizeof(buf), "/proc/self/fd/%d", fd); /// NOLINT(cert-err33-c)
     char file_path[PATH_MAX] = {'\0'};
     if (readlink(buf, file_path, sizeof(file_path) - 1) != -1)
         return getFormatFromFileName(file_path, false);

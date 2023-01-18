@@ -200,7 +200,7 @@ ExternalLoader::LoadablePtr ExternalUserDefinedFunctionsLoader::create(const std
     {
         /// proton: starts.
         .type = std::move(func_type), //-V1030
-        .url = std::move(url),
+        .url = url,
         .auth_method = std::move(auth_method),
         .auth_context = std::move(auth_ctx),
         .arguments = std::move(arguments),

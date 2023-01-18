@@ -364,7 +364,7 @@ void SystemLog<LogElement>::flushImpl(const std::vector<LogElement> & to_flush, 
         for (const auto & name_and_type : log_element_names_and_types)
             log_element_columns.emplace_back(name_and_type.type, name_and_type.name);
 
-        Block block(std::move(log_element_columns));
+        Block block(std::move(log_element_columns)); /// NOLINT(performance-move-const-arg)
 
         MutableColumns columns = block.mutateColumns();
         for (const auto & elem : to_flush)

@@ -316,7 +316,7 @@ bool ProxyStream::processTimestampStep(
     bool backfill = !seek_to.empty() && seek_to != "latest" && seek_to != "earliest";
 
     query_plan.addStep(std::make_unique<TimestampTransformStep>(
-        query_plan.getCurrentDataStream(), output_header, std::move(timestamp_func_desc), backfill));
+        query_plan.getCurrentDataStream(), output_header, timestamp_func_desc, backfill));
 
     return proc_time;
 }

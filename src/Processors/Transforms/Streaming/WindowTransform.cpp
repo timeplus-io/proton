@@ -82,14 +82,14 @@ WindowTransform::WindowTransform(
     if (partition_by_type == Aggregator::Params::GroupBy::WINDOW_START || partition_by_type == Aggregator::Params::GroupBy::WINDOW_END)
         executor = std::make_unique<WindowFunctionExecutor>(
             Substream::GroupByKeys::WINDOWED_PARTITION_KEYS,
-            std::move(input_header_),
+            input_header_,
             std::move(partition_by_indices),
             std::move(workspaces),
             std::move(context_indices));
     else
         executor = std::make_unique<WindowFunctionExecutor>(
             Substream::GroupByKeys::PARTITION_KEYS,
-            std::move(input_header_),
+            input_header_,
             std::move(partition_by_indices),
             std::move(workspaces),
             std::move(context_indices));

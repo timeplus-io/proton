@@ -87,12 +87,12 @@ std::vector<RecordsSequenceRangesPair> StreamCallbackData::categorizeRecordsAcco
 {
     std::vector<RecordsSequenceRangesPair> range_buckets(sequence_ranges.size() + 1);
 
-    for (auto & record : records)
+    for (const auto & record : records)
     {
         auto record_sn = record->getSN();
         if (record_sn > max_committed_sn)
         {
-            range_buckets.back().first.push_back(std::move(record));
+            range_buckets.back().first.push_back(record);
             continue;
         }
 
@@ -110,7 +110,7 @@ std::vector<RecordsSequenceRangesPair> StreamCallbackData::categorizeRecordsAcco
             {
                 /// Found the missing range for current record
                 auto & range_bucket = range_buckets[i];
-                range_bucket.first.push_back(std::move(record));
+                range_bucket.first.push_back(record);
 
                 /// Collect all missing sequence range parts
                 for (size_t j = i; j < sequence_ranges.size(); ++j)

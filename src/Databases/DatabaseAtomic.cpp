@@ -35,7 +35,7 @@ public:
 };
 
 DatabaseAtomic::DatabaseAtomic(String name_, String metadata_path_, UUID uuid, const String & logger_name, ContextPtr context_)
-    : DatabaseOrdinary(name_, std::move(metadata_path_), "store/", logger_name, context_)
+    : DatabaseOrdinary(name_, metadata_path_, "store/", logger_name, context_)
     , path_to_table_symlinks(fs::path(getContext()->getPath()) / "data" / escapeForFileName(name_) / "")
     , path_to_metadata_symlink(fs::path(getContext()->getPath()) / "metadata" / escapeForFileName(name_))
     , db_uuid(uuid)
@@ -354,7 +354,7 @@ void DatabaseAtomic::assertDetachedTableNotInUse(const UUID & uuid)
     /// 3. ATTACH TABLE table; (new instance of Storage with the same UUID is created, instances share data on disk)
     /// 4. INSERT INTO table ...; (both Storage instances writes data without any synchronization)
     /// To avoid it, we remember UUIDs of detached tables and does not allow ATTACH table with such UUID until detached instance still in use.
-    if (detached_tables.count(uuid))
+    if (detached_tables.contains(uuid))
         /// proton: starts
         throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Cannot attach stream with UUID {}, "
                         "because it was detached but still used by some query. Retry later.", toString(uuid));
@@ -580,7 +580,7 @@ void DatabaseAtomic::waitDetachedTableNotInUse(const UUID & uuid)
         {
             std::lock_guard lock{mutex};
             not_in_use = cleanupDetachedTables();
-            if (detached_tables.count(uuid) == 0)
+            if (!detached_tables.contains(uuid))
                 return;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(100));

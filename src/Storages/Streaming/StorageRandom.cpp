@@ -169,7 +169,7 @@ ColumnPtr fillColumnWithRandomData(const DataTypePtr type, UInt64 limit, pcg64 &
 
             auto data_column = fillColumnWithRandomData(nested_type, offset, rng, context);
 
-            return ColumnArray::create(std::move(data_column), std::move(offsets_column));
+            return ColumnArray::create(std::move(data_column), std::move(offsets_column)); /// NOLINT(performance-move-const-arg)
         }
 
         case TypeIndex::Tuple: {
@@ -180,7 +180,7 @@ ColumnPtr fillColumnWithRandomData(const DataTypePtr type, UInt64 limit, pcg64 &
             for (size_t i = 0; i < tuple_size; ++i)
                 tuple_columns[i] = fillColumnWithRandomData(elements[i], limit, rng, context);
 
-            return ColumnTuple::create(std::move(tuple_columns));
+            return ColumnTuple::create(std::move(tuple_columns)); /// NOLINT(performance-move-const-arg)
         }
 
         case TypeIndex::Nullable: {
@@ -193,7 +193,7 @@ ColumnPtr fillColumnWithRandomData(const DataTypePtr type, UInt64 limit, pcg64 &
             for (UInt64 i = 0; i < limit; ++i)
                 null_map[i] = rng() % 16 == 0; /// No real motivation for this.
 
-            return ColumnNullable::create(std::move(nested_column), std::move(null_map_column));
+            return ColumnNullable::create(std::move(nested_column), std::move(null_map_column)); /// NOLINT(performance-move-const-arg)
         }
         case TypeIndex::UInt8: {
             auto column = ColumnUInt8::create();
@@ -363,14 +363,14 @@ public:
         , rng(random_seed_)
         , context(context_)
     {
-        for (auto elem : block_full)
+        for (const auto &elem : block_full)
         {
             bool is_reserved_column
                 = std::find(ProtonConsts::RESERVED_COLUMN_NAMES.begin(), ProtonConsts::RESERVED_COLUMN_NAMES.end(), elem.name)
                 != ProtonConsts::RESERVED_COLUMN_NAMES.end();
             if ( is_reserved_column || our_columns.hasDefault(elem.name))
                 continue;
-            _block_to_fill.insert(elem);
+            block_to_fill.insert(elem);
         }
     }
 
@@ -382,41 +382,41 @@ protected:
         Columns columns;
         columns.reserve(block_full.columns());
         
-        Block block_to_fill(_block_to_fill.cloneEmpty());
+        Block block_to_fill_as_result(block_to_fill.cloneEmpty());
 
-        for (const auto & elem : block_to_fill)
+        for (const auto & elem : block_to_fill_as_result)
             columns.emplace_back(fillColumnWithRandomData(elem.type, block_size, rng, context));
 
-        block_to_fill.setColumns(std::move(columns));
+        block_to_fill_as_result.setColumns(columns);
 
         //TODO:be careful when a default column is named _dummy
         //e.g. create stream test(_dummy string default  rand_string());
 
-        if (block_to_fill.columns() == 0)
-            block_to_fill.insert({ColumnConst::create(ColumnUInt8::create(1, 0), block_size), std::make_shared<DataTypeUInt8>(), "_dummy"});
+        if (block_to_fill_as_result.columns() == 0)
+            block_to_fill_as_result.insert({ColumnConst::create(ColumnUInt8::create(1, 0), block_size), std::make_shared<DataTypeUInt8>(), "_dummy"});
 
-        auto dag = evaluateMissingDefaults(block_to_fill, block_full.getNamesAndTypesList(), our_columns, context);
+        auto dag = evaluateMissingDefaults(block_to_fill_as_result, block_full.getNamesAndTypesList(), our_columns, context);
         if (dag)
         {
             auto actions = std::make_shared<ExpressionActions>(
                 std::move(dag), ExpressionActionsSettings::fromContext(context, CompileExpressions::yes));
-            actions->execute(block_to_fill);
+            actions->execute(block_to_fill_as_result);
         }
 
-        if (block_to_fill.has(ProtonConsts::RESERVED_COLUMN_NAMES[0]) && block_to_fill.has(ProtonConsts::RESERVED_COLUMN_NAMES[1]) )
-            block_to_fill.getByName(ProtonConsts::RESERVED_COLUMN_NAMES[1]).column
-                = block_to_fill.getByName(ProtonConsts::RESERVED_COLUMN_NAMES[0]).column->cloneResized(block_size);
-        if( block_to_fill.has("_dummy") )
-            block_to_fill.erase("_dummy");
+        if (block_to_fill_as_result.has(ProtonConsts::RESERVED_COLUMN_NAMES[0]) && block_to_fill_as_result.has(ProtonConsts::RESERVED_COLUMN_NAMES[1]) )
+            block_to_fill_as_result.getByName(ProtonConsts::RESERVED_COLUMN_NAMES[1]).column
+                = block_to_fill_as_result.getByName(ProtonConsts::RESERVED_COLUMN_NAMES[0]).column->cloneResized(block_size);
+        if( block_to_fill_as_result.has("_dummy") )
+            block_to_fill_as_result.erase("_dummy");
 
-        columns = Nested::flatten(block_to_fill).getColumns();
+        columns = Nested::flatten(block_to_fill_as_result).getColumns();
         return {std::move(columns), block_size};
     }
 
 private:
     UInt64 block_size;
     Block block_full;
-    Block _block_to_fill;
+    Block block_to_fill;
     const ColumnsDescription our_columns;
     pcg64 rng;
     ContextPtr context;

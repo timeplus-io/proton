@@ -40,7 +40,7 @@ struct PullingAsyncPipelineExecutor::Data
         if (has_exception)
         {
             has_exception = false;
-            std::rethrow_exception(std::move(exception));
+            std::rethrow_exception(exception);
         }
     }
 };

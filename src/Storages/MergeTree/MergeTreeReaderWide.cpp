@@ -38,13 +38,13 @@ MergeTreeReaderWide::MergeTreeReaderWide(
     clockid_t clock_type_)
     : IMergeTreeReader(
         data_part_info_,
-        std::move(columns_),
+        columns_,
         metadata_snapshot_,
         uncompressed_cache_,
-        std::move(mark_cache_),
-        std::move(mark_ranges_),
-        std::move(settings_),
-        std::move(avg_value_size_hints_))
+        mark_cache_,
+        mark_ranges_,
+        settings_,
+        avg_value_size_hints_)
 {
     try
     {

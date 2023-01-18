@@ -19,7 +19,7 @@ SourceColumnsDescription::PhysicalColumnPositions::operator=(std::initializer_li
 SourceColumnsDescription::PhysicalColumnPositions &
 SourceColumnsDescription::PhysicalColumnPositions::operator=(const std::vector<uint16_t> & positions_)
 {
-    positions = std::move(positions_);
+    positions = positions_;
     subcolumns.clear();
     return *this;
 }

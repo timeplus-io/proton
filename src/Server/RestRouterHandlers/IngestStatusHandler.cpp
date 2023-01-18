@@ -71,8 +71,8 @@ namespace
             for (size_t i = 0; auto & poll_id : poll_id_and_status.first)
             {
                 Poco::JSON::Object::Ptr json(new Poco::JSON::Object());
-                json->set("poll_id", std::move(poll_id));
-                json->set("status", std::move(poll_id_and_status.second[i].status));
+                json->set("poll_id", poll_id);
+                json->set("status", poll_id_and_status.second[i].status);
                 json->set("progress", poll_id_and_status.second[i].progress);
                 json_statuses.add(json);
                 ++i;

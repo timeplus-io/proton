@@ -22,7 +22,7 @@ namespace
         if (target_pos >= 0)
         {
             assert(block.getByPosition(target_pos).column->getDataType() == col_tuple->getColumnPtr(src_pos)->getDataType());
-            block.getByPosition(target_pos).column = std::move(col_tuple->getColumnPtr(src_pos));
+            block.getByPosition(target_pos).column = std::move(col_tuple->getColumnPtr(src_pos)); /// NOLINT(performance-move-const-arg)
         }
     }
 
@@ -31,7 +31,7 @@ namespace
         if (target_pos >= 0)
         {
             /// const ColumnArray & src = assert_cast<const ColumnArray &>(*wstart_result);
-            auto src_win_col = checkAndGetColumn<ColumnArray>(col_tuple->getColumnPtr(src_pos).get());
+            const auto *src_win_col = checkAndGetColumn<ColumnArray>(col_tuple->getColumnPtr(src_pos).get());
 
             if (!replicated)
             {
@@ -153,7 +153,7 @@ void WindowAssignmentTransform::assignWindow(Chunk & chunk)
     chunk.setColumns(result.getColumns(), result.rows());
 }
 
-ALWAYS_INLINE void WindowAssignmentTransform::assignTumbleWindow(Block & result, const ColumnTuple * col_tuple)
+ALWAYS_INLINE void WindowAssignmentTransform::assignTumbleWindow(Block & result, const ColumnTuple * col_tuple) const
 {
     if (wstart_pos < wend_pos)
     {
@@ -167,7 +167,7 @@ ALWAYS_INLINE void WindowAssignmentTransform::assignTumbleWindow(Block & result,
     }
 }
 
-void WindowAssignmentTransform::assignHopWindow(Block & result, const ColumnTuple * col_tuple)
+void WindowAssignmentTransform::assignHopWindow(Block & result, const ColumnTuple * col_tuple) const
 {
     bool replicated = false;
     if (wstart_pos < wend_pos)
@@ -182,7 +182,7 @@ void WindowAssignmentTransform::assignHopWindow(Block & result, const ColumnTupl
     }
 }
 
-void WindowAssignmentTransform::assignSessionWindow(Block & result)
+void WindowAssignmentTransform::assignSessionWindow(Block & result) const
 {
     if (wstart_pos < wend_pos)
     {

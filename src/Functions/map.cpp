@@ -184,7 +184,7 @@ public:
         auto index_type = std::make_shared<DataTypeUInt64>();
         ColumnWithTypeAndName index_type_and_name{index_type->createColumnConst(1, 0), index_type, ""};
         ColumnsWithTypeAndName key_args{arguments[0], index_type_and_name};
-        ColumnsWithTypeAndName val_args{arguments[1], std::move(index_type_and_name)};
+        ColumnsWithTypeAndName val_args{arguments[1], index_type_and_name};
 
         auto array_length_builder = FunctionFactory::instance().get("length", ctx);
         auto array_length = array_length_builder->build({arguments[0]});
@@ -192,8 +192,8 @@ public:
         auto key_arr_len = array_length->execute(key_args, index_type_and_name.type, input_rows_count, false);
         auto val_arr_len = array_length->execute(val_args, index_type_and_name.type, input_rows_count, false);
 
-        auto * key_arr_len_vec = checkAndGetColumn<ColumnUInt64>(key_arr_len.get());
-        auto * val_arr_len_vec = checkAndGetColumn<ColumnUInt64>(val_arr_len.get());
+        const auto * key_arr_len_vec = checkAndGetColumn<ColumnUInt64>(key_arr_len.get());
+        const auto * val_arr_len_vec = checkAndGetColumn<ColumnUInt64>(val_arr_len.get());
         assert(key_arr_len_vec->size() == val_arr_len_vec->size() && key_arr_len_vec->size() == input_rows_count);
 
         /// Validate key array size, and value array size, each array shall have the same size

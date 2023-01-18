@@ -12,7 +12,7 @@ StreamingStoreSourceChannel::StreamingStoreSourceChannel(
     StorageSnapshotPtr storage_snapshot_,
     ContextPtr query_context_,
     Poco::Logger * log_)
-    : StreamingStoreSourceBase(header, std::move(storage_snapshot_), std::move(query_context_), log_, ProcessorID::StreamingStoreSourceChannelID)
+    : StreamingStoreSourceBase(header, storage_snapshot_, std::move(query_context_), log_, ProcessorID::StreamingStoreSourceChannelID) /// NOLINT(performance-move-const-arg)
     , id(sequence_id++)
     , multiplexer(std::move(multiplexer_))
     , records_queue(1000)

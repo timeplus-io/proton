@@ -27,13 +27,13 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
     clockid_t clock_type_)
     : IMergeTreeReader(
         data_part_info_for_read_,
-        std::move(columns_),
+        columns_,
         metadata_snapshot_,
         uncompressed_cache_,
         mark_cache_,
-        std::move(mark_ranges_),
-        std::move(settings_),
-        std::move(avg_value_size_hints_))
+        mark_ranges_,
+        settings_,
+        avg_value_size_hints_)
     , marks_loader(
           data_part_info_for_read_->getDataPartStorage(),
           mark_cache,

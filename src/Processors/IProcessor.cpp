@@ -118,7 +118,7 @@ void IProcessor::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
     /// By default, we just notify checkpoint coordinator the processor has seen
     /// seen the checkpoint epic since most processor don't have `state` to checkpoint
-    ckpt_ctx->coordinator->checkpointed(getVersion(), logic_pid, std::move(ckpt_ctx));
+    ckpt_ctx->coordinator->checkpointed(getVersion(), logic_pid, std::move(ckpt_ctx)); /// NOLINT(bugprone-use-after-move, hicpp-invalid-access-moved)
 }
 
 

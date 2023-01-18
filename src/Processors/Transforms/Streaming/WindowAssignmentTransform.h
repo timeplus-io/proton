@@ -31,9 +31,9 @@ public:
 
 private:
     void assignWindow(Chunk & chunk);
-    void assignTumbleWindow(Block & result, const ColumnTuple * col_tuple);
-    void assignHopWindow(Block & result, const ColumnTuple * col_tuple);
-    void assignSessionWindow(Block & result);
+    void assignTumbleWindow(Block & result, const ColumnTuple * col_tuple) const;
+    void assignHopWindow(Block & result, const ColumnTuple * col_tuple) const;
+    void assignSessionWindow(Block & result) const;
     /// Calculate the positions of columns required by window expr
     void calculateColumns(const Block & input_header, const Block & output_header);
 

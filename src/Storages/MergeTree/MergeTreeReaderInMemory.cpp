@@ -24,12 +24,12 @@ MergeTreeReaderInMemory::MergeTreeReaderInMemory(
     MergeTreeReaderSettings settings_)
     : IMergeTreeReader(
         data_part_info_for_read_,
-        std::move(columns_),
+        columns_,
         metadata_snapshot_,
         nullptr,
         nullptr,
-        std::move(mark_ranges_),
-        std::move(settings_),
+        mark_ranges_,
+        settings_,
         {})
     , part_in_memory(std::move(data_part_))
 {

@@ -226,7 +226,7 @@ ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms
     checkLastError(ctx);
 
     std::unique_ptr<rd_kafka_message_t *, decltype(free) *> rkmessages{
-        static_cast<rd_kafka_message_t **>(malloc(sizeof(*rkmessages) * count)), free};
+        static_cast<rd_kafka_message_t **>(malloc(sizeof(*rkmessages) * count)), free}; /// NOLINT(bugprone-sizeof-expression)
 
     auto res = rd_kafka_consume_batch(ctx.topic_handle.get(), ctx.partition, timeout_ms, rkmessages.get(), count);
 
@@ -237,7 +237,7 @@ ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms
 
         for (ssize_t idx = 0; idx < res; ++idx)
         {
-            auto rkmessage = rkmessages.get()[idx];
+            auto * rkmessage = rkmessages.get()[idx];
             if (rkmessage->err == RD_KAFKA_RESP_ERR_NO_ERROR)
             {
                 if (unlikely(rkmessage->offset < ctx.offset))
@@ -347,7 +347,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, ConsumeCallbac
                     try
                     {
                         auto size = wrapped->records.size();
-                        wrapped->callback(std::move(wrapped->records), wrapped->data);
+                        wrapped->callback(wrapped->records, wrapped->data);
                         assert(wrapped->records.empty());
                         wrapped->records.reserve(size);
                         wrapped->current_bytes = 0;
@@ -427,7 +427,7 @@ int32_t KafkaWALSimpleConsumer::consume(
     checkLastError(ctx);
 
     std::unique_ptr<rd_kafka_message_t *, decltype(free) *> rkmessages{
-        static_cast<rd_kafka_message_t **>(malloc(sizeof(*rkmessages) * count)), free};
+        static_cast<rd_kafka_message_t **>(malloc(sizeof(*rkmessages) * count)), free}; /// NOLINT(bugprone-sizeof-expression)
 
     auto res = rd_kafka_consume_batch(ctx.topic_handle.get(), ctx.partition, timeout_ms, rkmessages.get(), count);
 

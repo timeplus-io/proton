@@ -52,7 +52,7 @@ StreamingStoreSourceBase::getSubcolumnFromBlock(const Block & block, size_t pare
 
             /// Convert subcolumn if the subcolumn type of dynamic object may be dismatched with header.
             /// FIXME: Cache the ExpressionAction
-            Block subcolumn_block({ColumnWithTypeAndName{std::move(subcolumn), std::move(subcolumn_type), subcolumn_pair.name}});
+            Block subcolumn_block({ColumnWithTypeAndName{std::move(subcolumn), std::move(subcolumn_type), subcolumn_pair.name}}); /// NOLINT(performance-move-const-arg)
             ExpressionActions convert_act(ActionsDAG::makeConvertingActions(
                 subcolumn_block.getColumnsWithTypeAndName(),
                 {ColumnWithTypeAndName{subcolumn_pair.type->createColumn(), subcolumn_pair.type, subcolumn_pair.name}},
