@@ -1793,8 +1793,8 @@
                     ]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 5, "depends_on":601, "query_type": "table", "query":"kill query where query_id = '601'"},
-                    {"client":"python", "wait": 1, "query_type": "table", "query_end_timer": 3, "query":"drop view if exists test_stream_only_stream_sum_view"}
+                    {"client":"python", "wait": 6, "depends_on":601, "query_type": "table", "query":"kill query where query_id = '601'"},
+                    {"client":"python", "wait": 2, "query_type": "table", "query_end_timer": 3, "query":"drop view if exists test_stream_only_stream_sum_view"}
                 ]
                 }
             ],

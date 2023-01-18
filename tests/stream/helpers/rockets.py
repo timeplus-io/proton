@@ -2814,11 +2814,6 @@ def test_suite_env_setup(client, config, test_suite_name, test_suite_config):
         if setup != None:
             test_id = 'setup' #if input_walk_through_rest is called in setup phase, set test_id = 'setup'
             setup_inputs = setup.get("inputs")
-            if setup_inputs != None:
-                logger.debug(f"input_walk_through_rest to be started.")
-                setup_input_res = input_walk_through_rest(
-                    config, test_suite_name, test_id, setup_inputs, table_schemas
-                )
             setup_statements = setup.get(
                 "statements"
             )  # only support table rightnow todo: optimize logic
@@ -2843,8 +2838,13 @@ def test_suite_env_setup(client, config, test_suite_name, test_suite_config):
                         pyclient=client,
                         logger=logger,
                     )
+                    logger.debug(f"query_id = {query_id}, query_run_py is called")            
+            if setup_inputs != None:
+                logger.debug(f"input_walk_through_rest to be started.")
+                setup_input_res = input_walk_through_rest(
+                    config, test_suite_name, test_id, setup_inputs, table_schemas
+                )
 
-                    logger.debug(f"query_id = {query_id}, query_run_py is called")
     except (BaseException) as error:
         logger.info(f"TEST_SUITE_ENV_SETUP_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, error = {error}") #todo: define private exception
         raise Exception(f"TEST_SUITE_ENV_SETUP_ERROR FATAL exception: {error}")
@@ -2864,32 +2864,6 @@ def env_setup(
     logger.debug(f"env_setup: health_url = {health_url}")
     tables_cleaned = []
     env_docker_compose_res = True  # todo: remove this return value due to compose_up is done in ci_runner starting phase
-
-    """
-    if ci_mode == "local":
-        env_docker_compose_res = True
-        logger.info(f"Bypass docker compose up.")
-    else:
-        env_docker_compose_res = compose_up(env_compose_file)
-        logger.info(f"env_setup: docker compose up...")
-    logger.debug(f"env_setup: env_docker_compose_res: {env_docker_compose_res}")
-    
-    
-    env_health_check_res = env_health_check(health_url)
-    logger.info(f"env_setup: env_health_check_res: {env_health_check_res}")
-    if env_docker_compose_res:
-        retry = 10
-        while env_health_check_res == False and retry > 0:
-            time.sleep(2)
-            env_health_check_res = env_health_check(health_url)
-            logger.debug(f"env_setup: retry = {retry}")
-            retry -= 1
-
-        if env_health_check_res == False:
-            raise Exception("Env health check failure.")
-    else:
-        raise Exception("Env docker compose up failure.")
-    """
     env_health_check_res = env_health_check(health_url)
     logger.info(f"env_setup: env_health_check_res: {env_health_check_res}")
     retry = 20

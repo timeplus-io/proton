@@ -120,7 +120,7 @@
         {
           "statements": [
             {"client":"python","query_id":"1004", "terminate":"manuel", "wait":1,"query_type": "stream","depends_on_stream":"left_stream,right_stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', ts, tts) between -10 and 10"},
-            {"client":"python", "query_type": "table","depends_on":1004, "wait":2, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table","depends_on":1004, "wait":2,"trace_stream": {"trace_id": "03_start", "streams":"left_stream, right_stream", "trace_query": "select count() from table($)"}, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
               "query": "insert into right_stream(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),
@@ -132,7 +132,7 @@
               (1, 's7', '2022-05-23 15:45:20'),
               (1, 's8', '2022-05-23 15:45:21')"
             },
-            {"client":"python", "wait": 7, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1004'"}
+            {"client":"python", "wait": 7, "run_mode":"batch", "query_type": "table","trace_stream": {"trace_id": "03_end", "streams":"left_stream, right_stream", "trace_query": "select count() from table($)"}, "query":"kill query where query_id = '1004'"}
           ]
         }
       ],

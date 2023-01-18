@@ -4,85 +4,7 @@
     "test_suite_config": {
         "proton_ci_mode": "local",
         "table_schemas":[
-            {
-                "name": "event",
-                "type": "table",
-                "reset": "False",
-                "config": "setting_1",
-                "columns": [
-                    {
-                        "name": "event",
-                        "type": "json"
-                    },
-                    {
-                        "name": "perf_event_time",
-                        "type": "datetime64(3)",
-                        "default": "now64(3)"
-                    },                      
-                    {
-                        "name": "_perf_row_id",
-                        "type": "string"
-                    },                  
-                    {
-                        "name": "_perf_ingest_time",
-                        "type": "string"
-                    }                    
-            ]},
-            {
-                "name": "event_s",
-                "type": "table",
-                "reset": "False",
-                "config": "setting_1",
-		        "query_parameters":"logstore_retention_ms=3600000",
-                "columns": [
-                    {
-                        "name": "json_string",
-                        "type": "string"
-                    },
-                    {
-                        "name": "perf_event_time",
-                        "type": "datetime64(3)",
-                        "default": "now64(3)"
-                    },                      
-                    {
-                        "name": "_perf_row_id",
-                        "type": "string"
-                    },                  
-                    {
-                        "name": "_perf_ingest_time",
-                        "type": "string"
-                    }                    
-                ],
-                "ttl_expression": "to_datetime(_tp_time) + INTERVAL 1 HOUR"    
-            },
-            {
-                "name": "event_s1",
-                "type": "table",
-                "reset": "False",
-		        "query_parameters":"logstore_retention_ms=3600000",
-                "config": "setting_1",
-                "columns": [
-                    {
-                        "name": "json_string",
-                        "type": "string"
-                    },
-                    {
-                        "name": "perf_event_time",
-                        "type": "datetime64(3)",
-                        "default": "now64(3)"
-                    },                      
-                    {
-                        "name": "_perf_row_id",
-                        "type": "string"
-                    },                  
-                    {
-                        "name": "_perf_ingest_time",
-                        "type": "string"
-                    }                    
-                ],
-                "ttl_expression": "to_datetime(_tp_time) + INTERVAL 1 HOUR"
-            },                        
-             
+
             {
                 "name": "iris",
                 "type": "table",
@@ -152,9 +74,6 @@
                 ["Iris-versicolor", "versicolor"],
                 ["Iris-virginica", "virginica"]]
                 }              
-            ],
-            "statements":[
-                {"client":"python","config_set": "setting_1","workers": 1, "interval":1, "query_type": "table", "query":"insert into event(event) values('{\"id\": \"21562085809\", \"type\": \"PushEvent\", \"actor\": {\"id\": 75677395, \"login\": \"malviyaindia\", \"display_login\": \"malviyaindia\", \"gravatar_id\": \"\", \"url\": \"https://api.github.com/users/malviyaindia\", \"avatar_url\": \"https://avatars.githubusercontent.com/u/75677395?\"}, \"repo\": {\"id\": 385258641, \"name\": \"malviyaindiaiom\", \"url\": \"https://api.github.com/repos/malviyaindia/iom\"}, \"payload\": {\"push_id\": 9766550002, \"size\": 1, \"distinct_size\": 1, \"ref\": \"refs/heads/main\", \"head\": \"22d8895aee80067947304e63a4fc4007b73ff0cb\", \"before\": \"d82e4899e4682e65af392d38abd0368a2c242842\", \"commits\": [{\"sha\": \"22d8895aee80067947304e63a4fc4007b73ff0cb\", \"author\": {\"email\": \"75677395+malviyaindia@users.noreply.github.com\", \"name\": \"Atul Malviya\"}, \"message\": \"Update index.html\", \"distinct\": true, \"url\": \"https://api.github.com/repos/malviyaindia/iom/commits/22d8895aee80067947304e63a4fc4007b73ff0cb\"}]}, \"public\": true, \"created_at\": \"2022-05-01T10:10:13Z\"}')"}
             ]
         },
         "tests_2_run": {"ids_2_run": [8], "tags_2_run":[], "tags_2_skip":["bug", "todo", "to_support"]} 
