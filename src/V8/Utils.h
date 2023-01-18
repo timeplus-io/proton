@@ -44,22 +44,23 @@ void compileSource(
     v8::Isolate * isolate,
     const std::string & func_name,
     const std::string & source,
-    const std::function<void(v8::Local<v8::Context> &, v8::TryCatch &, v8::Local<v8::Value> &)> & func);
+    std::function<void(v8::Isolate *, v8::Local<v8::Context> &, v8::TryCatch &, v8::Local<v8::Value> &)> func);
 
 /// Run func in the specified v8 context
 inline void run(
     v8::Isolate * isolate,
     const v8::Persistent<v8::Context> & context,
-    const std::function<void(v8::Local<v8::Context> &, v8::TryCatch &)> & func)
+    std::function<void(v8::Isolate *, v8::Local<v8::Context> &, v8::TryCatch &)> func)
 {
     v8::Locker locker(isolate);
     v8::Isolate::Scope isolate_scope(isolate);
     v8::HandleScope handle_scope(isolate);
     v8::TryCatch try_catch(isolate);
+    try_catch.SetVerbose(true);
     v8::Local<v8::Context> local_ctx = v8::Local<v8::Context>::New(isolate, context);
     v8::Context::Scope context_scope(local_ctx);
 
-    func(local_ctx, try_catch);
+    func(isolate, local_ctx, try_catch);
 }
 
 /// Validate UDA

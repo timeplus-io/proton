@@ -375,7 +375,7 @@ v8::Local<v8::Array> to_v8(v8::Isolate * isolate, Iterator begin, Iterator end)
 {
     v8::EscapableHandleScope scope(isolate);
     v8::Local<v8::Context> context = isolate->GetCurrentContext();
-    v8::Local<v8::Array> result = v8::Array::New(isolate);
+    v8::Local<v8::Array> result = v8::Array::New(isolate, static_cast<int>(std::distance(begin, end)));
     for (uint32_t idx = 0; begin != end; ++begin, ++idx)
     {
         result->Set(context, idx, to_v8(isolate, *begin)).FromJust();

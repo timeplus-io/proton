@@ -723,7 +723,7 @@ class IColumn;
     M(UInt64, retract_k_multiplier, 2, "Control how many more values to keep around for changelog processing to workaround retract scenarios in min_k/max_k etc aggr", 0) \
     M(ExecuteMode, exec_mode, ExecuteMode::NORMAL, "Control query execute mode", 0) \
     M(UInt64, checkpoint_interval, 0, "Checkpoint interval in seconds", 0) \
-    M(UInt64, javascript_uda_max_concurrency, 2, "Control the concurrency of JavaScript UDA in a query", 0) \
+    M(UInt64, javascript_uda_max_concurrency, 1, "Control the concurrency of JavaScript UDA in a query", 0) \
     /** proton: ends. */
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

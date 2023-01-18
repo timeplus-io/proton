@@ -140,7 +140,7 @@ bool UDFHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & 
         /// check whether the source can be compiled
         if (payload->has("is_aggregation") && payload->getValue<bool>("is_aggregation"))
             /// UDA
-            V8::validateAggregationFunctionSource(func_name, {"process", "finalize"}, payload->get("source"));
+            V8::validateAggregationFunctionSource(func_name, {"initialize", "process", "finalize"}, payload->get("source"));
         else
             /// UDF
             V8::validateStatelessFunctionSource(func_name, payload->get("source"));

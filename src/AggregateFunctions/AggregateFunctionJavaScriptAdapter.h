@@ -8,11 +8,28 @@
 
 namespace DB
 {
+struct JavaScriptBlueprint
+{
+    struct IsolateDeleter
+    {
+        void operator()(v8::Isolate * isolate_) const { isolate_->Dispose(); }
+    };
+
+    JavaScriptBlueprint(const String & name, const String & source);
+    ~JavaScriptBlueprint() noexcept;
+
+    std::unique_ptr<v8::Isolate, IsolateDeleter> isolate;
+
+    v8::Persistent<v8::Context> global_context; /// shared across all UDA objects
+    v8::Persistent<v8::Object> uda_object_blueprint; /// UDA blueprint object which is used to create UDA object instance
+
+    /// If UDA has customized emit strategy
+    bool has_user_defined_emit_strategy = false;
+};
+
 struct JavaScriptAggrFunctionState
 {
-    v8::Isolate * isolate; /// The ownership of isolate is the AggregateFunctionAdapter, no need to delete
-    v8::Persistent<v8::Context> context;
-    v8::Persistent<v8::Object> object;
+    v8::Persistent<v8::Object> uda_instance; /// UDA instance created by UDA object blueprint
     v8::Persistent<v8::Function> initialize_func;
     v8::Persistent<v8::Function> process_func;
     v8::Persistent<v8::Function> finalize_func;
@@ -26,27 +43,19 @@ struct JavaScriptAggrFunctionState
     /// Whether the current group should emit
     bool should_finalize = false;
 
-    /// JavaScript UDA code looks like:
-    ///     {
-    ///        // Definitions of state variables
-    ///        state1: ...,
-    ///        ...,
-    ///        stateN: ...,
-    ///
-    ///        // Definitions of functions
-    ///        initialize: function() {...}, // optional. Called when the function object is created
-    ///        process: function (...) {...},  // required. the main function, with the same name of UDF, proton calls this function with batch of input rows
-    ///        finalize: function (...) {...},  // required. the main function which returns the aggregation results to caller
-    ///        serialize: function() {...},  // required. returns the serialized state of all internal states of UDA in string
-    ///        deserialize: function() {...}, // required. recover the aggregation function state with the persisted internal state
-    ///        merge: function(state_str) {...}  // required. merge two JavaScript UDA aggregation states into one. Used for multiple shards processing
-    ///        has_customized_emit : false /// Define if the the aggregation has user defined emit strategy
-    ///     }
+    /// JavaScript UDA code looks like below. For far, it can only contain member functions and the has_customized_emit bool data member or function
+    /// {
+    ///    // Definitions of functions
+    ///    initialize: function() {...}, // optional. Called when the function object is created
+    ///    process: function (...) {...},  // required. the main function, with the same name of UDF, proton calls this function with batch of input rows
+    ///    finalize: function (...) {...},  // required. the main function which returns the aggregation results to caller
+    ///    serialize: function() {...},  // required. returns the serialized state of all internal states of UDA in string
+    ///    deserialize: function() {...}, // required. recover the aggregation function state with the persisted internal state
+    ///    merge: function(state_str) {...}  // required. merge two JavaScript UDA aggregation states into one. Used for multiple shards processing
+    ///    has_customized_emit : false /// Define if the the aggregation has user defined emit strategy
+    /// }
     JavaScriptAggrFunctionState(
-        const std::string & name,
-        const std::string & source,
-        const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments,
-        v8::Isolate * isolate_);
+        const JavaScriptBlueprint & blueprint, const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments);
 
     ~JavaScriptAggrFunctionState();
 
@@ -58,6 +67,8 @@ struct JavaScriptAggrFunctionState
 class AggregateFunctionJavaScriptAdapter final : public IAggregateFunctionHelper<AggregateFunctionJavaScriptAdapter>
 {
 public:
+    friend JavaScriptAggrFunctionState;
+
     using Data = JavaScriptAggrFunctionState;
 
     struct DataDeleter
@@ -66,21 +77,13 @@ public:
     };
 
 private:
-
     static Data & data(AggregateDataPtr __restrict place) { return *reinterpret_cast<Data *>(place); }
     static const Data & data(ConstAggregateDataPtr __restrict place) { return *reinterpret_cast<const Data *>(place); }
 
-    struct IsolateDeleter
-    {
-        void operator()(v8::Isolate * isolate_) const { isolate_->Dispose(); }
-    };
-
     const UserDefinedFunctionConfiguration & config;
-    std::unique_ptr<v8::Isolate, AggregateFunctionJavaScriptAdapter::IsolateDeleter> isolate;
     size_t num_arguments;
     size_t max_v8_heap_size_in_bytes;
-    std::string source;
-    bool has_user_defined_emit_strategy = false;
+    JavaScriptBlueprint blueprint;
 
 public:
     AggregateFunctionJavaScriptAdapter(
@@ -119,7 +122,7 @@ public:
     /// Send the cached rows to User Defined Aggregate function
     bool flush(AggregateDataPtr __restrict /*place*/) const override;
 
-    bool hasUserDefinedEmit() const override { return has_user_defined_emit_strategy; }
+    bool hasUserDefinedEmit() const override { return blueprint.has_user_defined_emit_strategy; }
 
     UDFType udfType() const override { return UDFType::Javascript; }
 

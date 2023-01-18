@@ -33,6 +33,7 @@ namespace ErrorCodes
     extern const int INVALID_DATA;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+    extern const int UDF_INTERNAL_ERROR;
     /// proton: ends
 }
 
@@ -162,25 +163,23 @@ public:
         auto result_column = result_type->createColumn();
         result_column->reserve(row_num);
 
-        v8::Isolate * isolate = js_ctx->isolate.get();
-        assert(isolate);
-        auto execute = [&](v8::Local<v8::Context> & ctx, v8::TryCatch & try_catch) {
+        auto execute = [&](v8::Isolate * isolate_,v8::Local<v8::Context> & ctx, v8::TryCatch & try_catch) {
             /// First, get local function of UDF
-            v8::Local<v8::Function> local_func = v8::Local<v8::Function>::New(isolate, js_ctx->func);
+            v8::Local<v8::Function> local_func = v8::Local<v8::Function>::New(isolate_, js_ctx->func);
 
             /// Second, convert the input column into the corresponding object used by UDF
-            auto argv = V8::prepareArguments(isolate, config.arguments, columns);
+            auto argv = V8::prepareArguments(isolate_, config.arguments, columns);
 
             /// Third, execute the UDF and get result
             v8::Local<v8::Value> res;
             if (!local_func->CallAsFunction(ctx, ctx->Global(), static_cast<int>(config.arguments.size()), argv.data()).ToLocal(&res))
-                V8::throwException(isolate, try_catch, ErrorCodes::REMOTE_CALL_FAILED, "call JavaScript UDF '{}' failed", config.name);
+                V8::throwException(isolate_, try_catch, ErrorCodes::UDF_INTERNAL_ERROR, "call JavaScript UDF '{}' failed", config.name);
 
             /// Forth, insert the result to result_column
-            V8::insertResult(isolate, *result_column, result_type, true, res);
+            V8::insertResult(isolate_, *result_column, result_type, true, res);
         };
 
-        V8::run(isolate, js_ctx->context, execute);
+        V8::run(js_ctx->isolate.get(), js_ctx->context, execute);
         return result_column;
     }
     /// proton: ends

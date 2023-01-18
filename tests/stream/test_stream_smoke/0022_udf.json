@@ -52,7 +52,7 @@
                 "name": "add_five",
                 "arguments": [{"name": "value", "type": "float32"}],
                 "return_type": "float32",
-                "source": "{function add_five(value){for(let i=0;i<value.length;i++){value[i]=value[i]+5}return value}}"
+                "source": "function add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}"
               }
             },
             {"client":"python","query_id":"2301", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":2, "query_type": "stream", "query":"select add_five(f32) from udf_types"}
@@ -100,7 +100,7 @@
                 ],
                 "is_aggregation": true,
                 "return_type": "float32",
-                "source": "{max:-1.0,sec:-1.0,process:function(values){for(let i=0;i<values.length;i++){if(values[i]>this.max){this.sec=this.max;this.max=values[i]}if(values[i]<this.max&&values[i]>this.sec)this.sec=values[i]}},finalize:function(){return[this.sec]},serialize:function(){let s={'max':this.max,'sec':this.sec};return JSON.stringify(s)},deserialize:function(state_str){let s=JSON.parse(state_str);this.max=s['max'];this.sec=s['sec']},merge:function(state_str){let s=JSON.parse(state_str);if(s['sec']>=this.max){this.max=s['max'];this.sec=s['sec']}else if(s['max']>=this.max){this.sec=this.max;this.max=s['max']}else if(s['max']>this.sec){this.sec=s['max']}}};"
+                "source": "{ initialize: function() { this.max = -1.0; this.sec = -1.0; }, process: function(values) { for (let i=0; i<values.length; i++) { if (values[i] > this.max) { this.sec=this.max; this.max=values[i]; } if (values[i]<this.max && values[i]>this.sec) this.sec=values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {'max':this.max,'sec':this.sec}; return JSON.stringify(s);}, deserialize: function (state_str) { let s=JSON.parse(state_str); this.max=s['max']; this.sec=s['sec']; }, merge: function (state_str) { let s=JSON.parse(state_str); if(s['sec']>=this.max) { this.max=s['max']; this.sec=s['sec'];} else if(s['max']>=this.max) { this.sec=this.max; this.max=s['max'];} else if(s['max']>this.sec) { this.sec=s['max']; } } }"
               }
             },
             {"client":"python","query_id":"2301", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":2, "query_type": "stream", "query":"select s, sec_large(f32) from udf_types group by s order by s"}
@@ -154,7 +154,7 @@
                 ],
                 "is_aggregation": true,
                 "return_type": "tuple(start_price float32, bottom_ts datetime64(1), end_price float32, down_duration uint64)",
-                "source": "{has_customized_emit : true, bottom_ts:new Date(),last_down_price:-1.0,start_price:-1.0,down_duration:1,result:[],process:function(rowtime,price){var emit=false;for(let i=0;i<rowtime.length;i++){if(this.start_price<0||(this.last_down_price<0&&price[i]>=this.start_price)){this.start_price=price[i];this.bottom_ts=rowtime[i];this.down_duration=1}else if((this.last_down_price<0&&price[i]<this.start_price)||(price[i]<this.last_down_price)){this.last_down_price=price[i];this.bottom_ts=rowtime[i];this.down_duration=this.down_duration+1}else if(price[i]>this.last_down_price){this.result.push({'start_price':this.start_price,'bottom_ts':this.bottom_ts,'end_price':price[i],'down_duration':this.down_duration});emit=true;this.bottom_ts=rowtime[i];this.start_price=price[i];this.last_down_price=-1.0;this.down_duration=1}else{this.down_duration=this.down_duration+1}}return emit},finalize:function(){var old_result=this.result;this.result=[];return old_result},merge:function(){}};"}
+                "source": "{ has_customized_emit: true, initialize: function() { this.bottom_ts = new Date(); this.last_down_price = -1.0; this.start_price = -1.0; this.down_duration = 1; this.result = {};}, process: function(rowtimes, prices) { var emit=false; for (let i=0; i<rowtimes.length; i++) { if (this.start_price < 0 || (this.last_down_price < 0 && prices[i] >= this.start_price)) { this.start_price=prices[i]; this.bottom_ts = rowtimes[i]; this.down_duration = 1; } else if ((this.last_down_price < 0 && prices[i] < this.start_price) || (prices[i] < this.last_down_price)) { this.last_down_price = prices[i]; this.bottom_ts = rowtimes[i]; this.down_duration = this.down_duration + 1;} else if (prices[i] > this.last_down_price) { this.result = {'start_price': this.start_price, 'bottom_ts':this.bottom_ts, 'end_price':prices[i], 'down_duration': this.down_duration}; emit = true; this.bottom_ts = rowtimes[i]; this.start_price = prices[i]; this.last_down_price=-1.0; this.down_duration=1;} else { this.down_duration=this.down_duration+1; } } return emit;}, finalize: function() { var old_result = this.result; this.result = {}; return old_result;} }"}
             },
             {"client":"python","query_id":"2301", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":2, "query_type": "stream", "query":"select s, st.1, st.2, st.3, st.4 from (select s, stock(dt, f32) as st from udf_types group by s) order by s"}
           ]
@@ -207,7 +207,7 @@
                 ],
                 "is_aggregation": true,
                 "return_type": "tuple(start_price float32, bottom_ts datetime64(1), end_price float32, down_duration uint64)",
-                "source": "{has_customized_emit:true, bottom_ts:new Date(),last_down_price:-1.0,start_price:-1.0,down_duration:1,result:[],process:function(rowtime,price){var emit=false;for(let i=0;i<rowtime.length;i++){if(this.start_price<0||(this.last_down_price<0&&price[i]>=this.start_price)){this.start_price=price[i];this.bottom_ts=rowtime[i];this.down_duration=1}else if((this.last_down_price<0&&price[i]<this.start_price)||(price[i]<this.last_down_price)){this.last_down_price=price[i];this.bottom_ts=rowtime[i];this.down_duration=this.down_duration+1}else if(price[i]>this.last_down_price){this.result.push({'start_price':this.start_price,'bottom_ts':this.bottom_ts,'end_price':price[i],'down_duration':this.down_duration});emit=true;this.bottom_ts=rowtime[i];this.start_price=price[i];this.last_down_price=-1.0;this.down_duration=1}else{this.down_duration=this.down_duration+1}}return emit},finalize:function(){var old_result=this.result;this.result=[];return old_result},merge:function(){}};"}
+                "source": "{ has_customized_emit: true, initialize: function() { this.bottom_ts = new Date(); this.last_down_price = -1.0; this.start_price = -1.0; this.down_duration = 1; this.result = {} }, process: function(rowtimes, prices) { var emit=false; for(let i=0; i<rowtimes.length; i++) { if(this.start_price < 0 || (this.last_down_price < 0 && prices[i] >= this.start_price)) { this.start_price = prices[i]; this.bottom_ts = rowtimes[i]; this.down_duration = 1; } else if ((this.last_down_price < 0 && prices[i] < this.start_price) || (prices[i] < this.last_down_price)) { this.last_down_price = prices[i]; this.bottom_ts=rowtimes[i]; this.down_duration=this.down_duration + 1; } else if (prices[i]>this.last_down_price) { this.result = {'start_price':this.start_price,'bottom_ts':this.bottom_ts,'end_price':prices[i],'down_duration':this.down_duration}; emit = true; this.bottom_ts = rowtimes[i]; this.start_price=prices[i]; this.last_down_price=-1.0; this.down_duration=1; } else { this.down_duration=this.down_duration+1; } } return emit;}, finalize: function() { var old_result=this.result; this.result={}; return old_result; } }"}
             },
             {"client":"python","query_id":"2301", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":2, "query_type": "stream", "query":"select st.1, st.2, st.3, st.4 from (select stock(dt, f32) as st from udf_types)"}
           ]
@@ -256,7 +256,7 @@
                 ],
                 "is_aggregation": true,
                 "return_type": "float32",
-                "source": "{max:-1.0,sec:-1.0,process:function(values){for(let i=0;i<values.length;i++){if(values[i]>this.max){this.sec=this.max;this.max=values[i]}if(values[i]<this.max&&values[i]>this.sec)this.sec=values[i]}},finalize:function(){return[this.sec]},serialize:function(){let s={'max':this.max,'sec':this.sec};return JSON.stringify(s)},deserialize:function(state_str){let s=JSON.parse(state_str);this.max=s['max'];this.sec=s['sec']},merge:function(state_str){let s=JSON.parse(state_str);if(s['sec']>=this.max){this.max=s['max'];this.sec=s['sec']}else if(s['max']>=this.max){this.sec=this.max;this.max=s['max']}else if(s['max']>this.sec){this.sec=s['max']}}};"
+                "source": "{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {'max': this.max, 'sec':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s['max']; this.sec = s['sec']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s['sec'] >= this.max) { this.max = s['max']; this.sec = s['sec'];} else if(s['max'] >= this.max) { this.sec = this.max; this.max = s['max'];} else if (s['max'] > this.sec) { this.sec = s['max']; } } }"
               }
             },
             {"client":"python","query_id":"2301", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":2, "query_type": "stream", "query":"select s, sec_large(f32) over (partition by i) from udf_types group by s order by s"}
@@ -309,14 +309,15 @@
                 ],
                 "is_aggregation": true,
                 "return_type": "tuple(start_price float32, bottom_ts datetime64(1), end_price float32, down_duration uint64)",
-                "source": "{has_customized_emit:true, bottom_ts:new Date(),last_down_price:-1.0,start_price:-1.0,down_duration:1,result:[],process:function(rowtime,price){var emit=false;for(let i=0;i<rowtime.length;i++){if(this.start_price<0||(this.last_down_price<0&&price[i]>=this.start_price)){this.start_price=price[i];this.bottom_ts=rowtime[i];this.down_duration=1}else if((this.last_down_price<0&&price[i]<this.start_price)||(price[i]<this.last_down_price)){this.last_down_price=price[i];this.bottom_ts=rowtime[i];this.down_duration=this.down_duration+1}else if(price[i]>this.last_down_price){this.result.push({'start_price':this.start_price,'bottom_ts':this.bottom_ts,'end_price':price[i],'down_duration':this.down_duration});emit=true;this.bottom_ts=rowtime[i];this.start_price=price[i];this.last_down_price=-1.0;this.down_duration=1}else{this.down_duration=this.down_duration+1}}return emit},finalize:function(){var old_result=this.result;this.result=[];return old_result},merge:function(){}};"}
+                "source": "{ has_customized_emit: true, initialize: function() { this.bottom_ts = new Date(); this.last_down_price = -1.0; this.start_price = -1.0; this.down_duration = 1; this.result = {}; }, process: function(rowtimes, prices) { var emit=false; for(let i=0; i<rowtimes.length; i++) { if(this.start_price < 0 || (this.last_down_price < 0 && prices[i] >= this.start_price)) { this.start_price = prices[i]; this.bottom_ts = rowtimes[i]; this.down_duration = 1;} else if((this.last_down_price < 0 && prices[i] < this.start_price) || (prices[i]<this.last_down_price)) { this.last_down_price = prices[i];this.bottom_ts = rowtimes[i]; this.down_duration = this.down_duration + 1;} else if(prices[i] > this.last_down_price) { this.result = {'start_price': this.start_price, 'bottom_ts': this.bottom_ts, 'end_price':prices[i], 'down_duration':this.down_duration}; emit = true; this.bottom_ts=rowtimes[i]; this.start_price = prices[i]; this.last_down_price = -1.0; this.down_duration = 1;} else { this.down_duration = this.down_duration + 1; } } return emit; }, finalize: function() { var old_result = this.result; this.result = {}; return old_result; } }"}
             },
             {"client":"python","query_id":"2301", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":2, "query_type": "stream", "query":"select s, st.1, st.2, st.3, st.4 from (select s, stock(dt, f32) over (partition by i) as st from udf_types group by s) order by s"}
           ]
         },
+
         {
           "inputs": [
-            {"table_name": "udf_types", "depends_on":"2301", "wait":1, "data": [
+            {"table_name": "udf_types", "depends_on":"2301", "wait":3, "data": [
               [1, 10.0, "s1", "2020-02-02 20:00:00"], [4, 20.0, "s2", "2020-02-02 20:00:00"],
               [3, 6.0, "s1", "2020-02-02 20:00:01"], [4, 4.0, "s2", "2020-02-02 20:00:01"],
               [3, 5.0, "s1", "2020-02-02 20:00:02"], [4, 6.0, "s2", "2020-02-02 20:00:02"],
@@ -328,7 +329,7 @@
         {
           "query_id":"2301",
           "expected_results":[
-            ["s1", 6.0, "2020-02-02 20:00:02", 8.0, 2], ["s2", 20.0, "2020-02-02 20:00:01", 6.0, 2]
+            ["s2", 20.0, "2020-02-02 20:00:01", 6.0, 2], ["s1", 6.0, "2020-02-02 20:00:02", 8.0, 2]
           ]
         }
       ]

@@ -23,7 +23,7 @@ String UDA_CEP1 = R"###(
     initialize : function() {
         this.last_down_price = -1.0;
         this.down_duration = 0;
-        this.result = [];
+        this.result = 0;
     },
     process: function(prices) {
         var emit = false;
@@ -32,7 +32,7 @@ String UDA_CEP1 = R"###(
                 this.last_down_price = prices[i];
                 this.down_duration = this.down_duration + 1;
             } else {
-                this.result.push(this.down_duration);
+                this.result = this.down_duration;
                 this.last_down_price = prices[i];
                 this.down_duration = 1
                 emit = true;
@@ -42,12 +42,11 @@ String UDA_CEP1 = R"###(
     },
     finalize: function () {
         var old_result = this.result;
-        this.result = [];
+        this.result = 0;
         return old_result;
     },
     has_customized_emit : true
-}
-)###";
+})###";
 
 String ARGS_UDA1 = R"###([{ "name": "value","type": "int64"}])###";
 String RETURN_UDA1 = "float32";
@@ -69,7 +68,7 @@ String UDA1 = R"###(
         }
     },
     finalize: function () {
-        return [this.sec];
+        return this.sec;
     },
     serialize: function () {
         let s = {
@@ -97,8 +96,7 @@ String UDA1 = R"###(
             this.sec = s['max']
         }
     }
-}
-)###";
+})###";
 
 void initV8()
 {

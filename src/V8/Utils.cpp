@@ -72,7 +72,7 @@ v8::Local<v8::Array> fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_
 
     v8::EscapableHandleScope scope(isolate);
     v8::Local<v8::Context> context = isolate->GetCurrentContext();
-    v8::Local<v8::Array> result = v8::Array::New(isolate);
+    v8::Local<v8::Array> result = v8::Array::New(isolate, static_cast<int>(column->size()));
 
     switch (arg_type_id)
     {
@@ -138,7 +138,7 @@ std::vector<v8::Local<v8::Value>> prepareArguments(
     for (int i = 0; const auto & arg : arguments)
     {
         argv.emplace_back(fillV8Array(isolate, arg.type, columns[i]));
-        i++;
+        ++i;
     }
     return argv;
 }
@@ -243,12 +243,15 @@ void compileSource(
     v8::Isolate * isolate,
     const std::string & func_name,
     const std::string & source,
-    const std::function<void(v8::Local<v8::Context> &, v8::TryCatch &, v8::Local<v8::Value> &)> & func)
+    std::function<void(v8::Isolate *, v8::Local<v8::Context> &, v8::TryCatch &, v8::Local<v8::Value> &)> func)
 {
     v8::Locker locker(isolate);
     v8::Isolate::Scope isolate_scope(isolate);
     v8::HandleScope handle_scope(isolate);
     v8::TryCatch try_catch(isolate);
+    /// try_catch.SetVerbose(true);
+    try_catch.SetCaptureMessage(true);
+
     v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
     v8::Context::Scope context_scope(local_ctx);
 
@@ -257,19 +260,33 @@ void compileSource(
 
     v8::Local<v8::Script> compiled_script;
     if (!v8::Script::Compile(local_ctx, script_code).ToLocal(&compiled_script))
-        throw Exception(ErrorCodes::UDF_COMPILE_ERROR, "the JavaScript UDF {} is invalid", func_name);
+        throw Exception(
+            ErrorCodes::UDF_COMPILE_ERROR,
+            "the JavaScript UDF {} is invalid. Detail error: {}",
+            func_name,
+            V8::from_v8<String>(isolate, try_catch.Message()->Get()));
 
     /// Run js code in first time and init some data from them.
     v8::Local<v8::Value> res;
     if (!compiled_script->Run(local_ctx).ToLocal(&res))
-        V8::throwException(isolate, try_catch, ErrorCodes::UDF_COMPILE_ERROR, "The JavaScript UDF {} is invalid", func_name);
+        V8::throwException(
+            isolate,
+            try_catch,
+            ErrorCodes::UDF_COMPILE_ERROR,
+            "The JavaScript UDF {} is invalid. Detail error: {}",
+            func_name,
+            V8::from_v8<String>(isolate, try_catch.Message()->Get()));
 
-    v8::Local<v8::Value> obj;
-    if (!local_ctx->Global()->Get(local_ctx, to_v8(isolate, func_name)).ToLocal(&obj))
-        throw Exception(ErrorCodes::UDF_COMPILE_ERROR, "the JavaScript UDF {} is invalid", func_name);
+    v8::Local<v8::Value> func_val;
+    if (!local_ctx->Global()->Get(local_ctx, to_v8(isolate, func_name)).ToLocal(&func_val))
+        throw Exception(
+            ErrorCodes::UDF_COMPILE_ERROR,
+            "the JavaScript UDF {} is invalid. Detail error: {}",
+            func_name,
+            V8::from_v8<String>(isolate, try_catch.Message()->Get()));
 
     if (func)
-        func(local_ctx, try_catch, obj);
+        func(isolate, local_ctx, try_catch, func_val);
 }
 
 void validateFunctionSource(
@@ -277,6 +294,7 @@ void validateFunctionSource(
     const std::string & source,
     std::function<void(v8::Isolate *, v8::Local<v8::Context> &, v8::TryCatch &, v8::Local<v8::Value> &)> func)
 {
+    /// FIXME, switch to global isolate allocation / pooling
     UInt64 max_heap_size_in_bytes = 10 * 1024 * 1024;
     UInt64 max_old_gen_size_in_bytes = 8 * 1024 * 1024;
 
@@ -286,32 +304,56 @@ void validateFunctionSource(
     isolate_params.constraints.ConfigureDefaultsFromHeapSize(0, max_heap_size_in_bytes);
     isolate_params.constraints.set_max_old_generation_size_in_bytes(max_old_gen_size_in_bytes);
 
-    auto deleter = [](v8::Isolate * isolate_) { isolate_->Dispose(); };
-    std::unique_ptr<v8::Isolate, void (*)(v8::Isolate *)> isolate_ptr(v8::Isolate::New(isolate_params), deleter);
+    auto isolate_deleter = [](v8::Isolate * isolate_) { isolate_->Dispose(); };
+    std::unique_ptr<v8::Isolate, void (*)(v8::Isolate *)> isolate_ptr(v8::Isolate::New(isolate_params), isolate_deleter);
 
-    compileSource(isolate_ptr.get(), func_name, source, [&](auto & ctx, auto & try_catch, auto & local_obj) {
-        func(isolate_ptr.get(), ctx, try_catch, local_obj);
-    });
+    compileSource(
+        isolate_ptr.get(),
+        func_name,
+        source,
+        [&](v8::Isolate * isolate_, v8::Local<v8::Context> & local_ctx, v8::TryCatch & try_catch, v8::Local<v8::Value> & local_obj) {
+            func(isolate_, local_ctx, try_catch, local_obj);
+        });
 }
 
 void validateAggregationFunctionSource(
     const std::string & func_name, const std::vector<std::string> & required_member_funcs, const std::string & source)
 {
-    auto validate_member_functions = [&](v8::Isolate * isolate, v8::Local<v8::Context> & ctx, v8::TryCatch &, v8::Local<v8::Value> & obj) {
-        if (!obj->IsObject())
-            throw Exception(ErrorCodes::UDF_COMPILE_ERROR, "the JavaScript UDA {} is invalid", func_name);
+    auto validate_member_functions =
+        [&](v8::Isolate * isolate_, v8::Local<v8::Context> & local_ctx, v8::TryCatch &, v8::Local<v8::Value> & obj) {
+            if (!obj->IsObject())
+                throw Exception(ErrorCodes::UDF_COMPILE_ERROR, "the JavaScript UDA {} is invalid", func_name);
 
-        for (const auto & member_func_name : required_member_funcs)
-        {
-            v8::Local<v8::Value> function_val;
-            if (!obj.As<v8::Object>()->Get(ctx, V8::to_v8(isolate, member_func_name)).ToLocal(&function_val) || !function_val->IsFunction())
-                throw Exception(
-                    ErrorCodes::UDF_COMPILE_ERROR,
-                    "the JavaScript UDA {} is invalid. Missing required member function '{}'",
-                    func_name,
-                    member_func_name);
-        }
-    };
+            auto local_obj = obj.As<v8::Object>();
+            for (const auto & member_func_name : required_member_funcs)
+            {
+                v8::Local<v8::Value> function_val;
+                if (!local_obj->Get(local_ctx, V8::to_v8(isolate_, member_func_name)).ToLocal(&function_val) || !function_val->IsFunction())
+                    throw Exception(
+                        ErrorCodes::UDF_COMPILE_ERROR,
+                        "the JavaScript UDA {} is invalid. Missing required member function: '{}'. Please refer to the JavaScript UDA "
+                        "documents for details",
+                        func_name,
+                        member_func_name);
+            }
+
+            /// For aggregate function, we like to limit the member functions and `has_customized_emit` boolean or function only
+            /// The reason behind this is `mutable data member like [], {} are not safe for aggregation in the same context
+            auto property_names = local_obj->GetOwnPropertyNames(local_ctx).ToLocalChecked();
+            for (uint32_t i = 0; i < property_names->Length(); ++i)
+            {
+                auto property_name = property_names->Get(local_ctx, i).ToLocalChecked();
+                auto property = local_obj->Get(local_ctx, property_name).ToLocalChecked();
+                auto native_property_name = V8::from_v8<String>(isolate_, property_name);
+                if (!property->IsFunction() && native_property_name != "has_customized_emit")
+                    throw Exception(
+                        ErrorCodes::UDF_COMPILE_ERROR,
+                        "the JavaScript UDA {} is invalid. It contains non-function data member : '{}'. JavaScript UDA can contain only "
+                        "required data members and member functions. Please refer to the JavaScript UDA documents for details",
+                        func_name,
+                        native_property_name);
+            }
+        };
 
     /// For aggregate UDA, it is defined as an object. For example
     /// var second_max = {

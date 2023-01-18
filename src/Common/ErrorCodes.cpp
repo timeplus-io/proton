@@ -675,6 +675,7 @@
     M(2530, UDF_COMPILE_ERROR)       \
     M(2531, UDF_MEMORY_THRESHOLD_EXCEEDED)       \
     M(2532, UDF_INVALID_NAME)       \
+    M(2533, UDF_INTERNAL_ERROR)       \
 /* See END */
 
 namespace DB

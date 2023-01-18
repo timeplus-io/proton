@@ -612,21 +612,21 @@ JavaScriptExecutionContext::JavaScriptExecutionContext(const UserDefinedFunction
     isolate_params.array_buffer_allocator_shared
         = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
     isolate = std::unique_ptr<v8::Isolate, IsolateDeleter>(v8::Isolate::New(isolate_params), IsolateDeleter());
-    auto * isolate_ = isolate.get();
 
     /// check heap limit
-    V8::checkHeapLimit(isolate_, ctx->getSettingsRef().javascript_max_memory_bytes);
+    V8::checkHeapLimit(isolate.get(), ctx->getSettingsRef().javascript_max_memory_bytes);
 
-    auto init_functions = [&](v8::Local<v8::Context> & ctx, v8::TryCatch & try_catch, v8::Local<v8::Value> &) {
+    auto init_functions = [&](v8::Isolate * isolate_, v8::Local<v8::Context> & ctx, v8::TryCatch & try_catch, v8::Local<v8::Value> &) {
         v8::Local<v8::Value> function_val;
         if (!ctx->Global()->Get(ctx, V8::to_v8(isolate_, config.name)).ToLocal(&function_val) || !function_val->IsFunction())
             throw Exception(ErrorCodes::UDF_COMPILE_ERROR, "the JavaScript UDF {} is invalid", config.name);
+
         func.Reset(isolate_, function_val.As<v8::Function>());
 
         context.Reset(isolate_, ctx);
     };
 
-    V8::compileSource(isolate_, config.name, config.source, init_functions);
+    V8::compileSource(isolate.get(), config.name, config.source, init_functions);
 }
 
 UDFExecutionContextPtr ShellCommandSourceCoordinator::getUDFContext(

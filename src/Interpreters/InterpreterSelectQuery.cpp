@@ -3115,11 +3115,6 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     auto streaming_group_by = has_user_defined_emit_strategy ? Streaming::Aggregator::Params::GroupBy::USER_DEFINED
                                                              : Streaming::Aggregator::Params::GroupBy::OTHER;
 
-    if (query_analyzer->aggregates().size() > 1 && has_user_defined_emit_strategy)
-        throw Exception(
-            ErrorCodes::NOT_IMPLEMENTED,
-            "User defined aggregation function with emit strategy shall be used together with other aggregation function");
-
     const auto & header_before_aggregation = query_plan.getCurrentDataStream().header;
     ColumnNumbers keys;
 
@@ -3200,6 +3195,11 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         if (descr.arguments.empty())
             for (const auto & name : descr.argument_names)
                 descr.arguments.push_back(header_before_aggregation.getPositionByName(name));
+
+    if (aggregates.size() > 1 && has_user_defined_emit_strategy)
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "User defined aggregation function with emit strategy shall be used together with other aggregation function");
 
     const Settings & settings = context->getSettingsRef();
 

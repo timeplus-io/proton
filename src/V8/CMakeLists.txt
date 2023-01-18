@@ -27,7 +27,7 @@ target_compile_options(V8 PUBLIC -Wno-newline-eof -Wno-non-virtual-dtor -Wno-und
 #    add_subdirectory(tests)
 #endif ()
 #
-#if (ENABLE_EXAMPLES)
-#    add_subdirectory(examples)
-#endif()
+if (ENABLE_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 

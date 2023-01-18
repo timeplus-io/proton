@@ -21,6 +21,6 @@ target_include_directories(nlog SYSTEM PUBLIC
 
 target_link_libraries(nlog PUBLIC clickhouse_common_io ch_contrib::rocksdb ch_contrib::abseil_swiss_tables)
 
-if (ENABLE_TESTS)
-    add_subdirectory(tests)
+if (ENABLE_EXAMPLES)
+    add_subdirectory(examples)
 endif ()
