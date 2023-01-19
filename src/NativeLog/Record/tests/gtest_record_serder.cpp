@@ -59,9 +59,9 @@ std::unique_ptr<Record> createRecord()
     auto time_col = datetime64_type->createColumn();
     /// auto time_col = make_shared<ColumnDecimal<DateTime64>>;
     auto * time_col_inner = typeid_cast<ColumnDecimal<DateTime64> *>(time_col.get());
-    time_col_inner->insertValue(1612286044.256326);
-    time_col_inner->insertValue(1612296044.256326);
-    time_col_inner->insertValue(1612276044.256326);
+    time_col_inner->insertValue(static_cast<long>(1612286044.256326));
+    time_col_inner->insertValue(static_cast<long>(1612296044.256326));
+    time_col_inner->insertValue(static_cast<long>(1612276044.256326));
 
     ColumnWithTypeAndName time_col_with_type(std::move(time_col), datetime64_type, "_tp_time");
     block.insert(time_col_with_type);

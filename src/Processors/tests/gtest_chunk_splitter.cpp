@@ -1,3 +1,4 @@
+#include <base/Decimal.h>
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
@@ -24,7 +25,12 @@ void doInsertColumnNumber(DB::Chunk & chunk, size_t rows, size_t chunks, DB::Dat
     auto * col_ptr = typeid_cast<ColumnType *>(col.get());
 
     for (size_t i = 0; i < rows; ++i)
-        col_ptr->insert(IntegerType((i + OFFSET) % chunks));
+    {
+        if constexpr (DB::is_decimal<IntegerType>)
+            col_ptr->insert(static_cast<typename IntegerType::NativeType>((i + OFFSET) % chunks));
+        else
+            col_ptr->insert(static_cast<IntegerType>((i + OFFSET) % chunks));
+    }
 
     chunk.addColumn(std::move(col));
 }
