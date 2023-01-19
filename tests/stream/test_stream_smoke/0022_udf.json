@@ -333,6 +333,47 @@
           ]
         }
       ]
+    },
+    {
+      "id": 6,
+      "tags": ["udf"],
+      "name": "toggle_bool",
+      "description": "bool input and output, toggle input",
+      "steps":[
+        {
+          "statements": [
+            {
+              "client": "rest",
+              "rest_type": "raw",
+              "query_type": "table",
+              "query_id": "2300",
+              "query_url": "/proton/v1/udfs",
+              "http_method": "POST",
+              "data": {
+                "type": "javascript",
+                "name": "toggle_bool",
+                "arguments": [
+                  {
+                    "name": "bool_value",
+                    "type": "bool"
+                  }
+                ],
+                "return_type": "bool",
+                "source": "function toggle_bool(values) { for (let i = 0; i < values.length; i++) values[i] = !values[i]; return values; }"
+              }
+            },
+            {"client":"python","query_id":"2301", "wait":5, "query_type": "table", "query":"select toggle_bool(true)"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"2301",
+          "expected_results":[
+            ["False"]
+          ]
+        }
+      ]
     }
   ]
 }

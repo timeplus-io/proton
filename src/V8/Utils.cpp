@@ -143,20 +143,24 @@ std::vector<v8::Local<v8::Value>> prepareArguments(
     return argv;
 }
 
-void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & type, bool is_array, v8::Local<v8::Value> & result)
+void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & result_type, bool is_array, v8::Local<v8::Value> & result)
 {
     v8::HandleScope scope(isolate);
     v8::Local<v8::Context> context = isolate->GetCurrentContext();
 
     if (!is_array)
     {
-        switch (type->getTypeId())
+        switch (result_type->getTypeId())
         {
             case TypeIndex::Bool:
                 to.insert(from_v8<bool>(isolate, result));
                 break;
             case TypeIndex::UInt8:
-                to.insert(from_v8<uint8_t>(isolate, result));
+                if (result_type->getName() == "bool")
+                    /// Internally we stores bool as UIn8
+                    to.insert(from_v8<bool>(isolate, result));
+                else
+                    to.insert(from_v8<uint8_t>(isolate, result));
                 break;
             case TypeIndex::UInt16:
                 to.insert(from_v8<uint16_t>(isolate, result));
@@ -190,14 +194,14 @@ void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & type,
                 to.insert(from_v8<String>(isolate, result));
                 break;
             case TypeIndex::DateTime64: {
-                const auto & scale = reinterpret_cast<const DataTypeDateTime64 *>(type.get())->getScale();
+                const auto & scale = reinterpret_cast<const DataTypeDateTime64 *>(result_type.get())->getScale();
                 if (!result->IsDate())
                     throw Exception(ErrorCodes::TYPE_MISMATCH, "the UDA does not return 'datetime64' type");
                 to.insert(toDateTime64(static_cast<int64_t>(result.As<v8::Date>()->NumberValue(context).ToChecked()), 3, scale));
                 break;
             }
             case TypeIndex::Tuple: {
-                const auto * tuple_type_ptr = reinterpret_cast<const DataTypeTuple *>(type.get());
+                const auto * tuple_type_ptr = reinterpret_cast<const DataTypeTuple *>(result_type.get());
                 if (!result->IsObject())
                     throw Exception(ErrorCodes::TYPE_MISMATCH, "the result result is Tuple type, but the UDF does not return Object");
 
@@ -216,7 +220,7 @@ void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & type,
                 break;
             }
             default:
-                to.insert(type->getDefault());
+                to.insert(result_type->getDefault());
         }
     }
     else
@@ -234,7 +238,7 @@ void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & type,
         for (int idx = 0; idx < array->Length(); idx++)
         {
             v8::Local<v8::Value> val = array->Get(context, idx).ToLocalChecked();
-            insertResult(isolate, to, type, false, val);
+            insertResult(isolate, to, result_type, false, val);
         }
     }
 }
@@ -322,7 +326,11 @@ void validateAggregationFunctionSource(
     auto validate_member_functions =
         [&](v8::Isolate * isolate_, v8::Local<v8::Context> & local_ctx, v8::TryCatch &, v8::Local<v8::Value> & obj) {
             if (!obj->IsObject())
-                throw Exception(ErrorCodes::UDF_COMPILE_ERROR, "the JavaScript UDA {} is invalid", func_name);
+                throw Exception(
+                    ErrorCodes::UDF_COMPILE_ERROR,
+                    "the JavaScript UDA {} is invalid. The UDA object '{}' is not defined",
+                    func_name,
+                    func_name);
 
             auto local_obj = obj.As<v8::Object>();
             for (const auto & member_func_name : required_member_funcs)
@@ -369,7 +377,11 @@ void validateStatelessFunctionSource(const std::string & func_name, const std::s
     auto validate_function = [&](v8::Isolate * isolate, v8::Local<v8::Context> & ctx, v8::TryCatch &, v8::Local<v8::Value> &) {
         v8::Local<v8::Value> function_val;
         if (!ctx->Global()->Get(ctx, V8::to_v8(isolate, func_name)).ToLocal(&function_val) || !function_val->IsFunction())
-            throw Exception(ErrorCodes::UDF_COMPILE_ERROR, "the JavaScript UDF {} is invalid", func_name);
+            throw Exception(
+                ErrorCodes::UDF_COMPILE_ERROR,
+                "the JavaScript UDF '{}' is invalid since the function '{}' is not defined",
+                func_name,
+                func_name);
     };
 
     /// For stateless UDF, it is defined as a free function. For example
