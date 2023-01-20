@@ -4,12 +4,14 @@
 
 #include <Daemon/BaseDaemon.h>
 #include <Daemon/SentryWriter.h>
+#include <base/errnoToString.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/wait.h>
 #include <sys/resource.h>
+
 #if defined(OS_LINUX)
     #include <sys/prctl.h>
 #endif
@@ -61,6 +63,7 @@
 
 #if defined(OS_DARWIN)
 #   pragma GCC diagnostic ignored "-Wunused-macros"
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
 #   define _XOPEN_SOURCE 700  // ucontext is not available without _XOPEN_SOURCE
 #endif
 #include <ucontext.h>
@@ -91,15 +94,12 @@ static void call_default_signal_handler(int sig)
         DB::throwFromErrno("Cannot send signal.", DB::ErrorCodes::CANNOT_SEND_SIGNAL);
 }
 
-static constexpr size_t max_query_id_size = 127;
-
 static const size_t signal_pipe_buf_size =
     sizeof(int)
     + sizeof(siginfo_t)
-    + sizeof(ucontext_t)
+    + sizeof(ucontext_t*)
     + sizeof(StackTrace)
     + sizeof(UInt32)
-    + max_query_id_size + 1    /// query_id + varint encoded length
     + sizeof(void*);
 
 using signal_function = void(int, siginfo_t*, void*);
@@ -140,18 +140,14 @@ static void signalHandler(int sig, siginfo_t * info, void * context)
     char buf[signal_pipe_buf_size];
     DB::WriteBufferFromFileDescriptorDiscardOnFailure out(signal_pipe.fds_rw[1], signal_pipe_buf_size, buf);
 
-    const ucontext_t signal_context = *reinterpret_cast<ucontext_t *>(context);
-    const StackTrace stack_trace(signal_context);
-
-    StringRef query_id = DB::CurrentThread::getQueryId();   /// This is signal safe.
-    query_id.size = std::min(query_id.size, max_query_id_size);
+    const ucontext_t * signal_context = reinterpret_cast<ucontext_t *>(context);
+    const StackTrace stack_trace(*signal_context);
 
     DB::writeBinary(sig, out);
     DB::writePODBinary(*info, out);
     DB::writePODBinary(signal_context, out);
     DB::writePODBinary(stack_trace, out);
     DB::writeBinary(static_cast<UInt32>(getThreadId()), out);
-    DB::writeStringBinary(query_id, out);
     DB::writePODBinary(DB::current_thread, out);
 
     out.next();
@@ -195,6 +191,8 @@ public:
 
     void run() override
     {
+        static_assert(PIPE_BUF >= 512);
+        static_assert(signal_pipe_buf_size <= PIPE_BUF, "Only write of PIPE_BUF to pipe is atomic and the minimal known PIPE_BUF across supported platforms is 512");
         char buf[signal_pipe_buf_size];
         DB::ReadBufferFromFileDescriptor in(signal_pipe.fds_rw[0], signal_pipe_buf_size, buf);
 
@@ -238,10 +236,9 @@ public:
             else
             {
                 siginfo_t info{};
-                ucontext_t context{};
+                ucontext_t * context{};
                 StackTrace stack_trace(NoCapture{});
                 UInt32 thread_num{};
-                std::string query_id;
                 DB::ThreadStatus * thread_ptr{};
 
                 if (sig != SanitizerTrap)
@@ -252,12 +249,11 @@ public:
 
                 DB::readPODBinary(stack_trace, in);
                 DB::readBinary(thread_num, in);
-                DB::readBinary(query_id, in);
                 DB::readPODBinary(thread_ptr, in);
 
                 /// This allows to receive more signals if failure happens inside onFault function.
                 /// Example: segfault while symbolizing stack trace.
-                std::thread([=, this] { onFault(sig, info, context, stack_trace, thread_num, query_id, thread_ptr); }).detach();
+                std::thread([=, this] { onFault(sig, info, context, stack_trace, thread_num, thread_ptr); }).detach();
             }
         }
     }
@@ -290,18 +286,27 @@ private:
     void onFault(
         int sig,
         const siginfo_t & info,
-        const ucontext_t & context,
+        ucontext_t * context,
         const StackTrace & stack_trace,
         UInt32 thread_num,
-        const std::string & query_id,
         DB::ThreadStatus * thread_ptr) const
     {
         DB::ThreadStatus thread_status;
+
+        String query_id;
+        String query;
 
         /// Send logs from this thread to client if possible.
         /// It will allow client to see failure messages directly.
         if (thread_ptr)
         {
+            query_id = std::string(thread_ptr->getQueryId());
+
+            if (auto thread_group = thread_ptr->getThreadGroup())
+            {
+                query = thread_group->one_line_query;
+            }
+
             if (auto logs_queue = thread_ptr->getInternalTextLogsQueue())
                 DB::CurrentThread::attachInternalTextLogsQueue(logs_queue, DB::LogsLevel::trace);
         }
@@ -316,15 +321,15 @@ private:
         }
         else
         {
-            LOG_FATAL(log, "(version {}{}, build id: {}) (from thread {}) (query_id: {}) Received signal {} ({})",
+            LOG_FATAL(log, "(version {}{}, build id: {}) (from thread {}) (query_id: {}) (query: {}) Received signal {} ({})",
                 VERSION_STRING, VERSION_OFFICIAL, daemon.build_id,
-                thread_num, query_id, strsignal(sig), sig); // NOLINT(concurrency-mt-unsafe) // it is not thread-safe but ok in this context)
+                thread_num, query_id, query, strsignal(sig), sig); // NOLINT(concurrency-mt-unsafe) // it is not thread-safe but ok in this context)
         }
 
         String error_message;
 
         if (sig != SanitizerTrap)
-            error_message = signalToErrorMessage(sig, info, context);
+            error_message = signalToErrorMessage(sig, info, *context);
         else
             error_message = "Sanitizer trap.";
 
@@ -349,27 +354,34 @@ private:
 
 #if defined(OS_LINUX)
         /// Write information about binary checksum. It can be difficult to calculate, so do it only after printing stack trace.
-        String calculated_binary_hash = getHashOfLoadedBinaryHex();
+        /// Please keep the below log messages in-sync with the ones in programs/server/Server.cpp
+
         if (daemon.stored_binary_hash.empty())
         {
-            LOG_FATAL(log, "Calculated checksum of the binary: {}."
-                " There is no information about the reference checksum.", calculated_binary_hash);
-        }
-        else if (calculated_binary_hash == daemon.stored_binary_hash)
-        {
-            LOG_FATAL(log, "Checksum of the binary: {}, integrity check passed.", calculated_binary_hash);
+            LOG_FATAL(log, "Integrity check of the executable skipped because the reference checksum could not be read.");
         }
         else
         {
-            LOG_FATAL(log, "Calculated checksum of the proton binary ({0}) does not correspond"
-                " to the reference checksum stored in the binary ({1})."
-                " It may indicate one of the following:"
-                " - the file was changed just after startup;"
-                " - the file is damaged on disk due to faulty hardware;"
-                " - the loaded executable is damaged in memory due to faulty hardware;"
-                " - the file was intentionally modified;"
-                " - logical error in code."
-                , calculated_binary_hash, daemon.stored_binary_hash);
+            String calculated_binary_hash = getHashOfLoadedBinaryHex();
+            if (calculated_binary_hash == daemon.stored_binary_hash)
+            {
+                LOG_FATAL(log, "Integrity check of the executable successfully passed (checksum: {})", calculated_binary_hash);
+            }
+            else
+            {
+                LOG_FATAL(
+                    log,
+                    "Calculated checksum of the executable ({0}) does not correspond"
+                    " to the reference checksum stored in the executable ({1})."
+                    " This may indicate one of the following:"
+                    " - the executable was changed just after startup;"
+                    " - the executable was corrupted on disk due to faulty hardware;"
+                    " - the loaded executable was corrupted in memory due to faulty hardware;"
+                    " - the file was intentionally modified;"
+                    " - a logical error in the code.",
+                    calculated_binary_hash,
+                    daemon.stored_binary_hash);
+            }
         }
 #endif
 
@@ -406,20 +418,16 @@ static DISABLE_SANITIZER_INSTRUMENTATION void sanitizerDeathCallback()
 
     const StackTrace stack_trace;
 
-    StringRef query_id = DB::CurrentThread::getQueryId();
-    query_id.size = std::min(query_id.size, max_query_id_size);
-
     int sig = SignalListener::SanitizerTrap;
     DB::writeBinary(sig, out);
     DB::writePODBinary(stack_trace, out);
     DB::writeBinary(UInt32(getThreadId()), out);
-    DB::writeStringBinary(query_id, out);
     DB::writePODBinary(DB::current_thread, out);
 
     out.next();
 
     /// The time that is usually enough for separate thread to print info into log.
-    sleepForSeconds(10);
+    sleepForSeconds(20);
 }
 #endif
 
@@ -455,7 +463,7 @@ static DISABLE_SANITIZER_INSTRUMENTATION void sanitizerDeathCallback()
     DB::WriteBufferFromFileDescriptor out(signal_pipe.fds_rw[1], buf_size, buf);
 
     DB::writeBinary(static_cast<int>(SignalListener::StdTerminate), out);
-    DB::writeBinary(UInt32(getThreadId()), out);
+    DB::writeBinary(static_cast<UInt32>(getThreadId()), out);
     DB::writeBinary(log_message, out);
     out.next();
 
@@ -470,7 +478,7 @@ static std::string createDirectory(const std::string & file)
         return "";
     fs::create_directories(path);
     return path;
-};
+}
 
 
 static bool tryCreateDirectories(Poco::Logger * logger, const std::string & path)
@@ -517,9 +525,8 @@ BaseDaemon::~BaseDaemon()
     signal_listener_thread.join();
     /// Reset signals to SIG_DFL to avoid trying to write to the signal_pipe that will be closed after.
     for (int sig : handled_signals)
-    {
-        signal(sig, SIG_DFL); /// NOLINT(cert-err33-c)
-    }
+        if (SIG_ERR == signal(sig, SIG_DFL))
+            DB::throwFromErrno("Cannot set signal handler.", DB::ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
     signal_pipe.close();
 }
 
@@ -574,6 +581,7 @@ void BaseDaemon::closeFDs()
     {
         int max_fd = -1;
 #if defined(_SC_OPEN_MAX)
+        // fd cannot be > INT_MAX
         max_fd = static_cast<int>(sysconf(_SC_OPEN_MAX));
         if (max_fd == -1)
 #endif
@@ -666,7 +674,7 @@ void BaseDaemon::initialize(Application & self)
     if (config().has("timezone"))
     {
         const std::string config_timezone = config().getString("timezone");
-        if (0 != setenv("TZ", config_timezone.data(), 1)) /// NOLINT(concurrency-mt-unsafe)
+        if (0 != setenv("TZ", config_timezone.data(), 1)) // NOLINT(concurrency-mt-unsafe) // ok if not called concurrently with other setenv/getenv
             throw Poco::Exception("Cannot setenv TZ variable");
 
         tzset();
@@ -935,7 +943,7 @@ void BaseDaemon::handleSignal(int signal_id)
         signal_id == SIGQUIT ||
         signal_id == SIGTERM)
     {
-        std::unique_lock<std::mutex> lock(signal_handler_mutex);
+        std::lock_guard lock(signal_handler_mutex);
         {
             ++terminate_signals_counter;
             sigint_signals_counter += signal_id == SIGINT;
@@ -945,13 +953,13 @@ void BaseDaemon::handleSignal(int signal_id)
         onInterruptSignals(signal_id);
     }
     else
-        throw DB::Exception(std::string("Unsupported signal: ") + strsignal(signal_id), 0); /// NOLINT(concurrency-mt-unsafe)
+        throw DB::Exception(std::string("Unsupported signal: ") + strsignal(signal_id), 0); // NOLINT(concurrency-mt-unsafe) // it is not thread-safe but ok in this context
 }
 
 void BaseDaemon::onInterruptSignals(int signal_id)
 {
     is_cancelled = true;
-    LOG_INFO(&logger(), "Received termination signal ({})", strsignal(signal_id)); /// NOLINT(concurrency-mt-unsafe)
+    LOG_INFO(&logger(), "Received termination signal ({})", strsignal(signal_id)); // NOLINT(concurrency-mt-unsafe) // it is not thread-safe but ok in this context
 
     if (sigint_signals_counter >= 2)
     {
@@ -1057,7 +1065,7 @@ void BaseDaemon::setupWatchdog()
                     break;
             }
             else if (errno != EINTR)
-                throw Poco::Exception("Cannot waitpid, errno: " + std::string(strerror(errno))); /// NOLINT(concurrency-mt-unsafe)
+                throw Poco::Exception("Cannot waitpid, errno: " + errnoToString());
         } while (true);
 
         if (errno == ECHILD)

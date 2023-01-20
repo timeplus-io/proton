@@ -8,6 +8,7 @@
 #include <Parsers/ASTKillQueryQuery.h>
 #include <Parsers/IAST.h>
 #include <Parsers/queryNormalization.h>
+#include <Parsers/toOneLineQuery.h>
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Common/typeid_cast.h>
 #include <Common/Exception.h>
@@ -217,6 +218,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
             thread_group->performance_counters.setParent(&user_process_list.user_performance_counters);
             thread_group->memory_tracker.setParent(&user_process_list.user_memory_tracker);
             thread_group->query = process_it->query;
+            thread_group->one_line_query = toOneLineQuery(process_it->query);
             thread_group->normalized_query_hash = normalizedQueryHash<false>(process_it->query);
 
             /// Set query-level memory trackers
