@@ -36,7 +36,7 @@ class QueryPipelineBuilder
 public:
     QueryPipelineBuilder() = default;
     ~QueryPipelineBuilder() = default;
-    QueryPipelineBuilder(QueryPipelineBuilder &&) = default;
+    QueryPipelineBuilder(QueryPipelineBuilder &&) noexcept = default;
     QueryPipelineBuilder(const QueryPipelineBuilder &) = delete;
     QueryPipelineBuilder & operator= (QueryPipelineBuilder && rhs) = default;
     QueryPipelineBuilder & operator= (const QueryPipelineBuilder & rhs) = delete;

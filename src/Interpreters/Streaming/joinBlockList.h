@@ -15,9 +15,9 @@ struct RefCountBlock
     /// in the block so the block will be GCed
     RefCountBlock(Block && block_) : block(std::move(block_)), refcnt(static_cast<uint32_t>(block.rows())) { }
 
-    RefCountBlock(RefCountBlock && other) : block(std::move(other.block)), refcnt(other.refcnt) { }
+    RefCountBlock(RefCountBlock && other) noexcept: block(std::move(other.block)), refcnt(other.refcnt) { }
 
-    RefCountBlock & operator=(RefCountBlock && other)
+    RefCountBlock & operator=(RefCountBlock && other) noexcept
     {
         block = std::move(other.block);
         refcnt = other.refcnt;

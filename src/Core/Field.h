@@ -387,9 +387,9 @@ public:
     /// 2. customized types needs explicit cast
     template <typename T>
     enable_if_not_field_or_bool_or_stringlike_t<T, Field> & /// NOLINT
-    operator=(T && rhs);
+    operator=(T && rhs) noexcept;
 
-    Field & operator= (bool rhs)
+    Field & operator= (bool rhs) noexcept
     {
         *this = castToNearestFieldType(rhs);
         which = Types::Bool;
@@ -844,7 +844,7 @@ Field::Field(T && rhs, enable_if_not_field_or_bool_or_stringlike_t<T>) //-V730
 
 template <typename T>
 Field::enable_if_not_field_or_bool_or_stringlike_t<T, Field> & /// NOLINT
-Field::operator=(T && rhs)
+Field::operator=(T && rhs) noexcept
 {
     auto && val = castToNearestFieldType(std::forward<T>(rhs));
     using U = decltype(val);

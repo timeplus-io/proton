@@ -12,7 +12,7 @@ class ProcessListEntry;
 struct BlockIO
 {
     BlockIO() = default;
-    BlockIO(BlockIO &&) = default;
+    BlockIO(BlockIO &&) noexcept = default;
 
     BlockIO & operator= (BlockIO && rhs) noexcept;
     ~BlockIO();

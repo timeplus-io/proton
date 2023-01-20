@@ -210,7 +210,7 @@ public:
 
     FixedHashTable() { alloc(); }
 
-    FixedHashTable(FixedHashTable && rhs) : buf(nullptr) { *this = std::move(rhs); }
+    FixedHashTable(FixedHashTable && rhs) noexcept: buf(nullptr) { *this = std::move(rhs); }
 
     ~FixedHashTable()
     {
@@ -218,7 +218,7 @@ public:
         free();
     }
 
-    FixedHashTable & operator=(FixedHashTable && rhs)
+    FixedHashTable & operator=(FixedHashTable && rhs) noexcept
     {
         destroyElements();
         free();

@@ -96,8 +96,8 @@ protected:
         mutable_ptr(const mutable_ptr &) = delete;
 
         /// Move: ok.
-        mutable_ptr(mutable_ptr &&) = default; /// NOLINT
-        mutable_ptr & operator=(mutable_ptr &&) = default; /// NOLINT
+        mutable_ptr(mutable_ptr &&) noexcept = default; /// NOLINT
+        mutable_ptr & operator=(mutable_ptr &&) noexcept = default; /// NOLINT
 
         /// Initializing from temporary of compatible type.
         template <typename U>
@@ -132,8 +132,8 @@ protected:
         immutable_ptr(const immutable_ptr<U> & other) : Base(other) {} /// NOLINT
 
         /// Move: ok.
-        immutable_ptr(immutable_ptr &&) = default; /// NOLINT
-        immutable_ptr & operator=(immutable_ptr &&) = default; /// NOLINT
+        immutable_ptr(immutable_ptr &&) noexcept = default; /// NOLINT
+        immutable_ptr & operator=(immutable_ptr &&) noexcept = default; /// NOLINT
 
         /// Initializing from temporary of compatible type.
         template <typename U>

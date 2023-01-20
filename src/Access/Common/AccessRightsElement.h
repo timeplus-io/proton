@@ -23,8 +23,8 @@ struct AccessRightsElement
     AccessRightsElement() = default;
     AccessRightsElement(const AccessRightsElement &) = default;
     AccessRightsElement & operator=(const AccessRightsElement &) = default;
-    AccessRightsElement(AccessRightsElement &&) = default;
-    AccessRightsElement & operator=(AccessRightsElement &&) = default;
+    AccessRightsElement(AccessRightsElement &&) noexcept = default;
+    AccessRightsElement & operator=(AccessRightsElement &&) noexcept = default;
 
     AccessRightsElement(AccessFlags access_flags_) : access_flags(access_flags_) {}
 

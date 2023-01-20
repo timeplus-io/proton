@@ -76,7 +76,7 @@ struct ColumnDescription
     ASTPtr ttl;
 
     ColumnDescription() = default;
-    ColumnDescription(ColumnDescription &&) = default;
+    ColumnDescription(ColumnDescription &&) noexcept = default;
     ColumnDescription(const ColumnDescription &) = default;
     ColumnDescription(String name_, DataTypePtr type_);
 

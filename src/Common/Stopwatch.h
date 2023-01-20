@@ -107,7 +107,7 @@ public:
 
         explicit Lock(AtomicStopwatch * parent_) : parent(parent_) {}
 
-        Lock(Lock &&) = default;
+        Lock(Lock &&) noexcept = default;
 
         ~Lock()
         {

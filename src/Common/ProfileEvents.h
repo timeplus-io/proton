@@ -64,14 +64,14 @@ namespace ProfileEvents
         struct Snapshot
         {
             Snapshot();
-            Snapshot(Snapshot &&) = default;
+            Snapshot(Snapshot &&) noexcept = default;
 
             Count operator[] (Event event) const noexcept
             {
                 return counters_holder[event];
             }
 
-            Snapshot & operator=(Snapshot &&) = default;
+            Snapshot & operator=(Snapshot &&) noexcept = default;
         private:
             std::unique_ptr<Count[]> counters_holder;
 
@@ -121,8 +121,8 @@ namespace ProfileEvents
         explicit CountersIncrement(Counters::Snapshot const & snapshot);
         CountersIncrement(Counters::Snapshot const & after, Counters::Snapshot const & before);
 
-        CountersIncrement(CountersIncrement &&) = default;
-        CountersIncrement & operator=(CountersIncrement &&) = default;
+        CountersIncrement(CountersIncrement &&) noexcept = default;
+        CountersIncrement & operator=(CountersIncrement &&) noexcept = default;
 
         Increment operator[](Event event) const noexcept
         {

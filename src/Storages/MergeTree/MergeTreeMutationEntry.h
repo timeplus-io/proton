@@ -38,7 +38,7 @@ struct MergeTreeMutationEntry
     /// Create a new entry and write it to a temporary file.
     MergeTreeMutationEntry(MutationCommands commands_, DiskPtr disk, const String & path_prefix_, UInt64 tmp_number, const TransactionID & tid_, const WriteSettings & settings);
     MergeTreeMutationEntry(const MergeTreeMutationEntry &) = delete;
-    MergeTreeMutationEntry(MergeTreeMutationEntry &&) = default;
+    MergeTreeMutationEntry(MergeTreeMutationEntry &&) noexcept = default;
 
     /// Commit entry and rename it to a permanent file.
     void commit(UInt64 block_number_);

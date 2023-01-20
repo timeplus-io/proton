@@ -11,10 +11,10 @@ class Chain
 {
 public:
     Chain() = default;
-    Chain(Chain &&) = default;
+    Chain(Chain &&) noexcept = default;
     Chain(const Chain &) = delete;
 
-    Chain & operator=(Chain &&) = default;
+    Chain & operator=(Chain &&) noexcept = default;
     Chain & operator=(const Chain &) = delete;
 
     explicit Chain(ProcessorPtr processor);

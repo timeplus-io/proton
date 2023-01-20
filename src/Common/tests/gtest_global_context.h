@@ -15,7 +15,7 @@ struct ContextHolder
         context->setPath("./");
     }
 
-    ContextHolder(ContextHolder &&) = default;
+    ContextHolder(ContextHolder &&) noexcept = default;
 
     void destroy()
     {

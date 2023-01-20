@@ -76,7 +76,7 @@ public:
         }
 
         SimpleAggregateDescription() = default;
-        SimpleAggregateDescription(SimpleAggregateDescription &&) = default;
+        SimpleAggregateDescription(SimpleAggregateDescription &&) noexcept = default;
         SimpleAggregateDescription(const SimpleAggregateDescription &) = delete;
     };
 
