@@ -63,9 +63,12 @@ namespace Streaming
 inline bool worthConvertToTwoLevel(
     size_t group_by_two_level_threshold, size_t result_size, size_t group_by_two_level_threshold_bytes, auto result_size_bytes)
 {
-    // params.group_by_two_level_threshold will be equal to 0 if we have only one thread to execute aggregation (refer to AggregatingStep::transformPipeline).
+    /// params.group_by_two_level_threshold will be equal to 0 if we have only one thread to execute aggregation (refer to AggregatingStep::transformPipeline).
+    /// We like the unique key and state bytes both reach the threshold and then consider converting to two levels
+    /// For `partition by` streaming case, there may be lots of partitions and each partition may have only one key
+    /// but with more than `group_by_two_level_threshold_bytes` states.
     return (group_by_two_level_threshold && result_size >= group_by_two_level_threshold)
-        || (group_by_two_level_threshold_bytes && result_size_bytes >= static_cast<Int64>(group_by_two_level_threshold_bytes));
+        && (group_by_two_level_threshold_bytes && result_size_bytes >= static_cast<Int64>(group_by_two_level_threshold_bytes));
 }
 
 AggregatedDataVariants::~AggregatedDataVariants()
@@ -785,7 +788,7 @@ template <bool no_more_keys, bool use_compiled_functions, typename Method>
                     inst->batch_arguments,
                     aggregates_pool);
 
-                /// Caculate if we need finalization
+                /// Calculate if we need finalization
                 if (!need_finalization && inst->batch_that->isUserDefined())
                 {
                     auto * map = reinterpret_cast<AggregateDataPtr *>(method.data.data());
@@ -912,12 +915,16 @@ template <bool no_more_keys, bool use_compiled_functions, typename Method>
 
         if (inst->batch_that->isUserDefined())
         {
+            auto places_ptr = places.get();
             /// It is ok to re-flush if it is flush already, then we don't need maintain a map to check if it is ready flushed
             for (size_t i = row_begin; i < row_end; ++i)
             {
-                inst->batch_that->flush(places[i]);
-                if (!need_finalization)
-                    need_finalization = inst->batch_that->shouldFinalize(places[i]);
+                if (places_ptr[i])
+                {
+                    inst->batch_that->flush(places_ptr[i] + inst->state_offset);
+                    if (!need_finalization)
+                        need_finalization = inst->batch_that->shouldFinalize(places_ptr[i] + inst->state_offset);
+                }
             }
         }
     }

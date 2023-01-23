@@ -1075,9 +1075,11 @@ void NO_INLINE Aggregator::executeImplBatch(
         /// proton : starts.
         if (inst->batch_that->isUserDefined())
         {
+            auto places_ptr = places.get();
+
             /// It is ok to re-flush if it is flush already, then we don't need maintain a map to check if it is ready flushed
             for (size_t i = row_begin; i < row_end; ++i)
-                inst->batch_that->flush(places[i]);
+                inst->batch_that->flush(places_ptr[i] + inst->state_offset);
         }
         /// proton : ends
     }
