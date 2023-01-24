@@ -461,6 +461,11 @@ void AggregateFunctionJavaScriptAdapter::insertResultInto(AggregateDataPtr __res
     if (blueprint.has_user_defined_emit_strategy && !data.should_finalize)
         return;
 
+    /// Flush what we have if there is still buffered data
+    /// Actually we shall be able to assert, the buffer data is empty
+    assert(data.columns[0]->empty());
+    /// flush(place);
+
     auto finalize_func = [&](v8::Isolate * isolate_, v8::Local<v8::Context> & ctx, v8::TryCatch & try_catch) {
         v8::Local<v8::Object> local_obj = v8::Local<v8::Object>::New(isolate_, data.uda_instance);
         v8::Local<v8::Function> local_func = v8::Local<v8::Function>::New(isolate_, data.finalize_func);

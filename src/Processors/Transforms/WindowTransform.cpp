@@ -960,6 +960,11 @@ void WindowTransform::updateAggregationState()
             {
                 a->add(buf, columns, row, arena_ptr);
             }
+
+            /// proton : starts
+            if (a->isUserDefined())
+                a->flush(buf);
+            /// proton : ends
         }
     }
 
