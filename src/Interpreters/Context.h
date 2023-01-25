@@ -87,6 +87,7 @@ class AsynchronousMetricLog;
 class OpenTelemetrySpanLog;
 class ZooKeeperLog;
 class SessionLog;
+class ProcessorsProfileLog;
 class TransactionsInfoLog;
 class StorageS3Settings;
 class IDatabase;
@@ -881,6 +882,7 @@ public:
     std::shared_ptr<OpenTelemetrySpanLog> getOpenTelemetrySpanLog() const;
     std::shared_ptr<ZooKeeperLog> getZooKeeperLog() const;
     std::shared_ptr<SessionLog> getSessionLog() const;
+    std::shared_ptr<ProcessorsProfileLog> getProcessorsProfileLog() const;
     std::shared_ptr<TransactionsInfoLog> getTransactionsInfoLog() const;
 
     /// Returns an object used to log operations with parts if it possible.

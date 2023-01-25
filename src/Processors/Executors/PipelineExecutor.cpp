@@ -37,11 +37,15 @@ namespace
 const String GRAPH_CKPT_FILE = "dag";
 }
 
-PipelineExecutor::PipelineExecutor(Processors & processors, QueryStatus * elem) : process_list_element(elem)
+PipelineExecutor::PipelineExecutor(Processors & processors, QueryStatus * elem)
+    : process_list_element(elem)
 {
+    if (process_list_element)
+        profile_processors = process_list_element->getContext()->getSettingsRef().log_processors_profiles;
+
     try
     {
-        graph = std::make_unique<ExecutingGraph>(processors);
+        graph = std::make_unique<ExecutingGraph>(processors, profile_processors);
     }
     catch (Exception & exception)
     {
@@ -308,7 +312,7 @@ void PipelineExecutor::initializeExecution(size_t num_threads)
     Queue queue;
     graph->initializeExecution(queue);
 
-    tasks.init(num_threads);
+    tasks.init(num_threads, profile_processors);
     tasks.fill(queue);
 }
 

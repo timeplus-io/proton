@@ -144,7 +144,7 @@ public:
     using ProcessorsMap = std::unordered_map<const IProcessor *, uint64_t>;
     ProcessorsMap processors_map;
 
-    explicit ExecutingGraph(Processors & processors_);
+    explicit ExecutingGraph(Processors & processors_, bool profile_processors_);
 
     const Processors & getProcessors() const { return processors; }
 
@@ -202,6 +202,8 @@ private:
     std::mutex processors_mutex;
 
     UpgradableMutex nodes_mutex;
+
+    const bool profile_processors;
 };
 
 }

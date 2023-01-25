@@ -16,6 +16,7 @@
 
 namespace DB
 {
+
 class QueryStatus;
 class ExecutingGraph;
 using ExecutingGraphPtr = std::unique_ptr<ExecutingGraph>;
@@ -48,14 +49,14 @@ public:
     void cancel();
 
     /// Checks the query time limits (cancelled or timeout). Throws on cancellation or when time limit is reached and the query uses "break"
-    void registerCheckpoint(ExecuteMode exec_mode_);
-    void deregisterCheckpoint();
-
     bool checkTimeLimit();
     /// Same as checkTimeLimit but it never throws. It returns false on cancellation or time limit reached
     [[nodiscard]] bool checkTimeLimitSoft();
 
     /// proton: starts.
+    void registerCheckpoint(ExecuteMode exec_mode_);
+    void deregisterCheckpoint();
+
     bool requireExplicitCancel() const { return exec_mode == ExecuteMode::SUBSCRIBE || exec_mode == ExecuteMode::RECOVER;}
 
     String getStats() const;
@@ -88,6 +89,8 @@ private:
 
     /// Flag that checks that initializeExecution was called.
     bool is_execution_initialized = false;
+    /// system.processors_profile_log
+    bool profile_processors = false;
 
     std::atomic_bool cancelled = false;
 

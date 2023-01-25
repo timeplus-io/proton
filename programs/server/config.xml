@@ -1089,6 +1089,15 @@
         <flush_interval_milliseconds>7500</flush_interval_milliseconds>
     </session_log>
 
+    <!-- Profiling on Processors level. -->
+    <processors_profile_log>
+        <database>system</database>
+        <table>processors_profile_log</table>
+
+        <partition_by>toYYYYMM(event_date)</partition_by>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </processors_profile_log>
+
     <!-- Parameters for embedded dictionaries, used in Yandex.Metrica.
          See https://proton.com/docs/en/dicts/internal_dicts/
     -->

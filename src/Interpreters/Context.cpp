@@ -2287,6 +2287,16 @@ std::shared_ptr<ZooKeeperLog> Context::getZooKeeperLog() const
 }
 
 
+std::shared_ptr<ProcessorsProfileLog> Context::getProcessorsProfileLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->system_logs)
+        return {};
+
+    return shared->system_logs->processors_profile_log;
+}
+
 std::shared_ptr<TransactionsInfoLog> Context::getTransactionsInfoLog() const
 {
     auto lock = getLock();
