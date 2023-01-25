@@ -22,8 +22,9 @@ ShufflingTransform::ShufflingTransform(Block header_, size_t num_outputs_, std::
         output_ports.push_back({.port = &output, .status = OutputStatus::NotActive});
 }
 
-IProcessor::Status ShufflingTransform::prepare(const PortNumbers & updated_inputs, const PortNumbers & updated_outputs)
+IProcessor::Status ShufflingTransform::prepare(const PortNumbers &, const PortNumbers & updated_outputs)
 {
+    /// Find outputs which can accept more data
     for (const auto & output_number : updated_outputs)
     {
         auto & output = output_ports[output_number];
@@ -56,32 +57,34 @@ IProcessor::Status ShufflingTransform::prepare(const PortNumbers & updated_input
         return Status::Finished;
     }
 
-    bool has_output = false;
+    /// Loop waiting outputs which can accept more data
     for (auto iter = waiting_outputs.begin(); iter != waiting_outputs.end();)
     {
         auto output_port_index = *iter;
-        auto & output = output_ports[output_port_index];
-        auto & shuffled_bucket = shuffled_output_chunks[output_port_index];
+        auto & waiting_output = output_ports[output_port_index];
+        auto & shuffled_chunks = shuffled_output_chunks[output_port_index];
 
-        /// If no data, check next
-        if (shuffled_bucket.empty())
+        /// If no buffered chunk for this waiting output, check next waiting output
+        if (shuffled_chunks.empty())
         {
             ++iter;
             continue;
         }
 
-        output.port->push(std::move(shuffled_bucket.front()));
-        output.status = OutputStatus::NotActive;
-        shuffled_bucket.pop();
+        waiting_output.port->push(std::move(shuffled_chunks.front()));
+        waiting_output.status = OutputStatus::NotActive;
+        shuffled_chunks.pop();
         iter = waiting_outputs.erase(iter);
-
-        has_output = true;
     }
 
-    if (has_output)
+    auto drained = std::all_of(
+        shuffled_output_chunks.begin(), shuffled_output_chunks.end(), [](const auto & shuffled_chunks) { return shuffled_chunks.empty(); });
+
+    /// We choose to drain all of the buffered / shuffled chunks to avoid buffer too many shuffled chunks
+    if (!drained)
         return Status::PortFull;
 
-    /// Check can input.
+    /// Only when buffered chunk are drained, then check if we can pull more data in from input port.
     if (!current_chunk)
     {
         auto & input = inputs.front();
@@ -133,7 +136,7 @@ void ShufflingTransform::consume(Chunk chunk)
     }
     else
     {
-        /// Shuffling is at the very upstream, down stream substream watermark transform still
+        /// Shuffling is very upstream, downstream substream watermark transform still
         /// depends on this empty timer chunk to calculate watermark for global aggregation
         /// When we fix the timer issue systematically, the pipeline system shall have minimum
         /// empty block flowing around and we don't need this anymore

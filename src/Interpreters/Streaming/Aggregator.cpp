@@ -915,7 +915,7 @@ template <bool no_more_keys, bool use_compiled_functions, typename Method>
 
         if (inst->batch_that->isUserDefined())
         {
-            auto places_ptr = places.get();
+            AggregateDataPtr * places_ptr = places.get();
             /// It is ok to re-flush if it is flush already, then we don't need maintain a map to check if it is ready flushed
             for (size_t i = row_begin; i < row_end; ++i)
             {

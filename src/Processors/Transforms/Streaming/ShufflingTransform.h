@@ -10,6 +10,9 @@ namespace DB
 namespace Streaming
 {
 
+/// ShufflingTransform shuffle data from one input to N outputs
+/// according to keys. Data with the same key is guaranteed to push to
+/// the same outputs
 class ShufflingTransform final : public IProcessor
 {
 public:
@@ -18,6 +21,7 @@ public:
     String getName() const override { return "ShufflingTransform"; }
 
     Status prepare(const PortNumbers & updated_inputs, const PortNumbers & updated_outputs) override;
+
     void work() override;
 
 protected:

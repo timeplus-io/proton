@@ -1072,10 +1072,10 @@ void NO_INLINE Aggregator::executeImplBatch(
         else
             inst->batch_that->addBatch(row_begin, row_end, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool);
 
-        /// proton : starts.
+        /// proton : starts. Flush for UDA
         if (inst->batch_that->isUserDefined())
         {
-            auto places_ptr = places.get();
+            AggregateDataPtr * places_ptr = places.get();
 
             /// It is ok to re-flush if it is flush already, then we don't need maintain a map to check if it is ready flushed
             for (size_t i = row_begin; i < row_end; ++i)
@@ -1165,9 +1165,8 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
                 inst->batch_arguments,
                 arena);
 
-        /// proton : starts
-        if (inst->batch_that->isUserDefined())
-            inst->batch_that->flush(res + inst->state_offset);
+        /// proton : starts, flush for UDA
+        inst->batch_that->flush(res + inst->state_offset);
         /// proton : end
     }
 }
@@ -1194,9 +1193,8 @@ void NO_INLINE Aggregator::executeOnIntervalWithoutKeyImpl(
         else
             inst->batch_that->addBatchSinglePlaceFromInterval(row_begin, row_end, res + inst->state_offset, inst->batch_arguments, arena);
 
-        /// proton : starts
-        if (inst->batch_that->isUserDefined())
-            inst->batch_that->flush(res + inst->state_offset);
+        /// proton : starts. Flush for UDA
+        inst->batch_that->flush(res + inst->state_offset);
         /// proton : ends
     }
 }

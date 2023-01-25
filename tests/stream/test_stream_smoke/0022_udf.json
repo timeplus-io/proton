@@ -103,7 +103,7 @@
                 "source": "{ initialize: function() { this.max = -1.0; this.sec = -1.0; }, process: function(values) { for (let i=0; i<values.length; i++) { if (values[i] > this.max) { this.sec=this.max; this.max=values[i]; } if (values[i]<this.max && values[i]>this.sec) this.sec=values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {'max':this.max,'sec':this.sec}; return JSON.stringify(s);}, deserialize: function (state_str) { let s=JSON.parse(state_str); this.max=s['max']; this.sec=s['sec']; }, merge: function (state_str) { let s=JSON.parse(state_str); if(s['sec']>=this.max) { this.max=s['max']; this.sec=s['sec'];} else if(s['max']>=this.max) { this.sec=this.max; this.max=s['max'];} else if(s['max']>this.sec) { this.sec=s['max']; } } }"
               }
             },
-            {"client":"python","query_id":"2301", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":2, "query_type": "stream", "query":"select s, sec_large(f32), max(f32) from udf_types group by s order by s"}
+            {"client":"python","query_id":"2301", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":2, "query_type": "stream", "query":"select s, max(f32), sec_large(f32) from udf_types group by s order by s"}
           ]
         },
 
@@ -119,7 +119,7 @@
         {
           "query_id":"2301",
           "expected_results":[
-            ["s1", 1.0, 3.0], ["s2", 2.0, 4.0]
+            ["s1", 3.0, 1.0], ["s2", 4.0, 2.0]
           ]
         }
       ]

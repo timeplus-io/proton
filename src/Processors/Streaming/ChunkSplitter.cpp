@@ -78,10 +78,8 @@ std::vector<ChunkWithID> ChunkSplitter::split(Chunk & chunk) const
 #if defined(USE_ABSL_CHUNK_MAP) || defined(USE_STD_CHUNK_MAP)
             auto [iter, inserted] = selector_buckets.try_emplace(std::move(key), selector_buckets.size());
             if (inserted)
-            {
                 chunks.emplace_back(std::move(key), Chunk{});
-                chunks.back().chunk.reserve(columns.size());
-            }
+
             selector[row] = iter->second;
 #elif defined(USE_FIND_ALGO)
             auto iter = std::find_if(chunks.begin(), chunks.end(), [&key](const auto & chunk_with_id) { return chunk_with_id.id == key; } );
@@ -89,7 +87,6 @@ std::vector<ChunkWithID> ChunkSplitter::split(Chunk & chunk) const
             {
                 selector[row] = chunks.size();
                 chunks.emplace_back(std::move(key), Chunk{});
-                chunks.back().chunk.reserve(columns.size());
             }
             else
                 selector[row] = std::distance(chunks.begin(), iter);
@@ -102,7 +99,6 @@ std::vector<ChunkWithID> ChunkSplitter::split(Chunk & chunk) const
                 /// Setup the selector bucket which starts from 0
                 new (&it->getMapped()) size_t(selector_buckets.size() - 1);
                 chunks.emplace_back(std::move(key), Chunk{});
-                chunks.back().chunk.reserve(columns.size());
             }
 
             selector[row] = it->getMapped();

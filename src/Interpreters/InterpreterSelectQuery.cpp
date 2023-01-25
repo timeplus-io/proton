@@ -2382,7 +2382,9 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         /// 2) Sharding expr keys
         if (query_info.hasPartitionByKeys())
         {
-            /// We like to limit the shuffling concurrency for JavaScript UDA
+            /// We like to limit the shuffling concurrency here
+            /// 1) No more than number of inputs concurrency
+            /// 2) If there is JavaScript UDA, limit the concurrency further
             size_t shuffle_output_streams = context->getSettingsRef().max_threads.value;
             auto controlled_concurrency = context->getSettingsRef().javascript_uda_max_concurrency.value;
             if (query_info.has_javascript_uda)
@@ -2390,6 +2392,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
                 shuffle_output_streams = std::min(shuffle_output_streams, controlled_concurrency);
                 LOG_INFO(log, "Limit shuffling output stream to {} for JavaScript UDA", shuffle_output_streams);
             }
+            shuffle_output_streams = shuffle_output_streams == 0 ? 1 : shuffle_output_streams;
 
             auto substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
             query_plan.addStep(std::make_unique<Streaming::ShufflingStep>(

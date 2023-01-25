@@ -28,7 +28,13 @@ ShufflingStep::ShufflingStep(const DataStream & input_stream_, std::vector<size_
 
 void ShufflingStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
 {
-    size_t output_num = max_thread;
+    /// We like to limit the number of of the outputs
+    /// 1) No more than number of inputs concurrency
+    /// Depending on aggregation, more output stream may hurt perf
+    /// so we just limit the number of output stream here
+    auto output_num = std::min(pipeline.getNumStreams(), max_thread);
+    assert(output_num >= 1);
+
     if (pipeline.getNumStreams() > 1)
     {
         /// M -> N
@@ -38,7 +44,7 @@ void ShufflingStep::transformPipeline(QueryPipelineBuilder & pipeline, const Bui
     }
     else
     {
-        /// 1 -> N
+        /// 1 -> 1
         pipeline.addTransform(std::make_shared<ShufflingTransform>(pipeline.getHeader(), output_num, key_positions));
     }
 }
