@@ -1,11 +1,11 @@
 -- Tags: no-fasttest
 
-DROP STREAM IF EXISTS BannerDict;
+DROP TABLE IF EXISTS BannerDict;
 
-create stream BannerDict (`BannerID` uint64, `CompaignID` uint64) ENGINE = ODBC('DSN=pgconn;Database=postgres', bannerdict); -- {serverError 42}
+CREATE TABLE BannerDict (`BannerID` UInt64, `CompaignID` UInt64) ENGINE = ODBC('DSN=pgconn;Database=postgres', bannerdict); -- {serverError 42}
 
-create stream BannerDict (`BannerID` uint64, `CompaignID` uint64) ENGINE = ODBC('DSN=pgconn;Database=postgres', somedb, bannerdict);
+CREATE TABLE BannerDict (`BannerID` UInt64, `CompaignID` UInt64) ENGINE = ODBC('DSN=pgconn;Database=postgres', somedb, bannerdict);
 
-SHOW create stream BannerDict;
+SHOW CREATE TABLE BannerDict;
 
-DROP STREAM IF EXISTS BannerDict;
+DROP TABLE IF EXISTS BannerDict;

@@ -27,6 +27,6 @@ function cleanup()
 }
 trap cleanup EXIT
 
-${CLICKHOUSE_CLIENT} --query="insert into table function file('${symlink_path}', 'Values', 'a string') select 'OK'";
-${CLICKHOUSE_CLIENT} --query="select * from file('${symlink_path}', 'Values', 'a string')";
+${CLICKHOUSE_CLIENT} --query="insert into table function file('${symlink_path}', 'Values', 'a String') select 'OK'";
+${CLICKHOUSE_CLIENT} --query="select * from file('${symlink_path}', 'Values', 'a String')";
 

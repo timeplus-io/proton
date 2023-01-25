@@ -1,2 +1,2 @@
 SELECT sumMap(['a', 'b'], [1, NULL]);
-SELECT sumMap(['a', 'b'], [1, to_nullable(0)]);
+SELECT sumMap(['a', 'b'], [1, toNullable(0)]);

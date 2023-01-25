@@ -1,5 +1,5 @@
-DROP STREAM IF EXISTS ints;
-create stream ints (i64 int64, i32 int32) ;
+DROP TABLE IF EXISTS ints;
+CREATE TABLE ints (i64 Int64, i32 Int32) ENGINE = Memory;
 
 SET join_algorithm = 'partial_merge';
 
@@ -12,4 +12,4 @@ SELECT * FROM ints l INNER JOIN ints r USING i64 ORDER BY l.i32, r.i32;
 SELECT '-';
 SELECT count() FROM ( SELECT [1], count(1) ) AS t1 ALL RIGHT JOIN ( SELECT number AS s FROM numbers(2) ) AS t2 USING (s); -- { serverError NOT_FOUND_COLUMN_IN_BLOCK }
 
-DROP STREAM ints;
+DROP TABLE ints;

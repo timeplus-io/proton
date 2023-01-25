@@ -2,20 +2,20 @@
 
 struct Message
 {
-    int8 @0 : int8;
-    uint8 @1 : uint8;
-    int16 @2 : int16;
-    uint16 @3 : uint16;
-    int32 @4 : int32;
-    uint32 @5 : uint32;
-    int64 @6 : int64;
-    uint64 @7 : uint64;
-    float32 @8 : float32;
-    float64 @9 : float64;
+    int8 @0 : Int8;
+    uint8 @1 : UInt8;
+    int16 @2 : Int16;
+    uint16 @3 : UInt16;
+    int32 @4 : Int32;
+    uint32 @5 : UInt32;
+    int64 @6 : Int64;
+    uint64 @7 : UInt64;
+    float32 @8 : Float32;
+    float64 @9 : Float64;
     string @10 : Text;
     fixed @11 : Text;
     data @12 : Data;
-    date @13 : uint16;
-    datetime @14 : uint32;
-    datetime64 @15 : int64;
+    date @13 : UInt16;
+    datetime @14 : UInt32;
+    datetime64 @15 : Int64;
 }

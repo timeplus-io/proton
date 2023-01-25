@@ -1,5 +1,5 @@
 SELECT
-    'Nul\0able\0String)Nul\0\0ble(string)Nul\0able(string)Nul\0able(string)',
+    'Nul\0able\0String)Nul\0\0ble(String)Nul\0able(String)Nul\0able(String)',
     NULL AND 2,
     '',
     number,

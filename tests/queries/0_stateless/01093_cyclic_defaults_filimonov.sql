@@ -1,19 +1,19 @@
-create stream test
+CREATE TABLE test
 (
-    `a0` uint64 DEFAULT a1 + 1,
-    `a1` uint64 DEFAULT a0 + 1,
-    `a2` uint64 DEFAULT a3 + a4,
-    `a3` uint64 DEFAULT a2 + 1,
-    `a4` uint64 ALIAS a3 + 1
+    `a0` UInt64 DEFAULT a1 + 1,
+    `a1` UInt64 DEFAULT a0 + 1,
+    `a2` UInt64 DEFAULT a3 + a4,
+    `a3` UInt64 DEFAULT a2 + 1,
+    `a4` UInt64 ALIAS a3 + 1
 )
- ; -- { serverError 174 }
+ENGINE = Log; -- { serverError 174 }
 
-create stream pythagoras
+CREATE TABLE pythagoras
 (
-    `a` float64 DEFAULT sqrt((c * c) - (b * b)),
-    `b` float64 DEFAULT sqrt((c * c) - (a * a)),
-    `c` float64 DEFAULT sqrt((a * a) + (b * b))
+    `a` Float64 DEFAULT sqrt((c * c) - (b * b)),
+    `b` Float64 DEFAULT sqrt((c * c) - (a * a)),
+    `c` Float64 DEFAULT sqrt((a * a) + (b * b))
 )
- ; -- { serverError 174 }
+ENGINE = Log; -- { serverError 174 }
 
--- TODO: It works but should not: create stream test (a DEFAULT b, b DEFAULT a) 
+-- TODO: It works but should not: CREATE TABLE test (a DEFAULT b, b DEFAULT a) ENGINE = Memory

@@ -1,19 +1,19 @@
 -- Tags: no-parallel
 
-DROP STREAM IF EXISTS dictionary_primary_key_source_table;
-create stream dictionary_primary_key_source_table
+DROP TABLE IF EXISTS dictionary_primary_key_source_table;
+CREATE TABLE dictionary_primary_key_source_table
 (
-    identifier uint64,
-    v uint64
-) ;
+    identifier UInt64,
+    v UInt64
+) ENGINE = TinyLog;
 
 INSERT INTO dictionary_primary_key_source_table VALUES (20, 1);
 
 DROP DICTIONARY IF EXISTS flat_dictionary;
 CREATE DICTIONARY flat_dictionary
 (
-    identifier uint64,
-    v uint64
+    identifier UInt64,
+    v UInt64
 )
 PRIMARY KEY v
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() TABLE 'dictionary_primary_key_source_table'))
@@ -23,4 +23,4 @@ LAYOUT(FLAT());
 SELECT * FROM flat_dictionary;
 
 DROP DICTIONARY flat_dictionary;
-DROP STREAM dictionary_primary_key_source_table;
+DROP TABLE dictionary_primary_key_source_table;

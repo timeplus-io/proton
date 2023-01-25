@@ -1,12 +1,12 @@
-DROP STREAM IF EXISTS 02185_range_dictionary_source_table;
-create stream 02185_range_dictionary_source_table
+DROP TABLE IF EXISTS 02185_range_dictionary_source_table;
+CREATE TABLE 02185_range_dictionary_source_table
 (
-    id uint64,
-    start nullable(uint64),
-    end nullable(uint64),
-    value string
+    id UInt64,
+    start Nullable(UInt64),
+    end Nullable(UInt64),
+    value String
 )
-;
+ENGINE = TinyLog;
 
 INSERT INTO 02185_range_dictionary_source_table VALUES (0, NULL, 5000, 'Value0'), (0, 5001, 10000, 'Value1'), (0, 10001, NULL, 'Value2');
 
@@ -16,10 +16,10 @@ SELECT * FROM 02185_range_dictionary_source_table;
 DROP DICTIONARY IF EXISTS 02185_range_dictionary;
 CREATE DICTIONARY 02185_range_dictionary
 (
-    id uint64,
-    start uint64,
-    end uint64,
-    value string DEFAULT 'DefaultValue'
+    id UInt64,
+    start UInt64,
+    end UInt64,
+    value String DEFAULT 'DefaultValue'
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(TABLE '02185_range_dictionary_source_table'))
@@ -40,10 +40,10 @@ DROP DICTIONARY 02185_range_dictionary;
 
 CREATE DICTIONARY 02185_range_dictionary
 (
-    id uint64,
-    start uint64,
-    end uint64,
-    value string DEFAULT 'DefaultValue'
+    id UInt64,
+    start UInt64,
+    end UInt64,
+    value String DEFAULT 'DefaultValue'
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(TABLE '02185_range_dictionary_source_table'))
@@ -60,4 +60,4 @@ SELECT dictHas('02185_range_dictionary', 0, 0);
 SELECT dictHas('02185_range_dictionary', 0, 5001);
 SELECT dictHas('02185_range_dictionary', 0, 10001);
 
-DROP STREAM 02185_range_dictionary_source_table;
+DROP TABLE 02185_range_dictionary_source_table;

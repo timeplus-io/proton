@@ -15,13 +15,13 @@ SELECT '-';
 
 SET joined_subquery_requires_alias = 1;
 
-DROP STREAM IF EXISTS f;
-DROP STREAM IF EXISTS d;
+DROP TABLE IF EXISTS f;
+DROP TABLE IF EXISTS d;
 
-create stream f (`d_ids` array(int64) ) ;
+CREATE TABLE f (`d_ids` Array(Int64) ) ENGINE = TinyLog;
 INSERT INTO f VALUES ([1, 2]);
 
-create stream d (`id` int64, `name` string ) ;
+CREATE TABLE d (`id` Int64, `name` String ) ENGINE = TinyLog;
 
 INSERT INTO d VALUES (2, 'a2'), (3, 'a3');
 
@@ -40,12 +40,12 @@ JOIN system.one AS y ON x.dummy + 1 == y.dummy + 1;
 SELECT * FROM ( SELECT [dummy, dummy] AS dummy FROM system.one ) AS x ARRAY JOIN dummy
 JOIN system.one AS y USING dummy;
 
-SELECT * FROM ( SELECT [to_uint32(dummy), to_uint32(dummy)] AS dummy FROM system.one ) AS x ARRAY JOIN dummy
-JOIN (select to_int32(dummy) as dummy from system.one ) AS y USING dummy;
+SELECT * FROM ( SELECT [toUInt32(dummy), toUInt32(dummy)] AS dummy FROM system.one ) AS x ARRAY JOIN dummy
+JOIN (select toInt32(dummy) as dummy from system.one ) AS y USING dummy;
 
-SELECT dummy > 0, to_type_name(any(dummy)), any(to_type_name(dummy)) 
-FROM ( SELECT [to_uint32(dummy), to_uint32(dummy)] AS dummy FROM system.one ) AS x ARRAY JOIN dummy
-JOIN ( SELECT to_int32(dummy) AS dummy FROM system.one ) AS y USING dummy GROUP BY (dummy > 0);
+SELECT dummy > 0, toTypeName(any(dummy)), any(toTypeName(dummy))
+FROM ( SELECT [toUInt32(dummy), toUInt32(dummy)] AS dummy FROM system.one ) AS x ARRAY JOIN dummy
+JOIN ( SELECT toInt32(dummy) AS dummy FROM system.one ) AS y USING dummy GROUP BY (dummy > 0);
 
-DROP STREAM IF EXISTS f;
-DROP STREAM IF EXISTS d;
+DROP TABLE IF EXISTS f;
+DROP TABLE IF EXISTS d;

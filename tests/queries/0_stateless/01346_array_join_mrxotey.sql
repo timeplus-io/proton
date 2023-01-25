@@ -1,12 +1,12 @@
-DROP STREAM IF EXISTS test;
+DROP TABLE IF EXISTS test;
 
-create stream test (
-    a date,
-    b uint32,
-    c uint64,
-    p nested (
-        at1 string,
-        at2 string
+CREATE TABLE test (
+    a Date,
+    b UInt32,
+    c UInt64,
+    p Nested (
+        at1 String,
+        at2 String
     )
 ) ENGINE = MergeTree()
 PARTITION BY a
@@ -25,4 +25,4 @@ WHERE
         SELECT c FROM test
     );
 
-DROP STREAM test;
+DROP TABLE test;

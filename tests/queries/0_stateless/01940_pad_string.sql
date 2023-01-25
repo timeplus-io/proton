@@ -51,4 +51,4 @@ SELECT rightPad('абвг', 12, 'ЧАС');
 SELECT rightPadUTF8('абвг', 12, 'ЧАС');
 
 SELECT 'numbers';
-SELECT rightPad(leftPad(to_string(number), number, '_'), number*2, '^') FROM numbers(7);
+SELECT rightPad(leftPad(toString(number), number, '_'), number*2, '^') FROM numbers(7);

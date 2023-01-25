@@ -1,9 +1,9 @@
 -- Tags: no-parallel, no-fasttest
 
-DROP STREAM IF EXISTS current_failed_query_metrics;
-DROP STREAM IF EXISTS to_insert;
+DROP TABLE IF EXISTS current_failed_query_metrics;
+DROP TABLE IF EXISTS to_insert;
 
-create stream current_failed_query_metrics (event low_cardinality(string), value uint64) ();
+CREATE TABLE current_failed_query_metrics (event LowCardinality(String), value UInt64) ENGINE = Memory();
 
 
 INSERT INTO current_failed_query_metrics 
@@ -11,7 +11,7 @@ SELECT event, value
 FROM system.events
 WHERE event in ('FailedQuery', 'FailedInsertQuery', 'FailedSelectQuery');
 
-create stream to_insert (value uint64) ();
+CREATE TABLE to_insert (value UInt64) ENGINE = Memory();
 
 -- Failed insert before execution
 INSERT INTO table_that_do_not_exists VALUES (42); -- { serverError 60 }
@@ -64,5 +64,5 @@ ALL LEFT JOIN (
 on previous.event = current.event;
 
 
-DROP STREAM current_failed_query_metrics;
-DROP STREAM to_insert;
+DROP TABLE current_failed_query_metrics;
+DROP TABLE to_insert;

@@ -1,8 +1,8 @@
-DROP STREAM IF EXISTS test;
-create stream test
+DROP TABLE IF EXISTS test;
+CREATE TABLE test
 (
-  id   uint32,
-  code low_cardinality(fixed_string(2)) DEFAULT '--'
+  id   UInt32,
+  code LowCardinality(FixedString(2)) DEFAULT '--'
 ) ENGINE = MergeTree() PARTITION BY id ORDER BY id;
 
 INSERT INTO test FORMAT CSV 1,RU
@@ -12,4 +12,4 @@ SELECT * FROM test ORDER BY code;
 OPTIMIZE TABLE test;
 SELECT * FROM test ORDER BY code;
 
-DROP STREAM test;
+DROP TABLE test;

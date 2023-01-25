@@ -1,6 +1,6 @@
-DROP STREAM IF EXISTS truncate_test;
+DROP TABLE IF EXISTS truncate_test;
 
-create stream truncate_test(uint8 uint8)  ;
+CREATE TABLE truncate_test(uint8 UInt8) ENGINE = Log;
 
 INSERT INTO truncate_test VALUES(1), (2), (3);
 
@@ -10,4 +10,4 @@ TRUNCATE truncate_test;
 
 SELECT * FROM truncate_test ORDER BY uint8;
 
-DROP STREAM truncate_test;
+DROP TABLE truncate_test;

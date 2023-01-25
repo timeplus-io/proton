@@ -1,10 +1,10 @@
-DROP STREAM IF EXISTS t;
-DROP STREAM IF EXISTS nt;
-DROP STREAM IF EXISTS ntxy;
+DROP TABLE IF EXISTS t;
+DROP TABLE IF EXISTS nt;
+DROP TABLE IF EXISTS ntxy;
 
-create stream t (x string)  ();
-create stream nt (x nullable(string))  ();
-create stream ntxy (x nullable(string), y nullable(string))  ();
+CREATE TABLE t (x String) ENGINE = Log();
+CREATE TABLE nt (x Nullable(String)) ENGINE = Log();
+CREATE TABLE ntxy (x Nullable(String), y Nullable(String)) ENGINE = Log();
 
 INSERT INTO t (x) VALUES ('id'), ('1');
 INSERT INTO nt (x) VALUES ('id'), (NULL), ('1');
@@ -26,6 +26,6 @@ SELECT 'n a rj t', t1.x, t2.x FROM ntxy AS t1 ANY RIGHT JOIN t AS t2 ON t1.x = t
 SELECT 'n fj t', t1.x, t2.x FROM ntxy AS t1 FULL JOIN t AS t2 ON t1.x = t2.x OR t2.x = t1.y ORDER BY t1.x;
 SELECT 'n fj t', t1.x, t2.x FROM ntxy AS t1 FULL JOIN t AS t2 ON t2.x = t1.y OR t1.x = t2.x ORDER BY t1.x;
 
-DROP STREAM t;
-DROP STREAM nt;
-DROP STREAM ntxy;
+DROP TABLE t;
+DROP TABLE nt;
+DROP TABLE ntxy;

@@ -15,14 +15,14 @@ mkdir -p ${user_files_path}/${CLICKHOUSE_TEST_UNIQUE_NAME}/
 
 rm -rf ${user_files_path}/${CLICKHOUSE_TEST_UNIQUE_NAME:?}/*
 
-${CLICKHOUSE_CLIENT} --query "drop stream if exists file_log;"
+${CLICKHOUSE_CLIENT} --query "drop table if exists file_log;"
 
-${CLICKHOUSE_CLIENT} --query "create stream file_log(k uint8, v uint8) engine=FileLog('/tmp/aaa.csv', 'CSV');" 2>&1 | grep -q "Code: 36" && echo 'OK' || echo 'FAIL';
-${CLICKHOUSE_CLIENT} --query "create stream file_log(k uint8, v uint8) engine=FileLog('/tmp/aaa.csv', 'CSV');" 2>&1 | grep -q "Code: 36" && echo 'OK' || echo 'FAIL';
-${CLICKHOUSE_CLIENT} --query "create stream file_log(k uint8, v uint8) engine=FileLog('/tmp/aaa.csv', 'CSV');" 2>&1 | grep -q "Code: 36" && echo 'OK' || echo 'FAIL';
+${CLICKHOUSE_CLIENT} --query "create table file_log(k UInt8, v UInt8) engine=FileLog('/tmp/aaa.csv', 'CSV');" 2>&1 | grep -q "Code: 36" && echo 'OK' || echo 'FAIL';
+${CLICKHOUSE_CLIENT} --query "create table file_log(k UInt8, v UInt8) engine=FileLog('/tmp/aaa.csv', 'CSV');" 2>&1 | grep -q "Code: 36" && echo 'OK' || echo 'FAIL';
+${CLICKHOUSE_CLIENT} --query "create table file_log(k UInt8, v UInt8) engine=FileLog('/tmp/aaa.csv', 'CSV');" 2>&1 | grep -q "Code: 36" && echo 'OK' || echo 'FAIL';
 
-${CLICKHOUSE_CLIENT} --query "create stream file_log(k uint8, v uint8) engine=FileLog('${user_files_path}/${CLICKHOUSE_TEST_UNIQUE_NAME}/', 'CSV');"
+${CLICKHOUSE_CLIENT} --query "create table file_log(k UInt8, v UInt8) engine=FileLog('${user_files_path}/${CLICKHOUSE_TEST_UNIQUE_NAME}/', 'CSV');"
 
-${CLICKHOUSE_CLIENT} --query "drop stream file_log;"
+${CLICKHOUSE_CLIENT} --query "drop table file_log;"
 
 rm -rf ${user_files_path}/${CLICKHOUSE_TEST_UNIQUE_NAME:?}

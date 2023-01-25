@@ -4,14 +4,14 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS bloom_filter_idx;"
+$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS bloom_filter_idx;"
 
 # NGRAM BF
 $CLICKHOUSE_CLIENT -n --query="
-create stream bloom_filter_idx
+CREATE TABLE bloom_filter_idx
 (
-    k uint64,
-    s string,
+    k UInt64,
+    s String,
     INDEX bf (s, lower(s)) TYPE ngrambf_v1(3, 512, 2, 0) GRANULARITY 1
 ) ENGINE = MergeTree()
 ORDER BY k
@@ -57,30 +57,30 @@ $CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE startsWith(s, '
 $CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE startsWith(s, 'c') AND endsWith(s, 'science') FORMAT JSON" | grep "rows_read"
 
 # MULTY_SEARCH_ANY
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['data', 'base'])"
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['data', 'base']) FORMAT JSON" | grep "rows_read"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['data', 'base'])"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['data', 'base']) FORMAT JSON" | grep "rows_read"
 
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['string'])"
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['string']) FORMAT JSON" | grep "rows_read"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['string'])"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['string']) FORMAT JSON" | grep "rows_read"
 
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['string', 'computer'])"
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['string', 'computer']) FORMAT JSON" | grep "rows_read"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['string', 'computer'])"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['string', 'computer']) FORMAT JSON" | grep "rows_read"
 
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['base', 'seme', 'gement'])"
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['base', 'seme', 'gement']) FORMAT JSON" | grep "rows_read"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['base', 'seme', 'gement'])"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['base', 'seme', 'gement']) FORMAT JSON" | grep "rows_read"
 
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['abra', 'cadabra', 'cab', 'extra'])"
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['abra', 'cadabra', 'cab', 'extra']) FORMAT JSON" | grep "rows_read"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['abra', 'cadabra', 'cab', 'extra'])"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['abra', 'cadabra', 'cab', 'extra']) FORMAT JSON" | grep "rows_read"
 
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['строка', 'string'])"
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['строка', 'string']) FORMAT JSON" | grep "rows_read"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['строка', 'string'])"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['строка', 'string']) FORMAT JSON" | grep "rows_read"
 
 # MULTY_SEARCH_ANY + OTHER
 
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['adab', 'cad', 'aba']) AND startsWith(s, 'abra')"
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['adab', 'cad', 'aba']) AND startsWith(s, 'abra') FORMAT JSON" | grep "rows_read"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['adab', 'cad', 'aba']) AND startsWith(s, 'abra')"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['adab', 'cad', 'aba']) AND startsWith(s, 'abra') FORMAT JSON" | grep "rows_read"
 
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['adab', 'cad', 'aba']) AND (startsWith(s, 'c') OR startsWith(s, 'C'))"
-$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multi_search_any(s, ['adab', 'cad', 'aba']) AND (startsWith(s, 'c') OR startsWith(s, 'C')) FORMAT JSON" | grep "rows_read"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['adab', 'cad', 'aba']) AND (startsWith(s, 'c') OR startsWith(s, 'C'))"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['adab', 'cad', 'aba']) AND (startsWith(s, 'c') OR startsWith(s, 'C')) FORMAT JSON" | grep "rows_read"
 
-$CLICKHOUSE_CLIENT --query="DROP STREAM bloom_filter_idx;"
+$CLICKHOUSE_CLIENT --query="DROP TABLE bloom_filter_idx;"

@@ -1,24 +1,24 @@
-DROP STREAM IF EXISTS defaults;
-create stream defaults
+DROP TABLE IF EXISTS defaults;
+CREATE TABLE defaults
 (
-	n int32,
-	s string
-)();
+	n Int32,
+	s String
+)ENGINE = Memory();
 
 INSERT INTO defaults VALUES(1, '1') (2, '2') (3, '3') (4, '4') (5, '5');
 
 SELECT * FROM defaults;
 
-ALTER STREAM defaults UPDATE n = 100 WHERE s = '1';
+ALTER TABLE defaults UPDATE n = 100 WHERE s = '1';
 
 SELECT * FROM defaults;
 
 SELECT count(*) FROM defaults;
 
-ALTER STREAM defaults DELETE WHERE n = 100;
+ALTER TABLE defaults DELETE WHERE n = 100;
 
 SELECT * FROM defaults;
 
 SELECT count(*) FROM defaults;
 
-DROP STREAM defaults;
+DROP TABLE defaults;

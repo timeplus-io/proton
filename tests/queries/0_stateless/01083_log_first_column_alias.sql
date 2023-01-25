@@ -1,7 +1,7 @@
-DROP STREAM IF EXISTS test_alias;
+DROP TABLE IF EXISTS test_alias;
 
-create stream test_alias (a uint8 ALIAS b, b uint8) ENGINE Log;
+CREATE TABLE test_alias (a UInt8 ALIAS b, b UInt8) ENGINE Log;
 
 SELECT count() FROM test_alias;
 
-DROP STREAM test_alias;
+DROP TABLE test_alias;

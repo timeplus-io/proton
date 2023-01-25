@@ -38,8 +38,8 @@ toStartOfTenMinutes;toDateTime64;true	1920-02-02 10:20:00.000
 type;toStartOfTenMinutes;toDateTime64;true	DateTime64(3, \'UTC\')
 toStartOfFifteenMinutes;toDateTime64;true	1920-02-02 10:15:00.000
 type;toStartOfFifteenMinutes;toDateTime64;true	DateTime64(3, \'UTC\')
-time_slot;toDateTime64;true	1920-02-02 10:00:00.000
-type;time_slot;toDateTime64;true	DateTime64(3, \'UTC\')
+timeSlot;toDateTime64;true	1920-02-02 10:00:00.000
+type;timeSlot;toDateTime64;true	DateTime64(3, \'UTC\')
 toStartOfDay;toDate32;true	1920-02-02 00:00:00.000
 type;toStartOfDay;toDate32;true	DateTime64(3, \'UTC\')
 toStartOfYear;toDate32;false	2099-06-06
@@ -82,7 +82,7 @@ toStartOfTenMinutes;toDateTime64;false	2056-03-09 16:48:16
 type;toStartOfTenMinutes;toDateTime64;false	DateTime(\'UTC\')
 toStartOfFifteenMinutes;toDateTime64;false	2056-03-09 16:43:16
 type;toStartOfFifteenMinutes;toDateTime64;false	DateTime(\'UTC\')
-time_slot;toDateTime64;false	2056-03-09 16:58:16
-type;time_slot;toDateTime64;false	DateTime(\'UTC\')
+timeSlot;toDateTime64;false	2056-03-09 16:58:16
+type;timeSlot;toDateTime64;false	DateTime(\'UTC\')
 toStartOfDay;toDate32;false	2056-03-09 06:28:16
 type;toStartOfDay;toDate32;false	DateTime(\'UTC\')

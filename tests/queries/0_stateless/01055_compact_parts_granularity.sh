@@ -4,11 +4,11 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS mt_compact"
+$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS mt_compact"
 
 # Checks that granularity correctly computed from small parts.
 
-$CLICKHOUSE_CLIENT -q "create stream mt_compact(a int, s string) ENGINE = MergeTree ORDER BY a
+$CLICKHOUSE_CLIENT -q "CREATE TABLE mt_compact(a Int, s String) ENGINE = MergeTree ORDER BY a
                         SETTINGS min_rows_for_wide_part = 1000,
                         index_granularity = 14;"
 
@@ -30,4 +30,4 @@ for _ in {0..10}; do
 done
 
 $CLICKHOUSE_CLIENT -q "SELECT count(), sum(marks) FROM system.parts WHERE table = 'mt_compact' AND database = '$CLICKHOUSE_DATABASE' AND active"
-$CLICKHOUSE_CLIENT -q  "DROP STREAM mt_compact"
+$CLICKHOUSE_CLIENT -q  "DROP TABLE mt_compact"

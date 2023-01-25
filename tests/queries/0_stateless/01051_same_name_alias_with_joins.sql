@@ -1,10 +1,10 @@
-DROP STREAM IF EXISTS a;
-DROP STREAM IF EXISTS b;
-DROP STREAM IF EXISTS c;
+DROP TABLE IF EXISTS a;
+DROP TABLE IF EXISTS b;
+DROP TABLE IF EXISTS c;
 
-create stream a (x uint64) ;
-create stream b (x uint64) ;
-create stream c (x uint64) ;
+CREATE TABLE a (x UInt64) ENGINE = Memory;
+CREATE TABLE b (x UInt64) ENGINE = Memory;
+CREATE TABLE c (x UInt64) ENGINE = Memory;
 
 SET enable_optimize_predicate_expression = 0;
 
@@ -24,6 +24,6 @@ SELECT c.x AS x FROM a
 LEFT JOIN b ON a.x = b.x
 LEFT JOIN c ON b.x = c.x;
 
-DROP STREAM a;
-DROP STREAM b;
-DROP STREAM c;
+DROP TABLE a;
+DROP TABLE b;
+DROP TABLE c;

@@ -10,4 +10,4 @@ USER_FILES_PATH=$(clickhouse-client --query "select _path,_file from file('nonex
 DATA_FILE=$USER_FILES_PATH/test_02125.data
 
 echo "number=1" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02125.data', 'TSKV', 'number uint64') settings max_read_buffer_size=3, input_format_parallel_parsing=0"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02125.data', 'TSKV', 'number UInt64') settings max_read_buffer_size=3, input_format_parallel_parsing=0"

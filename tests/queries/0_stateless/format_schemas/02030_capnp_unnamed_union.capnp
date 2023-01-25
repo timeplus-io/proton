@@ -4,7 +4,7 @@ struct Message
 {
     union
     {
-        a @0 : uint64;
+        a @0 : UInt64;
         b @1 : Text;
     }
 }

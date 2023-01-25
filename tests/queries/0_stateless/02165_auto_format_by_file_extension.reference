@@ -17,11 +17,11 @@
 	[
 		{
 			"name": "id",
-			"type": "uint64"
+			"type": "UInt64"
 		},
 		{
 			"name": "name",
-			"type": "string"
+			"type": "String"
 		}
 	],
 

@@ -1,5 +1,5 @@
-DROP STREAM IF EXISTS fuse_tbl;
-create stream fuse_tbl(a int8, b int8) ;
+DROP TABLE IF EXISTS fuse_tbl;
+CREATE TABLE fuse_tbl(a Int8, b Int8) Engine = Log;
 INSERT INTO fuse_tbl SELECT number, number + 1 FROM numbers(1, 20);
 
 SET optimize_syntax_fuse_functions = 1;
@@ -10,4 +10,5 @@ EXPLAIN SYNTAX SELECT sum(a), sum(b), count(b) from fuse_tbl;
 SELECT '---------NOT trigger fuse--------';
 SELECT sum(a), avg(b) from fuse_tbl;
 EXPLAIN SYNTAX SELECT sum(a), avg(b) from fuse_tbl;
-DROP STREAM fuse_tbl;
+
+DROP TABLE fuse_tbl;

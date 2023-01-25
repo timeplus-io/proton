@@ -27,7 +27,7 @@ SELECT '---';
 SELECT 1 >= '257';
 SELECT '---';
 
-SELECT to_datetime('2020-06-13 01:02:03') = '2020-06-13T01:02:03';
+SELECT toDateTime('2020-06-13 01:02:03') = '2020-06-13T01:02:03';
 SELECT '---';
 
 SELECT 0 = ''; -- { serverError 32 }

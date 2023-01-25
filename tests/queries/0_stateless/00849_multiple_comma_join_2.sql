@@ -1,14 +1,16 @@
 SET enable_optimize_predicate_expression = 0;
+SET convert_query_to_cnf = 0;
+SET cross_to_inner_join_rewrite = 1;
 
-DROP STREAM IF EXISTS t1;
-DROP STREAM IF EXISTS t2;
-DROP STREAM IF EXISTS t3;
-DROP STREAM IF EXISTS t4;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+DROP TABLE IF EXISTS t3;
+DROP TABLE IF EXISTS t4;
 
-create stream t1 (a uint32, b nullable(int32)) ;
-create stream t2 (a uint32, b nullable(int32)) ;
-create stream t3 (a uint32, b nullable(int32)) ;
-create stream t4 (a uint32, b nullable(int32)) ;
+CREATE TABLE t1 (a UInt32, b Nullable(Int32)) ENGINE = Memory;
+CREATE TABLE t2 (a UInt32, b Nullable(Int32)) ENGINE = Memory;
+CREATE TABLE t3 (a UInt32, b Nullable(Int32)) ENGINE = Memory;
+CREATE TABLE t4 (a UInt32, b Nullable(Int32)) ENGINE = Memory;
 
 EXPLAIN SYNTAX SELECT t1.a FROM t1, t2;
 EXPLAIN SYNTAX SELECT t1.a FROM t1, t2 WHERE t1.a = t2.a;
@@ -61,7 +63,7 @@ SELECT t1.a, t2.b, t3.b, t4.b FROM t1, t2, t3, t4
 WHERE t1.a = t2.a AND t2.a = t3.a AND t3.a = t4.a
 ORDER BY t2.b, t3.b, t4.b;
 
-DROP STREAM t1;
-DROP STREAM t2;
-DROP STREAM t3;
-DROP STREAM t4;
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLE t3;
+DROP TABLE t4;

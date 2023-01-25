@@ -1,9 +1,9 @@
-DROP STREAM IF EXISTS test_data;
-create stream test_data (
-    col1 nullable(string),
-    col2 nullable(string),
-    col3 nullable(string)
-) ;
+DROP TABLE IF EXISTS test_data;
+CREATE TABLE test_data (
+    col1 Nullable(String),
+    col2 Nullable(String),
+    col3 Nullable(String)
+) ENGINE = Memory;
 
 INSERT INTO test_data VALUES ('val1', NULL, 'val3');
 

@@ -1,20 +1,20 @@
-SELECT empty(to_uuid('00000000-0000-0000-0000-000000000000'));
-SELECT not_empty(to_uuid('00000000-0000-0000-0000-000000000000'));
-SELECT uniq_if(uuid, empty(uuid)), uniq_if(uuid, not_empty(uuid))
+SELECT empty(toUUID('00000000-0000-0000-0000-000000000000'));
+SELECT notEmpty(toUUID('00000000-0000-0000-0000-000000000000'));
+SELECT uniqIf(uuid, empty(uuid)), uniqIf(uuid, notEmpty(uuid))
 FROM
 (
-    SELECT to_uuid('00000000-0000-0000-0000-000000000002') AS uuid
+    SELECT toUUID('00000000-0000-0000-0000-000000000002') AS uuid
     UNION ALL
-    SELECT to_uuid('00000000-0000-0000-0000-000000000000') AS uuid
+    SELECT toUUID('00000000-0000-0000-0000-000000000000') AS uuid
     UNION ALL
-    SELECT to_uuid('00000000-0000-0000-0000-000000000001') AS uuid
+    SELECT toUUID('00000000-0000-0000-0000-000000000001') AS uuid
 );
 
-DROP STREAM IF EXISTS users;
-DROP STREAM IF EXISTS orders;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS orders;
 
-create stream users (user_id uuid) ;
-create stream orders (order_id uuid, user_id uuid) ;
+CREATE TABLE users (user_id UUID) ENGINE = Memory;
+CREATE TABLE orders (order_id UUID, user_id UUID) ENGINE = Memory;
 
 INSERT INTO users VALUES ('00000000-0000-0000-0000-000000000001');
 INSERT INTO users VALUES ('00000000-0000-0000-0000-000000000002');
@@ -22,7 +22,7 @@ INSERT INTO orders VALUES ('00000000-0000-0000-0000-000000000003', '00000000-000
 
 SELECT
     uniq(user_id) AS users,
-    uniq_if(order_id, not_empty(order_id)) AS orders
+    uniqIf(order_id, notEmpty(order_id)) AS orders
 FROM
 (
     SELECT * FROM users
@@ -30,6 +30,6 @@ FROM
     SELECT * FROM orders
 ) t2 USING (user_id);
 
-DROP STREAM users;
-DROP STREAM orders;
+DROP TABLE users;
+DROP TABLE orders;
 

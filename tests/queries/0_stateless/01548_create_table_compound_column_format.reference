@@ -1,12 +1,12 @@
-create stream test
+CREATE TABLE test
 (
-    `a` int64,
-    `b` NESTED(a int64)
+    `a` Int64,
+    `b` NESTED(a Int64)
 )
-
-create stream test
+ENGINE = TinyLog
+CREATE TABLE test
 (
-    `a` int64,
-    `b` TUPLE(a int64)
+    `a` Int64,
+    `b` TUPLE(a Int64)
 )
-
+ENGINE = TinyLog

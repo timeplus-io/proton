@@ -1,1 +1,1 @@
-`value` nullable(Decimal(4, 2))
+`value` Nullable(Decimal(4, 2))

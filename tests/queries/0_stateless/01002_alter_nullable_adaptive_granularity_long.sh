@@ -7,8 +7,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 set -e
 
-$CLICKHOUSE_CLIENT --query "drop stream IF EXISTS test";
-$CLICKHOUSE_CLIENT --query "create stream test (x uint8, s string MATERIALIZED to_string(rand64())) ENGINE = MergeTree ORDER BY s";
+$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS test";
+$CLICKHOUSE_CLIENT --query "CREATE TABLE test (x UInt8, s String MATERIALIZED toString(rand64())) ENGINE = MergeTree ORDER BY s";
 
 function thread1()
 {
@@ -20,9 +20,9 @@ function thread1()
 function thread2()
 {
     while true; do
-        $CLICKHOUSE_CLIENT -n --query "ALTER STREAM test MODIFY COLUMN x nullable(uint8);";
+        $CLICKHOUSE_CLIENT -n --query "ALTER TABLE test MODIFY COLUMN x Nullable(UInt8);";
         sleep 0.0$RANDOM
-        $CLICKHOUSE_CLIENT -n --query "ALTER STREAM test MODIFY COLUMN x uint8;";
+        $CLICKHOUSE_CLIENT -n --query "ALTER TABLE test MODIFY COLUMN x UInt8;";
         sleep 0.0$RANDOM
     done
 }
@@ -57,4 +57,4 @@ timeout $TIMEOUT bash -c thread4 2> /dev/null &
 
 wait
 
-$CLICKHOUSE_CLIENT -q "drop stream test"
+$CLICKHOUSE_CLIENT -q "DROP TABLE test"

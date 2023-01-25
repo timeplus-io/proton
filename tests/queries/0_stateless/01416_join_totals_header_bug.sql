@@ -1,10 +1,10 @@
-DROP STREAM IF EXISTS tableCommon;
-DROP STREAM IF EXISTS tableTrees;
-DROP STREAM IF EXISTS tableFlowers;
+DROP TABLE IF EXISTS tableCommon;
+DROP TABLE IF EXISTS tableTrees;
+DROP TABLE IF EXISTS tableFlowers;
 
-create stream tableCommon (`key` fixed_string(15), `value` nullable(int8))  ();
-create stream tableTrees (`key` fixed_string(15), `name` nullable(int8), `name2` nullable(int8))  ();
-create stream tableFlowers (`key` fixed_string(15), `name` nullable(int8))  ();
+CREATE TABLE tableCommon (`key` FixedString(15), `value` Nullable(Int8)) ENGINE = Log();
+CREATE TABLE tableTrees (`key` FixedString(15), `name` Nullable(Int8), `name2` Nullable(Int8)) ENGINE = Log();
+CREATE TABLE tableFlowers (`key` FixedString(15), `name` Nullable(Int8)) ENGINE = Log();
 
 SELECT * FROM (
     SELECT common.key, common.value, trees.name, trees.name2
@@ -58,6 +58,6 @@ UNION ALL
     ) flowers ON (common.key = flowers.key)
 );
 
-DROP STREAM IF EXISTS tableCommon;
-DROP STREAM IF EXISTS tableTrees;
-DROP STREAM IF EXISTS tableFlowers;
+DROP TABLE IF EXISTS tableCommon;
+DROP TABLE IF EXISTS tableTrees;
+DROP TABLE IF EXISTS tableFlowers;

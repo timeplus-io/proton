@@ -1,11 +1,11 @@
-DROP STREAM IF EXISTS collapsing_table;
+DROP TABLE IF EXISTS collapsing_table;
 SET optimize_on_insert = 0;
 
-create stream collapsing_table
+CREATE TABLE collapsing_table
 (
-    key uint64,
-    value uint64,
-    Sign int8
+    key UInt64,
+    value UInt64,
+    Sign Int8
 )
 ENGINE = CollapsingMergeTree(Sign)
 ORDER BY key
@@ -22,16 +22,16 @@ OPTIMIZE TABLE collapsing_table FINAL;
 
 SELECT sum(Sign), count() from collapsing_table;
 
-DROP STREAM IF EXISTS collapsing_table;
+DROP TABLE IF EXISTS collapsing_table;
 
 
-DROP STREAM IF EXISTS collapsing_suspicious_granularity;
+DROP TABLE IF EXISTS collapsing_suspicious_granularity;
 
-create stream collapsing_suspicious_granularity
+CREATE TABLE collapsing_suspicious_granularity
 (
-    key uint64,
-    value uint64,
-    Sign int8
+    key UInt64,
+    value UInt64,
+    Sign Int8
 )
 ENGINE = CollapsingMergeTree(Sign)
 ORDER BY key
@@ -50,4 +50,4 @@ OPTIMIZE TABLE collapsing_suspicious_granularity FINAL;
 SELECT sum(Sign), count() from collapsing_suspicious_granularity;
 
 
-DROP STREAM IF EXISTS collapsing_suspicious_granularity;
+DROP TABLE IF EXISTS collapsing_suspicious_granularity;

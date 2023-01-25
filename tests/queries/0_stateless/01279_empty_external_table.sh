@@ -7,8 +7,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 set -e
 
 touch "${CLICKHOUSE_TMP}"/empty.tsv
-$CLICKHOUSE_CLIENT --query="SELECT count() FROM data" --external --file="${CLICKHOUSE_TMP}"/empty.tsv --name=data --types=uint32
+$CLICKHOUSE_CLIENT --query="SELECT count() FROM data" --external --file="${CLICKHOUSE_TMP}"/empty.tsv --name=data --types=UInt32
 rm "${CLICKHOUSE_TMP}"/empty.tsv
 
-echo -n | $CLICKHOUSE_CLIENT --query="SELECT count() FROM data" --external --file=- --name=data --types=uint32
-echo | $CLICKHOUSE_CLIENT --query="SELECT count() FROM data" --external --file=- --name=data --types=string
+echo -n | $CLICKHOUSE_CLIENT --query="SELECT count() FROM data" --external --file=- --name=data --types=UInt32
+echo | $CLICKHOUSE_CLIENT --query="SELECT count() FROM data" --external --file=- --name=data --types=String

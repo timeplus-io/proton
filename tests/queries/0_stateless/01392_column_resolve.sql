@@ -3,9 +3,9 @@
 DROP DATABASE IF EXISTS test_01392;
 CREATE DATABASE test_01392;
 
-create stream test_01392.tableConversion (conversionId string, value nullable(Double))  ();
-create stream test_01392.tableClick (clickId string, conversionId string, value nullable(Double))  ();
-create stream test_01392.leftjoin (id string)  ();
+CREATE TABLE test_01392.tableConversion (conversionId String, value Nullable(Double)) ENGINE = Log();
+CREATE TABLE test_01392.tableClick (clickId String, conversionId String, value Nullable(Double)) ENGINE = Log();
+CREATE TABLE test_01392.leftjoin (id String) ENGINE = Log();
 
 INSERT INTO test_01392.tableConversion(conversionId, value) VALUES ('Conversion 1', 1);
 INSERT INTO test_01392.tableClick(clickId, conversionId, value) VALUES ('Click 1', 'Conversion 1', 14);
@@ -29,8 +29,8 @@ LEFT JOIN (
 ) AS dummy ON (dummy.id = conversion.conversionId)
 ORDER BY myValue;
 
-DROP STREAM test_01392.tableConversion;
-DROP STREAM test_01392.tableClick;
-DROP STREAM test_01392.leftjoin;
+DROP TABLE test_01392.tableConversion;
+DROP TABLE test_01392.tableClick;
+DROP TABLE test_01392.leftjoin;
 
 DROP DATABASE test_01392;

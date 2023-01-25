@@ -5,9 +5,9 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS json_as_string";
+$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS json_as_string";
 
-$CLICKHOUSE_CLIENT --query="create stream json_as_string (field string) ";
+$CLICKHOUSE_CLIENT --query="CREATE TABLE json_as_string (field String) ENGINE = Memory";
 
 echo '
 {
@@ -83,5 +83,5 @@ echo '
 
 
 $CLICKHOUSE_CLIENT --query="SELECT * FROM json_as_string ORDER BY field";
-$CLICKHOUSE_CLIENT --query="DROP STREAM json_as_string"
+$CLICKHOUSE_CLIENT --query="DROP TABLE json_as_string"
 

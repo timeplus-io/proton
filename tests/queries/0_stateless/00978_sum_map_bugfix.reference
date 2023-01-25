@@ -39,5 +39,5 @@
 7	[100,100,200]
 8	[100,100,200]
 9	[100,100,200]
-array(array(uint8)), Const(size = 2, array(size = 1, uint64(size = 1), array(size = 1, uint64(size = 1), uint8(size = 2))))	([1,2],[1,2])
-array(array(uint8)), Const(size = 2, array(size = 1, uint64(size = 1), array(size = 1, uint64(size = 1), uint8(size = 2))))	([1,2],[1,2])
+Array(Array(UInt8)), Const(size = 2, Array(size = 1, UInt64(size = 1), Array(size = 1, UInt64(size = 1), UInt8(size = 2))))	([1,2],[1,2])
+Array(Array(UInt8)), Const(size = 2, Array(size = 1, UInt64(size = 1), Array(size = 1, UInt64(size = 1), UInt8(size = 2))))	([1,2],[1,2])

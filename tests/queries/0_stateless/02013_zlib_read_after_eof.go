@@ -33,7 +33,7 @@ func main() {
 
 	q.Set("query", "INSERT INTO "+database+".graphite FORMAT RowBinary")
 	p.RawQuery = q.Encode()
-	queryUrl := p.string()
+	queryUrl := p.String()
 
 	var req *http.Request
 

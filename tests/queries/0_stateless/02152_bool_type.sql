@@ -39,10 +39,10 @@ SELECT CAST('true', 'Bool') format Vertical;
 SELECT CAST('true', 'Bool') format Pretty;
 SELECT CAST('true', 'Bool') format JSONEachRow;
 
-SELECT CAST(CAST(2, 'Bool'), 'uint8');
-SELECT CAST(CAST(to_uint32(2), 'Bool'), 'uint8');
-SELECT CAST(CAST(to_int8(2), 'Bool'), 'uint8');
-SELECT CAST(CAST(to_float32(2), 'Bool'), 'uint8');
-SELECT CAST(CAST(to_decimal32(2, 2), 'Bool'), 'uint8');
-SELECT CAST(CAST(materialize(2), 'Bool'), 'uint8');
+SELECT CAST(CAST(2, 'Bool'), 'UInt8');
+SELECT CAST(CAST(toUInt32(2), 'Bool'), 'UInt8');
+SELECT CAST(CAST(toInt8(2), 'Bool'), 'UInt8');
+SELECT CAST(CAST(toFloat32(2), 'Bool'), 'UInt8');
+SELECT CAST(CAST(toDecimal32(2, 2), 'Bool'), 'UInt8');
+SELECT CAST(CAST(materialize(2), 'Bool'), 'UInt8');
 

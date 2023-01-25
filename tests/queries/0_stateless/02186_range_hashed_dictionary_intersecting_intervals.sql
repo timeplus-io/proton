@@ -1,12 +1,12 @@
-DROP STREAM IF EXISTS 02186_range_dictionary_source_table;
-create stream 02186_range_dictionary_source_table
+DROP TABLE IF EXISTS 02186_range_dictionary_source_table;
+CREATE TABLE 02186_range_dictionary_source_table
 (
-    id uint64,
-    start date,
-    end date,
-    value string
+    id UInt64,
+    start Date,
+    end Date,
+    value String
 )
-;
+Engine = TinyLog;
 
 INSERT INTO 02186_range_dictionary_source_table VALUES (1, '2020-01-01', '2100-01-01', 'Value0');
 INSERT INTO 02186_range_dictionary_source_table VALUES (1, '2020-01-02', '2100-01-01', 'Value1');
@@ -18,10 +18,10 @@ SELECT * FROM 02186_range_dictionary_source_table;
 DROP DICTIONARY IF EXISTS 02186_range_dictionary;
 CREATE DICTIONARY 02186_range_dictionary
 (
-    id uint64,
-    start date,
-    end date,
-    value string
+    id UInt64,
+    start Date,
+    end Date,
+    value String
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(TABLE '02186_range_dictionary_source_table'))
@@ -33,18 +33,18 @@ SELECT 'Dictionary .range_lookup_strategy = min';
 
 SELECT * FROM 02186_range_dictionary;
 
-select dictGet('02186_range_dictionary', 'value', to_uint64(1), to_date('2020-01-01'));
-select dictGet('02186_range_dictionary', 'value', to_uint64(1), to_date('2020-01-02'));
-select dictGet('02186_range_dictionary', 'value', to_uint64(1), to_date('2020-01-03'));
+select dictGet('02186_range_dictionary', 'value', toUInt64(1), toDate('2020-01-01'));
+select dictGet('02186_range_dictionary', 'value', toUInt64(1), toDate('2020-01-02'));
+select dictGet('02186_range_dictionary', 'value', toUInt64(1), toDate('2020-01-03'));
 
 DROP DICTIONARY 02186_range_dictionary;
 
 CREATE DICTIONARY 02186_range_dictionary
 (
-    id uint64,
-    start date,
-    end date,
-    value string
+    id UInt64,
+    start Date,
+    end Date,
+    value String
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(TABLE '02186_range_dictionary_source_table'))
@@ -56,9 +56,9 @@ SELECT 'Dictionary .range_lookup_strategy = max';
 
 SELECT * FROM 02186_range_dictionary;
 
-select dictGet('02186_range_dictionary', 'value', to_uint64(1), to_date('2020-01-01'));
-select dictGet('02186_range_dictionary', 'value', to_uint64(1), to_date('2020-01-02'));
-select dictGet('02186_range_dictionary', 'value', to_uint64(1), to_date('2020-01-03'));
+select dictGet('02186_range_dictionary', 'value', toUInt64(1), toDate('2020-01-01'));
+select dictGet('02186_range_dictionary', 'value', toUInt64(1), toDate('2020-01-02'));
+select dictGet('02186_range_dictionary', 'value', toUInt64(1), toDate('2020-01-03'));
 
 DROP DICTIONARY 02186_range_dictionary;
-DROP STREAM 02186_range_dictionary_source_table;
+DROP TABLE 02186_range_dictionary_source_table;

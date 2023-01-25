@@ -1,1 +1,1 @@
-`nation_key` nullable(int32), `name` nullable(string), `region_key` nullable(int32), `comment_col` nullable(string)
+`nation_key` Nullable(Int32), `name` Nullable(String), `region_key` Nullable(Int32), `comment_col` Nullable(String)

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Tags: no-fasttest
 
 set -e
 
@@ -7,7 +8,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 
-$CLICKHOUSE_CLIENT --multiquery --query "DROP STREAM IF EXISTS test; create stream IF NOT EXISTS test (x uint64, s array(nullable(string))) ;"
+$CLICKHOUSE_CLIENT --multiquery --query "DROP TABLE IF EXISTS test; CREATE TABLE IF NOT EXISTS test (x UInt64, s Array(Nullable(String))) ENGINE = TinyLog;"
 
 function thread_select {
     while true; do
@@ -42,4 +43,4 @@ timeout 10 bash -c 'thread_insert' &
 wait
 echo "Done"
 
-$CLICKHOUSE_CLIENT --multiquery --query "DROP STREAM IF EXISTS test;"
+$CLICKHOUSE_CLIENT --multiquery --query "DROP TABLE IF EXISTS test;"

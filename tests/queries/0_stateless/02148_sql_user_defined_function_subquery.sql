@@ -21,8 +21,8 @@ SELECT 02148_test_function_nested(1);
 DROP FUNCTION 02148_test_function;
 DROP FUNCTION 02148_test_function_nested;
 
-DROP STREAM IF EXISTS 02148_test_table;
-create stream 02148_test_table (id uint64, value string) ;
+DROP TABLE IF EXISTS 02148_test_table;
+CREATE TABLE 02148_test_table (id UInt64, value String) ENGINE=TinyLog;
 INSERT INTO 02148_test_table VALUES (0, 'Value');
 
 CREATE FUNCTION 02148_test_function AS () -> (SELECT * FROM 02148_test_table LIMIT 1);
@@ -32,4 +32,4 @@ CREATE OR REPLACE FUNCTION 02148_test_function AS () -> (SELECT value FROM 02148
 SELECT 02148_test_function();
 
 DROP FUNCTION 02148_test_function;
-DROP STREAM 02148_test_table;
+DROP TABLE 02148_test_table;

@@ -1,70 +1,70 @@
-DROP STREAM IF EXISTS fct_rt_dc_shop_sku_vender_day;
+DROP TABLE IF EXISTS fct_rt_dc_shop_sku_vender_day;
 
-create stream fct_rt_dc_shop_sku_vender_day
+create table fct_rt_dc_shop_sku_vender_day
 (
-    stat_year uint16,
-    stat_month uint32,
-    stat_day date,
-    out_buid uint8,
-    out_shop_id string,
-    in_shop_id low_cardinality(string),
-    datasource uint8,
-    venderid string,
-    categorytreeid uint8,
-    categoryid string,
-    goodsid low_cardinality(string),
-    logistics uint8,
-    buntype uint8,
-    dctype uint8,
-    shopformid uint8,
+    stat_year UInt16,
+    stat_month UInt32,
+    stat_day Date,
+    out_buid UInt8,
+    out_shop_id String,
+    in_shop_id LowCardinality(String),
+    datasource UInt8,
+    venderid String,
+    categorytreeid UInt8,
+    categoryid String,
+    goodsid LowCardinality(String),
+    logistics UInt8,
+    buntype UInt8,
+    dctype UInt8,
+    shopformid UInt8,
     rt_qty Decimal(18,4),
     rt_cost Decimal(18,4),
     rt_taxcost Decimal(18,4),
     rt_boxes Decimal(18,4),
-    rt_shops nullable(string),
+    rt_shops Nullable(String),
     rt_drygood_qty Decimal(18,4),
     rt_drygood_cost Decimal(18,4),
     rt_drygood_boxes Decimal(18,4),
-    rt_drygood_shops low_cardinality(nullable(string)),
+    rt_drygood_shops LowCardinality(Nullable(String)),
     rt_fresh_qty Decimal(18,4),
     rt_fresh_cost Decimal(18,4),
-    rt_fresh_shops low_cardinality(nullable(string)),
+    rt_fresh_shops LowCardinality(Nullable(String)),
     rt_supshop_cost Decimal(18,4),
     rt_supshop_qty Decimal(18,4),
     rt_supshop_boxes Decimal(18,4),
-    rt_supshop_shops low_cardinality(nullable(string)),
+    rt_supshop_shops LowCardinality(Nullable(String)),
     rt_smallshop_cost Decimal(18,4),
     rt_smallshop_qty Decimal(18,4),
     rt_smallshop_boxes Decimal(18,4),
-    rt_smallshop_shops low_cardinality(nullable(string)),
+    rt_smallshop_shops LowCardinality(Nullable(String)),
     rt_dc_cost Decimal(18,4),
     rt_dc_qty Decimal(18,4),
     rt_dc_boxes Decimal(18,4),
-    rt_dc_shops low_cardinality(nullable(string)),
+    rt_dc_shops LowCardinality(Nullable(String)),
     rt_drygood_supshop_cost Decimal(18,4),
     rt_drygood_supshop_qty Decimal(18,4),
     rt_drygood_supshop_boxes Decimal(18,4),
-    rt_drygood_supshop_shops low_cardinality(nullable(string)),
+    rt_drygood_supshop_shops LowCardinality(Nullable(String)),
     rt_drygood_smallshop_cost Decimal(18,4),
     rt_drygood_smallshop_qty Decimal(18,4),
     rt_drygood_smallshop_boxes Decimal(18,4),
-    rt_drygood_smallshop_shops low_cardinality(nullable(string)),
+    rt_drygood_smallshop_shops LowCardinality(Nullable(String)),
     rt_drygood_dc_cost Decimal(18,4),
     rt_drygood_dc_qty Decimal(18,4),
     rt_drygood_dc_boxes Decimal(18,4),
-    rt_drygood_dc_shops low_cardinality(nullable(string)),
+    rt_drygood_dc_shops LowCardinality(Nullable(String)),
     rt_fresh_supshop_cost Decimal(18,4),
     rt_fresh_supshop_qty Decimal(18,4),
-    rt_fresh_supshop_shops low_cardinality(nullable(string)),
+    rt_fresh_supshop_shops LowCardinality(Nullable(String)),
     rt_fresh_smallshop_cost Decimal(18,4),
     rt_fresh_smallshop_qty Decimal(18,4),
-    rt_fresh_smallshop_shops low_cardinality(nullable(string)),
+    rt_fresh_smallshop_shops LowCardinality(Nullable(String)),
     rt_fresh_dc_cost Decimal(18,4),
     rt_fresh_dc_qty Decimal(18,4),
-    rt_fresh_dc_shops low_cardinality(nullable(string)),
-    stat_day_num string default format_datetime(stat_day, '%F')
+    rt_fresh_dc_shops LowCardinality(Nullable(String)),
+    stat_day_num String default formatDateTime(stat_day, '%F')
 )
-engine = MergeTree PARTITION BY to_YYYYMM(stat_day) ORDER BY (stat_day, out_shop_id) SETTINGS index_granularity = 8192
+engine = MergeTree PARTITION BY toYYYYMM(stat_day) ORDER BY (stat_day, out_shop_id) SETTINGS index_granularity = 8192
 ;
 
 
@@ -128,8 +128,8 @@ select stat_year,
        sum(rt_fresh_dc_qty),
        max(rt_fresh_dc_shops)
 from fct_rt_dc_shop_sku_vender_day frdssvd
-where stat_day >= to_date('2016-01-01')
-  and stat_day < add_months(to_date('2016-01-01'), 1)
+where stat_day >= toDate('2016-01-01')
+  and stat_day < addMonths(toDate('2016-01-01'), 1)
 group by stat_year,
          stat_month,
          out_buid,
@@ -145,4 +145,4 @@ group by stat_year,
          dctype,
          shopformid;
 
-DROP STREAM fct_rt_dc_shop_sku_vender_day;
+DROP TABLE fct_rt_dc_shop_sku_vender_day;

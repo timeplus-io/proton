@@ -1,5 +1,5 @@
-DROP STREAM IF EXISTS test;
-create stream test (x uint64) ENGINE = MergeTree ORDER BY x SETTINGS index_granularity = 1000;
+DROP TABLE IF EXISTS test;
+CREATE TABLE test (x UInt64) ENGINE = MergeTree ORDER BY x SETTINGS index_granularity = 1000;
 INSERT INTO test SELECT * FROM numbers(1000000);
 OPTIMIZE TABLE test;
 
@@ -29,4 +29,4 @@ SELECT count() FROM test WHERE x <= '100000';
 SET max_rows_to_read = 901000;
 SELECT count() FROM test WHERE x >= '100000';
 
-DROP STREAM test;
+DROP TABLE test;

@@ -9,7 +9,7 @@ from (
     from (
         with 18 as n
         select repeat('\0', number % n)
-            || repeat('1', int_div(number, n) % n)
-            || repeat('\0', int_div(number, n * n) % n) key
+            || repeat('1', intDiv(number, n) % n)
+            || repeat('\0', intDiv(number, n * n) % n) key
         from numbers(18 * 18 * 18))
     group by key);

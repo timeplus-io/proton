@@ -139,14 +139,14 @@ def main():
     for q in const_queries:
         query(q)
 
-    query("""DROP STREAM IF EXISTS ht;
-    create stream IF NOT EXISTS
+    query("""DROP TABLE IF EXISTS ht;
+    CREATE TABLE IF NOT EXISTS
     ht
 (
-    haystack string,
-    needle string,
-    match uint8,
-    func string
+    haystack String,
+    needle String,
+    match UInt8,
+    func String
 )
 ENGINE MergeTree()
 ORDER BY haystack;
@@ -154,7 +154,7 @@ INSERT INTO ht VALUES {values};""".format(values=", ".join(rows)))
     for q in sorted(table_queries):
         query(q)
 
-    query("""DROP STREAM ht""")
+    query("""DROP TABLE ht""")
 
 if __name__ == '__main__':
     main()

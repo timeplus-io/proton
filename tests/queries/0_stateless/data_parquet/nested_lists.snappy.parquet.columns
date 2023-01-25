@@ -1,1 +1,1 @@
-`a` array(array(array(nullable(string)))), `b` nullable(int32)
+`a` Array(Array(Array(Nullable(String)))), `b` Nullable(Int32)

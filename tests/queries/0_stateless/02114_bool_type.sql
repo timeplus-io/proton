@@ -1,16 +1,16 @@
-DROP STREAM IF EXISTS bool_test;
+DROP TABLE IF EXISTS bool_test;
 
-create stream bool_test (value Bool,f string) ;
+CREATE TABLE bool_test (value Bool,f String) ENGINE = Memory;
 
 -- value column shoud have type 'Bool'
-SHOW create stream bool_test;
+SHOW CREATE TABLE bool_test;
 
 INSERT INTO bool_test (value,f) VALUES (false, 'test'), (true , 'test'), (0, 'test'), (1, 'test'), (FALSE, 'test'), (TRUE, 'test');
 INSERT INTO bool_test (value,f) FORMAT JSONEachRow {"value":false,"f":"test"}{"value":true,"f":"test"}{"value":0,"f":"test"}{"value":1,"f":"test"}
 
 SELECT value,f FROM bool_test;
 SELECT value,f FROM bool_test FORMAT JSONEachRow;
-SELECT to_uint64(value),f FROM bool_test;
+SELECT toUInt64(value),f FROM bool_test;
 SELECT value,f FROM bool_test where value > 0;
 
 set bool_true_representation='True';
@@ -34,5 +34,5 @@ INSERT INTO bool_test (value,f) FORMAT TSV Off	test
 SELECT value,f FROM bool_test order by value FORMAT CSV;
 SELECT value,f FROM bool_test order by value FORMAT TSV;
 
-DROP STREAM IF EXISTS bool_test;
+DROP TABLE IF EXISTS bool_test;
 

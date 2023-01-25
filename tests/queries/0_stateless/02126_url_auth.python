@@ -121,22 +121,18 @@ class CSVHTTPServer(BaseHTTPRequestHandler):
 class HTTPServerV6(HTTPServer):
     address_family = socket.AF_INET6
 
-def start_server(requests_amount):
+def start_server():
     if IS_IPV6:
         httpd = HTTPServerV6(HTTP_SERVER_ADDRESS, CSVHTTPServer)
     else:
         httpd = HTTPServer(HTTP_SERVER_ADDRESS, CSVHTTPServer)
 
-    def real_func():
-        for i in range(requests_amount):
-            httpd.handle_request()
-
-    t = threading.Thread(target=real_func)
-    return t
+    t = threading.Thread(target=httpd.serve_forever)
+    return t, httpd
 
 # test section
 
-def test_select(table_name="", schema="str string,numuint uint32,numint int32,double float64", requests=[], answers=[], test_data=""):
+def test_select(table_name="", schema="str String,numuint UInt32,numint Int32,double Float64", requests=[], answers=[], test_data=""):
     with open(CSV_DATA, 'w') as f: # clear file
         f.write('')
 
@@ -145,8 +141,8 @@ def test_select(table_name="", schema="str string,numuint uint32,numint int32,do
             f.write(test_data + "\n")
 
     if table_name:
-        get_ch_answer("drop stream if exists {}".format(table_name))
-        get_ch_answer("create stream {} ({}) engine=URL('{}', 'CSV')".format(table_name, schema, HTTP_SERVER_URL_STR))
+        get_ch_answer("drop table if exists {}".format(table_name))
+        get_ch_answer("create table {} ({}) engine=URL('{}', 'CSV')".format(table_name, schema, HTTP_SERVER_URL_STR))
 
     for i in range(len(requests)):
         tbl = table_name
@@ -155,15 +151,15 @@ def test_select(table_name="", schema="str string,numuint uint32,numint int32,do
         check_answers(requests[i].format(tbl=tbl), answers[i])
 
     if table_name:
-        get_ch_answer("drop stream if exists {}".format(table_name))
+        get_ch_answer("drop table if exists {}".format(table_name))
 
-def test_insert(table_name="", schema="str string,numuint uint32,numint int32,double float64", requests_insert=[], requests_select=[], answers=[]):
+def test_insert(table_name="", schema="str String,numuint UInt32,numint Int32,double Float64", requests_insert=[], requests_select=[], answers=[]):
     with open(CSV_DATA, 'w') as f: # flush test file
         f.write('')
 
     if table_name:
-        get_ch_answer("drop stream if exists {}".format(table_name))
-        get_ch_answer("create stream {} ({}) engine=URL('{}', 'CSV')".format(table_name, schema, HTTP_SERVER_URL_STR))
+        get_ch_answer("drop table if exists {}".format(table_name))
+        get_ch_answer("create table {} ({}) engine=URL('{}', 'CSV')".format(table_name, schema, HTTP_SERVER_URL_STR))
 
     for req in requests_insert:
         tbl = table_name
@@ -179,7 +175,7 @@ def test_insert(table_name="", schema="str string,numuint uint32,numint int32,do
         check_answers(requests_select[i].format(tbl=tbl), answers[i])
 
     if table_name:
-        get_ch_answer("drop stream if exists {}".format(table_name))
+        get_ch_answer("drop table if exists {}".format(table_name))
 
 def test_select_url_engine(requests=[], answers=[], test_data=""):
     for i in range(len(requests)):
@@ -207,9 +203,9 @@ def main():
     """
 
     if IS_IPV6:
-        query = "select * from url('http://guest:guest@" + f'[{str(HTTP_SERVER_ADDRESS[0])}]:{str(HTTP_SERVER_ADDRESS[1])}' + "/', 'RawBLOB', 'a string')"
+        query = "select * from url('http://guest:guest@" + f'[{str(HTTP_SERVER_ADDRESS[0])}]:{str(HTTP_SERVER_ADDRESS[1])}' + "/', 'RawBLOB', 'a String')"
     else:
-        query = "select * from url('http://guest:guest@" + f'{str(HTTP_SERVER_ADDRESS[0])}:{str(HTTP_SERVER_ADDRESS[1])}' + "/', 'RawBLOB', 'a string')"
+        query = "select * from url('http://guest:guest@" + f'{str(HTTP_SERVER_ADDRESS[0])}:{str(HTTP_SERVER_ADDRESS[1])}' + "/', 'RawBLOB', 'a String')"
 
 
 
@@ -217,9 +213,10 @@ def main():
        query : 'hello, world',
     }
 
-    t = start_server(len(list(select_requests_url_auth.keys())))
+    t, httpd = start_server()
     t.start()
     test_select(requests=list(select_requests_url_auth.keys()), answers=list(select_requests_url_auth.values()), test_data=test_data)
+    httpd.shutdown()
     t.join()
     print("PASSED")
 

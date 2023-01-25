@@ -1,8 +1,8 @@
-DROP STREAM IF EXISTS t0;
-DROP STREAM IF EXISTS t1;
+DROP TABLE IF EXISTS t0;
+DROP TABLE IF EXISTS t1;
 
-create stream t0 (x uint32, y uint64) engine = MergeTree ORDER BY (x,y);
-create stream t1 (x uint32, y uint64) engine = MergeTree ORDER BY (x,y);
+CREATE TABLE t0 (x UInt32, y UInt64) engine = MergeTree ORDER BY (x,y);
+CREATE TABLE t1 (x UInt32, y UInt64) engine = MergeTree ORDER BY (x,y);
 
 SET join_algorithm = 'partial_merge';
 
@@ -55,5 +55,5 @@ SELECT 'asof';
 SELECT * FROM t0 ASOF LEFT JOIN t1 ON t1.x = t0.x AND t0.y > t1.y; -- { serverError 48 }
 SELECT * FROM t0 ASOF LEFT JOIN t1 USING (x, y); -- { serverError 48 }
 
-DROP STREAM t0;
-DROP STREAM t1;
+DROP TABLE t0;
+DROP TABLE t1;

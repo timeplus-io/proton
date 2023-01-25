@@ -8,8 +8,8 @@ USE test_01073;
 
 SHOW TABLES;
 SELECT '---';
-create stream test1 (x uint8) ;
-create stream test2 (x uint8) ;
+CREATE TABLE test1 (x UInt8) ENGINE = Memory;
+CREATE TABLE test2 (x UInt8) ENGINE = Memory;
 
 SHOW TABLES;
 SELECT '--';

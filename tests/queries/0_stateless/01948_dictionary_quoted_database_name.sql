@@ -3,18 +3,18 @@
 DROP DATABASE IF EXISTS `01945.db`;
 CREATE DATABASE `01945.db`;
 
-create stream `01945.db`.test_dictionary_values
+CREATE TABLE `01945.db`.test_dictionary_values
 (
-	id uint64,
-	value string
-) ;
+	id UInt64,
+	value String
+) ENGINE=TinyLog;
 
 INSERT INTO `01945.db`.test_dictionary_values VALUES (0, 'Value');
 
 CREATE DICTIONARY `01945.db`.test_dictionary
 (
-    id uint64,
-    value string
+    id UInt64,
+    value String
 )
 PRIMARY KEY id
 LAYOUT(DIRECT())
@@ -25,8 +25,8 @@ DROP DICTIONARY `01945.db`.test_dictionary;
 
 CREATE DICTIONARY `01945.db`.`test_dictionary.test`
 (
-    id uint64,
-    value string
+    id UInt64,
+    value String
 )
 PRIMARY KEY id
 LAYOUT(DIRECT())
@@ -36,5 +36,5 @@ SELECT * FROM `01945.db`.`test_dictionary.test`;
 DROP DICTIONARY `01945.db`.`test_dictionary.test`;
 
 
-DROP STREAM `01945.db`.test_dictionary_values;
+DROP TABLE `01945.db`.test_dictionary_values;
 DROP DATABASE `01945.db`;

@@ -1,11 +1,11 @@
-SELECT '--- int Empty ---';
+SELECT '--- Int Empty ---';
 
-SELECT array_reduce('avgOrDefault', array_pop_back([1]));
-SELECT array_reduce('avgOrNull', array_pop_back([1]));
-SELECT array_reduce('stddevSampOrDefault', array_pop_back([1]));
-SELECT array_reduce('stddevSampOrNull', array_pop_back([1]));
-SELECT array_reduce('maxOrDefault', array_pop_back([1]));
-SELECT array_reduce('maxOrNull', array_pop_back([1]));
+SELECT arrayReduce('avgOrDefault', arrayPopBack([1]));
+SELECT arrayReduce('avgOrNull', arrayPopBack([1]));
+SELECT arrayReduce('stddevSampOrDefault', arrayPopBack([1]));
+SELECT arrayReduce('stddevSampOrNull', arrayPopBack([1]));
+SELECT arrayReduce('maxOrDefault', arrayPopBack([1]));
+SELECT arrayReduce('maxOrNull', arrayPopBack([1]));
 
 SELECT avgOrDefaultIf(x, x > 1) FROM (SELECT 1 AS x);
 SELECT avgOrNullIf(x, x > 1) FROM (SELECT 1 AS x);
@@ -21,14 +21,14 @@ SELECT stddevSampOrNullIfMerge(state) FROM (SELECT stddevSampOrNullIfState(x, x 
 SELECT maxOrDefaultIfMerge(state) FROM (SELECT maxOrDefaultIfState(x, x > 1) AS state FROM (SELECT 1 AS x));
 SELECT maxOrNullIfMerge(state) FROM (SELECT maxOrNullIfState(x, x > 1) AS state FROM (SELECT 1 AS x));
 
-SELECT '--- int Non-empty ---';
+SELECT '--- Int Non-empty ---';
 
-SELECT array_reduce('avgOrDefault', [1]);
-SELECT array_reduce('avgOrNull', [1]);
-SELECT array_reduce('stddevSampOrDefault', [1]);
-SELECT array_reduce('stddevSampOrNull', [1]);
-SELECT array_reduce('maxOrDefault', [1]);
-SELECT array_reduce('maxOrNull', [1]);
+SELECT arrayReduce('avgOrDefault', [1]);
+SELECT arrayReduce('avgOrNull', [1]);
+SELECT arrayReduce('stddevSampOrDefault', [1]);
+SELECT arrayReduce('stddevSampOrNull', [1]);
+SELECT arrayReduce('maxOrDefault', [1]);
+SELECT arrayReduce('maxOrNull', [1]);
 
 SELECT avgOrDefaultIf(x, x > 0) FROM (SELECT 1 AS x);
 SELECT avgOrNullIf(x, x > 0) FROM (SELECT 1 AS x);
@@ -46,30 +46,30 @@ SELECT maxOrNullIfMerge(state) FROM (SELECT maxOrNullIfState(x, x > 0) AS state 
 
 SELECT '--- Other Types Empty ---';
 
-SELECT array_reduce('maxOrDefault', array_pop_back(['hello']));
-SELECT array_reduce('maxOrNull', array_pop_back(['hello']));
+SELECT arrayReduce('maxOrDefault', arrayPopBack(['hello']));
+SELECT arrayReduce('maxOrNull', arrayPopBack(['hello']));
 
-SELECT array_reduce('maxOrDefault', array_pop_back(array_pop_back([to_datetime('2011-04-05 14:19:19'), null])));
-SELECT array_reduce('maxOrNull', array_pop_back(array_pop_back([to_datetime('2011-04-05 14:19:19'), null])));
+SELECT arrayReduce('maxOrDefault', arrayPopBack(arrayPopBack([toDateTime('2011-04-05 14:19:19'), null])));
+SELECT arrayReduce('maxOrNull', arrayPopBack(arrayPopBack([toDateTime('2011-04-05 14:19:19'), null])));
 
-SELECT array_reduce('avgOrDefault', array_pop_back([to_decimal128(-123.45, 2)]));
-SELECT array_reduce('avgOrNull', array_pop_back([to_decimal128(-123.45, 2)]));
-SELECT array_reduce('stddevSampOrDefault', array_pop_back([to_decimal128(-123.45, 2)]));
-SELECT array_reduce('stddevSampOrNull', array_pop_back([to_decimal128(-123.45, 2)]));
-SELECT array_reduce('maxOrDefault', array_pop_back([to_decimal128(-123.45, 2)]));
-SELECT array_reduce('maxOrNull', array_pop_back([to_decimal128(-123.45, 2)]));
+SELECT arrayReduce('avgOrDefault', arrayPopBack([toDecimal128(-123.45, 2)]));
+SELECT arrayReduce('avgOrNull', arrayPopBack([toDecimal128(-123.45, 2)]));
+SELECT arrayReduce('stddevSampOrDefault', arrayPopBack([toDecimal128(-123.45, 2)]));
+SELECT arrayReduce('stddevSampOrNull', arrayPopBack([toDecimal128(-123.45, 2)]));
+SELECT arrayReduce('maxOrDefault', arrayPopBack([toDecimal128(-123.45, 2)]));
+SELECT arrayReduce('maxOrNull', arrayPopBack([toDecimal128(-123.45, 2)]));
 
 SELECT '--- Other Types Non-empty ---';
 
-SELECT array_reduce('maxOrDefault', ['hello']);
-SELECT array_reduce('maxOrNull', ['hello']);
+SELECT arrayReduce('maxOrDefault', ['hello']);
+SELECT arrayReduce('maxOrNull', ['hello']);
 
-SELECT array_reduce('maxOrDefault', [to_datetime('2011-04-05 14:19:19'), null]);
-SELECT array_reduce('maxOrNull', [to_datetime('2011-04-05 14:19:19'), null]);
+SELECT arrayReduce('maxOrDefault', [toDateTime('2011-04-05 14:19:19'), null]);
+SELECT arrayReduce('maxOrNull', [toDateTime('2011-04-05 14:19:19'), null]);
 
-SELECT array_reduce('avgOrDefault', [to_decimal128(-123.45, 2)]);
-SELECT array_reduce('avgOrNull', [to_decimal128(-123.45, 2)]);
-SELECT array_reduce('stddevSampOrDefault', [to_decimal128(-123.45, 2)]);
-SELECT array_reduce('stddevSampOrNull', [to_decimal128(-123.45, 2)]);
-SELECT array_reduce('maxOrDefault', [to_decimal128(-123.45, 2)]);
-SELECT array_reduce('maxOrNull', [to_decimal128(-123.45, 2)]);
+SELECT arrayReduce('avgOrDefault', [toDecimal128(-123.45, 2)]);
+SELECT arrayReduce('avgOrNull', [toDecimal128(-123.45, 2)]);
+SELECT arrayReduce('stddevSampOrDefault', [toDecimal128(-123.45, 2)]);
+SELECT arrayReduce('stddevSampOrNull', [toDecimal128(-123.45, 2)]);
+SELECT arrayReduce('maxOrDefault', [toDecimal128(-123.45, 2)]);
+SELECT arrayReduce('maxOrNull', [toDecimal128(-123.45, 2)]);

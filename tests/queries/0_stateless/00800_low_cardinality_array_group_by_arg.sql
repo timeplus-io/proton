@@ -1,20 +1,20 @@
-DROP STREAM IF EXISTS table1;
-DROP STREAM IF EXISTS table2;
+DROP TABLE IF EXISTS table1;
+DROP TABLE IF EXISTS table2;
 
-create stream table1
+CREATE TABLE table1
 (
-dt date,
-id int32,
-arr array(low_cardinality(string))
-) ENGINE = MergeTree PARTITION BY to_monday(dt)
+dt Date,
+id Int32,
+arr Array(LowCardinality(String))
+) ENGINE = MergeTree PARTITION BY toMonday(dt)
 ORDER BY (dt, id) SETTINGS index_granularity = 8192;
 
-create stream table2
+CREATE TABLE table2
 (
-dt date,
-id int32,
-arr array(low_cardinality(string))
-) ENGINE = MergeTree PARTITION BY to_monday(dt)
+dt Date,
+id Int32,
+arr Array(LowCardinality(String))
+) ENGINE = MergeTree PARTITION BY toMonday(dt)
 ORDER BY (dt, id) SETTINGS index_granularity = 8192;
 
 insert into table1 (dt, id, arr) values ('2019-01-14', 1, ['aaa']);
@@ -30,5 +30,5 @@ from (
 )
 group by dt, id;
 
-DROP STREAM table1;
-DROP STREAM table2;
+DROP TABLE table1;
+DROP TABLE table2;

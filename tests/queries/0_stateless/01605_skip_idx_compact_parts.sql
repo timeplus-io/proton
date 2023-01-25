@@ -1,5 +1,5 @@
-DROP STREAM IF EXISTS skip_idx_comp_parts;
-create stream skip_idx_comp_parts (a int, b int, index b_idx b TYPE minmax GRANULARITY 4)
+DROP TABLE IF EXISTS skip_idx_comp_parts;
+CREATE TABLE skip_idx_comp_parts (a Int, b Int, index b_idx b TYPE minmax GRANULARITY 4)
     ENGINE = MergeTree ORDER BY a
     SETTINGS index_granularity=256, merge_max_block_size=100;
 
@@ -15,4 +15,4 @@ OPTIMIZE TABLE skip_idx_comp_parts FINAL;
 
 SELECT count() FROM skip_idx_comp_parts WHERE b > 100;
 
-DROP STREAM skip_idx_comp_parts;
+DROP TABLE skip_idx_comp_parts;

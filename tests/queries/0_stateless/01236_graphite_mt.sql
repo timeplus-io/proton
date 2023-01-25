@@ -1,8 +1,7 @@
 
--- Use datetime('UTC') to have a common rollup window
-SET query_mode = 'table';
-drop stream if exists test_graphite;
-create stream test_graphite (key uint32, Path string, Time datetime('UTC'), Value float64, Version uint32, col uint64)
+-- Use DateTime('UTC') to have a common rollup window
+drop table if exists test_graphite;
+create table test_graphite (key UInt32, Path String, Time DateTime('UTC'), Value Float64, Version UInt32, col UInt64)
     engine = GraphiteMergeTree('graphite_rollup') order by key settings index_granularity=10;
 
 SET joined_subquery_requires_alias = 0;
@@ -10,7 +9,7 @@ SET joined_subquery_requires_alias = 0;
 INSERT into test_graphite
 WITH dates AS
     (
-        SELECT to_start_of_day(to_datetime(now('UTC'), 'UTC')) as today,
+        SELECT toStartOfDay(toDateTime(now('UTC'), 'UTC')) as today,
                today - INTERVAL 3 day as older_date
     )
     -- Newer than 2 days are kept in windows of 600 seconds
@@ -39,4 +38,4 @@ optimize table test_graphite final;
 
 select key, Path, Value, Version, col from test_graphite order by key, Path, Time desc;
 
-drop stream test_graphite;
+drop table test_graphite;

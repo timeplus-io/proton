@@ -2,11 +2,11 @@
 
 SELECT 'executable_pool_simple';
 
-SELECT dictGet('executable_pool_simple', 'a', to_uint64(1));
-SELECT dictGet('executable_pool_simple', 'b', to_uint64(1));
+SELECT dictGet('executable_pool_simple', 'a', toUInt64(1));
+SELECT dictGet('executable_pool_simple', 'b', toUInt64(1));
 
-SELECT dictGet('executable_pool_simple', 'a', to_uint64(2));
-SELECT dictGet('executable_pool_simple', 'b', to_uint64(2));
+SELECT dictGet('executable_pool_simple', 'a', toUInt64(2));
+SELECT dictGet('executable_pool_simple', 'b', toUInt64(2));
 
 SELECT 'executable_pool_complex';
 

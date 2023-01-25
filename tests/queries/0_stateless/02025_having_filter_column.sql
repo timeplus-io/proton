@@ -1,15 +1,14 @@
-SET query_mode = 'table';
-drop stream if exists test;
+drop table if exists test;
 
 -- #29010
-create stream test
+CREATE TABLE test
 (
-    d datetime,
-    a string,
-    b uint64
+    d DateTime,
+    a String,
+    b UInt64
 )
 ENGINE = MergeTree
-PARTITION BY to_date(d)
+PARTITION BY toDate(d)
 ORDER BY d;
 
 SELECT *
@@ -38,4 +37,4 @@ FROM
 )
 WHERE a != '';
 
-drop stream if exists test;
+drop table if exists test;

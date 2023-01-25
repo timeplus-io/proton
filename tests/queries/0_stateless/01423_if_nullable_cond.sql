@@ -1,1 +1,1 @@
-SELECT CAST(null, 'nullable(uint8)') = 1 ? CAST(null, 'nullable(uint8)') : -1 AS x, to_type_name(x), dumpColumnStructure(x);
+SELECT CAST(null, 'Nullable(UInt8)') = 1 ? CAST(null, 'Nullable(UInt8)') : -1 AS x, toTypeName(x), dumpColumnStructure(x);

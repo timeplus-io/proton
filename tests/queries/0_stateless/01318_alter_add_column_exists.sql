@@ -1,27 +1,27 @@
-DROP STREAM IF EXISTS add_table;
+DROP TABLE IF EXISTS add_table;
 
-create stream add_table
+CREATE TABLE add_table
 (
-    key uint64,
-    value1 string
+    key UInt64,
+    value1 String
 )
 ENGINE = MergeTree()
 ORDER BY key;
 
-SHOW create stream add_table;
+SHOW CREATE TABLE add_table;
 
-ALTER STREAM add_table ADD COLUMN IF NOT EXISTS value1 uint64;
+ALTER TABLE add_table ADD COLUMN IF NOT EXISTS value1 UInt64;
 
-SHOW create stream add_table;
+SHOW CREATE TABLE add_table;
 
-ALTER STREAM add_table ADD COLUMN IF NOT EXISTS key string, ADD COLUMN IF NOT EXISTS value1 uint64;
+ALTER TABLE add_table ADD COLUMN IF NOT EXISTS key String, ADD COLUMN IF NOT EXISTS value1 UInt64;
 
-SHOW create stream add_table;
+SHOW CREATE TABLE add_table;
 
-ALTER STREAM add_table ADD COLUMN IF NOT EXISTS value1 uint64, ADD COLUMN IF NOT EXISTS value2 uint64;
+ALTER TABLE add_table ADD COLUMN IF NOT EXISTS value1 UInt64, ADD COLUMN IF NOT EXISTS value2 UInt64;
 
-SHOW create stream add_table;
+SHOW CREATE TABLE add_table;
 
-ALTER STREAM add_table ADD COLUMN value3 uint64, ADD COLUMN IF NOT EXISTS value3 uint32; --{serverError 44}
+ALTER TABLE add_table ADD COLUMN value3 UInt64, ADD COLUMN IF NOT EXISTS value3 UInt32; --{serverError 44}
 
-DROP STREAM IF EXISTS add_table;
+DROP TABLE IF EXISTS add_table;

@@ -1,12 +1,12 @@
-DROP STREAM IF EXISTS map_lc;
+DROP TABLE IF EXISTS map_lc;
 SET allow_experimental_map_type = 1;
-create stream map_lc
+CREATE TABLE map_lc
 (
-    `kv` Map(low_cardinality(string), low_cardinality(string))
+    `kv` Map(LowCardinality(String), LowCardinality(String))
 )
-;
+ENGINE = Memory;
 
 INSERT INTO map_lc select map('a', 'b');
 SELECT kv['a'] FROM map_lc;
-DROP STREAM map_lc;
-SELECT map(to_fixed_string('1',1),1) AS m, m[to_fixed_string('1',1)],m[to_fixed_string('1',2)];
+DROP TABLE map_lc;
+SELECT map(toFixedString('1',1),1) AS m, m[toFixedString('1',1)],m[toFixedString('1',2)];

@@ -13,11 +13,11 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CUR_DIR"/../shell_config.sh
 
 $CLICKHOUSE_CLIENT -nm -q "
-    drop stream if exists data_01900_1;
-    drop stream if exists data_01900_2;
+    drop table if exists data_01900_1;
+    drop table if exists data_01900_2;
 
-    create stream data_01900_1 (k uint64, s string) engine=MergeTree() order by k;
-    create stream data_01900_2 (k uint64, s string) engine=MergeTree() order by k;
+    create table data_01900_1 (k UInt64, s String) engine=MergeTree() order by k;
+    create table data_01900_2 (k UInt64, s String) engine=MergeTree() order by k;
 
     insert into data_01900_1 values (1, 'hello'), (2, 'world');
     insert into data_01900_2 values (1, 'hello'), (2, 'world');
@@ -26,13 +26,13 @@ $CLICKHOUSE_CLIENT -nm -q "
 # default finished_mutations_to_keep is 100
 # so 100 mutations will be scheduled and killed later.
 for i in {1..100}; do
-    echo "alter stream data_01900_1 update s = 'foo_$i' where 1;"
+    echo "alter table data_01900_1 update s = 'foo_$i' where 1;"
 done | $CLICKHOUSE_CLIENT -nm
 
 # but these mutations should not be killed.
 (
     for i in {1..100}; do
-        echo "alter stream data_01900_2 update s = 'bar_$i' where 1;"
+        echo "alter table data_01900_2 update s = 'bar_$i' where 1;"
     done | $CLICKHOUSE_CLIENT -nm --mutations_sync=1
 ) &
 $CLICKHOUSE_CLIENT --format Null -nm -q "kill mutation where table = 'data_01900_1' and database = '$CLICKHOUSE_DATABASE';"
@@ -40,5 +40,5 @@ wait
 
 $CLICKHOUSE_CLIENT -nm -q "select * from data_01900_2"
 
-$CLICKHOUSE_CLIENT -q "drop stream data_01900_1"
-$CLICKHOUSE_CLIENT -q "drop stream data_01900_2"
+$CLICKHOUSE_CLIENT -q "drop table data_01900_1"
+$CLICKHOUSE_CLIENT -q "drop table data_01900_2"

@@ -1,6 +1,6 @@
 1
-aggregate_function(uniq_exact, nullable(string))
+AggregateFunction(uniqExact, Nullable(String))
 1
-aggregate_function(uniq_exact, nullable(uint8))
+AggregateFunction(uniqExact, Nullable(UInt8))
 1
 1

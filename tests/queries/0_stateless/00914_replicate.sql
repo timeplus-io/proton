@@ -1,3 +1,3 @@
 -- Tags: replica
 
-SELECT CAST(replicate(['a'], [1]) AS string);
+SELECT CAST(replicate(['a'], [1]) AS String);

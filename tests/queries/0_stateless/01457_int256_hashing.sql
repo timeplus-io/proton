@@ -3,39 +3,39 @@
 SELECT toUInt256(123) IN (NULL);
 SELECT toUInt256(123) AS k GROUP BY k;
 SELECT toUInt256(123) AS k FROM system.one INNER JOIN (SELECT toUInt256(123) AS k) t USING k;
-SELECT array_enumerate_uniq([toUInt256(123), toUInt256(456), toUInt256(123)]);
+SELECT arrayEnumerateUniq([toUInt256(123), toUInt256(456), toUInt256(123)]);
 
 SELECT toInt256(123) IN (NULL);
 SELECT toInt256(123) AS k GROUP BY k;
 SELECT toInt256(123) AS k FROM system.one INNER JOIN (SELECT toInt256(123) AS k) t USING k;
-SELECT array_enumerate_uniq([toInt256(123), toInt256(456), toInt256(123)]);
+SELECT arrayEnumerateUniq([toInt256(123), toInt256(456), toInt256(123)]);
 
 -- SELECT toUInt128(123) IN (NULL);
 -- SELECT toUInt128(123) AS k GROUP BY k;
 -- SELECT toUInt128(123) AS k FROM system.one INNER JOIN (SELECT toUInt128(123) AS k) t USING k;
--- SELECT array_enumerate_uniq([toUInt128(123), toUInt128(456), toUInt128(123)]);
+-- SELECT arrayEnumerateUniq([toUInt128(123), toUInt128(456), toUInt128(123)]);
 
-SELECT to_int128(123) IN (NULL);
-SELECT to_int128(123) AS k GROUP BY k;
-SELECT to_int128(123) AS k FROM system.one INNER JOIN (SELECT to_int128(123) AS k) t USING k;
-SELECT array_enumerate_uniq([to_int128(123), to_int128(456), to_int128(123)]);
+SELECT toInt128(123) IN (NULL);
+SELECT toInt128(123) AS k GROUP BY k;
+SELECT toInt128(123) AS k FROM system.one INNER JOIN (SELECT toInt128(123) AS k) t USING k;
+SELECT arrayEnumerateUniq([toInt128(123), toInt128(456), toInt128(123)]);
 
-SELECT to_nullable(toUInt256(321)) IN (NULL);
-SELECT to_nullable(toUInt256(321)) AS k GROUP BY k;
-SELECT to_nullable(toUInt256(321)) AS k FROM system.one INNER JOIN (SELECT toUInt256(321) AS k) t USING k;
-SELECT array_enumerate_uniq([to_nullable(toUInt256(321)), to_nullable(toUInt256(456)), to_nullable(toUInt256(321))]);
+SELECT toNullable(toUInt256(321)) IN (NULL);
+SELECT toNullable(toUInt256(321)) AS k GROUP BY k;
+SELECT toNullable(toUInt256(321)) AS k FROM system.one INNER JOIN (SELECT toUInt256(321) AS k) t USING k;
+SELECT arrayEnumerateUniq([toNullable(toUInt256(321)), toNullable(toUInt256(456)), toNullable(toUInt256(321))]);
 
-SELECT to_nullable(toInt256(321)) IN (NULL);
-SELECT to_nullable(toInt256(321)) AS k GROUP BY k;
-SELECT to_nullable(toInt256(321)) AS k FROM system.one INNER JOIN (SELECT toInt256(321) AS k) t USING k;
-SELECT array_enumerate_uniq([to_nullable(toInt256(321)), to_nullable(toInt256(456)), to_nullable(toInt256(321))]);
+SELECT toNullable(toInt256(321)) IN (NULL);
+SELECT toNullable(toInt256(321)) AS k GROUP BY k;
+SELECT toNullable(toInt256(321)) AS k FROM system.one INNER JOIN (SELECT toInt256(321) AS k) t USING k;
+SELECT arrayEnumerateUniq([toNullable(toInt256(321)), toNullable(toInt256(456)), toNullable(toInt256(321))]);
 
--- SELECT to_nullable(toUInt128(321)) IN (NULL);
--- SELECT to_nullable(toUInt128(321)) AS k GROUP BY k;
--- SELECT to_nullable(toUInt128(321)) AS k FROM system.one INNER JOIN (SELECT toUInt128(321) AS k) t USING k;
--- SELECT array_enumerate_uniq([to_nullable(toUInt128(321)), to_nullable(toUInt128(456)), to_nullable(toUInt128(321))]);
+-- SELECT toNullable(toUInt128(321)) IN (NULL);
+-- SELECT toNullable(toUInt128(321)) AS k GROUP BY k;
+-- SELECT toNullable(toUInt128(321)) AS k FROM system.one INNER JOIN (SELECT toUInt128(321) AS k) t USING k;
+-- SELECT arrayEnumerateUniq([toNullable(toUInt128(321)), toNullable(toUInt128(456)), toNullable(toUInt128(321))]);
 
-SELECT to_nullable(to_int128(321)) IN (NULL);
-SELECT to_nullable(to_int128(321)) AS k GROUP BY k;
-SELECT to_nullable(to_int128(321)) AS k FROM system.one INNER JOIN (SELECT to_int128(321) AS k) t USING k;
-SELECT array_enumerate_uniq([to_nullable(to_int128(321)), to_nullable(to_int128(456)), to_nullable(to_int128(321))]);
+SELECT toNullable(toInt128(321)) IN (NULL);
+SELECT toNullable(toInt128(321)) AS k GROUP BY k;
+SELECT toNullable(toInt128(321)) AS k FROM system.one INNER JOIN (SELECT toInt128(321) AS k) t USING k;
+SELECT arrayEnumerateUniq([toNullable(toInt128(321)), toNullable(toInt128(456)), toNullable(toInt128(321))]);

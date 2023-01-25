@@ -10,15 +10,15 @@ SETTINGS="SET convert_query_to_cnf = 1; SET optimize_using_constraints = 1; SET 
 
 $CLICKHOUSE_CLIENT -n --query="
 $SETTINGS;
-DROP STREAM IF EXISTS hypothesis_test_test;
-DROP STREAM IF EXISTS hypothesis_test_test2;
-DROP STREAM IF EXISTS hypothesis_test_test3;
+DROP TABLE IF EXISTS hypothesis_test_test;
+DROP TABLE IF EXISTS hypothesis_test_test2;
+DROP TABLE IF EXISTS hypothesis_test_test3;
 
-create stream hypothesis_test_test (
-  i uint64,
-  a uint64,
-  b uint64,
-  c float64,
+CREATE TABLE hypothesis_test_test (
+  i UInt64,
+  a UInt64,
+  b UInt64,
+  c Float64,
   INDEX t (a < b) TYPE hypothesis GRANULARITY 1,
   INDEX t2 (b <= c) TYPE hypothesis GRANULARITY 1
 ) ENGINE = MergeTree() ORDER BY i SETTINGS index_granularity=1;
@@ -46,10 +46,10 @@ $CLICKHOUSE_CLIENT -n --query="$SETTINGS; SELECT count() FROM hypothesis_test_te
 
 $CLICKHOUSE_CLIENT -n --query="
 $SETTINGS;
-create stream hypothesis_test_test2 (
-  i uint64,
-  a uint64,
-  b uint64,
+CREATE TABLE hypothesis_test_test2 (
+  i UInt64,
+  a UInt64,
+  b UInt64,
   INDEX t (a != b) TYPE hypothesis GRANULARITY 1
 ) ENGINE = MergeTree() ORDER BY i SETTINGS index_granularity=1;
 "
@@ -68,10 +68,10 @@ $CLICKHOUSE_CLIENT -n --query="$SETTINGS; SELECT count() FROM hypothesis_test_te
 
 $CLICKHOUSE_CLIENT -n --query="
 $SETTINGS;
-create stream hypothesis_test_test3 (
-  i uint64,
-  a uint64,
-  b uint64,
+CREATE TABLE hypothesis_test_test3 (
+  i UInt64,
+  a UInt64,
+  b UInt64,
   INDEX t (a = b) TYPE hypothesis GRANULARITY 1
 ) ENGINE = MergeTree() ORDER BY i SETTINGS index_granularity=1;
 "
@@ -91,6 +91,6 @@ $CLICKHOUSE_CLIENT -n --query="$SETTINGS;SELECT count() FROM hypothesis_test_tes
 
 $CLICKHOUSE_CLIENT -n --query="
 $SETTINGS;
-DROP STREAM hypothesis_test_test;
-DROP STREAM hypothesis_test_test2;
-DROP STREAM hypothesis_test_test3;"
+DROP TABLE hypothesis_test_test;
+DROP TABLE hypothesis_test_test2;
+DROP TABLE hypothesis_test_test3;"

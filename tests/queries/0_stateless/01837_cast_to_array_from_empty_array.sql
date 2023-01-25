@@ -1,2 +1,2 @@
-SELECT CAST([] AS array(array(string)));
-SELECT CAST([] AS array(array(array(string))));
+SELECT CAST([] AS Array(Array(String)));
+SELECT CAST([] AS Array(Array(Array(String))));

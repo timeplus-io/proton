@@ -1,1 +1,1 @@
-SELECT lower_utf8('\xF0') = lower_utf8('\xF0');
+SELECT lowerUTF8('\xF0') = lowerUTF8('\xF0');

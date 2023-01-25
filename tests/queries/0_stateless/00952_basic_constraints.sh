@@ -6,12 +6,12 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 EXCEPTION_TEXT=violated
 EXCEPTION_SUCCESS_TEXT=ok
-$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS test_constraints;"
+$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS test_constraints;"
 
-$CLICKHOUSE_CLIENT --query="create stream test_constraints
+$CLICKHOUSE_CLIENT --query="CREATE TABLE test_constraints
 (
-        a       uint32,
-        b       uint32,
+        a       UInt32,
+        b       UInt32,
         CONSTRAINT b_constraint CHECK b > 0
 )
 ENGINE = MergeTree ORDER BY (a);"
@@ -26,13 +26,13 @@ $CLICKHOUSE_CLIENT --query="INSERT INTO test_constraints VALUES (3, 4), (1, 0), 
     | grep -q "$EXCEPTION_TEXT" && echo "$EXCEPTION_SUCCESS_TEXT" || echo "Did not thrown an exception"
 $CLICKHOUSE_CLIENT --query="SELECT * FROM test_constraints;"
 
-$CLICKHOUSE_CLIENT --query="DROP STREAM test_constraints;"
+$CLICKHOUSE_CLIENT --query="DROP TABLE test_constraints;"
 
 # Test two constraints on one table
-$CLICKHOUSE_CLIENT --query="create stream test_constraints
+$CLICKHOUSE_CLIENT --query="CREATE TABLE test_constraints
 (
-        a       uint32,
-        b       uint32,
+        a       UInt32,
+        b       UInt32,
         CONSTRAINT a_constraint CHECK a < 10,
         CONSTRAINT b_constraint CHECK b > 10
 )
@@ -52,4 +52,4 @@ $CLICKHOUSE_CLIENT --query="SELECT * FROM test_constraints;"
 $CLICKHOUSE_CLIENT --query="INSERT INTO test_constraints VALUES (7, 18), (0, 11);"
 $CLICKHOUSE_CLIENT --query="SELECT * FROM test_constraints;"
 
-$CLICKHOUSE_CLIENT --query="DROP STREAM test_constraints;"
+$CLICKHOUSE_CLIENT --query="DROP TABLE test_constraints;"

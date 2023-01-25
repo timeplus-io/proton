@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tags: no-debug, no-tsan, no-msan, no-ubsan, no-asan
+# ^ because inserting a 50 MB file can be slow.
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
@@ -19,96 +21,96 @@ ${CLICKHOUSE_GIT_IMPORT} 2>&1 | wc -l
 
 ${CLICKHOUSE_CLIENT} --multiline --multiquery --query "
 
-DROP STREAM IF EXISTS commits;
-DROP STREAM IF EXISTS file_changes;
-DROP STREAM IF EXISTS line_changes;
+DROP TABLE IF EXISTS commits;
+DROP TABLE IF EXISTS file_changes;
+DROP TABLE IF EXISTS line_changes;
 
-create stream commits
+CREATE TABLE commits
 (
-    hash string,
-    author low_cardinality(string),
-    time datetime,
-    message string,
-    files_added uint32,
-    files_deleted uint32,
-    files_renamed uint32,
-    files_modified uint32,
-    lines_added uint32,
-    lines_deleted uint32,
-    hunks_added uint32,
-    hunks_removed uint32,
-    hunks_changed uint32
+    hash String,
+    author LowCardinality(String),
+    time DateTime,
+    message String,
+    files_added UInt32,
+    files_deleted UInt32,
+    files_renamed UInt32,
+    files_modified UInt32,
+    lines_added UInt32,
+    lines_deleted UInt32,
+    hunks_added UInt32,
+    hunks_removed UInt32,
+    hunks_changed UInt32
 ) ENGINE = MergeTree ORDER BY time;
 
-create stream file_changes
+CREATE TABLE file_changes
 (
     change_type Enum('Add' = 1, 'Delete' = 2, 'Modify' = 3, 'Rename' = 4, 'Copy' = 5, 'Type' = 6),
-    path low_cardinality(string),
-    old_path low_cardinality(string),
-    file_extension low_cardinality(string),
-    lines_added uint32,
-    lines_deleted uint32,
-    hunks_added uint32,
-    hunks_removed uint32,
-    hunks_changed uint32,
+    path LowCardinality(String),
+    old_path LowCardinality(String),
+    file_extension LowCardinality(String),
+    lines_added UInt32,
+    lines_deleted UInt32,
+    hunks_added UInt32,
+    hunks_removed UInt32,
+    hunks_changed UInt32,
 
-    commit_hash string,
-    author low_cardinality(string),
-    time datetime,
-    commit_message string,
-    commit_files_added uint32,
-    commit_files_deleted uint32,
-    commit_files_renamed uint32,
-    commit_files_modified uint32,
-    commit_lines_added uint32,
-    commit_lines_deleted uint32,
-    commit_hunks_added uint32,
-    commit_hunks_removed uint32,
-    commit_hunks_changed uint32
+    commit_hash String,
+    author LowCardinality(String),
+    time DateTime,
+    commit_message String,
+    commit_files_added UInt32,
+    commit_files_deleted UInt32,
+    commit_files_renamed UInt32,
+    commit_files_modified UInt32,
+    commit_lines_added UInt32,
+    commit_lines_deleted UInt32,
+    commit_hunks_added UInt32,
+    commit_hunks_removed UInt32,
+    commit_hunks_changed UInt32
 ) ENGINE = MergeTree ORDER BY time;
 
-create stream line_changes
+CREATE TABLE line_changes
 (
-    sign int8,
-    line_number_old uint32,
-    line_number_new uint32,
-    hunk_num uint32,
-    hunk_start_line_number_old uint32,
-    hunk_start_line_number_new uint32,
-    hunk_lines_added uint32,
-    hunk_lines_deleted uint32,
-    hunk_context low_cardinality(string),
-    line low_cardinality(string),
-    indent uint8,
+    sign Int8,
+    line_number_old UInt32,
+    line_number_new UInt32,
+    hunk_num UInt32,
+    hunk_start_line_number_old UInt32,
+    hunk_start_line_number_new UInt32,
+    hunk_lines_added UInt32,
+    hunk_lines_deleted UInt32,
+    hunk_context LowCardinality(String),
+    line LowCardinality(String),
+    indent UInt8,
     line_type Enum('Empty' = 0, 'Comment' = 1, 'Punct' = 2, 'Code' = 3),
 
-    prev_commit_hash string,
-    prev_author low_cardinality(string),
-    prev_time datetime,
+    prev_commit_hash String,
+    prev_author LowCardinality(String),
+    prev_time DateTime,
 
     file_change_type Enum('Add' = 1, 'Delete' = 2, 'Modify' = 3, 'Rename' = 4, 'Copy' = 5, 'Type' = 6),
-    path low_cardinality(string),
-    old_path low_cardinality(string),
-    file_extension low_cardinality(string),
-    file_lines_added uint32,
-    file_lines_deleted uint32,
-    file_hunks_added uint32,
-    file_hunks_removed uint32,
-    file_hunks_changed uint32,
+    path LowCardinality(String),
+    old_path LowCardinality(String),
+    file_extension LowCardinality(String),
+    file_lines_added UInt32,
+    file_lines_deleted UInt32,
+    file_hunks_added UInt32,
+    file_hunks_removed UInt32,
+    file_hunks_changed UInt32,
 
-    commit_hash string,
-    author low_cardinality(string),
-    time datetime,
-    commit_message string,
-    commit_files_added uint32,
-    commit_files_deleted uint32,
-    commit_files_renamed uint32,
-    commit_files_modified uint32,
-    commit_lines_added uint32,
-    commit_lines_deleted uint32,
-    commit_hunks_added uint32,
-    commit_hunks_removed uint32,
-    commit_hunks_changed uint32
+    commit_hash String,
+    author LowCardinality(String),
+    time DateTime,
+    commit_message String,
+    commit_files_added UInt32,
+    commit_files_deleted UInt32,
+    commit_files_renamed UInt32,
+    commit_files_modified UInt32,
+    commit_lines_added UInt32,
+    commit_lines_deleted UInt32,
+    commit_hunks_added UInt32,
+    commit_hunks_removed UInt32,
+    commit_hunks_changed UInt32
 ) ENGINE = MergeTree ORDER BY time;
 "
 
@@ -118,11 +120,10 @@ ${CLICKHOUSE_CLIENT} --query "INSERT INTO line_changes FORMAT TSV" < line_change
 
 ${CLICKHOUSE_CLIENT} --query "SELECT count() FROM commits"
 ${CLICKHOUSE_CLIENT} --query "SELECT count() FROM file_changes"
-${CLICKHOUSE_CLIENT} --query "SELECT count() FROM line_changes"
+${CLICKHOUSE_CLIENT} --query "SELECT count(), round(avg(indent), 1) FROM line_changes"
 
 ${CLICKHOUSE_CLIENT} --multiline --multiquery --query "
-DROP STREAM commits;
-DROP STREAM file_changes;
-DROP STREAM line_changes;
+DROP TABLE commits;
+DROP TABLE file_changes;
+DROP TABLE line_changes;
 "
-

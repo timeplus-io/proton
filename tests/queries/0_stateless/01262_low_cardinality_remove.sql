@@ -1,9 +1,9 @@
-DROP STREAM IF EXISTS testView;
-DROP STREAM IF EXISTS testTable;
+DROP TABLE IF EXISTS testView;
+DROP TABLE IF EXISTS testTable;
 
-create stream IF NOT EXISTS testTable (
- A low_cardinality(string), -- like voter
- B int64
+CREATE TABLE IF NOT EXISTS testTable (
+ A LowCardinality(String), -- like voter
+ B Int64
 ) ENGINE MergeTree()
 ORDER BY (A);
 
@@ -16,27 +16,27 @@ SELECT
 FROM
    testTable;
 
-SELECT CAST(ALow, 'string') AS AStr
+SELECT CAST(ALow, 'String') AS AStr
 FROM testView
 GROUP BY AStr ORDER BY AStr;
 
-DROP STREAM testTable;
+DROP TABLE testTable;
 
-create stream IF NOT EXISTS testTable (
- A string, -- like voter
- B int64
+CREATE TABLE IF NOT EXISTS testTable (
+ A String, -- like voter
+ B Int64
 ) ENGINE MergeTree()
 ORDER BY (A);
 
-SELECT CAST(ALow, 'string') AS AStr
+SELECT CAST(ALow, 'String') AS AStr
 FROM testView
 GROUP BY AStr ORDER BY AStr;
 
 INSERT INTO testTable VALUES ('A', 1),('B',2),('C',3);
 
-SELECT CAST(ALow, 'string') AS AStr
+SELECT CAST(ALow, 'String') AS AStr
 FROM testView
 GROUP BY AStr ORDER BY AStr;
 
-DROP STREAM IF EXISTS testView;
-DROP STREAM IF EXISTS testTable;
+DROP TABLE IF EXISTS testView;
+DROP TABLE IF EXISTS testTable;

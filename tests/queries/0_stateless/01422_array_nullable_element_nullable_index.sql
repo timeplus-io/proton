@@ -1,3 +1,3 @@
-SELECT [1, NULL][to_nullable(1)];
-SELECT [to_nullable(1)][to_nullable(1)];
-SELECT [NULL][to_nullable(1)];
+SELECT [1, NULL][toNullable(1)];
+SELECT [toNullable(1)][toNullable(1)];
+SELECT [NULL][toNullable(1)];

@@ -1,1 +1,1 @@
-SELECT array_map(x -> array_join([x, 1]), [1, 2]); -- { serverError 36 }
+SELECT arrayMap(x -> arrayJoin([x, 1]), [1, 2]); -- { serverError 36 }

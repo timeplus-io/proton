@@ -1,7 +1,7 @@
-DROP STREAM IF EXISTS table_with_enum_column_for_tsv_insert;
+DROP TABLE IF EXISTS table_with_enum_column_for_tsv_insert;
 
-create stream table_with_enum_column_for_tsv_insert (
-    Id int32,
+CREATE TABLE table_with_enum_column_for_tsv_insert (
+    Id Int32,
     Value Enum('ef' = 1, 'es' = 2)
 ) ENGINE=Memory();
 
@@ -13,4 +13,4 @@ SELECT * FROM table_with_enum_column_for_tsv_insert ORDER BY Id;
 
 SET input_format_tsv_enum_as_number = 0;
 
-DROP STREAM IF EXISTS table_with_enum_column_for_tsv_insert;
+DROP TABLE IF EXISTS table_with_enum_column_for_tsv_insert;

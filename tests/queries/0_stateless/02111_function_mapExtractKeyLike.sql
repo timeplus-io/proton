@@ -1,6 +1,6 @@
-DROP STREAM IF EXISTS map_extractKeyLike_test;
+DROP TABLE IF EXISTS map_extractKeyLike_test;
 
-create stream map_extractKeyLike_test (id uint32, map Map(string, string)) Engine=MergeTree() ORDER BY id settings index_granularity=2;
+CREATE TABLE map_extractKeyLike_test (id UInt32, map Map(String, String)) Engine=MergeTree() ORDER BY id settings index_granularity=2;
 
 INSERT INTO map_extractKeyLike_test VALUES (1, {'P1-K1':'1-V1','P2-K2':'1-V2'}),(2,{'P1-K1':'2-V1','P2-K2':'2-V2'});
 INSERT INTO map_extractKeyLike_test VALUES (3, {'P1-K1':'3-V1','P2-K2':'3-V2'}),(4,{'P1-K1':'4-V1','P2-K2':'4-V2'});
@@ -19,4 +19,4 @@ SELECT '';
 SELECT 'The results of query: SELECT id, mapExtractKeyLike(map, \'5-K1\') FROM map_extractKeyLike_test ORDER BY id;';
 SELECT id, mapExtractKeyLike(map, '5-K1') FROM map_extractKeyLike_test ORDER BY id;
 
-DROP STREAM map_extractKeyLike_test;
+DROP TABLE map_extractKeyLike_test;

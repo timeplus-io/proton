@@ -1,8 +1,8 @@
-DROP STREAM IF EXISTS cte1;
-DROP STREAM IF EXISTS cte2;
+DROP TABLE IF EXISTS cte1;
+DROP TABLE IF EXISTS cte2;
 
-create stream cte1(a int64) ENGINE=Memory;
-create stream cte2(a int64) ENGINE=Memory;
+CREATE TABLE cte1(a Int64) ENGINE=Memory;
+CREATE TABLE cte2(a Int64) ENGINE=Memory;
 
 INSERT INTO cte1 SELECT * FROM numbers(10000);
 INSERT INTO cte2 SELECT * FROM numbers(5000);
@@ -78,5 +78,5 @@ SELECT max(a), min(a), count(*)
 FROM y
 WHERE a <100;
 
-DROP STREAM cte1;
-DROP STREAM cte2;
+DROP TABLE cte1;
+DROP TABLE cte2;

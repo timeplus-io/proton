@@ -6,11 +6,11 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 DATA_BEFORE=`${CLICKHOUSE_CLIENT} --query="SELECT event,value FROM system.events WHERE event IN ('QueryTimeMicroseconds','SelectQueryTimeMicroseconds','InsertQueryTimeMicroseconds') FORMAT CSV"`
 
-${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS test"
-${CLICKHOUSE_CLIENT} --query="create stream test (k uint32) ENGINE=MergeTree ORDER BY k"
+${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS test"
+${CLICKHOUSE_CLIENT} --query="CREATE TABLE test (k UInt32) ENGINE=MergeTree ORDER BY k"
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO test (k) SELECT sleep(1)"
 ${CLICKHOUSE_CLIENT} --query="SELECT sleep(1)" > /dev/null
-${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS test"
+${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS test"
 
 DATA_AFTER=`${CLICKHOUSE_CLIENT} --query="SELECT event,value FROM system.events WHERE event IN ('QueryTimeMicroseconds','SelectQueryTimeMicroseconds','InsertQueryTimeMicroseconds') FORMAT CSV"`
 

@@ -1,10 +1,10 @@
-DROP STREAM IF EXISTS test_nested;
+DROP TABLE IF EXISTS test_nested;
 
-create stream test_nested
+CREATE TABLE test_nested
 (
-    `id` string,
-    `with_dot.str` string,
-    `with_dot.array` array(int32)
+    `id` String,
+    `with_dot.str` String,
+    `with_dot.array` Array(Int32)
 )
 ENGINE = MergeTree()
 ORDER BY id;
@@ -12,7 +12,7 @@ ORDER BY id;
 INSERT INTO test_nested VALUES('123', 'asd', [1,2]);
 SELECT * FROM test_nested;
 
-ALTER STREAM test_nested ADD COLUMN `with_dot.bool` uint8;
+ALTER TABLE test_nested ADD COLUMN `with_dot.bool` UInt8;
 SELECT * FROM test_nested;
 
-DROP STREAM test_nested;
+DROP TABLE test_nested;

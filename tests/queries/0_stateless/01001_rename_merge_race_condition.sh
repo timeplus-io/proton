@@ -7,15 +7,15 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 set -e
 
-$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS test1";
-$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS test2";
-$CLICKHOUSE_CLIENT --query "create stream test1 (x uint64) ";
+$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS test1";
+$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS test2";
+$CLICKHOUSE_CLIENT --query "CREATE TABLE test1 (x UInt64) ENGINE = Memory";
 
 
 function thread1()
 {
     while true; do
-        seq 1 1000 | sed -r -e 's/.+/RENAME STREAM test1 TO test2; RENAME STREAM test2 TO test1;/' | $CLICKHOUSE_CLIENT -n
+        seq 1 1000 | sed -r -e 's/.+/RENAME TABLE test1 TO test2; RENAME TABLE test2 TO test1;/' | $CLICKHOUSE_CLIENT -n
     done
 }
 
@@ -37,5 +37,5 @@ timeout $TIMEOUT bash -c thread2 2> /dev/null &
 
 wait
 
-$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS test1";
-$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS test2";
+$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS test1";
+$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS test2";

@@ -1,6 +1,6 @@
-DROP STREAM IF EXISTS nullt;
+DROP TABLE IF EXISTS nullt;
 
-create stream nullt (c1 nullable(uint32), c2 nullable(string)) ;
+CREATE TABLE nullt (c1 Nullable(UInt32), c2 Nullable(String))ENGINE = Log;
 INSERT INTO nullt VALUES (1, 'abc'), (2, NULL), (NULL, NULL);
 
 SELECT c2 = ('abc') FROM nullt;
@@ -8,4 +8,4 @@ SELECT c2 IN ('abc') FROM nullt;
 
 SELECT c2 IN ('abc', NULL) FROM nullt;
 
-DROP STREAM IF EXISTS nullt;
+DROP TABLE IF EXISTS nullt;

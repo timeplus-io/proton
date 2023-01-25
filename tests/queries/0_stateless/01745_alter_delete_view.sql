@@ -1,11 +1,11 @@
 DROP VIEW IF EXISTS test_view;
-DROP STREAM IF EXISTS test_table;
+DROP TABLE IF EXISTS test_table;
 
-create stream test_table
+CREATE TABLE test_table
 (
-    f1 int32,
-    f2 int32,
-    pk int32
+    f1 Int32,
+    f2 Int32,
+    pk Int32
 )
 ENGINE = MergeTree()
 ORDER BY f1
@@ -20,9 +20,9 @@ INSERT INTO test_table (f1, f2, pk) VALUES (1,1,1), (1,1,2), (2,1,1), (2,1,2);
 
 SELECT * FROM test_view ORDER BY f1, f2;
 
-ALTER STREAM test_view DELETE WHERE pk = 2; --{serverError 48}
+ALTER TABLE test_view DELETE WHERE pk = 2; --{serverError 48}
 
 SELECT * FROM test_view ORDER BY f1, f2;
 
 DROP VIEW IF EXISTS test_view;
-DROP STREAM IF EXISTS test_table;
+DROP TABLE IF EXISTS test_table;

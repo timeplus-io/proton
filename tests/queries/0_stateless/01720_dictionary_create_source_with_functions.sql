@@ -3,19 +3,19 @@
 DROP DATABASE IF EXISTS 01720_dictionary_db;
 CREATE DATABASE 01720_dictionary_db;
 
-create stream 01720_dictionary_db.dictionary_source_table
+CREATE TABLE 01720_dictionary_db.dictionary_source_table
 (
-	key uint8,
-    value string
+	key UInt8,
+    value String
 )
-;
+ENGINE = TinyLog;
 
 INSERT INTO 01720_dictionary_db.dictionary_source_table VALUES (1, 'First');
 
 CREATE DICTIONARY 01720_dictionary_db.dictionary
 (
-    key uint64,
-    value string
+    key UInt64,
+    value String
 )
 PRIMARY KEY key
 SOURCE(CLICKHOUSE(DB '01720_dictionary_db' TABLE 'dictionary_source_table' HOST hostName() PORT tcpPort()))
@@ -25,6 +25,6 @@ LAYOUT(FLAT());
 SELECT * FROM 01720_dictionary_db.dictionary;
 
 DROP DICTIONARY 01720_dictionary_db.dictionary;
-DROP STREAM 01720_dictionary_db.dictionary_source_table;
+DROP TABLE 01720_dictionary_db.dictionary_source_table;
 
 DROP DATABASE 01720_dictionary_db;

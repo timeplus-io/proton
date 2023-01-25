@@ -13,7 +13,7 @@ SELECT fromUnixTimestamp64Nano('abc', 123);  -- {serverError 43}
 
 SELECT 'const column';
 WITH
-	CAST(1234567891011 AS int64) AS i64,
+	CAST(1234567891011 AS Int64) AS i64,
 	'UTC' AS tz
 SELECT
 	tz,
@@ -21,10 +21,10 @@ SELECT
 	fromUnixTimestamp64Milli(i64, tz),
 	fromUnixTimestamp64Micro(i64, tz),
 	fromUnixTimestamp64Nano(i64, tz) as dt64,
-	to_type_name(dt64);
+	toTypeName(dt64);
 
 WITH
-	CAST(1234567891011 AS int64) AS i64,
+	CAST(1234567891011 AS Int64) AS i64,
 	'Asia/Makassar' AS tz
 SELECT
 	tz,
@@ -32,11 +32,11 @@ SELECT
 	fromUnixTimestamp64Milli(i64, tz),
 	fromUnixTimestamp64Micro(i64, tz),
 	fromUnixTimestamp64Nano(i64, tz) as dt64,
-	to_type_name(dt64);
+	toTypeName(dt64);
 
 SELECT 'non-const column';
 WITH
-	CAST(1234567891011 AS int64) AS i64,
+	CAST(1234567891011 AS Int64) AS i64,
 	'UTC' AS tz
 SELECT
 	i64,
@@ -46,10 +46,10 @@ SELECT
 
 SELECT 'upper range bound';
 WITH
-    9904447342 AS timestamp,
-    CAST(9904447342123 AS int64) AS milli,
-    CAST(9904447342123456 AS int64) AS micro,
-    CAST(9904447342123456789 AS int64) AS nano,
+    10413688942 AS timestamp,
+    CAST(10413688942123 AS Int64) AS milli,
+    CAST(10413688942123456 AS Int64) AS micro,
+    CAST(10413688942123456789 AS Int64) AS nano,
     'UTC' AS tz
 SELECT
     timestamp,
@@ -59,10 +59,10 @@ SELECT
 
 SELECT 'lower range bound';
 WITH
-    -1420066799 AS timestamp,
-    CAST(-1420066799123 AS int64) AS milli,
-    CAST(-1420066799123456 AS int64) AS micro,
-    CAST(-1420066799123456789 AS int64) AS nano,
+    -2208985199 AS timestamp,
+    CAST(-2208985199123 AS Int64) AS milli,
+    CAST(-2208985199123456 AS Int64) AS micro,
+    CAST(-2208985199123456789 AS Int64) AS nano,
     'UTC' AS tz
 SELECT
     timestamp,

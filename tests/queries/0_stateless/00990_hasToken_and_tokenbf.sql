@@ -1,10 +1,10 @@
 
-DROP STREAM IF EXISTS bloom_filter;
+DROP TABLE IF EXISTS bloom_filter;
 
-create stream bloom_filter
+CREATE TABLE bloom_filter
 (
-    id uint64,
-    s string,
+    id UInt64,
+    s String,
     INDEX tok_bf (s, lower(s)) TYPE tokenbf_v1(512, 3, 0) GRANULARITY 1
 ) ENGINE = MergeTree() ORDER BY id SETTINGS index_granularity = 8;
 
@@ -29,4 +29,4 @@ SELECT max(id) FROM bloom_filter WHERE hasToken(s, 'yyy'); -- { serverError 158 
 -- this syntax is not supported by tokenbf
 SELECT max(id) FROM bloom_filter WHERE hasToken(s, 'zzz') == 1; -- { serverError 158 }
 
-DROP STREAM bloom_filter;
+DROP TABLE bloom_filter;

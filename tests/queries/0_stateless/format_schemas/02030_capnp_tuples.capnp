@@ -2,7 +2,7 @@
 
 struct Nested5
 {
-    x @0 : uint64;    
+    x @0 : UInt64;    
 }
 
 struct Nested4
@@ -17,19 +17,19 @@ struct Nested3
 
 struct Nested2
 {
-    three @0 : uint64;
-    four @1 : uint64;
+    three @0 : UInt64;
+    four @1 : UInt64;
 }
 
 struct Nested1
 {
-    one @0 : uint64;
+    one @0 : UInt64;
     two @1 : Nested2;
 }
 
 struct Message
 {
-    value @0 : uint64;
+    value @0 : UInt64;
     tuple1 @1 : Nested1;
     tuple2 @2 : Nested3;
 }

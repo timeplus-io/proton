@@ -9,20 +9,20 @@ SELECT extractGroups('hello world', materialize('\\w+')); --{serverError 44} non
 SELECT '0 groups, zero matches';
 SELECT extractGroups('hello world', '\\w+'); -- { serverError 36 }
 
-SELECT '1 group, multiple matches, string and fixed_string';
+SELECT '1 group, multiple matches, String and FixedString';
 SELECT extractGroups('hello world', '(\\w+) (\\w+)');
-SELECT extractGroups('hello world', CAST('(\\w+) (\\w+)' as fixed_string(11)));
-SELECT extractGroups(CAST('hello world' AS fixed_string(12)), '(\\w+) (\\w+)');
-SELECT extractGroups(CAST('hello world' AS fixed_string(12)), CAST('(\\w+) (\\w+)' as fixed_string(11)));
-SELECT extractGroups(materialize(CAST('hello world' AS fixed_string(12))), '(\\w+) (\\w+)');
-SELECT extractGroups(materialize(CAST('hello world' AS fixed_string(12))), CAST('(\\w+) (\\w+)' as fixed_string(11)));
+SELECT extractGroups('hello world', CAST('(\\w+) (\\w+)' as FixedString(11)));
+SELECT extractGroups(CAST('hello world' AS FixedString(12)), '(\\w+) (\\w+)');
+SELECT extractGroups(CAST('hello world' AS FixedString(12)), CAST('(\\w+) (\\w+)' as FixedString(11)));
+SELECT extractGroups(materialize(CAST('hello world' AS FixedString(12))), '(\\w+) (\\w+)');
+SELECT extractGroups(materialize(CAST('hello world' AS FixedString(12))), CAST('(\\w+) (\\w+)' as FixedString(11)));
 
 SELECT 'multiple matches';
 SELECT extractGroups('abc=111, def=222, ghi=333 "jkl mno"="444 foo bar"', '("[^"]+"|\\w+)=("[^"]+"|\\w+)');
 
 SELECT 'big match';
 SELECT
-    length(haystack), length(matches), array_map((x) -> length(x), matches)
+    length(haystack), length(matches), arrayMap((x) -> length(x), matches)
 FROM (
     SELECT
         repeat('abcdefghijklmnopqrstuvwxyz', number * 10) AS haystack,
@@ -32,7 +32,7 @@ FROM (
 
 SELECT 'lots of matches';
 SELECT
-    length(haystack), length(matches), array_reduce('sum', array_map((x) -> length(x), matches))
+    length(haystack), length(matches), arrayReduce('sum', arrayMap((x) -> length(x), matches))
 FROM (
     SELECT
         repeat('abcdefghijklmnopqrstuvwxyz', number * 10) AS haystack,
@@ -42,7 +42,7 @@ FROM (
 
 SELECT 'lots of groups';
 SELECT
-    length(haystack), length(matches), array_map((x) -> length(x), matches)
+    length(haystack), length(matches), arrayMap((x) -> length(x), matches)
 FROM (
     SELECT
         repeat('abcdefghijklmnopqrstuvwxyz', number * 10) AS haystack,

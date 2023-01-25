@@ -5,10 +5,10 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT -q "drop stream if exists test_02129"
-$CLICKHOUSE_CLIENT -q "create stream test_02129 (x uint64, y uint64) engine=Memory()"
+$CLICKHOUSE_CLIENT -q "drop table if exists test_02129"
+$CLICKHOUSE_CLIENT -q "create table test_02129 (x UInt64, y UInt64) engine=Memory()"
 
-QUERY="insert into test_02129 format CustomSeparatedWithNames settings input_format_skip_unknown_fields=1, format_custom_escaping_rule='Quoted'"
+QUERY="insert into test_02129 settings input_format_skip_unknown_fields=1, format_custom_escaping_rule='Quoted' format CustomSeparatedWithNames"
 
 # Skip string
 echo -e "'x'\t'trash'\t'y'\n1\t'Some string'\t42" | $CLICKHOUSE_CLIENT -q "$QUERY"
@@ -49,5 +49,5 @@ echo -e "'x'\t'trash'\t'y'\n25\t{'some string }}}}}}{{{{':123, 'one more string 
 echo -e "'x'\t'trash'\t'y'\n26\t{'key':{1:(1,2), 2:(3,4)}, 'foo':{1:(5,6), 2:(7,8)}}\t42" | $CLICKHOUSE_CLIENT -q "$QUERY"
 
 $CLICKHOUSE_CLIENT -q "select * from test_02129 order by x"
-$CLICKHOUSE_CLIENT -q "drop stream test_02129"
+$CLICKHOUSE_CLIENT -q "drop table test_02129"
 

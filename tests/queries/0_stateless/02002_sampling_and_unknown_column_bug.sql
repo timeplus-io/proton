@@ -1,8 +1,7 @@
-SET query_mode = 'table';
-drop stream if exists sessions;
-create stream sessions
+drop table if exists sessions;
+CREATE TABLE sessions
 (
-  `user_id` uint64
+  `user_id` UInt64
 )
 ENGINE = MergeTree
 ORDER BY user_id 

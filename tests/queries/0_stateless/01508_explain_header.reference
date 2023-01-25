@@ -1,6 +1,4 @@
 Expression ((Projection + Before ORDER BY))
-Header: x uint8
-  SettingQuotaAndLimits (Set limits and quota after reading from storage)
-  Header: dummy uint8
-    ReadFromStorage (SystemOne)
-    Header: dummy uint8
+Header: x UInt8
+  ReadFromStorage (SystemOne)
+  Header: dummy UInt8

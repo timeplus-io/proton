@@ -13,6 +13,6 @@ SELECT
     upper - lower AS range
 FROM
 (
-    SELECT array_join([1, 2]) AS x
+    SELECT arrayJoin([1, 2]) AS x
 ) 
 GROUP BY x WITH ROLLUP;

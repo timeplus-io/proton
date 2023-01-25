@@ -38,7 +38,7 @@ SELECT 'Const Truncate Offset';
 select 41 as offset, 'Hello' as s, subString(bin(s), offset), bin(bitSlice(s, offset));
 select -41 as offset, 'Hello' as s, subString(bin(s), offset), bin(bitSlice(s, offset));
 
-SELECT 'Const nullable Offset';
+SELECT 'Const Nullable Offset';
 select 1 as offset, null as s,          subString(bin(s), offset), bin(bitSlice(s, offset));
 select null as offset, 'Hello' as s,    subString(bin(s), offset), bin(bitSlice(s, offset));
 select null as offset, null as s,       subString(bin(s), offset), bin(bitSlice(s, offset));
@@ -119,7 +119,7 @@ select -44 as offset, -36 as length, 'Hello' as s,  subString(bin(s), offset, le
 select -41 as offset, -40 as length, 'Hello' as s,  subString(bin(s), offset, length), bin(bitSlice(s, offset, length));
 select -41 as offset,  41 as length, 'Hello' as s,  subString(bin(s), offset, length), bin(bitSlice(s, offset, length));
 
-select 'Const nullable Offset, Const nullable Length';
+select 'Const Nullable Offset, Const Nullable Length';
 select 1 as offset, 1 as length, null as s,         subString(bin(s), offset , length), bin(bitSlice(s, offset, length));
 select null as offset, 1 as length, 'Hello' as s,   subString(bin(s), offset, length), bin(bitSlice(s, offset, length));
 select 1 as offset, null as length, 'Hello' as s,   subString(bin(s), offset , length), bin(bitSlice(s, offset, length));
@@ -138,7 +138,7 @@ select -36-number as offset, 8 as length, 'Hello' as s,       subString(bin(s), 
 select -44 as offset, number as length, 'Hello' as s,       subString(bin(s), offset , length), bin(bitSlice(s, offset, length)) from numbers(9);
 select -44 as offset, number + 40 as length, 'Hello' as s,       subString(bin(s), offset , length), bin(bitSlice(s, offset, length)) from numbers(9);
 
-select 'Dynamic nullable Offset, Dynamic nullable Length';
+select 'Dynamic Nullable Offset, Dynamic Nullable Length';
 select if(number%4 ==1 or number%8==7, null, number) as offset, if(number%4==2 or number%8==7, null, number) as length,if(number%4 ==3, null, 'Hello') as s,
        subString(bin(s), offset, length), bin(bitSlice(s, offset , length))
 from numbers(16);

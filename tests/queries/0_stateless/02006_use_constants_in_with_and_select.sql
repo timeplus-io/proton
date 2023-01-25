@@ -1,6 +1,6 @@
 SELECT
     1 AS max_size,
-    group_array(max_size)(col)
+    groupArray(max_size)(col)
 FROM
     (SELECT col FROM (
         SELECT 1 AS col
@@ -9,7 +9,7 @@ FROM
     ) ORDER BY col);
 
 WITH 1 AS max_size
-SELECT group_array(max_size)(col)
+SELECT groupArray(max_size)(col)
 FROM
      (SELECT col FROM (
          SELECT 1 as col
@@ -27,7 +27,7 @@ FROM numbers(1000);
 WITH
     0.1 AS level,
     1 AS max_size
-SELECT group_array(max_size)(col)
+SELECT groupArray(max_size)(col)
 FROM
     (
         SELECT quantile(level)(number) AS col

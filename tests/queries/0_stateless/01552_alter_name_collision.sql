@@ -1,3 +1,3 @@
-DROP STREAM IF EXISTS test;
-create stream test(test string DEFAULT 'test', test_tmp int DEFAULT 1);
-DROP STREAM test;
+DROP TABLE IF EXISTS test;
+CREATE TABLE test(test String DEFAULT 'test', test_tmp Int DEFAULT 1)ENGINE = Memory;
+DROP TABLE test;

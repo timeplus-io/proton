@@ -1,4 +1,4 @@
-1 group, multiple matches, string and fixed_string
+1 group, multiple matches, String and FixedString
 [['hello','world']]
 [['hello','world']]
 [['hello','world']]

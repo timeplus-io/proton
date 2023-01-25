@@ -21,7 +21,7 @@ $CLICKHOUSE_CLIENT -q "create view view_00840 as select count(*),database,table 
 
 for _ in {1..100}; do
     $CLICKHOUSE_CLIENT -nm -q "
-        drop stream if exists view_00840;
+        drop table if exists view_00840;
         create view view_00840 as select count(*),database,table from system.columns group by database,table;
     "
 done &
@@ -32,6 +32,6 @@ done &
 wait
 trap '' EXIT
 
-echo "drop stream view_00840" | $CLICKHOUSE_CLIENT
+echo "drop table view_00840" | $CLICKHOUSE_CLIENT
 
 echo 'did not deadlock'

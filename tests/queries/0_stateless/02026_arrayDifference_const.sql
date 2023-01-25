@@ -1,1 +1,1 @@
-SELECT to_string(arrayDifference(x->0, [1, 2]));
+SELECT toString(arrayDifference(x->0, [1, 2]));

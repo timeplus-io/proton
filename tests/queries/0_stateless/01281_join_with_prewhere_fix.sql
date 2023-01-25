@@ -1,7 +1,6 @@
-SET query_mode = 'table';
-drop stream if exists t;
+drop table if exists t;
 
-create stream t (x uint8, id uint8) ENGINE = MergeTree() order by (id);
+create table t (x UInt8, id UInt8) ENGINE = MergeTree() order by (id);
 insert into t values (1, 1);
 
 set enable_optimize_predicate_expression = 0;
@@ -19,4 +18,4 @@ set optimize_move_to_prewhere = 0;
 select 7 from t as l join t as r on l.id = r.id where l.x and r.x;
 select 8 from t as l join t as r using id where l.x and r.x;
     
-drop stream t;
+drop table t;

@@ -13,7 +13,7 @@ SELECT count(1) FROM (
     JOIN (SELECT materialize(1) AS k, number n FROM numbers(10000)) j
     USING k);
 
-SELECT count(1), uniq_exact(n) FROM (
+SELECT count(1), uniqExact(n) FROM (
     SELECT materialize(1) as k, n FROM numbers(1000000) nums
     JOIN (SELECT materialize(1) AS k, number n FROM numbers(10)) j
     USING k);
@@ -39,12 +39,12 @@ SELECT count(1) FROM (
     JOIN (SELECT materialize(1) AS k, number n FROM numbers(1000000)) j
     USING k);
 
-SELECT count(1), uniq_exact(n) FROM (
+SELECT count(1), uniqExact(n) FROM (
     SELECT materialize(1) as k, n FROM numbers(1000) nums
     JOIN (SELECT materialize(1) AS k, number n FROM numbers(10000)) j
     USING k);
 
-SELECT count(1), uniq_exact(n) FROM (
+SELECT count(1), uniqExact(n) FROM (
     SELECT materialize(1) as k, n FROM numbers(1000000) nums
     JOIN (SELECT materialize(1) AS k, number n FROM numbers(10)) j
     USING k);
@@ -57,12 +57,12 @@ SELECT count(1) FROM (
     JOIN (SELECT materialize(1) AS k, number n FROM numbers(1000000)) j
     USING k);
 
-SELECT count(1), uniq_exact(n) FROM (
+SELECT count(1), uniqExact(n) FROM (
     SELECT materialize(1) as k, n FROM numbers(1000) nums
     JOIN (SELECT materialize(1) AS k, number n FROM numbers(10000)) j
     USING k);
 
-SELECT count(1), uniq_exact(n) FROM (
+SELECT count(1), uniqExact(n) FROM (
     SELECT materialize(1) as k, n FROM numbers(1000000) nums
     JOIN (SELECT materialize(1) AS k, number n FROM numbers(10)) j
     USING k);

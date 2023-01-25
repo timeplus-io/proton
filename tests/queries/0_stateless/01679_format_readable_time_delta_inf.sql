@@ -1,1 +1,1 @@
-SELECT formatReadableTimeDelta(array_join([inf, -inf, nan]));
+SELECT formatReadableTimeDelta(arrayJoin([inf, -inf, nan]));

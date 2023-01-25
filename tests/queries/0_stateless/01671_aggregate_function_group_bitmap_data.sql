@@ -1,10 +1,12 @@
-create stream group_bitmap_data_test
+SET group_by_two_level_threshold = 10000;
+
+CREATE TABLE group_bitmap_data_test
 (
-    `pickup_date` date,
-    `city_id` uint32,
-    `uid` uint32
+    `pickup_date` Date,
+    `city_id` UInt32,
+    `uid` UInt32
 )
-;
+ENGINE = Memory;
 
 INSERT INTO group_bitmap_data_test SELECT
     '2019-01-01',
@@ -50,6 +52,7 @@ ALL LEFT JOIN
     FROM group_bitmap_data_test
     WHERE pickup_date = '2019-01-01'
     GROUP BY city_id
-) AS js2 USING (city_id);
+) AS js2 USING (city_id)
+ORDER BY today_users, before_users, ll_users, old_users, new_users, diff_users;
 
-DROP STREAM IF EXISTS group_bitmap_data_test;
+DROP TABLE IF EXISTS group_bitmap_data_test;

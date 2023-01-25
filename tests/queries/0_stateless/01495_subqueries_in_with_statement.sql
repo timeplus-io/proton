@@ -1,17 +1,16 @@
-SET query_mode = 'table';
-DROP STREAM IF EXISTS test1;
+DROP TABLE IF EXISTS test1;
 
-create stream test1(i int, j int) ENGINE Log;
+CREATE TABLE test1(i int, j int) ENGINE Log;
 
 INSERT INTO test1 VALUES (1, 2), (3, 4);
 
 WITH test1 AS (SELECT * FROM numbers(5)) SELECT * FROM test1;
 WITH test1 AS (SELECT i + 1, j + 1 FROM test1) SELECT * FROM test1;
 WITH test1 AS (SELECT i + 1, j + 1 FROM test1) SELECT * FROM (SELECT * FROM test1);
-SELECT * FROM (WITH test1 AS (SELECT to_int32(*) i FROM numbers(5)) SELECT * FROM test1) l ANY INNER JOIN test1 r on (l.i == r.i);
-WITH test1 AS (SELECT i + 1, j + 1 FROM test1) SELECT to_int64(4) i, to_int64(5) j FROM numbers(3) WHERE (i, j) IN test1;
+SELECT * FROM (WITH test1 AS (SELECT toInt32(*) i FROM numbers(5)) SELECT * FROM test1) l ANY INNER JOIN test1 r on (l.i == r.i);
+WITH test1 AS (SELECT i + 1, j + 1 FROM test1) SELECT toInt64(4) i, toInt64(5) j FROM numbers(3) WHERE (i, j) IN test1;
 
-DROP STREAM IF EXISTS test1;
+DROP TABLE IF EXISTS test1;
 
 select '---------------------------';
 
@@ -29,8 +28,8 @@ SELECT max(n) FROM test1 where n=422;
 WITH test1 AS (SELECT number-1 as n FROM numbers(4442) order by n limit 100)
 SELECT max(n) FROM test1 where n=42;
 
-drop stream if exists with_test ;
-create stream with_test engine=Memory as select cast(number-1 as nullable(int64))  n from numbers(10000);
+drop table if exists with_test ;
+create table with_test engine=Memory as select cast(number-1 as Nullable(Int64))  n from numbers(10000);
 
 WITH test1 AS (SELECT n FROM with_test where n <= 40) 
 SELECT max(n+1)+1 z FROM test1 join test1 x using (n) having max(n+1)+1 - 1 = (select min(n-1)+41 from test1) + 2;
@@ -77,4 +76,4 @@ with
     test3 as (select x * y as z from test2)
 select z + 1 as q from test3;
 
-drop stream  with_test ;
+drop table  with_test ;

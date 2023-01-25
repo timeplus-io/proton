@@ -4,12 +4,12 @@ struct NullableUInt64
 {
     union
     {
-        value @0 : uint64;
+        value @0 : UInt64;
         null @1 : Void;
     }
 }
 
-struct tuple
+struct Tuple
 {
     nullable @0 : NullableUInt64;
 }
@@ -18,5 +18,5 @@ struct Message
 {
     nullable @0 : NullableUInt64;
     array @1 : List(NullableUInt64);
-    tuple @2 : tuple;
+    tuple @2 : Tuple;
 }

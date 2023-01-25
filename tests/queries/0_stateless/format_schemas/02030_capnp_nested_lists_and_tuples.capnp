@@ -2,8 +2,8 @@
 
 struct Nested1
 {
-    b @0 : uint64;
-    c @1 : List(List(uint64));
+    b @0 : UInt64;
+    c @1 : List(List(UInt64));
 }
 
 struct Nested2
@@ -14,16 +14,16 @@ struct Nested2
 
 struct Nested3
 {
-    f @0 : uint64;
-    g @1 : uint64;
+    f @0 : UInt64;
+    g @1 : UInt64;
 }
 
 struct Nested4
 {
-    k @0 : List(uint64);    
+    k @0 : List(UInt64);    
 }
 
-struct nested
+struct Nested
 {
     a @0 : Nested1;
     d @1 : List(Nested2);
@@ -31,6 +31,6 @@ struct nested
 
 struct Message
 {
-    value @0 : uint64;
-    nested @1 : nested;
+    value @0 : UInt64;
+    nested @1 : Nested;
 }

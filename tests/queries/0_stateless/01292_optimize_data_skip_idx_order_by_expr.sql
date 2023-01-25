@@ -1,8 +1,7 @@
-SET query_mode = 'table';
-drop stream if exists data_01292;
+drop table if exists data_01292;
 
-create stream data_01292 (
-    key int,
+create table data_01292 (
+    key Int,
     index key_idx (key) type minmax granularity 1
 ) Engine=MergeTree() ORDER BY (key+0);
 
@@ -12,4 +11,4 @@ optimize table data_01292 final;
 
 select * from data_01292 where key > 0;
 
-drop stream if exists data_01292;
+drop table if exists data_01292;

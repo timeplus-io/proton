@@ -1,7 +1,7 @@
 CREATE DICTIONARY testip
 (
-    `network` string, 
-    `test_field` string
+    `network` String, 
+    `test_field` String
 )
 PRIMARY KEY network
 SOURCE(FILE(PATH '/tmp/test.csv' FORMAT CSVWithNames))

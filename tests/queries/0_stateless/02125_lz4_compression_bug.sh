@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tags: no-parallel
+# Tags: no-parallel, no-fasttest
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
@@ -8,8 +8,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 for format in Native Values JSONCompactEachRow TSKV TSV CSV JSONEachRow JSONCompactEachRow JSONStringsEachRow
 do
     echo $format
-    ${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS file"
-    ${CLICKHOUSE_CLIENT} --query "create stream file (x uint64) ENGINE = File($format, '${CLICKHOUSE_DATABASE}/data.$format.lz4')"
+    ${CLICKHOUSE_CLIENT} --query "DROP TABLE IF EXISTS file"
+    ${CLICKHOUSE_CLIENT} --query "CREATE TABLE file (x UInt64) ENGINE = File($format, '${CLICKHOUSE_DATABASE}/data.$format.lz4')"
     for size in 10000 100000 1000000 2500000
     do
         ${CLICKHOUSE_CLIENT} --query "TRUNCATE TABLE file"
@@ -18,4 +18,4 @@ do
     done
 done
 
-${CLICKHOUSE_CLIENT} --query "DROP STREAM file"
+${CLICKHOUSE_CLIENT} --query "DROP TABLE file"

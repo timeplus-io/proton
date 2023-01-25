@@ -1,11 +1,11 @@
-DROP STREAM IF EXISTS mem_test;
+DROP TABLE IF EXISTS mem_test;
 
-create stream mem_test
+CREATE TABLE mem_test
 (
-    `a` int64,
-    `b` int64
+    `a` Int64,
+    `b` Int64
 )
-;
+ENGINE = Memory;
 
 SET max_block_size = 3;
 
@@ -14,19 +14,19 @@ INSERT INTO mem_test SELECT
     number
 FROM numbers(100);
 
-ALTER STREAM mem_test
+ALTER TABLE mem_test
     UPDATE a = 0 WHERE b = 99;
-ALTER STREAM mem_test
+ALTER TABLE mem_test
     UPDATE a = 0 WHERE b = 99;
-ALTER STREAM mem_test
+ALTER TABLE mem_test
     UPDATE a = 0 WHERE b = 99;
-ALTER STREAM mem_test
+ALTER TABLE mem_test
     UPDATE a = 0 WHERE b = 99;
-ALTER STREAM mem_test
+ALTER TABLE mem_test
     UPDATE a = 0 WHERE b = 99;
 
 SELECT *
 FROM mem_test
 FORMAT Null;
 
-DROP STREAM mem_test;
+DROP TABLE mem_test;

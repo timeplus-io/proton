@@ -12,7 +12,7 @@ $CLICKHOUSE_CLIENT --query="""
 	ORDER BY a LIMIT 3 WITH TIES BY a""" 2>&1 | grep -q "Code: 498." && echo 'OK' || echo 'FAIL' ||:
 
 $CLICKHOUSE_CLIENT --query="""
-	SELECT * FROM VALUES('Phrase string, Payload string',
+	SELECT * FROM VALUES('Phrase String, Payload String',
 		('hello', 'x'), ('world', 'x'), ('hello', 'z'),
 		('upyachka', 'a'), ('test', 'b'), ('foo', 'c'),
 		('bar', 'd'))
@@ -21,7 +21,7 @@ $CLICKHOUSE_CLIENT --query="""
 $CLICKHOUSE_CLIENT --query="""
 	SELECT * FROM
 	(
-		SELECT * FROM VALUES('Phrase string, Payload string',
+		SELECT * FROM VALUES('Phrase String, Payload String',
 				('hello', 'x'), ('world', 'x'), ('hello', 'z'),
 				('upyachka', 'a'), ('test', 'b'), ('foo', 'c'),
 				('bar', 'd'))
@@ -32,10 +32,10 @@ $CLICKHOUSE_CLIENT --query="""
 $CLICKHOUSE_CLIENT --query="""
 	SELECT * FROM
 	(
-		SELECT TOP 5 WITH TIES * FROM VALUES('Phrase string, Payload string',
+		SELECT TOP 5 WITH TIES * FROM VALUES('Phrase String, Payload String',
 				('hello', 'x'), ('world', 'x'), ('hello', 'z'),
 				('upyachka', 'a'), ('test', 'b'), ('foo', 'c'),
 				('bar', 'd'))
 		ORDER BY Payload LIMIT 1 BY Phrase
-	) ORDER BY Payload, Payload
+	) ORDER BY Payload, Phrase
 	"""

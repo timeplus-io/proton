@@ -1,18 +1,17 @@
-SET query_mode = 'table';
-drop stream if exists product_groups;
-drop stream if exists products;
+drop table if exists product_groups;
+drop table if exists products;
 
-create stream product_groups (
-	group_id int64,
-	group_name string
+CREATE TABLE product_groups (
+	group_id Int64,
+	group_name String
 ) Engine = Memory;
 
 
-create stream products (
-	product_id int64,
-	product_name string,
+CREATE TABLE products (
+	product_id Int64,
+	product_name String,
 	price DECIMAL(11, 2),
-	group_id int64
+	group_id Int64
 ) Engine = Memory;
 
 INSERT INTO product_groups  VALUES	(1, 'Smartphone'),(2, 'Laptop'),(3, 'Tablet');
@@ -37,7 +36,7 @@ SELECT
   price,
 	rank() OVER (PARTITION BY group_name ORDER BY price) rank
 FROM products INNER JOIN product_groups USING (group_id)
-order by  group_name, rank, price;
+order by group_name, rank, price, product_name;
 
 select '---- Q3 ----';
 SELECT
@@ -102,5 +101,5 @@ SELECT
 FROM products INNER JOIN  product_groups USING (group_id)) t
 order by group_name, product_name, price;
 
-drop stream product_groups;
-drop stream products;
+drop table product_groups;
+drop table products;

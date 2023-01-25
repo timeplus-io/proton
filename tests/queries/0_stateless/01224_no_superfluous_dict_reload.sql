@@ -2,14 +2,15 @@
 
 DROP DATABASE IF EXISTS dict_db_01224;
 DROP DATABASE IF EXISTS dict_db_01224_dictionary;
+set allow_deprecated_database_ordinary=1;
 CREATE DATABASE dict_db_01224 ENGINE=Ordinary;  -- Different internal dictionary name with Atomic
 CREATE DATABASE dict_db_01224_dictionary Engine=Dictionary;
 
-create stream dict_db_01224.dict_data (key uint64, val uint64) Engine=Memory();
+CREATE TABLE dict_db_01224.dict_data (key UInt64, val UInt64) Engine=Memory();
 CREATE DICTIONARY dict_db_01224.dict
 (
-  key uint64 DEFAULT 0,
-  val uint64 DEFAULT 10
+  key UInt64 DEFAULT 0,
+  val UInt64 DEFAULT 10
 )
 PRIMARY KEY key
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'dict_data' PASSWORD '' DB 'dict_db_01224'))
@@ -21,10 +22,10 @@ SELECT status FROM system.dictionaries WHERE database = 'dict_db_01224' AND name
 SELECT * FROM system.tables FORMAT Null;
 SELECT status FROM system.dictionaries WHERE database = 'dict_db_01224' AND name = 'dict';
 
-SHOW create stream dict_db_01224.dict FORMAT TSVRaw;
+SHOW CREATE TABLE dict_db_01224.dict FORMAT TSVRaw;
 SELECT status FROM system.dictionaries WHERE database = 'dict_db_01224' AND name = 'dict';
 
-SHOW create stream dict_db_01224_dictionary.`dict_db_01224.dict` FORMAT TSVRaw;
+SHOW CREATE TABLE dict_db_01224_dictionary.`dict_db_01224.dict` FORMAT TSVRaw;
 SELECT status FROM system.dictionaries WHERE database = 'dict_db_01224' AND name = 'dict';
 
 SELECT engine, metadata_path LIKE '%/metadata/dict\_db\_01224/dict.sql', create_table_query FROM system.tables WHERE database = 'dict_db_01224' AND name = 'dict';

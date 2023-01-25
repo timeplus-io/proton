@@ -1,18 +1,18 @@
-select 'uint8', blockSerializedSize(0);
-select 'nullable(uint8)', blockSerializedSize(to_nullable(0));
-select 'uint32', blockSerializedSize(0xdeadbeaf);
-select 'uint64', blockSerializedSize(0xdeadbeafdead);
-select 'nullable(uint64)', blockSerializedSize(to_nullable(0xdeadbeafdead));
+select 'UInt8', blockSerializedSize(0);
+select 'Nullable(UInt8)', blockSerializedSize(toNullable(0));
+select 'UInt32', blockSerializedSize(0xdeadbeaf);
+select 'UInt64', blockSerializedSize(0xdeadbeafdead);
+select 'Nullable(UInt64)', blockSerializedSize(toNullable(0xdeadbeafdead));
 
 select '';
-select 'string', blockSerializedSize('foo');
-select 'fixed_string(32)', blockSerializedSize(cast('foo', 'fixed_string(32)'));
+select 'String', blockSerializedSize('foo');
+select 'FixedString(32)', blockSerializedSize(cast('foo', 'FixedString(32)'));
 
 select '';
-select 'enum8', blockSerializedSize(cast('a' as enum8('a' = 1, 'b' = 2)));
+select 'Enum8', blockSerializedSize(cast('a' as Enum8('a' = 1, 'b' = 2)));
 
 select '';
-select 'array', blockSerializedSize(['foo']);
+select 'Array', blockSerializedSize(['foo']);
 
 select '';
 select 'uniqCombinedState(100)', blockSerializedSize(uniqCombinedState(number)) from (select number from system.numbers limit 100);
@@ -23,7 +23,7 @@ select 'uniqCombinedState(10000000)', blockSerializedSize(uniqCombinedState(numb
 select 'uniqCombined64State(10000000)', blockSerializedSize(uniqCombined64State(number)) from (select number from system.numbers limit 10000000);
 
 select '';
-select 'string,uint8', blockSerializedSize('foo', 1);
+select 'String,UInt8', blockSerializedSize('foo', 1);
 
 select '';
-select 'Block(uint32)', blockSerializedSize(number) from numbers(2);
+select 'Block(UInt32)', blockSerializedSize(number) from numbers(2);

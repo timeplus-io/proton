@@ -1,4 +1,4 @@
-select *　from (　select 'table' as table, to_int64(10) as rows, to_int64(101) as elements　union all　select 'another table' as table, to_int64(0) as rows, to_int64(0) as elements　)　where rows - elements <> 0;
+select *　from (　select 'table' as table, toInt64(10) as rows, toInt64(101) as elements　union all　select 'another table' as table, toInt64(0) as rows, toInt64(0) as elements　)　where rows - elements <> 0;
 
 SELECT
     label,
@@ -28,3 +28,8 @@ WHERE number IN
     SELECT number
     FROM numbers(5)
 ) order by label, number;
+
+SELECT NULL FROM
+(SELECT [1048575, NULL] AS ax, 2147483648 AS c) t1 ARRAY JOIN ax
+INNER JOIN (SELECT NULL AS c) t2 USING (c);
+

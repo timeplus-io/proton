@@ -1,8 +1,8 @@
-DROP STREAM IF EXISTS bloom_filter_nullable_index;
-create stream bloom_filter_nullable_index
+DROP TABLE IF EXISTS bloom_filter_nullable_index;
+CREATE TABLE bloom_filter_nullable_index
     (
-        order_key uint64,
-        str nullable(string),
+        order_key UInt64,
+        str Nullable(String),
 
         INDEX idx (str) TYPE bloom_filter GRANULARITY 1
     )
@@ -29,14 +29,14 @@ SELECT * FROM bloom_filter_nullable_index WHERE str IN
 
 SELECT 'NullableColumnFromCast with transform_null_in=0';
 SELECT * FROM bloom_filter_nullable_index WHERE str IN
-    (SELECT cast('test', 'nullable(string)')) SETTINGS transform_null_in = 0;
+    (SELECT cast('test', 'Nullable(String)')) SETTINGS transform_null_in = 0;
 
 SELECT 'NullableColumnFromCast with transform_null_in=1';
 SELECT * FROM bloom_filter_nullable_index WHERE str IN
-    (SELECT cast('test', 'nullable(string)')) SETTINGS transform_null_in = 1;
+    (SELECT cast('test', 'Nullable(String)')) SETTINGS transform_null_in = 1;
 
-DROP STREAM IF EXISTS nullable_string_value;
-create stream nullable_string_value (value nullable(string)) ;
+DROP TABLE IF EXISTS nullable_string_value;
+CREATE TABLE nullable_string_value (value Nullable(String)) ENGINE=TinyLog;
 INSERT INTO nullable_string_value VALUES ('test');
 
 SELECT 'NullableColumnFromTable with transform_null_in=0';
@@ -47,5 +47,5 @@ SELECT 'NullableColumnFromTable with transform_null_in=1';
 SELECT * FROM bloom_filter_nullable_index WHERE str IN
     (SELECT value FROM nullable_string_value) SETTINGS transform_null_in = 1;
 
-DROP STREAM nullable_string_value; 
-DROP STREAM bloom_filter_nullable_index;
+DROP TABLE nullable_string_value; 
+DROP TABLE bloom_filter_nullable_index;

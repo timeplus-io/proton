@@ -1,9 +1,9 @@
-DROP STREAM IF EXISTS old_school_table;
+DROP TABLE IF EXISTS old_school_table;
 
-create stream old_school_table
+CREATE TABLE old_school_table
 (
-    key uint64,
-    value string
+    key UInt64,
+    value String
 )
 ENGINE = MergeTree()
 ORDER BY key
@@ -21,10 +21,10 @@ OPTIMIZE TABLE old_school_table FINAL; -- just to be sure
 
 SELECT * FROM old_school_table ORDER BY key;
 
-ALTER STREAM old_school_table MODIFY SETTING vertical_merge_algorithm_min_rows_to_activate = 10000, vertical_merge_algorithm_min_columns_to_activate = 10000;
+ALTER TABLE old_school_table MODIFY SETTING vertical_merge_algorithm_min_rows_to_activate = 10000, vertical_merge_algorithm_min_columns_to_activate = 10000;
 
 OPTIMIZE TABLE old_school_table FINAL; -- and horizontal merge
 
 SELECT * FROM old_school_table ORDER BY key;
 
-DROP STREAM IF EXISTS old_school_table;
+DROP TABLE IF EXISTS old_school_table;

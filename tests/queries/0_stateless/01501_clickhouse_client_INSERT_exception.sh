@@ -5,9 +5,9 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-${CLICKHOUSE_CLIENT} -q "DROP STREAM IF EXISTS data"
-${CLICKHOUSE_CLIENT} -q "create stream data (key int) Engine=Memory()"
-${CLICKHOUSE_CLIENT} --input_format_parallel_parsing=0 -q "INSERT INTO data SELECT key FROM input('key int') FORMAT TSV" <<<10
+${CLICKHOUSE_CLIENT} -q "DROP TABLE IF EXISTS data"
+${CLICKHOUSE_CLIENT} -q "CREATE TABLE data (key Int) Engine=Memory()"
+${CLICKHOUSE_CLIENT} --input_format_parallel_parsing=0 -q "INSERT INTO data SELECT key FROM input('key Int') FORMAT TSV" <<<10
 # with '\n...' after the query clickhouse-client prefer data from the query over data from stdin, and produce very tricky message:
 #   Code: 27. DB::Exception: Cannot parse input: expected '\n' before: ' ': (at row 1)
 # well for TSV it is ok, but for RowBinary:
@@ -17,4 +17,4 @@ ${CLICKHOUSE_CLIENT} --input_format_parallel_parsing=0 -q "INSERT INTO data FORM
  " <<<2 |& grep -F -c 'data for INSERT was parsed from query'
 ${CLICKHOUSE_CLIENT} -q "SELECT * FROM data"
 
-$CLICKHOUSE_CLIENT -q "DROP STREAM data"
+$CLICKHOUSE_CLIENT -q "DROP TABLE data"

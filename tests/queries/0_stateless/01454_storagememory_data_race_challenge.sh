@@ -7,8 +7,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS mem"
-$CLICKHOUSE_CLIENT -q "create stream mem (x uint64) engine = Memory"
+$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS mem"
+$CLICKHOUSE_CLIENT -q "CREATE TABLE mem (x UInt64) engine = Memory"
 
 function f {
   for _ in $(seq 1 300); do
@@ -40,4 +40,4 @@ timeout 30 bash -c f > /dev/null &
 timeout 30 bash -c g > /dev/null &
 wait
 
-$CLICKHOUSE_CLIENT -q "DROP STREAM mem"
+$CLICKHOUSE_CLIENT -q "DROP TABLE mem"

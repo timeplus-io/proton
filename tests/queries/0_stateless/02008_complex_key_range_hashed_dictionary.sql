@@ -1,29 +1,29 @@
 -- Tags: no-parallel
 
-DROP STREAM IF EXISTS date_table;
-create stream date_table
+DROP TABLE IF EXISTS date_table;
+CREATE TABLE date_table
 (
-  CountryID uint64,
-  CountryKey string,
-  StartDate date,
-  EndDate date,
-  Tax float64
+  CountryID UInt64,
+  CountryKey String,
+  StartDate Date,
+  EndDate Date,
+  Tax Float64
 )
 ENGINE = MergeTree()
 ORDER BY CountryID;
 
-INSERT INTO date_table VALUES(1, '1', to_date('2019-05-05'), to_date('2019-05-20'), 0.33);
-INSERT INTO date_table VALUES(1, '1', to_date('2019-05-21'), to_date('2019-05-30'), 0.42);
-INSERT INTO date_table VALUES(2, '2', to_date('2019-05-21'), to_date('2019-05-30'), 0.46);
+INSERT INTO date_table VALUES(1, '1', toDate('2019-05-05'), toDate('2019-05-20'), 0.33);
+INSERT INTO date_table VALUES(1, '1', toDate('2019-05-21'), toDate('2019-05-30'), 0.42);
+INSERT INTO date_table VALUES(2, '2', toDate('2019-05-21'), toDate('2019-05-30'), 0.46);
 
 DROP DICTIONARY IF EXISTS range_dictionary;
 CREATE DICTIONARY range_dictionary
 (
-  CountryID uint64,
-  CountryKey string,
-  StartDate date,
-  EndDate date,
-  Tax float64 DEFAULT 0.2
+  CountryID UInt64,
+  CountryKey String,
+  StartDate Date,
+  EndDate Date,
+  Tax Float64 DEFAULT 0.2
 )
 PRIMARY KEY CountryID, CountryKey
 SOURCE(CLICKHOUSE(TABLE 'date_table'))
@@ -33,16 +33,16 @@ RANGE(MIN StartDate MAX EndDate);
 
 SELECT 'Dictionary not nullable';
 SELECT 'dictGet';
-SELECT dictGet('range_dictionary', 'Tax', (to_uint64(1), '1'), to_date('2019-05-15'));
-SELECT dictGet('range_dictionary', 'Tax', (to_uint64(1), '1'), to_date('2019-05-29'));
-SELECT dictGet('range_dictionary', 'Tax', (to_uint64(2), '2'), to_date('2019-05-29'));
-SELECT dictGet('range_dictionary', 'Tax', (to_uint64(2), '2'), to_date('2019-05-31'));
-SELECT dictGetOrDefault('range_dictionary', 'Tax', (to_uint64(2), '2'), to_date('2019-05-31'), 0.4);
+SELECT dictGet('range_dictionary', 'Tax', (toUInt64(1), '1'), toDate('2019-05-15'));
+SELECT dictGet('range_dictionary', 'Tax', (toUInt64(1), '1'), toDate('2019-05-29'));
+SELECT dictGet('range_dictionary', 'Tax', (toUInt64(2), '2'), toDate('2019-05-29'));
+SELECT dictGet('range_dictionary', 'Tax', (toUInt64(2), '2'), toDate('2019-05-31'));
+SELECT dictGetOrDefault('range_dictionary', 'Tax', (toUInt64(2), '2'), toDate('2019-05-31'), 0.4);
 SELECT 'dictHas';
-SELECT dictHas('range_dictionary', (to_uint64(1), '1'), to_date('2019-05-15'));
-SELECT dictHas('range_dictionary', (to_uint64(1), '1'), to_date('2019-05-29'));
-SELECT dictHas('range_dictionary', (to_uint64(2), '2'), to_date('2019-05-29'));
-SELECT dictHas('range_dictionary', (to_uint64(2), '2'), to_date('2019-05-31'));
+SELECT dictHas('range_dictionary', (toUInt64(1), '1'), toDate('2019-05-15'));
+SELECT dictHas('range_dictionary', (toUInt64(1), '1'), toDate('2019-05-29'));
+SELECT dictHas('range_dictionary', (toUInt64(2), '2'), toDate('2019-05-29'));
+SELECT dictHas('range_dictionary', (toUInt64(2), '2'), toDate('2019-05-31'));
 SELECT 'select columns from dictionary';
 SELECT 'allColumns';
 SELECT * FROM range_dictionary ORDER BY CountryID, StartDate, EndDate;
@@ -53,31 +53,31 @@ SELECT CountryID, StartDate, Tax FROM range_dictionary ORDER BY CountryID, Start
 SELECT 'onlySpecificColumn';
 SELECT Tax FROM range_dictionary ORDER BY CountryID, StartDate, EndDate;
 
-DROP STREAM date_table;
+DROP TABLE date_table;
 DROP DICTIONARY range_dictionary;
 
-create stream date_table
+CREATE TABLE date_table
 (
-  CountryID uint64,
-  CountryKey string,
-  StartDate date,
-  EndDate date,
-  Tax nullable(float64)
+  CountryID UInt64,
+  CountryKey String,
+  StartDate Date,
+  EndDate Date,
+  Tax Nullable(Float64)
 )
 ENGINE = MergeTree()
 ORDER BY CountryID;
 
-INSERT INTO date_table VALUES(1, '1', to_date('2019-05-05'), to_date('2019-05-20'), 0.33);
-INSERT INTO date_table VALUES(1, '1', to_date('2019-05-21'), to_date('2019-05-30'), 0.42);
-INSERT INTO date_table VALUES(2, '2', to_date('2019-05-21'), to_date('2019-05-30'), NULL);
+INSERT INTO date_table VALUES(1, '1', toDate('2019-05-05'), toDate('2019-05-20'), 0.33);
+INSERT INTO date_table VALUES(1, '1', toDate('2019-05-21'), toDate('2019-05-30'), 0.42);
+INSERT INTO date_table VALUES(2, '2', toDate('2019-05-21'), toDate('2019-05-30'), NULL);
 
 CREATE DICTIONARY range_dictionary_nullable
 (
-  CountryID uint64,
-  CountryKey string,
-  StartDate date,
-  EndDate date,
-  Tax nullable(float64) DEFAULT 0.2
+  CountryID UInt64,
+  CountryKey String,
+  StartDate Date,
+  EndDate Date,
+  Tax Nullable(Float64) DEFAULT 0.2
 )
 PRIMARY KEY CountryID, CountryKey
 SOURCE(CLICKHOUSE(TABLE 'date_table'))
@@ -87,16 +87,16 @@ RANGE(MIN StartDate MAX EndDate);
 
 SELECT 'Dictionary nullable';
 SELECT 'dictGet';
-SELECT dictGet('range_dictionary_nullable', 'Tax', (to_uint64(1), '1'), to_date('2019-05-15'));
-SELECT dictGet('range_dictionary_nullable', 'Tax', (to_uint64(1), '1'), to_date('2019-05-29'));
-SELECT dictGet('range_dictionary_nullable', 'Tax', (to_uint64(2), '2'), to_date('2019-05-29'));
-SELECT dictGet('range_dictionary_nullable', 'Tax', (to_uint64(2), '2'), to_date('2019-05-31'));
-SELECT dictGetOrDefault('range_dictionary_nullable', 'Tax', (to_uint64(2), '2'), to_date('2019-05-31'), 0.4);
+SELECT dictGet('range_dictionary_nullable', 'Tax', (toUInt64(1), '1'), toDate('2019-05-15'));
+SELECT dictGet('range_dictionary_nullable', 'Tax', (toUInt64(1), '1'), toDate('2019-05-29'));
+SELECT dictGet('range_dictionary_nullable', 'Tax', (toUInt64(2), '2'), toDate('2019-05-29'));
+SELECT dictGet('range_dictionary_nullable', 'Tax', (toUInt64(2), '2'), toDate('2019-05-31'));
+SELECT dictGetOrDefault('range_dictionary_nullable', 'Tax', (toUInt64(2), '2'), toDate('2019-05-31'), 0.4);
 SELECT 'dictHas';
-SELECT dictHas('range_dictionary_nullable', (to_uint64(1), '1'), to_date('2019-05-15'));
-SELECT dictHas('range_dictionary_nullable', (to_uint64(1), '1'), to_date('2019-05-29'));
-SELECT dictHas('range_dictionary_nullable', (to_uint64(2), '2'), to_date('2019-05-29'));
-SELECT dictHas('range_dictionary_nullable', (to_uint64(2), '2'), to_date('2019-05-31'));
+SELECT dictHas('range_dictionary_nullable', (toUInt64(1), '1'), toDate('2019-05-15'));
+SELECT dictHas('range_dictionary_nullable', (toUInt64(1), '1'), toDate('2019-05-29'));
+SELECT dictHas('range_dictionary_nullable', (toUInt64(2), '2'), toDate('2019-05-29'));
+SELECT dictHas('range_dictionary_nullable', (toUInt64(2), '2'), toDate('2019-05-31'));
 SELECT 'select columns from dictionary';
 SELECT 'allColumns';
 SELECT * FROM range_dictionary_nullable ORDER BY CountryID, StartDate, EndDate;
@@ -107,5 +107,5 @@ SELECT CountryID, StartDate, Tax FROM range_dictionary_nullable ORDER BY Country
 SELECT 'onlySpecificColumn';
 SELECT Tax FROM range_dictionary_nullable ORDER BY CountryID, StartDate, EndDate;
 
-DROP STREAM date_table;
+DROP TABLE date_table;
 DROP DICTIONARY range_dictionary_nullable;

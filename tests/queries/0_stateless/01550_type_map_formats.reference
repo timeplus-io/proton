@@ -4,15 +4,15 @@ JSON
 	[
 		{
 			"name": "m",
-			"type": "Map(string, uint32)"
+			"type": "Map(String, UInt32)"
 		},
 		{
 			"name": "m1",
-			"type": "Map(string, date)"
+			"type": "Map(String, Date)"
 		},
 		{
 			"name": "m2",
-			"type": "Map(string, array(uint32))"
+			"type": "Map(String, Array(UInt32))"
 		}
 	],
 

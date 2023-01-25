@@ -1,15 +1,15 @@
-uint8	1
-nullable(uint8)	2
-uint32	4
-uint64	8
-nullable(uint64)	9
+UInt8	1
+Nullable(UInt8)	2
+UInt32	4
+UInt64	8
+Nullable(UInt64)	9
 
-string	4
-fixed_string(32)	32
+String	4
+FixedString(32)	32
 
-enum8	1
+Enum8	1
 
-array	12
+Array	12
 
 uniqCombinedState(100)	402
 uniqCombinedState(10000)	81993
@@ -18,7 +18,7 @@ uniqCombinedState(1000000)	81993
 uniqCombinedState(10000000)	81993
 uniqCombined64State(10000000)	98505
 
-string,uint8	5
+String,UInt8	5
 
-Block(uint32)	16
-Block(uint32)	16
+Block(UInt32)	16
+Block(UInt32)	16

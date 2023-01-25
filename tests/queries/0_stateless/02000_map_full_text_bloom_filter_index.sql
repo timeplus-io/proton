@@ -1,11 +1,11 @@
-DROP STREAM IF EXISTS bf_tokenbf_map_keys_test;
-DROP STREAM IF EXISTS bf_ngrambf_map_keys_test;
+DROP TABLE IF EXISTS bf_tokenbf_map_keys_test;
+DROP TABLE IF EXISTS bf_ngrambf_map_keys_test;
 
-create stream bf_tokenbf_map_keys_test
+CREATE TABLE bf_tokenbf_map_keys_test
 (
-    row_id uint32,
-    map Map(string, string),
-    map_fixed Map(fixed_string(2), string),
+    row_id UInt32,
+    map Map(String, String),
+    map_fixed Map(FixedString(2), String),
     INDEX map_keys_tokenbf mapKeys(map) TYPE tokenbf_v1(256,2,0) GRANULARITY 1,
     INDEX map_fixed_keys_tokenbf mapKeys(map_fixed) TYPE ngrambf_v1(4,256,2,0) GRANULARITY 1
 ) Engine=MergeTree() ORDER BY row_id SETTINGS index_granularity = 1;
@@ -42,13 +42,13 @@ SELECT * FROM bf_tokenbf_map_keys_test WHERE map_fixed['K2'] != 'V2' SETTINGS fo
 SELECT 'Not equals with non existing key and default value';
 SELECT * FROM bf_tokenbf_map_keys_test WHERE map_fixed['K3'] != '';
 
-DROP STREAM bf_tokenbf_map_keys_test;
+DROP TABLE bf_tokenbf_map_keys_test;
 
-create stream bf_tokenbf_map_values_test
+CREATE TABLE bf_tokenbf_map_values_test
 (
-    row_id uint32,
-    map Map(string, string),
-    map_fixed Map(fixed_string(2), string),
+    row_id UInt32,
+    map Map(String, String),
+    map_fixed Map(FixedString(2), String),
     INDEX map_values_tokenbf mapValues(map) TYPE tokenbf_v1(256,2,0) GRANULARITY 1,
     INDEX map_fixed_values_tokenbf mapValues(map_fixed) TYPE ngrambf_v1(4,256,2,0) GRANULARITY 1
 ) Engine=MergeTree() ORDER BY row_id SETTINGS index_granularity = 1;
@@ -85,13 +85,13 @@ SELECT * FROM bf_tokenbf_map_values_test WHERE map_fixed['K2'] != 'V2' SETTINGS 
 SELECT 'Not equals with non existing key and default value';
 SELECT * FROM bf_tokenbf_map_values_test WHERE map_fixed['K3'] != '';
 
-DROP STREAM bf_tokenbf_map_values_test;
+DROP TABLE bf_tokenbf_map_values_test;
 
-create stream bf_ngrambf_map_keys_test
+CREATE TABLE bf_ngrambf_map_keys_test
 (
-    row_id uint32,
-    map Map(string, string),
-    map_fixed Map(fixed_string(2), string),
+    row_id UInt32,
+    map Map(String, String),
+    map_fixed Map(FixedString(2), String),
     INDEX map_keys_ngrambf mapKeys(map) TYPE ngrambf_v1(4,256,2,0) GRANULARITY 1,
     INDEX map_fixed_keys_ngrambf mapKeys(map_fixed) TYPE ngrambf_v1(4,256,2,0) GRANULARITY 1
 ) Engine=MergeTree() ORDER BY row_id SETTINGS index_granularity = 1;
@@ -128,13 +128,13 @@ SELECT * FROM bf_ngrambf_map_keys_test WHERE map_fixed['K2'] != 'V2' SETTINGS fo
 SELECT 'Not equals with non existing key and default value';
 SELECT * FROM bf_ngrambf_map_keys_test WHERE map_fixed['K3'] != '';
 
-DROP STREAM bf_ngrambf_map_keys_test;
+DROP TABLE bf_ngrambf_map_keys_test;
 
-create stream bf_ngrambf_map_values_test
+CREATE TABLE bf_ngrambf_map_values_test
 (
-    row_id uint32,
-    map Map(string, string),
-    map_fixed Map(fixed_string(2), string),
+    row_id UInt32,
+    map Map(String, String),
+    map_fixed Map(FixedString(2), String),
     INDEX map_values_ngrambf mapKeys(map) TYPE ngrambf_v1(4,256,2,0) GRANULARITY 1,
     INDEX map_fixed_values_ngrambf mapKeys(map_fixed) TYPE ngrambf_v1(4,256,2,0) GRANULARITY 1
 ) Engine=MergeTree() ORDER BY row_id SETTINGS index_granularity = 1;
@@ -171,4 +171,4 @@ SELECT * FROM bf_ngrambf_map_values_test WHERE map_fixed['K2'] != 'V2' SETTINGS 
 SELECT 'Not equals with non existing key and default value';
 SELECT * FROM bf_ngrambf_map_values_test WHERE map_fixed['K3'] != '';
 
-DROP STREAM bf_ngrambf_map_values_test;
+DROP TABLE bf_ngrambf_map_values_test;

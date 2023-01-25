@@ -1,8 +1,8 @@
-DROP STREAM IF EXISTS t1;
-DROP STREAM IF EXISTS t2;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
 
-create stream t1 (x uint32, s string) engine = Memory;
-create stream t2 (x uint32, s string) engine = Memory;
+CREATE TABLE t1 (x UInt32, s String) engine = Memory;
+CREATE TABLE t2 (x UInt32, s String) engine = Memory;
 
 INSERT INTO t1 (x, s) VALUES (0, 'a1'), (1, 'a2'), (2, 'a3'), (3, 'a4'), (4, 'a5');
 INSERT INTO t2 (x, s) VALUES (2, 'b1'), (4, 'b2'), (5, 'b4');
@@ -41,5 +41,5 @@ SELECT t1.*, t2.* FROM t1 ANTI LEFT JOIN t2 USING(x) ORDER BY t1.x, t2.x;
 SELECT 'anti right';
 SELECT t1.*, t2.* FROM t1 ANTI RIGHT JOIN t2 USING(x) ORDER BY t1.x, t2.x;
 
-DROP STREAM t1;
-DROP STREAM t2;
+DROP TABLE t1;
+DROP TABLE t2;

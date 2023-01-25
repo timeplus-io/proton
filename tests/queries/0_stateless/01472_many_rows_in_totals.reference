@@ -29,11 +29,11 @@ Totals:
 	[
 		{
 			"name": "g",
-			"type": "uint64"
+			"type": "UInt64"
 		},
 		{
 			"name": "s",
-			"type": "uint64"
+			"type": "UInt64"
 		}
 	],
 

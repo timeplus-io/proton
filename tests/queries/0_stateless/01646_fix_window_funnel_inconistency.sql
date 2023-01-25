@@ -1,14 +1,14 @@
-DROP STREAM IF EXISTS trend;
-create stream trend
+DROP TABLE IF EXISTS trend;
+CREATE TABLE trend
 (
-    `event_date` date,
-    `user_id` int32,
-    `timestamp` datetime,
-    `eventID` int32,
-    `product` string
+    `event_date` Date,
+    `user_id` Int32,
+    `timestamp` DateTime,
+    `eventID` Int32,
+    `product` String
 )
 ENGINE = MergeTree()
-PARTITION BY to_YYYYMM(event_date)
+PARTITION BY toYYYYMM(event_date)
 ORDER BY user_id;
 
 insert into trend values ('2019-01-28', 1, '2019-01-29 10:00:00', 1004, 'phone') ('2019-01-28', 1, '2019-01-29 10:00:00', 1003, 'phone') ('2019-01-28', 1, '2019-01-28 10:00:00', 1002, 'phone');
@@ -46,4 +46,4 @@ FROM
 GROUP BY level
 ORDER BY level ASC;
 
-DROP STREAM trend;
+DROP TABLE trend;

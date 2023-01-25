@@ -2,8 +2,8 @@ SELECT
     UserID,
     UserID = 0,
     if(UserID = 0, 'delete', 'leave')
-FROM VALUES('UserID nullable(uint8)', (2), (0), (NULL));
+FROM VALUES('UserID Nullable(UInt8)', (2), (0), (NULL));
 
 SELECT '---';
 
-SELECT array_join([0, 1, 3, NULL]) AS x, x = 0, if(x = 0, 'Definitely x = 0', 'We cannot say that x = 0');
+SELECT arrayJoin([0, 1, 3, NULL]) AS x, x = 0, if(x = 0, 'Definitely x = 0', 'We cannot say that x = 0');

@@ -5,8 +5,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS csv"
-$CLICKHOUSE_CLIENT --query="create stream csv (d date, u uint8, str string) "
+$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS csv"
+$CLICKHOUSE_CLIENT --query="CREATE TABLE csv (d Date, u UInt8, str String) ENGINE = TinyLog"
 
 INSERT_QUERY='$CLICKHOUSE_CLIENT --query="INSERT INTO csv FORMAT CSVWithNames"'
 USE_HEADER='--input_format_with_names_use_header=1'
@@ -35,4 +35,4 @@ echo -ne 'd,str\n2019-04-18,Line18\n2019-04-18,Line19\n'| eval "$INSERT_QUERY" $
 echo -ne 'unknown\n\n\n'                                | eval "$INSERT_QUERY" $USE_HEADER $SKIP_UNKNOWN
 
 $CLICKHOUSE_CLIENT --query="SELECT * FROM csv"
-$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS csv"
+$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS csv"

@@ -1,8 +1,8 @@
-DROP STREAM IF EXISTS map_test_index_map_keys;
-create stream map_test_index_map_keys
+DROP TABLE IF EXISTS map_test_index_map_keys;
+CREATE TABLE map_test_index_map_keys
 (
-    row_id uint32,
-    map Map(string, string),
+    row_id UInt32,
+    map Map(String, String),
     INDEX map_bloom_filter_keys mapKeys(map) TYPE bloom_filter GRANULARITY 1
 ) Engine=MergeTree() ORDER BY row_id SETTINGS index_granularity = 1;
 
@@ -50,13 +50,13 @@ SELECT * FROM map_test_index_map_keys WHERE has(map, 'K2') SETTINGS force_data_s
 SELECT 'Has with non existing key and default value';
 SELECT * FROM map_test_index_map_keys WHERE has(map, '') SETTINGS force_data_skipping_indices='map_bloom_filter_keys';
 
-DROP STREAM map_test_index_map_keys;
+DROP TABLE map_test_index_map_keys;
 
-DROP STREAM IF EXISTS map_test_index_map_values;
-create stream map_test_index_map_values
+DROP TABLE IF EXISTS map_test_index_map_values;
+CREATE TABLE map_test_index_map_values
 (
-    row_id uint32,
-    map Map(string, string),
+    row_id UInt32,
+    map Map(String, String),
     INDEX map_bloom_filter_values mapValues(map) TYPE bloom_filter GRANULARITY 1
 ) Engine=MergeTree() ORDER BY row_id SETTINGS index_granularity = 1;
 
@@ -89,4 +89,4 @@ SELECT * FROM map_test_index_map_values WHERE map['K2'] NOT IN 'V2' SETTINGS for
 SELECT 'NOT IN with non existing key and default value';
 SELECT * FROM map_test_index_map_values WHERE map['K3'] NOT IN '';
 
-DROP STREAM map_test_index_map_values;
+DROP TABLE map_test_index_map_values;

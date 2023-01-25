@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tags: no-parallel
+# Tags: no-parallel, no-fasttest
 
 CLICKHOUSE_CLIENT_SERVER_LOGS_LEVEL=fatal
 
@@ -10,8 +10,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 $CLICKHOUSE_CLIENT --query "DROP DATABASE IF EXISTS test_01150"
 $CLICKHOUSE_CLIENT --query "CREATE DATABASE test_01150"
 
-$CLICKHOUSE_CLIENT --query "create stream test_01150.t1 (x uint64, s array(nullable(string))) "
-$CLICKHOUSE_CLIENT --query "create stream test_01150.t2 (x uint64, s array(nullable(string))) "
+$CLICKHOUSE_CLIENT --query "CREATE TABLE test_01150.t1 (x UInt64, s Array(Nullable(String))) ENGINE = Memory"
+$CLICKHOUSE_CLIENT --query "CREATE TABLE test_01150.t2 (x UInt64, s Array(Nullable(String))) ENGINE = Memory"
 
 function thread_detach_attach {
     while true; do
@@ -24,11 +24,11 @@ function thread_detach_attach {
 
 function thread_rename {
     while true; do
-        $CLICKHOUSE_CLIENT --query "RENAME STREAM test_01150.t1 TO test_01150.t2_tmp, test_01150.t2 TO test_01150.t1, test_01150.t2_tmp TO test_01150.t2" 2>&1 | grep -v -F -e 'Received exception from server' -e '(query: ' | grep -v -P 'Code: (81|60|57|521)'
+        $CLICKHOUSE_CLIENT --query "RENAME TABLE test_01150.t1 TO test_01150.t2_tmp, test_01150.t2 TO test_01150.t1, test_01150.t2_tmp TO test_01150.t2" 2>&1 | grep -v -F -e 'Received exception from server' -e '(query: ' | grep -v -P 'Code: (81|60|57|521)'
         sleep 0.0$RANDOM
-        $CLICKHOUSE_CLIENT --query "RENAME STREAM test_01150.t2 TO test_01150.t1, test_01150.t2_tmp TO test_01150.t2" 2>&1 | grep -v -F -e 'Received exception from server' -e '(query: ' | grep -v -P 'Code: (81|60|57|521)'
+        $CLICKHOUSE_CLIENT --query "RENAME TABLE test_01150.t2 TO test_01150.t1, test_01150.t2_tmp TO test_01150.t2" 2>&1 | grep -v -F -e 'Received exception from server' -e '(query: ' | grep -v -P 'Code: (81|60|57|521)'
         sleep 0.0$RANDOM
-        $CLICKHOUSE_CLIENT --query "RENAME STREAM test_01150.t2_tmp TO test_01150.t2" 2>&1 | grep -v -F -e 'Received exception from server' -e '(query: ' | grep -v -P 'Code: (81|60|57|521)'
+        $CLICKHOUSE_CLIENT --query "RENAME TABLE test_01150.t2_tmp TO test_01150.t2" 2>&1 | grep -v -F -e 'Received exception from server' -e '(query: ' | grep -v -P 'Code: (81|60|57|521)'
         sleep 0.0$RANDOM
     done
 }

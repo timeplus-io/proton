@@ -31,7 +31,7 @@ SELECT
 	fromUnixTimestamp64Milli(toUnixTimestamp64Milli(dt64), timezone),
 	fromUnixTimestamp64Micro(toUnixTimestamp64Micro(dt64), timezone),
 	fromUnixTimestamp64Nano(toUnixTimestamp64Nano(dt64), timezone) AS v,
-	to_type_name(v);
+	toTypeName(v);
 
 WITH
 	'Asia/Makassar' as timezone,
@@ -41,11 +41,11 @@ SELECT
 	fromUnixTimestamp64Milli(toUnixTimestamp64Milli(dt64), timezone),
 	fromUnixTimestamp64Micro(toUnixTimestamp64Micro(dt64), timezone),
 	fromUnixTimestamp64Nano(toUnixTimestamp64Nano(dt64), timezone) AS v,
-	to_type_name(v);
+	toTypeName(v);
 
 
 WITH
-	CAST(1234567891011 AS int64) AS val
+	CAST(1234567891011 AS Int64) AS val
 SELECT
 	val,
 	toUnixTimestamp64Milli(fromUnixTimestamp64Milli(val)),
@@ -55,10 +55,10 @@ SELECT
 SELECT 'with explicit timezone';
 WITH
 	'UTC' as timezone,
-	CAST(1234567891011 AS int64) AS val
+	CAST(1234567891011 AS Int64) AS val
 SELECT
 	val,
 	toUnixTimestamp64Milli(fromUnixTimestamp64Milli(val, timezone)),
 	toUnixTimestamp64Micro(fromUnixTimestamp64Micro(val, timezone)),
 	toUnixTimestamp64Nano(fromUnixTimestamp64Nano(val, timezone)) AS v,
-	to_type_name(v);
+	toTypeName(v);

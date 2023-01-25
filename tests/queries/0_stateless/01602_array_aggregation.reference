@@ -1,7 +1,7 @@
-array min 	1
-array max 	6
-array sum 	21
-array avg 	3.5
+Array min 	1
+Array max 	6
+Array sum 	21
+Array avg 	3.5
 Table array int min
 1
 0
@@ -35,26 +35,26 @@ Table array decimal avg
 0
 2
 Types of aggregation result array min
-int8	int16	int32	int64
-uint8	uint16	uint32	uint64
+Int8	Int16	Int32	Int64
+UInt8	UInt16	UInt32	UInt64
 Int128	Int256	UInt256
-float32	float64
+Float32	Float64
 Decimal(9, 8)	Decimal(18, 8)	Decimal(38, 8)
 Types of aggregation result array max
-int8	int16	int32	int64
-uint8	uint16	uint32	uint64
+Int8	Int16	Int32	Int64
+UInt8	UInt16	UInt32	UInt64
 Int128	Int256	UInt256
-float32	float64
+Float32	Float64
 Decimal(9, 8)	Decimal(18, 8)	Decimal(38, 8)
 Types of aggregation result array summ
-int64	int64	int64	int64
-uint64	uint64	uint64	uint64
+Int64	Int64	Int64	Int64
+UInt64	UInt64	UInt64	UInt64
 Int128	Int256	UInt256
-float64	float64
+Float64	Float64
 Decimal(38, 8)	Decimal(38, 8)	Decimal(38, 8)
 Types of aggregation result array avg
-float64	float64	float64	float64
-float64	float64	float64	float64
-float64	float64	float64
-float64	float64
-float64	float64	float64
+Float64	Float64	Float64	Float64
+Float64	Float64	Float64	Float64
+Float64	Float64	Float64
+Float64	Float64
+Float64	Float64	Float64

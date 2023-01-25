@@ -1,1 +1,1 @@
-SELECT test_function(to_uint64(2), to_uint64(2));
+SELECT test_function(toUInt64(2), toUInt64(2));

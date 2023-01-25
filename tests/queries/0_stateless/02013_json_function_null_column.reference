@@ -1,9 +1,9 @@
-\N	nullable(string)
+\N	Nullable(String)
 	String
-\N	nullable(string)
-	nullable(string)
-\N	nullable(nothing)
-\N	nullable(nothing)
+\N	Nullable(String)
+	Nullable(String)
+\N	Nullable(Nothing)
+\N	Nullable(Nothing)
 b
 \N
 

@@ -1,15 +1,15 @@
 SET joined_subquery_requires_alias = 0;
 
-select to_type_name(key), to_type_name(value) from (
+select toTypeName(key), toTypeName(value) from (
     select 1 as key, '' as value
     union all
-    select to_uint64(2) as key, to_nullable('') as value
+    select toUInt64(2) as key, toNullable('') as value
 );
 
-select to_type_name(key), to_type_name(value) from (
-    select to_decimal64(2, 8) as key, to_nullable('') as value
+select toTypeName(key), toTypeName(value) from (
+    select toDecimal64(2, 8) as key, toNullable('') as value
     union all
-    select to_decimal32(2, 4) as key, to_fixed_string('', 1) as value
+    select toDecimal32(2, 4) as key, toFixedString('', 1) as value
 );
 
 select * from (
@@ -28,6 +28,6 @@ from (
 all left join (
     select 'key1' as key, '' as value
     union all
-    select 'key2' as key, to_nullable('') as value
+    select 'key2' as key, toNullable('') as value
 ) s2
 using key;

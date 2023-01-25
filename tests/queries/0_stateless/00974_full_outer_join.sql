@@ -5,7 +5,7 @@ SELECT
 FROM
 (
     SELECT
-        to_date(addDays(to_date('2015-12-01'), number)) AS dt,
+        toDate(addDays(toDate('2015-12-01'), number)) AS dt,
         sum(number) AS cnt
     FROM numbers(2)
     GROUP BY dt
@@ -13,7 +13,7 @@ FROM
 ALL FULL OUTER JOIN
 (
     SELECT
-        to_date(addDays(to_date('2015-12-01'), number)) AS dt,
+        toDate(addDays(toDate('2015-12-01'), number)) AS dt,
         sum(number) AS cnt2
     FROM numbers(5)
     GROUP BY dt

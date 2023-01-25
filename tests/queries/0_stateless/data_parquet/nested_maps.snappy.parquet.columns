@@ -1,1 +1,1 @@
-`a` Map(string, Map(int32, nullable(uint8))), `b` nullable(int32), `c` nullable(float64)
+`a` Map(String, Map(Int32, Nullable(UInt8))), `b` Nullable(Int32), `c` Nullable(Float64)

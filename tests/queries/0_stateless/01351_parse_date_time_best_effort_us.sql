@@ -5,7 +5,7 @@ SELECT
     parseDateTimeBestEffortUS(s, 'UTC') AS a
 FROM
 (
-    SELECT array_join([
+    SELECT arrayJoin([
 '1970/01/02 010203Z',
 '01-02-2001 UTC',
 '10.23.1990',
@@ -32,7 +32,7 @@ SELECT
     parseDateTimeBestEffortUSOrNull(s, 'UTC') AS b
 FROM
 (
-    SELECT array_join([
+    SELECT arrayJoin([
 '1970/01/02 010203Z',
 '01-02-2001 UTC',
 '10.23.1990',

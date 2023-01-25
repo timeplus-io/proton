@@ -1,9 +1,8 @@
-SET query_mode = 'table';
-drop stream if exists tbl_repr;
+drop table if exists tbl_repr;
 
-create stream tbl_repr(
-ts datetime,
-x  string)
+CREATE TABLE tbl_repr(
+ts DateTime,
+x  String)
 ENGINE=MergeTree ORDER BY ts;
 
 
@@ -19,4 +18,4 @@ FROM
 )
 WHERE x != '';
 
-drop stream if exists tbl_repr;
+drop table if exists tbl_repr;

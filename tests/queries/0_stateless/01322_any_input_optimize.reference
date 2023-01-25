@@ -1,7 +1,7 @@
 SELECT any(number) + (any(number) * 2)
 FROM numbers(1, 2)
 3
-SELECT any_last(number) + (any_last(number) * 2)
+SELECT anyLast(number) + (anyLast(number) * 2)
 FROM numbers(1, 2)
 6
 WITH any(number) * 3 AS x
@@ -9,14 +9,14 @@ SELECT x
 FROM numbers(1, 2)
 3
 SELECT
-    any_last(number) * 3 AS x,
+    anyLast(number) * 3 AS x,
     x
 FROM numbers(1, 2)
 6	6
 SELECT any(number + (number * 2))
 FROM numbers(1, 2)
 3
-SELECT any_last(number + (number * 2))
+SELECT anyLast(number + (number * 2))
 FROM numbers(1, 2)
 6
 WITH any(number * 3) AS x
@@ -24,9 +24,9 @@ SELECT x
 FROM numbers(1, 2)
 3
 SELECT
-    any_last(number * 3) AS x,
+    anyLast(number * 3) AS x,
     x
 FROM numbers(1, 2)
 6	6
-array_join
+arrayJoin
 0	[]

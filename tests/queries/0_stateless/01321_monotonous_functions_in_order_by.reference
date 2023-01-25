@@ -42,17 +42,17 @@ FROM numbers(3)
 ORDER BY number ASC
 SELECT number
 FROM numbers(3)
-ORDER BY abs(to_float32(number)) ASC
+ORDER BY abs(toFloat32(number)) ASC
 SELECT number
 FROM numbers(3)
-ORDER BY to_float32(abs(number)) ASC
+ORDER BY toFloat32(abs(number)) ASC
 SELECT number
 FROM numbers(3)
 ORDER BY number DESC
 SELECT number
 FROM numbers(3)
 ORDER BY exp(number) ASC
-SELECT round_to_exp2(number) AS x
+SELECT roundToExp2(number) AS x
 FROM numbers(3)
 ORDER BY number ASC
 SELECT number AS x
@@ -63,17 +63,17 @@ FROM numbers(3)
 ORDER BY number DESC
 SELECT number
 FROM numbers(3)
-ORDER BY abs(to_float32(number)) DESC
+ORDER BY abs(toFloat32(number)) DESC
 SELECT number
 FROM numbers(3)
-ORDER BY to_float32(abs(number)) DESC
+ORDER BY toFloat32(abs(number)) DESC
 SELECT number
 FROM numbers(3)
 ORDER BY number ASC
 SELECT number
 FROM numbers(3)
 ORDER BY exp(number) DESC
-SELECT round_to_exp2(number) AS x
+SELECT roundToExp2(number) AS x
 FROM numbers(3)
 ORDER BY number DESC
 0
@@ -117,46 +117,46 @@ ORDER BY number DESC
 0
 SELECT number
 FROM numbers(3)
-ORDER BY to_float32(to_float64(number)) ASC
+ORDER BY toFloat32(toFloat64(number)) ASC
 SELECT number
 FROM numbers(3)
-ORDER BY abs(to_float32(number)) ASC
+ORDER BY abs(toFloat32(number)) ASC
 SELECT number
 FROM numbers(3)
-ORDER BY to_float32(abs(number)) ASC
+ORDER BY toFloat32(abs(number)) ASC
 SELECT number
 FROM numbers(3)
 ORDER BY -number ASC
 SELECT number
 FROM numbers(3)
 ORDER BY exp(number) ASC
-SELECT round_to_exp2(number) AS x
+SELECT roundToExp2(number) AS x
 FROM numbers(3)
 ORDER BY
     x ASC,
-    to_float32(x) ASC
+    toFloat32(x) ASC
 SELECT number AS x
 FROM numbers(3)
 ORDER BY
-    to_float32(x) AS k ASC,
-    to_float64(k) ASC
+    toFloat32(x) AS k ASC,
+    toFloat64(k) ASC
 SELECT number
 FROM numbers(3)
-ORDER BY to_float32(to_float64(number)) DESC
+ORDER BY toFloat32(toFloat64(number)) DESC
 SELECT number
 FROM numbers(3)
-ORDER BY abs(to_float32(number)) DESC
+ORDER BY abs(toFloat32(number)) DESC
 SELECT number
 FROM numbers(3)
-ORDER BY to_float32(abs(number)) DESC
+ORDER BY toFloat32(abs(number)) DESC
 SELECT number
 FROM numbers(3)
 ORDER BY -number DESC
 SELECT number
 FROM numbers(3)
 ORDER BY exp(number) DESC
-SELECT round_to_exp2(number) AS x
+SELECT roundToExp2(number) AS x
 FROM numbers(3)
 ORDER BY
     x DESC,
-    to_float32(x) DESC
+    toFloat32(x) DESC

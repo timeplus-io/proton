@@ -1,5 +1,5 @@
-DROP STREAM IF EXISTS mt;
-create stream mt (x uint8, y date) ENGINE = MergeTree ORDER BY x;
+DROP TABLE IF EXISTS mt;
+CREATE TABLE mt (x UInt8, y Date) ENGINE = MergeTree ORDER BY x;
 
 SELECT count()
 FROM mt
@@ -9,4 +9,4 @@ ANY LEFT JOIN
 ) js2 USING (x)
 PREWHERE x IN (1) WHERE y = today();
 
-DROP STREAM mt;
+DROP TABLE mt;

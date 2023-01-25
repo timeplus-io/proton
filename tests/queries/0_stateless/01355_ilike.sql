@@ -41,7 +41,7 @@ SELECT 'abct\n\ndef' ILIKE '%abc%def%';
 SELECT 'ab\ndef'     ILIKE '%Abc%def%';
 SELECT 'aBc\nef'     ILIKE '%ABC%DEF%';
 
-SELECT CAST('hello' AS fixed_string(5)) ILIKE '%he%o%';
+SELECT CAST('hello' AS FixedString(5)) ILIKE '%he%o%';
 
 SELECT 'ёЁё' ILIKE 'Ё%Ё';
 SELECT 'ощщЁё' ILIKE 'Щ%Ё';
@@ -56,8 +56,8 @@ SHOW TABLES NOT ILIKE '%';
 DROP DATABASE IF EXISTS test_01355;
 CREATE DATABASE test_01355;
 USE test_01355;
-create stream test1 (x uint8) ;
-create stream test2 (x uint8) ;
+CREATE TABLE test1 (x UInt8) ENGINE = Memory;
+CREATE TABLE test2 (x UInt8) ENGINE = Memory;
 SHOW TABLES ILIKE 'tES%';
 SHOW TABLES NOT ILIKE 'TeS%';
 DROP DATABASE test_01355;

@@ -1,12 +1,12 @@
-DROP STREAM IF EXISTS test_table;
+DROP TABLE IF EXISTS test_table;
 
-create stream test_table (n int32, s string)
+CREATE TABLE test_table (n Int32, s String)
 ENGINE = MergeTree() PARTITION BY n % 10 ORDER BY n;
 
-INSERT INTO test_table SELECT number, to_string(number) FROM system.numbers LIMIT 100;
-INSERT INTO test_table SELECT number, to_string(number * number) FROM system.numbers LIMIT 100;
-INSERT INTO test_table SELECT number, to_string(number * number) FROM system.numbers LIMIT 100;
+INSERT INTO test_table SELECT number, toString(number) FROM system.numbers LIMIT 100;
+INSERT INTO test_table SELECT number, toString(number * number) FROM system.numbers LIMIT 100;
+INSERT INTO test_table SELECT number, toString(number * number) FROM system.numbers LIMIT 100;
 
 SELECT * FROM test_table ORDER BY n, s LIMIT 30;
 
-DROP STREAM test_table;
+DROP TABLE test_table;

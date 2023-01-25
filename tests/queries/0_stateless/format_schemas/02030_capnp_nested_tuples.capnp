@@ -2,22 +2,22 @@
 
 struct Nested1
 {
-    d @0 : uint64;
+    d @0 : UInt64;
     e @1 : Nested2;
 }
 
 struct Nested2
 {
-    f @0 : uint64;
+    f @0 : UInt64;
 }
 
-struct nested
+struct Nested
 {
-    b @0 : uint64;
+    b @0 : UInt64;
     c @1 : Nested1;
 }
 
 struct Message
 {
-    a @0 : nested;
+    a @0 : Nested;
 }

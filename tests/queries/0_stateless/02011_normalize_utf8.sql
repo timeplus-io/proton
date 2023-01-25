@@ -1,7 +1,7 @@
 -- Tags: no-fasttest
 
-DROP STREAM IF EXISTS normalize_test;
-create stream normalize_test (id int, value string) ENGINE = MergeTree ORDER BY value;
+DROP TABLE IF EXISTS normalize_test;
+CREATE TABLE normalize_test (id int, value String) ENGINE = MergeTree ORDER BY value;
 
 
 SELECT

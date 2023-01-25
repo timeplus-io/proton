@@ -2,9 +2,9 @@
 
 SET allow_experimental_funnel_functions = 1;
 
-DROP STREAM IF EXISTS test_sequenceNextNode_Nullable;
+DROP TABLE IF EXISTS test_sequenceNextNode_Nullable;
 
-create stream IF NOT EXISTS test_sequenceNextNode_Nullable (dt datetime, id int, action nullable(string)) ENGINE = MergeTree() PARTITION BY dt ORDER BY id;
+CREATE TABLE IF NOT EXISTS test_sequenceNextNode_Nullable (dt DateTime, id int, action Nullable(String)) ENGINE = MergeTree() PARTITION BY dt ORDER BY id;
 
 INSERT INTO test_sequenceNextNode_Nullable values ('2000-01-02 09:00:01',1,'A');
 INSERT INTO test_sequenceNextNode_Nullable values ('2000-01-02 09:00:02',1,'B');
@@ -94,13 +94,13 @@ SELECT '(backward, first_match, B)', id, sequenceNextNode('backward', 'first_mat
 SELECT '(backward, first_match, B->A)', id, sequenceNextNode('backward', 'first_match')(dt, action, 1, action = 'B', action = 'A') AS next_node FROM test_sequenceNextNode_Nullable GROUP BY id ORDER BY id;
 SELECT '(backward, first_match, B->B)', id, sequenceNextNode('backward', 'first_match')(dt, action, 1, action = 'B', action = 'B') AS next_node FROM test_sequenceNextNode_Nullable GROUP BY id ORDER BY id;
 
-DROP STREAM IF EXISTS test_sequenceNextNode_Nullable;
+DROP TABLE IF EXISTS test_sequenceNextNode_Nullable;
 
 -- The same testcases for a non-null type.
 
-DROP STREAM IF EXISTS test_sequenceNextNode;
+DROP TABLE IF EXISTS test_sequenceNextNode;
 
-create stream IF NOT EXISTS test_sequenceNextNode (dt datetime, id int, action string) ENGINE = MergeTree() PARTITION BY dt ORDER BY id;
+CREATE TABLE IF NOT EXISTS test_sequenceNextNode (dt DateTime, id int, action String) ENGINE = MergeTree() PARTITION BY dt ORDER BY id;
 
 INSERT INTO test_sequenceNextNode values ('2000-01-02 09:00:01',1,'A');
 INSERT INTO test_sequenceNextNode values ('2000-01-02 09:00:02',1,'B');
@@ -196,11 +196,11 @@ INSERT INTO test_sequenceNextNode values ('2000-01-02 09:00:01',12,'A');
 
 SELECT '(forward, head, A) id = 12', sequenceNextNode('forward', 'head')(dt, action, 1, action = 'A') AS next_node FROM test_sequenceNextNode WHERE id = 12;
 
-DROP STREAM IF EXISTS test_sequenceNextNode;
+DROP TABLE IF EXISTS test_sequenceNextNode;
 
-DROP STREAM IF EXISTS test_base_condition;
+DROP TABLE IF EXISTS test_base_condition;
 
-create stream IF NOT EXISTS test_base_condition (dt datetime, id int, action string, referrer string) ENGINE = MergeTree() PARTITION BY dt ORDER BY id;
+CREATE TABLE IF NOT EXISTS test_base_condition (dt DateTime, id int, action String, referrer String) ENGINE = MergeTree() PARTITION BY dt ORDER BY id;
 
 INSERT INTO test_base_condition values ('2000-01-02 09:00:01',1,'A','1');
 INSERT INTO test_base_condition values ('2000-01-02 09:00:02',1,'B','2');
@@ -232,4 +232,4 @@ SELECT '(backward, first_match, 1, B->C)', id, sequenceNextNode('backward', 'fir
 SET allow_experimental_funnel_functions = 0;
 SELECT '(backward, first_match, 1, B->C)', id, sequenceNextNode('backward', 'first_match')(dt, action, referrer = '2', action = 'B', action = 'A') AS next_node FROM test_base_condition GROUP BY id ORDER BY id; -- { serverError 63 }
 
-DROP STREAM IF EXISTS test_base_condition;
+DROP TABLE IF EXISTS test_base_condition;

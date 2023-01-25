@@ -1,2 +1,2 @@
 select now64(10); -- { serverError 69 }
-select length(to_string(now64(9)));
+select length(toString(now64(9)));

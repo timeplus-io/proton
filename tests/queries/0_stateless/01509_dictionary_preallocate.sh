@@ -9,26 +9,26 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CUR_DIR"/../shell_config.sh
 
 $CLICKHOUSE_CLIENT -nm -q "
-    DROP STREAM IF EXISTS data_01509;
+    DROP TABLE IF EXISTS data_01509;
     DROP DICTIONARY IF EXISTS dict_01509;
     DROP DICTIONARY IF EXISTS dict_01509_preallocate;
 
-    create stream data_01509
+    CREATE TABLE data_01509
     (
-      key   uint64,
-      value string
+      key   UInt64,
+      value String
     )
     ENGINE = MergeTree()
     ORDER BY key;
-    INSERT INTO data_01509 SELECT number key, to_string(number) value FROM numbers(10e3);
+    INSERT INTO data_01509 SELECT number key, toString(number) value FROM numbers(10e3);
 "
 
 # regular
 $CLICKHOUSE_CLIENT -nm -q "
     CREATE DICTIONARY dict_01509
     (
-      key   uint64,
-      value string DEFAULT '-'
+      key   UInt64,
+      value String DEFAULT '-'
     )
     PRIMARY KEY key
     SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() TABLE 'data_01509'))
@@ -46,8 +46,8 @@ $CLICKHOUSE_CLIENT -nm -q "
 $CLICKHOUSE_CLIENT -nm -q "
     CREATE DICTIONARY dict_01509_preallocate
     (
-      key   uint64,
-      value string DEFAULT '-'
+      key   UInt64,
+      value String DEFAULT '-'
     )
     PRIMARY KEY key
     SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() TABLE 'data_01509'))
@@ -63,17 +63,17 @@ $CLICKHOUSE_CLIENT -nm -q "
 )
 
 $CLICKHOUSE_CLIENT -nm -q "
-    SELECT dictGet('dict_01509', 'value', to_uint64(1e12));
-    SELECT dictGet('dict_01509', 'value', to_uint64(0));
+    SELECT dictGet('dict_01509', 'value', toUInt64(1e12));
+    SELECT dictGet('dict_01509', 'value', toUInt64(0));
     SELECT count() FROM dict_01509;
 
-    SELECT dictGet('dict_01509_preallocate', 'value', to_uint64(1e12));
-    SELECT dictGet('dict_01509_preallocate', 'value', to_uint64(0));
+    SELECT dictGet('dict_01509_preallocate', 'value', toUInt64(1e12));
+    SELECT dictGet('dict_01509_preallocate', 'value', toUInt64(0));
     SELECT count() FROM dict_01509_preallocate;
 "
 
 $CLICKHOUSE_CLIENT -nm -q "
-    DROP STREAM data_01509;
+    DROP TABLE data_01509;
     DROP DICTIONARY dict_01509;
     DROP DICTIONARY dict_01509_preallocate;
 "

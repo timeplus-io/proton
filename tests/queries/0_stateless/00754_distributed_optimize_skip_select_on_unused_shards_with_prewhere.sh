@@ -5,14 +5,14 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS distributed_00754;"
-${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS mergetree_00754;"
+${CLICKHOUSE_CLIENT} --query "DROP TABLE IF EXISTS distributed_00754;"
+${CLICKHOUSE_CLIENT} --query "DROP TABLE IF EXISTS mergetree_00754;"
 
 ${CLICKHOUSE_CLIENT} --query "
-    create stream mergetree_00754 (a int64, b int64, c string) ENGINE = MergeTree ORDER BY (a, b);
+    CREATE TABLE mergetree_00754 (a Int64, b Int64, c String) ENGINE = MergeTree ORDER BY (a, b);
 "
 ${CLICKHOUSE_CLIENT} --query "
-    create stream distributed_00754 AS mergetree_00754
+    CREATE TABLE distributed_00754 AS mergetree_00754
     ENGINE = Distributed(test_unavailable_shard, ${CLICKHOUSE_DATABASE}, mergetree_00754, jumpConsistentHash(a+b, 2));
 "
 
@@ -101,5 +101,5 @@ ${CLICKHOUSE_CLIENT} -n --query="
     SELECT count(*) FROM distributed_00754 PREWHERE a = 0 AND b = 0 OR c LIKE '%l%';
 " 2>&1 \ | grep -F -q "All connection tries failed" && echo 'OK' || echo 'FAIL'
 
-$CLICKHOUSE_CLIENT -q "DROP STREAM distributed_00754"
-$CLICKHOUSE_CLIENT -q "DROP STREAM mergetree_00754"
+$CLICKHOUSE_CLIENT -q "DROP TABLE distributed_00754"
+$CLICKHOUSE_CLIENT -q "DROP TABLE mergetree_00754"

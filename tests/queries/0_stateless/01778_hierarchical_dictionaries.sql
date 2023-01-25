@@ -3,13 +3,13 @@
 DROP DATABASE IF EXISTS 01778_db;
 CREATE DATABASE 01778_db;
 
-create stream 01778_db.hierarchy_source_table (id uint64, parent_id uint64) ;
+CREATE TABLE 01778_db.hierarchy_source_table (id UInt64, parent_id UInt64) ENGINE = TinyLog;
 INSERT INTO 01778_db.hierarchy_source_table VALUES (1, 0), (2, 1), (3, 1), (4, 2);
 
 CREATE DICTIONARY 01778_db.hierarchy_flat_dictionary
 (
-    id uint64,
-    parent_id uint64 HIERARCHICAL
+    id UInt64,
+    parent_id UInt64 HIERARCHICAL
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'hierarchy_source_table' DB '01778_db'))
@@ -33,8 +33,8 @@ DROP DICTIONARY 01778_db.hierarchy_flat_dictionary;
 
 CREATE DICTIONARY 01778_db.hierarchy_hashed_dictionary
 (
-    id uint64,
-    parent_id uint64 HIERARCHICAL
+    id UInt64,
+    parent_id UInt64 HIERARCHICAL
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'hierarchy_source_table' DB '01778_db'))
@@ -58,8 +58,8 @@ DROP DICTIONARY 01778_db.hierarchy_hashed_dictionary;
 
 CREATE DICTIONARY 01778_db.hierarchy_cache_dictionary
 (
-    id uint64,
-    parent_id uint64 HIERARCHICAL
+    id UInt64,
+    parent_id UInt64 HIERARCHICAL
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'hierarchy_source_table' DB '01778_db'))
@@ -77,8 +77,8 @@ DROP DICTIONARY 01778_db.hierarchy_cache_dictionary;
 
 CREATE DICTIONARY 01778_db.hierarchy_direct_dictionary
 (
-    id uint64,
-    parent_id uint64 HIERARCHICAL
+    id UInt64,
+    parent_id UInt64 HIERARCHICAL
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'hierarchy_source_table' DB '01778_db'))
@@ -93,5 +93,5 @@ SELECT dictIsIn('01778_db.hierarchy_direct_dictionary', number, number) FROM sys
 
 DROP DICTIONARY 01778_db.hierarchy_direct_dictionary;
 
-DROP STREAM 01778_db.hierarchy_source_table;
+DROP TABLE 01778_db.hierarchy_source_table;
 DROP DATABASE 01778_db;
