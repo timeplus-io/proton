@@ -335,9 +335,7 @@ struct ContextSharedPart
             access_control->stopPeriodicReloadingUsersConfigs();
         if (external_dictionaries_loader)
             external_dictionaries_loader->enablePeriodicUpdates(false);
-        /// proton: starts
-        ExternalUserDefinedFunctionsLoader::instance(nullptr).enablePeriodicUpdates(false);
-        /// proton: ends
+
         if (external_models_loader)
             external_models_loader->enablePeriodicUpdates(false);
 

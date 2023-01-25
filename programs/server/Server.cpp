@@ -81,16 +81,17 @@
 
 /// proton: starts
 #include <Checkpoint/CheckpointCoordinator.h>
-#include <Common/Config/ExternalGrokPatterns.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/DDLService.h>
 #include <DistributedMetadata/PlacementService.h>
 #include <DistributedMetadata/TaskStatusService.h>
 #include <Interpreters/DiskUtilChecker.h>
+#include <Interpreters/ExternalUserDefinedFunctionsLoader.h>
 #include <KafkaLog/KafkaWALPool.h>
 #include <NativeLog/Server/NativeLog.h>
 #include <Server/RestRouterHandlers/RestRouterFactory.h>
+#include <Common/Config/ExternalGrokPatterns.h>
 
 #include <v8.h>
 
@@ -165,13 +166,11 @@ int mainServer(int argc, char ** argv)
 
     if (jemallocOptionEnabled("opt.background_thread"))
     {
-        /// proton: starts.
         LOG_ERROR(&app.logger(),
             "jemalloc.background_thread was requested, "
             "however Proton uses percpu_arena and background_thread most likely will not give any benefits, "
             "and also background_thread is not compatible with Proton watchdog "
             "(that can be disabled with PROTON_WATCHDOG_ENABLE=0)");
-        /// proton: ends.
     }
 
     /// Do not fork separate process from watchdog if we attached to terminal.
@@ -179,9 +178,7 @@ int mainServer(int argc, char ** argv)
     /// Can be overridden by environment variable (cannot use server config at this moment).
     if (argc > 0)
     {
-        /// proton: starts.
         const char * env_watchdog = getenv("PROTON_WATCHDOG_ENABLE"); /// NOLINT(concurrency-mt-unsafe)
-        /// proton: ends.
         if (env_watchdog)
         {
             if (0 == strcmp(env_watchdog, "1"))
@@ -349,7 +346,7 @@ void initGlobalServicePost(DB::ContextMutablePtr global_context)
 ///    - C++ basically can't guarantee the construction order unless we init them in a control way
 ///      otherwise we can't guarantee their dtor order. We need avoid these kind of global variables
 ///      as much as possible
-void deinitDistributedMetadataServices(DB::ContextMutablePtr global_context)
+void deinitGlobalServices(DB::ContextMutablePtr global_context)
 {
     auto & ddl_service = DB::DDLService::instance(global_context);
     ddl_service.shutdown();
@@ -368,11 +365,7 @@ void deinitDistributedMetadataServices(DB::ContextMutablePtr global_context)
     /// auto & pool = DWAL::KafkaWALPool::instance(global_context);
     /// pool.shutdown();
 }
-/// proton: ends
 
-
-/// Init global singletons to
-/// proton: starts
 void initGlobalSingletons(DB::ContextMutablePtr & context)
 {
     DB::DataTypeFactory::instance();   /// Fixed occasional crash errors during delayed initialization
@@ -380,6 +373,12 @@ void initGlobalSingletons(DB::ContextMutablePtr & context)
     /// init DiskQuotaChecker
     DB::DiskUtilChecker::instance(context);
     DB::ExternalGrokPatterns::instance(context);
+    DB::ExternalUserDefinedFunctionsLoader::instance(context);
+}
+
+void deinitGlobalSingletons(DB::ContextMutablePtr & context)
+{
+    DB::ExternalUserDefinedFunctionsLoader::instance(context).enablePeriodicUpdates(false);
 }
 /// proton: ends
 }
@@ -1042,7 +1041,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-    LOG_DEBUG(log, "Initiailizing interserver credentials.");
+    LOG_DEBUG(log, "Initializing interserver credentials.");
     global_context->updateInterserverCredentials(config());
 
     if (config().has("macros"))
@@ -1217,6 +1216,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             global_context->loadOrReloadDictionaries(*config);
             global_context->loadOrReloadModels(*config);
+
             /// proton: starts
             global_context->loadOrReloadUserDefinedExecutableFunctions();
             /// proton: ends
@@ -1714,9 +1714,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 LOG_INFO(log, "Closed connections.");
 
             /// proton: start.
-            deinitDistributedMetadataServices(global_context);
+            deinitGlobalServices(global_context);
 
-            /// dispose v8 engine
+            deinitGlobalSingletons(global_context);
+
             disposeV8();
             /// proton: end.
 

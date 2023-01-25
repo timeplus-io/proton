@@ -30,6 +30,9 @@ ExternalUserDefinedFunctionsLoader::ExternalUserDefinedFunctionsLoader(ContextPt
     : ExternalLoader("external user defined function", &Poco::Logger::get("ExternalUserDefinedFunctionsLoader"))
     , WithContext(global_context_)
 {
+    if (!global_context_)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Passing nullptr to init UDF loader");
+
     setConfigSettings({"function", "name", "database", "uuid"});
     enableAsyncLoading(false);
     enablePeriodicUpdates(true);

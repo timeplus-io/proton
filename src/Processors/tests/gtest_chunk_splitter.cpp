@@ -27,7 +27,7 @@ void doInsertColumnNumber(DB::Chunk & chunk, size_t rows, size_t chunks, DB::Dat
     for (size_t i = 0; i < rows; ++i)
     {
         if constexpr (DB::is_decimal<IntegerType>)
-            col_ptr->insert(static_cast<typename IntegerType::NativeType>((i + OFFSET) % chunks));
+            col_ptr->insert(IntegerType(static_cast<typename IntegerType::NativeType>((i + OFFSET) % chunks)));
         else
             col_ptr->insert(static_cast<IntegerType>((i + OFFSET) % chunks));
     }

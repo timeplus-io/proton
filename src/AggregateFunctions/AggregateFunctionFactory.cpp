@@ -194,9 +194,16 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
     }
 
     /// proton: starts. Check user defined aggr function
-    auto aggr = UserDefinedFunctionFactory::getAggregateFunction(name, argument_types, parameters, out_properties);
-    if (aggr)
-        return aggr;
+    try
+    {
+        auto aggr = UserDefinedFunctionFactory::getAggregateFunction(name, argument_types, parameters, out_properties);
+        if (aggr)
+            return aggr;
+    }
+    catch (...)
+    {
+        /// We ignore the failure of user defined function checking
+    }
     /// proton: ends
 
     String extra_info;
@@ -276,7 +283,15 @@ bool AggregateFunctionFactory::isAggregateFunctionName(const String & name) cons
         return isAggregateFunctionName(name.substr(0, name.size() - combinator->getName().size()));
 
     /// proton: starts
-    return UserDefinedFunctionFactory::instance().isAggregateFunctionName(name);
+    try
+    {
+        return UserDefinedFunctionFactory::instance().isAggregateFunctionName(name);
+    }
+    catch (...)
+    {
+        /// We ignore the failure of user defined function checking
+        return false;
+    }
     /// proton: ends
 }
 

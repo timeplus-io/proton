@@ -8,12 +8,21 @@
 #include <Parsers/parseQuery.h>
 #include <gtest/gtest.h>
 
-/// FIXME: when we find a way to mock Context and ExternalUserDefinedExecutableFunctionsLoader
-#if 0
+/// Note gtest_graphite.cpp also need registers aggregation functions
+/// to avoid conflicts, register only once
+extern bool regAggregateFunctions;
+
 class StreamingEmitInterpreterTest : public ::testing::Test
 {
 public:
-    static void SetUpTestSuite() { DB::registerAggregateFunctions(); }
+    static void SetUpTestSuite()
+    {
+        if (!regAggregateFunctions)
+        {
+            DB::registerAggregateFunctions();
+            regAggregateFunctions = true;
+        }
+    }
 };
 
 /// Collect Tree AST elems recursively
@@ -269,4 +278,3 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleTailModeWithWhere)
         true)
         << "Last-X Tail with where";
 }
-#endif

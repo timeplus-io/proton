@@ -231,13 +231,12 @@ void PipelineExecutor::executeSingleThread(size_t thread_num)
 
 #ifndef NDEBUG
     auto & context = tasks.getThreadContext(thread_num);
-    LOG_TRACE(
-        log,
-        "Thread finished. Total time: {} sec. Execution time: {} sec. Processing time: {} sec. Wait time: {} sec.",
-        (context.total_time_ns / 1e9),
-        (context.execution_time_ns / 1e9),
-        (context.processing_time_ns / 1e9),
-        (context.wait_time_ns / 1e9));
+    LOG_TRACE(log,
+              "Thread finished. Total time: {} sec. Execution time: {} sec. Processing time: {} sec. Wait time: {} sec.",
+              context.total_time_ns / 1e9,
+              context.execution_time_ns / 1e9,
+              context.processing_time_ns / 1e9,
+              context.wait_time_ns / 1e9);
 #endif
 }
 
@@ -334,13 +333,16 @@ void PipelineExecutor::executeImpl(size_t num_threads, ExecuteMode exec_mode_)
 
     bool finished_flag = false;
 
-    SCOPE_EXIT_SAFE(if (!finished_flag) {
-        finish();
+    SCOPE_EXIT_SAFE(
+        if (!finished_flag)
+        {
+            finish();
 
-        for (auto & thread : threads)
-            if (thread.joinable())
-                thread.join();
-    });
+            for (auto & thread : threads)
+                if (thread.joinable())
+                    thread.join();
+        }
+    );
 
     if (num_threads > 1)
     {
@@ -348,7 +350,8 @@ void PipelineExecutor::executeImpl(size_t num_threads, ExecuteMode exec_mode_)
 
         for (size_t i = 0; i < num_threads; ++i)
         {
-            threads.emplace_back([this, thread_group, thread_num = i] {
+            threads.emplace_back([this, thread_group, thread_num = i]
+            {
                 /// ThreadStatus thread_status;
 
                 setThreadName("QueryPipelineEx");

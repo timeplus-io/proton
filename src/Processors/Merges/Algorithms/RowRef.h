@@ -159,12 +159,12 @@ struct RowRef
     }
 
     /// proton : starts
-    bool hasEqualSortColumnsWith(const RowRef & other)
+    bool hasEqualSortColumnsWith(const RowRef & other) const
     {
         return hasEqualSortColumnsWith(other, -1);
     }
 
-    bool hasEqualSortColumnsWith(const RowRef & other, size_t skip_column_pos)
+    bool hasEqualSortColumnsWith(const RowRef & other, size_t skip_column_pos) const
     {
         return checkEquals(num_columns, sort_columns, row_num, other.sort_columns, other.row_num, skip_column_pos);
     }

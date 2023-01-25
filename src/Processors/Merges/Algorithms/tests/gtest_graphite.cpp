@@ -7,22 +7,21 @@
 
 #include <Common/tests/gtest_global_context.h>
 
-#include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Processors/Merges/Algorithms/Graphite.h>
 #include <Common/Config/ConfigProcessor.h>
 
 using namespace DB;
 
+bool regAggregateFunctions = false;
 
-[[maybe_unused]]static int regAggregateFunctions = 0;
 /// note: the registerAggregateFunctions will have conflict with gtest_streaming_emit_interpreter.cpp:14
-[[maybe_unused]] void tryRegisterAggregateFunctions()
+void tryRegisterAggregateFunctions()
 {
     if (!regAggregateFunctions)
     {
         registerAggregateFunctions();
-        regAggregateFunctions = 1;
+        regAggregateFunctions = true;
     }
 }
 
@@ -148,6 +147,8 @@ struct PatternsForPath
 
 TEST(GraphiteTest, testSelectPattern)
 {
+    tryRegisterAggregateFunctions();
+
     using namespace std::literals;
 
     std::string
@@ -367,6 +368,8 @@ TEST(GraphiteTest, testBuildTaggedRegex)
 
 TEST(GraphiteTest, testSelectPatternTyped)
 {
+    tryRegisterAggregateFunctions();
+
     using namespace std::literals;
 
     std::string
