@@ -18,7 +18,13 @@ public:
 
     InterpreterSelectWithUnionQuery(
         const ASTPtr & query_ptr_,
-        ContextPtr context_,
+        const ContextPtr & context_,
+        const SelectQueryOptions &,
+        const Names & required_result_column_names = {});
+
+    InterpreterSelectWithUnionQuery(
+        const ASTPtr & query_ptr_,
+        const ContextMutablePtr & context_,
         const SelectQueryOptions &,
         const Names & required_result_column_names = {});
 

@@ -31,7 +31,13 @@ QueryPipelineBuilderPtr JoinStep::updatePipeline(QueryPipelineBuilders pipelines
     if (pipelines.size() != 2)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "JoinStep expect two input steps");
 
-    return QueryPipelineBuilder::joinPipelines(std::move(pipelines[0]), std::move(pipelines[1]), join, max_block_size, &processors);
+    return QueryPipelineBuilder::joinPipelines(
+        std::move(pipelines[0]),
+        std::move(pipelines[1]),
+        join,
+        output_stream->header,
+        max_block_size,
+        &processors);
 }
 
 void JoinStep::describePipeline(FormatSettings & settings) const
@@ -82,7 +88,7 @@ void FilledJoinStep::transformPipeline(QueryPipelineBuilder & pipeline, const Bu
     {
         bool on_totals = stream_type == QueryPipelineBuilder::StreamType::Totals;
         auto counter = on_totals ? nullptr : finish_counter;
-        return std::make_shared<JoiningTransform>(header, join, max_block_size, on_totals, default_totals, counter);
+        return std::make_shared<JoiningTransform>(header, output_stream->header, join, max_block_size, on_totals, default_totals, counter);
     });
 }
 

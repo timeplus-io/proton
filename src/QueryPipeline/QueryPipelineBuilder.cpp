@@ -321,6 +321,7 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelines(
     std::unique_ptr<QueryPipelineBuilder> left,
     std::unique_ptr<QueryPipelineBuilder> right,
     JoinPtr join,
+    const Block & output_header,
     size_t max_block_size,
     Processors * collected_processors)
 {
@@ -373,7 +374,8 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelines(
 
     for (size_t i = 0; i < num_streams; ++i)
     {
-        auto joining = std::make_shared<JoiningTransform>(left->getHeader(), join, max_block_size, false, default_totals, finish_counter);
+        auto joining = std::make_shared<JoiningTransform>(
+            left->getHeader(), output_header, join, max_block_size, false, default_totals, finish_counter);
         connect(**lit, joining->getInputs().front());
         connect(**rit, joining->getInputs().back());
         *lit = &joining->getOutputs().front();
@@ -389,7 +391,7 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelines(
 
     if (left->hasTotals())
     {
-        auto joining = std::make_shared<JoiningTransform>(left->getHeader(), join, max_block_size, true, default_totals);
+        auto joining = std::make_shared<JoiningTransform>(left->getHeader(), output_header, join, max_block_size, true, default_totals);
         connect(*left->pipe.totals_port, joining->getInputs().front());
         connect(**rit, joining->getInputs().back());
         left->pipe.totals_port = &joining->getOutputs().front();

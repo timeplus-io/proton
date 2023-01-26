@@ -111,6 +111,7 @@ public:
         std::unique_ptr<QueryPipelineBuilder> left,
         std::unique_ptr<QueryPipelineBuilder> right,
         JoinPtr join,
+        const Block & output_header,
         size_t max_block_size,
         Processors * collected_processors = nullptr);
 

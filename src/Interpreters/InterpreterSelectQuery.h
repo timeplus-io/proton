@@ -60,6 +60,12 @@ public:
         const SelectQueryOptions &,
         const Names & required_result_column_names_ = Names{});
 
+    InterpreterSelectQuery(
+        const ASTPtr & query_ptr_,
+        const ContextMutablePtr & context_,
+        const SelectQueryOptions &,
+        const Names & required_result_column_names_ = Names{});
+
     /// Read data not from the table specified in the query, but from the prepared pipe `input`.
     InterpreterSelectQuery(
         const ASTPtr & query_ptr_,
@@ -124,10 +130,21 @@ public:
     Names getRequiredColumns() { return required_columns; }
 
     bool supportsTransactions() const override { return true; }
+
 private:
     InterpreterSelectQuery(
         const ASTPtr & query_ptr_,
         const ContextPtr & context_,
+        std::optional<Pipe> input_pipe,
+        const StoragePtr & storage_,
+        const SelectQueryOptions &,
+        const Names & required_result_column_names = {},
+        const StorageMetadataPtr & metadata_snapshot_ = nullptr,
+        PreparedSetsPtr prepared_sets_ = nullptr);
+
+    InterpreterSelectQuery(
+        const ASTPtr & query_ptr_,
+        const ContextMutablePtr & context_,
         std::optional<Pipe> input_pipe,
         const StoragePtr & storage_,
         const SelectQueryOptions &,

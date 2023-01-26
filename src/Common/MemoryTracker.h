@@ -61,6 +61,8 @@ private:
     /// This description will be used as prefix into log messages (if isn't nullptr)
     std::atomic<const char *> description_ptr = nullptr;
 
+    bool log_peak_memory_usage_in_destructor = true;
+
     bool updatePeak(Int64 will_be, bool log_memory_usage);
     void logMemoryUsage(Int64 current) const;
 
@@ -171,7 +173,7 @@ public:
     void set(Int64 to);
 
     /// Prints info about peak memory consumption into log.
-    void logPeakMemoryUsage() const;
+    void logPeakMemoryUsage();
 };
 
 extern MemoryTracker total_memory_tracker;
