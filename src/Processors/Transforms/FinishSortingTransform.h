@@ -11,9 +11,12 @@ class FinishSortingTransform final : public SortingTransform
 {
 public:
     /// limit - if not 0, allowed to return just first 'limit' rows in sorted order.
-    FinishSortingTransform(const Block & header, const SortDescription & description_sorted_,
+    FinishSortingTransform(
+        const Block & header,
+        const SortDescription & description_sorted_,
         const SortDescription & description_to_sort_,
-        size_t max_merged_block_size_, UInt64 limit_);
+        size_t max_merged_block_size_,
+        UInt64 limit_);
 
     String getName() const override { return "FinishSortingTransform"; }
 

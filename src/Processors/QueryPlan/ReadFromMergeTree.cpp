@@ -623,25 +623,13 @@ static void addMergingFinal(
         /// like group rows with same `primary key` together.
         /// Removing `version` column helps AddingSelectorTransform to do the correct hashing
         /// and distributed rows with same primary key to the same downstream processor
-        if (!desc.column_name.empty())
-        {
-            if ((merging_params.mode == MergeTreeData::MergingParams::ChangelogKV
-                 || merging_params.mode == MergeTreeData::MergingParams::VersionedKV)
-                && desc.column_name == merging_params.version_column)
-                continue;
+        if ((merging_params.mode == MergeTreeData::MergingParams::ChangelogKV
+             || merging_params.mode == MergeTreeData::MergingParams::VersionedKV)
+            && desc.column_name == merging_params.version_column)
+            continue;
+        /// proton : end
 
-            key_columns.push_back(header.getPositionByName(desc.column_name));
-        }
-        else
-        {
-            if ((merging_params.mode == MergeTreeData::MergingParams::ChangelogKV
-                 || merging_params.mode == MergeTreeData::MergingParams::VersionedKV)
-                && header.getByPosition(desc.column_number).name == merging_params.version_column)
-                continue;
-
-            key_columns.emplace_back(desc.column_number);
-        }
-        /// proton : ends
+        key_columns.push_back(header.getPositionByName(desc.column_name));
     }
 
     pipe.addSimpleTransform([&](const Block & stream_header)
@@ -797,9 +785,8 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsFinal(
 
         Names partition_key_columns = metadata_for_reading->getPartitionKey().column_names;
 
-        const auto & header = pipe.getHeader();
         for (size_t i = 0; i < sort_columns_size; ++i)
-            sort_description.emplace_back(header.getPositionByName(sort_columns[i]), 1, 1);
+            sort_description.emplace_back(sort_columns[i], 1, 1);
 
         addMergingFinal(
             pipe,

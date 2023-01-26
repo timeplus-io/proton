@@ -15,11 +15,8 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-FinishAggregatingInOrderAlgorithm::State::State(
-    const Chunk & chunk, const SortDescriptionWithPositions & desc, Int64 total_bytes_)
-    : all_columns(chunk.getColumns())
-    , num_rows(chunk.getNumRows())
-    , total_bytes(total_bytes_)
+FinishAggregatingInOrderAlgorithm::State::State(const Chunk & chunk, const SortDescriptionWithPositions & desc, Int64 total_bytes_)
+    : all_columns(chunk.getColumns()), num_rows(chunk.getNumRows()), total_bytes(total_bytes_)
 {
     if (!chunk)
         return;
@@ -33,7 +30,7 @@ FinishAggregatingInOrderAlgorithm::FinishAggregatingInOrderAlgorithm(
     const Block & header_,
     size_t num_inputs_,
     AggregatingTransformParamsPtr params_,
-    SortDescription description_,
+    const SortDescription & description_,
     size_t max_block_size_,
     size_t max_block_bytes_)
     : header(header_)

@@ -41,7 +41,7 @@ public:
         const Block & header_,
         size_t num_inputs_,
         AggregatingTransformParamsPtr params_,
-        SortDescription description_,
+        const SortDescription & description_,
         size_t max_block_size_,
         size_t max_block_bytes_);
 
