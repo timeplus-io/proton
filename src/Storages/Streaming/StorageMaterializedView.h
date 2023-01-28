@@ -2,6 +2,7 @@
 
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/IAST_fwd.h>
+#include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
 #include <Storages/StorageSnapshot.h>
@@ -48,15 +49,6 @@ public:
 
     void checkValid() const;
 
-    Pipe read(
-        const Names & column_names,
-        const StorageSnapshotPtr & storage_snapshot,
-        SelectQueryInfo & query_info,
-        ContextPtr context,
-        QueryProcessingStage::Enum processed_stage,
-        size_t max_block_size,
-        size_t num_streams) override;
-
     void read(
         QueryPlan & query_plan,
         const Names & column_names,
@@ -80,7 +72,8 @@ public:
 private:
     void initInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
     void updateStorageSettings();
-    void buildBackgroundPipeline(InterpreterSelectWithUnionQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
+    void buildBackgroundPipeline(
+        InterpreterSelectWithUnionQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
     void executeBackgroundPipeline();
     void cancelBackgroundPipeline();
 
@@ -104,6 +97,7 @@ private:
         std::atomic<bool> has_exception = false;
         std::exception_ptr exception;
     } background_status;
+
     PipelineExecutorPtr background_executor;
     QueryPipelineBuilder background_pipeline;
     ThreadFromGlobalPool background_thread;

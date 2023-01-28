@@ -43,7 +43,7 @@ namespace
     {
     public:
         SourceFromNativeStream(const Block & header, const std::string & path)
-                : ISource(header, ProcessorID::SourceFromNativeStreamID), file_in(path), compressed_in(file_in),
+                : ISource(header, true, ProcessorID::SourceFromNativeStreamID), file_in(path), compressed_in(file_in),
                   block_in(std::make_unique<NativeReader>(compressed_in, DBMS_TCP_PROTOCOL_VERSION))
         {
         }
@@ -99,7 +99,7 @@ public:
         ManyAggregatedDataVariantsPtr data_,
         SharedDataPtr shared_data_,
         Arena * arena_)
-        : ISource(params_->getHeader(), ProcessorID::ConvertingAggregatedToChunksSourceID)
+        : ISource(params_->getHeader(), false, ProcessorID::ConvertingAggregatedToChunksSourceID)
         , params(std::move(params_))
         , data(std::move(data_))
         , shared_data(std::move(shared_data_))

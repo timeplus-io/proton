@@ -1,5 +1,6 @@
 #include "DictionarySource.h"
 #include <Dictionaries/DictionaryHelpers.h>
+#include <Processors/ISource.h>
 
 
 namespace DB
@@ -11,12 +12,13 @@ namespace ErrorCodes
     extern const int NO_SUCH_COLUMN_IN_STREAM;
 }
 
-class DictionarySource final : public SourceWithProgress
+class DictionarySource final : public ISource
 {
 public:
 
     explicit DictionarySource(std::shared_ptr<DictionarySourceCoordinator> coordinator_)
-        : SourceWithProgress(coordinator_->getHeader(), ProcessorID::DictionarySourceID), coordinator(std::move(coordinator_)) {
+        : ISource(coordinator_->getHeader(), true, ProcessorID::DictionarySourceID), coordinator(std::move(coordinator_))
+    {
     }
 
 private:

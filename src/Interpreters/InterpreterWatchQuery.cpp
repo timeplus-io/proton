@@ -16,6 +16,7 @@ limitations under the License. */
 #include <Interpreters/Context.h>
 #include <Access/Common/AccessFlags.h>
 #include <QueryPipeline/StreamLocalLimits.h>
+#include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Storages/IStorage.h>
 
 
@@ -34,6 +35,20 @@ BlockIO InterpreterWatchQuery::execute()
 {
     BlockIO res;
     res.pipeline = QueryPipelineBuilder::getPipeline(buildQueryPipeline());
+
+    /// Constraints on the result, the quota on the result, and also callback for progress.
+    {
+        const Settings & settings = getContext()->getSettingsRef();
+
+        StreamLocalLimits limits;
+        limits.mode = LimitsMode::LIMITS_CURRENT; //-V1048
+        limits.size_limits.max_rows = settings.max_result_rows;
+        limits.size_limits.max_bytes = settings.max_result_bytes;
+        limits.size_limits.overflow_mode = settings.result_overflow_mode;
+
+        res.pipeline.setLimitsAndQuota(limits, getContext()->getQuota());
+    }
+
     return res;
 }
 
@@ -46,10 +61,8 @@ QueryPipelineBuilder InterpreterWatchQuery::buildQueryPipeline()
     storage = DatabaseCatalog::instance().tryGetTable(table_id, getContext());
 
     if (!storage)
-        /// proton: starts
         throw Exception("Stream " + table_id.getNameForLogs() + " doesn't exist.",
         ErrorCodes::UNKNOWN_STREAM);
-        /// proton: ends
 
     auto storage_name = storage->getName();
     if (storage_name == "LiveView"
@@ -87,18 +100,6 @@ QueryPipelineBuilder InterpreterWatchQuery::buildQueryPipeline()
 
     /// Watch storage
     auto pipe = storage->watch(required_columns, query_info, getContext(), from_stage, max_block_size, max_streams);
-
-    /// Constraints on the result, the quota on the result, and also callback for progress.
-    {
-        StreamLocalLimits limits;
-        limits.mode = LimitsMode::LIMITS_CURRENT; //-V1048
-        limits.size_limits.max_rows = settings.max_result_rows;
-        limits.size_limits.max_bytes = settings.max_result_bytes;
-        limits.size_limits.overflow_mode = settings.result_overflow_mode;
-
-        pipe.setLimits(limits);
-        pipe.setQuota(getContext()->getQuota());
-    }
 
     QueryPipelineBuilder pipeline;
     pipeline.init(std::move(pipe));

@@ -46,7 +46,7 @@ class MergeSorterSource : public ISource
 {
 public:
     MergeSorterSource(const Block & header, Chunks chunks, SortDescription & description, size_t max_merged_block_size, UInt64 limit)
-        : ISource(header, ProcessorID::MergeSorterSourceID), merge_sorter(header, std::move(chunks), description, max_merged_block_size, limit)
+        : ISource(header, true, ProcessorID::MergeSorterSourceID), merge_sorter(header, std::move(chunks), description, max_merged_block_size, limit)
     {
     }
 

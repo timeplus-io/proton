@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Processors/Sources/SourceWithProgress.h>
+#include <Processors/ISource.h>
 #include <Storages/FileLog/ReadBufferFromFileLog.h>
 #include <Storages/FileLog/StorageFileLog.h>
 
@@ -10,7 +10,7 @@ namespace Poco
 }
 namespace DB
 {
-class FileLogSource : public SourceWithProgress
+class FileLogSource : public ISource
 {
 public:
     FileLogSource(
@@ -52,7 +52,7 @@ private:
     Block virtual_header;
 
     /// The start pos and end pos of files responsible by this stream,
-    /// does not include end
+    /// does not include end.
     size_t start;
     size_t end;
 };

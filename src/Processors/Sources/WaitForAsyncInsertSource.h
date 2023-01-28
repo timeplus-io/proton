@@ -8,12 +8,12 @@ namespace DB
 
 /// Source, that allow to wait until processing of
 /// asynchronous insert for specified query_id will be finished.
-class WaitForAsyncInsertSource : public ISource, WithContext
+class WaitForAsyncInsertSource final : public ISource, WithContext
 {
 public:
     WaitForAsyncInsertSource(
         const String & query_id_, size_t timeout_ms_, AsynchronousInsertQueue & queue_)
-        : ISource(Block(), ProcessorID::WaitForAsyncInsertSourceID)
+        : ISource(Block(), true, ProcessorID::WaitForAsyncInsertSourceID)
         , query_id(query_id_)
         , timeout_ms(timeout_ms_)
         , queue(queue_)

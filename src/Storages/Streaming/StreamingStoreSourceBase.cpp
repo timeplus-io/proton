@@ -17,7 +17,7 @@ extern const int RECOVER_CHECKPOINT_FAILED;
 
 StreamingStoreSourceBase::StreamingStoreSourceBase(
     const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr query_context_, Poco::Logger * log_, ProcessorID pid_)
-    : SourceWithProgress(header, pid_)
+    : ISource(header, true, pid_)
     , storage_snapshot(
           std::make_shared<StorageSnapshot>(*storage_snapshot_)) /// We like to make a copy of it since we will mutate the snapshot
     , query_context(std::move(query_context_))

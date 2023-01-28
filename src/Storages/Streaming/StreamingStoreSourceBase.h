@@ -4,7 +4,7 @@
 
 #include <Interpreters/Context_fwd.h>
 #include <NativeLog/Record/Record.h>
-#include <Processors/Sources/SourceWithProgress.h>
+#include <Processors/ISource.h>
 
 namespace DB
 {
@@ -12,7 +12,7 @@ namespace DB
 struct StorageSnapshot;
 using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
 
-class StreamingStoreSourceBase : public SourceWithProgress
+class StreamingStoreSourceBase : public ISource
 {
 public:
     StreamingStoreSourceBase(

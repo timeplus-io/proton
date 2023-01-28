@@ -1,6 +1,7 @@
 #include <Processors/Sources/RemoteSource.h>
 #include <QueryPipeline/RemoteQueryExecutor.h>
 #include <QueryPipeline/RemoteQueryExecutorReadContext.h>
+#include <QueryPipeline/StreamLocalLimits.h>
 #include <Processors/Transforms/convertToChunk.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 
@@ -8,7 +9,7 @@ namespace DB
 {
 
 RemoteSource::RemoteSource(RemoteQueryExecutorPtr executor, bool add_aggregation_info_, bool async_read_)
-    : SourceWithProgress(executor->getHeader(), false, ProcessorID::RemoteSourceID)
+    : ISource(executor->getHeader(), false, ProcessorID::RemoteSourceID)
     , add_aggregation_info(add_aggregation_info_), query_executor(std::move(executor))
     , async_read(async_read_)
 {
@@ -20,6 +21,16 @@ RemoteSource::RemoteSource(RemoteQueryExecutorPtr executor, bool add_aggregation
 }
 
 RemoteSource::~RemoteSource() = default;
+
+void RemoteSource::setStorageLimits(const std::shared_ptr<const StorageLimitsList> & storage_limits_)
+{
+    /// Remove leaf limits for remote source.
+    StorageLimitsList list;
+    for (const auto & value : *storage_limits_)
+        list.emplace_back(StorageLimits{value.local_limits, {}});
+
+    storage_limits = std::make_shared<const StorageLimitsList>(std::move(list));
+}
 
 ISource::Status RemoteSource::prepare()
 {
@@ -33,7 +44,7 @@ ISource::Status RemoteSource::prepare()
     if (is_async_state)
         return Status::Async;
 
-    Status status = SourceWithProgress::prepare();
+    Status status = ISource::prepare();
     /// To avoid resetting the connection (because of "unfinished" query) in the
     /// RemoteQueryExecutor it should be finished explicitly.
     if (status == Status::Finished)
@@ -53,7 +64,12 @@ std::optional<Chunk> RemoteSource::tryGenerate()
     if (!was_query_sent)
     {
         /// Progress method will be called on Progress packet.
-        query_executor->setProgressCallback([this](const Progress & value) { progress(value); });
+        query_executor->setProgressCallback([this](const Progress & value)
+        {
+            if (value.total_rows_to_read)
+                addTotalRowsApprox(value.total_rows_to_read);
+            progress(value.read_rows, value.read_bytes);
+        });
 
         /// Get rows_before_limit result for remote query from ProfileInfo packet.
         query_executor->setProfileInfoCallback([this](const ProfileInfo & info)
@@ -114,6 +130,7 @@ std::optional<Chunk> RemoteSource::tryGenerate()
 
     return chunk;
 }
+
 void RemoteSource::onCancel()
 {
     was_query_canceled = true;
@@ -133,7 +150,7 @@ void RemoteSource::onUpdatePorts()
 
 
 RemoteTotalsSource::RemoteTotalsSource(RemoteQueryExecutorPtr executor)
-    : ISource(executor->getHeader(), ProcessorID::RemoteTotalsSourceID)
+    : ISource(executor->getHeader(), true, ProcessorID::RemoteTotalsSourceID)
     , query_executor(std::move(executor))
 {
 }
@@ -153,7 +170,7 @@ Chunk RemoteTotalsSource::generate()
 
 
 RemoteExtremesSource::RemoteExtremesSource(RemoteQueryExecutorPtr executor)
-    : ISource(executor->getHeader(), ProcessorID::RemoteExtremesSourceID)
+    : ISource(executor->getHeader(), true, ProcessorID::RemoteExtremesSourceID)
     , query_executor(std::move(executor))
 {
 }

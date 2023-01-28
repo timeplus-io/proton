@@ -48,7 +48,6 @@
 #include <Common/quoteString.h>
 #include <re2/re2.h>
 
-#include <Processors/Sources/SourceWithProgress.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <QueryPipeline/Pipe.h>
 #include <filesystem>
@@ -231,7 +230,7 @@ StorageS3Source::StorageS3Source(
     const std::shared_ptr<Aws::S3::S3Client> & client_,
     const String & bucket_,
     std::shared_ptr<IteratorWrapper> file_iterator_)
-    : SourceWithProgress(getHeader(sample_block_, need_path, need_file), ProcessorID::StorageS3SourceID)
+    : ISource(getHeader(sample_block_, need_path, need_file), true, ProcessorID::StorageS3SourceID)
     , WithContext(context_)
     , name(std::move(name_))
     , bucket(bucket_)

@@ -1,9 +1,8 @@
 #include "StorageMaterializedView.h"
 #include "StorageStream.h"
 
-#include <Interpreters/DiskUtilChecker.h>
-
 #include <IO/WriteBufferFromString.h>
+#include <Interpreters/DiskUtilChecker.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterInsertQuery.h>
@@ -19,8 +18,6 @@
 #include <Processors/QueryPlan/ExpressionStep.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
-#include <Processors/QueryPlan/SettingQuotaAndLimitsStep.h>
 #include <Processors/Sinks/EmptySink.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <Processors/Transforms/ExpressionTransform.h>
@@ -271,21 +268,6 @@ void StorageMaterializedView::cancelBackgroundPipeline()
     }
 }
 
-Pipe StorageMaterializedView::read(
-    const Names & column_names,
-    const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & query_info,
-    ContextPtr local_context,
-    QueryProcessingStage::Enum processed_stage,
-    const size_t max_block_size,
-    const size_t num_streams)
-{
-    QueryPlan plan;
-    read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
-    return plan.convertToPipe(
-        QueryPlanOptimizationSettings::fromContext(local_context), BuildQueryPipelineSettings::fromContext(local_context), local_context);
-}
-
 void StorageMaterializedView::read(
     QueryPlan & query_plan,
     const Names & column_names,
@@ -300,16 +282,16 @@ void StorageMaterializedView::read(
     /// In some cases, the view background thread has exception, we check it before users access this view
     checkValid();
 
+    auto storage = getTargetTable();
+    /// stop query, if the inner table has been deleted.
+    if (!storage)
+        throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Inner table of {}", getStorageID().getFullTableName());
+
     Block header;
     if (!column_names.empty())
         header = storage_snapshot->getSampleBlockForColumns(column_names);
     else
         header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
-
-    auto storage = getTargetTable();
-    /// stop query, if the inner table has been deleted.
-    if (!storage)
-        throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Inner table of {}", getStorageID().getFullTableName());
 
     auto lock = storage->lockForShare(local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
     auto target_metadata_snapshot = storage->getInMemoryMetadataPtr();
@@ -318,36 +300,23 @@ void StorageMaterializedView::read(
     if (query_info.order_optimizer)
         query_info.input_order_info = query_info.order_optimizer->getInputOrder(target_metadata_snapshot, local_context);
 
-    auto pipe
-        = storage->read(column_names, target_storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
+    storage->read(query_plan, column_names, target_storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
 
-    if (pipe.empty())
-    {
-        /// Create step which reads from empty source if storage has no historical data.
-        assert(!query_info.syntax_analyzer_result->streaming);
-        InterpreterSelectQuery::addEmptySourceToQueryPlan(query_plan, header, query_info, local_context);
-    }
-    else
+    if (query_plan.isInitialized())
     {
         if (query_info.syntax_analyzer_result->streaming)
         {
+            // This check is so weird, disable it for now
             /// Add valid check of the view
-            /// If not check, when the view go bad, the streaming query of the target table will be blocked indefinitely since there is no ingestion on background.
-            pipe.addTransform(std::make_shared<CheckMaterializedViewValidTransform>(header, *this));
+            /// If not check, when the view go bad, the streaming query of the target stream will be blocked indefinitely
+            /// since there is no ingestion on background.
+            /// pipe.addTransform(std::make_shared<CheckMaterializedViewValidTransform>(header, *this));
+            /// query_plan.addStep(std::move(read_step));
         }
-        auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName() + "-Target");
-        query_plan.addStep(std::move(read_step));
+
+        query_plan.addStorageHolder(storage);
+        query_plan.addTableLock(std::move(lock));
     }
-
-    StreamLocalLimits limits;
-    SizeLimits leaf_limits;
-
-    /// Add table lock for destination table.
-    auto adding_limits_and_quota = std::make_unique<SettingQuotaAndLimitsStep>(
-        query_plan.getCurrentDataStream(), storage, std::move(lock), limits, leaf_limits, nullptr, nullptr);
-
-    adding_limits_and_quota->setStepDescription("Lock destination stream for MaterializedView");
-    query_plan.addStep(std::move(adding_limits_and_quota));
 }
 
 void StorageMaterializedView::drop()

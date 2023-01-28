@@ -89,21 +89,6 @@ QueryProcessingStage::Enum ProxyStream::getQueryProcessingStage(
         return QueryProcessingStage::FetchColumns;
 }
 
-Pipe ProxyStream::read(
-    const Names & column_names,
-    const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & query_info,
-    ContextPtr context_,
-    QueryProcessingStage::Enum processed_stage,
-    size_t max_block_size,
-    size_t num_streams)
-{
-    QueryPlan plan;
-    read(plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
-    return plan.convertToPipe(
-        QueryPlanOptimizationSettings::fromContext(context_), BuildQueryPipelineSettings::fromContext(context_), context_);
-}
-
 void ProxyStream::read(
     QueryPlan & query_plan,
     const Names & column_names,

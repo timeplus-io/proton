@@ -251,7 +251,7 @@ namespace
     *
     * If process_pool is passed in constructor then after source is destroyed process is returned to pool.
     */
-    class ShellCommandSource final : public SourceWithProgress
+    class ShellCommandSource final : public ISource
     {
     public:
 
@@ -267,7 +267,7 @@ namespace
             const ShellCommandSourceConfiguration & configuration_ = {},
             std::unique_ptr<ShellCommandHolder> && command_holder_ = nullptr,
             std::shared_ptr<ProcessPool> process_pool_ = nullptr)
-            : SourceWithProgress(sample_block_, ProcessorID::ShellCommandSourceID)
+            : ISource(sample_block_, true, ProcessorID::ShellCommandSourceID)
             , context(context_)
             , format(format_)
             , sample_block(sample_block_)
@@ -326,7 +326,6 @@ namespace
             if (command_is_invalid)
                 command = nullptr;
 
-
             if (command_holder && process_pool)
             {
                 bool valid_command = configuration.read_fixed_number_of_rows && current_read_rows >= configuration.number_of_rows_to_read;
@@ -381,7 +380,7 @@ namespace
 
         Status prepare() override
         {
-            auto status = SourceWithProgress::prepare();
+            auto status = ISource::prepare();
 
             if (status == Status::Finished)
             {
@@ -528,6 +527,7 @@ Pipe ShellCommandSourceCoordinator::createPipe(
 
     std::vector<ShellCommandSource::SendDataTask> tasks;
     tasks.reserve(input_pipes.size());
+
     for (size_t i = 0; i < input_pipes.size(); ++i)
     {
         WriteBufferFromFile * write_buffer = nullptr;
@@ -589,9 +589,8 @@ Pipe ShellCommandSourceCoordinator::createPipe(
         source_configuration,
         std::move(process_holder),
         process_pool);
-    auto pipe = Pipe(std::move(source));
 
-    return pipe;
+    return Pipe(std::move(source));
 }
 
 /// proton: starts

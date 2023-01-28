@@ -21,6 +21,9 @@ class QueryStatus;
 class ExecutingGraph;
 using ExecutingGraphPtr = std::unique_ptr<ExecutingGraph>;
 
+class ReadProgressCallback;
+using ReadProgressCallbackPtr = std::unique_ptr<ReadProgressCallback>;
+
 /// Executes query pipeline.
 class PipelineExecutor final : public std::enable_shared_from_this<PipelineExecutor>
 {
@@ -52,6 +55,10 @@ public:
     bool checkTimeLimit();
     /// Same as checkTimeLimit but it never throws. It returns false on cancellation or time limit reached
     [[nodiscard]] bool checkTimeLimitSoft();
+
+    /// Set callback for read progress.
+    /// It would be called every time when processor reports read progress.
+    void setReadProgressCallback(ReadProgressCallbackPtr callback);
 
     /// proton: starts.
     void registerCheckpoint(ExecuteMode exec_mode_);
@@ -106,6 +113,8 @@ private:
 
     /// Now it's used to check if query was killed.
     QueryStatus * const process_list_element = nullptr;
+
+    ReadProgressCallbackPtr read_progress_callback;
 
     using Queue = std::queue<ExecutingGraph::Node *>;
 

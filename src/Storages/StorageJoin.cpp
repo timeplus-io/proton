@@ -17,8 +17,9 @@
 #include <Interpreters/join_common.h>
 
 #include <Compression/CompressedWriteBuffer.h>
-#include <Processors/Sources/SourceWithProgress.h>
+#include <Processors/ISource.h>
 #include <QueryPipeline/Pipe.h>
+#include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Processors/Executors/PullingPipelineExecutor.h>
 #include <Poco/String.h> /// toLower
 
@@ -62,9 +63,7 @@ StorageJoin::StorageJoin(
     auto metadata_snapshot = getInMemoryMetadataPtr();
     for (const auto & key : key_names)
         if (!metadata_snapshot->getColumns().hasPhysical(key))
-            /// proton: starts
             throw Exception{"Key column (" + key + ") does not exist in stream declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_STREAM};
-            /// proton: ends
 
     table_join = std::make_shared<TableJoin>(limits, use_nulls, kind, strictness, key_names);
     join = std::make_shared<HashJoin>(table_join, getRightSampleBlock(), overwrite);
@@ -102,9 +101,7 @@ void StorageJoin::checkMutationIsPossible(const MutationCommands & commands, con
 {
     for (const auto & command : commands)
         if (command.type != MutationCommand::DELETE)
-            /// proton: starts
             throw Exception("The engine Join supports only DELETE mutations", ErrorCodes::NOT_IMPLEMENTED);
-            /// proton: ends
 }
 
 void StorageJoin::mutate(const MutationCommands & commands, ContextPtr context)
@@ -127,7 +124,7 @@ void StorageJoin::mutate(const MutationCommands & commands, ContextPtr context)
     {
         auto storage_ptr = DatabaseCatalog::instance().getTable(getStorageID(), context);
         auto interpreter = std::make_unique<MutationsInterpreter>(storage_ptr, metadata_snapshot, commands, context, true);
-        auto pipeline = interpreter->execute();
+        auto pipeline = QueryPipelineBuilder::getPipeline(interpreter->execute());
         PullingPipelineExecutor executor(pipeline);
 
         Block block;
@@ -168,9 +165,7 @@ HashJoinPtr StorageJoin::getJoinLocked(std::shared_ptr<TableJoin> analyzed_join,
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();
     if (!analyzed_join->sameStrictnessAndKind(strictness, kind))
-        /// proton: starts
         throw Exception("Stream " + getStorageID().getNameForLogs() + " has incompatible type of JOIN.", ErrorCodes::INCOMPATIBLE_TYPE_OF_JOIN);
-        /// proton: ends
 
     if ((analyzed_join->forceNullableRight() && !use_nulls) ||
         (!analyzed_join->forceNullableRight() && isLeftOrFull(analyzed_join->kind()) && use_nulls))
@@ -383,11 +378,11 @@ size_t rawSize(const StringRef & t)
     return t.size;
 }
 
-class JoinSource final : public SourceWithProgress
+class JoinSource final : public ISource
 {
 public:
     JoinSource(HashJoinPtr join_, TableLockHolder lock_holder_, UInt64 max_block_size_, Block sample_block_)
-        : SourceWithProgress(sample_block_, ProcessorID::JoinSourceID)
+        : ISource(sample_block_, true, ProcessorID::JoinSourceID)
         , join(join_)
         , lock_holder(lock_holder_)
         , max_block_size(max_block_size_)

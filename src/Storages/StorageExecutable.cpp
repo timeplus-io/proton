@@ -16,6 +16,7 @@
 
 #include <QueryPipeline/Pipe.h>
 #include <Processors/ISimpleTransform.h>
+#include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/Executors/CompletedPipelineExecutor.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
@@ -103,10 +104,11 @@ StorageExecutable::StorageExecutable(
     coordinator = std::make_unique<ShellCommandSourceCoordinator>(std::move(configuration));
 }
 
-Pipe StorageExecutable::read(
-    const Names & /*column_names*/,
+void StorageExecutable::read(
+    QueryPlan & query_plan,
+    const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & /*query_info*/,
+    SelectQueryInfo & query_info,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
     size_t max_block_size,
@@ -130,12 +132,14 @@ Pipe StorageExecutable::read(
             user_scripts_path);
 
     Pipes inputs;
+    QueryPlanResourceHolder resources;
     inputs.reserve(input_queries.size());
 
     for (auto & input_query : input_queries)
     {
         InterpreterSelectWithUnionQuery interpreter(input_query, context, {});
-        inputs.emplace_back(QueryPipelineBuilder::getPipe(interpreter.buildQueryPipeline()));
+        auto builder = interpreter.buildQueryPipeline();
+        inputs.emplace_back(QueryPipelineBuilder::getPipe(std::move(builder), resources));
     }
 
     /// For executable pool we read data from input streams and convert it to single blocks streams.
@@ -153,7 +157,9 @@ Pipe StorageExecutable::read(
         configuration.read_number_of_rows_from_process_output = true;
     }
 
-    return coordinator->createPipe(script_path, settings.script_arguments, std::move(inputs), std::move(sample_block), context, configuration);
+    auto pipe = coordinator->createPipe(script_path, settings.script_arguments, std::move(inputs), std::move(sample_block), context, configuration);
+    IStorage::readFromPipe(query_plan, std::move(pipe), column_names, storage_snapshot, query_info, context, getName());
+    query_plan.addResources(std::move(resources));
 }
 
 void registerStorageExecutable(StorageFactory & factory)

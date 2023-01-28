@@ -6,11 +6,13 @@
 #include <Storages/MergeTree/RangesInDataPart.h>
 #include <Storages/MergeTree/PartitionPruner.h>
 #include <Processors/QueryPlan/ReadFromMergeTree.h>
+#include <Processors/ISource.h>
 
 namespace DB
 {
 
 class KeyCondition;
+struct QueryIdHolder;
 
 using PartitionIdToMaxBlock = std::unordered_map<String, Int64>;
 

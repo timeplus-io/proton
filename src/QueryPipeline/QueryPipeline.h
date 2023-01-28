@@ -1,5 +1,7 @@
 #pragma once
 #include <QueryPipeline/PipelineResourcesHolder.h>
+#include <QueryPipeline/SizeLimits.h>
+#include <QueryPipeline/StreamLocalLimits.h>
 #include <functional>
 
 /// proton : starts
@@ -31,6 +33,10 @@ class IOutputFormat;
 class SinkToStorage;
 class ISource;
 class ISink;
+class ReadProgressCallback;
+
+struct ColumnWithTypeAndName;
+using ColumnsWithTypeAndName = std::vector<ColumnWithTypeAndName>;
 
 class QueryPipeline
 {
@@ -44,8 +50,9 @@ public:
 
     ~QueryPipeline();
 
-    /// pulling
+    /// pulling or completed
     explicit QueryPipeline(Pipe pipe);
+    /// pulling
     explicit QueryPipeline(std::shared_ptr<ISource> source);
     /// pushing
     explicit QueryPipeline(Chain chain);
@@ -54,18 +61,18 @@ public:
 
     /// completed
     QueryPipeline(
-        PipelineResourcesHolder resources_,
+        QueryPlanResourceHolder resources_,
         Processors processors_);
 
     /// pushing
     QueryPipeline(
-        PipelineResourcesHolder resources_,
+        QueryPlanResourceHolder resources_,
         Processors processors_,
         InputPort * input_);
 
     /// pulling
     QueryPipeline(
-        PipelineResourcesHolder resources_,
+        QueryPlanResourceHolder resources_,
         Processors processors_,
         OutputPort * output_,
         OutputPort * totals_ = nullptr,
@@ -96,12 +103,31 @@ public:
 
     void setProcessListElement(QueryStatus * elem);
     void setProgressCallback(const ProgressCallback & callback);
-    void setLimitsAndQuota(const StreamLocalLimits & limits, std::shared_ptr<const EnabledQuota> quota);
+    void setLimitsAndQuota(const StreamLocalLimits & limits, std::shared_ptr<const EnabledQuota> quota_);
     bool tryGetResultRowsAndBytes(UInt64 & result_rows, UInt64 & result_bytes) const;
+
+    void setQuota(std::shared_ptr<const EnabledQuota> quota_);
 
     void addStorageHolder(StoragePtr storage);
 
+    /// Existing resources are not released here, see move ctor for QueryPlanResourceHolder.
+    void addResources(QueryPlanResourceHolder holder) { resources = std::move(holder); }
+
+    /// Skip updating profile events.
+    /// For merges in mutations it may need special logic, it's done inside ProgressCallback.
+    void disableProfileEventUpdate() { update_profile_events = false; }
+
+    /// Create progress callback from limits and quotas.
+    std::unique_ptr<ReadProgressCallback> getReadProgressCallback() const;
+
+    /// Add processors and resources from other pipeline. Other pipeline should be completed.
+    void addCompletedPipeline(QueryPipeline other);
+
     const Processors & getProcessors() const { return processors; }
+
+    /// For pulling pipeline, convert structure to expected.
+    /// Trash, need to remove later.
+    void convertStructureTo(const ColumnsWithTypeAndName & columns);
 
     void reset();
 
@@ -110,7 +136,12 @@ public:
     /// proton : ends
 
 private:
-    PipelineResourcesHolder resources;
+    QueryPlanResourceHolder resources;
+
+    ProgressCallback progress_callback;
+    std::shared_ptr<const EnabledQuota> quota;
+    bool update_profile_events = true;
+
     Processors processors;
 
     InputPort * input = nullptr;

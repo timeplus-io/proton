@@ -8,8 +8,9 @@
 #include <Processors/Transforms/ExtremesTransform.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/NullSource.h>
-#include <Processors/Sources/SourceWithProgress.h>
+#include <Processors/ISource.h>
 #include <Processors/QueryPlan/QueryPlan.h>
+#include <QueryPipeline/ReadProgressCallback.h>
 #include <Columns/ColumnConst.h>
 
 namespace DB
@@ -101,16 +102,6 @@ static OutputPort * uniteTotals(const OutputPortRawPtrs & ports, const Block & h
     return totals_port;
 }
 
-void Pipe::addQueryPlan(std::unique_ptr<QueryPlan> plan)
-{
-    holder.query_plans.emplace_back(std::move(plan));
-}
-
-PipelineResourcesHolder Pipe::detachResources()
-{
-    return std::move(holder);
-}
-
 Pipe::Pipe(ProcessorPtr source, OutputPort * output, OutputPort * totals, OutputPort * extremes)
 {
     if (!source->getInputs().empty())
@@ -170,8 +161,7 @@ Pipe::Pipe(ProcessorPtr source, OutputPort * output, OutputPort * totals, Output
 
 Pipe::Pipe(ProcessorPtr source)
 {
-    if (source->getOutputs().size() != 1)
-        checkSource(*source);
+    checkSource(*source);
 
     if (collected_processors)
         collected_processors->emplace_back(source);
@@ -303,19 +293,13 @@ Pipe Pipe::unitePipes(Pipes pipes, Processors * collected_processors, bool allow
 {
     Pipe res;
 
-    for (auto & pipe : pipes)
-        res.holder = std::move(pipe.holder); /// see move assignment for Pipe::Holder.
-
     pipes = removeEmptyPipes(std::move(pipes));
 
     if (pipes.empty())
         return res;
 
     if (pipes.size() == 1)
-    {
-        pipes[0].holder = std::move(res.holder);
         return std::move(pipes[0]);
-    }
 
     OutputPortRawPtrs totals;
     OutputPortRawPtrs extremes;
@@ -708,7 +692,6 @@ void Pipe::addChains(std::vector<Chain> chains)
         connect(*output_ports[i], chains[i].getInputPort());
         output_ports[i] = &chains[i].getOutputPort();
 
-        holder = chains[i].detachResources();
         auto added_processors = Chain::getProcessors(std::move(chains[i]));
         for (auto & transform : added_processors)
         {
@@ -782,45 +765,6 @@ void Pipe::setSinks(const Pipe::ProcessorGetterWithStreamKind & getter)
 
     add_transform(totals_port, StreamType::Totals);
     add_transform(extremes_port, StreamType::Extremes);
-
-    output_ports.clear();
-    header.clear();
-}
-
-void Pipe::setOutputFormat(ProcessorPtr output)
-{
-    if (output_ports.empty())
-        throw Exception("Cannot set output format to empty Pipe", ErrorCodes::LOGICAL_ERROR);
-
-    if (output_ports.size() != 1)
-        throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Cannot set output format to Pipe because single output port is expected, but it has {} ports", output_ports.size());
-
-    auto * format = dynamic_cast<IOutputFormat * >(output.get());
-
-    if (!format)
-        throw Exception("IOutputFormat processor expected for QueryPipelineBuilder::setOutputFormat",
-                        ErrorCodes::LOGICAL_ERROR);
-
-    auto & main = format->getPort(IOutputFormat::PortKind::Main);
-    auto & totals = format->getPort(IOutputFormat::PortKind::Totals);
-    auto & extremes = format->getPort(IOutputFormat::PortKind::Extremes);
-
-    if (!totals_port)
-        addTotalsSource(std::make_shared<NullSource>(totals.getHeader()));
-
-    if (!extremes_port)
-        addExtremesSource(std::make_shared<NullSource>(extremes.getHeader()));
-
-    if (collected_processors)
-        collected_processors->emplace_back(output);
-
-    processors.emplace_back(std::move(output));
-
-    connect(*output_ports.front(), main);
-    connect(*totals_port, totals);
-    connect(*extremes_port, extremes);
 
     output_ports.clear();
     header.clear();
@@ -911,33 +855,6 @@ void Pipe::transform(const Transformer & transformer)
     processors.insert(processors.end(), new_processors.begin(), new_processors.end());
 
     max_parallel_streams = std::max<size_t>(max_parallel_streams, output_ports.size());
-}
-
-void Pipe::setLimits(const StreamLocalLimits & limits)
-{
-    for (auto & processor : processors)
-    {
-        if (auto * source_with_progress = dynamic_cast<ISourceWithProgress *>(processor.get()))
-            source_with_progress->setLimits(limits);
-    }
-}
-
-void Pipe::setLeafLimits(const SizeLimits & leaf_limits)
-{
-    for (auto & processor : processors)
-    {
-        if (auto * source_with_progress = dynamic_cast<ISourceWithProgress *>(processor.get()))
-            source_with_progress->setLeafLimits(leaf_limits);
-    }
-}
-
-void Pipe::setQuota(const std::shared_ptr<const EnabledQuota> & quota)
-{
-    for (auto & processor : processors)
-    {
-        if (auto * source_with_progress = dynamic_cast<ISourceWithProgress *>(processor.get()))
-            source_with_progress->setQuota(quota);
-    }
 }
 
 /// proton: starts.

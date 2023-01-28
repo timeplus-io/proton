@@ -8,7 +8,7 @@ namespace DB
 class MarkSource final : public ISource
 {
 public:
-    explicit MarkSource(Block header, UInt64 mark) : ISource(std::move(header), ProcessorID::MarkSourceID), chunk(output.getHeader().getColumns(), 0)
+    explicit MarkSource(Block header, UInt64 mark) : ISource(std::move(header), true, ProcessorID::MarkSourceID), chunk(output.getHeader().getColumns(), 0)
     {
         auto chunk_ctx = std::make_shared<ChunkContext>();
         chunk_ctx->setMark(mark);

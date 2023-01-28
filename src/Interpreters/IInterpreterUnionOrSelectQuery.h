@@ -95,13 +95,23 @@ public:
 
     void extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr &, ContextPtr) const override;
 
+    /// Add limits from external query.
+    void addStorageLimits(const StorageLimitsList & limits);
+
 protected:
     ASTPtr query_ptr;
     ContextMutablePtr context;
     Block result_header;
     SelectQueryOptions options;
+    StorageLimitsList storage_limits;
+
     size_t max_streams = 1;
     bool settings_limit_offset_needed = false;
     bool settings_limit_offset_done = false;
+
+    /// Set quotas to query pipeline.
+    void setQuota(QueryPipeline & pipeline) const;
+
+    static StorageLimits getStorageLimits(const Context & context, const SelectQueryOptions & options);
 };
 }

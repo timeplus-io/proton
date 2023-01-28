@@ -15,7 +15,7 @@ namespace ErrorCodes
 /// proton: ends
 
 IInputFormat::IInputFormat(Block header, ReadBuffer & in_, ProcessorID pid_)
-    : ISource(std::move(header), pid_), in(&in_)
+    : ISource(std::move(header), true, pid_), in(&in_)
 {
     column_mapping = std::make_shared<ColumnMapping>();
 }

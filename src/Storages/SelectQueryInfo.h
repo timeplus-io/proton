@@ -6,6 +6,7 @@
 #include <Core/Names.h>
 #include <Storages/ProjectionsDescription.h>
 #include <Interpreters/AggregateDescription.h>
+#include <QueryPipeline/StreamLocalLimits.h>
 
 #include <memory>
 
@@ -142,6 +143,8 @@ struct SelectQueryInfo
     ASTPtr query;
     ASTPtr view_query; /// Optimized VIEW query
     ASTPtr original_query; /// Unmodified query for projection analysis
+
+    std::shared_ptr<const StorageLimitsList> storage_limits;
 
     /// Cluster for the query.
     ClusterPtr cluster;

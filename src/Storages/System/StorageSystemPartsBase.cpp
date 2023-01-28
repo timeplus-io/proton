@@ -10,6 +10,7 @@
 #include <Databases/IDatabase.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
+#include <QueryPipeline/Pipe.h>
 #include <Interpreters/Context.h>
 
 /// proton: starts.

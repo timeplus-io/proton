@@ -1,7 +1,5 @@
 #include <Storages/Streaming/StorageRandom.h>
 
-#include <Common/ProtonCommon.h>
-
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
@@ -17,22 +15,22 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/NestedUtils.h>
+#include <Functions/FunctionFactory.h>
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Parsers/ASTLiteral.h>
+#include <Processors/ISource.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
-#include <Processors/Sources/SourceWithProgress.h>
 #include <QueryPipeline/Pipe.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IStorage.h>
+#include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageFactory.h>
-
 #include <base/unaligned.h>
+#include <Common/ProtonCommon.h>
 #include <Common/SipHash.h>
 #include <Common/randomSeed.h>
-
-#include <Functions/FunctionFactory.h>
 
 #include <pcg_random.hpp>
 
@@ -351,24 +349,24 @@ ColumnPtr fillColumnWithRandomData(const DataTypePtr type, UInt64 limit, pcg64 &
 }
 
 
-class GenerateRandomSource : public SourceWithProgress
+class GenerateRandomSource final : public ISource
 {
 public:
     GenerateRandomSource(
         UInt64 block_size_, UInt64 random_seed_, Block block_header_, const ColumnsDescription our_columns_, ContextPtr context_)
-        : SourceWithProgress(Nested::flatten(prepareBlockToFill(block_header_)), ProcessorID::GenerateRandomSourceID)
+        : ISource(Nested::flatten(prepareBlockToFill(block_header_)), true, ProcessorID::GenerateRandomSourceID)
         , block_size(block_size_)
         , block_full(std::move(block_header_))
         , our_columns(our_columns_)
         , rng(random_seed_)
         , context(context_)
     {
-        for (const auto &elem : block_full)
+        for (const auto & elem : block_full)
         {
             bool is_reserved_column
                 = std::find(ProtonConsts::RESERVED_COLUMN_NAMES.begin(), ProtonConsts::RESERVED_COLUMN_NAMES.end(), elem.name)
                 != ProtonConsts::RESERVED_COLUMN_NAMES.end();
-            if ( is_reserved_column || our_columns.hasDefault(elem.name))
+            if (is_reserved_column || our_columns.hasDefault(elem.name))
                 continue;
             block_to_fill.insert(elem);
         }
@@ -381,7 +379,7 @@ protected:
     {
         Columns columns;
         columns.reserve(block_full.columns());
-        
+
         Block block_to_fill_as_result(block_to_fill.cloneEmpty());
 
         for (const auto & elem : block_to_fill_as_result)
@@ -393,7 +391,8 @@ protected:
         //e.g. create stream test(_dummy string default  rand_string());
 
         if (block_to_fill_as_result.columns() == 0)
-            block_to_fill_as_result.insert({ColumnConst::create(ColumnUInt8::create(1, 0), block_size), std::make_shared<DataTypeUInt8>(), "_dummy"});
+            block_to_fill_as_result.insert(
+                {ColumnConst::create(ColumnUInt8::create(1, 0), block_size), std::make_shared<DataTypeUInt8>(), "_dummy"});
 
         auto dag = evaluateMissingDefaults(block_to_fill_as_result, block_full.getNamesAndTypesList(), our_columns, context);
         if (dag)
@@ -403,10 +402,11 @@ protected:
             actions->execute(block_to_fill_as_result);
         }
 
-        if (block_to_fill_as_result.has(ProtonConsts::RESERVED_COLUMN_NAMES[0]) && block_to_fill_as_result.has(ProtonConsts::RESERVED_COLUMN_NAMES[1]) )
+        if (block_to_fill_as_result.has(ProtonConsts::RESERVED_COLUMN_NAMES[0])
+            && block_to_fill_as_result.has(ProtonConsts::RESERVED_COLUMN_NAMES[1]))
             block_to_fill_as_result.getByName(ProtonConsts::RESERVED_COLUMN_NAMES[1]).column
                 = block_to_fill_as_result.getByName(ProtonConsts::RESERVED_COLUMN_NAMES[0]).column->cloneResized(block_size);
-        if( block_to_fill_as_result.has("_dummy") )
+        if (block_to_fill_as_result.has("_dummy"))
             block_to_fill_as_result.erase("_dummy");
 
         columns = Nested::flatten(block_to_fill_as_result).getColumns();
@@ -482,7 +482,7 @@ void StorageRandom::read(
 {
     Pipe pipe = read(column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 
-    auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName());
+    auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName(), query_info.storage_limits);
     query_plan.addStep(std::move(read_step));
 }
 
@@ -513,7 +513,7 @@ Pipe StorageRandom::read(
 
     for (UInt64 i = 0; i < num_streams; ++i)
         pipes.emplace_back(std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context));
-        
+
     return Pipe::unitePipes(std::move(pipes));
 }
 

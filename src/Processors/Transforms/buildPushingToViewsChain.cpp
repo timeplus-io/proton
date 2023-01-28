@@ -9,6 +9,7 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Executors/PullingPipelineExecutor.h>
 #include <Storages/StorageValues.h>
+#include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Common/CurrentThread.h>
 #include <Common/ProfileEvents.h>
 #include <Common/ThreadProfileEvents.h>

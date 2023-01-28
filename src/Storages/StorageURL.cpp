@@ -22,7 +22,7 @@
 #include <Storages/PartitionedSink.h>
 
 #include <Poco/Net/HTTPRequest.h>
-#include <Processors/Sources/SourceWithProgress.h>
+#include <Processors/ISource.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Processors/Executors/PullingPipelineExecutor.h>
 #include <Common/logger_useful.h>
@@ -130,10 +130,9 @@ namespace
     }
 
 
-    class StorageURLSource : public SourceWithProgress
+    class StorageURLSource : public ISource
     {
-
-    using URIParams = std::vector<std::pair<String, String>>;
+        using URIParams = std::vector<std::pair<String, String>>;
 
     public:
         struct URIInfo
@@ -166,7 +165,7 @@ namespace
             const String & compression_method,
             const ReadWriteBufferFromHTTP::HTTPHeaderEntries & headers_ = {},
             const URIParams & params = {})
-            : SourceWithProgress(sample_block, ProcessorID::StorageURLSourceID), name(std::move(name_))
+            : ISource(sample_block, true, ProcessorID::StorageURLSourceID), name(std::move(name_))
             , uri_info(uri_info_)
         {
             auto headers = getHeaders(headers_);

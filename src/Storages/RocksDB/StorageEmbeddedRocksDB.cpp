@@ -1,8 +1,6 @@
 #include <Storages/RocksDB/StorageEmbeddedRocksDB.h>
 #include <Storages/RocksDB/EmbeddedRocksDBSink.h>
-/// proton: starts.
-#include <Storages/MutationCommands.h>
-/// proton:ends.
+
 #include <DataTypes/DataTypesNumber.h>
 
 #include <Storages/SelectQueryInfo.h>
@@ -20,7 +18,7 @@
 #include <IO/ReadBufferFromString.h>
 
 #include <QueryPipeline/Pipe.h>
-#include <Processors/Sources/SourceWithProgress.h>
+#include <Processors/ISource.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/Set.h>
@@ -39,6 +37,10 @@
 
 #include <filesystem>
 #include <shared_mutex>
+
+/// proton: starts.
+#include <Storages/MutationCommands.h>
+/// proton:ends.
 
 
 namespace fs = std::filesystem;
@@ -182,7 +184,7 @@ static std::pair<FieldVectorPtr, bool> getFilterKeys(
 }
 
 
-class EmbeddedRocksDBSource final : public SourceWithProgress
+class EmbeddedRocksDBSource final : public ISource
 {
 public:
     EmbeddedRocksDBSource(
@@ -192,7 +194,7 @@ public:
         FieldVector::const_iterator begin_,
         FieldVector::const_iterator end_,
         const size_t max_block_size_)
-        : SourceWithProgress(header, ProcessorID::EmbeddedRocksDBSourceID)
+        : ISource(header, true, ProcessorID::EmbeddedRocksDBSourceID)
         , storage(storage_)
         , primary_key_pos(header.getPositionByName(storage.getPrimaryKey()))
         , keys(keys_)
@@ -208,7 +210,7 @@ public:
         const Block & header,
         std::unique_ptr<rocksdb::Iterator> iterator_,
         const size_t max_block_size_)
-        : SourceWithProgress(header, ProcessorID::EmbeddedRocksDBSourceID)
+        : ISource(header, true, ProcessorID::EmbeddedRocksDBSourceID)
         , storage(storage_)
         , primary_key_pos(header.getPositionByName(storage.getPrimaryKey()))
         , iterator(std::move(iterator_))

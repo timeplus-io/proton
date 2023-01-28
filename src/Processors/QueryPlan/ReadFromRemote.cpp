@@ -14,6 +14,7 @@
 #include <Common/checkStackSize.h>
 #include <Client/ConnectionPool.h>
 #include <Client/ConnectionPoolWithFailover.h>
+#include <QueryPipeline/QueryPipelineBuilder.h>
 
 namespace DB
 {
@@ -103,7 +104,8 @@ ReadFromRemote::ReadFromRemote(
     Scalars scalars_,
     Tables external_tables_,
     Poco::Logger * log_,
-    UInt32 shard_count_)
+    UInt32 shard_count_,
+    std::shared_ptr<const StorageLimitsList> storage_limits_)
     : ISourceStep(DataStream{.header = std::move(header_)})
     , shards(std::move(shards_))
     , stage(stage_)
@@ -113,6 +115,7 @@ ReadFromRemote::ReadFromRemote(
     , throttler(std::move(throttler_))
     , scalars(std::move(scalars_))
     , external_tables(std::move(external_tables_))
+    , storage_limits(std::move(storage_limits_))
     , log(log_)
     , shard_count(shard_count_)
 {
@@ -143,7 +146,7 @@ void ReadFromRemote::addLazyPipe(Pipes & pipes, const ClusterProxy::IStreamFacto
             scalars = scalars, external_tables = external_tables,
             stage = stage, local_delay = shard.local_delay,
             add_agg_info, add_totals, add_extremes, async_read]() mutable
-        -> Pipe
+        -> QueryPipelineBuilder
     {
         auto current_settings = context->getSettingsRef();
         auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(
@@ -179,9 +182,9 @@ void ReadFromRemote::addLazyPipe(Pipes & pipes, const ClusterProxy::IStreamFacto
         {
             auto plan = createLocalPlan(query, header, context, stage, static_cast<UInt32>(shard_num), shard_count);
 
-            return QueryPipelineBuilder::getPipe(std::move(*plan->buildQueryPipeline(
+            return std::move(*plan->buildQueryPipeline(
                 QueryPlanOptimizationSettings::fromContext(context),
-                BuildQueryPipelineSettings::fromContext(context), context)));
+                BuildQueryPipelineSettings::fromContext(context), context));
         }
         else
         {
@@ -198,12 +201,14 @@ void ReadFromRemote::addLazyPipe(Pipes & pipes, const ClusterProxy::IStreamFacto
                 pool, std::move(connections), query_string, header, context, throttler, scalars, external_tables, stage,
                 RemoteQueryExecutor::Extension{.parallel_reading_coordinator = std::move(coordinator), .replica_info = replica_info});
 
-            return createRemoteSourcePipe(remote_query_executor, add_agg_info, add_totals, add_extremes, async_read);
+            auto pipe = createRemoteSourcePipe(remote_query_executor, add_agg_info, add_totals, add_extremes, async_read);
+            QueryPipelineBuilder builder;
+            builder.init(std::move(pipe));
+            return builder;
         }
     };
 
     pipes.emplace_back(createDelayedPipe(shard.header, lazily_create_stream, add_totals, add_extremes));
-    pipes.back().addInterpreterContext(context);
     addConvertingActions(pipes.back(), output_stream->header);
 }
 
@@ -244,7 +249,6 @@ void ReadFromRemote::addPipe(Pipes & pipes, const ClusterProxy::IStreamFactory::
         remote_query_executor->setMainTable(main_table);
 
     pipes.emplace_back(createRemoteSourcePipe(remote_query_executor, add_agg_info, add_totals, add_extremes, async_read));
-    pipes.back().addInterpreterContext(context);
     addConvertingActions(pipes.back(), output_stream->header);
 }
 
@@ -297,6 +301,10 @@ void ReadFromRemote::initializePipeline(QueryPipelineBuilder & pipeline, const B
     }
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
+
+    for (const auto & processor : pipe.getProcessors())
+        processor->setStorageLimits(storage_limits);
+
     pipeline.init(std::move(pipe));
 }
 

@@ -11,7 +11,7 @@
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
 
-#include <Processors/Sources/SourceWithProgress.h>
+#include <Processors/ISource.h>
 
 #include <boost/algorithm/string/replace.hpp>
 

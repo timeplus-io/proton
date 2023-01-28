@@ -4,6 +4,7 @@
 #include <Processors/Transforms/convertToChunk.h>
 #include <Processors/Sources/NullSource.h>
 #include <QueryPipeline/QueryPipeline.h>
+#include <QueryPipeline/ReadProgressCallback.h>
 #include <Common/setThreadName.h>
 #include <Common/ThreadPool.h>
 #include <Common/scope_guard_safe.h>
@@ -107,6 +108,7 @@ bool PullingAsyncPipelineExecutor::pull(Chunk & chunk, uint64_t milliseconds)
     {
         data = std::make_unique<Data>();
         data->executor = std::make_shared<PipelineExecutor>(pipeline.processors, pipeline.process_list_element);
+        data->executor->setReadProgressCallback(pipeline.getReadProgressCallback());
         data->lazy_format = lazy_format.get();
         data->exec_mode = pipeline.exec_mode;
 

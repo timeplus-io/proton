@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# Usage
+# ./run_ck_tests.sh <proton-binary-path> <data-set-path>
+# Example : ./run_ck_tests.sh /server/debug_build/programs ~/datasets
+
+
+usage() {
+    echo "Usage: ./run_ck_tests.sh <proton-binary-path> <data-set-path>"
+    echo -e "\tExample : ./run_ck_tests.sh /server/debug_build/programs ~/datasets"
+    echo
+    echo "You may need first download dataset first:"
+    echo -e "\tcurl https://datasets.clickhouse.com/hits/tsv/hits_v1.tsv.xz | unxz --threads=`nproc` > hits_v1.tsv"
+    echo -e "\tcurl https://datasets.clickhouse.com/visits/tsv/visits_v1.tsv.xz | unxz --threads=`nproc` > visits_v1.tsv"
+    exit -1
+}
+
+if [ "${1}" == "" ] || [ "${2}" == "" ]; then
+    usage
+fi
+
+
+if [ ! -f "${1}/proton" ]; then
+    echo "Didn't find proton executable in in data directory: ${1}"
+    usage
+fi
+
+export PATH=$PATH:"${1}"
+
+visits_tsv="${2}/visits_v1.tsv"
+hits_tsv="${2}/hits_v1.tsv"
+
+if [ ! -f  "${visits_tsv}" ] || [ ! -f "${hits_tsv}" ]; then
+    echo "Didn't find visits_v1.tsv or hits_v1.tsv in data directory: ${2}"
+    usage
+fi
+
+
+# Create test database and streams
+echo "Provisioning test database"
+proton-client --query="create database if not exists test"
+
+echo "Provisioning test.hits"
+proton-client --query="drop stream if exists test.hits"
+proton-client --query="create stream if not exists test.hits ( WatchID uint64, JavaEnable uint8, Title string, GoodEvent int16, EventTime datetime, EventDate date, CounterID uint32, ClientIP uint32, ClientIP6 fixed_string(16), RegionID uint32, UserID uint64, CounterClass int8, OS uint8, UserAgent uint8, URL string, Referer string, URLDomain string, RefererDomain string, Refresh uint8, IsRobot uint8, RefererCategories array(uint16), URLCategories array(uint16), URLRegions array(uint32), RefererRegions array(uint32), ResolutionWidth uint16, ResolutionHeight uint16, ResolutionDepth uint8, FlashMajor uint8, FlashMinor uint8, FlashMinor2 string, NetMajor uint8, NetMinor uint8, UserAgentMajor uint16, UserAgentMinor fixed_string(2), CookieEnable uint8, JavascriptEnable uint8, IsMobile uint8, MobilePhone uint8, MobilePhoneModel string, Params string, IPNetworkID uint32, TraficSourceID int8, SearchEngineID uint16, SearchPhrase string, AdvEngineID uint8, IsArtifical uint8, WindowClientWidth uint16, WindowClientHeight uint16, ClientTimeZone int16, ClientEventTime datetime, SilverlightVersion1 uint8, SilverlightVersion2 uint8, SilverlightVersion3 uint32, SilverlightVersion4 uint16, PageCharset string, CodeVersion uint32, IsLink uint8, IsDownload uint8, IsNotBounce uint8, FUniqID uint64, HID uint32, IsOldCounter uint8, IsEvent uint8, IsParameter uint8, DontCountHits uint8, WithHash uint8, HitColor fixed_string(1), UTCEventTime datetime, Age uint8, Sex uint8, Income uint8, interests uint16, Robotness uint8, GeneralInterests array(uint16), RemoteIP uint32, RemoteIP6 fixed_string(16), WindowName int32, OpenerName int32, HistoryLength int16, BrowserLanguage fixed_string(2), BrowserCountry fixed_string(2), SocialNetwork string, SocialAction string, HTTPError uint16, SendTiming int32, DNSTiming int32, ConnectTiming int32, ResponseStartTiming int32, ResponseEndTiming int32, FetchTiming int32, RedirectTiming int32, DOMinteractiveTiming int32, DOMContentLoadedTiming int32, DOMCompleteTiming int32, LoadEventStartTiming int32, LoadEventEndTiming int32, NSToDOMContentLoadedTiming int32, FirstPaintTiming int32, RedirectCount int8, SocialSourceNetworkID uint8, SocialSourcePage string, ParamPrice int64, ParamOrderID string, ParamCurrency fixed_string(3), ParamCurrencyID uint16, GoalsReached array(uint32), OpenstatServiceName string, OpenstatCampaignID string, OpenstatAdID string, OpenstatSourceID string, UTMSource string, UTMMedium string, UTMCampaign string, UTMContent string, UTMTerm string, FromTag string, HasGCLID uint8, RefererHash uint64, URLHash uint64, CLID uint32, YCLID uint64, ShareService string, ShareURL string, ShareTitle string, ParsedParams nested(Key1 string, Key2 string, Key3 string, Key4 string, Key5 string, ValueDouble float64), IslandID fixed_string(16), RequestNum uint32, RequestTry uint8 ) ENGINE = MergeTree() PARTITION BY to_YYYYMM(EventDate) ORDER BY (CounterID, EventDate) SETTINGS index_granularity = 8192"
+
+
+echo "Provisioning test.visits"
+proton-client --query="drop stream if exists test.visits"
+proton-client --query="create stream if not exists test.visits ( CounterID uint32, StartDate Date, Sign int8, IsNew uint8, VisitID uint64, UserID uint64, StartTime datetime, Duration uint32, UTCStartTime datetime, PageViews int32, Hits int32, IsBounce uint8, Referer string, StartURL string, RefererDomain string, StartURLDomain string, EndURL string, LinkURL string, IsDownload uint8, TraficSourceID int8, SearchEngineID uint16, SearchPhrase string, AdvEngineID uint8, PlaceID int32, RefererCategories array(uint16), URLCategories array(uint16), URLRegions array(uint32), RefererRegions array(uint32), IsYandex uint8, GoalReachesDepth int32, GoalReachesURL int32, GoalReachesAny int32, SocialSourceNetworkID uint8, SocialSourcePage string, MobilePhoneModel string, ClientEventTime datetime, RegionID uint32, ClientIP uint32, ClientIP6 fixed_string(16), RemoteIP uint32, RemoteIP6 fixed_string(16), IPNetworkID uint32, SilverlightVersion3 uint32, CodeVersion uint32, ResolutionWidth uint16, ResolutionHeight uint16, UserAgentMajor uint16, UserAgentMinor uint16, WindowClientWidth uint16, WindowClientHeight uint16, SilverlightVersion2 uint8, SilverlightVersion4 uint16, FlashVersion3 uint16, FlashVersion4 uint16, ClientTimeZone int16, OS uint8, UserAgent uint8, ResolutionDepth uint8, FlashMajor uint8, FlashMinor uint8, NetMajor uint8, NetMinor uint8, MobilePhone uint8, SilverlightVersion1 uint8, Age uint8, Sex uint8, Income uint8, JavaEnable uint8, CookieEnable uint8, JavascriptEnable uint8, IsMobile uint8, BrowserLanguage uint16, BrowserCountry uint16, interests uint16, Robotness uint8, GeneralInterests array(uint16), Params array(string), Goals nested(ID uint32, Serial uint32, EventTime datetime, Price int64, OrderID string, CurrencyID uint32), WatchIDs array(uint64), ParamSumPrice int64, ParamCurrency fixed_string(3), ParamCurrencyID uint16, ClickLogID uint64, ClickEventID int32, ClickGoodEvent int32, ClickEventTime datetime, ClickPriorityID int32, ClickPhraseID int32, ClickPageID int32, ClickPlaceID int32, ClickTypeID int32, ClickResourceID int32, ClickCost uint32, ClickClientIP uint32, ClickDomainID uint32, ClickURL string, ClickAttempt uint8, ClickOrderID uint32, ClickBannerID uint32, ClickMarketCategoryID uint32, ClickMarketPP uint32, ClickMarketCategoryName string, ClickMarketPPName string, ClickAWAPSCampaignName string, ClickPageName string, ClickTargetType uint16, ClickTargetPhraseID uint64, ClickContextType uint8, ClickSelectType int8, ClickOptions string, ClickGroupBannerID int32, OpenstatServiceName string, OpenstatCampaignID string, OpenstatAdID string, OpenstatSourceID string, UTMSource string, UTMMedium string, UTMCampaign string, UTMContent string, UTMTerm string, FromTag string, HasGCLID uint8, FirstVisit datetime, PredLastVisit Date, LastVisit Date, TotalVisits uint32, TraficSource nested(ID int8, SearchEngineID uint16, AdvEngineID uint8, PlaceID uint16, SocialSourceNetworkID uint8, Domain string, SearchPhrase string, SocialSourcePage string), Attendance fixed_string(16), CLID uint32, YCLID uint64, NormalizedRefererHash uint64, SearchPhraseHash uint64, RefererDomainHash uint64, NormalizedStartURLHash uint64, StartURLDomainHash uint64, NormalizedEndURLHash uint64, TopLevelDomain uint64, URLScheme uint64, OpenstatServiceNameHash uint64, OpenstatCampaignIDHash uint64, OpenstatAdIDHash uint64, OpenstatSourceIDHash uint64, UTMSourceHash uint64, UTMMediumHash uint64, UTMCampaignHash uint64, UTMContentHash uint64, UTMTermHash uint64, FromHash uint64, WebVisorEnabled uint8, WebVisorActivity uint32, ParsedParams nested(Key1 string, Key2 string, Key3 string, Key4 string, Key5 string, ValueDouble float64), Market nested(Type uint8, GoalID uint32, OrderID string, OrderPrice int64, PP uint32, DirectPlaceID uint32, DirectOrderID uint32, DirectBannerID uint32, GoodID string, GoodName string, GoodQuantity int32, GoodPrice int64), IslandID fixed_string(16) ) ENGINE = MergeTree() PARTITION BY to_YYYYMM(StartDate) ORDER BY (CounterID, StartDate, VisitID) SETTINGS index_granularity = 8192"
+
+# Load the data
+echo "Loading data ${visits_tsv}"
+proton-client --query="insert into test.visits format TSV" < "${visits_tsv}"
+
+echo "Loading data ${hits_tsv}"
+proton-client --query="insert into test.hits format TSV" < "${hits_tsv}"
+
+echo "Run test cases"
+./ported-clickhouse-test.py -q ./queries_ported

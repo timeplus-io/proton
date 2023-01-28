@@ -8,6 +8,7 @@ namespace DB
 using PartitionIdToMaxBlock = std::unordered_map<String, Int64>;
 
 class Pipe;
+class ISource;
 
 struct MergeTreeDataSelectSamplingData
 {

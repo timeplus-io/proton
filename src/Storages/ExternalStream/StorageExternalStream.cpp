@@ -5,6 +5,8 @@
 
 /// External stream storages
 #include <Storages/ExternalStream/Kafka/Kafka.h>
+#include <Storages/SelectQueryInfo.h>
+
 #ifdef OS_LINUX
 #    include <Storages/ExternalStream/Log/FileLog.h>
 #endif
@@ -88,7 +90,7 @@ void StorageExternalStream::read(
 {
     Pipe pipe = read(column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 
-    auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName());
+    auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName(), query_info.storage_limits);
     query_plan.addStep(std::move(read_step));
 }
 

@@ -313,7 +313,7 @@ void testLogAndStateMachine1(Coordination::CoordinationSettingsPtr settings, uin
     ChangelogDirTest snapshots("./snapshots");
     ChangelogDirTest logs("./logs");
 
-    //    ResponsesQueue queue;
+    /// ResponsesQueue queue;
     MetaSnapshotsQueue snapshots_queue{1};
     auto state_machine = std::make_shared<MetaStateMachine>(snapshots_queue, "./snapshots", "./meta", settings);
     state_machine->init();
@@ -347,6 +347,7 @@ void testLogAndStateMachine1(Coordination::CoordinationSettingsPtr settings, uin
             (void)snapshots_queue.pop(snapshot_task);
             snapshot_task.create_snapshot(std::move(snapshot_task.snapshot));
         }
+
         if (snapshot_created)
         {
             if (changelog.size() > settings->reserved_log_items)

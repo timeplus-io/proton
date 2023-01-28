@@ -3,7 +3,7 @@
 #include <KafkaLog/KafkaWALContext.h>
 #include <KafkaLog/KafkaWALSimpleConsumer.h>
 #include <IO/ReadBufferFromMemory.h>
-#include <Processors/Sources/SourceWithProgress.h>
+#include <Processors/ISource.h>
 #include <Storages/StorageSnapshot.h>
 
 namespace Poco
@@ -18,7 +18,7 @@ namespace DB
 class Kafka;
 class StreamingFormatExecutor;
 
-class KafkaSource final : public SourceWithProgress
+class KafkaSource final : public ISource
 {
 public:
     KafkaSource(

@@ -1,6 +1,6 @@
 #include <QueryPipeline/RemoteInserter.h>
 #include <Formats/NativeReader.h>
-#include <Processors/Sources/SourceWithProgress.h>
+#include <Processors/ISource.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/SipHash.h>
@@ -897,7 +897,7 @@ private:
     }
 };
 
-class DirectoryMonitorSource : public SourceWithProgress
+class DirectoryMonitorSource : public ISource
 {
 public:
 
@@ -932,7 +932,7 @@ public:
     }
 
     explicit DirectoryMonitorSource(Data data_)
-        : SourceWithProgress(data_.first_block.cloneEmpty(), ProcessorID::DirectoryMonitorSourceID)
+        : ISource(data_.first_block.cloneEmpty(), true, ProcessorID::DirectoryMonitorSourceID)
         , data(std::move(data_))
     {
     }

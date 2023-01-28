@@ -644,22 +644,6 @@ StorageSnapshotPtr StorageDistributed::getStorageSnapshotForQuery(
     return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, object_columns, std::move(snapshot_data));
 }
 
-Pipe StorageDistributed::read(
-    const Names & column_names,
-    const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & query_info,
-    ContextPtr local_context,
-    QueryProcessingStage::Enum processed_stage,
-    const size_t max_block_size,
-    const size_t num_streams)
-{
-    QueryPlan plan;
-    read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
-    return plan.convertToPipe(
-        QueryPlanOptimizationSettings::fromContext(local_context),
-        BuildQueryPipelineSettings::fromContext(local_context), local_context);
-}
-
 void StorageDistributed::read(
     QueryPlan & query_plan,
     const Names &,
@@ -762,8 +746,10 @@ SinkToStoragePtr StorageDistributed::write(const ASTPtr &, const StorageMetadata
 }
 
 
-QueryPipelineBuilderPtr StorageDistributed::distributedWrite(const ASTInsertQuery & query, ContextPtr local_context)
+std::optional<QueryPipeline> StorageDistributed::distributedWrite(const ASTInsertQuery & query, ContextPtr local_context)
 {
+    QueryPipeline pipeline;
+
     const Settings & settings = local_context->getSettingsRef();
     std::shared_ptr<StorageDistributed> storage_src;
     auto & select = query.select->as<ASTSelectWithUnionQuery &>();
@@ -795,7 +781,7 @@ QueryPipelineBuilderPtr StorageDistributed::distributedWrite(const ASTInsertQuer
 
     if (!storage_src || storage_src->getClusterName() != getClusterName())
     {
-        return nullptr;
+        return {};
     }
 
     if (settings.parallel_distributed_insert_select == PARALLEL_DISTRIBUTED_INSERT_SELECT_ALL)
@@ -805,8 +791,6 @@ QueryPipelineBuilderPtr StorageDistributed::distributedWrite(const ASTInsertQuer
 
     const auto & cluster = getCluster();
     const auto & shards_info = cluster->getShardsInfo();
-
-    std::vector<std::unique_ptr<QueryPipelineBuilder>> pipelines;
 
     String new_query_str;
     {
@@ -823,8 +807,7 @@ QueryPipelineBuilderPtr StorageDistributed::distributedWrite(const ASTInsertQuer
         if (shard_info.isLocal())
         {
             InterpreterInsertQuery interpreter(new_query, local_context);
-            pipelines.emplace_back(std::make_unique<QueryPipelineBuilder>());
-            pipelines.back()->init(interpreter.execute().pipeline);
+            pipeline.addCompletedPipeline(interpreter.execute().pipeline);
         }
         else
         {
@@ -837,16 +820,14 @@ QueryPipelineBuilderPtr StorageDistributed::distributedWrite(const ASTInsertQuer
             ///  INSERT SELECT query returns empty block
             auto remote_query_executor
                 = std::make_shared<RemoteQueryExecutor>(shard_info.pool, std::move(connections), new_query_str, Block{}, local_context);
-            pipelines.emplace_back(std::make_unique<QueryPipelineBuilder>());
-            pipelines.back()->init(Pipe(std::make_shared<RemoteSource>(remote_query_executor, false, settings.async_socket_for_remote)));
-            pipelines.back()->setSinks([](const Block & header, QueryPipelineBuilder::StreamType) -> ProcessorPtr
-            {
-                return std::make_shared<EmptySink>(header);
-            });
+            QueryPipeline remote_pipeline(std::make_shared<RemoteSource>(remote_query_executor, false, settings.async_socket_for_remote));
+            remote_pipeline.complete(std::make_shared<EmptySink>(remote_query_executor->getHeader()));
+
+            pipeline.addCompletedPipeline(std::move(remote_pipeline));
         }
     }
 
-    return std::make_unique<QueryPipelineBuilder>(QueryPipelineBuilder::unitePipelines(std::move(pipelines)));
+    return pipeline;
 }
 
 

@@ -78,7 +78,7 @@ void MetaStateMachine::init()
     initDB();
 
     /// Do everything without mutexes, no other threads exist.
-    LOG_DEBUG(log, "Totally have {} snapshots", snapshot_manager.totalSnapshots());
+    LOG_INFO(log, "Totally have {} snapshots", snapshot_manager.totalSnapshots());
 
     //    bool has_snapshots = snapshot_manager.totalSnapshots() != 0;
     std::string idx_value;
@@ -88,7 +88,9 @@ void MetaStateMachine::init()
         assert(idx_value.size() == sizeof(uint64_t));
         last_committed_idx = *reinterpret_cast<uint64_t*>(idx_value.data());
     }
-    LOG_DEBUG(log, "last committed log index {}", last_committed_idx);
+
+    LOG_INFO(log, "last committed log index {}", last_committed_idx);
+
     while (snapshot_manager.totalSnapshots() != 0)
     {
         auto latest_log_idx = snapshot_manager.getLatestSnapshotIndex();
@@ -96,19 +98,22 @@ void MetaStateMachine::init()
         {
             latest_snapshot_buf = snapshot_manager.deserializeSnapshotBufferFromDisk(latest_log_idx);
             latest_snapshot_meta = snapshot_manager.deserializeSnapshotFromBuffer(latest_snapshot_buf);
+
             LOG_DEBUG(
                 log,
                 "Trying to load snapshot_meta info from snapshot up to log index {}",
                 latest_snapshot_meta->snapshot_meta->get_last_log_idx());
+
             break;
         }
         catch (const DB::Exception & ex)
         {
-            LOG_WARNING(
+            LOG_ERROR(
                 log,
                 "Failed to load from snapshot with index {}, with error {}, will remove it from disk",
                 latest_log_idx,
                 ex.displayText());
+
             snapshot_manager.removeSnapshot(latest_log_idx);
         }
     }

@@ -1,11 +1,12 @@
 #pragma once
 
+#include <QueryPipeline/Pipe.h>
 #include <Storages/IStorage.h>
 
 namespace DB
 {
 /// Base class of StorageExternalStreamImpl
-class StorageExternalStreamImpl: public std::enable_shared_from_this<StorageExternalStreamImpl>
+class StorageExternalStreamImpl : public std::enable_shared_from_this<StorageExternalStreamImpl>
 {
 public:
     virtual ~StorageExternalStreamImpl() = default;

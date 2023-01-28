@@ -612,7 +612,7 @@ void StorageStream::readStreaming(
         share_resource_group ? "shared" : "dedicated");
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
-    auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), description);
+    auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), description, query_info.storage_limits);
     query_plan.addStep(std::move(read_step));
 }
 
@@ -738,21 +738,6 @@ void StorageStream::readHistory(
     auto union_step = std::make_unique<UnionStep>(std::move(input_streams));
     union_step->setStepDescription(description);
     query_plan.unitePlans(std::move(union_step), std::move(plans));
-}
-
-Pipe StorageStream::read(
-    const Names & column_names,
-    const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & query_info,
-    ContextPtr context_,
-    QueryProcessingStage::Enum processed_stage,
-    size_t max_block_size,
-    size_t num_streams)
-{
-    QueryPlan plan;
-    read(plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
-    return plan.convertToPipe(
-        QueryPlanOptimizationSettings::fromContext(context_), BuildQueryPipelineSettings::fromContext(context_), context_);
 }
 
 void StorageStream::startup()

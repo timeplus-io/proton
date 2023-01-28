@@ -52,7 +52,8 @@ public:
         return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, object_columns);
     }
 
-    Pipe read(
+    void read(
+        QueryPlan & query_plan,
         const Names & column_names,
         const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
@@ -61,7 +62,7 @@ public:
         size_t max_block_size,
         size_t num_streams) override
     {
-        QueryPlan query_plan = std::move(*MergeTreeDataSelectExecutor(storage)
+        query_plan = std::move(*MergeTreeDataSelectExecutor(storage)
                                               .readFromParts(
                                                   parts,
                                                   column_names,
@@ -72,9 +73,6 @@ public:
                                                   num_streams,
                                                   nullptr,
                                                   analysis_result_ptr));
-
-        return query_plan.convertToPipe(
-            QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context), context);
     }
 
     bool supportsPrewhere() const override { return true; }
