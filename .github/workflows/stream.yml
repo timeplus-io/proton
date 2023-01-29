@@ -54,7 +54,13 @@ jobs:
         cd $GITHUB_WORKSPACE/tests/stream
         export PROTON_VERSION=testing-$GITHUB_SHA
         env
+
+        # fix issue proton #1906 (we assume the ami image will not change to other python env)
+        rm -rf /usr/lib/python3/dist-packages/OpenSSL
+        pip3 install --upgrade pyopenssl
+
         pip3 install -r helpers/requirements.txt
+        pip3 list
         python3 ci_runner.py --debug --settings=redp,nativelog
 
         echo "check test result"
