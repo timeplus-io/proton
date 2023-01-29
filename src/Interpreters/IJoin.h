@@ -4,13 +4,12 @@
 #include <vector>
 
 #include <Core/Names.h>
+#include <Core/Block.h>
 #include <Columns/IColumn.h>
 #include <Common/Exception.h>
 
 namespace DB
 {
-
-class Block;
 
 struct ExtraBlock;
 using ExtraBlockPtr = std::shared_ptr<ExtraBlock>;
@@ -56,12 +55,17 @@ public:
     /// Could be called from different threads in parallel.
     virtual void joinBlock(Block & block, std::shared_ptr<ExtraBlock> & not_processed) = 0;
 
-    /// Set/Get totals for right table
-    virtual void setTotals(const Block & block) = 0;
-    virtual const Block & getTotals() const = 0;
+    /** Set/Get totals for right table
+      * Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
+      */
+    virtual void setTotals(const Block & block) { totals = block; }
+    virtual const Block & getTotals() const { return totals; }
 
+    /// Number of rows/bytes stored in memory
     virtual size_t getTotalRowCount() const = 0;
     virtual size_t getTotalByteCount() const = 0;
+
+    /// Returns true if no data to join with.
     virtual bool alwaysReturnsEmptySet() const = 0;
 
     /// StorageJoin/Dictionary is already filled. No need to call addJoinedBlock.
@@ -74,6 +78,9 @@ public:
 
     virtual std::shared_ptr<NotJoinedBlocks>
     getNonJoinedBlocks(const Block & left_sample_block, const Block & result_sample_block, UInt64 max_block_size) const = 0;
+
+private:
+    Block totals;
 };
 
 

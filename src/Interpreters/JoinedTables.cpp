@@ -1,5 +1,7 @@
 #include <Interpreters/JoinedTables.h>
 
+#include <Core/SettingsEnums.h>
+
 #include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <Interpreters/InJoinSubqueriesPreprocessor.h>
@@ -140,10 +142,8 @@ private:
                 match == IdentifierSemantic::ColumnMatch::DBAndTable)
             {
                 if (rewritten)
-                    /// proton: starts
                     throw Exception("Failed to rewrite distributed stream names. Ambiguous column '" + identifier.name() + "'",
                                     ErrorCodes::AMBIGUOUS_COLUMN_NAME);
-                    /// proton: ends
                 /// Table has an alias. So we set a new name qualified by table alias.
                 IdentifierSemantic::setColumnLongName(identifier, table);
                 rewritten = true;
@@ -246,11 +246,9 @@ bool JoinedTables::resolveTables()
             const auto & t = tables_with_columns[i];
             if (t.table.table.empty() && t.table.alias.empty())
             {
-                /// proton: starts
                 throw Exception("No alias for subquery or function in JOIN (set joined_subquery_requires_alias=0 to disable restriction). While processing '"
                     + table_expressions[i]->formatForErrorMessage() + "'",
                     ErrorCodes::ALIAS_REQUIRED);
-                /// proton: ends
             }
         }
     }
@@ -303,6 +301,7 @@ std::shared_ptr<TableJoin> JoinedTables::makeTableJoin(const ASTSelectQuery & se
         return {};
 
     auto settings = context->getSettingsRef();
+    MultiEnum<JoinAlgorithm> join_algorithm = settings.join_algorithm;
     auto table_join = std::make_shared<TableJoin>(settings, context->getTemporaryVolume());
 
     const ASTTablesInSelectQueryElement * ast_join = select_query.join();
@@ -316,9 +315,18 @@ std::shared_ptr<TableJoin> JoinedTables::makeTableJoin(const ASTSelectQuery & se
         if (storage)
         {
             if (auto storage_join = std::dynamic_pointer_cast<StorageJoin>(storage); storage_join)
+            {
                 table_join->setStorageJoin(storage_join);
+            }
             else if (auto storage_dict = std::dynamic_pointer_cast<StorageDictionary>(storage); storage_dict)
+            {
                 table_join->setStorageJoin(storage_dict);
+            }
+            else if (auto storage_kv = std::dynamic_pointer_cast<IKeyValueStorage>(storage);
+                     storage_kv && join_algorithm.isSet(JoinAlgorithm::DIRECT))
+            {
+                table_join->setStorageJoin(storage_kv);
+            }
         }
     }
 

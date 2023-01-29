@@ -185,14 +185,22 @@ void TableJoin::deduplicateAndQualifyColumnNames(const NameSet & left_table_colu
     columns_from_joined_table.swap(dedup_columns);
 }
 
+String TableJoin::getOriginalName(const String & column_name) const
+{
+    auto it = original_names.find(column_name);
+    if (it != original_names.end())
+        return it->second;
+    return column_name;
+}
+
 NamesWithAliases TableJoin::getNamesWithAliases(const NameSet & required_columns) const
 {
     NamesWithAliases out;
-    for (const auto & column : required_columns)
+    out.reserve(required_columns.size());
+    for (const auto & name : required_columns)
     {
-        auto it = original_names.find(column);
-        if (it != original_names.end())
-            out.emplace_back(it->second, it->first); /// {original_name, name}
+        auto original_name = getOriginalName(name);
+        out.emplace_back(original_name, name);
     }
     return out;
 }
@@ -479,6 +487,7 @@ TableJoin::createConvertingActions(
         {
             if (dag)
             {
+                /// Just debug message
                 std::vector<std::string> input_cols;
                 for (const auto & col : dag->getRequiredColumns())
                     input_cols.push_back(col.name + ": " + col.type->getName());
@@ -523,14 +532,6 @@ TableJoin::createConvertingActions(
 template <typename LeftNamesAndTypes, typename RightNamesAndTypes>
 void TableJoin::inferJoinKeyCommonType(const LeftNamesAndTypes & left, const RightNamesAndTypes & right, bool allow_right, bool strict)
 {
-    if (strictness() == ASTTableJoin::Strictness::Asof)
-    {
-        if (clauses.size() != 1)
-            throw DB::Exception("ASOF join over multiple keys is not supported", ErrorCodes::NOT_IMPLEMENTED);
-        if (right.back().type->isNullable())
-            throw DB::Exception("ASOF join over right table Nullable column is not implemented", ErrorCodes::NOT_IMPLEMENTED);
-    }
-
     if (!left_type_map.empty() || !right_type_map.empty())
         return;
 
@@ -542,6 +543,15 @@ void TableJoin::inferJoinKeyCommonType(const LeftNamesAndTypes & left, const Rig
     for (const auto & col : right)
         right_types[renamedRightColumnName(col.name)] = col.type;
 
+    if (strictness() == ASTTableJoin::Strictness::Asof)
+    {
+        if (clauses.size() != 1)
+            throw DB::Exception("ASOF join over multiple keys is not supported", ErrorCodes::NOT_IMPLEMENTED);
+
+        auto asof_key_type = right_types.find(clauses.back().key_names_right.back());
+        if (asof_key_type != right_types.end() && asof_key_type->second->isNullable())
+            throw DB::Exception("ASOF join over right table Nullable column is not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    }
 
     forAllKeys(clauses, [&](const auto & left_key_name, const auto & right_key_name)
     {
@@ -606,7 +616,7 @@ static ActionsDAGPtr changeKeyTypes(const ColumnsWithTypeAndName & cols_src,
     bool has_some_to_do = false;
     for (auto & col : cols_dst)
     {
-        if (auto it = type_mapping.find(col.name); it != type_mapping.end())
+        if (auto it = type_mapping.find(col.name); it != type_mapping.end() && col.type != it->second)
         {
             col.type = it->second;
             col.column = nullptr;
@@ -679,6 +689,11 @@ ActionsDAGPtr TableJoin::applyKeyConvertToTable(
             return dag_stage2;
     }
     return dag_stage1;
+}
+
+void TableJoin::setStorageJoin(std::shared_ptr<IKeyValueStorage> storage)
+{
+    right_kv_storage = storage;
 }
 
 void TableJoin::setStorageJoin(std::shared_ptr<StorageJoin> storage)
@@ -779,7 +794,7 @@ void TableJoin::resetToCross()
 
 bool TableJoin::allowParallelHashJoin() const
 {
-    if (dictionary_reader || join_algorithm != JoinAlgorithm::PARALLEL_HASH)
+    if (dictionary_reader || !join_algorithm.isSet(JoinAlgorithm::PARALLEL_HASH))
         return false;
     if (table_join.kind != ASTTableJoin::Kind::Left && table_join.kind != ASTTableJoin::Kind::Inner)
         return false;

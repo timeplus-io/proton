@@ -9,7 +9,8 @@
 #include <Interpreters/asof.h>
 #include <QueryPipeline/SizeLimits.h>
 #include <DataTypes/getLeastSupertype.h>
-#include <Storages/IStorage_fwd.h>
+#include <Storages/IKVStorage.h>
+
 #include <Common/Exception.h>
 #include <Parsers/IAST_fwd.h>
 
@@ -35,6 +36,7 @@ class Block;
 class DictionaryReader;
 class StorageJoin;
 class StorageDictionary;
+class IKeyValueStorage;
 
 struct ColumnWithTypeAndName;
 using ColumnsWithTypeAndName = std::vector<ColumnWithTypeAndName>;
@@ -59,7 +61,7 @@ public:
     struct JoinOnClause
     {
         Names key_names_left;
-        Names key_names_right; /// Duplicating right key names are qualified.
+        Names key_names_right; /// Duplicating right key names are qualified
 
         ASTPtr on_filter_condition_left;
         ASTPtr on_filter_condition_right;
@@ -107,18 +109,18 @@ private:
 
     friend class TreeRewriter;
 
-    const SizeLimits size_limits;
+    SizeLimits size_limits;
     const size_t default_max_bytes = 0;
     const bool join_use_nulls = false;
     const size_t max_joined_block_rows = 0;
-    JoinAlgorithm join_algorithm = JoinAlgorithm::AUTO;
+    MultiEnum<JoinAlgorithm> join_algorithm = MultiEnum<JoinAlgorithm>(JoinAlgorithm::AUTO);
     const size_t partial_merge_join_rows_in_right_blocks = 0;
     const size_t partial_merge_join_left_table_buffer_bytes = 0;
     const size_t max_files_to_merge = 0;
     const String temporary_files_codec = "LZ4";
 
     /// the limit has no technical reasons, it supposed to improve safety
-    const size_t MAX_DISJUNCTS = 16;
+    const size_t MAX_DISJUNCTS = 16; /// NOLINT
 
     ASTs key_asts_left;
     ASTs key_asts_right;
@@ -155,6 +157,8 @@ private:
 
     std::shared_ptr<StorageDictionary> right_storage_dictionary;
     std::shared_ptr<DictionaryReader> dictionary_reader;
+
+    std::shared_ptr<IKeyValueStorage> right_kv_storage;
 
     Names requiredJoinedNames() const;
 
@@ -199,17 +203,22 @@ public:
     const SizeLimits & sizeLimits() const { return size_limits; }
     VolumePtr getTemporaryVolume() { return tmp_volume; }
     bool allowMergeJoin() const;
-    bool preferMergeJoin() const { return join_algorithm == JoinAlgorithm::PREFER_PARTIAL_MERGE; }
-    bool forceMergeJoin() const { return join_algorithm == JoinAlgorithm::PARTIAL_MERGE; }
+
+    bool isAllowedAlgorithm(JoinAlgorithm val) const { return join_algorithm.isSet(val) || join_algorithm.isSet(JoinAlgorithm::AUTO); }
+    bool isForcedAlgorithm(JoinAlgorithm val) const { return join_algorithm == MultiEnum<JoinAlgorithm>(val); }
+
+    bool preferMergeJoin() const { return join_algorithm == MultiEnum<JoinAlgorithm>(JoinAlgorithm::PREFER_PARTIAL_MERGE); }
+    bool forceMergeJoin() const { return join_algorithm == MultiEnum<JoinAlgorithm>(JoinAlgorithm::PARTIAL_MERGE); }
+
     bool allowParallelHashJoin() const;
-    /// kchen, FIXME
-    /// bool forceFullSortingMergeJoin() const { return !isSpecialStorage() && join_algorithm.isSet(JoinAlgorithm::FULL_SORTING_MERGE); }
-    bool forceFullSortingMergeJoin() const { return !isSpecialStorage() && join_algorithm == JoinAlgorithm::FULL_SORTING_MERGE; }
+    bool forceFullSortingMergeJoin() const { return !isSpecialStorage() && join_algorithm.isSet(JoinAlgorithm::FULL_SORTING_MERGE); }
 
     bool forceHashJoin() const
     {
         /// HashJoin always used for DictJoin
-        return dictionary_reader || join_algorithm == JoinAlgorithm::HASH || join_algorithm == JoinAlgorithm::PARALLEL_HASH;
+        return dictionary_reader
+            || join_algorithm == MultiEnum<JoinAlgorithm>(JoinAlgorithm::HASH)
+            || join_algorithm == MultiEnum<JoinAlgorithm>(JoinAlgorithm::PARALLEL_HASH);
     }
 
     bool joinUseNulls() const { return join_use_nulls; }
@@ -258,6 +267,7 @@ public:
     bool hasUsing() const { return table_join.using_expression_list != nullptr; }
     bool hasOn() const { return table_join.on_expression != nullptr; }
 
+    String getOriginalName(const String & column_name) const;
     NamesWithAliases getNamesWithAliases(const NameSet & required_columns) const;
     NamesWithAliases getRequiredColumns(const Block & sample, const Names & action_required_columns) const;
 
@@ -318,6 +328,7 @@ public:
 
     std::unordered_map<String, String> leftToRightKeyRemap() const;
 
+    void setStorageJoin(std::shared_ptr<IKeyValueStorage> storage);
     void setStorageJoin(std::shared_ptr<StorageJoin> storage);
     void setStorageJoin(std::shared_ptr<StorageDictionary> storage);
 
@@ -325,8 +336,10 @@ public:
 
     bool tryInitDictJoin(const Block & sample_block, ContextPtr context);
 
-    bool isSpecialStorage() const { return right_storage_dictionary || right_storage_join; }
+    bool isSpecialStorage() const { return right_storage_dictionary || right_storage_join || right_kv_storage; }
     const DictionaryReader * getDictionaryReader() const { return dictionary_reader.get(); }
+
+    std::shared_ptr<IKeyValueStorage> getStorageKeyValue() { return right_kv_storage; }
 };
 
 }
