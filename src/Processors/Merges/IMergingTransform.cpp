@@ -23,6 +23,26 @@ IMergingTransformBase::IMergingTransformBase(
 {
 }
 
+static InputPorts createPorts(const Blocks & blocks)
+{
+    InputPorts ports;
+    for (const auto & block : blocks)
+        ports.emplace_back(block);
+    return ports;
+}
+
+IMergingTransformBase::IMergingTransformBase(
+    const Blocks & input_headers,
+    const Block & output_header,
+    bool have_all_inputs_,
+    UInt64 limit_hint_,
+    ProcessorID pid_)
+    : IProcessor(createPorts(input_headers), {output_header}, pid_)
+    , have_all_inputs(have_all_inputs_)
+    , limit_hint(limit_hint_)
+{
+}
+
 void IMergingTransformBase::onNewInput()
 {
     throw Exception("onNewInput is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
@@ -171,6 +191,10 @@ IProcessor::Status IMergingTransformBase::prepare()
                 return Status::NeedData;
 
             state.has_input = true;
+        }
+        else
+        {
+            state.no_data = true;
         }
 
         state.need_data = false;

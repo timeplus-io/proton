@@ -160,7 +160,8 @@ private:
 
     /// Create converting actions and change key column names if required
     ActionsDAGPtr applyKeyConvertToTable(
-        const ColumnsWithTypeAndName & cols_src, const NameToTypeMap & type_mapping, NameToNameMap & key_column_rename,
+        const ColumnsWithTypeAndName & cols_src, const NameToTypeMap & type_mapping,
+        NameToNameMap & key_column_rename,
         bool make_nullable) const;
 
     void addKey(const String & left_name, const String & right_name, const ASTPtr & left_ast, const ASTPtr & right_ast = nullptr);
@@ -169,7 +170,7 @@ private:
 
     /// Calculates common supertypes for corresponding join key columns.
     template <typename LeftNamesAndTypes, typename RightNamesAndTypes>
-    void inferJoinKeyCommonType(const LeftNamesAndTypes & left, const RightNamesAndTypes & right, bool allow_right);
+    void inferJoinKeyCommonType(const LeftNamesAndTypes & left, const RightNamesAndTypes & right, bool allow_right, bool strict);
 
     NamesAndTypesList correctedColumnsAddedByJoin() const;
 
@@ -201,12 +202,17 @@ public:
     bool preferMergeJoin() const { return join_algorithm == JoinAlgorithm::PREFER_PARTIAL_MERGE; }
     bool forceMergeJoin() const { return join_algorithm == JoinAlgorithm::PARTIAL_MERGE; }
     bool allowParallelHashJoin() const;
+    /// kchen, FIXME
+    /// bool forceFullSortingMergeJoin() const { return !isSpecialStorage() && join_algorithm.isSet(JoinAlgorithm::FULL_SORTING_MERGE); }
+    bool forceFullSortingMergeJoin() const { return !isSpecialStorage() && join_algorithm == JoinAlgorithm::FULL_SORTING_MERGE; }
+
     bool forceHashJoin() const
     {
         /// HashJoin always used for DictJoin
         return dictionary_reader || join_algorithm == JoinAlgorithm::HASH || join_algorithm == JoinAlgorithm::PARALLEL_HASH;
     }
 
+    bool joinUseNulls() const { return join_use_nulls; }
     bool forceNullableRight() const { return join_use_nulls && isLeftOrFull(table_join.kind); }
     bool forceNullableLeft() const { return join_use_nulls && isRightOrFull(table_join.kind); }
     size_t defaultMaxBytes() const { return default_max_bytes; }
@@ -269,7 +275,9 @@ public:
     /// For `USING` join we will convert key columns inplace and affect into types in the result table
     /// For `JOIN ON` we will create new columns with converted keys to join by.
     std::pair<ActionsDAGPtr, ActionsDAGPtr>
-    createConvertingActions(const ColumnsWithTypeAndName & left_sample_columns, const ColumnsWithTypeAndName & right_sample_columns);
+    createConvertingActions(
+        const ColumnsWithTypeAndName & left_sample_columns,
+        const ColumnsWithTypeAndName & right_sample_columns);
 
     void setAsofInequality(ASOF::Inequality inequality) { asof_inequality = inequality; }
     ASOF::Inequality getAsofInequality() const { return asof_inequality; }

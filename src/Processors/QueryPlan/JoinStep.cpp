@@ -2,6 +2,7 @@
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Processors/Transforms/JoiningTransform.h>
 #include <Interpreters/IJoin.h>
+#include <Common/typeid_cast.h>
 
 namespace DB
 {
@@ -32,7 +33,13 @@ QueryPipelineBuilderPtr JoinStep::updatePipeline(QueryPipelineBuilders pipelines
     if (pipelines.size() != 2)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "JoinStep expect two input steps");
 
-    return QueryPipelineBuilder::joinPipelines(
+    if (join->pipelineType() == JoinPipelineType::YShaped)
+        return QueryPipelineBuilder::joinPipelinesYShaped(
+            std::move(pipelines[0]), std::move(pipelines[1]),
+            join, output_stream->header,
+            max_block_size, &processors);
+
+    return QueryPipelineBuilder::joinPipelinesRightLeft(
             std::move(pipelines[0]),
             std::move(pipelines[1]),
             join,

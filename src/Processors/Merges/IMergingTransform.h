@@ -24,6 +24,13 @@ public:
         UInt64 limit_hint_,
         ProcessorID pid_);
 
+    IMergingTransformBase(
+        const Blocks & input_headers,
+        const Block & output_header,
+        bool have_all_inputs_,
+        UInt64 limit_hint_,
+        ProcessorID pid_);
+
     OutputPort & getOutputPort() { return outputs.front(); }
 
     /// Methods to add additional input port. It is possible to do only before the first call of `prepare`.
@@ -52,6 +59,7 @@ protected:
         bool has_input = false;
         bool is_finished = false;
         bool need_data = false;
+        bool no_data = false;
         size_t next_input_to_read = 0;
 
         IMergingAlgorithm::Inputs init_chunks;
@@ -96,6 +104,21 @@ public:
     {
     }
 
+    template <typename ... Args>
+    IMergingTransform(
+        const Blocks & input_headers,
+        const Block & output_header,
+        bool have_all_inputs_,
+        UInt64 limit_hint_,
+        bool empty_chunk_on_finish_,
+        ProcessorID pid_,
+        Args && ... args)
+        : IMergingTransformBase(input_headers, output_header, have_all_inputs_, limit_hint_, pid_)
+        , empty_chunk_on_finish(empty_chunk_on_finish_)
+        , algorithm(std::forward<Args>(args) ...)
+    {
+    }
+
     void work() override
     {
         /// proton: starts.
@@ -118,6 +141,12 @@ public:
 
             algorithm.consume(state.input_chunk, state.next_input_to_read);
             state.has_input = false;
+        }
+        else if (state.no_data && empty_chunk_on_finish)
+        {
+            IMergingAlgorithm::Input current_input;
+            algorithm.consume(current_input, state.next_input_to_read);
+            state.no_data = false;
         }
 
         IMergingAlgorithm::Status status = algorithm.merge();
@@ -147,6 +176,9 @@ public:
     }
 
 protected:
+    /// Call `consume` with empty chunk when there is no more data.
+    bool empty_chunk_on_finish = false;
+
     Algorithm algorithm;
 
     /// Profile info.

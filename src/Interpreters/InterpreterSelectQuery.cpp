@@ -82,10 +82,10 @@
 #include <Common/checkStackSize.h>
 #include <Core/ColumnNumbers.h>
 #include <Interpreters/Aggregator.h>
-
+#include <Interpreters/IJoin.h>
+#include <QueryPipeline/SizeLimits.h>
 #include <base/map.h>
 #include <Common/scope_guard_safe.h>
-#include <memory>
 
 /// proton: starts
 #include <DataTypes/ObjectUtils.h>
@@ -1576,6 +1576,35 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                     if (!joined_plan)
                         throw Exception(ErrorCodes::LOGICAL_ERROR, "There is no joined plan for query");
 
+                    auto add_sorting = [&settings, this] (QueryPlan & plan, const Names & key_names)
+                    {
+                        SortDescription order_descr;
+                        order_descr.reserve(key_names.size());
+                        for (const auto & key_name : key_names)
+                            order_descr.emplace_back(key_name);
+
+                        auto sorting_step = std::make_unique<SortingStep>(
+                            plan.getCurrentDataStream(),
+                            order_descr,
+                            settings.max_block_size,
+                            0 /* LIMIT */,
+                            SizeLimits(settings.max_rows_to_sort, settings.max_bytes_to_sort, settings.sort_overflow_mode),
+                            settings.max_bytes_before_remerge_sort,
+                            settings.remerge_sort_lowered_memory_bytes_ratio,
+                            settings.max_bytes_before_external_sort,
+                            this->context->getTemporaryVolume(),
+                            settings.min_free_disk_space_for_temporary_data);
+                        sorting_step->setStepDescription("Sort before JOIN");
+                        plan.addStep(std::move(sorting_step));
+                    };
+
+                    if (expressions.join->pipelineType() == JoinPipelineType::YShaped)
+                    {
+                        const auto & join_clause = expressions.join->getTableJoin().getOnlyClause();
+                        add_sorting(query_plan, join_clause.key_names_left);
+                        add_sorting(*joined_plan, join_clause.key_names_right);
+                    }
+
                     /// proton : starts
                     QueryPlanStepPtr join_step;
                     if (joined_plan->isStreaming())
@@ -1601,7 +1630,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                     }
                     /// proton : ends
 
-                    join_step->setStepDescription("JOIN");
+                    join_step->setStepDescription(fmt::format("JOIN {}", expressions.join->pipelineType()));
                     std::vector<QueryPlanPtr> plans;
                     plans.emplace_back(std::make_unique<QueryPlan>(std::move(query_plan)));
                     plans.emplace_back(std::move(joined_plan));
@@ -2231,7 +2260,8 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
 
     auto [limit_length, limit_offset] = getLimitLengthAndOffset(query, context);
 
-    /** Optimization - if not specified DISTINCT, WHERE, GROUP, HAVING, ORDER, LIMIT BY, WITH TIES but LIMIT is specified, and limit + offset < max_block_size,
+    /** Optimization - if not specified DISTINCT, WHERE, GROUP, HAVING, ORDER, JOIN, LIMIT BY, WITH TIES
+     *  but LIMIT is specified, and limit + offset < max_block_size,
      *  then as the block size we will use limit + offset (not to read more from the table than requested),
      *  and also set the number of threads to 1.
      */
@@ -2243,13 +2273,14 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         && !query.having()
         && !query.orderBy()
         && !query.limitBy()
-        && query.limitLength()
+        && !query.join()
         && !query_analyzer->hasAggregation()
         && !query_analyzer->hasWindow()
+        && query.limitLength()
         && limit_length <= std::numeric_limits<UInt64>::max() - limit_offset
         && limit_length + limit_offset < max_block_size)
     {
-        max_block_size = std::max(UInt64{1}, limit_length + limit_offset);
+        max_block_size = std::max<UInt64>(1, limit_length + limit_offset);
         max_threads_execute_query = max_streams = 1;
     }
 

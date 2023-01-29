@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <memory>
 #include <Core/Settings.h>
 #include <Core/NamesAndTypes.h>
 
@@ -24,6 +25,7 @@
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/PredicateExpressionsOptimizer.h>
 
+#include <Parsers/IAST_fwd.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
@@ -585,9 +587,8 @@ void setJoinStrictness(ASTSelectQuery & select_query, JoinStrictness join_defaul
     }
     else
     {
-        if (table_join.strictness == ASTTableJoin::Strictness::Any)
-            if (table_join.kind == ASTTableJoin::Kind::Full)
-                throw Exception("ANY FULL JOINs are not implemented.", ErrorCodes::NOT_IMPLEMENTED);
+        if (table_join.strictness == ASTTableJoin::Strictness::Any && table_join.kind == ASTTableJoin::Kind::Full)
+            throw Exception("ANY FULL JOINs are not implemented", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     out_table_join = table_join;

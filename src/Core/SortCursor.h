@@ -111,8 +111,14 @@ struct SortCursorImpl
 
     bool isFirst() const { return pos == 0; }
     bool isLast() const { return pos + 1 >= rows; }
+    bool isLast(size_t size) const { return pos + size >= rows; }
     bool isValid() const { return pos < rows; }
+
     void next() { ++pos; }
+    void next(size_t size) { pos += size; }
+
+    size_t getSize() const { return rows; }
+    size_t rowsLeft() const { return rows - pos; }
 
 /// Prevent using pos instead of getRow()
 private:

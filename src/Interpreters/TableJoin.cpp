@@ -9,9 +9,6 @@
 #include <Core/Settings.h>
 
 #include <DataTypes/DataTypeNullable.h>
-
-#include <Dictionaries/DictionaryStructure.h>
-
 #include <Interpreters/DictionaryReader.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 
@@ -338,7 +335,7 @@ void TableJoin::addJoinedColumnsAndCorrectTypes(NamesAndTypesList & left_columns
              * For `JOIN ON expr1 == expr2` we will infer common type later in makeTableJoin,
              *   when part of plan built and types of expression will be known.
              */
-            inferJoinKeyCommonType(left_columns, columns_from_joined_table, !isSpecialStorage());
+            inferJoinKeyCommonType(left_columns, columns_from_joined_table, !isSpecialStorage(), forceFullSortingMergeJoin());
 
             if (auto it = left_type_map.find(col.name); it != left_type_map.end())
                 col.type = it->second;
@@ -464,14 +461,18 @@ static void renameIfNeeded(String & name, const NameToNameMap & renames)
 }
 
 std::pair<ActionsDAGPtr, ActionsDAGPtr>
-TableJoin::createConvertingActions(const ColumnsWithTypeAndName & left_sample_columns, const ColumnsWithTypeAndName & right_sample_columns)
+TableJoin::createConvertingActions(
+    const ColumnsWithTypeAndName & left_sample_columns,
+    const ColumnsWithTypeAndName & right_sample_columns)
 {
-    inferJoinKeyCommonType(left_sample_columns, right_sample_columns, !isSpecialStorage());
+    inferJoinKeyCommonType(left_sample_columns, right_sample_columns, !isSpecialStorage(), forceFullSortingMergeJoin());
 
     NameToNameMap left_key_column_rename;
     NameToNameMap right_key_column_rename;
-    auto left_converting_actions = applyKeyConvertToTable(left_sample_columns, left_type_map, left_key_column_rename, forceNullableLeft());
-    auto right_converting_actions = applyKeyConvertToTable(right_sample_columns, right_type_map, right_key_column_rename, forceNullableRight());
+    auto left_converting_actions = applyKeyConvertToTable(
+        left_sample_columns, left_type_map, left_key_column_rename, forceNullableLeft());
+    auto right_converting_actions = applyKeyConvertToTable(
+        right_sample_columns, right_type_map, right_key_column_rename, forceNullableRight());
 
     {
         auto log_actions = [](const String & side, const ActionsDAGPtr & dag)
@@ -492,7 +493,18 @@ TableJoin::createConvertingActions(const ColumnsWithTypeAndName & left_sample_co
             else
             {
                 LOG_DEBUG(&Poco::Logger::get("TableJoin"), "{} JOIN converting actions: empty", side);
+                return;
             }
+            auto format_cols = [](const auto & cols) -> std::string
+            {
+                std::vector<std::string> str_cols;
+                str_cols.reserve(cols.size());
+                for (const auto & col : cols)
+                    str_cols.push_back(fmt::format("'{}': {}", col.name, col.type->getName()));
+                return fmt::format("[{}]", fmt::join(str_cols, ", "));
+            };
+            LOG_DEBUG(&Poco::Logger::get("TableJoin"), "{} JOIN converting actions: {} -> {}",
+                side, format_cols(dag->getRequiredColumns()), format_cols(dag->getResultColumns()));
         };
         log_actions("Left", left_converting_actions);
         log_actions("Right", right_converting_actions);
@@ -509,7 +521,7 @@ TableJoin::createConvertingActions(const ColumnsWithTypeAndName & left_sample_co
 }
 
 template <typename LeftNamesAndTypes, typename RightNamesAndTypes>
-void TableJoin::inferJoinKeyCommonType(const LeftNamesAndTypes & left, const RightNamesAndTypes & right, bool allow_right)
+void TableJoin::inferJoinKeyCommonType(const LeftNamesAndTypes & left, const RightNamesAndTypes & right, bool allow_right, bool strict)
 {
     if (strictness() == ASTTableJoin::Strictness::Asof)
     {
@@ -533,38 +545,42 @@ void TableJoin::inferJoinKeyCommonType(const LeftNamesAndTypes & left, const Rig
 
     forAllKeys(clauses, [&](const auto & left_key_name, const auto & right_key_name)
     {
-        auto ltype = left_types.find(left_key_name);
-        auto rtype = right_types.find(right_key_name);
-        if (ltype == left_types.end() || rtype == right_types.end())
+        auto ltypeit = left_types.find(left_key_name);
+        auto rtypeit = right_types.find(right_key_name);
+        if (ltypeit == left_types.end() || rtypeit == right_types.end())
         {
             /// Name mismatch, give up
             left_type_map.clear();
             right_type_map.clear();
             return false;
         }
+        const auto & ltype = ltypeit->second;
+        const auto & rtype = rtypeit->second;
 
-        if (JoinCommon::typesEqualUpToNullability(ltype->second, rtype->second))
+        bool type_equals = strict ? ltype->equals(*rtype) : JoinCommon::typesEqualUpToNullability(ltype, rtype);
+        if (type_equals)
             return true;
 
         DataTypePtr common_type;
         try
         {
             /// TODO(vdimir): use getMostSubtype if possible
-            common_type = DB::getLeastSupertype(DataTypes{ltype->second, rtype->second});
+            common_type = DB::getLeastSupertype(DataTypes{ltype, rtype});
         }
         catch (DB::Exception & ex)
         {
             throw DB::Exception(ErrorCodes::TYPE_MISMATCH,
                 "Can't infer common type for joined columns: {}: {} at left, {}: {} at right. {}",
-                left_key_name, ltype->second->getName(),
-                right_key_name, rtype->second->getName(),
+                left_key_name, ltype->getName(),
+                right_key_name, rtype->getName(),
                 ex.message());
         }
-        if (!allow_right && !common_type->equals(*rtype->second))
+
+        if (!allow_right && !common_type->equals(*rtype))
         {
             throw DB::Exception(ErrorCodes::TYPE_MISMATCH,
                 "Can't change type for right table: {}: {} -> {}.",
-                right_key_name, rtype->second->getName(), common_type->getName());
+                right_key_name, rtype->getName(), common_type->getName());
         }
         left_type_map[left_key_name] = right_type_map[right_key_name] = common_type;
 
@@ -599,10 +615,19 @@ static ActionsDAGPtr changeKeyTypes(const ColumnsWithTypeAndName & cols_src,
     }
     if (!has_some_to_do)
         return nullptr;
-    return ActionsDAG::makeConvertingActions(cols_src, cols_dst, ActionsDAG::MatchColumnsMode::Name, true, add_new_cols, &key_column_rename);
+
+    return ActionsDAG::makeConvertingActions(
+        /* source= */ cols_src,
+        /* result= */ cols_dst,
+        /* mode= */ ActionsDAG::MatchColumnsMode::Name,
+        /* ignore_constant_values= */ true,
+        /* add_casted_columns= */ add_new_cols,
+        /* new_names= */ &key_column_rename);
 }
 
-static ActionsDAGPtr changeTypesToNullable(const ColumnsWithTypeAndName & cols_src, const NameSet & exception_cols)
+static ActionsDAGPtr changeTypesToNullable(
+    const ColumnsWithTypeAndName & cols_src,
+    const NameSet & exception_cols)
 {
     ColumnsWithTypeAndName cols_dst = cols_src;
     bool has_some_to_do = false;
@@ -617,7 +642,14 @@ static ActionsDAGPtr changeTypesToNullable(const ColumnsWithTypeAndName & cols_s
 
     if (!has_some_to_do)
         return nullptr;
-    return ActionsDAG::makeConvertingActions(cols_src, cols_dst, ActionsDAG::MatchColumnsMode::Name, true, false, nullptr);
+
+    return ActionsDAG::makeConvertingActions(
+        /* source= */ cols_src,
+        /* result= */ cols_dst,
+        /* mode= */ ActionsDAG::MatchColumnsMode::Name,
+        /* ignore_constant_values= */ true,
+        /* add_casted_columns= */ false,
+        /* new_names= */ nullptr);
 }
 
 ActionsDAGPtr TableJoin::applyKeyConvertToTable(
@@ -632,7 +664,7 @@ ActionsDAGPtr TableJoin::applyKeyConvertToTable(
     /// Create DAG to make columns nullable if needed
     if (make_nullable)
     {
-        /// Do not need to make nullable temporary columns that would be used only as join keys, but now shown to user
+        /// Do not need to make nullable temporary columns that would be used only as join keys, but is not visible to user
         NameSet cols_not_nullable;
         for (const auto & t : key_column_rename)
             cols_not_nullable.insert(t.second);
@@ -736,7 +768,6 @@ void TableJoin::assertHasOneOnExpr() const
             text.push_back(onexpr.formatDebug());
         throw DB::Exception(ErrorCodes::LOGICAL_ERROR, "Expected to have only one join clause, got {}: [{}], query: '{}'",
                             clauses.size(), fmt::join(text, " | "), queryToString(table_join));
-
     }
 }
 
