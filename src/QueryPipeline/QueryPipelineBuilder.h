@@ -104,6 +104,8 @@ public:
         JoinPtr join,
         const Block & output_header,
         size_t max_block_size,
+        size_t max_streams,
+        bool keep_left_read_in_order,
         Processors * collected_processors = nullptr);
 
     /// Add other pipeline and execute it before current one.

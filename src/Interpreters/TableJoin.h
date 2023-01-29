@@ -200,10 +200,11 @@ public:
     bool allowMergeJoin() const;
     bool preferMergeJoin() const { return join_algorithm == JoinAlgorithm::PREFER_PARTIAL_MERGE; }
     bool forceMergeJoin() const { return join_algorithm == JoinAlgorithm::PARTIAL_MERGE; }
+    bool allowParallelHashJoin() const;
     bool forceHashJoin() const
     {
         /// HashJoin always used for DictJoin
-        return dictionary_reader || join_algorithm == JoinAlgorithm::HASH;
+        return dictionary_reader || join_algorithm == JoinAlgorithm::HASH || join_algorithm == JoinAlgorithm::PARALLEL_HASH;
     }
 
     bool forceNullableRight() const { return join_use_nulls && isLeftOrFull(table_join.kind); }
@@ -244,7 +245,7 @@ public:
      * Only rows where conditions are met (where new columns have non-zero value) will be joined.
      *
      * NOTE: non-equi condition containing columns from different tables (like `... ON t1.id = t2.id AND t1.val > t2.val)
-     *     isn't supported yet, it can be added later.
+     *     doesn't supported yet, it can be added later.
      */
     void addJoinCondition(const ASTPtr & ast, bool is_left);
 

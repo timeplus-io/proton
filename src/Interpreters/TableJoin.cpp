@@ -746,6 +746,19 @@ void TableJoin::resetToCross()
     this->table_join.kind = ASTTableJoin::Kind::Cross;
 }
 
+bool TableJoin::allowParallelHashJoin() const
+{
+    if (dictionary_reader || join_algorithm != JoinAlgorithm::PARALLEL_HASH)
+        return false;
+    if (table_join.kind != ASTTableJoin::Kind::Left && table_join.kind != ASTTableJoin::Kind::Inner)
+        return false;
+    if (table_join.strictness == ASTTableJoin::Strictness::Asof)
+        return false;
+    if (isSpecialStorage() || !oneDisjunct())
+        return false;
+    return true;
+}
+
 /// proton : starts
 void TableJoin::validateRangeAsof(Int64 max_range) const
 {
