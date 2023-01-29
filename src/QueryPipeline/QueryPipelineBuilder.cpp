@@ -1,5 +1,6 @@
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
+#include <Processors/QueryPlan/ExpressionStep.h>
 #include <Processors/ResizeProcessor.h>
 #include <Processors/LimitTransform.h>
 #include <Processors/Transforms/TotalsHavingTransform.h>
@@ -313,7 +314,15 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelines(
     right->pipe.dropExtremes();
 
     left->pipe.collected_processors = collected_processors;
-    right->pipe.collected_processors = collected_processors;
+
+    /// Collect the NEW processors for the right pipeline.
+    QueryPipelineProcessorsCollector collector(*right);
+    /// Remember the last step of the right pipeline.
+    ExpressionStep * step = typeid_cast<ExpressionStep *>(right->pipe.processors.back()->getQueryPlanStep());
+    if (!step)
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "The top step of the right pipeline should be ExpressionStep");
+    }
 
     /// In case joined subquery has totals, and we don't, add default chunk to totals.
     bool default_totals = false;
@@ -383,6 +392,10 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelines(
 
         left->pipe.processors.emplace_back(std::move(joining));
     }
+
+    /// Move the collected processors to the last step in the right pipeline.
+    Processors processors = collector.detachProcessors();
+    step->appendExtraProcessors(processors);
 
     left->pipe.processors.insert(left->pipe.processors.end(), right->pipe.processors.begin(), right->pipe.processors.end());
     left->resources = std::move(right->resources);
@@ -521,7 +534,13 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     right->pipe.dropExtremes();
 
     left->pipe.collected_processors = collected_processors;
-    right->pipe.collected_processors = collected_processors;
+
+    /// Collect the NEW processors for the right pipeline.
+    QueryPipelineProcessorsCollector collector(*right);
+    /// Remember the last step of the right pipeline.
+    ExpressionStep * step = typeid_cast<ExpressionStep *>(right->pipe.processors.back()->getQueryPlanStep());
+    if (!step)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "The top step of the right pipeline should be ExpressionStep");
 
     if (left->hasTotals() || right->hasTotals())
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Streaming join doesn't support totals");
@@ -569,6 +588,10 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
 
         left->pipe.processors.emplace_back(std::move(joining));
     }
+
+    /// Move the collected processors to the last step in the right pipeline.
+    Processors processors = collector.detachProcessors();
+    step->appendExtraProcessors(processors);
 
     left->pipe.processors.insert(left->pipe.processors.end(), right->pipe.processors.begin(), right->pipe.processors.end());
     left->resources = std::move(right->resources);
