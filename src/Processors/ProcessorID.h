@@ -97,6 +97,7 @@ enum class ProcessorID : UInt32
     SessionTransformWithSubstreamID = 85,
     ShufflingTransformID = 86,
     MergeJoinTransformID = 87,
+    FilterSortedStreamByRangeID = 88,
 
     /// Aggregating transform
     AggregatingInOrderTransformID = 1'000,
