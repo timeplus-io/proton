@@ -46,10 +46,10 @@ void Streaming::RangeAsofJoinContext::validate(Int64 max_range) const
             "left_time_col, date_add(right_time_col, 2h))",
             lower_bound, upper_bound);
 
-    if (left_inequality != ASOF::Inequality::Greater && left_inequality != ASOF::Inequality::GreaterOrEquals)
+    if (left_inequality != ASOFJoinInequality::Greater && left_inequality != ASOFJoinInequality::GreaterOrEquals)
         throw Exception(ErrorCodes::SYNTAX_ERROR, "Range join requires lower bound of inequality shall be '>' or '>='");
 
-    if (right_inequality != ASOF::Inequality::Less && right_inequality != ASOF::Inequality::LessOrEquals)
+    if (right_inequality != ASOFJoinInequality::Less && right_inequality != ASOFJoinInequality::LessOrEquals)
         throw Exception(ErrorCodes::SYNTAX_ERROR, "Range join requires upper bound of inequality shall be '<' or '<='");
 }
 }

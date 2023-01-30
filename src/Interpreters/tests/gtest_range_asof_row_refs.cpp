@@ -72,8 +72,8 @@ void commonTest(const std::vector<Case> & cases, const DB::Streaming::RangeAsofJ
 TEST(RowRefs, FindRangeGreaterOrEqualsAndLessOrEquals)
 {
     DB::Streaming::RangeAsofJoinContext range_ctx;
-    range_ctx.left_inequality = DB::ASOF::Inequality::GreaterOrEquals;
-    range_ctx.right_inequality = DB::ASOF::Inequality::LessOrEquals;
+    range_ctx.left_inequality = DB::ASOFJoinInequality::GreaterOrEquals;
+    range_ctx.right_inequality = DB::ASOFJoinInequality::LessOrEquals;
 
     range_ctx.lower_bound = -10 * 1000;
     range_ctx.upper_bound = 10 * 1000;
@@ -96,8 +96,8 @@ TEST(RowRefs, FindRangeGreaterOrEqualsAndLessOrEquals)
 TEST(RowRefs, FindRangeGreateAndLess)
 {
     DB::Streaming::RangeAsofJoinContext range_ctx;
-    range_ctx.left_inequality = DB::ASOF::Inequality::Greater;
-    range_ctx.right_inequality = DB::ASOF::Inequality::Less;
+    range_ctx.left_inequality = DB::ASOFJoinInequality::Greater;
+    range_ctx.right_inequality = DB::ASOFJoinInequality::Less;
 
     range_ctx.lower_bound = -10 * 1000;
     range_ctx.upper_bound = 10 * 1000;
@@ -120,8 +120,8 @@ TEST(RowRefs, FindRangeGreateAndLess)
 TEST(RowRefs, FindRangeGreaterOrEqualsAndLess)
 {
     DB::Streaming::RangeAsofJoinContext range_ctx;
-    range_ctx.left_inequality = DB::ASOF::Inequality::GreaterOrEquals;
-    range_ctx.right_inequality = DB::ASOF::Inequality::Less;
+    range_ctx.left_inequality = DB::ASOFJoinInequality::GreaterOrEquals;
+    range_ctx.right_inequality = DB::ASOFJoinInequality::Less;
 
     range_ctx.lower_bound = -10 * 1000;
     range_ctx.upper_bound = 10 * 1000;
@@ -144,8 +144,8 @@ TEST(RowRefs, FindRangeGreaterOrEqualsAndLess)
 TEST(RowRefs, FindRangeGreaterAndLessOrEquals)
 {
     DB::Streaming::RangeAsofJoinContext range_ctx;
-    range_ctx.left_inequality = DB::ASOF::Inequality::Greater;
-    range_ctx.right_inequality = DB::ASOF::Inequality::LessOrEquals;
+    range_ctx.left_inequality = DB::ASOFJoinInequality::Greater;
+    range_ctx.right_inequality = DB::ASOFJoinInequality::LessOrEquals;
 
     range_ctx.lower_bound = -10 * 1000;
     range_ctx.upper_bound = 10 * 1000;

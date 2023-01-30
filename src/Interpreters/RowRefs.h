@@ -6,11 +6,11 @@
 #include <mutex>
 #include <algorithm>
 
+#include <Core/Joins.h>
 #include <base/sort.h>
 
 #include <Common/Arena.h>
 #include <Columns/IColumn.h>
-#include <Interpreters/asof.h>
 
 namespace DB
 {
@@ -249,7 +249,7 @@ public:
     void insert(TypeIndex type, const IColumn & asof_column, const Block * block, size_t row_num);
 
     // This will internally synchronize
-    const RowRef * findAsof(TypeIndex type, ASOF::Inequality inequality, const IColumn & asof_column, size_t row_num) const;
+    const RowRef * findAsof(TypeIndex type, ASOFJoinInequality inequality, const IColumn & asof_column, size_t row_num) const;
 
 private:
     // Lookups can be stored in a HashTable because it is memmovable

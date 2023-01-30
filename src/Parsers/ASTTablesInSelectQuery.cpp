@@ -105,30 +105,22 @@ ASTPtr ASTTablesInSelectQuery::clone() const
 void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     frame.current_select = this;
-    /// proton: starts
-    std::string indent_str = settings.one_line ? "" : std::string(2 * (frame.indent + 1), ' ');
-    /// proton: ends
+    std::string indent_str = settings.one_line ? "" : std::string(2 * (frame.indent + 1), ' '); /// proton: updated
 
     if (database_and_table_name)
     {
-        /// proton: starts
         settings.ostr << " ";
         database_and_table_name->formatImpl(settings, state, frame);
-        /// proton: ends
     }
     else if (table_function)
     {
-        /// proton: starts
         settings.ostr << " ";
-        /// proton: ends
         table_function->formatImpl(settings, state, frame);
     }
     else if (subquery)
     {
-        /// proton: starts
-        settings.ostr << " ";
+        settings.ostr << " ";  /// proton: updated
         subquery->formatImpl(settings, state, frame);
-        /// proton: ends
     }
 
     if (final)
@@ -156,46 +148,44 @@ void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState
 void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, FormatState &, FormatStateStacked frame) const
 {
     settings.ostr << (settings.hilite ? hilite_keyword : "");
-    /// proton: starts
-    std::string indent_str = settings.one_line ? "" : std::string(2 * frame.indent, ' ');
-    /// proton: ends
+    std::string indent_str = settings.one_line ? "" : std::string(2 * frame.indent, ' '); /// proton: updated
 
-    if (kind != Kind::Comma)
+    if (kind != JoinKind::Comma)
     {
         settings.ostr << settings.nl_or_ws << indent_str;
     }
 
     switch (locality)
     {
-        case Locality::Unspecified:
+        case JoinLocality::Unspecified:
             break;
-        case Locality::Local:
+        case JoinLocality::Local:
             break;
-        case Locality::Global:
+        case JoinLocality::Global:
             settings.ostr << "GLOBAL ";
             break;
     }
 
-    if (kind != Kind::Cross && kind != Kind::Comma)
+    if (kind != JoinKind::Cross && kind != JoinKind::Comma)
     {
         switch (strictness)
         {
-            case Strictness::Unspecified:
+            case JoinStrictness::Unspecified:
                 break;
-            case Strictness::RightAny:
-            case Strictness::Any:
+            case JoinStrictness::RightAny:
+            case JoinStrictness::Any:
                 settings.ostr << "ANY ";
                 break;
-            case Strictness::All:
+            case JoinStrictness::All:
                 settings.ostr << "ALL ";
                 break;
-            case Strictness::Asof:
+            case JoinStrictness::Asof:
                 settings.ostr << "ASOF ";
                 break;
-            case Strictness::Semi:
+            case JoinStrictness::Semi:
                 settings.ostr << "SEMI ";
                 break;
-            case Strictness::Anti:
+            case JoinStrictness::Anti:
                 settings.ostr << "ANTI ";
                 break;
         }
@@ -203,22 +193,22 @@ void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, Format
 
     switch (kind)
     {
-        case Kind::Inner:
+        case JoinKind::Inner:
             settings.ostr << "INNER JOIN";
             break;
-        case Kind::Left:
+        case JoinKind::Left:
             settings.ostr << "LEFT JOIN";
             break;
-        case Kind::Right:
+        case JoinKind::Right:
             settings.ostr << "RIGHT JOIN";
             break;
-        case Kind::Full:
+        case JoinKind::Full:
             settings.ostr << "FULL OUTER JOIN";
             break;
-        case Kind::Cross:
+        case JoinKind::Cross:
             settings.ostr << "CROSS JOIN";
             break;
-        case Kind::Comma:
+        case JoinKind::Comma:
             settings.ostr << ",";
             break;
     }
@@ -290,9 +280,7 @@ void ASTTablesInSelectQueryElement::formatImpl(const FormatSettings & settings, 
 
 void ASTTablesInSelectQuery::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
-    /// proton: starts
-    std::string indent_str = settings.one_line ? "" : std::string(2 * frame.indent, ' ');
-    /// proton: ends
+    std::string indent_str = settings.one_line ? "" : std::string(2 * frame.indent, ' '); /// proton: updated
 
     for (const auto & child : children)
         child->formatImpl(settings, state, frame);

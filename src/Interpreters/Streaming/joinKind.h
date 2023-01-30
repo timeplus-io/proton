@@ -24,7 +24,7 @@ enum class Kind
     Right,
 };
 
-Kind toStreamingKind(ASTTableJoin::Kind kind);
-Strictness toStreamingStrictness(ASTTableJoin::Strictness strictness, bool is_range);
+Kind toStreamingKind(JoinKind kind);
+Strictness toStreamingStrictness(JoinStrictness strictness, bool is_range);
 }
 }

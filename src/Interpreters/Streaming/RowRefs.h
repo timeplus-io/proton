@@ -7,7 +7,6 @@
 #include <Columns/IColumn.h>
 #include <Core/Block.h>
 #include <Interpreters/RowRefs.h>
-#include <Interpreters/asof.h>
 #include <base/sort.h>
 #include <Common/Arena.h>
 
@@ -172,11 +171,11 @@ public:
         JoinBlockList * blocks,
         JoinBlockList::iterator block,
         size_t row_num,
-        ASOF::Inequality inequality,
+        ASOFJoinInequality inequality,
         size_t keep_versions);
 
     /// This will be synchronized by the rwlock mutex in StreamingHashJoin.h
-    const RowRefWithRefCount * findAsof(TypeIndex type, ASOF::Inequality inequality, const IColumn & asof_column, size_t row_num) const;
+    const RowRefWithRefCount * findAsof(TypeIndex type, ASOFJoinInequality inequality, const IColumn & asof_column, size_t row_num) const;
 
 private:
     // Lookups can be stored in a HashTable because it is memmovable

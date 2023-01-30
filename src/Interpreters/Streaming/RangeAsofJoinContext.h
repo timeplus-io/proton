@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Interpreters/asof.h>
+#include <Core/Joins.h>
 #include <base/types.h>
 
 #include <fmt/format.h>
@@ -19,8 +19,8 @@ enum class RangeType : uint8_t
 struct RangeAsofJoinContext
 {
     /// Left means range left
-    ASOF::Inequality left_inequality = ASOF::Inequality::GreaterOrEquals;
-    ASOF::Inequality right_inequality = ASOF::Inequality::LessOrEquals;
+    ASOFJoinInequality left_inequality = ASOFJoinInequality::GreaterOrEquals;
+    ASOFJoinInequality right_inequality = ASOFJoinInequality::LessOrEquals;
 
     /// For interval range, it is always in second
     Int64 lower_bound = 0;

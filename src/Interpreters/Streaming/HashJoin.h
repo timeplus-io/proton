@@ -148,11 +148,11 @@ public:
 
     bool alwaysReturnsEmptySet() const final;
 
-    ASTTableJoin::Kind getKind() const { return kind; }
-    ASTTableJoin::Strictness getStrictness() const { return strictness; }
+    JoinKind getKind() const { return kind; }
+    JoinStrictness getStrictness() const { return strictness; }
     Strictness getStreamingStrictness() const { return streaming_strictness; }
     const std::optional<TypeIndex> & getAsofType() const { return asof_type; }
-    ASOF::Inequality getAsofInequality() const { return asof_inequality; }
+    ASOFJoinInequality getAsofInequality() const { return asof_inequality; }
     bool anyTakeLastRow() const { return any_take_last_row; }
 
     const ColumnWithTypeAndName & rightAsofKeyColumn() const;
@@ -351,8 +351,8 @@ private:
     friend class JoinSource;
 
     std::shared_ptr<TableJoin> table_join;
-    ASTTableJoin::Kind kind;
-    ASTTableJoin::Strictness strictness;
+    JoinKind kind;
+    JoinStrictness strictness;
 
     Kind streaming_kind;
     Strictness streaming_strictness;
@@ -361,7 +361,7 @@ private:
     bool nullable_left_side; /// In case of RIGHT and FULL joins, if use_nulls, convert left-side columns to Nullable.
     bool any_take_last_row; /// Overwrite existing values when encountering the same key again
     std::optional<TypeIndex> asof_type;
-    ASOF::Inequality asof_inequality;
+    ASOFJoinInequality asof_inequality;
 
     JoinStreamDescription left_stream_desc;
     JoinStreamDescription right_stream_desc;

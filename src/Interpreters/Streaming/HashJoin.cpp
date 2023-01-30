@@ -261,7 +261,7 @@ public:
     }
 
     TypeIndex asofType() const { return *asof_type; }
-    ASOF::Inequality asofInequality() const { return asof_inequality; }
+    ASOFJoinInequality asofInequality() const { return asof_inequality; }
     const IColumn & leftAsofKey() const { return *left_asof_key; }
 
     std::vector<JoinOnKeyColumns> join_on_keys;
@@ -284,7 +284,7 @@ private:
     size_t lazy_defaults_count = 0;
     /// for ASOF
     std::optional<TypeIndex> asof_type;
-    ASOF::Inequality asof_inequality;
+    ASOFJoinInequality asof_inequality;
     const IColumn * left_asof_key = nullptr;
 
     void addColumn(const ColumnWithTypeAndName & src_column, const std::string & qualified_name)
@@ -444,7 +444,7 @@ joinRightColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<
                 else if constexpr (jf.is_asof_join)
                 {
                     TypeIndex asof_type = added_columns.asofType();
-                    ASOF::Inequality asof_inequality = added_columns.asofInequality();
+                    ASOFJoinInequality asof_inequality = added_columns.asofInequality();
                     const IColumn & left_asof_key = added_columns.leftAsofKey();
 
                     if (const auto * found = mapped.findAsof(asof_type, asof_inequality, left_asof_key, i))
@@ -1007,7 +1007,7 @@ void HashJoin::initRightBlockStructure(Block & saved_block_sample)
 {
     bool multiple_disjuncts = !table_join->oneDisjunct();
     /// We could remove key columns for LEFT | INNER HashJoin but we should keep them for JoinSwitcher (if any).
-    bool save_key_columns = !table_join->forceHashJoin() || isRightOrFull(kind) || multiple_disjuncts;
+    bool save_key_columns = !table_join->isEnabledAlgorithm(JoinAlgorithm::AUTO) || isRightOrFull(kind) || multiple_disjuncts;
     if (save_key_columns)
         saved_block_sample = right_table_keys.cloneEmpty();
     else if (

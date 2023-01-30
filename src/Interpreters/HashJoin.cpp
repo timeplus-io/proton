@@ -73,7 +73,7 @@ namespace JoinStuff
     }
 
     /// for single disjunct
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
+    template <JoinKind KIND, JoinStrictness STRICTNESS>
     void JoinUsedFlags::reinit(size_t size)
     {
         if constexpr (MapGetter<KIND, STRICTNESS>::flagged)
@@ -85,7 +85,7 @@ namespace JoinStuff
     }
 
     /// for multiple disjuncts
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
+    template <JoinKind KIND, JoinStrictness STRICTNESS>
     void JoinUsedFlags::reinit(const Block * block_ptr)
     {
         if constexpr (MapGetter<KIND, STRICTNESS>::flagged)
@@ -295,7 +295,7 @@ HashJoin::HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_s
             std::get<MapsOne>(data->maps[0]).create(Type::DICT);
             chooseMethod(kind, key_columns, key_sizes.emplace_back()); /// init key_sizes
         }
-        else if (strictness == ASTTableJoin::Strictness::Asof)
+        else if (strictness == JoinStrictness::Asof)
         {
             assert(disjuncts_num == 1);
 
@@ -336,7 +336,7 @@ HashJoin::HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_s
     LOG_DEBUG(log, "Join type: {}, kind: {}, strictness: {}", data->type, kind, strictness);
 }
 
-HashJoin::Type HashJoin::chooseMethod(ASTTableJoin::Kind kind, const ColumnRawPtrs & key_columns, Sizes & key_sizes)
+HashJoin::Type HashJoin::chooseMethod(JoinKind kind, const ColumnRawPtrs & key_columns, Sizes & key_sizes)
 {
     size_t keys_size = key_columns.size();
 
@@ -519,7 +519,7 @@ void HashJoin::dataMapInit(MapsVariant & map)
 {
     if (data->type == Type::DICT)
         return;
-    if (kind == ASTTableJoin::Kind::Cross)
+    if (kind == JoinKind::Cross)
         return;
     joinDispatchInit(kind, strictness, map);
     joinDispatch(kind, strictness, map, [&](auto, auto, auto & map_) { map_.create(data->type); });
@@ -623,13 +623,13 @@ namespace
     };
 
 
-    template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
+    template <JoinStrictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
     size_t NO_INLINE insertFromBlockImplTypeCase(
         HashJoin & join, Map & map, size_t rows, const ColumnRawPtrs & key_columns,
         const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, BoolColumnDataPtr join_mask, Arena & pool)
     {
         [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<typename Map::mapped_type, RowRef>;
-        constexpr bool is_asof_join = (STRICTNESS == ASTTableJoin::Strictness::Asof);
+        constexpr bool is_asof_join = (STRICTNESS == JoinStrictness::Asof);
 
         const IColumn * asof_column [[maybe_unused]] = nullptr;
         if constexpr (is_asof_join)
@@ -657,7 +657,7 @@ namespace
     }
 
 
-    template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
+    template <JoinStrictness STRICTNESS, typename KeyGetter, typename Map>
     size_t insertFromBlockImplType(
         HashJoin & join, Map & map, size_t rows, const ColumnRawPtrs & key_columns,
         const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, BoolColumnDataPtr join_mask, Arena & pool)
@@ -671,7 +671,7 @@ namespace
     }
 
 
-    template <ASTTableJoin::Strictness STRICTNESS, typename Maps>
+    template <JoinStrictness STRICTNESS, typename Maps>
     size_t insertFromBlockImpl(
         HashJoin & join, HashJoin::Type type, Maps & maps, size_t rows, const ColumnRawPtrs & key_columns,
         const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, BoolColumnDataPtr join_mask, Arena & pool)
@@ -698,12 +698,12 @@ void HashJoin::initRightBlockStructure(Block & saved_block_sample)
 {
     bool multiple_disjuncts = !table_join->oneDisjunct();
     /// We could remove key columns for LEFT | INNER HashJoin but we should keep them for JoinSwitcher (if any).
-    bool save_key_columns = !table_join->forceHashJoin() || isRightOrFull(kind) || multiple_disjuncts;
+    bool save_key_columns = table_join->isEnabledAlgorithm(JoinAlgorithm::AUTO) || isRightOrFull(kind) || multiple_disjuncts;
     if (save_key_columns)
     {
         saved_block_sample = right_table_keys.cloneEmpty();
     }
-    else if (strictness == ASTTableJoin::Strictness::Asof)
+    else if (strictness == JoinStrictness::Asof)
     {
         /// Save ASOF key
         saved_block_sample.insert(right_table_keys.safeGetByPosition(right_table_keys.columns() - 1));
@@ -741,9 +741,7 @@ bool HashJoin::addJoinedBlock(const Block & source_block, bool check_limits)
     /// RowRef::SizeT is uint32_t (not size_t) for hash table Cell memory efficiency.
     /// It's possible to split bigger blocks and insert them by parts here. But it would be a dead code.
     if (unlikely(source_block.rows() > std::numeric_limits<RowRef::SizeT>::max()))
-        /// proton: starts
         throw Exception("Too many rows in right stream block for HashJoin: " + toString(source_block.rows()), ErrorCodes::NOT_IMPLEMENTED);
-        /// proton: ends
 
     /// There's no optimization for right side const columns. Remove constness if any.
     Block block = materializeBlock(source_block);
@@ -808,7 +806,7 @@ bool HashJoin::addJoinedBlock(const Block & source_block, bool check_limits)
                 }
             }
 
-            if (kind != ASTTableJoin::Kind::Cross)
+            if (kind != JoinKind::Cross)
             {
                 joinDispatch(kind, strictness, data->maps[onexpr_idx], [&](auto kind_, auto strictness_, auto & map)
                 {
@@ -995,7 +993,7 @@ public:
     }
 
     TypeIndex asofType() const { return *asof_type; }
-    ASOF::Inequality asofInequality() const { return asof_inequality; }
+    ASOFJoinInequality asofInequality() const { return asof_inequality; }
     const IColumn & leftAsofKey() const { return *left_asof_key; }
 
     std::vector<JoinOnKeyColumns> join_on_keys;
@@ -1011,7 +1009,7 @@ private:
     size_t lazy_defaults_count = 0;
     /// for ASOF
     std::optional<TypeIndex> asof_type;
-    ASOF::Inequality asof_inequality;
+    ASOFJoinInequality asof_inequality;
     const IColumn * left_asof_key = nullptr;
 
     bool is_join_get;
@@ -1024,20 +1022,20 @@ private:
     }
 };
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
+template <JoinKind KIND, JoinStrictness STRICTNESS>
 struct JoinFeatures
 {
-    static constexpr bool is_any_join = STRICTNESS == ASTTableJoin::Strictness::Any;
-    static constexpr bool is_any_or_semi_join = STRICTNESS == ASTTableJoin::Strictness::Any || STRICTNESS == ASTTableJoin::Strictness::RightAny || (STRICTNESS == ASTTableJoin::Strictness::Semi && KIND == ASTTableJoin::Kind::Left);
-    static constexpr bool is_all_join = STRICTNESS == ASTTableJoin::Strictness::All;
-    static constexpr bool is_asof_join = STRICTNESS == ASTTableJoin::Strictness::Asof;
-    static constexpr bool is_semi_join = STRICTNESS == ASTTableJoin::Strictness::Semi;
-    static constexpr bool is_anti_join = STRICTNESS == ASTTableJoin::Strictness::Anti;
+    static constexpr bool is_any_join = STRICTNESS == JoinStrictness::Any;
+    static constexpr bool is_any_or_semi_join = STRICTNESS == JoinStrictness::Any || STRICTNESS == JoinStrictness::RightAny || (STRICTNESS == JoinStrictness::Semi && KIND == JoinKind::Left);
+    static constexpr bool is_all_join = STRICTNESS == JoinStrictness::All;
+    static constexpr bool is_asof_join = STRICTNESS == JoinStrictness::Asof;
+    static constexpr bool is_semi_join = STRICTNESS == JoinStrictness::Semi;
+    static constexpr bool is_anti_join = STRICTNESS == JoinStrictness::Anti;
 
-    static constexpr bool left = KIND == ASTTableJoin::Kind::Left;
-    static constexpr bool right = KIND == ASTTableJoin::Kind::Right;
-    static constexpr bool inner = KIND == ASTTableJoin::Kind::Inner;
-    static constexpr bool full = KIND == ASTTableJoin::Kind::Full;
+    static constexpr bool left = KIND == JoinKind::Left;
+    static constexpr bool right = KIND == JoinKind::Right;
+    static constexpr bool inner = KIND == JoinKind::Inner;
+    static constexpr bool full = KIND == JoinKind::Full;
 
     static constexpr bool need_replication = is_all_join || (is_any_join && right) || (is_semi_join && right);
     static constexpr bool need_filter = !need_replication && (inner || right || (is_semi_join && left) || (is_anti_join && left));
@@ -1191,7 +1189,7 @@ void setUsed(IColumn::Filter & filter [[maybe_unused]], size_t pos [[maybe_unuse
 
 /// Joins right table columns which indexes are present in right_indexes using specified map.
 /// Makes filter (1 if row presented in right table) and returns offsets to replicate (for ALL JOINS).
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool need_filter, bool has_null_map, bool multiple_disjuncts>
+template <JoinKind KIND, JoinStrictness STRICTNESS, typename KeyGetter, typename Map, bool need_filter, bool has_null_map, bool multiple_disjuncts>
 NO_INLINE IColumn::Filter joinRightColumns(
     std::vector<KeyGetter> && key_getter_vector,
     const std::vector<const Map *> & mapv,
@@ -1241,7 +1239,7 @@ NO_INLINE IColumn::Filter joinRightColumns(
                 if constexpr (jf.is_asof_join)
                 {
                     TypeIndex asof_type = added_columns.asofType();
-                    ASOF::Inequality asof_inequality = added_columns.asofInequality();
+                    ASOFJoinInequality asof_inequality = added_columns.asofInequality();
                     const IColumn & left_asof_key = added_columns.leftAsofKey();
 
                     if (const RowRef * found = mapped.findAsof(asof_type, asof_inequality, left_asof_key, i))
@@ -1275,7 +1273,7 @@ NO_INLINE IColumn::Filter joinRightColumns(
                         addFoundRowAll<Map, jf.add_missing>(mapped, added_columns, current_offset, known_rows, used_flags_opt);
                     }
                 }
-                else if constexpr (jf.is_any_join && KIND == ASTTableJoin::Kind::Inner)
+                else if constexpr (jf.is_any_join && KIND == JoinKind::Inner)
                 {
                     bool used_once = used_flags.template setUsedOnce<jf.need_flags, multiple_disjuncts>(find_result);
 
@@ -1342,7 +1340,7 @@ NO_INLINE IColumn::Filter joinRightColumns(
     return filter;
 }
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool need_filter, bool has_null_map>
+template <JoinKind KIND, JoinStrictness STRICTNESS, typename KeyGetter, typename Map, bool need_filter, bool has_null_map>
 IColumn::Filter joinRightColumnsSwitchMultipleDisjuncts(
     std::vector<KeyGetter> && key_getter_vector,
     const std::vector<const Map *> & mapv,
@@ -1354,7 +1352,7 @@ IColumn::Filter joinRightColumnsSwitchMultipleDisjuncts(
         : joinRightColumns<KIND, STRICTNESS, KeyGetter, Map, true, true, false>(std::forward<std::vector<KeyGetter>>(key_getter_vector), mapv, added_columns, used_flags);
 }
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
+template <JoinKind KIND, JoinStrictness STRICTNESS, typename KeyGetter, typename Map>
 IColumn::Filter joinRightColumnsSwitchNullability(
     std::vector<KeyGetter> && key_getter_vector,
     const std::vector<const Map *> & mapv,
@@ -1379,14 +1377,14 @@ IColumn::Filter joinRightColumnsSwitchNullability(
     }
 }
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+template <JoinKind KIND, JoinStrictness STRICTNESS, typename Maps>
 IColumn::Filter switchJoinRightColumns(
     const std::vector<const Maps *> & mapv,
     AddedColumns & added_columns,
     HashJoin::Type type,
     JoinStuff::JoinUsedFlags & used_flags)
 {
-    constexpr bool is_asof_join = STRICTNESS == ASTTableJoin::Strictness::Asof;
+    constexpr bool is_asof_join = STRICTNESS == JoinStrictness::Asof;
     switch (type)
     {
         case HashJoin::Type::EMPTY:
@@ -1429,13 +1427,13 @@ IColumn::Filter switchJoinRightColumns(
     }
 }
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
+template <JoinKind KIND, JoinStrictness STRICTNESS>
 IColumn::Filter dictionaryJoinRightColumns(const TableJoin & table_join, AddedColumns & added_columns)
 {
-    if constexpr (KIND == ASTTableJoin::Kind::Left &&
-        (STRICTNESS == ASTTableJoin::Strictness::Any ||
-        STRICTNESS == ASTTableJoin::Strictness::Semi ||
-        STRICTNESS == ASTTableJoin::Strictness::Anti))
+    if constexpr (KIND == JoinKind::Left &&
+        (STRICTNESS == JoinStrictness::Any ||
+        STRICTNESS == JoinStrictness::Semi ||
+        STRICTNESS == JoinStrictness::Anti))
     {
         assert(added_columns.join_on_keys.size() == 1);
 
@@ -1453,7 +1451,7 @@ IColumn::Filter dictionaryJoinRightColumns(const TableJoin & table_join, AddedCo
 
 } /// nameless
 
-template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+template <JoinKind KIND, JoinStrictness STRICTNESS, typename Maps>
 void HashJoin::joinBlockImpl(
     Block & block,
     const Block & block_with_columns_to_add,
@@ -1698,11 +1696,11 @@ DataTypePtr HashJoin::joinGetCheckAndGetReturnType(const DataTypes & data_types,
 }
 
 /// TODO: return multiple columns as named tuple
-/// TODO: return array of values when strictness == ASTTableJoin::Strictness::All
+/// TODO: return array of values when strictness == JoinStrictness::All
 ColumnWithTypeAndName HashJoin::joinGet(const Block & block, const Block & block_with_columns_to_add) const
 {
-    bool is_valid = (strictness == ASTTableJoin::Strictness::Any || strictness == ASTTableJoin::Strictness::RightAny)
-        && kind == ASTTableJoin::Kind::Left;
+    bool is_valid = (strictness == JoinStrictness::Any || strictness == JoinStrictness::RightAny)
+        && kind == JoinKind::Left;
     if (!is_valid)
         throw Exception("joinGet only supports StorageJoin of type Left Any", ErrorCodes::INCOMPATIBLE_TYPE_OF_JOIN);
     const auto & key_names_right = table_join->getOnlyClause().key_names_right;
@@ -1716,14 +1714,12 @@ ColumnWithTypeAndName HashJoin::joinGet(const Block & block, const Block & block
         keys.insert(std::move(key));
     }
 
-    /// proton: starts
-    static_assert(!MapGetter<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::Any>::flagged,
+    static_assert(!MapGetter<JoinKind::Left, JoinStrictness::Any>::flagged,
                   "joinGet are not protected from hash stream changes between block processing");
-    /// proton: ends
 
     std::vector<const MapsOne *> maps_vector;
     maps_vector.push_back(&std::get<MapsOne>(data->maps[0]));
-    joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::Any>(
+    joinBlockImpl<JoinKind::Left, JoinStrictness::Any>(
         keys, block_with_columns_to_add, maps_vector, true);
     return keys.getByPosition(keys.columns() - 1);
 }
@@ -1746,46 +1742,43 @@ void HashJoin::joinBlock(Block & block, ExtraBlockPtr & not_processed)
             right_sample_block, onexpr.key_names_right, cond_column_name.second);
     }
 
-    if (kind == ASTTableJoin::Kind::Cross)
+    if (kind == JoinKind::Cross)
     {
         joinBlockImplCross(block, not_processed);
         return;
     }
 
-    if (kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full)
+    if (kind == JoinKind::Right || kind == JoinKind::Full)
     {
         materializeBlockInplace(block);
     }
 
     if (overDictionary())
     {
-        using Kind = ASTTableJoin::Kind;
-        using Strictness = ASTTableJoin::Strictness;
-
         auto & map = std::get<MapsOne>(data->maps[0]);
         std::vector<const std::decay_t<decltype(map)>*> maps_vector;
         maps_vector.push_back(&map);
 
-        if (kind == Kind::Left)
+        if (kind == JoinKind::Left)
         {
             switch (strictness)
             {
-            case Strictness::Any:
-            case Strictness::All:
-                    joinBlockImpl<Kind::Left, Strictness::Any>(block, sample_block_with_columns_to_add, maps_vector);
+            case JoinStrictness::Any:
+            case JoinStrictness::All:
+                    joinBlockImpl<JoinKind::Left, JoinStrictness::Any>(block, sample_block_with_columns_to_add, maps_vector);
                     break;
-            case Strictness::Semi:
-                    joinBlockImpl<Kind::Left, Strictness::Semi>(block, sample_block_with_columns_to_add, maps_vector);
+            case JoinStrictness::Semi:
+                    joinBlockImpl<JoinKind::Left, JoinStrictness::Semi>(block, sample_block_with_columns_to_add, maps_vector);
                     break;
-            case Strictness::Anti:
-                    joinBlockImpl<Kind::Left, Strictness::Anti>(block, sample_block_with_columns_to_add, maps_vector);
+            case JoinStrictness::Anti:
+                    joinBlockImpl<JoinKind::Left, JoinStrictness::Anti>(block, sample_block_with_columns_to_add, maps_vector);
                     break;
             default:
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong JOIN combination: dictionary + {} {}", strictness, kind);
             }
         }
-        else if (kind == Kind::Inner && strictness == Strictness::All)
-            joinBlockImpl<Kind::Left, Strictness::Semi>(block, sample_block_with_columns_to_add, maps_vector);
+        else if (kind == JoinKind::Inner && strictness == JoinStrictness::All)
+            joinBlockImpl<JoinKind::Left, JoinStrictness::Semi>(block, sample_block_with_columns_to_add, maps_vector);
 
         else
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong JOIN combination: {} {}", strictness, kind);
@@ -1934,7 +1927,7 @@ private:
         return rows_added;
     }
 
-    template <ASTTableJoin::Strictness STRICTNESS, typename Maps>
+    template <JoinStrictness STRICTNESS, typename Maps>
     size_t fillColumnsFromMap(const Maps & maps, MutableColumns & columns_keys_and_right)
     {
         switch (parent.data->type)
@@ -1951,7 +1944,7 @@ private:
         __builtin_unreachable();
     }
 
-    template <ASTTableJoin::Strictness STRICTNESS, typename Map>
+    template <JoinStrictness STRICTNESS, typename Map>
     size_t fillColumns(const Map & map, MutableColumns & columns_keys_and_right)
     {
         size_t rows_added = 0;
@@ -2044,8 +2037,8 @@ std::shared_ptr<NotJoinedBlocks> HashJoin::getNonJoinedBlocks(const Block & left
                                                               const Block & result_sample_block,
                                                               UInt64 max_block_size) const
 {
-    if (table_join->strictness() == ASTTableJoin::Strictness::Asof ||
-        table_join->strictness() == ASTTableJoin::Strictness::Semi ||
+    if (table_join->strictness() == JoinStrictness::Asof ||
+        table_join->strictness() == JoinStrictness::Semi ||
         !isRightOrFull(table_join->kind()))
     {
         return {};

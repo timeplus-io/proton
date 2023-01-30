@@ -14,11 +14,6 @@ class ASTIdentifier;
 class ASTLiteral;
 class TableJoin;
 
-namespace ASOF
-{
-    enum class Inequality;
-}
-
 enum class JoinIdentifierPos
 {
     /// Position can't be established, identifier not resolved
@@ -55,7 +50,7 @@ public:
 
         void addJoinKeys(const ASTPtr & left_ast, const ASTPtr & right_ast, JoinIdentifierPosPair table_pos);
         void addAsofJoinKeys(const ASTPtr & left_ast, const ASTPtr & right_ast, JoinIdentifierPosPair table_pos,
-                             const ASOF::Inequality & asof_inequality);
+                             const ASOFJoinInequality & asof_inequality);
         void asofToJoinKeys();
     };
 
@@ -96,8 +91,8 @@ private:
     static void handleRangeBetweenAsOfJoin(const ASTFunction & func, const ASTPtr & ast, Data & data);
     /// General RangeBetween asof join
     static bool handleRangeBetweenAsOfJoinGeneral(const ASTFunction & func, Data & data);
-    static bool handleLeftLiteralArgumentForRangeBetweenAsofJoin(const ASTLiteral * left_literal_arg, ASTPtr right_arg, ASOF::Inequality inequality, Data & data);
-    static bool handleRightLiteralArgumentForRangeBetweenAsofJoin(const ASTLiteral * right_literal_arg, ASTPtr left_arg, ASOF::Inequality inequality, Data & data);
+    static bool handleLeftLiteralArgumentForRangeBetweenAsofJoin(const ASTLiteral * left_literal_arg, ASTPtr right_arg, ASOFJoinInequality inequality, Data & data);
+    static bool handleRightLiteralArgumentForRangeBetweenAsofJoin(const ASTLiteral * right_literal_arg, ASTPtr left_arg, ASOFJoinInequality inequality, Data & data);
     static std::pair<Int64, bool> handleLeftAndRightArgumentsForRangeBetweenAsOfJoin(const ASTLiteral * literal_arg, ASTPtr non_literal_arg, Data & data);
     /// proton : ends
 };

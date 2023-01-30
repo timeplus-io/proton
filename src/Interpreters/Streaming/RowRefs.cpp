@@ -78,7 +78,7 @@ void AsofRowRefs::insert(
     JoinBlockList * blocks,
     JoinBlockList::iterator block,
     size_t row_num,
-    ASOF::Inequality inequality,
+    ASOFJoinInequality inequality,
     size_t keep_versions)
 {
     auto call = [&](const auto & t) {
@@ -91,7 +91,7 @@ void AsofRowRefs::insert(
         const auto & column = typeid_cast<const ColumnType &>(asof_column);
 
         T key = column.getElement(row_num);
-        bool ascending = (inequality == ASOF::Inequality::Less) || (inequality == ASOF::Inequality::LessOrEquals);
+        bool ascending = (inequality == ASOFJoinInequality::Less) || (inequality == ASOFJoinInequality::LessOrEquals);
         container->insert(Entry<T>(key, RowRefWithRefCount(blocks, block, row_num)), ascending);
         container->truncateTo(keep_versions, ascending);
     };
@@ -100,12 +100,12 @@ void AsofRowRefs::insert(
 }
 
 const RowRefWithRefCount *
-AsofRowRefs::findAsof(TypeIndex type, ASOF::Inequality inequality, const IColumn & asof_column, size_t row_num) const
+AsofRowRefs::findAsof(TypeIndex type, ASOFJoinInequality inequality, const IColumn & asof_column, size_t row_num) const
 {
     const RowRefWithRefCount * out = nullptr;
 
-    bool ascending = (inequality == ASOF::Inequality::Less) || (inequality == ASOF::Inequality::LessOrEquals);
-    bool is_strict = (inequality == ASOF::Inequality::Less) || (inequality == ASOF::Inequality::Greater);
+    bool ascending = (inequality == ASOFJoinInequality::Less) || (inequality == ASOFJoinInequality::LessOrEquals);
+    bool is_strict = (inequality == ASOFJoinInequality::Less) || (inequality == ASOFJoinInequality::Greater);
 
     auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
@@ -232,7 +232,7 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(
         /// => key - upper_bound <= right_key < key - lower_bound
         /// Find key range : [key - upper_bound, key - lower_bound)
 
-        bool is_right_strict = range_join_ctx.right_inequality == ASOF::Inequality::Less;
+        bool is_right_strict = range_join_ctx.right_inequality == ASOFJoinInequality::Less;
 
         if constexpr (is_decimal<T>)
             key -= static_cast<typename T::NativeType>(range_join_ctx.upper_bound);
@@ -261,7 +261,7 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(
             /// all keys in the map > key - lower_bound
             return;
 
-        bool is_left_strict = range_join_ctx.left_inequality == ASOF::Inequality::Greater;
+        bool is_left_strict = range_join_ctx.left_inequality == ASOFJoinInequality::Greater;
 
         /// >= key
         auto upper_iter = m->lower_bound(key);
@@ -315,7 +315,7 @@ const RowRef * RangeAsofRowRefs::findAsof(
         /// => key - upper_bound <= right_key < key - lower_bound
         /// Find key range : [key - upper_bound, key - lower_bound)
 
-        bool is_right_strict = range_join_ctx.right_inequality == ASOF::Inequality::Less;
+        bool is_right_strict = range_join_ctx.right_inequality == ASOFJoinInequality::Less;
 
         if constexpr (is_decimal<T>)
             key -= static_cast<typename T::NativeType>(range_join_ctx.upper_bound);
@@ -348,7 +348,7 @@ const RowRef * RangeAsofRowRefs::findAsof(
         /// >= key
         auto upper_iter = m->lower_bound(key);
 
-        bool is_left_strict = range_join_ctx.left_inequality == ASOF::Inequality::Greater;
+        bool is_left_strict = range_join_ctx.left_inequality == ASOFJoinInequality::Greater;
         if (is_left_strict && upper_iter == m->begin())
             return;
 

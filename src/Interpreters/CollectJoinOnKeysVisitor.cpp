@@ -57,7 +57,7 @@ void CollectJoinOnKeysMatcher::Data::addJoinKeys(const ASTPtr & left_ast, const 
 }
 
 void CollectJoinOnKeysMatcher::Data::addAsofJoinKeys(const ASTPtr & left_ast, const ASTPtr & right_ast,
-                                                     JoinIdentifierPosPair table_pos, const ASOF::Inequality & inequality)
+                                                     JoinIdentifierPosPair table_pos, const ASOFJoinInequality & inequality)
 {
     if (isLeftIdentifier(table_pos.first) && isRightIdentifier(table_pos.second))
     {
@@ -69,7 +69,7 @@ void CollectJoinOnKeysMatcher::Data::addAsofJoinKeys(const ASTPtr & left_ast, co
     {
         asof_left_key = right_ast->clone();
         asof_right_key = left_ast->clone();
-        analyzed_join.setAsofInequality(ASOF::reverseInequality(inequality));
+        analyzed_join.setAsofInequality(reverseASOFJoinInequality(inequality));
     }
     else
     {
@@ -100,17 +100,17 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
     if (func.name == "and")
         return; /// go into children
 
-    ASOF::Inequality inequality = ASOF::getInequality(func.name);
+    ASOFJoinInequality inequality = getASOFJoinInequality(func.name);
 
     /// proton : starts
-    if (inequality == ASOF::Inequality::RangeBetween)
+    if (inequality == ASOFJoinInequality::RangeBetween)
     {
         handleRangeBetweenAsOfJoin(func, ast, data);
         return;
     }
     /// proton : ends
 
-    if (func.name == "equals" || inequality != ASOF::Inequality::None)
+    if (func.name == "equals" || inequality != ASOFJoinInequality::None)
     {
         if (func.arguments->children.size() != 2)
             throw Exception("Function " + func.name + " takes two arguments, got '" + func.formatForErrorMessage() + "' instead",
@@ -360,13 +360,13 @@ void CollectJoinOnKeysMatcher::handleRangeBetweenAsOfJoin(const ASTFunction & fu
             ErrorCodes::INVALID_JOIN_ON_EXPRESSION, "Multiple range joins are detected in ON section. Unexpected '{}'", queryToString(ast));
 
     auto table_numbers = getTableNumbers(left, right, data);
-    data.addAsofJoinKeys(left, right, table_numbers, ASOF::Inequality::RangeBetween);
+    data.addAsofJoinKeys(left, right, table_numbers, ASOFJoinInequality::RangeBetween);
 
     data.analyzed_join.setRangeAsofLowerBound(-range);
     data.analyzed_join.setRangeAsofUpperBound(range);
     data.analyzed_join.setRangeType(Streaming::RangeType::Interval);
-    data.analyzed_join.setRangeAsofLeftInequality(ASOF::Inequality::GreaterOrEquals);
-    data.analyzed_join.setRangeAsofRightInequality(ASOF::Inequality::LessOrEquals);
+    data.analyzed_join.setRangeAsofLeftInequality(ASOFJoinInequality::GreaterOrEquals);
+    data.analyzed_join.setRangeAsofRightInequality(ASOFJoinInequality::LessOrEquals);
 
     data.range_analyze_finished = true;
 }
@@ -387,7 +387,7 @@ bool CollectJoinOnKeysMatcher::handleRangeBetweenAsOfJoinGeneral(const ASTFuncti
     /// SELECT ... FROM left JOIN right ON left.i = right.ii AND left.k - right.kk BETWEEN -10 AND 10 => RangeBetween asof, this seems difficult
     /// SELECT ... FROM left JOIN right ON left.i = right.ii AND (left.k - right.kk) > -10 AND (left.k - right.kk) < 10 => RangeBetween asof, this seems difficult
 
-    ASOF::Inequality inequality = ASOF::getInequality(func.name);
+    ASOFJoinInequality inequality = getASOFJoinInequality(func.name);
 
     /// RangeBetween asof join. We don't support these kinds of range : x > y + 5 and x <= y + 10
     /// User needs rewrite it to `x - y > 5 and x - y < 10`. There are 2 parts of inequality in range asof join
@@ -475,7 +475,7 @@ std::pair<Int64, bool> CollectJoinOnKeysMatcher::handleLeftAndRightArgumentsForR
                 arg_func->formatForErrorMessage());
 
         auto table_numbers = getTableNumbers(arg_func->arguments->children[0], arg_func->arguments->children[1], data);
-        data.addAsofJoinKeys(arg_func->arguments->children[0], arg_func->arguments->children[1], table_numbers, ASOF::Inequality::RangeBetween);
+        data.addAsofJoinKeys(arg_func->arguments->children[0], arg_func->arguments->children[1], table_numbers, ASOFJoinInequality::RangeBetween);
         data.analyzed_join.setRangeType(Streaming::RangeType::Integer);
         return {range, isLeftIdentifier(table_numbers.first)};
     }
@@ -522,7 +522,7 @@ std::pair<Int64, bool> CollectJoinOnKeysMatcher::handleLeftAndRightArgumentsForR
                 arg_func->formatForErrorMessage());
 
         auto table_numbers = getTableNumbers(arg_func->arguments->children[1], arg_func->arguments->children[2], data);
-        data.addAsofJoinKeys(arg_func->arguments->children[1], arg_func->arguments->children[2], table_numbers, ASOF::Inequality::RangeBetween);
+        data.addAsofJoinKeys(arg_func->arguments->children[1], arg_func->arguments->children[2], table_numbers, ASOFJoinInequality::RangeBetween);
         data.analyzed_join.setRangeType(Streaming::RangeType::Interval);
 
         return {range, isLeftIdentifier(table_numbers.first)};
@@ -534,30 +534,30 @@ std::pair<Int64, bool> CollectJoinOnKeysMatcher::handleLeftAndRightArgumentsForR
             arg_func->name);
 }
 
-bool CollectJoinOnKeysMatcher::handleLeftLiteralArgumentForRangeBetweenAsofJoin(const ASTLiteral * left_literal_arg, ASTPtr right_arg, ASOF::Inequality inequality, Data & data)
+bool CollectJoinOnKeysMatcher::handleLeftLiteralArgumentForRangeBetweenAsofJoin(const ASTLiteral * left_literal_arg, ASTPtr right_arg, ASOFJoinInequality inequality, Data & data)
 {
     auto [range_value, is_first_arg_left_identifier] = handleLeftAndRightArgumentsForRangeBetweenAsOfJoin(left_literal_arg, right_arg, data);
 
     if (is_first_arg_left_identifier)
     {
-        if (inequality == ASOF::Inequality::Greater || inequality == ASOF::Inequality::GreaterOrEquals)
+        if (inequality == ASOFJoinInequality::Greater || inequality == ASOFJoinInequality::GreaterOrEquals)
         {
             /// The expression is in this `10 >= left.column - right.column or 10 >= date_diff('second', left.column, right.column)` form
             /// Change it to `left.column - right.column <= 10 or date_diff('second', left.column, right.column) <= 10` form
-            data.analyzed_join.setRangeAsofRightInequality(ASOF::reverseInequality(inequality));
+            data.analyzed_join.setRangeAsofRightInequality(reverseASOFJoinInequality(inequality));
             data.analyzed_join.setRangeAsofUpperBound(range_value);
         }
         else
         {
             /// The expression is in this `5 < left.column - right.column or 5 < date_diff('second', left.column, right.column)` form
             /// Change it to `left.column - right.column >= 5 or date_diff('second', left.column, right.column) >= 5` form
-            data.analyzed_join.setRangeAsofLeftInequality(ASOF::reverseInequality(inequality));
+            data.analyzed_join.setRangeAsofLeftInequality(reverseASOFJoinInequality(inequality));
             data.analyzed_join.setRangeAsofLowerBound(range_value);
         }
     }
     else
     {
-        if (inequality == ASOF::Inequality::Greater || inequality == ASOF::Inequality::GreaterOrEquals)
+        if (inequality == ASOFJoinInequality::Greater || inequality == ASOFJoinInequality::GreaterOrEquals)
         {
             /// The expression is in this `10 >= right.column - left.column or 10 >= date_diff('second', right.column, left.column)` form
             /// Change it to `left.column - right.column >= -10 or date_diff('second', left.column, right.column) >= -10` form
@@ -576,13 +576,13 @@ bool CollectJoinOnKeysMatcher::handleLeftLiteralArgumentForRangeBetweenAsofJoin(
     return is_first_arg_left_identifier;
 }
 
-bool CollectJoinOnKeysMatcher::handleRightLiteralArgumentForRangeBetweenAsofJoin(const ASTLiteral * right_literal_arg, ASTPtr left_arg, ASOF::Inequality inequality, Data & data)
+bool CollectJoinOnKeysMatcher::handleRightLiteralArgumentForRangeBetweenAsofJoin(const ASTLiteral * right_literal_arg, ASTPtr left_arg, ASOFJoinInequality inequality, Data & data)
 {
     auto [range_value, is_first_arg_left_identifier] = handleLeftAndRightArgumentsForRangeBetweenAsOfJoin(right_literal_arg, left_arg, data);
 
     if (is_first_arg_left_identifier)
     {
-        if (inequality == ASOF::Inequality::Greater || inequality == ASOF::Inequality::GreaterOrEquals)
+        if (inequality == ASOFJoinInequality::Greater || inequality == ASOFJoinInequality::GreaterOrEquals)
         {
             /// The expression is in this `left.column - right.column >= 10 or date_diff('second', left.column, right.column) >= 10` form
             /// Don't need change form
@@ -599,18 +599,18 @@ bool CollectJoinOnKeysMatcher::handleRightLiteralArgumentForRangeBetweenAsofJoin
     }
     else
     {
-        if (inequality == ASOF::Inequality::Greater || inequality == ASOF::Inequality::GreaterOrEquals)
+        if (inequality == ASOFJoinInequality::Greater || inequality == ASOFJoinInequality::GreaterOrEquals)
         {
             /// The expression is in this `right.column - left.column >= 10 or date_diff('second', right.column, left.column)` >= 10 form
             /// Change it to `left.column - right.column <= -10 or date_diff('second', left.column, right.column) <= -10` form
-            data.analyzed_join.setRangeAsofRightInequality(ASOF::reverseInequality(inequality));
+            data.analyzed_join.setRangeAsofRightInequality(reverseASOFJoinInequality(inequality));
             data.analyzed_join.setRangeAsofUpperBound(-range_value);
         }
         else
         {
             /// The expression is in this `right.column - left.column < 10 or date_diff('second', right.column, left.column)` < 10 form
             /// Change it to `left.column - right.column > -10 or date_diff('second', left.column, right.column) > -10` form
-            data.analyzed_join.setRangeAsofLeftInequality(ASOF::reverseInequality(inequality));
+            data.analyzed_join.setRangeAsofLeftInequality(reverseASOFJoinInequality(inequality));
             data.analyzed_join.setRangeAsofLowerBound(-range_value);
         }
     }
