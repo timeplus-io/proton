@@ -39,7 +39,7 @@ void ShufflingStep::transformPipeline(QueryPipelineBuilder & pipeline, const Bui
     {
         /// M -> N
         pipeline.addShufflingTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
-            return std::make_shared<ShufflingTransform>(pipeline.getHeader(), output_num, key_positions);
+            return std::make_shared<ShufflingTransform>(header, output_num, key_positions);
         });
     }
     else

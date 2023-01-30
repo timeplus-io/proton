@@ -831,7 +831,7 @@ void consume(KafkaWALPtrs & wals, const BenchmarkSettings & bench_settings)
 
             atomic_uint64_t consumed = 0;
             Int32 batch = 100;
-            Int32 max_messages = bench_settings.consumer_settings.max_messages;
+            uint64_t max_messages = bench_settings.consumer_settings.max_messages;
 
             ConsumeContext cctx{stdout_mutex, consumed, ctx, wal, dumpdata};
 
@@ -988,7 +988,7 @@ void incrementalConsume(const BenchmarkSettings & bench_settings, Int32 size)
         ++i;
     }
 
-    while (consumed <= bench_settings.consumer_settings.max_messages)
+    while (consumed <= static_cast<uint64_t>(bench_settings.consumer_settings.max_messages))
     {
         this_thread::sleep_for(1000ms);
     }

@@ -2417,7 +2417,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             /// 1) No more than number of inputs concurrency
             /// 2) If there is JavaScript UDA, limit the concurrency further
             size_t shuffle_output_streams = context->getSettingsRef().max_threads.value;
-            auto controlled_concurrency = context->getSettingsRef().javascript_uda_max_concurrency.value;
+            size_t controlled_concurrency = context->getSettingsRef().javascript_uda_max_concurrency.value;
             if (query_info.has_javascript_uda)
             {
                 shuffle_output_streams = std::min(shuffle_output_streams, controlled_concurrency);

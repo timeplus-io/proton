@@ -404,7 +404,7 @@ MergeTreeTransactionPtr TransactionLog::beginTransaction()
 #endif
 }
 
-CSN TransactionLog::commitTransaction(const MergeTreeTransactionPtr & txn, bool throw_on_unknown_status)
+CSN TransactionLog::commitTransaction(const MergeTreeTransactionPtr & txn [[maybe_unused]], bool throw_on_unknown_status [[maybe_unused]])
 {
 #if 0
     /// Some precommit checks, may throw
