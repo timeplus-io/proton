@@ -57,17 +57,9 @@
 #  import global_settigns
 
 from cgi import test
-import os, sys, json, getopt, subprocess, traceback
-import logging, logging.config
-import time
-import datetime
-import random
-import requests
-import uuid
+import datetime, json, getopt, logging, logging.config, math, os, random, requests, subprocess, sys, threading, time, traceback, uuid
 import multiprocessing as mp
-import threading
-from clickhouse_driver import Client
-from clickhouse_driver import errors
+from clickhouse_driver import Client, errors
 from requests.api import request
 from helpers.utils import compose_up
 
@@ -77,7 +69,7 @@ sys.path.append(cur_path)
 
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter(
-    "%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"
+    "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"
 )
 
 TABLE_CREATE_RECORDS = []
@@ -94,6 +86,7 @@ HOST_NONE_NODE_FIRST = "host_none_node_first"
 
 DEFAULT_TEST_SUITE_TIMEOUT = 1800 #seconds
 DEFAULT_CASE_TIMEOUT = 60 #seconds, todo: case level timeout guardian
+CASE_RETRY_UP_LIMIT = 3 #test suite case retry up limit, test_suite_run retry case only when failed case number less than this value
 
 # alive = mp.Value('b', True)
 
@@ -931,6 +924,35 @@ def get_view_only_nodes(
     )
     return view_only_depend_nodes
 
+class Statement():
+    def __init__(self, statement, **statement_context): #statement_to_run, statement_context is a dict of query (statement_2_run, settings, config, query_results_queue, logging_level and etc.), query_client and etc.
+        self._host = statement_context["host"]
+        self._port = str(statement_context["port"])
+        self._statement_context = statement_context
+    @property
+    def host(self):   
+        if self._host is None:
+            return self._host
+        else:
+            return None
+    @property
+    def port(self):   
+        if self._port is None:
+            return self._port
+        else:
+            return None
+    @property
+    def statement_context(self):   
+        if self._statement_context is None:
+            return self._statement_context
+        else:
+            return None
+
+class StatementRunner():
+    def __init__(self,statement):
+        pass
+    def run(statement):
+        pass
 
 def query_run_py(
     statement_2_run,
@@ -2014,15 +2036,21 @@ def query_walk_through(proton_setting,test_suite_name, test_id, statements, quer
         statement["proton_setting"] = proton_setting
         statement["test_id"] = test_id
         statement["test_suite_name"] = test_suite_name
-        if query_id == None:
+        query_id_type = statement.get("query_id_type")
+        if query_id is None and query_id_type is None: #the query_id_type is only set when 1st run of query_walk_throug, otherwise it will be set wrong during failed case retry
             query_id = str(uuid.uuid1())
 
             # query_id = random.randint(
             #    1, 10000
             # )  # unique query id, if no query_id specified in tests.json
             statement["query_id"] = query_id
+            statement["query_id_type"] = "non-designated"
         else:
-            statement["query_id_type"] = "designated" #mark the query_id_type, when query_result_check, only show the "designated" satement result to make the troule shooting easy
+            if query_id is not None and query_id_type is None:
+                statement["query_id_type"] = "designated" #mark the query_id_type, when query_result_check, only show the "designated" satement result to make the troule shooting easy
+            elif query_id_type == "non-designated":
+                query_id = str(uuid.uuid1())
+            
 
         if query_type == "stream" and terminate == None:
             statement[
@@ -2105,8 +2133,8 @@ def query_id_exists_py(py_client, query_id, query_exist_check_sql=None):
     try:
         # logger.debug(f"query_exist_check_sql = {query_exist_check_sql} to be called.")
         res_check_query_id = py_client.execute(query_exist_check_sql)
-        logger.debug(f"query_exist_check_sql = {query_exist_check_sql} to was called.")
-        logger.debug(f"res_check_query_id = {res_check_query_id}")
+        logger.debug(f"query_exist_check_sql = {query_exist_check_sql} was called.")
+        #logger.debug(f"res_check_query_id = {res_check_query_id}")
         if res_check_query_id != None and isinstance(res_check_query_id, list):
             for element in res_check_query_id:
                 logger.debug(f"element = {element}, query_id = {query_id}")
@@ -3268,7 +3296,8 @@ def test_suite_run(
                 "test_sets": [],
                 "test_list": [],
                 "proton_setting": proton_setting,
-                "test_suite_run_status": [],                
+                #"test_suite_run_status": [],
+                "test_suite_result":False                
             }
             test_suite_run_ctl_queue.get()
             test_suite_run_ctl_queue.task_done()                      
@@ -3279,17 +3308,20 @@ def test_suite_run(
                 test_name = test.get("name")
                 steps = test.get("steps")
                 expected_results = test.get("expected_results")
-                test_suite_run_status.append({"test_id": test_id, "status":"aborted"}) #list for test suite running status, aborted or done
+                #test_suite_run_status.append({"test_id": test_id, "status":"aborted"}) #list for test suite running status, aborted or done
                 test_run_id_list.append(test_id)
                 test_sets_2_run.append(
                     {
+                        "proton_setting": proton_setting,
                         "test_suite_name": test_suite_name,
                         "test_id_run": 0,
                         "test_id": test_id,
                         "test_name": test_name,
                         "steps": steps,
                         "expected_results": expected_results,
-                        "statements_results": ["aborted"],                        
+                        "statements_results": ["aborted"],
+                        "status":"aborted", 
+                        "test_result":""                       
                     }
                 )          
             try:
@@ -3309,13 +3341,24 @@ def test_suite_run(
                     logger.info(
                         f"test_suite_name = {test_suite_name}, no test_suite_config, bypass test_suite_env_setup"
                     )
-                i = 0
+                i = 0 # counter for test_run_list
+                j = 0 # counter for retry_cases
                 logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_suite_timeout_hit.is_set() = {test_suite_timeout_hit.is_set()}")
                 if test_suite_timeout_hit.is_set():
                     logger.info(f"raise TEST_SUITE_TIMEOUT_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_timeout = {test_suite_timeout} hit")
-                    raise Exception(f"TEST_SUITE_TIMEOUT_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_timeout = {test_suite_timeout} hit")                
-                while i < len(test_run_list) and not test_suite_timeout_hit.is_set():
-                    test_case = test_run_list[i]
+                    raise Exception(f"TEST_SUITE_TIMEOUT_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_timeout = {test_suite_timeout} hit")
+
+                retry_cases = [] #record the falied case
+                retry_times = 1 #hard code firstly and refine later to make it a parameter of ci_runner.py
+                retry_cases_num = 0 #retry_case_num will be set when the 1st round of the test_suite execution ends
+                case_retry_flag = False                
+                while (i < len(test_run_list) or (j < retry_cases_num and retry_times > 0 and retry_cases_num <CASE_RETRY_UP_LIMIT)) and not test_suite_timeout_hit.is_set():#only case retry when failed case number less than case_retry_up_limit
+                    recovered_test_ids = [] #record the test id of the retry success case
+                    if not case_retry_flag:
+                        test_case = test_run_list[i]
+                    else:
+                        test_case = retry_cases[j]
+                        logger.info(f'retry case: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_case["id"]}, test_case = {test_case}')
                     statements_results = []
                     inputs_record = []
                     test_id = test_case.get("id")
@@ -3335,7 +3378,7 @@ def test_suite_run(
                     )
 
                     logger.info(
-                        f"proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name}, test_id = {test_id} starts......"
+                        f"proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag}, test_id = {test_id} starts......"
                     )
                     wait_before_inputs = 0
                     for step in steps:
@@ -3344,14 +3387,14 @@ def test_suite_run(
                         if "statements" in step:
                             step_statements = step.get("statements")
                             logger.debug(
-                                f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, step_statements = {step_statements}"
+                                f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag}, test_id = {test_id}, step_statements = {step_statements}"
                             )
                             query_walk_through_res = query_walk_through(
                                 proton_setting, test_suite_name, test_id, step_statements, query_conn
                             ) # walk through statements, todo: optimize the statement context building up logic
                             statement_result_from_query_execute = query_walk_through_res
                             logger.debug(
-                                f"query_walk_through_res = {query_walk_through_res}"
+                                f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag}, test_id = {test_id}, query_walk_through_res = {query_walk_through_res}"
                             )
                             wait_before_inputs = query_walk_through_res #get the max_wai in query_walk_through
                             
@@ -3364,7 +3407,7 @@ def test_suite_run(
                             #         statements_results.append(element)
 
                             logger.info(
-                                f"proton_setting = {proton_setting}, test_suite_run: {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id}, step{step_id}.statements{statements_id}, done..."
+                                f"proton_setting = {proton_setting}, test_suite_run: {test_id_run}, test_suite_name = {test_suite_name}, case_retry_flag = {case_retry_flag}, test_id = {test_id}, step{step_id}.statements{statements_id}, done..."
                             )
 
                             statements_id += 1
@@ -3372,14 +3415,14 @@ def test_suite_run(
                             time.sleep(wait_before_inputs) #auto wait the max_wait of the query_execute
                             inputs = step.get("inputs")
                             logger.info(
-                                f"proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id} inputs = {inputs}"
+                                f"proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag},  test_id = {test_id} inputs = {inputs}"
                             )
 
                             inputs_record = input_walk_through_rest(
                                 config, test_suite_name, test_id, inputs, table_schemas
                             )  # inputs walk through rest_client
                             logger.info(
-                                f"proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id} input_walk_through done"
+                                f"proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag},  test_id = {test_id} input_walk_through done"
                             )
                             # time.sleep(0.5) #wait for the data inputs done.
                         step_id += 1
@@ -3393,7 +3436,7 @@ def test_suite_run(
                     )  # wait the query_execute to send "case_result_done" to indicate all the statements in pipe are consumed.
 
                     logger.debug(
-                        f"test_suite_run: mssage_recv from query_execute = {message_recv}"
+                        f"proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag}, mssage_recv from query_execute = {message_recv}"
                     )
                     assert message_recv == "case_result_done"
                     
@@ -3404,21 +3447,21 @@ def test_suite_run(
                         time.sleep(0.2)
                         message_recv = query_results_queue.get()
                         logger.debug(
-                            f"test_suite_run: message_recv of query_results_queue.get() = {message_recv}"
+                            f"proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag}, message_recv of query_results_queue.get() = {message_recv}"
                         )
                         query_results = json.loads(message_recv)
                         query_id = query_results.get("query_id")
                         query = query_results.get("query")
                         query_type = query_results.get("query_type")
-                        logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_type = {query_type}, query = {query}, query_result recved in test_suite_run")
+                        logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag}, test_id = {test_id}, query_id = {query_id}, query_type = {query_type}, query = {query}, query_result recved in test_suite_run")
                         query_state = query_results.get("query_state")
                         if query_state is not None and (query_state == 'crash' or query_state== 'fatal'): #when Connection related error happens, it will be set in the query_state of the query results
                             error = query_results.get("error")
                             if query_state == 'crash':
-                                logger.debug(f"QUERY_ERROR CRASH exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_run, proton crash happens = {error}, raise Exception")
+                                logger.debug(f"QUERY_ERROR CRASH exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag}, test_id = {test_id}, test_suite_run, proton crash happens = {error}, raise Exception")
                             else:
-                                logger.debug(f"QUERY_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_run, proton fatal happens = {error}, raise Exception")
-                            raise Exception(f"QUERY_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_run, Error = {error}")
+                                logger.debug(f"QUERY_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag}, test_id = {test_id}, test_suite_run, proton fatal happens = {error}, raise Exception")
+                            raise Exception(f"QUERY_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag}, test_id = {test_id}, test_suite_run, Error = {error}")
 
 
                         statements_results.append(query_results)
@@ -3438,30 +3481,67 @@ def test_suite_run(
                     # )
                     
                     # logger.debug(f"test_set = {test_set}")
-                    for test in test_sets_2_run:
+                    for test in test_sets_2_run: #todo: change the dict structure of the test_sets_2_run to use test_id as a key to simplify the case locating for result update 
                         test_2_run_id = test.get("test_id")
                         if test_2_run_id == test_id:
                             test['test_id_run'] = test_id_run
                             test['expected_results'] = expected_results
                             test['statements_results'] = statements_results
+                            if case_retry_flag:
+                                test['status'] = 'retried' #set status to retried
+                            else:
+                                test['status'] = 'done' #set status to done
+                            case_result = case_result_check(test)#check test case result
+                            test["test_result"] = case_result
+                            if not case_result:
+                                retry_cases.append(test_case)
+                                logger.info(f"case failed: proton_setting = {proton_setting}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag}, test_id = {test_id}")
+                            elif case_retry_flag: #during retry, if the case passed, pop from retry_cases 
+                                recovered_test_ids.append(test_id)
+                                logger.info(f"case retry passed: proton_setting = {proton_setting}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag}, test_id = {test_id}")
+                            else:
+                                logger.info(f"case passed: proton_setting = {proton_setting}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag}, test_id = {test_id}")
 
                     logger.debug(f"proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, expected_results = {expected_results}, statements_results = {statements_results}")
-                    test_suite_run_status[i]['status'] = 'done'
+                    #test_suite_run_status[i]['status'] = 'done'
                     
-                    i += 1
+                    if not case_retry_flag: #when the 1st round of test suite execution, i increase, when retry j increase, test_id_run records the run sequence
+                        i += 1
+                        if i == len(test_run_list):
+                            retry_cases_num = len(retry_cases) #when the 1st round of test suite execution ends, set retry_case_num
+                            if retry_cases_num > 0:
+                                case_retry_flag = True # if retry_cases_num > 0, set case_retry_flag                           
+                                logger.info(f"First run of the test suite done: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, there are {retry_cases_num} retry_cases, set case_retry_flag = {case_retry_flag}")                            
+                    else:
+                        j += 1
+                        if j == len(retry_cases):
+                            retry_cases_num = len(retry_cases) #when the 1st round of test suite execution ends, set retry_case_num
+                            retry_times -= 1
+                            j = 0 # reset counter of retry_cases to 0, if retry_times > 1 and
+                            retry_cases_copy = []
+                            for test in retry_cases:
+                                test_id = test["test_id"]
+                                if test_id not in recovered_test_ids:
+                                    retry_cases_copy.append(test)
+                            retry_cases = retry_cases_copy #reset the retry_cases and remove the cases passed during retry.                            
+
                     test_id_run += 1
+
+
                     #print(f"test_suite_timeout_hit = {test_suite_timeout_hit}")
 
                     if test_suite_timeout_hit.is_set():
                         logger.info(f"raise TEST_SUITE_TIMEOUT_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_timeout = {test_suite_timeout} hit")
                         raise Exception(f"TEST_SUITE_TIMEOUT_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, test_suite_timeout = {test_suite_timeout} hit")
+
                 test_suite_result_summary = {
                     "test_suite_name": test_suite_name,
                     "test_run_list_len": test_run_list_len,
                     "test_sets": test_sets_2_run,
                     "test_list": test_run_list,
                     "proton_setting": proton_setting,
-                    "test_suite_run_status": test_suite_run_status,
+                    #"test_suite_run_status": test_suite_run_status,
+                    "test_suite_result":False,
                 }                
             except (BaseException) as error:
                 logger.info(f"test_suite_run, exception: {error}, ")
@@ -3471,7 +3551,8 @@ def test_suite_run(
                     "test_sets": test_sets_2_run,
                     "test_list": test_run_list,
                     "proton_setting": proton_setting,
-                    "test_suite_run_status": test_suite_run_status,
+                    #"test_suite_run_status": test_suite_run_status,
+                    "test_suite_result":False,
                 }
 
 
@@ -3481,9 +3562,9 @@ def test_suite_run(
                 test_suite_run_ctl_queue.task_done()
 
             logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name} running ends")
-            logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_suite_run_status: ")
-            for status in test_suite_run_status:
-                logger.info(f"{status}")
+            logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test suite run status: ")
+            for test_set in test_sets_2_run:
+                logger.info(f'test_id = {test_set["test_id"]}, test_status = {test_set["status"]}, , test_result = {test_set["test_result"]}')
         
         test_suite_result_done_queue.put(test_suite_result_summary)
         test_suite_result_done_queue.join()
@@ -3533,43 +3614,232 @@ def test_suite_run(
     return (test_run_list_len_total, test_sets)
 
 
-# @pytest.fixture(scope="module")
-def rockets_run(test_context):
-    # todo: split tests.json to test_suite_config.json and tests.json
-    root_logger = logging.getLogger()
-    logger.info(
-        f"rockets_run starts..., root_logger.level={root_logger.level}, logger.level={logger.level}"
-    )
-    if root_logger.level != None and root_logger.level == 20:
-        logging_level = "INFO"
-    else:
-        logging_level = "DEBUG"
-    docker_compose_file = test_context.get("docker_compose_file")
-    #proton_setting = test_context.get("proton_setting")
-    config = test_context.get("config")
-    proton_setting = config.get("proton_setting")
-    #proton_ci_mode = os.getenv("PROTON_CI_MODE", "Github")
-    proton_ci_mode = config.get("proton_ci_mode")
-    test_suites_selected_sets = None
-    test_suites_selected_sets = test_context.get("test_suites_selected_sets")
-    test_suite_run_ctl_queue = test_context.get("test_suite_run_ctl_queue")
-    test_suite_result_done_queue = test_context.get("test_suite_result_done_queue")
-    test_suite_query_reulst_queue_list = test_context.get(
-        "test_suite_query_reulst_queue_list"
-    )
-    rest_setting = config.get("rest_setting")
-    if test_suites_selected_sets != None and len(test_suites_selected_sets) != 0:
-        env_setup_res = env_setup(rest_setting, docker_compose_file, proton_ci_mode)
-        logger.info(f"rockets_run env_etup done, env_setup_res = {env_setup_res}")
-    else:
-        test_suites_set_env = os.getenv("PROTON_TEST_SUITES", None)
-        print(f'######\n Wrong Test Suite Name \nci_runner.py --test_suite={test_suites_set_env}, test suite name {test_suites_set_env} is not found in any test suite json file! \n######\n')
-        sys.exit(1)
+def case_result_check(test_set, order_check=False, logging_level="INFO"):
+    try:
+        expected_results = test_set.get("expected_results")
+        statements_results = test_set.get("statements_results")
+        proton_setting = test_set.get("proton_setting")
+        test_suite_name = test_set.get("test_suite_name")
+        test_id = test_set.get("test_id")
+        #logging.info(f"test run: statemetns_results: {statements_results}")
 
+        statements_results_designed = [] #list for the query results for designated query_id
+        for result in statements_results: #
+            #logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, statements_results = {statements_results}")
+            query_id_type = result.get("query_id_type")
+            query_result_column_types = result.get('query_result_column_types')
+            if result != "aborted":
+                if query_id_type == "designated":
+                    statement_result = {
+                        'query_id': result['query_id'], 
+                        'query_result': result['query_result'],
+                        #'query_result_column_types': query_result_column_types,
+                    }
+                    statements_results_designed.append(statement_result)
+        if result == "aborted":
+            test_set["statements_results_designed"] = "aborted"
+        test_set["statements_results_designed"] = statements_results_designed
+
+        #logging.info(f'\n proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, statements_results_designated = {statements_results_designed}')    
+
+        for result in statements_results: #check result, throw AssertException if result == "aborted"
+            assert result != "aborted", f"statements_result = {result}"        
+
+        for i in range(len(expected_results)):  # for each query_results
+            expected_result = expected_results[i].get("expected_results")
+            expected_result_query_id = expected_results[i].get("query_id")
+            query_results_dict = None
+            for statement_results in statements_results:
+                assert statement_results != "aborted" and isinstance(statement_results, dict), f"aborted or interruppted case"
+                statement_results_query_id = statement_results.get("query_id")
+                if statement_results_query_id == str(expected_result_query_id):
+                    query_results_dict = statement_results
+            assert (
+                query_results_dict != None
+            )  # if no statement_results_query_id matches expected_result_query_id, case failed
+            query_result = query_results_dict.get("query_result")
+            #logging.info(f"\n test_run: expected_result = {expected_result}")
+            #logging.info(f"\n test_run: query_result = {query_result}")
+            query_result_column_types = query_results_dict.get("query_result_column_types")
+            if query_result != 'error_code:159': #error_code:159 means Wait 2100 milliseconds for DDL operation timeout. the timeout is 2000 milliseconds, known issue of redpenda as external stream storage mode, skip result check.
+                assert type(expected_result) == type(
+                    query_result
+                ), f"expected_result = {expected_result}, query_result = {query_result}"  # assert if the type of the query_result equals the type of expected_result
+                if isinstance(
+                    expected_result, str
+                ):  # if the expected_result is a string lke "skip", "error_code:xxx"
+                    if expected_result == "skip":
+                        continue
+                    else:
+                        assert expected_result == query_result, f"expected_result = {expected_result}, query_result = {query_result}"
+
+                elif isinstance(expected_result, dict):
+                    for key in expected_result:
+                        if expected_result[key] == "any_value":
+                            pass
+                        else:
+                            assert expected_result[key] == query_result[key], f"expected_result = {expected_result}, query_result = {query_result}"
+                else:
+                    if len(expected_result) == 0:
+                        assert len(query_result) == 0, f"expected_result = {expected_result}, query_result = {query_result}"
+
+                    else:
+                        assert len(expected_result) == len(query_result), f"expected_result = {expected_result}, query_result = {query_result}"
+                        if (
+                            order_check == False
+                        ):  # when the order_check ==False, only check if the expected_reslt matches a query result but the sequence of the query result is not checked.
+                            expected_result_check_arry = []
+                            for i in range(len(expected_result)):
+                                expected_result_check_arry.append(0)
+                            row_step = 0
+                            for expected_result_row in expected_result:
+                                for query_result_row in query_result:
+                                    expected_result_row_field_check_arry = []
+                                    for i in range(
+                                        #len(query_result_column_types) - 1 # query_result_column_types has a timestamp filed added by query_execute, so need to minus 1
+                                        len(query_result_column_types)
+                                    ):  
+                                        expected_result_row_field_check_arry.append(0)
+
+                                    expected_result_row_check = 1
+                                    for i in range(
+                                        len(expected_result_row)
+                                    ):  # for each filed of each row of each query_results
+                                        expected_result_field = expected_result_row[i]
+                                        query_result_field = query_result_row[i]
+                                        if "array" in query_result_column_types[i][1] and "array_join" not in query_result_column_types[i][1]:
+                                            if expected_result_field == query_result_field:
+                                                expected_result_row_field_check_arry[i] = 1
+                                                #logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                                #logging.debug("test_run: match")
+                                            else:
+                                                pass
+                                                #logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                                #logging.debug("test_run: not match")
+                                        elif "float" in query_result_column_types[i][1]:
+                                            if math.isclose(
+                                                float(expected_result_field),
+                                                float(query_result_field),
+                                                rel_tol=1e-2,
+                                            ):
+                                                expected_result_row_field_check_arry[i] = 1
+                                                #logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                                #logging.debug("test_run: match")
+                                            else:
+                                                pass
+                                                #logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                                #logging.debug("test_run: not match")
+                                        elif "int" in query_result_column_types[i][1] and "tuple" not in query_result_column_types[i][1] and "map" not in query_result_column_types[i][1]:
+                                            if int(expected_result_field) == int(
+                                                query_result_field
+                                            ):
+                                                expected_result_row_field_check_arry[i] = 1
+                                                #logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                                #logging.debug("test_run: match")
+                                            else:
+                                                pass
+                                                #logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                                #logging.debug("test_run: match")
+                                        elif "nullable" in query_result_column_types[i][1]:
+                                            if  query_result_field == "None":
+                                                expected_result_row_field_check_arry[i] = 1
+                                                #logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                                #logging.debug("test_run: match")
+                                            else:
+                                                pass
+                                                #logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                                #logging.debug("test_run: match")                                
+                                        
+                                        elif isinstance(expected_result_field,str):
+                                            _match = 1
+                                            _expected_field_itmes = expected_result_field.split(",")
+                                            _query_field_items = query_result_field.split(",")
+                                            for (_expected_item, _result_item)  in zip(_expected_field_itmes, _query_field_items):
+                                                #logging.debug(f"_expected_item = {_expected_item}, _result_item = {_result_item}")
+                                                if _expected_item == 'any_value' or _expected_item == _result_item:
+                                                    _match *= 1
+                                                else:
+                                                    _match *= 0
+                                            if _match:
+                                                expected_result_row_field_check_arry[i] = 1
+                                                #logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                                #logging.debug("test_run: match")
+                                            else:
+                                                pass
+                                                #logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                                #logging.debug("test_run: not match")                                           
+                                        else:
+                                            if expected_result_field == query_result_field:
+                                                expected_result_row_field_check_arry[i] = 1
+                                                #logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                                #logging.debug("test_run: match")
+                                            else:
+                                                pass
+                                                #logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                                #logging.debug("test_run: not match")
+
+                                    #logging.debug(f"test_run: expected_result_row_field_check_arry = {expected_result_row_field_check_arry}")
+                                    expected_result_row_check = 1
+                                    for i in range(len(expected_result_row_field_check_arry)):
+                                        expected_result_row_check = (
+                                            expected_result_row_check
+                                            * expected_result_row_field_check_arry[i]
+                                        )
+                                    #logging.debug(f"test_run: expected_result_row_check = {expected_result_row_check}")
+                                    if expected_result_row_check == 1:
+                                        expected_result_check_arry[row_step] = 1
+                                assert expected_result_check_arry[row_step] == 1,  f"expected_result = {expected_result}, query_result = {query_result}"
+                                row_step += 1
+                        else:  # if order_check == True, assert the query result in the exact sequence of the expected result
+                            for i in range(
+                                len(expected_result)
+                            ):  # for each row of each query_results
+                                expected_result_row = expected_result[i]
+                                query_result_row = query_result[i]
+                                assert (
+                                    len(expected_result_row) == len(query_result_row) - 1
+                                ),f"expected_result = {expected_result}, query_result = {query_result}"  # the timestamp field in query_result_row is artifically added and need to be excluded in the length
+                                for i in range(
+                                    len(expected_result_row)
+                                ):  # for each filed of each row of each query_results
+                                    expected_result_field = expected_result_row[i]
+                                    query_result_field = query_result_row[i]
+                                    if "array" in query_result_column_types[i][1]:
+                                        assert expected_result_field == query_result_field, f"expected_result = {expected_result}, query_result = {query_result}"
+                                    elif "float" in query_result_column_types[i][1]:
+                                        assert math.isclose(
+                                            float(expected_result_field),
+                                            float(query_result_field),
+                                            rel_tol=1e-2,
+                                        ), f"expected_result = {expected_result}, query_result = {query_result}"
+                                    elif "int" in query_result_column_types[i][1]:
+                                        assert int(expected_result_field) == int(
+                                            query_result_field
+                                        ), f"expected_result = {expected_result}, query_result = {query_result}"
+                                    else:
+                                        assert expected_result_field == query_result_field, f"expected_result = {expected_result}, query_result = {query_result}"
+            else:
+                assert 1 == 1
+            return True
+    except(AssertionError) as ae:
+        logger.info(f"assert error")
+        return False
+    except(BaseException) as be:
+        logger.info(f"BaseException = {be}")
+        return False
+    
+def run_test_suites(config, test_suite_run_ctl_queue, test_suites_selected_sets,test_suite_result_done_queue):
+    test_report = {}
+    test_summary = {}
+    module_summary = {}
+    case_results = {}
+    test_report = {"test_summary":test_summary, "module_summary":module_summary, "case_results":case_results}
     test_suite_runners = []
     test_sets = []
     test_run_list_total = []
+    failed_cases = [] #record the failed cases for retry
     test_suite_count = 1
+    proton_setting = config.get("proton_setting")
     for test_suite_set_dict in test_suites_selected_sets:
         test_suite_name = test_suite_set_dict.get("test_suite_name")
         test_suite_run_ctl_queue.put("run a test suite")
@@ -3604,7 +3874,7 @@ def rockets_run(test_context):
         test_suite_result_summary_list = []
         while test_suite_result_collect_done < len(test_suites_selected_sets):
             test_suite_result_summary = test_suite_result_done_queue.get()
-            test_suite_result_summary_list.append(test_suite_result_summary)
+            test_suite_result = True
             test_suite_name_recvd = test_suite_result_summary.get("test_suite_name")
             test_run_list_len_recvd = test_suite_result_summary.get("test_run_list_len")
             test_run_list_recvd = test_suite_result_summary.get("test_run_list")
@@ -3615,10 +3885,20 @@ def rockets_run(test_context):
             )
             test_run_list_len_total += test_run_list_len_recvd
             test_run_list_total.append(test_run_list_recvd)
+            for test_set in test_sets_recvd:
+                test_result = case_result_check(test_set) #as soon as a test_suite_result_summary is received, check the test result and set the test_result field of each case
+                test_set["test_result"] = test_result
+                if not test_result:
+                    failed_case = {"proton_setting": proton_setting, "test_suite_name":test_set["test_suite_name"], "test_id": test_set["test_id"], "test_name": test_set["test_id"], "status":test_set["status"], "test_result":test_set["test_result"]}
+                    failed_cases.append(failed_case)
+                test_suite_result = test_suite_result&test_result
+            test_suite_result_summary["test_suite_result"] = test_suite_result #update the test_suite_result field of the test_suite_result_summary based on the case result check
+            test_suite_result_summary_list.append(test_suite_result_summary)            
+            
             test_sets.extend(test_sets_recvd)
-            logger.debug(
-                f"test_suite: {test_suite_name} result received, len(test_sets) after test_sets.extend(test_sets_recvd) = {len(test_sets)}"
-            )
+            # logger.debug(
+            #     f"test_suite: {test_suite_name} result received, len(test_sets) after test_sets.extend(test_sets_recvd) = {len(test_sets)}"
+            # )
             test_suite_result_done_queue.task_done()
             test_suite_result_collect_done += 1
             time.sleep(random.random())
@@ -3635,18 +3915,58 @@ def rockets_run(test_context):
 
     for test_suite_runner_dict in test_suite_runners:
         test_suite_runner_dict["test_suite_runner"].join()
-    logger.debug(
-        f"test_run_list_len_total = {test_run_list_len_total}, len(test_sets) = {len(test_sets)}"
-    )
+
     
     print(f"proton_setting = {proton_setting}, Test Suites Running_Statistics:\n")
     for test_suite_summary in test_suite_result_summary_list:
         test_suite_name = test_suite_summary.get("test_suite_name")
         test_suite_run_status = test_suite_summary.get("test_suite_run_status")
+        test_set_list = test_suite_summary.get("test_sets")
         print(f"test_suite_name = {test_suite_name}")
-        for status in test_suite_run_status:
-            print(status)
-    
+        for test_set in test_set_list:
+            print(f'test_id = {test_set["test_id"]}, status = {test_set["status"]}, result = {test_set["test_result"]}')
+
+    # logger.debug(
+    #     f"test_run_list_len_total = {test_run_list_len_total}, len(test_sets) = {len(test_sets)}\n"
+    # )    
+
+    return (test_run_list_len_total, test_run_list_total, test_sets)    
+
+
+def rockets_run(test_context):
+    # todo: split tests.json to test_suite_config.json and tests.json
+    #root_logger = logging.getLogger()
+    logger.info(
+        f"rockets_run starts..., logger.level={logger.level}"
+    )
+    if logger.level != None and logger.level == 20:
+        logging_level = "INFO"
+    else:
+        logging_level = "DEBUG"
+    docker_compose_file = test_context.get("docker_compose_file")
+    #proton_setting = test_context.get("proton_setting")
+    config = test_context.get("config")
+    proton_setting = config.get("proton_setting")
+    #proton_ci_mode = os.getenv("PROTON_CI_MODE", "Github")
+    proton_ci_mode = config.get("proton_ci_mode")
+    test_suites_selected_sets = None
+    test_suites_selected_sets = test_context.get("test_suites_selected_sets")
+    test_suite_run_ctl_queue = test_context.get("test_suite_run_ctl_queue")
+    test_suite_result_done_queue = test_context.get("test_suite_result_done_queue")
+    test_suite_query_reulst_queue_list = test_context.get(
+        "test_suite_query_reulst_queue_list"
+    )
+    rest_setting = config.get("rest_setting")
+    if test_suites_selected_sets != None and len(test_suites_selected_sets) != 0:
+        env_setup_res = env_setup(rest_setting, docker_compose_file, proton_ci_mode)
+        logger.info(f"rockets_run env_etup done, env_setup_res = {env_setup_res}")
+    else:
+        test_suites_set_env = os.getenv("PROTON_TEST_SUITES", None)
+        print(f'######\n Wrong Test Suite Name \nci_runner.py --test_suite={test_suites_set_env}, test suite name {test_suites_set_env} is not found in any test suite json file! \n######\n')
+        sys.exit(1)
+
+
+    test_run_list_len_total, test_run_list_total, test_sets = run_test_suites(config, test_suite_run_ctl_queue, test_suites_selected_sets,test_suite_result_done_queue)
 
     return (test_run_list_len_total, test_run_list_total, test_sets)
 

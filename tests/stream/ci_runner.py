@@ -7,7 +7,7 @@ import pytest
 
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter(
-    "%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"
+    "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"
 )
 
 PROTON_PYTHON_DRIVER_S3_BUCKET_NAME = "tp-internal"
@@ -106,6 +106,7 @@ def proton_python_driver_install():
         encoding="utf-8",
         timeout=600,
     )
+    logger.debug(f"ret.stdout == {ret.stdout}")
     if PROTON_PYTHON_DRIVER_NANME not in ret.stdout:
         s3_helper.client.download_file(
             PROTON_PYTHON_DRIVER_S3_BUCKET_NAME,
@@ -128,6 +129,7 @@ def proton_python_driver_install():
             f"{PROTON_PYTHON_DRIVER_NANME} exists bypass s3 download and install"
         )
 
+    time.sleep(1)
 
 def ci_runner(
     local_all_results_folder_path,
@@ -254,7 +256,7 @@ if __name__ == "__main__":
     test_suites = "all"
     settings = []
 
-    proton_python_driver_install()
+
 
     try:
         opts, args = getopt.getopt(
@@ -335,11 +337,13 @@ if __name__ == "__main__":
     else:
         logger.setLevel(logging.DEBUG)
 
-    i = 0
-
     logger.info(
         f"ci_runner: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}, test_suite_timeout = {test_suite_timeout} starts"
     )
+
+    logger.info(f"Check proton_python_driver and install...")
+    proton_python_driver_install()
+
 
     if run_mode == "local":
         env_docker_compose_res = True
