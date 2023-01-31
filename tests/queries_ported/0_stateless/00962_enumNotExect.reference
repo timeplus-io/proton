@@ -1,0 +1,17 @@
+0
+hello
+world
+hello
+1
+2
+1
+0
+hello
+world
+hello
+1
+128
+1
+enum16(\'a\' = 2, \'b\' = 128)
+enum8(\'a\' = 2, \'b\' = 127)
+g

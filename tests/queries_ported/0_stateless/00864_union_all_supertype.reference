@@ -1,0 +1,8 @@
+uint64	nullable(string)
+uint64	nullable(string)
+decimal(18, 8)	nullable(string)
+decimal(18, 8)	nullable(string)
+v1	w1
+v1	\N
+v2	
+key1	value1	

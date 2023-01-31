@@ -1,0 +1,18 @@
+SET query_mode='table';
+SET asterisk_include_reserved_columns=false;
+DROP STREAM IF EXISTS t_enum8;
+create stream t_enum8( x enum('hello' = 1, 'world' = 2) ) ;
+INSERT INTO t_enum8(x) Values('hello'),('world'),('hello');
+SELECT sleep(3);
+SELECT * FROM t_enum8;
+SELECT CAST(x, 'int8') FROM t_enum8;
+DROP STREAM t_enum8;
+DROP STREAM IF EXISTS t_enum16;
+create stream t_enum16( x enum('hello' = 1, 'world' = 128) ) ;
+INSERT INTO t_enum16(x) Values('hello'),('world'),('hello');
+SELECT sleep(3);
+SELECT * FROM t_enum16;
+SELECT CAST(x, 'int16') FROM t_enum16;
+DROP STREAM t_enum16;
+SELECT to_type_name(CAST('a', 'enum(\'a\' = 2, \'b\' = 128)'));
+SELECT to_type_name(CAST('a', 'enum(\'a\' = 2, \'b\' = 127)'));

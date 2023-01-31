@@ -1,0 +1,16 @@
+SELECT round_duration(0);
+SELECT round_duration(10);
+SELECT round_duration(30);
+SELECT round_duration(60);
+SELECT round_duration(120);
+SELECT round_duration(180);
+SELECT round_duration(240);
+SELECT round_duration(300);
+SELECT round_duration(600);
+SELECT round_duration(1200);
+SELECT round_duration(1800);
+SELECT round_duration(3600);
+SELECT round_duration(7200);
+SELECT round_duration(18000);
+SELECT round_duration(36000);
+SELECT round_duration(37000);
