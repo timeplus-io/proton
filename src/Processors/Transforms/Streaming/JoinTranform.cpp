@@ -3,8 +3,8 @@
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/JoinUtils.h>
 #include <Interpreters/TableJoin.h>
-#include <Interpreters/join_common.h>
 
 /// #include <Common/logger_useful.h>
 
@@ -12,9 +12,9 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int NOT_IMPLEMENTED;
-    extern const int TOO_MANY_BYTES;
+extern const int LOGICAL_ERROR;
+extern const int NOT_IMPLEMENTED;
+extern const int TOO_MANY_BYTES;
 }
 
 namespace Streaming
@@ -38,7 +38,8 @@ JoinTransform::JoinTransform(
     UInt64 join_max_wait_rows_,
     UInt64 join_max_cached_bytes_,
     FinishCounterPtr finish_counter_)
-    : IProcessor({left_input_header, right_input_header}, {transformHeader(left_input_header, join_)}, ProcessorID::StreamingJoinTransformID)
+    : IProcessor(
+        {left_input_header, right_input_header}, {transformHeader(left_input_header, join_)}, ProcessorID::StreamingJoinTransformID)
     , insert_funcs({&HashJoin::insertLeftBlock, &HashJoin::insertRightBlock})
     , port_can_have_more_data{true, true}
     , header_chunk(outputs.front().getHeader().getColumns(), 0)
@@ -178,7 +179,8 @@ void JoinTransform::work()
             {
                 std::scoped_lock lock(mutex);
                 /// Piggy-back watermark in header's chunk info if there is
-                output_chunks.emplace_back(blocks[0].getColumns(), blocks[0].rows(), header_chunk.getChunkInfo(), header_chunk.getChunkContext());
+                output_chunks.emplace_back(
+                    blocks[0].getColumns(), blocks[0].rows(), header_chunk.getChunkInfo(), header_chunk.getChunkContext());
                 header_chunk.setChunkInfo(nullptr);
                 header_chunk.setChunkContext(nullptr);
             }

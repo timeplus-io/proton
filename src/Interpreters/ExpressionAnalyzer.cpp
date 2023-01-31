@@ -16,7 +16,6 @@
 #include <Interpreters/ArrayJoinAction.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ConcurrentHashJoin.h>
-#include <Interpreters/DictionaryReader.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -37,6 +36,7 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageDictionary.h>
 #include <Storages/StorageJoin.h>
+#include <Functions/FunctionsExternalDictionaries.h>
 
 #include <Common/typeid_cast.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -51,7 +51,7 @@
 #include <Interpreters/GetAggregatesVisitor.h>
 #include <Interpreters/GlobalSubqueriesVisitor.h>
 #include <Interpreters/interpretSubquery.h>
-#include <Interpreters/join_common.h>
+#include <Interpreters/JoinUtils.h>
 #include <Interpreters/misc.h>
 
 #include <IO/Operators.h>
@@ -107,6 +107,8 @@ bool allowEarlyConstantFolding(const ActionsDAG & actions, const Settings & sett
     }
     return true;
 }
+
+Poco::Logger * getLogger() { return &Poco::Logger::get("ExpressionAnalyzer"); }
 
 bool checkPositionalArguments(ASTPtr & argument, const ASTSelectQuery * select_query, ASTSelectQuery::Expression expression)
 {
@@ -1152,19 +1154,12 @@ static std::shared_ptr<IJoin> chooseJoinAlgorithm(std::shared_ptr<TableJoin> ana
 
     if (analyzed_join->isEnabledAlgorithm(JoinAlgorithm::DIRECT))
     {
-        if (JoinPtr kvjoin = tryKeyValueJoin(analyzed_join, right_sample_block))
+        JoinPtr direct_join = tryKeyValueJoin(analyzed_join, right_sample_block);
+        if (direct_join)
         {
-            /// Do not need to execute plan for right part
+            /// Do not need to execute plan for right part, it's ready.
             joined_plan.reset();
-            return kvjoin;
-        }
-
-        /// It's not a hash join actually, that's why we check JoinAlgorithm::DIRECT
-        /// It's would be fixed in https://github.com/ClickHouse/ClickHouse/pull/38956
-        if (analyzed_join->tryInitDictJoin(right_sample_block, context))
-        {
-            joined_plan.reset();
-            return std::make_shared<HashJoin>(analyzed_join, right_sample_block);
+            return direct_join;
         }
     }
 
@@ -1262,19 +1257,17 @@ std::shared_ptr<DirectKeyValueJoin> tryKeyValueJoin(std::shared_ptr<TableJoin> a
 
     auto storage = analyzed_join->getStorageKeyValue();
     if (!storage)
-    {
         return nullptr;
-    }
 
-    if (!isInnerOrLeft(analyzed_join->kind()))
+    bool allowed_inner = isInner(analyzed_join->kind()) && analyzed_join->strictness() == JoinStrictness::All;
+    bool allowed_left = isLeft(analyzed_join->kind()) && (analyzed_join->strictness() == JoinStrictness::Any ||
+                                                          analyzed_join->strictness() == JoinStrictness::All ||
+                                                          analyzed_join->strictness() == JoinStrictness::Semi ||
+                                                          analyzed_join->strictness() == JoinStrictness::Anti);
+    if (!allowed_inner && !allowed_left)
     {
-        return nullptr;
-    }
-
-    if (analyzed_join->strictness() != JoinStrictness::All &&
-        analyzed_join->strictness() != JoinStrictness::Any &&
-        analyzed_join->strictness() != JoinStrictness::RightAny)
-    {
+        LOG_TRACE(getLogger(), "Can't use direct join: {} {} is not supported",
+            analyzed_join->kind(), analyzed_join->strictness());
         return nullptr;
     }
 
@@ -1287,6 +1280,7 @@ std::shared_ptr<DirectKeyValueJoin> tryKeyValueJoin(std::shared_ptr<TableJoin> a
 
     if (!only_one_key)
     {
+        LOG_TRACE(getLogger(), "Can't use direct join: only one key is supported");
         return nullptr;
     }
 
@@ -1295,6 +1289,8 @@ std::shared_ptr<DirectKeyValueJoin> tryKeyValueJoin(std::shared_ptr<TableJoin> a
     const auto & storage_primary_key = storage->getPrimaryKey();
     if (storage_primary_key.size() != 1 || storage_primary_key[0] != original_key_name)
     {
+        LOG_TRACE(getLogger(), "Can't use direct join: join key '{}' doesn't match to storage key ({})",
+            original_key_name, fmt::join(storage_primary_key, ", "));
         return nullptr;
     }
 

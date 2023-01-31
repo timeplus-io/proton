@@ -106,6 +106,13 @@ void splitAdditionalColumns(const Names & key_names, const Block & sample_block,
 
 void changeLowCardinalityInplace(ColumnWithTypeAndName & column);
 
+/// Insert default values for rows marked in filter
+ColumnPtr filterWithBlanks(ColumnPtr src_column, const IColumn::Filter & filter, bool inverse_filter = false);
+
+/// proton : starts
+ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable);
+ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable, const ColumnUInt8 & negative_null_map);
+/// proton : ends
 }
 
 /// Creates result from right table data in RIGHT and FULL JOIN when keys are not present in left table.

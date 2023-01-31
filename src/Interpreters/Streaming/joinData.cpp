@@ -1,7 +1,7 @@
 #include "joinData.h"
 #include "HashJoin.h"
 
-#include <Interpreters/join_common.h>
+#include <Interpreters/JoinUtils.h>
 
 namespace DB
 {

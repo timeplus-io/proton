@@ -90,7 +90,7 @@ constexpr void callOnDictionaryAttributeType(AttributeUnderlyingType type, F && 
         if (type == other)
             func(DictionaryAttributeType<other>{});
     });
-};
+}
 
 struct DictionarySpecialAttribute final
 {
@@ -127,6 +127,7 @@ struct DictionaryStructure final
     DataTypes getKeyTypes() const;
     void validateKeyTypes(const DataTypes & key_types) const;
 
+    bool hasAttribute(const std::string & attribute_name) const;
     const DictionaryAttribute & getAttribute(const std::string & attribute_name) const;
     const DictionaryAttribute & getAttribute(const std::string & attribute_name, const DataTypePtr & type) const;
 

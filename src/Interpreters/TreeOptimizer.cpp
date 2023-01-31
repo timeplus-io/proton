@@ -758,6 +758,11 @@ void TreeOptimizer::optimizeIf(ASTPtr & query, Aliases & aliases, bool if_chain_
         OptimizeIfChainsVisitor().visit(query);
 }
 
+void TreeOptimizer::optimizeCountConstantAndSumOne(ASTPtr & query)
+{
+    RewriteCountVariantsVisitor::visit(query);
+}
+
 void TreeOptimizer::apply(ASTPtr & query, TreeRewriterResult & result,
                           const std::vector<TableWithColumnNamesAndTypes> & tables_with_columns, ContextPtr context)
 {

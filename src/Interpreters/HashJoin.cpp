@@ -15,13 +15,11 @@
 #include <DataTypes/DataTypeLowCardinality.h>
 
 #include <Interpreters/HashJoin.h>
-#include <Interpreters/join_common.h>
+#include <Interpreters/JoinUtils.h>
 #include <Interpreters/TableJoin.h>
 #include <Interpreters/joinDispatch.h>
 #include <Interpreters/NullableUtils.h>
-#include <Interpreters/DictionaryReader.h>
 
-#include <Storages/StorageDictionary.h>
 #include <Storages/IStorage.h>
 
 #include <Core/ColumnNumbers.h>
@@ -160,73 +158,6 @@ namespace JoinStuff
             return flags[nullptr][off].compare_exchange_strong(expected, true);
         }
     }
-
-ColumnPtr filterWithBlanks(ColumnPtr src_column, const IColumn::Filter & filter, bool inverse_filter)
-{
-    ColumnPtr column = src_column->convertToFullColumnIfConst();
-    MutableColumnPtr mut_column = column->cloneEmpty();
-    mut_column->reserve(column->size());
-
-    if (inverse_filter)
-    {
-        for (size_t row = 0; row < filter.size(); ++row)
-        {
-            if (filter[row])
-                mut_column->insertDefault();
-            else
-                mut_column->insertFrom(*column, row);
-        }
-    }
-    else
-    {
-        for (size_t row = 0; row < filter.size(); ++row)
-        {
-            if (filter[row])
-                mut_column->insertFrom(*column, row);
-            else
-                mut_column->insertDefault();
-        }
-    }
-
-    return mut_column;
-}
-
-ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable)
-{
-    if (nullable)
-    {
-        JoinCommon::convertColumnToNullable(column);
-    }
-    else
-    {
-        /// We have to replace values masked by NULLs with defaults.
-        if (column.column)
-            if (const auto * nullable_column = checkAndGetColumn<ColumnNullable>(*column.column))
-                column.column = filterWithBlanks(column.column, nullable_column->getNullMapColumn().getData(), true);
-
-        JoinCommon::removeColumnNullability(column);
-    }
-
-    return std::move(column);
-}
-
-ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable, const ColumnUInt8 & negative_null_map)
-{
-    if (nullable)
-    {
-        JoinCommon::convertColumnToNullable(column);
-        if (column.type->isNullable() && !negative_null_map.empty())
-        {
-            MutableColumnPtr mutable_column = IColumn::mutate(std::move(column.column));
-            assert_cast<ColumnNullable &>(*mutable_column).applyNegatedNullMap(negative_null_map);
-            column.column = std::move(mutable_column);
-        }
-    }
-    else
-        JoinCommon::removeColumnNullability(column);
-
-    return std::move(column);
-}
 }
 
 HashJoin::HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_sample_block_, bool any_take_last_row_)
@@ -286,16 +217,7 @@ HashJoin::HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_s
         const auto & key_names_right = clause.key_names_right;
         ColumnRawPtrs key_columns = JoinCommon::extractKeysForJoin(right_table_keys, key_names_right);
 
-        if (table_join->getDictionaryReader())
-        {
-            assert(disjuncts_num == 1);
-            data->type = Type::DICT;
-
-            data->maps.resize(disjuncts_num);
-            std::get<MapsOne>(data->maps[0]).create(Type::DICT);
-            chooseMethod(kind, key_columns, key_sizes.emplace_back()); /// init key_sizes
-        }
-        else if (strictness == JoinStrictness::Asof)
+        if (strictness == JoinStrictness::Asof)
         {
             assert(disjuncts_num == 1);
 
@@ -417,36 +339,6 @@ static KeyGetter createKeyGetter(const ColumnRawPtrs & key_columns, const Sizes 
 template <typename Mapped, bool need_offset = false>
 using FindResultImpl = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped, true>;
 
-class KeyGetterForDict
-{
-public:
-    using Mapped = RowRef;
-    using FindResult = FindResultImpl<Mapped, true>;
-
-    KeyGetterForDict(const TableJoin & table_join, const ColumnRawPtrs & key_columns)
-    {
-        assert(table_join.getDictionaryReader());
-        table_join.getDictionaryReader()->readKeys(*key_columns[0], read_result, found, positions);
-
-        for (ColumnWithTypeAndName & column : read_result)
-            if (table_join.rightBecomeNullable(column.type))
-                JoinCommon::convertColumnToNullable(column);
-    }
-
-    FindResult findKey(const TableJoin &, size_t row, const Arena &)
-    {
-        result.block = &read_result;
-        result.row_num = static_cast<Mapped::SizeT>(positions[row]);
-        return FindResult(&result, found[row], 0);
-    }
-
-private:
-    Block read_result;
-    Mapped result;
-    ColumnVector<UInt8>::Container found;
-    std::vector<size_t> positions;
-};
-
 /// Dummy key getter, always find nothing, used for JOIN ON NULL
 template <typename Mapped>
 class KeyGetterEmpty
@@ -517,17 +409,10 @@ struct KeyGetterForType
 
 void HashJoin::dataMapInit(MapsVariant & map)
 {
-    if (data->type == Type::DICT)
-        return;
     if (kind == JoinKind::Cross)
         return;
     joinDispatchInit(kind, strictness, map);
     joinDispatch(kind, strictness, map, [&](auto, auto, auto & map_) { map_.create(data->type); });
-}
-
-bool HashJoin::overDictionary() const
-{
-    return data->type == Type::DICT;
 }
 
 bool HashJoin::empty() const
@@ -537,7 +422,7 @@ bool HashJoin::empty() const
 
 bool HashJoin::alwaysReturnsEmptySet() const
 {
-    return isInnerOrRight(getKind()) && data->empty && !overDictionary();
+    return isInnerOrRight(getKind()) && data->empty;
 }
 
 size_t HashJoin::getTotalRowCount() const
@@ -549,7 +434,7 @@ size_t HashJoin::getTotalRowCount() const
         for (const auto & block : data->blocks)
             res += block.rows();
     }
-    else if (data->type != Type::DICT)
+    else
     {
         for (const auto & map : data->maps)
         {
@@ -569,7 +454,7 @@ size_t HashJoin::getTotalByteCount() const
         for (const auto & block : data->blocks)
             res += block.bytes();
     }
-    else if (data->type != Type::DICT)
+    else
     {
         for (const auto & map : data->maps)
         {
@@ -629,7 +514,7 @@ namespace
         const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, BoolColumnDataPtr join_mask, Arena & pool)
     {
         [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<typename Map::mapped_type, RowRef>;
-        constexpr bool is_asof_join = (STRICTNESS == JoinStrictness::Asof);
+        constexpr bool is_asof_join = STRICTNESS == JoinStrictness::Asof;
 
         const IColumn * asof_column [[maybe_unused]] = nullptr;
         if constexpr (is_asof_join)
@@ -680,7 +565,6 @@ namespace
         {
             case HashJoin::Type::EMPTY: return 0;
             case HashJoin::Type::CROSS: return 0; /// Do nothing. We have already saved block, and it is enough.
-            case HashJoin::Type::DICT:  return 0; /// No one should call it with Type::DICT.
 
         #define M(TYPE) \
             case HashJoin::Type::TYPE: \
@@ -696,6 +580,13 @@ namespace
 
 void HashJoin::initRightBlockStructure(Block & saved_block_sample)
 {
+    if (isCrossOrComma(kind))
+    {
+        /// cross join doesn't have keys, just add all columns
+        saved_block_sample = sample_block_with_columns_to_add.cloneEmpty();
+        return;
+    }
+
     bool multiple_disjuncts = !table_join->oneDisjunct();
     /// We could remove key columns for LEFT | INNER HashJoin but we should keep them for JoinSwitcher (if any).
     bool save_key_columns = table_join->isEnabledAlgorithm(JoinAlgorithm::AUTO) || isRightOrFull(kind) || multiple_disjuncts;
@@ -713,9 +604,7 @@ void HashJoin::initRightBlockStructure(Block & saved_block_sample)
     for (auto & column : sample_block_with_columns_to_add)
     {
         if (!saved_block_sample.findByName(column.name))
-        {
             saved_block_sample.insert(column);
-        }
     }
 }
 
@@ -735,9 +624,6 @@ Block HashJoin::structureRightBlock(const Block & block) const
 
 bool HashJoin::addJoinedBlock(const Block & source_block, bool check_limits)
 {
-    if (overDictionary())
-        throw Exception("Logical error: insert into hash-map in HashJoin over dictionary", ErrorCodes::LOGICAL_ERROR);
-
     /// RowRef::SizeT is uint32_t (not size_t) for hash table Cell memory efficiency.
     /// It's possible to split bigger blocks and insert them by parts here. But it would be a dead code.
     if (unlikely(source_block.rows() > std::numeric_limits<RowRef::SizeT>::max()))
@@ -1167,7 +1053,7 @@ void addFoundRowAll(
             ++current_offset;
         }
     }
-};
+}
 
 template <bool add_missing, bool need_offset>
 void addNotFoundRow(AddedColumns & added [[maybe_unused]], IColumn::Offset & current_offset [[maybe_unused]])
@@ -1427,28 +1313,6 @@ IColumn::Filter switchJoinRightColumns(
     }
 }
 
-template <JoinKind KIND, JoinStrictness STRICTNESS>
-IColumn::Filter dictionaryJoinRightColumns(const TableJoin & table_join, AddedColumns & added_columns)
-{
-    if constexpr (KIND == JoinKind::Left &&
-        (STRICTNESS == JoinStrictness::Any ||
-        STRICTNESS == JoinStrictness::Semi ||
-        STRICTNESS == JoinStrictness::Anti))
-    {
-        assert(added_columns.join_on_keys.size() == 1);
-
-        std::vector<const TableJoin *> maps_vector;
-        maps_vector.push_back(&table_join);
-
-        JoinStuff::JoinUsedFlags flags;
-        std::vector<KeyGetterForDict> key_getter_vector;
-        key_getter_vector.push_back(KeyGetterForDict(table_join, added_columns.join_on_keys[0].key_columns));
-        return joinRightColumnsSwitchNullability<KIND, STRICTNESS, KeyGetterForDict>(std::move(key_getter_vector), maps_vector, added_columns, flags);
-    }
-
-    throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong JOIN combination: {} {}", STRICTNESS, KIND);
-}
-
 } /// nameless
 
 template <JoinKind KIND, JoinStrictness STRICTNESS, typename Maps>
@@ -1495,9 +1359,7 @@ void HashJoin::joinBlockImpl(
     bool has_required_right_keys = (required_right_keys.columns() != 0);
     added_columns.need_filter = jf.need_filter || has_required_right_keys;
 
-    IColumn::Filter row_filter = overDictionary() ?
-        dictionaryJoinRightColumns<KIND, STRICTNESS>(*table_join, added_columns) :
-        switchJoinRightColumns<KIND, STRICTNESS>(maps_, added_columns, data->type, used_flags);
+    IColumn::Filter row_filter = switchJoinRightColumns<KIND, STRICTNESS>(maps_, added_columns, data->type, used_flags);
 
     for (size_t i = 0; i < added_columns.size(); ++i)
         block.insert(added_columns.moveColumn(i));
@@ -1529,7 +1391,7 @@ void HashJoin::joinBlockImpl(
                 ColumnWithTypeAndName right_col(col.column, col.type, right_col_name);
                 if (right_col.type->lowCardinality() != right_key.type->lowCardinality())
                     JoinCommon::changeLowCardinalityInplace(right_col);
-                right_col = JoinStuff::correctNullability(std::move(right_col), is_nullable);
+                right_col = JoinCommon::correctNullability(std::move(right_col), is_nullable);
                 block.insert(std::move(right_col));
             }
         }
@@ -1558,12 +1420,12 @@ void HashJoin::joinBlockImpl(
                 const auto & col = block.getByName(left_name);
                 bool is_nullable = JoinCommon::isNullable(right_key.type);
 
-                ColumnPtr thin_column = JoinStuff::filterWithBlanks(col.column, filter);
+                ColumnPtr thin_column = JoinCommon::filterWithBlanks(col.column, filter);
 
                 ColumnWithTypeAndName right_col(thin_column, col.type, right_col_name);
                 if (right_col.type->lowCardinality() != right_key.type->lowCardinality())
                     JoinCommon::changeLowCardinalityInplace(right_col);
-                right_col = JoinStuff::correctNullability(std::move(right_col), is_nullable, null_map_filter);
+                right_col = JoinCommon::correctNullability(std::move(right_col), is_nullable, null_map_filter);
                 block.insert(std::move(right_col));
 
                 if constexpr (jf.need_replication)
@@ -1753,39 +1615,7 @@ void HashJoin::joinBlock(Block & block, ExtraBlockPtr & not_processed)
         materializeBlockInplace(block);
     }
 
-    if (overDictionary())
     {
-        auto & map = std::get<MapsOne>(data->maps[0]);
-        std::vector<const std::decay_t<decltype(map)>*> maps_vector;
-        maps_vector.push_back(&map);
-
-        if (kind == JoinKind::Left)
-        {
-            switch (strictness)
-            {
-            case JoinStrictness::Any:
-            case JoinStrictness::All:
-                    joinBlockImpl<JoinKind::Left, JoinStrictness::Any>(block, sample_block_with_columns_to_add, maps_vector);
-                    break;
-            case JoinStrictness::Semi:
-                    joinBlockImpl<JoinKind::Left, JoinStrictness::Semi>(block, sample_block_with_columns_to_add, maps_vector);
-                    break;
-            case JoinStrictness::Anti:
-                    joinBlockImpl<JoinKind::Left, JoinStrictness::Anti>(block, sample_block_with_columns_to_add, maps_vector);
-                    break;
-            default:
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong JOIN combination: dictionary + {} {}", strictness, kind);
-            }
-        }
-        else if (kind == JoinKind::Inner && strictness == JoinStrictness::All)
-            joinBlockImpl<JoinKind::Left, JoinStrictness::Semi>(block, sample_block_with_columns_to_add, maps_vector);
-
-        else
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong JOIN combination: {} {}", strictness, kind);
-    }
-    else
-    {
-
         std::vector<const std::decay_t<decltype(data->maps[0])> * > maps_vector;
         for (size_t i = 0; i < table_join->getClauses().size(); ++i)
             maps_vector.push_back(&data->maps[i]);
@@ -2048,7 +1878,6 @@ std::shared_ptr<NotJoinedBlocks> HashJoin::getNonJoinedBlocks(const Block & left
     if (multiple_disjuncts)
     {
         /// ... calculate `left_columns_count` ...
-        // throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "TODO");
         size_t left_columns_count = left_sample_block.columns();
         auto non_joined = std::make_unique<NotJoinedHash<true>>(*this, max_block_size);
         return std::make_shared<NotJoinedBlocks>(std::move(non_joined), result_sample_block, left_columns_count, table_join->leftToRightKeyRemap());

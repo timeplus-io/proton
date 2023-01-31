@@ -11,12 +11,9 @@
 
 #include <DataTypes/DataTypeNullable.h>
 
-#include <Interpreters/DictionaryReader.h>
 #include <Interpreters/NullableUtils.h>
 #include <Interpreters/TableJoin.h>
-#include <Interpreters/join_common.h>
-
-#include <Storages/StorageDictionary.h>
+#include <Interpreters/JoinUtils.h>
 
 #include <Core/ColumnNumbers.h>
 #include <Common/assert_cast.h>
@@ -1284,7 +1281,7 @@ void HashJoin::joinBlockImpl(Block & block, const Block & block_with_columns_to_
                 ColumnWithTypeAndName right_col(col.column, col.type, right_col_name);
                 if (right_col.type->lowCardinality() != right_key.type->lowCardinality())
                     JoinCommon::changeLowCardinalityInplace(right_col);
-                right_col = JoinStuff::correctNullability(std::move(right_col), is_nullable);
+                right_col = JoinCommon::correctNullability(std::move(right_col), is_nullable);
                 block.insert(right_col);
             }
         }
@@ -1313,12 +1310,12 @@ void HashJoin::joinBlockImpl(Block & block, const Block & block_with_columns_to_
                 const auto & col = block.getByName(left_name);
                 bool is_nullable = nullable_right_side || right_key.type->isNullable();
 
-                ColumnPtr thin_column = JoinStuff::filterWithBlanks(col.column, filter);
+                ColumnPtr thin_column = JoinCommon::filterWithBlanks(col.column, filter);
 
                 ColumnWithTypeAndName right_col(thin_column, col.type, right_col_name);
                 if (right_col.type->lowCardinality() != right_key.type->lowCardinality())
                     JoinCommon::changeLowCardinalityInplace(right_col);
-                right_col = JoinStuff::correctNullability(std::move(right_col), is_nullable, null_map_filter);
+                right_col = JoinCommon::correctNullability(std::move(right_col), is_nullable, null_map_filter);
                 block.insert(right_col);
 
                 if constexpr (jf.need_replication)

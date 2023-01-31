@@ -27,13 +27,12 @@
 #include <Core/Block.h>
 
 #include <Storages/IStorage_fwd.h>
-#include <Storages/IKVStorage.h>
+#include <Interpreters/IKeyValueEntity.h>
 
 namespace DB
 {
 
 class TableJoin;
-class DictionaryReader;
 
 namespace JoinStuff
 {
@@ -73,11 +72,6 @@ public:
     bool setUsedOnce(const T & f);
 };
 
-/// proton : starts
-ColumnPtr filterWithBlanks(ColumnPtr src_column, const IColumn::Filter & filter, bool inverse_filter = false);
-ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable);
-ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable, const ColumnUInt8 & negative_null_map);
-/// proton : ends
 }
 
 /** Data structure for implementation of JOIN.
@@ -173,13 +167,12 @@ public:
     /// Used by joinGet function that turns StorageJoin into a dictionary.
     ColumnWithTypeAndName joinGet(const Block & block, const Block & block_with_columns_to_add) const;
 
-    bool isFilled() const override { return from_storage_join || data->type == Type::DICT; }
+    bool isFilled() const override { return from_storage_join; }
 
     JoinPipelineType pipelineType() const override
     {
-        /// No need to process anything in the right stream if it's a dictionary will just join the left stream with it.
-        bool is_filled = from_storage_join || data->type == Type::DICT;
-        if (is_filled)
+        /// No need to process anything in the right stream if hash table was already filled
+        if (from_storage_join)
             return JoinPipelineType::FilledRight;
 
         /// Default pipeline processes right stream at first and then left.
@@ -235,7 +228,6 @@ public:
     {
         EMPTY,
         CROSS,
-        DICT,
         #define M(NAME) NAME,
             APPLY_FOR_JOIN_VARIANTS(M)
         #undef M
@@ -263,7 +255,6 @@ public:
             {
                 case Type::EMPTY:            break;
                 case Type::CROSS:            break;
-                case Type::DICT:             break;
 
             #define M(NAME) \
                 case Type::NAME: NAME = std::make_unique<typename decltype(NAME)::element_type>(); break;
@@ -278,7 +269,6 @@ public:
             {
                 case Type::EMPTY:            return 0;
                 case Type::CROSS:            return 0;
-                case Type::DICT:             return 0;
 
             #define M(NAME) \
                 case Type::NAME: return NAME ? NAME->size() : 0;
@@ -295,7 +285,6 @@ public:
             {
                 case Type::EMPTY:            return 0;
                 case Type::CROSS:            return 0;
-                case Type::DICT:             return 0;
 
             #define M(NAME) \
                 case Type::NAME: return NAME ? NAME->getBufferSizeInBytes() : 0;
@@ -312,7 +301,6 @@ public:
             {
                 case Type::EMPTY:            return 0;
                 case Type::CROSS:            return 0;
-                case Type::DICT:             return 0;
 
             #define M(NAME) \
                 case Type::NAME: return NAME ? NAME->getBufferSizeInCells() : 0;
@@ -426,7 +414,6 @@ private:
     static Type chooseMethod(JoinKind kind, const ColumnRawPtrs & key_columns, Sizes & key_sizes);
 
     bool empty() const;
-    bool overDictionary() const;
 };
 
 }

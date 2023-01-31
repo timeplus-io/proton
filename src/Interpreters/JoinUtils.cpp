@@ -1,4 +1,4 @@
-#include <Interpreters/join_common.h>
+#include <Interpreters/JoinUtils.h>
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnLowCardinality.h>
@@ -573,6 +573,73 @@ void splitAdditionalColumns(const Names & key_names, const Block & sample_block,
     }
 }
 
+ColumnPtr filterWithBlanks(ColumnPtr src_column, const IColumn::Filter & filter, bool inverse_filter)
+{
+    ColumnPtr column = src_column->convertToFullColumnIfConst();
+    MutableColumnPtr mut_column = column->cloneEmpty();
+    mut_column->reserve(column->size());
+
+    if (inverse_filter)
+    {
+        for (size_t row = 0; row < filter.size(); ++row)
+        {
+            if (filter[row])
+                mut_column->insertDefault();
+            else
+                mut_column->insertFrom(*column, row);
+        }
+    }
+    else
+    {
+        for (size_t row = 0; row < filter.size(); ++row)
+        {
+            if (filter[row])
+                mut_column->insertFrom(*column, row);
+            else
+                mut_column->insertDefault();
+        }
+    }
+
+    return mut_column;
+}
+
+
+ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable)
+{
+    if (nullable)
+    {
+        JoinCommon::convertColumnToNullable(column);
+    }
+    else
+    {
+        /// We have to replace values masked by NULLs with defaults.
+        if (column.column)
+            if (const auto * nullable_column = checkAndGetColumn<ColumnNullable>(*column.column))
+                column.column = JoinCommon::filterWithBlanks(column.column, nullable_column->getNullMapColumn().getData(), true);
+
+        JoinCommon::removeColumnNullability(column);
+    }
+
+    return std::move(column);
+}
+
+ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable, const ColumnUInt8 & negative_null_map)
+{
+    if (nullable)
+    {
+        JoinCommon::convertColumnToNullable(column);
+        if (column.type->isNullable() && !negative_null_map.empty())
+        {
+            MutableColumnPtr mutable_column = IColumn::mutate(std::move(column.column));
+            assert_cast<ColumnNullable &>(*mutable_column).applyNegatedNullMap(negative_null_map);
+            column.column = std::move(mutable_column);
+        }
+    }
+    else
+        JoinCommon::removeColumnNullability(column);
+
+    return std::move(column);
+}
 }
 
 NotJoinedBlocks::NotJoinedBlocks(std::unique_ptr<RightColumnsFiller> filler_,
@@ -597,26 +664,29 @@ NotJoinedBlocks::NotJoinedBlocks(std::unique_ptr<RightColumnsFiller> filler_,
             column_indices_left.emplace_back(left_pos);
     }
 
-    for (size_t right_pos = 0; right_pos < saved_block_sample.columns(); ++right_pos)
+    /// `saved_block_sample` may contains non unique column names, get any of them
+    /// (e.g. in case of `... JOIN (SELECT a, a, b FROM table) as t2`)
+    for (const auto & [name, right_pos] : saved_block_sample.getNamesToIndexesMap())
     {
-        const String & name = saved_block_sample.getByPosition(right_pos).name;
-        if (!result_sample_block.has(name))
-            continue;
-
-        size_t result_position = result_sample_block.getPositionByName(name);
-
-        /// Don't remap left keys twice. We need only qualified right keys here
-        if (result_position < left_columns_count)
-            continue;
-
-        setRightIndex(right_pos, result_position);
+        /// Start from left_columns_count to don't remap left keys twice. We need only qualified right keys here
+        /// `result_sample_block` may contains non unique column names, need to set index for all of them
+        for (size_t result_pos = left_columns_count; result_pos < result_sample_block.columns(); ++result_pos)
+        {
+            const auto & result_name = result_sample_block.getByPosition(result_pos).name;
+            if (result_name == name)
+                setRightIndex(right_pos, result_pos);
+        }
     }
 
     if (column_indices_left.size() + column_indices_right.size() + same_result_keys.size() != result_sample_block.columns())
-        throw Exception(ErrorCodes::LOGICAL_ERROR,
-                        "Error in columns mapping in RIGHT|FULL JOIN. Left: {}, right: {}, same: {}, result: {}",
-                        column_indices_left.size(), column_indices_right.size(),
-                        same_result_keys.size(), result_sample_block.columns());
+    {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Error in columns mapping in JOIN: assertion failed {} + {} + {} != {}; "
+            "Result block [{}], Saved block [{}]",
+            column_indices_left.size(), column_indices_right.size(), same_result_keys.size(), result_sample_block.columns(),
+            result_sample_block.dumpNames(), saved_block_sample.dumpNames());
+    }
 }
 
 void NotJoinedBlocks::setRightIndex(size_t right_pos, size_t result_position)
