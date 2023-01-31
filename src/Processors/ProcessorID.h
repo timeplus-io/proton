@@ -77,7 +77,7 @@ enum class ProcessorID : UInt32
     CheckConstraintsTransformID = 65,
     CountingTransformID = 66,
     SquashingChunksTransformID = 67,
-    PushingToMaterializedViewMemorySinkID = 68,
+    // PushingToMaterializedViewMemorySinkID = 68,
     RemoteSinkID = 69,
     BufferSinkID = 70,
     StorageFileSinkID = 71,
@@ -439,9 +439,9 @@ inline ProcessorID toProcessID(UInt32 v)
         case 67:
             pid = ProcessorID::SquashingChunksTransformID;
             break;
-        case 68:
-            pid = ProcessorID::PushingToMaterializedViewMemorySinkID;
-            break;
+        // case 68:
+        //     pid = ProcessorID::PushingToMaterializedViewMemorySinkID;
+        //     break;
         case 69:
             pid = ProcessorID::RemoteSinkID;
             break;

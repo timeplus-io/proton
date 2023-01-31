@@ -66,56 +66,6 @@ private:
     const StorageMaterializedView & view;
 };
 
-class PushingToMaterializedViewMemorySink final : public ExceptionKeepingTransform
-{
-private:
-    const StorageMaterializedView::VirtualColumns & to_calc_virtual_columns;
-    size_t expected_virtual_num = 0;
-
-public:
-    PushingToMaterializedViewMemorySink(
-        const Block & in_header, const Block & out_header, const StorageMaterializedView::VirtualColumns & to_calc_virtual_columns_)
-        : ExceptionKeepingTransform(in_header, out_header, true, ProcessorID::PushingToMaterializedViewMemorySinkID)
-        , to_calc_virtual_columns(to_calc_virtual_columns_)
-        , expected_virtual_num(out_header.columns() - in_header.columns())
-    {
-        assert(expected_virtual_num <= to_calc_virtual_columns.size());
-    }
-
-    String getName() const override { return "PushingToMaterializedViewMemory"; }
-
-protected:
-    void onConsume(Chunk chunk) override
-    {
-        if (!chunk.hasColumns())
-            return;
-
-        auto newest_block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
-        auto rows = newest_block.rows();
-
-        /// Calc and add virtual columns if expected
-        for (size_t i = 0; i < expected_virtual_num; ++i)
-        {
-            const auto & [name, type, calc_func] = to_calc_virtual_columns[i];
-            auto virtual_column = rows > 0 ? type->createColumnConst(rows, calc_func()) : type->createColumn();
-            newest_block.insert({virtual_column, type, name});
-        }
-
-        chunk.setColumns(newest_block.getColumns(), rows);
-
-        cur_chunk = std::move(chunk);
-    }
-
-    GenerateResult onGenerate() override
-    {
-        GenerateResult res;
-        res.chunk = std::move(cur_chunk);
-        return res;
-    }
-
-    Chunk cur_chunk;
-};
-
 StorageMaterializedView::StorageMaterializedView(
     const StorageID & table_id_,
     ContextPtr local_context,
@@ -128,8 +78,6 @@ StorageMaterializedView::StorageMaterializedView(
     , log(&Poco::Logger::get("StorageMaterializedView (" + table_id_.database_name + "." + table_id_.table_name + ")"))
     , is_attach(attach_)
     , is_virtual(is_virtual_)
-    , virtual_columns(
-          {{ProtonConsts::RESERVED_VIEW_VERSION, std::make_shared<DataTypeInt64>(), []() -> Int64 { return UTCMilliseconds::now(); }}})
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
@@ -211,17 +159,6 @@ void StorageMaterializedView::startup()
                 /// Run background pipeline
                 executeBackgroundPipeline();
             }
-
-            /// Update metadata in memory since we want to show version column for global aggr (select *)
-            if (is_global_aggr_query)
-            {
-                auto new_metadata = getInMemoryMetadata();
-                auto new_names_and_types = metadata_snapshot->getColumns().getAll();
-                const auto & virtuals = getVirtuals();
-                new_names_and_types.insert(new_names_and_types.end(), virtuals.begin(), virtuals.end());
-                new_metadata.setColumns(ColumnsDescription(new_names_and_types));
-                setInMemoryMetadata(new_metadata);
-            }
             LOG_INFO(log, "'{}' inner table is ready and background query started", getStorageID().getFullTableName());
         }
         catch (...)
@@ -300,7 +237,8 @@ void StorageMaterializedView::read(
     if (query_info.order_optimizer)
         query_info.input_order_info = query_info.order_optimizer->getInputOrder(target_metadata_snapshot, local_context);
 
-    storage->read(query_plan, column_names, target_storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
+    storage->read(
+        query_plan, column_names, target_storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
 
     if (query_plan.isInitialized())
     {
@@ -411,10 +349,9 @@ void StorageMaterializedView::checkValid() const
 
 NamesAndTypesList StorageMaterializedView::getVirtuals() const
 {
-    if (is_global_aggr_query)
-        return NamesAndTypesList{NameAndTypePair(ProtonConsts::RESERVED_VIEW_VERSION, std::make_shared<DataTypeInt64>())};
-    else
-        return {};
+    /// So far we always have inner target table.
+    assert(target_table_storage);
+    return target_table_storage->getVirtuals();
 }
 
 void StorageMaterializedView::initInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
@@ -432,8 +369,6 @@ void StorageMaterializedView::initInnerTable(const StorageMetadataPtr & metadata
         manual_create_query->uuid = target_table_id.uuid;
 
         auto names_and_types = metadata_snapshot->getColumns().getAll();
-        const auto & virtuals = getVirtuals();
-        names_and_types.insert(names_and_types.end(), virtuals.begin(), virtuals.end());
         auto columns_ast = InterpreterCreateQuery::formatColumns(names_and_types);
         auto new_columns_list = std::make_shared<ASTColumns>();
         new_columns_list->set(new_columns_list->columns, columns_ast);
@@ -471,7 +406,7 @@ void StorageMaterializedView::updateStorageSettings()
 void StorageMaterializedView::buildBackgroundPipeline(
     InterpreterSelectWithUnionQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
 {
-    /// [Pipeline]: `Source` -> `Converting` -> `PushingToMaterializedViewMemorySink` -> `Materializing const` -> `target_table`
+    /// [Pipeline]: `Source` -> `Converting` -> `Materializing const` -> `target_table`
     background_pipeline = inner_interpreter.buildQueryPipeline();
     background_pipeline.resize(1);
     const auto & current_header = background_pipeline.getHeader();
@@ -487,21 +422,6 @@ void StorageMaterializedView::buildBackgroundPipeline(
         return std::make_shared<ExpressionTransform>(cur_header, inner_converting_view_actions);
     });
 
-    /// Pushing newest data with virtual generated data to memory
-    /// and output:
-    /// 1) if is global aggr, we output additional `RESERVED_VIEW_VERSION` for target table
-    auto out_header = current_header;
-    if (is_global_aggr_query)
-    {
-        assert(!virtual_columns.empty());
-        const auto & [name, type, calc_func] = virtual_columns.front();
-        out_header.insert({type->createColumn(), type, name});
-    }
-
-    background_pipeline.addSimpleTransform([&, this](const Block & cur_header, QueryPipelineBuilder::StreamType) -> ProcessorPtr {
-        return std::make_shared<PushingToMaterializedViewMemorySink>(cur_header, out_header, virtual_columns);
-    });
-
     /// Materializing const columns
     background_pipeline.addSimpleTransform([](const Block & cur_header, QueryPipelineBuilder::StreamType) -> ProcessorPtr {
         return std::make_shared<MaterializingTransform>(cur_header);
@@ -514,7 +434,7 @@ void StorageMaterializedView::buildBackgroundPipeline(
 
     /// Sink to target table
     InterpreterInsertQuery interpreter(nullptr, local_context, false, true /* no_squash */);
-    auto out_chain = interpreter.buildChain(target_table, target_table->getInMemoryMetadataPtr(), out_header.getNames(), nullptr, nullptr);
+    auto out_chain = interpreter.buildChain(target_table, target_table->getInMemoryMetadataPtr(), current_header.getNames(), nullptr, nullptr);
     out_chain.addStorageHolder(target_table);
 
     background_pipeline.addChain(std::move(out_chain));

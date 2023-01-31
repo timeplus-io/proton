@@ -18,10 +18,7 @@ struct ExtraBlock;
 class StorageMaterializedView final : public shared_ptr_helper<StorageMaterializedView>, public IStorage, WithMutableContext
 {
     friend struct shared_ptr_helper<StorageMaterializedView>;
-    friend class PushingToMaterializedViewMemorySink;
     friend class MaterializedViewMemorySource;
-
-    using VirtualColumns = std::vector<std::tuple<String, DataTypePtr, std::function<Int64()>>>;
 
 public:
     ~StorageMaterializedView() override;
@@ -60,7 +57,6 @@ public:
         size_t num_streams) override;
 
     NamesAndTypesList getVirtuals() const override;
-    bool isGlobalAggrInnerQuery() { return is_global_aggr_query; }
 
     bool supportsSubcolumns() const override { return true; }
     bool supportsDynamicSubcolumns() const override { return true; }
@@ -85,9 +81,6 @@ private:
     StoragePtr target_table_storage = nullptr;
     bool is_attach = false;
     bool is_virtual = false;
-
-    VirtualColumns virtual_columns;
-    bool is_global_aggr_query = false;
 
     std::atomic_flag shutdown_called;
 

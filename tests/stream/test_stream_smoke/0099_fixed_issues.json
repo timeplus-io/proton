@@ -133,6 +133,35 @@
           ["2", "1"]
         ]}
       ]
+    },
+    {
+      "id": 5,
+      "tags": ["materialized view"],
+      "name": "#1934",
+      "description": "materialized view support virtual columns like to a stream",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "wait":2, "query": "drop view if exists test_mv_1934"},
+            {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test_stream_1934"},
+            {"client":"python", "query_type": "table", "wait":2, "query": "create stream test_stream_1934(value int)"},
+            {"client":"python", "query_type": "table", "depends_on_stream":"test_stream_1934", "query": "create materialized view test_mv_1934 as select count() from test_stream_1934"},
+            {"client":"python", "query_type": "table", "depends_on_stream":"test_mv_1934", "wait":2, "query": "insert into test_stream_1934(value) values(1)"},
+            {"client":"python", "query_type": "table", "wait":3, "query": "insert into test_stream_1934(value) values(2)"},
+            {"client":"python", "query_type": "table", "wait":3, "query": "insert into test_stream_1934(value) values(3)"},
+            {"client":"python", "query_type": "stream", "query_id":"9900", "query_end_timer":3, "query":"select *, _tp_shard, _tp_sn from test_mv_1934 where _tp_sn >= 0"},
+            {"client":"python", "query_type": "stream", "query_id":"9901", "query_end_timer":3, "query":"select *, _tp_shard, _tp_sn from test_mv_1934 where _tp_time >= now() - 1m"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":[
+          [1, 0, 0], [2, 0, 1], [3, 0, 2]
+        ]},
+        {"query_id":"9901", "expected_results":[
+          [1, 0, 0], [2, 0, 1], [3, 0, 2]
+        ]}
+      ]
     }
   
   ]

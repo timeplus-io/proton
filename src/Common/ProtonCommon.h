@@ -22,9 +22,6 @@ const String HOP_FUNC_NAME = "__hop";
 const String SESSION_FUNC_NAME = "__session";
 const String DEDUP_FUNC_NAME = "__dedup";
 
-/// Reserved column names / aliases for streaming view
-const String RESERVED_VIEW_VERSION = "__tp_version";
-
 const String RESERVED_EMIT_VERSION = "emit_version()";
 
 /// Reserved column names / aliases for proton system
