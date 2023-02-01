@@ -79,6 +79,14 @@ void ExpressionInfoMatcher::visit(const ASTFunction & ast_function, const ASTPtr
         /// Skip lambda, tuple and other special functions
         if (function)
         {
+            /// proton: starts. it's a virtual aggreagte function
+            if (function->getName() == "emit_version")
+            {
+                data.is_aggregate_function = true;
+                return;
+            }
+            /// proton: ends.
+
             if (function->isStateful())
                 data.is_stateful_function = true;
 

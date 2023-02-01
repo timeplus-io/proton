@@ -78,7 +78,7 @@ public:
 
 }
 
-void registerFunctionToConcreteType(FunctionFactory & factory)
+REGISTER_FUNCTION(ToConcreteType)
 {
     factory.registerFunction<FunctionToConcreteType>();
 }

@@ -2078,8 +2078,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                 /// Here we are manually fixing the ActionsDAG to produce `emit_version()` column to downstream pipe.
                 /// ActionsDAG: source_header -> ... -> Aggregation -> Aggregation Output + manually inserted `emit_version()` column
                 /// During execution, we need patch the Aggregation Pipe as well to produce `emit_version()` column to match the ActionsDAG
-                ExpressionActionsChain::Step & step = chain.lastStep(query_analyzer.aggregated_columns);
-                step.actions()->addColumn({DataTypeFactory::instance().get("int64"), ProtonConsts::RESERVED_EMIT_VERSION});
+                query_analyzer.aggregated_columns.push_back({ProtonConsts::RESERVED_EMIT_VERSION, DataTypeFactory::instance().get("int64")});
             }
 
             /// FIXME, `EMIT CHANGELOG` which requires emitting `_tp_delta`

@@ -48,7 +48,7 @@ public:
     bool isSuitableForConstantFolding() const override { return false; }
 };
 
-void registerFunctionEmitVersion(FunctionFactory & factory)
+REGISTER_FUNCTION(EmitVersion)
 {
     factory.registerFunction<FunctionEmitVersion>();
 }
