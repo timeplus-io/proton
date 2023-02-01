@@ -61,7 +61,9 @@ def case_result_check(test_set, logging_level="INFO"):
 
     expected_results = test_set.get("expected_results")
     statements_results_designed = test_set.get("statements_results_designed")
-    logger.info(f"expected_results = {expected_results}, statements_results_designed = {statements_results_designed}")
+
+    if test_set["test_result"] != True:
+        logger.info(f"expected_results = {expected_results}, statements_results_designed = {statements_results_designed}")
 
     assert test_set["test_result"] == True, f"expected_result = {expected_results} \n, statements_results_designed = {statements_results_designed}"    
 

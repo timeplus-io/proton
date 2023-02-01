@@ -69,7 +69,7 @@ services:
   stream-store:
     image: vectorized/redpanda:v21.11.19
     ports:
-      - "9093:9092"
+      - "9092:9092"
       - "29092:29092"
     command:
       - redpanda

@@ -255,7 +255,9 @@ if __name__ == "__main__":
     os.environ["PROTON_TEST_IDS"] = "all"
     test_suites = "all"
     settings = []
-
+    ci_runner_start = datetime.datetime.now()
+    ci_runner_end = datetime.datetime.now()
+    ci_runner_duration = ci_runner_end - ci_runner_start
 
 
     try:
@@ -338,7 +340,7 @@ if __name__ == "__main__":
         logger.setLevel(logging.DEBUG)
 
     logger.info(
-        f"ci_runner: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}, test_suite_timeout = {test_suite_timeout} starts"
+        f"ci_runner starting: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}, test_suite_timeout = {test_suite_timeout} starts"
     )
 
     logger.info(f"Check proton_python_driver and install...")
@@ -375,7 +377,14 @@ if __name__ == "__main__":
         time.sleep(5)
     for proc in procs:
         proc.join()
+    
+    ci_runner_end = datetime.datetime.now()
+    
+    ci_runner_duration = ci_runner_end - ci_runner_start
 
+    logger.info(
+        f"ci_runner end: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}, test_suite_timeout = {test_suite_timeout}, ci_runner_duration = {ci_runner_duration.seconds} seconds, ends"
+    )    
     # while i < loop:
     #    ci_runner(cur_dir, run_mode, logging_level = logging_level)
     #    i += 1
