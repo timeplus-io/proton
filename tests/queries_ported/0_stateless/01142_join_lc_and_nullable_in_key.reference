@@ -1,0 +1,34 @@
+1	l	\N	nullable(string)
+2		\N	nullable(string)
+1	l	\N	nullable(string)
+2		\N	nullable(string)
+-
+1	l	\N	nullable(string)
+0		\N	nullable(string)
+0		\N	nullable(string)
+1	l	\N	nullable(string)
+-
+1	l	\N	nullable(string)
+0		\N	nullable(string)
+0		\N	nullable(string)
+1	l	\N	nullable(string)
+-
+0	
+-
+1	l	\N	nullable(string)
+2	\N	\N	nullable(string)
+1	l	\N	nullable(string)
+2	\N	\N	nullable(string)
+-
+1	l	\N	nullable(string)
+\N	\N	\N	nullable(string)
+1	l	\N	nullable(string)
+\N	\N	\N	nullable(string)
+-
+1	l	\N	nullable(string)
+\N	\N	\N	nullable(string)
+1	l	\N	nullable(string)
+\N	\N	\N	nullable(string)
+-
+\N	\N
+-

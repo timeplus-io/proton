@@ -1,0 +1,52 @@
+SELECT
+  test_view.date, test_view.id, test_view.name, test_view.value
+FROM
+ (
+  SELECT
+    *
+  FROM
+ default.test
+  HAVING
+    id = 1
+) AS test_view
+WHERE
+  id = 1
+SELECT
+  test_view.date, test_view.id, test_view.name, test_view.value
+FROM
+ (
+  SELECT
+    *
+  FROM
+ default.test
+  HAVING
+    id = 2
+) AS test_view
+WHERE
+  id = 2
+SELECT
+  id
+FROM
+ (
+  SELECT
+    *
+  FROM
+ default.test
+  HAVING
+    id = 1
+) AS test_view
+WHERE
+  id = 1
+SELECT
+  s.id
+FROM
+ (
+  SELECT
+    *
+  FROM
+ default.test
+  HAVING
+    s.id = 1
+) AS s
+WHERE
+  s.id = 1

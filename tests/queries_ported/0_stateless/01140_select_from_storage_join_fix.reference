@@ -1,0 +1,8 @@
+1	s	1	string	string
+2	s	2	string	string
+3	s	3	nullable(string)	string
+4	s	4	string	nullable(string)
+1	s	1	string	string
+2	s	2	string	string
+3	s	3	nullable(string)	string
+4	s	4	string	nullable(string)

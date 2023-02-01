@@ -1,0 +1,12 @@
+SELECT position_case_insensitive_utf8(materialize('сссссс'), 'Ё');
+SELECT count_substrings_case_insensitive_utf8(materialize('сссссс'), 'ё');
+SELECT position_case_insensitive_utf8(materialize('сссссссс'), 'ё');
+SELECT count_substrings_case_insensitive_utf8(materialize('сссссссс'), 'Ё');
+SELECT count_substrings_case_insensitive_utf8(materialize('ссссссссссссссссссс'), 'ёёёёёёё');
+SELECT position_case_insensitive_utf8(materialize('ссссссссссссссссссс'), 'ёЁёЁёЁё');
+SELECT count_substrings_case_insensitive_utf8(materialize('ссссссссссссссссссс'), 'ёЁёЁёЁёЁёЁ');
+SELECT position_case_insensitive_utf8(materialize('ссссссссссссссссссс'), 'ЁЁЁЁЁЁЁЁЁЁ');
+SELECT count_substrings_case_insensitive_utf8(materialize('ссссссссссссссссссс'), 'ёЁёЁёЁёссс');
+SELECT position_case_insensitive_utf8(materialize('ссссссссссссссссссс'), 'ёЁёЁёЁёссс');
+SELECT count_substrings_case_insensitive_utf8(materialize('ссссссссссссссссссс'), 'ЁС');
+SELECT position_case_insensitive_utf8(materialize('ссссссссссссссссссс'), 'ёс');
