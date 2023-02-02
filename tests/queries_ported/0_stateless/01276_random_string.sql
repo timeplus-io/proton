@@ -1,0 +1,1 @@
+SELECT DISTINCT c > 30000 FROM (SELECT array_join(array_map(x -> reinterpret_as_uint8(substring(random_string(100), x + 1, 1)), range(100))) AS byte, count() AS c FROM numbers(100000) GROUP BY byte ORDER BY byte);

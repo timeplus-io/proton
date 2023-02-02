@@ -1,0 +1,234 @@
+0
+1
+2
+0
+1
+2
+0
+1
+2
+2
+1
+0
+0
+1
+2
+0
+1
+2
+0
+1
+2
+2
+1
+0
+2
+1
+0
+2
+1
+0
+0
+1
+2
+2
+1
+0
+2
+1
+0
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  number ASC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  abs(to_float32(number)) ASC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  to_float32(abs(number)) ASC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  number DESC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  exp(number) ASC
+SELECT
+  round_to_exp2(number) AS x
+FROM
+ numbers(3)
+ORDER BY
+  number ASC
+SELECT
+  number AS x
+FROM
+ numbers(3)
+ORDER BY
+  number ASC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  number DESC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  abs(to_float32(number)) DESC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  to_float32(abs(number)) DESC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  number ASC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  exp(number) DESC
+SELECT
+  round_to_exp2(number) AS x
+FROM
+ numbers(3)
+ORDER BY
+  number DESC
+0
+1
+2
+0
+1
+2
+0
+1
+2
+2
+1
+0
+0
+1
+2
+0
+1
+2
+0
+1
+2
+2
+1
+0
+2
+1
+0
+2
+1
+0
+0
+1
+2
+2
+1
+0
+2
+1
+0
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  to_float32(to_float64(number)) ASC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  abs(to_float32(number)) ASC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  to_float32(abs(number)) ASC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  -number ASC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  exp(number) ASC
+SELECT
+  round_to_exp2(number) AS x
+FROM
+ numbers(3)
+ORDER BY
+  x ASC, to_float32(x) ASC
+SELECT
+  number AS x
+FROM
+ numbers(3)
+ORDER BY
+  to_float32(x) AS k ASC, to_float64(k) ASC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  to_float32(to_float64(number)) DESC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  abs(to_float32(number)) DESC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  to_float32(abs(number)) DESC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  -number DESC
+SELECT
+  number
+FROM
+ numbers(3)
+ORDER BY
+  exp(number) DESC
+SELECT
+  round_to_exp2(number) AS x
+FROM
+ numbers(3)
+ORDER BY
+  x DESC, to_float32(x) DESC

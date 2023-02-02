@@ -1,0 +1,26 @@
+SELECT normalize_query('SELECT 1');
+SELECT normalize_query('SELECT  1');
+SELECT normalize_query('SELECT  1, 1, 1');
+SELECT normalize_query('SELECT 1, 1, 1, /* Hwllo */');
+SELECT normalize_query('SELECT 1, 1, 1, /* Hello */');
+SELECT normalize_query('SELECT 1, 1, 1, /* Hello */ \'abc\'');
+SELECT normalize_query('SELECT 1, 1, 1, /* Hello */ \'abc\' WHERE 1');
+SELECT normalize_query('SELECT 1, 1, 1, /* Hello */ \'abc\' WHERE 1 = 1');
+SELECT normalize_query('SELECT 1, 1, 1, /* Hello */ \'abc\' WHERE 1 = 1 AND (x, y)');
+SELECT normalize_query('SELECT 1, 1, 1, /* Hello */ \'abc\' WHERE 1 = 1 AND (1, y)');
+SELECT normalize_query('[1, 2, 3]');
+SELECT normalize_query('[1, 2, 3, x]');
+SELECT normalize_query('SELECT 1, 1, 1, /* Hello */ \'abc\' WHERE 1 = 1 AND (1, y) LIMIT 1, 1');
+SELECT normalize_query('SELECT 1 AS `xyz`');
+SELECT normalize_query('SELECT 1 AS `xyz1`');
+SELECT normalize_query('SELECT 1 AS `xyz11`');
+SELECT normalize_query('SELECT 1 AS xyz111');
+SELECT normalize_query('SELECT 1 AS xyz1');
+SELECT normalize_query('SELECT 1 AS xyz11');
+SELECT normalize_query('SELECT 1 xyz11');
+SELECT normalize_query('SELECT 1, xyz11');
+SELECT normalize_query('SELECT 1, ''xyz11''');
+SELECT normalize_query('SELECT $doc$VALUE$doc$ xyz11');
+SELECT normalize_query('SELECT $doc$VALUE$doc$, xyz11');
+SELECT normalize_query('SELECT $doc$VALUE$doc$, ''xyz11''');
+

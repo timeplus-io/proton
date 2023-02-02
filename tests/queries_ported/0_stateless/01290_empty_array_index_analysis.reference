@@ -1,0 +1,50 @@
+--- not_empty
+	['a']	2
+	['a','b','c']	3
+	['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']	4
+--- empty
+	[]	1
+--- = []
+	[]	1
+--- != []
+	['a']	2
+	['a','b','c']	3
+	['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']	4
+--- > []
+	['a']	2
+	['a','b','c']	3
+	['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']	4
+--- < []
+--- >= []
+	[]	1
+	['a']	2
+	['a','b','c']	3
+	['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']	4
+--- <= []
+	[]	1
+---
+--- not_empty
+	['a']	2
+	['a','b','c']	3
+	['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']	4
+--- empty
+	[]	1
+--- = []
+	[]	1
+--- != []
+	['a']	2
+	['a','b','c']	3
+	['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']	4
+--- > []
+	['a']	2
+	['a','b','c']	3
+	['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']	4
+--- < []
+--- >= []
+	[]	1
+	['a']	2
+	['a','b','c']	3
+	['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']	4
+--- <= []
+	[]	1
+---

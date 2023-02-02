@@ -1,0 +1,36 @@
+-
+low_cardinality(uint64)	uint64	string	low_cardinality(string)
+-
+uint64	low_cardinality(uint64)	low_cardinality(string)	string
+-
+low_cardinality(uint64)	low_cardinality(uint64)	low_cardinality(string)	low_cardinality(string)
+-
+low_cardinality(uint64)	uint64	string	low_cardinality(string)
+low_cardinality(uint64)	uint64	string	low_cardinality(string)
+low_cardinality(uint64)	uint64	string	low_cardinality(string)
+-
+uint64	low_cardinality(uint64)	low_cardinality(string)	string
+uint64	low_cardinality(uint64)	low_cardinality(string)	string
+uint64	low_cardinality(uint64)	low_cardinality(string)	string
+-
+low_cardinality(uint64)	low_cardinality(uint64)	low_cardinality(string)	low_cardinality(string)
+low_cardinality(uint64)	low_cardinality(uint64)	low_cardinality(string)	low_cardinality(string)
+low_cardinality(uint64)	low_cardinality(uint64)	low_cardinality(string)	low_cardinality(string)
+-
+low_cardinality(uint64)	uint64	string	low_cardinality(string)
+-
+uint64	low_cardinality(uint64)	low_cardinality(string)	string
+-
+low_cardinality(uint64)	low_cardinality(uint64)	low_cardinality(string)	low_cardinality(string)
+-
+low_cardinality(uint64)	uint64	string	low_cardinality(string)
+low_cardinality(uint64)	uint64	string	low_cardinality(string)
+low_cardinality(uint64)	uint64	string	low_cardinality(string)
+-
+uint64	low_cardinality(uint64)	low_cardinality(string)	string
+uint64	low_cardinality(uint64)	low_cardinality(string)	string
+uint64	low_cardinality(uint64)	low_cardinality(string)	string
+-
+low_cardinality(uint64)	low_cardinality(uint64)	low_cardinality(string)	low_cardinality(string)
+low_cardinality(uint64)	low_cardinality(uint64)	low_cardinality(string)	low_cardinality(string)
+low_cardinality(uint64)	low_cardinality(uint64)	low_cardinality(string)	low_cardinality(string)

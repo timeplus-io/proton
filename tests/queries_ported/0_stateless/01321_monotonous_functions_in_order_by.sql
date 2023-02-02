@@ -1,0 +1,58 @@
+SET optimize_monotonous_functions_in_order_by = 1;
+
+SELECT number FROM numbers(3) ORDER BY to_float32(to_float64(number));
+SELECT number FROM numbers(3) ORDER BY abs(to_float32(number));
+SELECT number FROM numbers(3) ORDER BY to_float32(abs(number));
+SELECT number FROM numbers(3) ORDER BY -number;
+SELECT number FROM numbers(3) ORDER BY exp(number);
+SELECT round_to_exp2(number) AS x FROM numbers(3) ORDER BY x, to_float32(x);
+SELECT number AS x FROM numbers(3) ORDER BY to_float32(x) as k, to_float64(k);
+SELECT number FROM numbers(3) ORDER BY to_float32(to_float64(number)) DESC;
+SELECT number FROM numbers(3) ORDER BY abs(to_float32(number)) DESC;
+SELECT number FROM numbers(3) ORDER BY to_float32(abs(number)) DESC;
+SELECT number FROM numbers(3) ORDER BY -number DESC;
+SELECT number FROM numbers(3) ORDER BY exp(number) DESC;
+SELECT round_to_exp2(number) AS x FROM numbers(3) ORDER BY x DESC, to_float32(x) DESC;
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY to_float32(to_float64(number));
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY abs(to_float32(number));
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY to_float32(abs(number));
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY -number;
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY exp(number);
+EXPLAIN SYNTAX SELECT round_to_exp2(number) AS x FROM numbers(3) ORDER BY x, to_float32(x);
+EXPLAIN SYNTAX SELECT number AS x FROM numbers(3) ORDER BY to_float32(x) as k, to_float64(k);
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY to_float32(to_float64(number)) DESC;
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY abs(to_float32(number)) DESC;
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY to_float32(abs(number)) DESC;
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY -number DESC;
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY exp(number) DESC;
+EXPLAIN SYNTAX SELECT round_to_exp2(number) AS x FROM numbers(3) ORDER BY x DESC, to_float32(x) DESC;
+
+SET optimize_monotonous_functions_in_order_by = 0;
+
+SELECT number FROM numbers(3) ORDER BY to_float32(to_float64(number));
+SELECT number FROM numbers(3) ORDER BY abs(to_float32(number));
+SELECT number FROM numbers(3) ORDER BY to_float32(abs(number));
+SELECT number FROM numbers(3) ORDER BY -number;
+SELECT number FROM numbers(3) ORDER BY exp(number);
+SELECT round_to_exp2(number) AS x FROM numbers(3) ORDER BY x, to_float32(x);
+SELECT number AS x FROM numbers(3) ORDER BY to_float32(x) as k, to_float64(k);
+SELECT number FROM numbers(3) ORDER BY to_float32(to_float64(number)) DESC;
+SELECT number FROM numbers(3) ORDER BY abs(to_float32(number)) DESC;
+SELECT number FROM numbers(3) ORDER BY to_float32(abs(number)) DESC;
+SELECT number FROM numbers(3) ORDER BY -number DESC;
+SELECT number FROM numbers(3) ORDER BY exp(number) DESC;
+SELECT round_to_exp2(number) AS x FROM numbers(3) ORDER BY x DESC, to_float32(x) DESC;
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY to_float32(to_float64(number));
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY abs(to_float32(number));
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY to_float32(abs(number));
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY -number;
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY exp(number);
+EXPLAIN SYNTAX SELECT round_to_exp2(number) AS x FROM numbers(3) ORDER BY x, to_float32(x);
+EXPLAIN SYNTAX SELECT number AS x FROM numbers(3) ORDER BY to_float32(x) as k, to_float64(k);
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY to_float32(to_float64(number)) DESC;
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY abs(to_float32(number)) DESC;
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY to_float32(abs(number)) DESC;
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY -number DESC;
+EXPLAIN SYNTAX SELECT number FROM numbers(3) ORDER BY exp(number) DESC;
+EXPLAIN SYNTAX SELECT round_to_exp2(number) AS x FROM numbers(3) ORDER BY x DESC, to_float32(x) DESC;
+-- TODO: exp() should be monotonous function

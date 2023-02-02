@@ -1,0 +1,10 @@
+0	int32
+0	int32
+1	nullable(int32)
+1	nullable(int32)
+2	nullable(float32)
+2	nullable(uint8)
+3	nullable(int32)
+\N	nullable(int32)
+42	nullable(int32)
+\N	nullable(int32)

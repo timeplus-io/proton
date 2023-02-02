@@ -1,0 +1,24 @@
+\N	nullable(uint8)
+0	nullable(uint8)
+\N	nullable(uint8)
+0	nullable(uint8)
+0	ok
+\N	ok
+0	ok
+\N	ok
+ok
+ok
+ok
+ok
+ok
+ok
+ok
+nullable(uint8)	\N	true	ok	ok	ok
+nullable(uint8)	\N	true	ok	ok	ok
+nullable(uint8)	\N	true	ok	ok	ok
+nullable(uint8)	\N	true	ok	ok	ok
+\N	true	nullable(int8)	\N	ok
+\N	nullable(float64)	0
+\N	nullable(float64)	0
+1
+1

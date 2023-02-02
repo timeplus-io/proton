@@ -1,0 +1,12 @@
+SELECT
+  one.dummy
+FROM
+ system.one
+LIMIT 1 BY one.dummy
+LIMIT 1
+SELECT
+  one.dummy
+FROM
+ system.one
+LIMIT 1 BY 0 + dummy, 0 - dummy
+LIMIT 1

@@ -1,0 +1,6 @@
+send_timeout	Seconds	300
+connect_timeout	Seconds	10
+connect_timeout_with_failover_ms	Milliseconds	50
+connect_timeout_with_failover_secure_ms	Milliseconds	100
+external_storage_connect_timeout_sec	UInt64	10
+max_memory_usage	UInt64	10000000000

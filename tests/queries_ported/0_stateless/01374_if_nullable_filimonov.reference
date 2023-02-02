@@ -1,0 +1,8 @@
+2	false	leave
+0	true	delete
+\N	\N	leave
+---
+0	true	Definitely x = 0
+1	false	We cannot say that x = 0
+3	false	We cannot say that x = 0
+\N	\N	We cannot say that x = 0
