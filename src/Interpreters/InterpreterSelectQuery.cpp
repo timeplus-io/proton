@@ -654,6 +654,13 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
     /// Before analyzing, handle settings seek_to
     handleSeekToSetting();
+
+    /// Analyze event predicates in WHERE clause like `WHERE _tp_time > 2023-01-01 00:01:01` or `WHERE _tp_sn > 1000`
+    /// and create `SeekToInfo` objects to represent these predicates for streaming store rewinding in a streaming query.
+    /// FIXME: in the short term, we only support strict event prediction, which event column must be `_tp_time` or `_tp_sn`:
+    /// 1) Don't support alias
+    /// 2) Don't support column identifier with table prefix, such as `a._tp_time`
+    analyzeEventPredicateAsSeekTo();
     /// proton: ends.
 
     joined_tables.rewriteDistributedInAndJoins(query_ptr);
@@ -838,10 +845,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         }
 
         /// proton: starts.
-        /// Analyze event predicates in WHERE clause like `WHERE _tp_time > 2023-01-01 00:01:01` or `WHERE _tp_sn > 1000`
-        /// and create `SeekToInfo` objects to represent these predicates for streaming store rewinding in a streaming query.
-        analyzeEventPredicateAsSeekTo();
-
         /// Calculate structure of the result.
         result_header = getSampleBlockImpl();
         /// proton, FIXME. For distributed streaming query in future, we may need conditionally remove __tp_ts from result header

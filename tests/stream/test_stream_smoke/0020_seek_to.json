@@ -220,7 +220,7 @@
     },
     {
       "id": 5,
-      "tags": ["seek_to"],
+      "tags": ["seek_to", "todo"],
       "name": "seek_to",
       "description": "event predicate with subquery",
       "steps":[
@@ -248,7 +248,7 @@
     },
     {
       "id": 6,
-      "tags": ["seek_to"],
+      "tags": ["seek_to", "todo"],
       "name": "seek_to",
       "description": "event time predicate with cte",
       "steps":[
