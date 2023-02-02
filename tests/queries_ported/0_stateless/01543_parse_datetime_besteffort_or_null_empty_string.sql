@@ -1,0 +1,12 @@
+SELECT parse_datetime_best_effort_or_null('2010-01-01');
+SELECT parse_datetime_best_effort_or_null('2010-01-01 01:01:01');
+SELECT parse_datetime_best_effort_or_null('2020-01-01 11:01:01 am');
+SELECT parse_datetime_best_effort_or_null('2020-01-01 11:01:01 pm');
+SELECT parse_datetime_best_effort_or_null('2020-01-01 12:01:01 am');
+SELECT parse_datetime_best_effort_or_null('2020-01-01 12:01:01 pm');
+SELECT parse_datetime_best_effort_or_null('01:01:01');
+SELECT parse_datetime_best_effort_or_null('20100');
+SELECT parse_datetime_best_effort_or_null('0100:0100:0000');
+SELECT parse_datetime_best_effort_or_null('x');
+SELECT parse_datetime_best_effort_or_null('');
+SELECT parse_datetime_best_effort_or_null('       ');

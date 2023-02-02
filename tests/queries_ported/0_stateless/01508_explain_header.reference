@@ -1,0 +1,4 @@
+Expression ((Projection + Before ORDER BY))
+Header: x uint8
+  ReadFromStorage (SystemOne)
+  Header: dummy uint8

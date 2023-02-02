@@ -1,0 +1,3 @@
+-1	datetime64(1, \'UTC\')	<	true	true	true	<=	true	true	true	=	false	false	false	>=	false	false	false	>	false	false	false	!=	true	true	true
+0	datetime64(1, \'UTC\')	<	false	false	false	<=	true	true	true	=	true	true	true	>=	true	true	true	>	false	false	false	!=	false	false	false
+1	datetime64(1, \'UTC\')	<	false	false	false	<=	false	false	false	=	false	false	false	>=	true	true	true	>	true	true	true	!=	true	true	true

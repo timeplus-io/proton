@@ -1,0 +1,35 @@
+1	l	\N	low_cardinality(string)	nullable(string)
+2		\N	low_cardinality(string)	nullable(string)
+1	l	\N	low_cardinality(string)	nullable(string)
+2		\N	low_cardinality(string)	nullable(string)
+-
+0	\N		nullable(string)	low_cardinality(string)
+1	\N	l	nullable(string)	low_cardinality(string)
+0	\N		nullable(string)	low_cardinality(string)
+1	\N	l	nullable(string)	low_cardinality(string)
+-
+1	l	\N	low_cardinality(string)	nullable(string)
+0		\N	low_cardinality(string)	nullable(string)
+0		\N	low_cardinality(string)	nullable(string)
+1	l	\N	low_cardinality(string)	nullable(string)
+-
+0	\N		nullable(string)	low_cardinality(string)
+1	\N	l	nullable(string)	low_cardinality(string)
+0	\N		nullable(string)	low_cardinality(string)
+1	\N	l	nullable(string)	low_cardinality(string)
+-
+1	l	\N	low_cardinality(string)	nullable(string)
+2	\N	\N	low_cardinality(nullable(string))	nullable(string)
+1	l	\N	low_cardinality(nullable(string))	nullable(string)
+2	\N	\N	low_cardinality(nullable(string))	nullable(string)
+-
+\N	\N	\N	nullable(string)	low_cardinality(nullable(string))
+1	\N	l	nullable(string)	low_cardinality(string)
+1	\N	l	nullable(string)	low_cardinality(nullable(string))
+\N	\N	\N	nullable(string)	low_cardinality(nullable(string))
+-
+1	l	\N	low_cardinality(string)	nullable(string)
+\N	\N	\N	low_cardinality(nullable(string))	nullable(string)
+1	l	\N	low_cardinality(nullable(string))	nullable(string)
+\N	\N	\N	low_cardinality(nullable(string))	nullable(string)
+-
