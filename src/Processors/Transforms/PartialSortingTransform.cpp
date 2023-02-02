@@ -6,7 +6,7 @@ namespace DB
 {
 
 PartialSortingTransform::PartialSortingTransform(
-    const Block & header_, SortDescription & description_, UInt64 limit_)
+    const Block & header_, const SortDescription & description_, UInt64 limit_)
     : ISimpleTransform(header_, header_, false, ProcessorID::PartialSortingTransformID)
     , description(description_), limit(limit_)
 {

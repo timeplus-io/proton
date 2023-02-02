@@ -34,6 +34,21 @@ void SortColumnDescription::explain(JSONBuilder::JSONMap & map) const
     map.add("With Fill", with_fill);
 }
 
+bool SortDescription::hasPrefix(const SortDescription & prefix) const
+{
+    if (prefix.empty())
+        return true;
+
+    if (prefix.size() > size())
+        return false;
+
+    for (size_t i = 0; i < prefix.size(); ++i)
+    {
+        if ((*this)[i] != prefix[i])
+            return false;
+    }
+    return true;
+}
 
 std::string dumpSortDescription(const SortDescription & description)
 {

@@ -7,8 +7,7 @@
 #include <Core/Field.h>
 #include <Core/SettingsEnums.h>
 #include <Common/IntervalKind.h>
-
-class Collator;
+#include <Columns/Collator.h>
 
 namespace DB
 {
@@ -62,9 +61,18 @@ struct SortColumnDescription
     {
     }
 
-    bool operator == (const SortColumnDescription & other) const
+    static bool compareCollators(const std::shared_ptr<Collator> & a, const std::shared_ptr<Collator> & b)
     {
-        return column_name == other.column_name && direction == other.direction && nulls_direction == other.nulls_direction;
+        if (unlikely(a && b))
+            return *a == *b;
+
+        return a == b;
+    }
+
+    bool operator==(const SortColumnDescription & other) const
+    {
+        return column_name == other.column_name && direction == other.direction && nulls_direction == other.nulls_direction
+            && compareCollators(collator, other.collator);
     }
 
     bool operator != (const SortColumnDescription & other) const
@@ -86,11 +94,31 @@ struct SortColumnDescriptionWithColumnIndex
         : base(std::move(description_)), column_number(column_number_)
     {
     }
+
+    bool operator==(const SortColumnDescriptionWithColumnIndex & other) const
+    {
+        return base == other.base && column_number == other.column_number;
+    }
+
+    bool operator!=(const SortColumnDescriptionWithColumnIndex & other) const { return !(*this == other); }
 };
 
 /// Description of the sorting rule for several columns.
-using SortDescription = std::vector<SortColumnDescription>;
 using SortDescriptionWithPositions = std::vector<SortColumnDescriptionWithColumnIndex>;
+
+class SortDescription : public std::vector<SortColumnDescription>
+{
+public:
+    /// Can be safely casted into JITSortDescriptionFunc
+#if 0
+    void * compiled_sort_description = nullptr;
+    std::shared_ptr<CompiledSortDescriptionFunctionHolder> compiled_sort_description_holder;
+    size_t min_count_to_compile_sort_description = 3;
+    bool compile_sort_description = false;
+#endif
+
+    bool hasPrefix(const SortDescription & prefix) const;
+};
 
 /// Outputs user-readable description into `out`.
 void dumpSortDescription(const SortDescription & description, WriteBuffer & out);

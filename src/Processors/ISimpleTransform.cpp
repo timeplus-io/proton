@@ -122,8 +122,8 @@ void ISimpleTransform::work()
             getOutputPort().getHeader().cloneEmpty().getColumns(),
             0,
             output_data.chunk.getChunkInfo(),
-            output_data.chunk.getChunkContext());
-}
+            output_data.chunk.getChunkContext()); /// proton : propagate chunk context
+ }
 
 }
 

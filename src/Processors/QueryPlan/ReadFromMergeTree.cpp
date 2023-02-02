@@ -127,6 +127,34 @@ ReadFromMergeTree::ReadFromMergeTree(
 
     if (enable_parallel_reading)
         read_task_callback = context->getMergeTreeReadTaskCallback();
+
+    /// Add explicit description.
+    setStepDescription(data.getStorageID().getFullNameNotQuoted());
+
+    { /// build sort description for output stream
+        SortDescription sort_description;
+        const Names & sorting_key_columns = storage_snapshot->getMetadataForQuery()->getSortingKeyColumns();
+        const Block & header = output_stream->header;
+        const int sort_direction = getSortDirection();
+        for (const auto & column_name : sorting_key_columns)
+        {
+            if (std::find_if(header.begin(), header.end(), [&](ColumnWithTypeAndName const & col) { return col.name == column_name; })
+                == header.end())
+                break;
+            sort_description.emplace_back(column_name, sort_direction);
+        }
+        if (!sort_description.empty())
+        {
+            auto const & settings = context->getSettingsRef();
+            if ((settings.optimize_read_in_order || settings.optimize_aggregation_in_order) && query_info.getInputOrderInfo())
+                output_stream->sort_scope = DataStream::SortScope::Stream;
+            else
+                output_stream->sort_scope = DataStream::SortScope::Chunk;
+        }
+
+        output_stream->sort_description = std::move(sort_description);
+
+    }
 }
 
 Pipe ReadFromMergeTree::readFromPool(
@@ -217,6 +245,7 @@ ProcessorPtr ReadFromMergeTree::createSource(
             .colums_to_read = required_columns
         };
     }
+
     return std::make_shared<TSource>(
             data, storage_snapshot, part.data_part, max_block_size, preferred_block_size_bytes,
             preferred_max_column_in_block_size_bytes, required_columns, part.ranges, use_uncompressed_cache, prewhere_info,
@@ -235,7 +264,6 @@ Pipe ReadFromMergeTree::readInOrder(
     /// one range per task to reduce number of read rows.
     bool has_limit_below_one_block = read_type != ReadType::Default && limit && limit < max_block_size;
 
-    /// proton: starts
     for (const auto & part : parts_with_range)
     {
         auto source = (read_type == ReadType::InReverseOrder || create_streaming_source) /// proton: we like reverse read according to event timestamp
@@ -556,7 +584,8 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
                         pipe.getHeader(),
                         pipe.numOutputPorts(),
                         sort_description,
-                        max_block_size);
+                        max_block_size,
+                        SortingQueueStrategy::Batch);
 
                 pipe.addTransform(std::move(transform));
             }
@@ -584,7 +613,7 @@ static void addMergingFinal(
         {
             case MergeTreeData::MergingParams::Ordinary:
                 return std::make_shared<MergingSortedTransform>(header, num_outputs,
-                            sort_description, max_block_size);
+                            sort_description, max_block_size, SortingQueueStrategy::Batch);
 
             case MergeTreeData::MergingParams::Collapsing:
                 return std::make_shared<CollapsingSortedTransform>(header, num_outputs,
@@ -938,10 +967,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
     result.total_marks_pk = total_marks_pk;
     result.selected_rows = sum_rows;
 
-    const auto & input_order_info = query_info.input_order_info
-        ? query_info.input_order_info
-        : (query_info.projection ? query_info.projection->input_order_info : nullptr);
-
+    const auto & input_order_info = query_info.getInputOrderInfo();
     if ((settings.optimize_read_in_order || settings.optimize_aggregation_in_order) && input_order_info)
         result.read_type = (input_order_info->direction > 0) ? ReadType::InOrder
                                                              : ReadType::InReverseOrder;
@@ -1032,13 +1058,10 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
                                    column_names_to_read.end());
     }
 
-    const auto & input_order_info = query_info.input_order_info
-        ? query_info.input_order_info
-        : (query_info.projection ? query_info.projection->input_order_info : nullptr);
-
     Pipe pipe;
 
     const auto & settings = context->getSettingsRef();
+    const auto & input_order_info = query_info.getInputOrderInfo();
 
     if (select.final() || ((data.isChangelogKvMode() || data.isVersionedKvMode()) && settings.compact_kv_stream.value)) /// proton : for changelog_kv or versioned_kv, we always enforce final
     {
@@ -1085,13 +1108,11 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
     for (const auto & processor : pipe.getProcessors())
         processor->setStorageLimits(query_info.storage_limits);
 
-    /// proton: starts
     if (pipe.empty())
     {
-        init_default_pipeline();
+        init_default_pipeline(); /// proton : connect streaming part
         return;
     }
-    /// proton : ends
 
     if (result.sampling.use_sampling)
     {

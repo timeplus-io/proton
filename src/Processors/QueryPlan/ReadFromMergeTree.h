@@ -1,6 +1,7 @@
 #pragma once
 #include <Processors/QueryPlan/ISourceStep.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
+#include <Storages/SelectQueryInfo.h>
 
 namespace DB
 {
@@ -135,6 +136,15 @@ public:
         Poco::Logger * log);
 
 private:
+    int getSortDirection() const
+    {
+        const InputOrderInfoPtr & order_info = query_info.getInputOrderInfo();
+        if (order_info)
+            return order_info->direction;
+
+        return 1;
+    }
+
     const MergeTreeReaderSettings reader_settings;
 
     MergeTreeData::DataPartsVector prepared_parts;

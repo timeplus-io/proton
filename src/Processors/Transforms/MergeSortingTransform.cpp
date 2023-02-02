@@ -202,6 +202,7 @@ void MergeSortingTransform::consume(Chunk chunk)
                     0,
                     description,
                     max_merged_block_size,
+                    SortingQueueStrategy::Batch,
                     limit,
                     nullptr,
                     quiet,
