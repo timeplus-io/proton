@@ -75,12 +75,12 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
 {
     auto types_without_low_cardinality = convertLowCardinalityTypesToNested(argument_types);
 
-    /// If one of the types is Nullable, we apply aggregate function combinator "Null".
+    /// If one of the types is Nullable, we apply aggregate function combinator "_null".
 
     if (std::any_of(types_without_low_cardinality.begin(), types_without_low_cardinality.end(),
         [](const auto & type) { return type->isNullable(); }))
     {
-        AggregateFunctionCombinatorPtr combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix("Null");
+        AggregateFunctionCombinatorPtr combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix("_null");
         if (!combinator)
             throw Exception("Logical error: cannot find aggregate function combinator to apply a function to Nullable arguments.",
                 ErrorCodes::LOGICAL_ERROR);

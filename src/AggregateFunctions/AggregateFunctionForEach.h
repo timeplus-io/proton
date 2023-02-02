@@ -122,7 +122,7 @@ public:
 
     String getName() const override
     {
-        return nested_func->getName() + "ForEach";
+        return nested_func->getName() + "_for_each";
     }
 
     DataTypePtr getReturnType() const override
