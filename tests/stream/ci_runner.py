@@ -34,14 +34,14 @@ def container_file_download(dir="./", setting="nativelog", *files_in_container):
     print(files_in_container)
     if len(files_in_container) != 0:
         files_downloaded = []
-        for file in files_in_container:
+        for file_tuple in files_in_container: #file is a tuple of {proton_server_container_name,log_file_path}
             try:
-                print(f"file = {file}")
-                file_name = file.split("/")[-1]
-                file_name = f"{setting}-" + file_name
+                print(f"file_tuple = {file_tuple}")
+                file_name = file_tuple[1].split("/")[-1]
+                file_name = f"{setting}-{file_tuple[0]}-" + file_name
                 print(f"file_name = {file_name}")
-                cmd = f"docker cp {file} {dir}{file_name}"
-                print(f"Copying {file}, command = {cmd}")
+                cmd = f"docker cp {file_tuple[1]} {dir}{file_name}"
+                print(f"Copying {file_tuple[1]}, command = {cmd}")
                 subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
                 files_downloaded.append(f"{dir}{file_name}")
             except Exception as ex:
@@ -142,36 +142,56 @@ def ci_runner(
 ):
     
     timestamp = str(datetime.datetime.now())
+    setting_running_start = datetime.datetime.now()
     report_file_name = f"report_{setting}_{timestamp}.html"
     report_file_path = f"{local_all_results_folder_path}/{report_file_name}"
     proton_log_folder = f"{local_all_results_folder_path}/proton"
     pytest_logging_level_set = f"--log-cli-level={logging_level}"
     s3_helper = S3Helper("https://s3.amazonaws.com")
-    proton_server_container_name_str = setting_config.get("proton_server_container_name")
-    if proton_server_container_name_str is None:
-        raise Exception(f"proton_server_container_name of setting = {setting} is not found in setting_config")
-    proton_server_container_name_list = proton_server_container_name_str.split(',') #for multi containers in clustering settings
-    proton_server_container_name = proton_server_container_name_list[0] #todo: handle multi containers in clustering scenario
-    ci_runner_params_from_config = setting_config.get("ci_runner_params")
-    print(f"ci_runner: ci_runner_params_from_config = {ci_runner_params_from_config}")
+    multi_protons = setting_config.get("multi_protons")
+    proton_server_container_name_list = []
+    if multi_protons == True:#if multi_protons is True, there are multiple settings for allocating the test suites on configs
+        for key in setting_config["settings"]:
+            proton_server_container_name_str = setting_config["settings"][key].get("proton_server_container_name")
+
+            ci_runner_params_from_config = setting_config["settings"][key].get("ci_runner_params") #todo: support ci_runner_params per env of multi envs setting
+
+        if proton_server_container_name_str is None:
+            raise Exception(f"proton_server_container_name of setting = {setting} is not found in setting_config")
+        else:
+            proton_server_container_name_list.extend(proton_server_container_name_str.split(','))
+    else:#todo: right now just make a simple if_else to handle the logic, so currently only multi env settings for single node proton is supported, need to optimize to support multi envs of cluster
+        proton_server_container_name_str = setting_config.get("proton_server_container_name")
+        if proton_server_container_name_str is None:
+            raise Exception(f"proton_server_container_name of setting = {setting} is not found in setting_config")
+        proton_server_container_name_list = proton_server_container_name_str.split(',') #for multi containers in clustering settings
+        #proton_server_container_name = proton_server_container_name_list[0] #todo: handle multi containers in clustering scenario
+        ci_runner_params_from_config = setting_config.get("ci_runner_params")
+        print(f"ci_runner: ci_runner_params_from_config = {ci_runner_params_from_config}") #todo: currently only single env setting support ci_runner_params, need to optimize to support ci_runner_params per env
+        if ci_runner_params_from_config is not None and len(ci_runner_params_from_config) > 0: #todo: currently only single env setting support ci_runner_params, need to optimize to support ci_runner_params per env
+            for param in ci_runner_params_from_config:
+                print(f"ci_runner: setting = {setting}, param = {param}")
+                for key, value in param.items():
+                    os.environ[key] = value
+                    env_setting = os.getenv(key)
+                    print(f"os.getenv({key}) = {env_setting}")        
     os.environ["PROTON_SETTING"] = setting # set the env virable to setting for rockets_run() based on settings gotten from cmdline
     #set env vars for rockets_run based on the other ci_runner parameters gotten from config
-    if ci_runner_params_from_config is not None and len(ci_runner_params_from_config) > 0:
-        for param in ci_runner_params_from_config:
-            print(f"ci_runner: setting = {setting}, param = {param}")
-            for key, value in param.items():
-                os.environ[key] = value
-                env_setting = os.getenv(key)
-                print(f"os.getenv({key}) = {env_setting}")
+
                 
     
     #set proton log container path therefore log files could be retrieved later.
-    proton_log_in_container = (
-        f"{proton_server_container_name}://var/log/proton-server/proton-server.log"
-    )
-    proton_err_log_in_container = (
-        f"{proton_server_container_name}://var/log/proton-server/proton-server.err.log"
-    )
+    proton_logs_in_container = [] # a list of tuple
+
+    for proton_server_container_name in proton_server_container_name_list:
+        proton_log_in_container = (
+            f"{proton_server_container_name}://var/log/proton-server/proton-server.log"
+        )
+        proton_logs_in_container.append((proton_server_container_name,proton_log_in_container))
+        proton_err_log_in_container = (
+            f"{proton_server_container_name}://var/log/proton-server/proton-server.err.log"
+        )
+        proton_logs_in_container.append((proton_server_container_name, proton_err_log_in_container))
    
     retcode = pytest.main(
         [
@@ -185,17 +205,21 @@ def ci_runner(
         ]
     )
 
+    setting_running_test_end = datetime.datetime.now()
+    setting_test_duration = setting_running_test_end - setting_running_start
+
+    print(f"setting = {setting}, setting_test_duration = {setting_test_duration.seconds}")
+
     with open(".status", "a+") as status_result:
         # status_result.writelines(f"{setting}:"+str(retcode)+"\n")
         status_result.writelines(f"{setting}:" + str(retcode))
 
     # todo: download proton-logs based on setting
-
+    downloaded_log_files_paths = []
     downloaded_log_files_paths = container_file_download(
         './',
         setting,
-        proton_log_in_container,
-        proton_err_log_in_container,
+        *proton_logs_in_container
     )
 
     print(
@@ -239,7 +263,8 @@ def ci_runner(
             )
             print(f"::notice ::Proton server log url: {proton_log_folder_url}")
     else:
-        print("ci_runner: local mode, no report uploaded.")    
+        print("ci_runner: local mode, no report uploaded.")
+    
             
 
 

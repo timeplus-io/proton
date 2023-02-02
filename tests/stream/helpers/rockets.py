@@ -57,7 +57,7 @@
 #  import global_settigns
 
 from cgi import test
-import datetime, json, getopt, logging, logging.config, math, os, random, requests, subprocess, sys, threading, time, traceback, uuid
+import datetime, json, getopt, logging, logging.config, math, os, platform, random, requests, subprocess, sys, threading, time, traceback, uuid
 import multiprocessing as mp
 from clickhouse_driver import Client, errors
 from requests.api import request
@@ -88,6 +88,7 @@ DEFAULT_TEST_SUITE_TIMEOUT = 1800 #seconds
 DEFAULT_CASE_TIMEOUT = 60 #seconds, todo: case level timeout guardian
 CASE_RETRY_UP_LIMIT = 5 #test suite case retry up limit, test_suite_run retry case only when failed case number less than this value
 CASE_RETRY_TIMES = 3 #if retry again if failed case found in retry 
+TEST_SUITE_LAUNCH_INTERVAL = 10 #default value will be covered by the setting in config file
 # alive = mp.Value('b', True)
 
 
@@ -2823,39 +2824,39 @@ def test_suite_env_setup(client, config, test_suite_name, test_suite_config):
 
 
 def env_setup(
-    rest_setting,
-    env_compose_file=None,
+    rest_settings,
     proton_ci_mode="local",
 ):
     ci_mode = proton_ci_mode
     logger.info(f"env_setup: ci_mode = {ci_mode}")
-    logger.debug(f"env_setup: rest_setting = {rest_setting}")
-    health_url = rest_setting.get("health_check_url")
-    logger.debug(f"env_setup: health_url = {health_url}")
-    tables_cleaned = []
-    env_docker_compose_res = True  # todo: remove this return value due to compose_up is done in ci_runner starting phase
-    env_health_check_res = env_health_check(health_url)
-    logger.info(f"env_setup: env_health_check_res: {env_health_check_res}")
-    retry = 20
-    while env_health_check_res == False and retry > 0:
-        time.sleep(2)
+    logger.debug(f"env_setup: rest_settings = {rest_settings}")
+    env_health_check_res_list = []
+    for rest_setting in rest_settings:
+        health_url = rest_setting.get("health_check_url")
+        logger.debug(f"env_setup: health_url = {health_url}")
+        tables_cleaned = []
         env_health_check_res = env_health_check(health_url)
-        logger.debug(f"env_setup: retry = {retry}")
-        retry -= 1
+        logger.info(f"env_setup: env_health_check_res: {env_health_check_res}")
+        retry = 20
+        while env_health_check_res == False and retry > 0:
+            time.sleep(2)
+            env_health_check_res = env_health_check(health_url)
+            logger.debug(f"env_setup: retry = {retry}")
+            retry -= 1
 
-    if env_health_check_res == False:
-        raise Exception("Env health check failure.")
+        if env_health_check_res == False:
+            raise Exception("Env health check failure.")
+        env_health_check_res_list.append(env_health_check_res)
 
     if ci_mode == "github":
         time.sleep(
             10
         )  # health check rest is not accurate, wait after docker compsoe up under github mode, remove later when it's fixed.
 
-    # clean_all_res = clean_all() #todl: drop all the streams and views
+        # clean_all_res = clean_all() #todl: drop all the streams and views
 
     return {
-        "env_docker_compose_res": env_docker_compose_res,
-        "env_health_check_res": env_health_check_res,
+        "env_health_check_res_list": env_health_check_res_list,
     }
 
 
@@ -3106,22 +3107,10 @@ def test_suite_run(
     logger.addHandler(console_handler)
     logger.setLevel(logging_level)
     proton_setting = config.get("proton_setting")
-    
-    test_suite_start = datetime.datetime.now()
-    test_suite_case_run_end = datetime.datetime.now()
-    test_suite_end = datetime.datetime.now()
-    test_suite_case_run_duration = test_suite_case_run_end - test_suite_start
-    test_suite_run_duration = test_suite_end - test_suite_start
-    test_suite_passed_total = 0
-    test_id = '' #initialize test_id
-
-    logger.debug(
-        f"query_execute starts, logging_level = {logging_level}, logger.handlers = {logger.handlers}"
-    )
-    # run the test suite in a standlone process
     test_suite_name = test_suite_set_dict.get("test_suite_name")
+    proton_server_container_name = config.get("proton_server_container_name")
     config["test_suite_name"] = test_suite_name #test_suite_run is started to be run in a standalone process, set the test_suite_name in config, todo: logic for test_suite_run is not in multiple process
-    logger.info(f"proton_setting = {proton_setting}, test_suite = {test_suite_name} running starts......")
+    logger.info(f"proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, running starts......")
     test_suite = test_suite_set_dict.get("test_suite")
     query_results_queue = test_suite_set_dict.get("query_results_queue")
     # q_exec_client = test_suite_set_dict.get("query_exe_client")
@@ -3151,6 +3140,32 @@ def test_suite_run(
     logger.debug(f"alive.value = {alive.value}")
     query_exe_client.start()  # start the query execute process
     logger.debug(f"query_exe_client: {query_exe_client} started.")
+
+    to_start_at = config.get("to_start_at") #calculate wait time to launch
+    test_suite_launch_interval = config.get("test_suite_launch_interval")
+    if test_suite_launch_interval is None:
+        test_suite_launch_interval = TEST_SUITE_LAUNCH_INTERVAL
+    logger.debug(f"watch: proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name},to_start_at = {to_start_at}")
+    if to_start_at is not None: #if no last_test_suite_lanuched_at in config, that means the 1st test suite running on the env
+        sleep_time = to_start_at - datetime.datetime.now()
+        logger.debug(f"watch: proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name},sleep_time = {sleep_time}")
+        if sleep_time.days < 0:
+            sleep_time = test_suite_launch_interval
+        else:
+            sleep_time = sleep_time.seconds
+            time.sleep(sleep_time)
+        logger.debug(f"proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, waited for sleep_time = {sleep_time} seconds to launch.")
+    
+    test_suite_start = datetime.datetime.now()
+    test_suite_case_run_end = datetime.datetime.now()
+    test_suite_end = datetime.datetime.now()
+    test_suite_case_run_duration = test_suite_case_run_end - test_suite_start
+    test_suite_run_duration = test_suite_end - test_suite_start
+    test_suite_passed_total = 0
+    test_id = '' #initialize test_id
+
+    # run the test suite in a standlone process
+    
 
     
     #proton_setting = config.get("proton_setting")
@@ -3256,7 +3271,8 @@ def test_suite_run(
                 "test_suite_result":False,
                 "test_suite_case_run_duration": 0,
                 "test_suite_run_duration": 0,
-                "test_suite_passed_total": 0,                
+                "test_suite_passed_total": 0,
+                "proton_server_container_name": proton_server_container_name,                
             }
             test_suite_run_ctl_queue.get()
             test_suite_run_ctl_queue.task_done()                      
@@ -3506,6 +3522,7 @@ def test_suite_run(
                     #"test_suite_run_status": test_suite_run_status,
                     "test_suite_result":False,
                     "test_suite_passed_total": test_suite_passed_total,
+                    "proton_server_container_name": proton_server_container_name,
                 }                
             except (BaseException) as error:
                 logger.info(f"test_suite_run, exception: {error}, ")
@@ -3518,6 +3535,7 @@ def test_suite_run(
                     #"test_suite_run_status": test_suite_run_status,
                     "test_suite_result":False,
                     "test_suite_passed_total": test_suite_passed_total,
+                    "proton_server_container_name": proton_server_container_name,
                 }
 
 
@@ -3532,7 +3550,7 @@ def test_suite_run(
                 test_suite_run_ctl_queue.task_done()
 
             logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name} running ends")
-            logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name},test_run_list_len = {test_run_list_len}, test_suite_passed_total = {test_suite_passed_total}, test_suite_case_run_duration = {test_suite_case_run_duration.seconds} seconds, test_suite_run_duration = {test_suite_run_duration.seconds} seconds, test suite run status: ")
+            logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, test_run_list_len = {test_run_list_len}, test_suite_passed_total = {test_suite_passed_total}, test_suite_case_run_duration = {test_suite_case_run_duration.seconds} seconds, test_suite_run_duration = {test_suite_run_duration.seconds} seconds, test suite run status: ")
             for test_set in test_sets_2_run:
                 logger.info(f'test_id = {test_set["test_id"]}, test_status = {test_set["status"]},case_retried = {test_set["case_retried"]}, test_result = {test_set["test_result"]}, test_case_duration = {test_set["test_case_duration"]} seconds')
         
@@ -3805,9 +3823,31 @@ def case_result_check(test_set, order_check=False, logging_level="INFO"):
     except(BaseException) as be:
         logger.info(f"BaseException = {be}")
         return False
-    
+
+
+
+def get_top():
+    try:
+        os_info = platform.platform()
+        if 'Linux' in os_info:
+            command = "top -bn1 |head -10"
+        else:
+            return f'os is not linux, no top info collected.' #todo: support other OS later.
+        res = subprocess.run(
+            command,
+            shell=True,
+            encoding="utf-8",
+            timeout=5,
+            capture_output=True,
+        )
+        return (f"top result: #######\n {res}") 
+    except(BaseException) as error:
+        logger.debug(f"get_top exception: error = error")
+        return "get_top error, no top info collected"  
+
+
+
 def run_test_suites(config, test_suite_run_ctl_queue, test_suites_selected_sets,test_suite_result_done_queue):
-    test_report = {}
     test_summary = {}
     module_summary = {}
     case_results = {}
@@ -3821,24 +3861,70 @@ def run_test_suites(config, test_suite_run_ctl_queue, test_suites_selected_sets,
     logger.debug(f"proton_setting = {proton_setting}, total {len(test_suites_selected_sets)} test suties to be launched.")
     test_suite_names = []
     multi_protons = config.get("multi_protons")
+    top_info = ""
+    test_suite_launch_interval = TEST_SUITE_LAUNCH_INTERVAL #10 seconds by default
+    sleep_time = test_suite_launch_interval
+
+    proton_configs = []  
+    if multi_protons == True: #if multi_protons is True, there are multiple settings for allocating the test suites on configs
+
+        proton_configs = list(config["settings"].values())
+        for proton_config in proton_configs:
+            proton_config["proton_ci_mode"] = config["proton_ci_mode"]
+            proton_config["proton_setting"] = config["proton_setting"] 
+            proton_config["test_suite_timeout"] = config["test_suite_timeout"] 
+            proton_config["test_case_timeout"] = config["test_case_timeout"] 
+            proton_config["proton_create_stream_shards"] = config["proton_create_stream_shards"] 
+            proton_config["proton_create_stream_replicas"] = config["proton_create_stream_replicas"]
+            proton_cluster_query_node = config.get("proton_cluster_query_node")
+            if proton_cluster_query_node is not None: #todo: support and optimize handle multi cluster settings in one env later.
+                proton_config["proton_cluster_query_node"] = config["proton_cluster_query_node"]
+            proton_cluster_query_route_mode = config.get ("proton_cluster_query_route_mode")
+            if proton_cluster_query_route_mode is not None:
+                proton_config["proton_cluster_query_route_mode"] = proton_cluster_query_route_mode       
+            ci_runner_params = config.get("ci_runner_params")
+            if ci_runner_params is not None and len(ci_runner_params) > 0:
+                for param in ci_runner_params:
+                    for key, value in param.items():
+                        if key == "test_suite_launch_interval":
+                            test_suite_launch_interval = int(value) #get the interval for lanuch concurrent test_suite running, if interval is too small in kafka mode, Code: 159 error will happen and lots case would be failed.        
+            proton_config["test_suite_launch_interval"] = test_suite_launch_interval
+    else:
+            ci_runner_params = config.get("ci_runner_params")
+            if ci_runner_params is not None and len(ci_runner_params) > 0:
+                for param in ci_runner_params:
+                    for key, value in param.items():
+                        if key == "test_suite_launch_interval":
+                            test_suite_launch_interval = int(value) #get the interval for lanuch concurrent test_suite running, if interval is too small in kafka mode, Code: 159 error will happen and lots case would be failed.        
+            config["test_suite_launch_interval"] = test_suite_launch_interval       
+    logger.debug(f"watch: proton_configs = {proton_configs}")
     i = 0 #count for the proton_settings in config when multi_protons == True
+    j = 0 #counter for test_suites launch
     for test_suite_set_dict in test_suites_selected_sets:
         test_suite_name = test_suite_set_dict.get("test_suite_name")
         test_suite_names.append(test_suite_name)
         test_suite_run_ctl_queue.put("run a test suite")
-        multi_protons = config.get("multi_protons")
-        if multi_protons == True:#if multi_protons is True, there are multiple settings for allocating the test suites on configs
-            proton_config = list(config["settings"].values)[i]
-            proton_server_container_name = list(config["settings"].values)[i]["proton_server_container_name"]
+        if multi_protons == True: #if multi_protons is True, there are multiple settings for allocating the test suites on configs
+            proton_config = proton_configs[i]
+            proton_server_container_name = proton_config["proton_server_container_name"]
             i += 1
-            if i == len(config):
+            if i == len(proton_configs):
                 i = 0
         else:
             proton_config = config
-            proton_server_container_name = config["proton_server_container_name"]    
-        
-        logger.debug(f"proton_server_container_name = {proton_server_container_name}, proton_config = {proton_config},test_suite_name = {test_suite_name} ")
-
+            proton_configs = [proton_config]
+            proton_server_container_name = proton_config["proton_server_container_name"]
+        # if j//len(proton_configs) > 0:
+        #     last_test_suite_lanuched_at = datetime.datetime.now()
+        #     proton_config["last_test_suite_lanuched_at"] = last_test_suite_lanuched_at
+        test_suite_launch_interval = int(proton_config["test_suite_launch_interval"])
+        to_start_at = proton_config.get("to_start_at")
+        if to_start_at is None:
+            if j//len(proton_configs) > 0:
+                to_start_at = datetime.datetime.now() + datetime.timedelta(seconds=test_suite_launch_interval)
+        else:
+            to_start_at = to_start_at + datetime.timedelta(seconds=test_suite_launch_interval)
+        proton_config["to_start_at"] =  to_start_at
         test_suite_runner = mp.Process(
             target=test_suite_run,
             args=(
@@ -3849,17 +3935,21 @@ def run_test_suites(config, test_suite_run_ctl_queue, test_suites_selected_sets,
                 test_suite_set_dict,
             ),
         )
-        # time.sleep(random.randint(1,10)) # start test_suite_run processes in a random time gap to avoid ddl operation in parallel to trigger 159
-        time.sleep(10)
+        # time.sleep(random.randint(1,10)) # start test_suite_run processes in a random time gap to avoid ddl operation in parallel to trigger 159       
+        test_suite_count += 1
+        j += 1        
+        
         test_suite_runner.start()
-        logging.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name} is launched on proton_server_container_name = {proton_server_container_name}.")
+        top_info = get_top()
+        logging.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name} is launched on proton_server_container_name = {proton_server_container_name}, top_info = {top_info}.")
         test_suite_runners.append(
             {
                 "test_suite_name": test_suite_name,
                 "test_suite_runner": test_suite_runner,
             }
         )
-        test_suite_count += 1
+
+        
     logger.debug(f"proton_setting = {proton_setting}, total {len(test_suites_selected_sets)} test suties are launched: {test_suite_names}")
 
     try:
@@ -3923,7 +4013,8 @@ def run_test_suites(config, test_suite_run_ctl_queue, test_suites_selected_sets,
         test_suite_case_run_duration = test_suite_summary.get("test_suite_case_run_duration")
         test_run_list_len = test_suite_summary.get("test_run_list_len")
         test_suite_passed_total = test_suite_summary.get("test_suite_passed_total"),
-        print(f"test_suite_name = {test_suite_name},test_run_list_len = {test_run_list_len}, test_suite_passed_total = {test_suite_passed_total}, test_suite_case_run_duration = {test_suite_case_run_duration} seconds,test_suite_run_duration = {test_suite_run_duration} seconds ")
+        proton_server_container_name = test_suite_summary.get("proton_server_container_name")
+        print(f"proton_settings = {proton_setting}, proton_server_container_name = {proton_server_container_name}, test_suite_name = {test_suite_name},test_run_list_len = {test_run_list_len}, test_suite_passed_total = {test_suite_passed_total}, test_suite_case_run_duration = {test_suite_case_run_duration} seconds,test_suite_run_duration = {test_suite_run_duration} seconds ")
         for test_set in test_set_list:
             print(f'test_id = {test_set["test_id"]}, status = {test_set["status"]}, case_retried = {test_set["case_retried"]}, result = {test_set["test_result"]}, test_case_duration = {test_set["test_case_duration"]} seconds')
 
@@ -3957,9 +4048,16 @@ def rockets_run(test_context):
     test_suite_query_reulst_queue_list = test_context.get(
         "test_suite_query_reulst_queue_list"
     )
-    rest_setting = config.get("rest_setting")
+    rest_settings = []
+    multi_protons = config.get("multi_protons")
+    if multi_protons == True:
+        for key in config["settings"]:
+            rest_setting = config["settings"][key].get("rest_setting")
+            rest_settings.append(rest_setting)
+    else:
+        rest_setting = config.get("rest_setting")
     if test_suites_selected_sets != None and len(test_suites_selected_sets) != 0:
-        env_setup_res = env_setup(rest_setting, docker_compose_file, proton_ci_mode)
+        env_setup_res = env_setup(rest_settings, proton_ci_mode)
         logger.info(f"rockets_run env_etup done, env_setup_res = {env_setup_res}")
     else:
         test_suites_set_env = os.getenv("PROTON_TEST_SUITES", None)

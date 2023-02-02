@@ -66,6 +66,76 @@ services:
     depends_on:
       - stream-store
 
+  proton-redp1:
+    image: timeplus/proton:${PROTON_VERSION:-develop}
+    pull_policy: always
+    container_name: proton-redp1
+    volumes:
+      - ../../proton-redp1/datas:/var/lib/proton
+      - ../../proton-redp1/log:/var/log/proton-server
+    ports:
+      - "13219:3218" # HTTP Streaming
+      - "18124:8123" # HTTP Snapshot
+      - "18464:8463" # TCP Streaming
+      - "15433:5432" # Postgres Snapshot
+      - "17583:7587" # TCP Snapshot
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    # `proton` depends on STREAM_STORAGE_BROKERS env variable
+    # to discover stream store
+    environment:
+      - STREAM_STORAGE_BROKERS=stream-store1:9093
+      - MAX_CONCURRENT_QUERIES=100        # Default: 100
+      - MAX_CONCURRENT_SELECT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_INSERT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
+      - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
+      - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
+      - STREAM_STORAGE_TYPE=kafka
+
+    command: >
+      /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
+    depends_on:
+      - stream-store1
+
+
+  proton-redp2:
+    image: timeplus/proton:${PROTON_VERSION:-develop}
+    pull_policy: always
+    container_name: proton-redp2
+    volumes:
+      - ../../proton-redp2/datas:/var/lib/proton
+      - ../../proton-redp2/log:/var/log/proton-server
+    ports:
+      - "13220:3218" # HTTP Streaming
+      - "18125:8123" # HTTP Snapshot
+      - "18465:8463" # TCP Streaming
+      - "15434:5432" # Postgres Snapshot
+      - "17584:7587" # TCP Snapshot
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    # `proton` depends on STREAM_STORAGE_BROKERS env variable
+    # to discover stream store
+    environment:
+      - STREAM_STORAGE_BROKERS=stream-store2:9094
+      - MAX_CONCURRENT_QUERIES=100        # Default: 100
+      - MAX_CONCURRENT_SELECT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_INSERT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
+      - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
+      - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
+      - STREAM_STORAGE_TYPE=kafka
+
+    command: >
+      /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
+    depends_on:
+      - stream-store2
+
+
   stream-store:
     image: vectorized/redpanda:v21.11.19
     ports:
@@ -93,3 +163,59 @@ services:
       - "redpanda.enable_idempotence=true"
       - --check=false
     container_name: redpanda-1
+
+  stream-store1:
+    image: vectorized/redpanda:v21.11.19
+    ports:
+      - "9093:9092"
+      - "29093:29092"
+    command:
+      - redpanda
+      - start
+      - --smp
+      - '1'
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - '0'
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9093
+      - --advertise-kafka-addr
+      - PLAINTEXT://stream-store1:29092,OUTSIDE://stream-store1:9093
+      - --set
+      - "redpanda.auto_create_topics_enabled=false"
+      - --set
+      - "redpanda.enable_idempotence=true"
+      - --check=false
+    container_name: redpanda-2
+
+  stream-store2:
+    image: vectorized/redpanda:v21.11.19
+    ports:
+      - "9094:9092"
+      - "29094:29092"
+    command:
+      - redpanda
+      - start
+      - --smp
+      - '1'
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - '0'
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9094
+      - --advertise-kafka-addr
+      - PLAINTEXT://stream-store2:29092,OUTSIDE://stream-store2:9094
+      - --set
+      - "redpanda.auto_create_topics_enabled=false"
+      - --set
+      - "redpanda.enable_idempotence=true"
+      - --check=false
+    container_name: redpanda-3    
