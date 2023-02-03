@@ -116,6 +116,7 @@ LogAppendDescription Log::append(RecordPtr & record)
         last_committed_cv.notify_all();
     }
 
+    /// Log end sn may be changed, notify readers who wait on new data
     log_end_cv.notify_all();
 
     return append_info;

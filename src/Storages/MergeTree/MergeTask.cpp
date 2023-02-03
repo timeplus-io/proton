@@ -1,4 +1,3 @@
-#include "Storages/MergeTree/IDataPartStorage.h"
 #include <Storages/MergeTree/MergeTask.h>
 
 #include <memory>
@@ -25,6 +24,7 @@
 #include <Processors/Merges/VersionedCollapsingTransform.h>
 #include <Processors/Transforms/TTLTransform.h>
 #include <Processors/Transforms/DistinctSortedTransform.h>
+#include <Processors/Transforms/DistinctTransform.h>
 
 namespace DB
 {
@@ -880,8 +880,14 @@ void MergeTask::ExecuteAndFinalizeHorizontalPart::createMergedStream()
     res_pipe.addTransform(std::move(merged_transform));
 
     if (global_ctx->deduplicate)
-        res_pipe.addTransform(std::make_shared<DistinctSortedTransform>(
-            res_pipe.getHeader(), sort_description, SizeLimits(), 0 /*limit_hint*/, global_ctx->deduplicate_by_columns));
+    {
+        if (DistinctSortedTransform::isApplicable(header, sort_description, global_ctx->deduplicate_by_columns))
+            res_pipe.addTransform(std::make_shared<DistinctSortedTransform>(
+                res_pipe.getHeader(), sort_description, SizeLimits(), 0 /*limit_hint*/, global_ctx->deduplicate_by_columns));
+        else
+            res_pipe.addTransform(std::make_shared<DistinctTransform>(
+                res_pipe.getHeader(), SizeLimits(), 0 /*limit_hint*/, global_ctx->deduplicate_by_columns));
+    }
 
     if (ctx->need_remove_expired_values)
         res_pipe.addTransform(std::make_shared<TTLTransform>(

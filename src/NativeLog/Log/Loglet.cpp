@@ -181,7 +181,6 @@ LogSegmentPtr Loglet::roll(std::optional<int64_t> expected_next_sn)
     auto start = DB::MonotonicMilliseconds::now();
 
     auto new_sn = std::max(expected_next_sn.value_or(0), logEndSequence());
-    auto log_file = logFile(log_dir, new_sn);
     auto active_segment = segments->activeSegment();
 
     /// Segment with the same base sn shall not already exist

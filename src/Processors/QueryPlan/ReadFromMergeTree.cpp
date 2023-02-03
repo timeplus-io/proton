@@ -153,7 +153,6 @@ ReadFromMergeTree::ReadFromMergeTree(
         }
 
         output_stream->sort_description = std::move(sort_description);
-
     }
 }
 
