@@ -91,13 +91,13 @@ void registerWindowFunctions(AggregateFunctionFactory & factory);
 
 /// proton: starts.
 void registerAggregateFunctionMinMaxK(AggregateFunctionFactory &);
-void registerAggregateFunctionCombinatorDistinctStreaming(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionsAlias(AggregateFunctionFactory &);
 void registerAggregateFunctionXirr(AggregateFunctionFactory & factory);
 
 /// changelog retract aggr
 namespace Streaming
 {
+void registerAggregateFunctionCombinatorDistinct(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCountRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionSumRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionAvgRetract(AggregateFunctionFactory & factory);
@@ -211,7 +211,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionCombinatorMap(factory);
     
         /// proton: starts.
-        registerAggregateFunctionCombinatorDistinctStreaming(factory);
+        Streaming::registerAggregateFunctionCombinatorDistinct(factory);
         /// proton: ends.
     }
 }
