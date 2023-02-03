@@ -145,6 +145,8 @@ public:
 
         /// Does result of the calculation already exists in the block.
         bool hasColumn(const String & column_name) const;
+        std::vector<std::string_view> getAllColumnNames() const;
+
         void addColumn(ColumnWithTypeAndName column)
         {
             actions_stack.addColumn(std::move(column));

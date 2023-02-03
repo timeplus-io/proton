@@ -367,7 +367,7 @@ SetPtr makeExplicitSet(
     const ASTPtr & right_arg = args.children.at(1);
 
     auto column_name = left_arg->getColumnName();
-    const auto & dag_node = actions.findInIndex(column_name);
+    const auto & dag_node = actions.findInOutputs(column_name);
     const DataTypePtr & left_arg_type = dag_node.result_type;
 
     DataTypes set_element_types = {left_arg_type};
@@ -446,6 +446,15 @@ public:
     }
 
     bool contains(const std::string & name) const { return map.contains(name); }
+
+    std::vector<std::string_view> getAllNames() const
+    {
+        std::vector<std::string_view> result;
+        result.reserve(map.size());
+        for (auto const & e : map)
+            result.emplace_back(e.first);
+        return result;
+    }
 };
 
 ActionsMatcher::Data::Data(
@@ -470,7 +479,7 @@ ActionsMatcher::Data::Data(
     , create_source_for_in(create_source_for_in_)
     , visit_depth(0)
     , actions_stack(std::move(actions_dag), context_)
-    , next_unique_suffix(actions_stack.getLastActions().getIndex().size() + 1)
+    , next_unique_suffix(actions_stack.getLastActions().getOutputs().size() + 1)
 {
 }
 
@@ -479,13 +488,19 @@ bool ActionsMatcher::Data::hasColumn(const String & column_name) const
     return actions_stack.getLastActionsIndex().contains(column_name);
 }
 
+std::vector<std::string_view> ActionsMatcher::Data::getAllColumnNames() const
+{
+    const auto & index = actions_stack.getLastActionsIndex();
+    return index.getAllNames();
+}
+
 ScopeStack::ScopeStack(ActionsDAGPtr actions_dag, ContextPtr context_) : WithContext(context_)
 {
     auto & level = stack.emplace_back();
     level.actions_dag = std::move(actions_dag);
-    level.index = std::make_unique<ScopeStack::Index>(level.actions_dag->getIndex());
+    level.index = std::make_unique<ScopeStack::Index>(level.actions_dag->getOutputs());
 
-    for (const auto & node : level.actions_dag->getIndex())
+    for (const auto & node : level.actions_dag->getOutputs())
         if (node->type == ActionsDAG::ActionType::INPUT)
             level.inputs.emplace(node->result_name);
 }
@@ -494,7 +509,7 @@ void ScopeStack::pushLevel(const NamesAndTypesList & input_columns)
 {
     auto & level = stack.emplace_back();
     level.actions_dag = std::make_shared<ActionsDAG>();
-    level.index = std::make_unique<ScopeStack::Index>(level.actions_dag->getIndex());
+    level.index = std::make_unique<ScopeStack::Index>(level.actions_dag->getOutputs());
     const auto & prev = stack[stack.size() - 2];
 
     for (const auto & input_column : input_columns)
@@ -504,7 +519,7 @@ void ScopeStack::pushLevel(const NamesAndTypesList & input_columns)
         level.inputs.emplace(input_column.name);
     }
 
-    for (const auto & node : prev.actions_dag->getIndex())
+    for (const auto & node : prev.actions_dag->getOutputs())
     {
         if (!level.index->contains(node->result_name))
         {
@@ -802,8 +817,9 @@ void ActionsMatcher::visit(const ASTIdentifier & identifier, const ASTPtr &, Dat
         {
             if (column_name_type.name == column_name)
             {
-                throw Exception("Column " + backQuote(column_name) + " is not under aggregate function and not in GROUP BY",
-                                ErrorCodes::NOT_AN_AGGREGATE);
+                throw Exception(ErrorCodes::NOT_AN_AGGREGATE,
+                    "Column {} is not under aggregate function and not in GROUP BY. Have columns: {}",
+                    backQuote(column_name), toString(data.getAllColumnNames()));
             }
         }
 
@@ -846,7 +862,6 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
 
         return;
     }
-    /// proton: ends
 
     SetPtr prepared_set;
     if (checkFunctionIsInOrGlobalInOperator(node))
@@ -890,7 +905,6 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
         {
             visit(node.window_definition, data);
         }
-
         // Also manually add columns for arguments of the window function itself.
         // ActionVisitor is written in such a way that this method must itself
         // descend into all needed function children. Window functions can't have

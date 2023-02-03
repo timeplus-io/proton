@@ -339,7 +339,7 @@ String InterpreterSelectQuery::generateFilterActions(ActionsDAGPtr & actions, co
     actions->projectInput(false);
 
     for (const auto * node : actions->getInputs())
-        actions->getIndex().push_back(node);
+        actions->getOutputs().push_back(node);
 
     return column_name;
 }

@@ -11,6 +11,7 @@
 #include <Processors/QueryPlan/TotalsHavingStep.h>
 #include <Processors/QueryPlan/DistinctStep.h>
 #include <Processors/QueryPlan/UnionStep.h>
+
 #include <Interpreters/ActionsDAG.h>
 #include <Interpreters/ArrayJoinAction.h>
 #include <Interpreters/TableJoin.h>
@@ -53,7 +54,7 @@ static size_t tryAddNewFilterStep(
     // std::cerr << "===============\n" << expression->dumpDAG() << std::endl;
     // std::cerr << "---------------\n" << split_filter->dumpDAG() << std::endl;
 
-    const auto * filter_node = expression->tryFindInIndex(filter_column_name);
+    const auto * filter_node = expression->tryFindInOutputs(filter_column_name);
     if (!filter_node && !removes_filter)
         throw Exception(ErrorCodes::LOGICAL_ERROR,
                         "Filter column {} was removed from ActionsDAG but it is needed in result. DAG:\n{}",
@@ -75,7 +76,8 @@ static size_t tryAddNewFilterStep(
     /// Expression/Filter -> Aggregating -> Filter -> Something
 
     /// New filter column is the first one.
-    auto split_filter_column_name = (*split_filter->getIndex().begin())->result_name;
+    auto split_filter_column_name = split_filter->getOutputs().front()->result_name;
+
     node.step = std::make_unique<FilterStep>(
         node.children.at(0)->step->getOutputStream(), std::move(split_filter), std::move(split_filter_column_name), true);
 
