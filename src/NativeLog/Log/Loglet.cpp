@@ -324,7 +324,7 @@ StreamShard Loglet::streamShardFrom(const fs::path & log_dir_)
     else
         throw_ex();
 
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 LeaderEpochFileCachePtr

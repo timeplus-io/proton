@@ -323,7 +323,6 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
     if (to_table_id)
     {
         assert(is_materialized_view && to_inner_uuid == UUIDHelpers::Nil);
-        /// proton: starts. Specified streaming view with `INTO`
         settings.ostr
             << (settings.hilite ? hilite_keyword : "") << (is_materialized_view ? " INTO " : " TO ") << (settings.hilite ? hilite_none : "")
             << (!to_table_id.database_name.empty() ? backQuoteIfNeed(to_table_id.database_name) + "." : "")

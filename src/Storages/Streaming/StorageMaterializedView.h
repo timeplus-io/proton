@@ -18,7 +18,6 @@ struct ExtraBlock;
 class StorageMaterializedView final : public shared_ptr_helper<StorageMaterializedView>, public IStorage, WithMutableContext
 {
     friend struct shared_ptr_helper<StorageMaterializedView>;
-    friend class MaterializedViewMemorySource;
 
 public:
     ~StorageMaterializedView() override;
@@ -66,12 +65,18 @@ public:
     MergeTreeSettingsPtr getSettings() const;
 
 private:
-    void initInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
-    void updateStorageSettings();
-    void buildBackgroundPipeline(
-        InterpreterSelectWithUnionQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
+    /// Return true on success, false on failure
+    bool createInnerTableIfNecessary();
+    void createInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
+
+    void buildBackgroundPipeline();
+    void executeSelectPipeline();
     void executeBackgroundPipeline();
     void cancelBackgroundPipeline();
+
+    void updateStorageSettings();
+
+    void validateInnerQuery(const StorageInMemoryMetadata & storage_metadata, const ContextPtr & local_context) const;
 
 private:
     Poco::Logger * log;
@@ -79,6 +84,7 @@ private:
     /// Target table
     StorageID target_table_id = StorageID::createEmpty();
     StoragePtr target_table_storage = nullptr;
+    bool has_inner_table = false;
     bool is_attach = false;
     bool is_virtual = false;
 

@@ -1,5 +1,5 @@
-#include "StorageMaterializedView.h"
-#include "StorageStream.h"
+#include <Storages/Streaming/StorageMaterializedView.h>
+#include <Storages/Streaming/StorageStream.h>
 
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/DiskUtilChecker.h>
@@ -75,7 +75,7 @@ StorageMaterializedView::StorageMaterializedView(
     bool is_virtual_)
     : IStorage(table_id_)
     , WithMutableContext(local_context->getGlobalContext())
-    , log(&Poco::Logger::get("StorageMaterializedView (" + table_id_.database_name + "." + table_id_.table_name + ")"))
+    , log(&Poco::Logger::get(fmt::format("StorageMaterializedView ({})", table_id_.getFullTableName())))
     , is_attach(attach_)
     , is_virtual(is_virtual_)
 {
@@ -83,21 +83,70 @@ StorageMaterializedView::StorageMaterializedView(
     storage_metadata.setColumns(columns_);
 
     if (!query.select)
-        throw Exception("SELECT query is not specified for " + getName(), ErrorCodes::INCORRECT_QUERY);
+        throw Exception(ErrorCodes::INCORRECT_QUERY, "SELECT query is not specified for {}", getName());
+
+    /// If `INTO [target stream]` is not specified, use inner stream
+    has_inner_table = query.to_table_id.empty();
 
     auto select = SelectQueryDescription::getSelectQueryFromASTForMatView(query.select->clone(), local_context);
+
+    /// FIXME, we shall fix the above resolution ?
+    /// Fix database name for tables if we didn't resolve them otherwise addDependency / removeDependency will fail
+    for (auto & select_table_id : select.select_table_ids)
+        if (select_table_id.database_name.empty())
+            select_table_id.database_name = table_id_.getDatabaseName();
+
     storage_metadata.setSelectQuery(select);
     setInMemoryMetadata(storage_metadata);
 
-    if (!query.to_table_id.empty())
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Streaming View {} doesn't support INTO clause", table_id_.getFullTableName());
+    if (!attach_)
+        validateInnerQuery(storage_metadata, local_context);
 
-    bool point_to_itself_by_uuid = query.to_inner_uuid != UUIDHelpers::Nil && query.to_inner_uuid == table_id_.uuid;
-    if (point_to_itself_by_uuid)
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Streaming View {} cannot point to itself", table_id_.getFullTableName());
+    bool point_to_itself_by_uuid = has_inner_table && query.to_inner_uuid != UUIDHelpers::Nil && query.to_inner_uuid == table_id_.uuid;
+    bool point_to_itself_by_name = !has_inner_table && query.to_table_id.database_name == table_id_.database_name
+        && query.to_table_id.table_name == table_id_.table_name;
+    if (point_to_itself_by_uuid || point_to_itself_by_name)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Materialized view {} cannot point to itself", table_id_.getFullTableName());
 
+    if (!has_inner_table)
+    {
+        target_table_id = query.to_table_id;
 
-    target_table_id = StorageID(getStorageID().database_name, generateInnerTableName(getStorageID()), query.to_inner_uuid);
+        if (!attach_)
+        {
+            auto target_table = getTargetTable();
+            if (!target_table)
+                throw Exception(ErrorCodes::INCORRECT_QUERY, "Target stream is not found", target_table_id.getFullTableName());
+
+            auto * stream = target_table->as<StorageStream>();
+            if (stream == nullptr)
+                throw Exception(
+                    ErrorCodes::NOT_IMPLEMENTED, "MaterializedView doesn't support target storage is {}", target_table->getName());
+        }
+    }
+    else if (attach_)
+    {
+        /// If this is an ATTACH request, then the internal stream must already be created
+        target_table_id = StorageID(getStorageID().database_name, generateInnerTableName(getStorageID()), query.to_inner_uuid);
+    }
+    else
+    {
+        /// We will create a query to create an internal stream
+        /// For now, we create inner stream during startup, FIXME, why?
+        target_table_id = StorageID(getStorageID().database_name, generateInnerTableName(getStorageID()), query.to_inner_uuid);
+    }
+}
+
+void StorageMaterializedView::validateInnerQuery(const StorageInMemoryMetadata & storage_metadata, const ContextPtr & local_context) const
+{
+    /// Validate if the inner query is a streaming query. Only streaming query is supported for now
+    auto select_context = Context::createCopy(local_context);
+    select_context->makeQueryContext();
+    select_context->setCurrentQueryId(""); /// generate random query_id
+
+    InterpreterSelectWithUnionQuery select_interpreter(storage_metadata.getSelectQuery().inner_query, select_context, SelectQueryOptions());
+    if (!select_interpreter.isStreaming())
+        throw Exception(ErrorCodes::INCORRECT_QUERY, "Materialized view doesn't support historical select query");
 }
 
 StorageMaterializedView::~StorageMaterializedView()
@@ -114,70 +163,15 @@ StorageMaterializedView::~StorageMaterializedView()
 /// others:         (view_properties)                               (view_properties)
 void StorageMaterializedView::startup()
 {
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    auto storage_id = getStorageID();
+    const auto & select_query = metadata_snapshot->getSelectQuery();
+    for (const auto & select_table_id : select_query.select_table_ids)
+        DatabaseCatalog::instance().addDependency(select_table_id, storage_id);
+
     start_thread = ThreadFromGlobalPool{[this]() {
-        /// Init inner memory table and inner target table
-        auto metadata_snapshot = getInMemoryMetadataPtr();
-        auto local_context = Context::createCopy(getContext());
-        local_context->makeQueryContext();
-        local_context->setCurrentQueryId(""); // generate random query_id
-        int max_retries = 10;
-        while (max_retries-- > 0)
-        {
-            try
-            {
-                initInnerTable(metadata_snapshot, local_context);
-                break;
-            }
-            catch (...)
-            {
-                std::this_thread::sleep_for(std::chrono::seconds(2));
-                LOG_DEBUG(log, "'{}' waiting for inner table ready", getStorageID().getFullTableName());
-            }
-        }
-
-        if (max_retries <= 0)
-        {
-            background_status.has_exception = true;
-            background_status.exception = std::make_exception_ptr(
-                Exception(ErrorCodes::RESOURCE_NOT_INITED, "init inner table '{}' failed", getStorageID().getFullTableName()));
-            LOG_ERROR(log, "Init inner table '{}' failed", getStorageID().getFullTableName());
-            return;
-        }
-
-        try
-        {
-            InterpreterSelectWithUnionQuery select_interpreter(
-                metadata_snapshot->getSelectQuery().inner_query, local_context, SelectQueryOptions());
-            if (!select_interpreter.isStreaming())
-                throw Exception(ErrorCodes::INCORRECT_QUERY, "Streaming View doesn't support historical query");
-
-            if (!is_virtual)
-            {
-                /// Build inner background query pipeline and keep it alive during the lifetime of Proton
-                buildBackgroundPipeline(select_interpreter, metadata_snapshot, local_context);
-
-                /// Run background pipeline
-                executeBackgroundPipeline();
-            }
-            LOG_INFO(log, "'{}' inner table is ready and background query started", getStorageID().getFullTableName());
-        }
-        catch (...)
-        {
-            background_status.exception = std::current_exception();
-            background_status.has_exception = true;
-
-            LOG_ERROR(log, "MaterializedView '{}' startup error: {}", getName(), getExceptionMessage(background_status.exception, false));
-
-            /// Exception safety: failed "startup" does not require a call to "shutdown" from the caller.
-            /// And it should be able to safely destroy table after exception in "startup" method.
-            /// It means that failed "startup" must not create any background tasks that we will have to wait.
-            cancelBackgroundPipeline();
-
-            /// Note: after failed "startup", the stream will be in a state that only allows to destroy the object.
-            /// If is an Attach request, we didn't throw exception to avoid the system fail to setup.
-            if (!is_attach)
-                throw;
-        }
+        createInnerTableIfNecessary();
+        executeSelectPipeline();
     }};
 }
 
@@ -190,6 +184,39 @@ void StorageMaterializedView::shutdown()
 
     if (start_thread.joinable())
         start_thread.join();
+}
+
+void StorageMaterializedView::executeSelectPipeline()
+{
+    if (is_virtual)
+        return;
+
+    try
+    {
+        /// Build inner background query pipeline and keep it alive during the lifetime of Proton
+        buildBackgroundPipeline();
+
+        /// Run background pipeline
+        executeBackgroundPipeline();
+        LOG_INFO(log, "Started background select query pipeline", getStorageID().getFullTableName());
+    }
+    catch (...)
+    {
+        background_status.exception = std::current_exception();
+        background_status.has_exception = true;
+
+        LOG_ERROR(log, "Failed to start: {}", getExceptionMessage(background_status.exception, false));
+
+        /// Exception safety: failed "startup" does not require a call to "shutdown" from the caller.
+        /// And it should be able to safely destroy table after exception in "startup" method.
+        /// It means that failed "startup" must not create any background tasks that we will have to wait.
+        cancelBackgroundPipeline();
+
+        /// Note: after failed "startup", the stream will be in a state that only allows to destroy the object.
+        /// If is an Attach request, we didn't throw exception to avoid the system fail to setup.
+        if (!is_attach)
+            throw;
+    }
 }
 
 void StorageMaterializedView::cancelBackgroundPipeline()
@@ -259,26 +286,25 @@ void StorageMaterializedView::read(
 
 void StorageMaterializedView::drop()
 {
+    auto table_id = getStorageID();
+    const auto & select_query = getInMemoryMetadataPtr()->getSelectQuery();
+    for (const auto & select_table_id : select_query.select_table_ids)
+        DatabaseCatalog::instance().removeDependency(select_table_id, table_id);
+
     dropInnerTableIfAny(true, getContext());
 }
 
 void StorageMaterializedView::dropInnerTableIfAny(bool no_delay, ContextPtr local_context)
 {
-    /// So far, the target table is always inner table
-    if (target_table_id)
+    if (has_inner_table && target_table_id)
         InterpreterDropQuery::executeDropQuery(ASTDropQuery::Kind::Drop, getContext(), local_context, target_table_id, no_delay);
 
     target_table_storage = nullptr;
 }
 
-void StorageMaterializedView::alter(const AlterCommands & commands, ContextPtr context_, AlterLockHolder & alter_lock_holder)
+void StorageMaterializedView::alter(const AlterCommands &, ContextPtr, AlterLockHolder &)
 {
-    auto target = getTargetTable();
-    if (!target)
-        return;
-
-    target->alter(commands, context_, alter_lock_holder);
-    updateStorageSettings();
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Altering Materialized view is not supported");
 }
 
 void StorageMaterializedView::checkTableCanBeRenamed() const
@@ -354,41 +380,84 @@ NamesAndTypesList StorageMaterializedView::getVirtuals() const
     return target_table_storage->getVirtuals();
 }
 
-void StorageMaterializedView::initInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
+bool StorageMaterializedView::createInnerTableIfNecessary()
 {
-    /// If there is a Create request, then we need create the target inner table.
+    if (is_attach || is_virtual || !has_inner_table)
+        /// In attach or virtual or `INTO [target stream]` scenarios, inner stream is supposed to already exist
+        return true;
+
     assert(target_table_id);
-    if (!is_attach && !is_virtual)
+
+    /// Init inner memory table and inner target table
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    auto local_context = Context::createCopy(getContext());
+    local_context->makeQueryContext();
+    local_context->setCurrentQueryId(""); // generate random query_id
+
+    int max_retries = 10;
+    while (max_retries-- > 0)
     {
-        /// Create inner target table query
-        ///   create table <inner_target_table_id> (view_properties[, ProtonConsts::RESERVED_VIEW_VERSION]) engine = Stream(1, 1, rand());
-        /// FIXME: In future, add order clause or remove engine ?
-        auto manual_create_query = std::make_shared<ASTCreateQuery>();
-        manual_create_query->setDatabase(target_table_id.getDatabaseName());
-        manual_create_query->setTable(target_table_id.getTableName());
-        manual_create_query->uuid = target_table_id.uuid;
-
-        auto names_and_types = metadata_snapshot->getColumns().getAll();
-        auto columns_ast = InterpreterCreateQuery::formatColumns(names_and_types);
-        auto new_columns_list = std::make_shared<ASTColumns>();
-        new_columns_list->set(new_columns_list->columns, columns_ast);
-
-        auto new_storage = std::make_shared<ASTStorage>();
-        auto engine = makeASTFunction(
-            "Stream", std::make_shared<ASTLiteral>(UInt64(1)), std::make_shared<ASTLiteral>(UInt64(1)), makeASTFunction("rand"));
-        engine->no_empty_args = true;
-        new_storage->set(new_storage->engine, engine);
-
-        manual_create_query->set(manual_create_query->columns_list, new_columns_list);
-        manual_create_query->set(manual_create_query->storage, new_storage);
-
-        InterpreterCreateQuery create_interpreter(manual_create_query, local_context);
-        create_interpreter.setInternal(true);
-        create_interpreter.execute();
-
-        target_table_storage
-            = DatabaseCatalog::instance().getTable({manual_create_query->getDatabase(), manual_create_query->getTable()}, local_context);
+        try
+        {
+            createInnerTable(metadata_snapshot, local_context);
+            return true;
+        }
+        catch (...)
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            LOG_DEBUG(log, "'{}' waiting for inner stream ready", getStorageID().getFullTableName());
+        }
     }
+
+    if (max_retries <= 0)
+    {
+        background_status.has_exception = true;
+        background_status.exception = std::make_exception_ptr(Exception(
+            ErrorCodes::RESOURCE_NOT_INITED,
+            "Failed to create inner stream for Materialized view '{}'",
+            getStorageID().getFullTableName()));
+
+        LOG_ERROR(log, "Failed to create inner stream for Materialized view '{}'", getStorageID().getFullTableName());
+        return false;
+    }
+
+    return true;
+}
+
+void StorageMaterializedView::createInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
+{
+    assert(has_inner_table);
+
+    /// If there is a Create request, then we need create the target inner table.
+    /// Create inner target table query
+    ///   create stream <inner_target_table_id> (view_properties[, ProtonConsts::RESERVED_VIEW_VERSION]) engine = Stream(1, 1, rand());
+    /// FIXME: In future, add order clause or remove engine ?
+    auto manual_create_query = std::make_shared<ASTCreateQuery>();
+    manual_create_query->setDatabase(target_table_id.getDatabaseName());
+    manual_create_query->setTable(target_table_id.getTableName());
+    manual_create_query->uuid = target_table_id.uuid;
+
+    auto names_and_types = metadata_snapshot->getColumns().getAll();
+    auto columns_ast = InterpreterCreateQuery::formatColumns(names_and_types);
+    auto new_columns_list = std::make_shared<ASTColumns>();
+    new_columns_list->set(new_columns_list->columns, columns_ast);
+
+    auto new_storage = std::make_shared<ASTStorage>();
+    auto engine = makeASTFunction(
+        "Stream", std::make_shared<ASTLiteral>(UInt64(1)), std::make_shared<ASTLiteral>(UInt64(1)), makeASTFunction("rand"));
+    engine->no_empty_args = true;
+    new_storage->set(new_storage->engine, engine);
+
+    manual_create_query->set(manual_create_query->columns_list, new_columns_list);
+    manual_create_query->set(manual_create_query->storage, new_storage);
+
+    InterpreterCreateQuery create_interpreter(manual_create_query, local_context);
+    create_interpreter.setInternal(true);
+    create_interpreter.execute();
+
+    target_table_storage
+        = DatabaseCatalog::instance().getTable({manual_create_query->getDatabase(), manual_create_query->getTable()}, local_context);
+
     updateStorageSettings();
 }
 
@@ -403,38 +472,75 @@ void StorageMaterializedView::updateStorageSettings()
     }
 }
 
-void StorageMaterializedView::buildBackgroundPipeline(
-    InterpreterSelectWithUnionQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
+void StorageMaterializedView::buildBackgroundPipeline()
 {
-    /// [Pipeline]: `Source` -> `Converting` -> `Materializing const` -> `target_table`
-    background_pipeline = inner_interpreter.buildQueryPipeline();
-    background_pipeline.resize(1);
-    const auto & current_header = background_pipeline.getHeader();
+    auto target_table = getTargetTable();
+    auto target_metadata_snapshot = target_table->getInMemoryMetadataPtr();
+    auto metadata_snapshot = getInMemoryMetadataPtr();
 
-    /// Converting since the view properties allows to explicitly specify
-    auto inner_converting_view_dag = ActionsDAG::makeConvertingActions(
-        current_header.getColumnsWithTypeAndName(),
-        metadata_snapshot->getSampleBlock().getColumnsWithTypeAndName(),
-        ActionsDAG::MatchColumnsMode::Position);
-    auto inner_converting_view_actions = std::make_shared<ExpressionActions>(
-        inner_converting_view_dag, ExpressionActionsSettings::fromContext(local_context, CompileExpressions::yes));
-    background_pipeline.addSimpleTransform([&](const Block & cur_header, QueryPipelineBuilder::StreamType) -> ProcessorPtr {
-        return std::make_shared<ExpressionTransform>(cur_header, inner_converting_view_actions);
-    });
+    auto local_context = Context::createCopy(getContext());
+    local_context->makeQueryContext();
+    local_context->setCurrentQueryId(""); /// generate random query_id
+    local_context->setInternalQuery(false); /// We like to log materialized query like a regular one
+
+    InterpreterSelectWithUnionQuery select_interpreter(
+        metadata_snapshot->getSelectQuery().inner_query, local_context, SelectQueryOptions());
+
+    /// [Pipeline]: `Source` -> `Converting` -> `Materializing const` -> `target_table`
+    background_pipeline = select_interpreter.buildQueryPipeline();
+    background_pipeline.resize(1);
+    const auto & source_header = background_pipeline.getHeader();
+
+    Block target_header;
+    Names insert_columns;
+    ActionsDAG::MatchColumnsMode match_mode = ActionsDAG::MatchColumnsMode::Position;
+
+    if (!has_inner_table)
+    {
+        /// Has specified `INTO [target stream]`
+        /// The `select` output header may not match the target stream's schema
+
+        target_header.reserve(source_header.columns());
+        /// Insert columns only returned by select query
+        const auto & target_table_columns = target_metadata_snapshot->getColumns();
+        auto target_storage_header{target_metadata_snapshot->getSampleBlock()};
+        for (const auto & source_column : source_header)
+        {
+            /// Skip columns which target storage doesn't have
+            if (target_table_columns.hasPhysical(source_column.name))
+            {
+                insert_columns.emplace_back(source_column.name);
+                target_header.insert(target_storage_header.getByName(source_column.name));
+            }
+        }
+        /// We will need use by name since we may have less columns after filtering
+        match_mode = ActionsDAG::MatchColumnsMode::Name;
+    }
+    else
+    {
+        /// Internally inner table. The inner storage header shall be identical as the source header
+        insert_columns = source_header.getNames();
+        target_header = metadata_snapshot->getSampleBlock();
+    }
+
+    if (!blocksHaveEqualStructure(source_header, target_header))
+    {
+        auto converting = ActionsDAG::makeConvertingActions(
+            source_header.getColumnsWithTypeAndName(), target_header.getColumnsWithTypeAndName(), match_mode);
+
+        background_pipeline.addTransform(std::make_shared<ExpressionTransform>(
+            source_header,
+            std::make_shared<ExpressionActions>(
+                std::move(converting), ExpressionActionsSettings::fromContext(local_context, CompileExpressions::yes))));
+    }
 
     /// Materializing const columns
-    background_pipeline.addSimpleTransform([](const Block & cur_header, QueryPipelineBuilder::StreamType) -> ProcessorPtr {
-        return std::make_shared<MaterializingTransform>(cur_header);
-    });
-
-    auto target_table = getTargetTable();
-    auto * stream = target_table->as<StorageStream>();
-    if (stream == nullptr)
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "MaterializedView doesn't support target storage is {}", target_table->getName());
+    background_pipeline.addTransform(std::make_shared<MaterializingTransform>(background_pipeline.getHeader()));
 
     /// Sink to target table
-    InterpreterInsertQuery interpreter(nullptr, local_context, false, true /* no_squash */);
-    auto out_chain = interpreter.buildChain(target_table, target_table->getInMemoryMetadataPtr(), current_header.getNames(), nullptr, nullptr);
+    InterpreterInsertQuery interpreter(nullptr, local_context, false, false, false);
+    /// FIXME, thread status
+    auto out_chain = interpreter.buildChain(target_table, target_metadata_snapshot, insert_columns, nullptr, nullptr);
     out_chain.addStorageHolder(target_table);
 
     background_pipeline.addChain(std::move(out_chain));
@@ -444,7 +550,6 @@ void StorageMaterializedView::buildBackgroundPipeline(
     });
 
     local_context->setInsertionTable(target_table->getStorageID());
-    local_context->setupQueryStatusPollId(stream->nextBlockId());
 }
 
 void StorageMaterializedView::executeBackgroundPipeline()

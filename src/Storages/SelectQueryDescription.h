@@ -10,7 +10,7 @@ namespace DB
 struct SelectQueryDescription
 {
     /// Table id for select query
-    std::vector<StorageID> select_table_ids;
+    std::vector<StorageID> select_table_ids; /// proton : supports mv union
     /// Select query itself (ASTSelectWithUnionQuery)
     ASTPtr inner_query;
 

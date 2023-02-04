@@ -149,16 +149,12 @@ void TablesLoader::removeUnresolvableDependencies(bool remove_loaded)
                     fmt::join(info.dependent_database_objects, ", "), dependency_name);
 
         if (!info.dependencies.empty())
-            /// proton: starts
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Stream {} does not exist, but we have seen its AST and found {} dependencies."
                                                        "It's a bug", dependency_name, info.dependencies.size());
-            ///proton: ends
 
         if (info.dependent_database_objects.empty())
-            /// proton: starts
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Stream {} does not have dependencies and dependent streams as it expected to."
                                                        "It's a bug", dependency_name);
-            /// proton: ends
 
         return true;
     };
@@ -216,14 +212,10 @@ DependenciesInfosIter TablesLoader::removeResolvedDependency(const DependenciesI
     const QualifiedTableName & table_name = info_it->first;
     const DependenciesInfo & info = info_it->second;
     if (!info.dependencies.empty())
-        /// proton: starts
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Stream {} is in list of independent streams, but dependencies count is {}."
                                                    "It's a bug", table_name, info.dependencies.size());
-        /// proton: ends
     if (info.dependent_database_objects.empty())
-        /// proton: starts
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Stream {} does not have dependent tables. It's a bug", table_name);
-        /// proton: ends
 
     /// Decrement number of dependencies for each dependent table
     for (const auto & dependent_table : info.dependent_database_objects)
@@ -250,7 +242,7 @@ void TablesLoader::startLoadingIndependentTables(ThreadPool & pool, size_t level
 {
     size_t total_tables = metadata.parsed_tables.size();
 
-    LOG_INFO(log, "Loading {} tables with {} dependency level", metadata.independent_database_objects.size(), level);
+    LOG_INFO(log, "Loading {} streams with {} dependency level", metadata.independent_database_objects.size(), level);
 
     for (const auto & table_name : metadata.independent_database_objects)
     {
@@ -280,33 +272,29 @@ void TablesLoader::checkCyclicDependencies() const
 
     for (const auto & info : metadata.dependencies_info)
     {
-        /// proton: starts
         LOG_WARNING(log, "Cannot resolve dependencies: Stream {} have {} dependencies and {} dependent streams. List of dependent streams: {}",
                     info.first, info.second.dependencies.size(),
                     info.second.dependent_database_objects.size(), fmt::join(info.second.dependent_database_objects, ", "));
-        /// proton: ends
         assert(info.second.dependencies.empty());
     }
 
-    throw Exception(ErrorCodes::INFINITE_LOOP, "Cannot attach {} tables due to cyclic dependencies. "
+    throw Exception(ErrorCodes::INFINITE_LOOP, "Cannot attach {} streams due to cyclic dependencies. "
                                                "See server log for details.", metadata.dependencies_info.size());
 }
 
 void TablesLoader::logDependencyGraph() const
 {
-    LOG_TEST(log, "Have {} independent tables: {}",
+    LOG_TEST(log, "Have {} independent streams: {}",
               metadata.independent_database_objects.size(),
               fmt::join(metadata.independent_database_objects, ", "));
     for (const auto & dependencies : metadata.dependencies_info)
     {
-        /// proton: starts
         LOG_TEST(log,
-            "Stream {} have {} dependencies and {} dependent streams. List of dependent tables: {}",
+            "Stream {} have {} dependencies and {} dependent streams. List of dependent streams: {}",
             dependencies.first,
             dependencies.second.dependencies.size(),
             dependencies.second.dependent_database_objects.size(),
             fmt::join(dependencies.second.dependent_database_objects, ", "));
-        /// proton: ends
     }
 }
 

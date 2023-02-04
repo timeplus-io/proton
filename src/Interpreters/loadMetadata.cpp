@@ -159,7 +159,7 @@ void loadMetadata(ContextMutablePtr context, const std::vector<String> & builtin
 
     /// clickhouse-local creates DatabaseMemory as default database by itself
     /// For clickhouse-server we need create default database
-    /// proton: starts
+    /// proton: starts. Add `neutron` etc builtin databases
     for (const auto & builtin_db : builtin_databases)
     {
         bool create_default_db_if_not_exists = !builtin_db.empty();

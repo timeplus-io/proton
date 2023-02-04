@@ -387,8 +387,6 @@ std::shared_ptr<ThreadPool> LogManager::loadLogsInDir(
                     stream_shard.stream.name = iter->first.name;
                     config = iter->second;
                 }
-                else
-                    LOG_ERROR(logger, "Failed to find log config for stream_shard={}", stream_shard.string());
             }
 
             /// Recovery point sn

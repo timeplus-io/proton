@@ -786,11 +786,11 @@ static void generateUUIDForTable(ASTCreateQuery & create)
     if (create.uuid == UUIDHelpers::Nil)
         create.uuid = UUIDHelpers::generateV4();
 
+    /// proton: starts
     /// If destination table (to_table_id) is not specified for materialized view,
     /// then MV will create inner table. We should generate UUID of inner table here,
     /// so it will be the same on all hosts if query in ON CLUSTER or database engine is Replicated.
-    /// proton: starts.
-    bool need_uuid_for_inner_table = !create.attach && create.is_materialized_view;
+    bool need_uuid_for_inner_table = !create.attach && create.is_materialized_view && create.to_table_id.empty();
     /// proton: ends.
     if (need_uuid_for_inner_table && create.to_inner_uuid == UUIDHelpers::Nil)
         create.to_inner_uuid = UUIDHelpers::generateV4();
