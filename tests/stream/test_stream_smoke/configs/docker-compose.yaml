@@ -7,7 +7,6 @@ services:
     volumes:
       - ../../proton-server/datas:/var/lib/proton
       - ../../proton-server/log:/var/log/proton-server
-      - /Users/jameshao/projects/proton:/usr/proton
     ports:
       - "3218:3218" # HTTP Streaming
       - "8123:8123" # HTTP Snapshot
@@ -31,6 +30,37 @@ services:
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
+
+  proton-server1:
+    image: timeplus/proton:${PROTON_VERSION:-develop}
+    pull_policy: always
+    container_name: proton-server1
+    volumes:
+      - ../../proton-server1/datas:/var/lib/proton
+      - ../../proton-server1/log:/var/log/proton-server
+    ports:
+      - "3219:3218" # HTTP Streaming
+      - "8124:8123" # HTTP Snapshot
+      - "8464:8463" # TCP Streaming
+      - "5433:5432" # Postgres Snapshot
+      - "7588:7587" # TCP Snapshot
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    # `proton` depends on STREAM_STORAGE_BROKERS env variable
+    # to discover stream store
+    environment:
+      - STREAM_STORAGE_BROKERS=stream-store:19092
+      - MAX_CONCURRENT_QUERIES=100        # Default: 100
+      - MAX_CONCURRENT_SELECT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_INSERT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
+      - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
+      - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
+
+    command: >
+      /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"      
 
   proton-redp:
     image: timeplus/proton:${PROTON_VERSION:-develop}
@@ -135,6 +165,39 @@ services:
     depends_on:
       - stream-store2
 
+  proton-redp3:
+    image: timeplus/proton:${PROTON_VERSION:-develop}
+    pull_policy: always
+    container_name: proton-redp3
+    volumes:
+      - ../../proton-redp3/datas:/var/lib/proton
+      - ../../proton-redp3/log:/var/log/proton-server
+    ports:
+      - "13221:3218" # HTTP Streaming
+      - "18126:8123" # HTTP Snapshot
+      - "18466:8463" # TCP Streaming
+      - "15435:5432" # Postgres Snapshot
+      - "17585:7587" # TCP Snapshot
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    # `proton` depends on STREAM_STORAGE_BROKERS env variable
+    # to discover stream store
+    environment:
+      - STREAM_STORAGE_BROKERS=stream-store3:9095
+      - MAX_CONCURRENT_QUERIES=100        # Default: 100
+      - MAX_CONCURRENT_SELECT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_INSERT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
+      - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
+      - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
+      - STREAM_STORAGE_TYPE=kafka
+
+    command: >
+      /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
+    depends_on:
+      - stream-store3
 
   stream-store:
     image: vectorized/redpanda:v21.11.19
@@ -218,4 +281,32 @@ services:
       - --set
       - "redpanda.enable_idempotence=true"
       - --check=false
-    container_name: redpanda-3    
+    container_name: redpanda-3
+
+  stream-store3:
+    image: vectorized/redpanda:v21.11.19
+    ports:
+      - "9095:9092"
+      - "29095:29092"
+    command:
+      - redpanda
+      - start
+      - --smp
+      - '1'
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - '0'
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9095
+      - --advertise-kafka-addr
+      - PLAINTEXT://stream-store2:29092,OUTSIDE://stream-store3:9095
+      - --set
+      - "redpanda.auto_create_topics_enabled=false"
+      - --set
+      - "redpanda.enable_idempotence=true"
+      - --check=false
+    container_name: redpanda-4        

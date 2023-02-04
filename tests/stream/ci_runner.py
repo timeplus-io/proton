@@ -21,7 +21,7 @@ cur_dir = os.path.dirname(os.path.abspath(__file__))
 config_file_path = f"{cur_dir}/test_stream_smoke/configs/config.json"
 
 docker_compose_file_path = f"{cur_dir}/test_stream_smoke/configs/docker-compose.yaml"
-DEFAULT_TEST_SUITE_TIMEOUT = 1800 #seconds
+DEFAULT_TEST_SUITE_TIMEOUT = 1200 #seconds
 
 
 def compress_logs(self, dir, relpaths, result_path):
@@ -384,7 +384,8 @@ if __name__ == "__main__":
         raise Exception("Env docker compose up failure.")
     
     if settings == []:
-        settings = ["nativelog"] 
+        #settings = ["nativelog"]
+        settings = ["default"] 
     procs = []
     for setting in settings:
         logger.debug(f"setting = {setting}, get config...")
