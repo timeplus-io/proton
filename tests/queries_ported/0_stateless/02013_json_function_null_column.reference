@@ -1,0 +1,23 @@
+\N	nullable(string)
+	string
+\N	nullable(string)
+	nullable(string)
+\N	nullable(nothing)
+\N	nullable(nothing)
+b
+\N
+
+
+
+c
+1
+true
+1
+a
+1
+1
+true
+1
+a
+\N
+\N

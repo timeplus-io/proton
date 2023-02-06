@@ -1,0 +1,1 @@
+select to_date(to_datetime64('2019-01-01 00:00:00', 3, 'Asia/Istanbul')), to_datetime64(to_date('2019-01-01'), 3, 'Asia/Istanbul')

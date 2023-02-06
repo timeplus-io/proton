@@ -1,0 +1,10 @@
+SET date_time_output_format='iso';
+drop stream if exists t;
+CREATE STREAM t (a DateTime('UTC'), b string, c string, d string, e int32) ENGINE = Memory;
+INSERT INTO t(a, b, c, d ,e)  VALUES ('2022-03-31','','','',1);
+INSERT INTO t(a, b, c, d ,e)  VALUES (1648804224,'','','',2);
+INSERT INTO t(a, b, c, d ,e)  VALUES ('2022-03-31 10:18:56','','','',3);
+INSERT INTO t(a, b, c, d ,e)  VALUES ('2022-03-31T10:18:56','','','',4);
+INSERT INTO t(a, b, c, d ,e)  VALUES ('1648804224','','','',5);
+select a, e from t order by e;
+drop stream if exists t;

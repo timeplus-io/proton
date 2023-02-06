@@ -1,0 +1,5 @@
+SELECT round(cramers_v(a, b), 2), round(cramers_v_bias_corrected(a, b), 2), round(theils_u(a, b), 2), round(theils_u(b, a), 2), round(contingency(a, b), 2) FROM (SELECT number % 3 AS a, number % 5 AS b FROM numbers(150));
+SELECT round(cramers_v(a, b), 2), round(cramers_v_bias_corrected(a, b), 2), round(theils_u(a, b), 2), round(theils_u(b, a), 2), round(contingency(a, b), 2) FROM (SELECT number AS a, number + 1 AS b FROM numbers(150));
+SELECT round(cramers_v(a, b), 2), round(cramers_v_bias_corrected(a, b), 2), round(theils_u(a, b), 2), round(theils_u(b, a), 2), round(contingency(a, b), 2) FROM (SELECT number % 10 AS a, number % 10 AS b FROM numbers(150));
+SELECT round(cramers_v(a, b), 2), round(cramers_v_bias_corrected(a, b), 2), round(theils_u(a, b), 2), round(theils_u(b, a), 2), round(contingency(a, b), 2) FROM (SELECT number % 10 AS a, number % 5 AS b FROM numbers(150));
+SELECT round(cramers_v(a, b), 2), round(cramers_v_bias_corrected(a, b), 2), round(theils_u(a, b), 2), round(theils_u(b, a), 2), round(contingency(a, b), 2) FROM (SELECT number % 10 AS a, number % 10 = 0 ? number : a AS b FROM numbers(150));

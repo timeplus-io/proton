@@ -1,0 +1,37 @@
+-- { echo }
+
+SELECT 1.123::decimal64(1);
+SELECT 1.123::decimal64(2);
+SELECT 1.123::decimal64(3);
+SELECT 1.123::decimal64(4);
+SELECT 1.123::decimal64(5);
+SELECT 1.123::decimal64(10);
+SELECT 1::decimal64(0);
+SELECT 1::decimal64(1);
+SELECT 1::decimal64(10);
+
+SELECT 1.1234567::decimal32(8);
+SELECT 1.1234567890::decimal64(10);
+SELECT 1.1234567890::decimal128(10);
+SELECT 1.1234567890::decimal256(10);
+SELECT 1.123456789012345678901::decimal256(20);
+SELECT 1.123456789012345678901::decimal256(22);
+
+SET output_format_decimal_trailing_zeros = 1;
+
+SELECT 1.123::decimal64(1);
+SELECT 1.123::decimal64(2);
+SELECT 1.123::decimal64(3);
+SELECT 1.123::decimal64(4);
+SELECT 1.123::decimal64(5);
+SELECT 1.123::decimal64(10);
+SELECT 1::decimal64(0);
+SELECT 1::decimal64(1);
+SELECT 1::decimal64(10);
+
+SELECT 1.1234567::decimal32(8);
+SELECT 1.1234567890::decimal64(10);
+SELECT 1.1234567890::decimal128(10);
+SELECT 1.1234567890::decimal256(10);
+SELECT 1.123456789012345678901::decimal256(20);
+SELECT 1.123456789012345678901::decimal256(22);

@@ -1,0 +1,214 @@
+LIKE
+1	Hello		false
+2	Hello	%	true
+3	Hello	%%	true
+4	Hello	%%%	true
+5	Hello	%_%	true
+6	Hello	_	false
+7	Hello	_%	true
+8	Hello	%_	true
+9	Hello	H%o	true
+10	hello	H%0	false
+11	hello	h%o	true
+12	Hello	h%o	false
+13	OHello	%lhell%	false
+14	OHello	%hell%	false
+15	hEllo	%HEL%	false
+16	abcdef	%aBc%def%	false
+17	ABCDDEF	%abc%def%	false
+18	Abc\nDef	%abc%def%	false
+19	abc\ntdef	%abc%def%	true
+20	abct\ndef	%abc%dEf%	false
+21	abc\n\ndeF	%abc%def%	false
+22	abc\n\ntdef	%abc%deF%	false
+23	Abc\nt\ndef	%abc%def%	false
+24	abct\n\ndef	%abc%def%	true
+25	ab\ndef	%Abc%def%	false
+26	aBc\nef	%ABC%DEF%	false
+27	ёЁё	Ё%Ё	false
+28	ощщЁё	Щ%Ё	false
+29	ощЩЁё	%Щ%Ё	false
+30	Щущпандер	%щп%е%	true
+31	Щущпандер	%щП%е%	false
+32	ощщЁё	%щ%	true
+33	ощЩЁё	%ё%	true
+34	Hello	.*	false
+35	Hello	.*ell.*	false
+36	Hello	o$	false
+37	Hello	hE.*lO	false
+NOT LIKE
+1	Hello		true
+2	Hello	%	false
+3	Hello	%%	false
+4	Hello	%%%	false
+5	Hello	%_%	false
+6	Hello	_	true
+7	Hello	_%	false
+8	Hello	%_	false
+9	Hello	H%o	false
+10	hello	H%0	true
+11	hello	h%o	false
+12	Hello	h%o	true
+13	OHello	%lhell%	true
+14	OHello	%hell%	true
+15	hEllo	%HEL%	true
+16	abcdef	%aBc%def%	true
+17	ABCDDEF	%abc%def%	true
+18	Abc\nDef	%abc%def%	true
+19	abc\ntdef	%abc%def%	false
+20	abct\ndef	%abc%dEf%	true
+21	abc\n\ndeF	%abc%def%	true
+22	abc\n\ntdef	%abc%deF%	true
+23	Abc\nt\ndef	%abc%def%	true
+24	abct\n\ndef	%abc%def%	false
+25	ab\ndef	%Abc%def%	true
+26	aBc\nef	%ABC%DEF%	true
+27	ёЁё	Ё%Ё	true
+28	ощщЁё	Щ%Ё	true
+29	ощЩЁё	%Щ%Ё	true
+30	Щущпандер	%щп%е%	false
+31	Щущпандер	%щП%е%	true
+32	ощщЁё	%щ%	false
+33	ощЩЁё	%ё%	false
+34	Hello	.*	true
+35	Hello	.*ell.*	true
+36	Hello	o$	true
+37	Hello	hE.*lO	true
+ILIKE
+1	Hello		false
+2	Hello	%	true
+3	Hello	%%	true
+4	Hello	%%%	true
+5	Hello	%_%	true
+6	Hello	_	false
+7	Hello	_%	true
+8	Hello	%_	true
+9	Hello	H%o	true
+10	hello	H%0	false
+11	hello	h%o	true
+12	Hello	h%o	true
+13	OHello	%lhell%	false
+14	OHello	%hell%	true
+15	hEllo	%HEL%	true
+16	abcdef	%aBc%def%	true
+17	ABCDDEF	%abc%def%	true
+18	Abc\nDef	%abc%def%	true
+19	abc\ntdef	%abc%def%	true
+20	abct\ndef	%abc%dEf%	true
+21	abc\n\ndeF	%abc%def%	true
+22	abc\n\ntdef	%abc%deF%	true
+23	Abc\nt\ndef	%abc%def%	true
+24	abct\n\ndef	%abc%def%	true
+25	ab\ndef	%Abc%def%	false
+26	aBc\nef	%ABC%DEF%	false
+27	ёЁё	Ё%Ё	true
+28	ощщЁё	Щ%Ё	false
+29	ощЩЁё	%Щ%Ё	true
+30	Щущпандер	%щп%е%	true
+31	Щущпандер	%щП%е%	true
+32	ощщЁё	%щ%	true
+33	ощЩЁё	%ё%	true
+34	Hello	.*	false
+35	Hello	.*ell.*	false
+36	Hello	o$	false
+37	Hello	hE.*lO	false
+NOT ILIKE
+1	Hello		true
+2	Hello	%	false
+3	Hello	%%	false
+4	Hello	%%%	false
+5	Hello	%_%	false
+6	Hello	_	true
+7	Hello	_%	false
+8	Hello	%_	false
+9	Hello	H%o	false
+10	hello	H%0	true
+11	hello	h%o	false
+12	Hello	h%o	false
+13	OHello	%lhell%	true
+14	OHello	%hell%	false
+15	hEllo	%HEL%	false
+16	abcdef	%aBc%def%	false
+17	ABCDDEF	%abc%def%	false
+18	Abc\nDef	%abc%def%	false
+19	abc\ntdef	%abc%def%	false
+20	abct\ndef	%abc%dEf%	false
+21	abc\n\ndeF	%abc%def%	false
+22	abc\n\ntdef	%abc%deF%	false
+23	Abc\nt\ndef	%abc%def%	false
+24	abct\n\ndef	%abc%def%	false
+25	ab\ndef	%Abc%def%	true
+26	aBc\nef	%ABC%DEF%	true
+27	ёЁё	Ё%Ё	false
+28	ощщЁё	Щ%Ё	true
+29	ощЩЁё	%Щ%Ё	false
+30	Щущпандер	%щп%е%	false
+31	Щущпандер	%щП%е%	false
+32	ощщЁё	%щ%	false
+33	ощЩЁё	%ё%	false
+34	Hello	.*	true
+35	Hello	.*ell.*	true
+36	Hello	o$	true
+37	Hello	hE.*lO	true
+MATCH
+1	Hello		true
+2	Hello	%	false
+3	Hello	%%	false
+4	Hello	%%%	false
+5	Hello	%_%	false
+6	Hello	_	false
+7	Hello	_%	false
+8	Hello	%_	false
+9	Hello	H%o	false
+10	hello	H%0	false
+11	hello	h%o	false
+12	Hello	h%o	false
+13	OHello	%lhell%	false
+14	OHello	%hell%	false
+15	hEllo	%HEL%	false
+16	abcdef	%aBc%def%	false
+17	ABCDDEF	%abc%def%	false
+18	Abc\nDef	%abc%def%	false
+19	abc\ntdef	%abc%def%	false
+20	abct\ndef	%abc%dEf%	false
+21	abc\n\ndeF	%abc%def%	false
+22	abc\n\ntdef	%abc%deF%	false
+23	Abc\nt\ndef	%abc%def%	false
+24	abct\n\ndef	%abc%def%	false
+25	ab\ndef	%Abc%def%	false
+26	aBc\nef	%ABC%DEF%	false
+27	ёЁё	Ё%Ё	false
+28	ощщЁё	Щ%Ё	false
+29	ощЩЁё	%Щ%Ё	false
+30	Щущпандер	%щп%е%	false
+31	Щущпандер	%щП%е%	false
+32	ощщЁё	%щ%	false
+33	ощЩЁё	%ё%	false
+34	Hello	.*	true
+35	Hello	.*ell.*	true
+36	Hello	o$	true
+37	Hello	hE.*lO	false
+MULTISEARCHANY
+true
+true
+true
+true
+true
+true
+true
+MULTISEARCHFIRSTINDEX
+true
+true
+true
+true
+true
+true
+true
+MULTISEARCHFIRSTPOSITION
+true
+true
+true
+true
+true
+true
+true

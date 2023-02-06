@@ -1,0 +1,10 @@
+DROP STREAM IF EXISTS test_table;
+CREATE STREAM test_table (id uint64, value ipv6) ENGINE=MergeTree ORDER BY id;
+
+INSERT INTO test_table VALUES (0, '0000:0000:0000:0000:0000:ffff:1.12.12.12');
+INSERT INTO test_table VALUES (1, '0000:0000:0000:0000:0000:ffff:123.123.123.123');
+INSERT INTO test_table VALUES (2, '0000:0000:0000:0000:0000:ffff:192.168.100.228');
+
+SELECT * FROM test_table ORDER BY id;
+
+DROP STREAM test_table;
