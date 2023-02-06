@@ -1,0 +1,120 @@
+-- { echo }
+
+SELECT extract_text_from_html('');
+
+SELECT extract_text_from_html(' ');
+
+SELECT extract_text_from_html('  ');
+
+SELECT extract_text_from_html('Hello');
+Hello
+SELECT extract_text_from_html('Hello, world');
+Hello, world
+SELECT extract_text_from_html('Hello,  world');
+Hello, world
+SELECT extract_text_from_html(' Hello,  world');
+Hello, world
+SELECT extract_text_from_html(' Hello,  world ');
+Hello, world
+SELECT extract_text_from_html(' \t Hello,\rworld \n ');
+Hello, world
+SELECT extract_text_from_html('Hello<world');
+Hello
+SELECT extract_text_from_html('Hello < world');
+Hello
+SELECT extract_text_from_html('Hello > world');
+Hello > world
+SELECT extract_text_from_html('Hello<world>');
+Hello
+SELECT extract_text_from_html('Hello<>world');
+Hello world
+SELECT extract_text_from_html('Hello<!>world');
+Hello world
+SELECT extract_text_from_html('Hello<!->world');
+Hello world
+SELECT extract_text_from_html('Hello<!-->world');
+Hello world
+SELECT extract_text_from_html('Hello<!--->world');
+Hello world
+SELECT extract_text_from_html('Hello<!---->world');
+Hello world
+SELECT extract_text_from_html('Hello <!-- --> World');
+Hello World
+SELECT extract_text_from_html('Hello<!-- --> World');
+Hello World
+SELECT extract_text_from_html('Hello<!-- -->World');
+Hello World
+SELECT extract_text_from_html('Hello <!-- -->World');
+Hello World
+SELECT extract_text_from_html('Hello <u> World</u>');
+Hello World
+SELECT extract_text_from_html('Hello <u>World</u>');
+Hello World
+SELECT extract_text_from_html('Hello<u>World</u>');
+Hello World
+SELECT extract_text_from_html('Hello<u> World</u>');
+Hello World
+SELECT extract_text_from_html('<![CDATA[ \t Hello,\rworld \n ]]>');
+ \t Hello,\rworld \n 
+SELECT extract_text_from_html('Hello <![CDATA[Hello\tworld]]> world!');
+HelloHello\tworld world!
+SELECT extract_text_from_html('Hello<![CDATA[Hello\tworld]]>world!');
+HelloHello\tworld world!
+SELECT extract_text_from_html('Hello <![CDATA[Hello <b>world</b>]]> world!');
+HelloHello <b>world</b> world!
+SELECT extract_text_from_html('<![CDATA[<sender>John Smith</sender>]]>');
+<sender>John Smith</sender>
+SELECT extract_text_from_html('<![CDATA[<sender>John <![CDATA[Smith</sender>]]>');
+<sender>John <![CDATA[Smith</sender>
+SELECT extract_text_from_html('<![CDATA[<sender>John <![CDATA[]]>Smith</sender>]]>');
+<sender>John <![CDATA[ Smith ]]>
+SELECT extract_text_from_html('<![CDATA[<sender>John ]]><![CDATA[Smith</sender>]]>');
+<sender>John Smith</sender>
+SELECT extract_text_from_html('<![CDATA[<sender>John ]]> <![CDATA[Smith</sender>]]>');
+<sender>John Smith</sender>
+SELECT extract_text_from_html('<![CDATA[<sender>John]]> <![CDATA[Smith</sender>]]>');
+<sender>JohnSmith</sender>
+SELECT extract_text_from_html('<![CDATA[<sender>John ]]>]]><![CDATA[Smith</sender>]]>');
+<sender>John ]]>Smith</sender>
+SELECT extract_text_from_html('Hello<script>World</script> goodbye');
+Hello goodbye
+SELECT extract_text_from_html('Hello<script >World</script> goodbye');
+Hello goodbye
+SELECT extract_text_from_html('Hello<scripta>World</scripta> goodbye');
+Hello World goodbye
+SELECT extract_text_from_html('Hello<script type="text/javascript">World</script> goodbye');
+Hello goodbye
+SELECT extract_text_from_html('Hello<style type="text/css">World</style> goodbye');
+Hello goodbye
+SELECT extract_text_from_html('Hello<script:p>World</script:p> goodbye');
+Hello World goodbye
+SELECT extract_text_from_html('Hello<script:p type="text/javascript">World</script:p> goodbye');
+Hello World goodbye
+SELECT extract_text_from_html('Hello<style type="text/css">World <!-- abc --> </style> goodbye');
+Hello goodbye
+SELECT extract_text_from_html('Hello<style type="text/css">World <!-- abc --> </style \n > goodbye');
+Hello goodbye
+SELECT extract_text_from_html('Hello<style type="text/css">World <!-- abc --> </ style> goodbye');
+Hello
+SELECT extract_text_from_html('Hello<style type="text/css">World <!-- abc --> </stylea> goodbye');
+Hello
+SELECT extract_text_from_html('Hello<style type="text/css">World <![CDATA[</style>]]> </stylea> goodbye');
+Hello
+SELECT extract_text_from_html('Hello<style type="text/css">World <![CDATA[</style>]]> </style> goodbye');
+Hello goodbye
+SELECT extract_text_from_html('Hello<style type="text/css">World <![CDAT[</style>]]> </style> goodbye');
+Hello ]]> goodbye
+SELECT extract_text_from_html('Hello<style type="text/css">World <![endif]--> </style> goodbye');
+Hello goodbye
+SELECT extract_text_from_html('Hello<style type="text/css">World <script>abc</script> </stylea> goodbye');
+Hello
+SELECT extract_text_from_html('Hello<style type="text/css">World <script>abc</script> </style> goodbye');
+Hello goodbye
+SELECT extract_text_from_html('<![CDATA[]]]]><![CDATA[>]]>');
+]]>
+SELECT extract_text_from_html('
+<img src="pictures/power.png" style="margin-bottom: -30px;" />
+<br><span style="padding-right: 10px; font-size: 10px;">xkcd.com</span>
+</div>
+');
+xkcd.com

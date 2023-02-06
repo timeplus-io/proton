@@ -1,0 +1,105 @@
+-- { echo }
+SELECT '--json_value--';
+--json_value--
+SELECT json_value('{"hello":1}', '$'); -- root is a complex object => default value (empty string)
+{"hello":1}
+SELECT json_value('{"hello":1}', '$.hello');
+1
+SELECT json_value('{"hello":1.2}', '$.hello');
+1.2
+SELECT json_value('{"hello":true}', '$.hello');
+true
+SELECT json_value('{"hello":"world"}', '$.hello');
+world
+SELECT json_value('{"hello":null}', '$.hello');
+null
+SELECT json_value('{"hello":["world","world2"]}', '$.hello');
+["world","world2"]
+SELECT json_value('{"hello":{"world":"!"}}', '$.hello');
+{"world":"!"}
+SELECT json_value('{hello:world}', '$.hello'); -- invalid json => default value (empty string)
+
+SELECT json_value('', '$.hello');
+
+SELECT json_value('{"foo foo":"bar"}', '$."foo foo"');
+bar
+SELECT json_value('{"hello":"\\uD83C\\uDF3A \\uD83C\\uDF38 \\uD83C\\uDF37 Hello, World \\uD83C\\uDF37 \\uD83C\\uDF38 \\uD83C\\uDF3A"}', '$.hello');
+🌺 🌸 🌷 Hello, World 🌷 🌸 🌺
+SELECT json_value('{"a":"Hello \\"World\\" \\\\"}', '$.a');
+Hello "World" \\
+select json_value('{"a":"\\n\\u0000"}', '$.a');
+\n\0
+select json_value('{"a":"\\u263a"}', '$.a');
+☺
+SELECT '--json_query--';
+--json_query--
+SELECT json_query('{"hello":1}', '$');
+[{"hello":1}]
+SELECT json_query('{"hello":1}', '$.hello');
+[1]
+SELECT json_query('{"hello":1.2}', '$.hello');
+[1.2]
+SELECT json_query('{"hello":true}', '$.hello');
+[true]
+SELECT json_query('{"hello":"world"}', '$.hello');
+["world"]
+SELECT json_query('{"hello":null}', '$.hello');
+[null]
+SELECT json_query('{"hello":["world","world2"]}', '$.hello');
+[["world","world2"]]
+SELECT json_query('{"hello":{"world":"!"}}', '$.hello');
+[{"world":"!"}]
+SELECT json_query( '{hello:{"world":"!"}}}', '$.hello'); -- invalid json => default value (empty string)
+
+SELECT json_query('', '$.hello');
+
+SELECT json_query('{"array":[[0, 1, 2, 3, 4, 5], [0, -1, -2, -3, -4, -5]]}', '$.array[*][0 to 2, 4]');
+[0, 1, 4, 0, -1, -4]
+SELECT '--json_exists--';
+--json_exists--
+SELECT json_exists('{"hello":1}', '$');
+true
+SELECT json_exists('', '$');
+false
+SELECT json_exists('{}', '$');
+true
+SELECT json_exists('{"hello":1}', '$.hello');
+true
+SELECT json_exists('{"hello":1,"world":2}', '$.world');
+true
+SELECT json_exists('{"hello":{"world":1}}', '$.world');
+false
+SELECT json_exists('{"hello":{"world":1}}', '$.hello.world');
+true
+SELECT json_exists('{hello:world}', '$.hello'); -- invalid json => default value (zero integer)
+false
+SELECT json_exists('', '$.hello');
+false
+SELECT json_exists('{"hello":["world"]}', '$.hello[*]');
+true
+SELECT json_exists('{"hello":["world"]}', '$.hello[0]');
+true
+SELECT json_exists('{"hello":["world"]}', '$.hello[1]');
+false
+SELECT json_exists('{"a":[{"b":1},{"c":2}]}', '$.a[*].b');
+true
+SELECT json_exists('{"a":[{"b":1},{"c":2}]}', '$.a[*].f');
+false
+SELECT json_exists('{"a":[[{"b":1}, {"g":1}],[{"h":1},{"y":1}]]}', '$.a[*][0].h');
+true
+SELECT '--MANY ROWS--';
+--MANY ROWS--
+DROP STREAM IF EXISTS 01889_sql_json;
+CREATE STREAM 01889_sql_json (id uint8, json string) ENGINE = MergeTree ORDER BY id;
+INSERT INTO 01889_sql_json(id, json) VALUES(0, '{"name":"Ivan","surname":"Ivanov","friends":["Vasily","Kostya","Artyom"]}');
+INSERT INTO 01889_sql_json(id, json) VALUES(1, '{"name":"Katya","surname":"Baltica","friends":["Tihon","Ernest","Innokentiy"]}');
+INSERT INTO 01889_sql_json(id, json) VALUES(2, '{"name":"Vitali","surname":"Brown","friends":["Katya","Anatoliy","Ivan","Oleg"]}');
+SELECT id, json_query(json, '$.friends[0 to 2]') FROM 01889_sql_json ORDER BY id;
+0	["Vasily", "Kostya"]
+1	["Tihon", "Ernest"]
+2	["Katya", "Anatoliy"]
+SELECT id, json_value(json, '$.friends[0]') FROM 01889_sql_json ORDER BY id;
+0	Vasily
+1	Tihon
+2	Katya
+DROP STREAM 01889_sql_json;

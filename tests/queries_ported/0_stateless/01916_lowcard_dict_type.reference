@@ -1,0 +1,6 @@
+1	low_cardinality(interval_minute)
+2	low_cardinality(interval_minute)
+1	low_cardinality(interval_day)
+2	low_cardinality(interval_day)
+61f0c404-5cb3-11e7-907b-a6006ad3dba2	low_cardinality(uuid)
+2	low_cardinality(string)

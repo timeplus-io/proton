@@ -1,0 +1,17 @@
+SelectWithUnionQuery (children 1)
+ ExpressionList (children 1)
+  SelectQuery (children 1)
+   ExpressionList (children 1)
+    Function tuple_element (children 1)
+     ExpressionList (children 2)
+      Literal uint64_255
+      Literal uint64_100
+SelectWithUnionQuery (children 1)
+ ExpressionList (children 1)
+  SelectQuery (children 1)
+   ExpressionList (children 1)
+    Function tuple_element (children 1)
+     ExpressionList (children 2)
+      Literal tuple_(uint64_255, uint64_1)
+      Literal uint64_1
+255

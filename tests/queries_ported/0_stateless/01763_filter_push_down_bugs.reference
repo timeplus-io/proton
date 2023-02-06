@@ -1,0 +1,8 @@
+1	2
+1	2
+[1]	2
+[[1]]	2
+string1_0	string2_0	string3_0	string4_0	1
+string1_0	string2_0	string3_0	string4_0	1
+1	[0,1,2]
+1

@@ -1,0 +1,23 @@
+DROP STREAM IF EXISTS v1;
+DROP STREAM IF EXISTS v2;
+
+CREATE STREAM v1 ( id int32 ) ENGINE = MergeTree() ORDER BY id;
+CREATE STREAM v2 ( value int32 ) ENGINE = MergeTree() ORDER BY value;
+
+INSERT INTO v1 ( id ) VALUES (1);
+INSERT INTO v2 ( value ) VALUES (1);
+
+SELECT * FROM v1 AS t1
+JOIN v1 AS t2 USING (id)
+JOIN v2 AS n1 ON t1.id = n1.value
+JOIN v2 AS n2 ON t1.id = n2.value;
+
+SELECT * FROM v1 AS t1
+JOIN v1 AS t2 USING (id)
+CROSS JOIN v2 AS n1
+CROSS JOIN v2 AS n2;
+
+SELECT * FROM v1 AS t1 JOIN v1 AS t2 USING (id) JOIN v1 AS t3 USING (value); -- { serverError NOT_IMPLEMENTED }
+
+DROP STREAM IF EXISTS v1;
+DROP STREAM IF EXISTS v2;

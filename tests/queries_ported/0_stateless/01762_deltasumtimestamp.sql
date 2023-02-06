@@ -1,0 +1,5 @@
+select delta_sum_timestamp_merge(state) from (select delta_sum_timestamp_state(value, timestamp) as state from (select to_date16(number) as timestamp, [4, 5, 5, 5][number-4] as value from numbers(5, 4)) UNION ALL select delta_sum_timestamp_state(value, timestamp) as state from (select to_date16(number) as timestamp, [0, 4, 8, 3][number] as value from numbers(1, 4)));
+select delta_sum_timestamp_merge(state) from (select delta_sum_timestamp_state(value, timestamp) as state from (select number as timestamp, [0, 4, 8, 3][number] as value from numbers(1, 4)) UNION ALL select delta_sum_timestamp_state(value, timestamp) as state from (select number as timestamp, [4, 5, 5, 5][number-4] as value from numbers(5, 4)));
+select delta_sum_timestamp(value, timestamp) from (select to_datetime(number) as timestamp, [0, 4, 8, 3][number] as value from numbers(1, 4));
+select delta_sum_timestamp(value, timestamp) from (select to_datetime(number) as timestamp, [0, 4.5, 8, 3][number] as value from numbers(1, 4));
+select delta_sum_timestamp(value, timestamp) from (select number as timestamp, [0, 4, 8, 3, 0, 0, 0, 1, 3, 5][number] as value from numbers(1, 10));
