@@ -1,0 +1,10 @@
+SELECT range(100) == range(0, 100) and range(0, 100) == range(0, 100, 1);
+SELECT range(100) == range(cast('100', 'int8')) and range(100) == range(cast('100', 'int16')) and range(100) == range(cast('100', 'int32')) and range(100) == range(cast('100', 'int64'));
+SELECT range(cast('100', 'int8')) == range(0, cast('100', 'int8')) and  range(0, cast('100', 'int8')) == range(0, cast('100', 'int8'), 1) and range(0, cast('100', 'int8')) == range(0, cast('100', 'int8'), cast('1', 'int8'));
+SELECT range(-1, 1);
+SELECT range(-1, 1, 2);
+SELECT range(1,1);
+SELECT range(5, 0, -1);
+SELECT range(5, -1, -1);
+SELECT range(1, 257, 65535);
+SELECT range(cast(number - 5, 'int8'), cast(number + 5, 'int8')) from system.numbers limit 10;
