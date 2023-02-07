@@ -1,0 +1,15 @@
+DROP STREAM IF EXISTS test;
+CREATE STREAM test (id string, `abc.1` string, `abc.2` string, `abc` string) ENGINE MergeTree order by id;
+DESC STREAM test;
+ALTER STREAM test MODIFY COLUMN `abc.1` string AFTER `abc`;
+DESC STREAM test;
+ALTER STREAM test MODIFY COLUMN `abc.2` string AFTER `abc`;
+DESC STREAM test;
+ALTER STREAM test MODIFY COLUMN `abc` string AFTER `abc.2`;
+DESC STREAM test;
+ALTER STREAM test MODIFY COLUMN `abc` string AFTER `id`;
+DESC STREAM test;
+ALTER STREAM test MODIFY COLUMN `abc` string AFTER `abc.1`;
+DESC STREAM test;
+ALTER STREAM test DROP COLUMN `abc`;
+DESC STREAM test;

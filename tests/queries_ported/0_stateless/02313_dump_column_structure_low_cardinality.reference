@@ -1,0 +1,1 @@
+array(low_cardinality(string)), const(size = 1, array(size = 1, uint64(size = 1), ColumnLowCardinality(size = 2, uint8(size = 2), ColumnUnique(size = 3, string(size = 3)))))

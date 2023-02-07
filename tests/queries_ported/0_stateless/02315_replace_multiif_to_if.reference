@@ -1,0 +1,8 @@
+SELECT
+  multi_if(number = 0, NULL, to_nullable(number))
+FROM
+ numbers(10000)
+SELECT
+  multi_if(number = 0, NULL, to_nullable(number))
+FROM
+ numbers(10000)

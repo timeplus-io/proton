@@ -1,0 +1,1 @@
+WITH ( SELECT to_low_cardinality('a') ) AS bar SELECT bar

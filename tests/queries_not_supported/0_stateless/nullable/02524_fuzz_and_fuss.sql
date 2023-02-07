@@ -1,0 +1,1 @@
+SELECT [9223372036854775806, 1048575], [], sum_map(val, [to_datetime64([CAST(1., 'decimal(10,2)'), CAST(10.000100135803223, 'decimal(10,2)')], NULL), CAST(-0., 'decimal(10,2)')], cnt) FROM (SELECT to_datetime64('0.0000001023', [1025, 256], '102.5', NULL), [NULL], [CAST('a', 'fixed_string(1)'), CAST('', 'fixed_string(1)')] AS val, [1024, 100] AS cnt);
