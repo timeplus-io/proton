@@ -550,6 +550,7 @@ void StorageMaterializedView::buildBackgroundPipeline()
     });
 
     local_context->setInsertionTable(target_table->getStorageID());
+    local_context->setupQueryStatusPollId(target_table->as<StorageStream &>().nextBlockId()); /// Async insert requried
 }
 
 void StorageMaterializedView::executeBackgroundPipeline()
