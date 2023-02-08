@@ -3,12 +3,13 @@ name: manual_trigger_build
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
     inputs:
-      sanitizer:
-        description: 'Sanitizer'
-        required: true
-        default: 'address'
+      build_type:
+        description: 'Build type'
+        required: false
+        default: 'release'
         type: choice
         options:
+        - release
         - address
         - thread
         - memory
@@ -25,7 +26,7 @@ on: # yamllint disable-line rule:truthy
         description: 'Docker image tag'     
         required: true
         type: string
-        default: 'sanitizer'
+        default: 'manual'
 
 jobs:
   prepare:
@@ -59,9 +60,7 @@ jobs:
 
         # push docker image
         docker push timeplus/proton:$TAG
-
-        echo 'docker pull timeplus/proton:$TAG'
-
+        echo "docker pull timeplus/proton:$TAG"
     steps:
       - name: display command
         run: |
@@ -69,13 +68,34 @@ jobs:
   build_x64:
     needs: prepare
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    if: github.event.inputs.arch == 'x64'
+    if: github.event.inputs.arch == 'x64' && github.event.inputs.build_type != 'release'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
-      sanitizer: ${{ github.event.inputs.sanitizer }}
+      sanitizer: ${{ github.event.inputs.build_type }}
+      arch: ${{ vars.X64_ARCH }}
+      tag: ${{ github.event.inputs.tag }}
+      command: |
+        ${{ needs.prepare.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  build_x64_release:
+    needs: prepare
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: github.event.inputs.arch == 'x64' && github.event.inputs.build_type == 'release'
+    with:
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      submodules: 'recursive'
       arch: ${{ vars.X64_ARCH }}
       tag: ${{ github.event.inputs.tag }}
       command: |
@@ -91,13 +111,34 @@ jobs:
   build_arm:
     needs: prepare
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    if: github.event.inputs.arch == 'arm'
+    if: github.event.inputs.arch == 'arm' && github.event.inputs.build_type != 'release'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
-      sanitizer: ${{ github.event.inputs.sanitizer }}
+      sanitizer: ${{ github.event.inputs.build_type }}
+      arch: ${{ vars.ARM_ARCH }}
+      tag: ${{ github.event.inputs.tag }}
+      command: |
+        ${{ needs.prepare.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  build_arm_release:
+    needs: prepare
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: github.event.inputs.arch == 'arm' && github.event.inputs.build_type == 'release'
+    with:
+      ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.ARM_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      submodules: 'recursive'
       arch: ${{ vars.ARM_ARCH }}
       tag: ${{ github.event.inputs.tag }}
       command: |
