@@ -48,6 +48,7 @@ COPY su-exec.c /su-exec.c
 
 RUN groupadd -r timeplus --gid=101 \
     && useradd -r -g timeplus --uid=101 --home-dir=/var/lib/proton --shell=/bin/bash timeplus \
+    && echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4 \
     && apt-get update \
     && apt-get install --yes --no-install-recommends \
         apt-transport-https \

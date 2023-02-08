@@ -1,0 +1,87 @@
+name: manual_trigger_test
+
+on: # yamllint disable-line rule:truthy
+  workflow_dispatch:
+    inputs:
+      arch:
+        descrition: 'Hardware architecture'
+        required: true
+        default: x64
+        type: choice
+        options:
+        - x64
+        - arm
+      tag:
+        description: 'Docker image tag'     
+        required: true
+        type: string
+        default: 'sanitizer'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      command: |
+        # pull docker image
+        docker pull timeplus/proton:$TAG
+
+        echo "run stream test"
+        cd $GITHUB_WORKSPACE/tests/stream
+        export PROTON_VERSION=$TAG
+        env
+
+        pip3 install -r helpers/requirements.txt
+        pip3 list
+        python3 ci_runner.py --debug --settings=redp,nativelog
+
+        echo "check test result"
+        cat $GITHUB_WORKSPACE/tests/stream/.status
+        cat $GITHUB_WORKSPACE/tests/stream/.status | grep nativelog:ExitCode.OK | grep redp:ExitCode.OK
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  test_on_x64:
+    needs: prepare
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: github.event.inputs.arch == 'x64'
+    with:
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      submodules: false
+      sanitizer: ''
+      arch: ${{ vars.X64_ARCH }}
+      tag: ${{ github.event.inputs.tag }}
+      command: |
+        ${{ needs.prepare.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  test_on_arm:
+    needs: prepare
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: github.event.inputs.arch == 'arm'
+    with:
+      ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.ARM_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      submodules: false
+      arch: ${{ vars.ARM_ARCH }}
+      sanitizer: ''
+      tag: ${{ github.event.inputs.tag }}
+      command: |
+        ${{ needs.prepare.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

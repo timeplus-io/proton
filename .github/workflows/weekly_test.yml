@@ -26,18 +26,23 @@ jobs:
               exit 127
             fi
 
+            tar -zcf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
+            aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://tp-internal/proton/ci_cache/
+
+            # clean ccache and build footprint
+            rm -rf $GITHUB_WORKSPACE/ccache
+            rm ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz
+            rm -rf build_docker
+
             docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
             cd $GITHUB_WORKSPACE/docker/server
 
-            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:testing-$SANITIZER-$GITHUB_SHA
+            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA
 
-            docker push timeplus/proton:testing-$SANITIZER-$GITHUB_SHA
+            docker push timeplus/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA
             cd $GITHUB_WORKSPACE/tests/stream
 
-            tar -zcf ./cache${SANITIZER:+_}$SANITIZER.tar.gz -C $GITHUB_WORKSPACE/ccache .
-            aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER.tar.gz s3://tp-internal/proton/
-
-            export PROTON_VERSION=testing-$SANITIZER-$GITHUB_SHA
+            export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
             env
             pip3 install -r helpers/requirements.txt
             python3 ci_runner.py --debug --settings=redp,nativelog
@@ -48,14 +53,16 @@ jobs:
       - name: display command
         run: |
           echo 'command: ${{ steps.set_command.outputs.command }}'
-  test_address:
+  test_address_x64:
     needs: prepare
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: c5.4xlarge
-      ec2-image-id: ami-045a86d6d301ab637
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_AMI}}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: "address"
+      arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
       command: |
         ${{ needs.prepare.outputs.command }}
@@ -67,14 +74,16 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-  test_thread:
+  test_thread_x64:
     needs: prepare
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: c5.4xlarge
-      ec2-image-id: ami-045a86d6d301ab637
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_AMI}}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: "thread"
+      arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
       command: |
         ${{ needs.prepare.outputs.command }}
@@ -86,14 +95,16 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-  test_memory:
+  test_memory_x64:
     needs: prepare
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: c5.4xlarge
-      ec2-image-id: ami-045a86d6d301ab637
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_AMI}}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: "memory"
+      arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
       command: |
         ${{ needs.prepare.outputs.command }}
@@ -105,14 +116,16 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-  test_undefined:
+  test_undefined_x64:
     needs: prepare
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: c5.4xlarge
-      ec2-image-id: ami-045a86d6d301ab637
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_AMI}}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: "undefined"
+      arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
       command: |
         ${{ needs.prepare.outputs.command }}
@@ -124,14 +137,16 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-  test_release:
+  test_release_x64:
     needs: prepare
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: c5.4xlarge
-      ec2-image-id: ami-045a86d6d301ab637
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_AMI}}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: ""
+      arch: ${{ vars.X64_ARCH }}
       tag: 'release'
       command: |
         ${{ needs.prepare.outputs.command }}

@@ -45,6 +45,7 @@ RUN apt-get update \
         lld-${LLVM_VERSION} \
         llvm-${LLVM_VERSION} \
         llvm-${LLVM_VERSION}-dev \
+        libclang-rt-${LLVM_VERSION}-dev \
         moreutils \
         ninja-build \
         pigz \

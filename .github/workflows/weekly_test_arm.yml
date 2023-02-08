@@ -1,3 +1,4 @@
+# FIXME: merge this workflow into weekly_test
 name: WeeklyTestARM
 
 on: # yamllint disable-line rule:truthy

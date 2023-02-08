@@ -1,0 +1,112 @@
+name: manual_trigger_build
+
+on: # yamllint disable-line rule:truthy
+  workflow_dispatch:
+    inputs:
+      sanitizer:
+        description: 'Sanitizer'
+        required: true
+        default: 'address'
+        type: choice
+        options:
+        - address
+        - thread
+        - memory
+        - undefined
+      arch:
+        descrition: 'Hardware architecture'
+        required: true
+        default: x64
+        type: choice
+        options:
+        - x64
+        - arm
+      tag:
+        description: 'Docker image tag'     
+        required: true
+        type: string
+        default: 'sanitizer'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      command: |
+        cd $GITHUB_WORKSPACE
+
+        # git config
+        git config user.name "proton-robot"
+        git config user.email "proton_robot@timeplus.io"
+        
+        # prepare build cache
+        aws s3 cp --no-progress s3://tp-internal/proton/ci_cache/cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz .
+        mkdir $GITHUB_WORKSPACE/ccache
+        tar -zxf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache
+        rm cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz
+
+        # compiling
+        ./docker/packager/packager --package-type binary --docker-image-version clang-15 --sanitizer $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+
+        # clear compiling footprint
+        rm -rf $GITHUB_WORKSPACE/ccache
+        rm -rf build_docker
+
+        docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
+        cd $GITHUB_WORKSPACE/docker/server
+
+        # build docker image
+        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$TAG
+
+        # push docker image
+        docker push timeplus/proton:$TAG
+
+        echo 'docker pull timeplus/proton:$TAG'
+
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  build_x64:
+    needs: prepare
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: github.event.inputs.arch == 'x64'
+    with:
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      submodules: 'recursive'
+      sanitizer: ${{ github.event.inputs.sanitizer }}
+      arch: ${{ vars.X64_ARCH }}
+      tag: ${{ github.event.inputs.tag }}
+      command: |
+        ${{ needs.prepare.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  build_arm:
+    needs: prepare
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: github.event.inputs.arch == 'arm'
+    with:
+      ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.ARM_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      submodules: 'recursive'
+      sanitizer: ${{ github.event.inputs.sanitizer }}
+      arch: ${{ vars.ARM_ARCH }}
+      tag: ${{ github.event.inputs.tag }}
+      command: |
+        ${{ needs.prepare.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

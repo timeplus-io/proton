@@ -17,6 +17,10 @@ on:
         type: string
         required: false
         default: sg-0b08bfc9785de435e
+      ec2-volume-size:
+        type: string
+        required: false
+        default: '200'
       submodules:
         type: string
         required: false
@@ -29,6 +33,10 @@ on:
         required: false
         type: string
         default: 'address'
+      arch:
+        required: false
+        type: string
+        default: 'x64'
       tag:
         required: false
         type: string
@@ -66,12 +74,13 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
       - name: Start EC2 runner
         id: start-ec2-runner
-        uses: machulav/ec2-github-runner@v2
+        uses: timeplus-io/ec2-github-runner@main
         with:
           mode: start
           github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           ec2-image-id: ${{ inputs.ec2-image-id }}
           ec2-instance-type: ${{ inputs.ec2-instance-type }}
+          ec2-volume-size: ${{ inputs.ec2-volume-size }}
           subnet-id: ${{ inputs.ec2-subnet-id }}
           security-group-id: ${{ inputs.ec2-security-group-id }}
           aws-resource-tags: > # optional, requires additional permissions
@@ -85,6 +94,7 @@ jobs:
     runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
     env:
       SANITIZER: ${{ inputs.sanitizer }}
+      ARCH: ${{ inputs.arch }}
       TAG: ${{ inputs.tag }}
     steps:
       - name: Configure AWS credentials from Test account
@@ -123,7 +133,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       - name: Stop EC2 runner
-        uses: machulav/ec2-github-runner@v2
+        uses: timeplus-io/ec2-github-runner@main
         with:
           mode: stop
           github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
