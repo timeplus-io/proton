@@ -69,11 +69,11 @@
         {
           "statements": [
             {"client":"python", "query_type": "table", "wait":2, "query":"drop stream if exists test_substream_1"},
-            {"client":"python", "query_type": "table", "wait":2, "query":"create stream test_substream_1(id int, value int)"},
-            {"client":"python", "query_id":"9900", "terminate": "manual", "query_type": "stream", "depends_on_stream":"test_substream_1", "query":"select id, min_k(value, 1), max_k(value, 1), top_k(value, 1) from test_substream_1 partition by id order by id limit 2"},
-            {"client":"python", "query_type": "table", "wait":2, "query": "insert into test_substream_1(id, value) values (1, 1), (2, 2), (2, 1), (1, 2), (2, 1), (1, 2)"},
+            {"client":"python", "query_type": "table", "wait":5, "query":"create stream test_substream_1(id int, value int)"},
+            {"client":"python", "query_id":"9900", "terminate": "manual", "query_type": "stream", "wait":1, "depends_on_stream":"test_substream_1", "query":"select id, min_k(value, 1), max_k(value, 1), top_k(value, 1) from test_substream_1 partition by id order by id limit 2"},
+            {"client":"python", "query_type": "table", "wait":3, "query": "insert into test_substream_1(id, value) values (1, 1), (2, 2), (2, 1), (1, 2), (2, 1), (1, 2)"},
             {"client":"python", "query_type": "table", "query_id":"9901", "wait":2, "query":"select id, min_k(value, 1), max_k(value, 1), top_k(value, 1) from table(test_substream_1) partition by id group by id order by id"},
-            {"client":"python", "wait": 2, "run_mode":"table", "query_type": "table", "query":"kill query where query_id = '9900'"}
+            {"client":"python", "wait": 5, "run_mode":"table", "query_type": "table", "query":"kill query where query_id = '9900'"}
           ]
         }
       ],

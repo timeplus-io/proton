@@ -156,10 +156,10 @@ def ci_runner(
 
             ci_runner_params_from_config = setting_config["settings"][key].get("ci_runner_params") #todo: support ci_runner_params per env of multi envs setting
 
-        if proton_server_container_name_str is None:
-            raise Exception(f"proton_server_container_name of setting = {setting} is not found in setting_config")
-        else:
-            proton_server_container_name_list.extend(proton_server_container_name_str.split(','))
+            if proton_server_container_name_str is None:
+                raise Exception(f"proton_server_container_name of setting = {setting} is not found in setting_config")
+            else:
+                proton_server_container_name_list.extend(proton_server_container_name_str.split(','))
     else:#todo: right now just make a simple if_else to handle the logic, so currently only multi env settings for single node proton is supported, need to optimize to support multi envs of cluster
         proton_server_container_name_str = setting_config.get("proton_server_container_name")
         if proton_server_container_name_str is None:
@@ -182,7 +182,7 @@ def ci_runner(
     
     #set proton log container path therefore log files could be retrieved later.
     proton_logs_in_container = [] # a list of tuple
-
+    print(f"proton_server_container_name_list = {proton_server_container_name_list}")
     for proton_server_container_name in proton_server_container_name_list:
         proton_log_in_container = (
             f"{proton_server_container_name}://var/log/proton-server/proton-server.log"

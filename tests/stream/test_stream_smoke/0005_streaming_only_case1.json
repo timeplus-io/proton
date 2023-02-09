@@ -145,7 +145,7 @@
             "description": "stream stream aggregation join",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"601-1", "query_type": "stream", "query_end_timer":5, "query":"select a.id, b.type, max(a.value), window_start, window_end from tumble(test_stream_only1, timestamp, interval 5 second) as a join table(test_stream_only1_d) as b on a.id = b.id group by a.id, b.type, window_start, window_end"}]},
+                    {"client":"python", "query_id":"601-1", "query_type": "stream","wait":2, "query_end_timer":6, "query":"select a.id, b.type, max(a.value), window_start, window_end from tumble(test_stream_only1, timestamp, interval 5 second) as a join table(test_stream_only1_d) as b on a.id = b.id group by a.id, b.type, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test_stream_only1","depends_on":"601-1","wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
