@@ -205,9 +205,13 @@ std::pair<String, Int32> TableRestRouterHandler::executePost(const Poco::JSON::O
     /// may already happen in other nodes and broadcast to the action node, in this case, we will
     /// report table exist failure but we should not
     if (isDistributedDDL() && CatalogService::instance(query_context).tableExists(database, table))
+    {
+        auto tables = CatalogService::instance(query_context).findTableByName(database, table);
         return {
-            jsonErrorResponse(fmt::format("Stream {}.{} already exists.", database, table), ErrorCodes::STREAM_ALREADY_EXISTS),
+            jsonErrorResponse(
+                fmt::format("{} {}.{} already exists.", tables[0]->engine, database, table), ErrorCodes::STREAM_ALREADY_EXISTS),
             HTTPResponse::HTTP_BAD_REQUEST};
+    }
 
     const auto & host_shards = getQueryParameter("host_shards");
     const auto & uuid = getQueryParameter("uuid");

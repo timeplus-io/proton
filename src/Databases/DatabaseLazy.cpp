@@ -178,7 +178,12 @@ void DatabaseLazy::attachTable(ContextPtr /* context_ */, const String & table_n
                               std::forward_as_tuple(table, current_time, DatabaseOnDisk::getObjectMetadataModificationTime(table_name)));
     if (!inserted)
         /// proton: starts
-        throw Exception("Stream " + backQuote(database_name) + "." + backQuote(table_name) + " already exists.", ErrorCodes::STREAM_ALREADY_EXISTS);
+        throw Exception(
+            ErrorCodes::STREAM_ALREADY_EXISTS,
+            "{} {}.{} already exists.",
+            it->second.table->getName(),
+            backQuote(database_name),
+            backQuote(table_name));
         /// proton: ends
 
     it->second.expiration_iterator = cache_expiration_queue.emplace(cache_expiration_queue.end(), current_time, table_name);

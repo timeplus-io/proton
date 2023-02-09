@@ -75,6 +75,7 @@
 #include <Interpreters/Streaming/DDLHelper.h>
 #include <NativeLog/Server/NativeLog.h>
 #include <Storages/Streaming/StorageStreamProperties.h>
+#include <Storages/Streaming/storageUtil.h>
 /// proton: ends.
 
 
@@ -933,7 +934,7 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
         if (create.if_not_exists)
             return true;
         else
-            throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Stream {}.{} already exists", create.getDatabase(), create.getTable());
+            throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "{} {}.{} already exists", tables[0]->engine, create.getDatabase(), create.getTable());
     }
 
     assert(create.storage);
@@ -1190,13 +1191,7 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
         assertOrSetUUID(create, database);
 
         /// proton : starts.
-        String storage_name;
-        if (create.is_dictionary)
-            storage_name = "Dictionary";
-        else if (create.is_ordinary_view || create.is_materialized_view)
-            storage_name = "View";
-        else
-            storage_name = "Stream";
+        String storage_name = getStorageName(create);
         /// proton : ends.
 
         auto storage_already_exists_error_code = create.is_dictionary ? ErrorCodes::DICTIONARY_ALREADY_EXISTS : ErrorCodes::STREAM_ALREADY_EXISTS;

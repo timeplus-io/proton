@@ -254,7 +254,7 @@ void DatabaseWithOwnTablesBase::attachTableUnlocked(const String & table_name, c
         if (table_id.hasUUID())
             DatabaseCatalog::instance().removeUUIDMapping(table_id.uuid);
         /// proton: starts
-        throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Stream {} already exists.", table_id.getFullTableName());
+        throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "{} {} already exists.", table->getName(), table_id.getFullTableName());
         /// proton: ends
     }
 }

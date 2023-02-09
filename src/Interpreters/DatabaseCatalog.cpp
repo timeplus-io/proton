@@ -484,7 +484,8 @@ void DatabaseCatalog::assertTableDoesntExist(const StorageID & table_id, Context
 {
     if (isTableExist(table_id, context_))
         /// proton: starts
-        throw Exception("Stream " + table_id.getNameForLogs() + " already exists.", ErrorCodes::STREAM_ALREADY_EXISTS);
+        throw Exception(
+            ErrorCodes::STREAM_ALREADY_EXISTS, "{} {} already exists.", getTable(table_id, context_)->getName(), table_id.getNameForLogs());
         /// proton: ends
 }
 

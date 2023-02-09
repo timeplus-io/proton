@@ -22,6 +22,10 @@
 #include <filesystem>
 #include <Common/filesystemHelpers.h>
 
+/// proton: starts.
+#include <Storages/Streaming/storageUtil.h>
+/// proton: ends.
+
 namespace fs = std::filesystem;
 
 namespace DB
@@ -185,7 +189,11 @@ void DatabaseOnDisk::createTable(
     if (isTableExist(table_name, getContext()))
         /// proton: starts
         throw Exception(
-            ErrorCodes::STREAM_ALREADY_EXISTS, "Stream {}.{} already exists", backQuote(getDatabaseName()), backQuote(table_name));
+            ErrorCodes::STREAM_ALREADY_EXISTS,
+            "{} {}.{} already exists",
+            tryGetTable(table_name, getContext())->getName(),
+            backQuote(getDatabaseName()),
+            backQuote(table_name));
         /// proton: ends
 
     String table_metadata_path = getObjectMetadataPath(table_name);
@@ -216,10 +224,12 @@ void DatabaseOnDisk::createTable(
         if (create.uuid != create_detached.uuid)
             /// proton: starts
             throw Exception(
-                    ErrorCodes::STREAM_ALREADY_EXISTS,
-                    "Stream {}.{} already exist (detached permanently). To attach it back "
-                    "you need to use short ATTACH syntax or a full statement with the same UUID",
-                    backQuote(getDatabaseName()), backQuote(table_name));
+                ErrorCodes::STREAM_ALREADY_EXISTS,
+                "{} {}.{} already exist (detached permanently). To attach it back "
+                "you need to use short ATTACH syntax or a full statement with the same UUID",
+                getStorageName(create_detached),
+                backQuote(getDatabaseName()),
+                backQuote(table_name));
             /// proton: ends
     }
 
@@ -360,9 +370,9 @@ void DatabaseOnDisk::checkMetadataFilenameAvailabilityUnlocked(const String & to
 
         /// proton: starts
         if (fs::exists(detached_permanently_flag))
-            throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Stream {}.{} already exists (detached permanently)", backQuote(database_name), backQuote(to_table_name));
+            throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Metadata {}.{} already exists (detached permanently)", backQuote(database_name), backQuote(to_table_name));
         else
-            throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Stream {}.{} already exists (detached)", backQuote(database_name), backQuote(to_table_name));
+            throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Metadata {}.{} already exists (detached)", backQuote(database_name), backQuote(to_table_name));
         /// proton: ends
     }
 }
