@@ -26,7 +26,7 @@ namespace
 String getExceptionMessagePrefix(const DataTypes & types)
 {
     WriteBufferFromOwnString res;
-    res << "There is no subtype for types ";
+    res << "Data types ";
 
     bool first = true;
     for (const auto & type : types)
@@ -38,6 +38,7 @@ String getExceptionMessagePrefix(const DataTypes & types)
         res << type->getName();
     }
 
+    res <<  " are incompatible, and a function or an expression cannot return those incompatible data types.";
     return res.str();
 }
 
@@ -352,3 +353,4 @@ DataTypePtr getMostSubtype(const DataTypes & types, bool throw_if_result_is_noth
 }
 
 }
+

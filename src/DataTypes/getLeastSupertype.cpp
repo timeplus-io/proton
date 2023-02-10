@@ -39,7 +39,7 @@ template <typename DataTypes>
 String getExceptionMessagePrefix(const DataTypes & types)
 {
     WriteBufferFromOwnString res;
-    res << "There is no supertype for types ";
+    res << "Data types ";
 
     bool first = true;
     for (const auto & type : types)
@@ -51,6 +51,7 @@ String getExceptionMessagePrefix(const DataTypes & types)
         res << typeToString(type);
     }
 
+    res <<  " are incompatible, and a function or an expression cannot return those incompatible data types.";
     return res.str();
 }
 
