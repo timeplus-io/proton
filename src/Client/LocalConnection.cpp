@@ -65,13 +65,14 @@ void LocalConnection::sendQuery(
     UInt64 stage,
     const Settings *,
     const ClientInfo *,
-    bool)
+    bool,
+    std::function<void(const Progress &)> process_progress_callback)
 {
     query_context = session.makeQueryContext();
     query_context->setCurrentQueryId(query_id);
     if (send_progress)
     {
-        query_context->setProgressCallback([this] (const Progress & value) { return this->updateProgress(value); });
+        query_context->setProgressCallback([this] (const Progress & value) { this->updateProgress(value); });
         query_context->setFileProgressCallback([this](const FileProgress & value) { this->updateProgress(Progress(value)); });
     }
 
@@ -127,6 +128,19 @@ void LocalConnection::sendQuery(
         else if (state->io.pipeline.completed())
         {
             CompletedPipelineExecutor executor(state->io.pipeline);
+            if (process_progress_callback)
+            {
+                auto callback = [this, &process_progress_callback]()
+                {
+                    if (state->is_cancelled)
+                        return true;
+
+                    process_progress_callback(state->progress.fetchAndResetPiecewiseAtomically());
+                    return false;
+                };
+
+                executor.setCancelCallback(callback, query_context->getSettingsRef().interactive_delay / 1000);
+            }
             executor.execute();
         }
 
@@ -169,6 +183,7 @@ void LocalConnection::sendData(const Block & block, const String &, bool)
 
 void LocalConnection::sendCancel()
 {
+    state->is_cancelled = true;
     if (state->executor)
         state->executor->cancel();
 }
@@ -401,7 +416,7 @@ Packet LocalConnection::receivePacket()
         }
         case Protocol::Server::Progress:
         {
-            packet.progress = std::move(state->progress);
+            packet.progress = state->progress.fetchAndResetPiecewiseAtomically();
             state->progress.reset();
             next_packet_type.reset();
             break;

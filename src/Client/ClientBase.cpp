@@ -649,7 +649,7 @@ void ClientBase::processOrdinaryQuery(const String & query_to_execute, ASTPtr pa
     }
 
     int retries_left = 10;
-    while (retries_left)
+while (retries_left)
     {
         try
         {
@@ -660,7 +660,8 @@ void ClientBase::processOrdinaryQuery(const String & query_to_execute, ASTPtr pa
                 query_processing_stage,
                 &global_context->getSettingsRef(),
                 &global_context->getClientInfo(),
-                true);
+                true,
+                [&](const Progress & progress) { onProgress(progress); });
 
             if (send_external_tables)
                 sendExternalTables(parsed_query);
@@ -1002,7 +1003,8 @@ void ClientBase::processInsertQuery(const String & query_to_execute, ASTPtr pars
         query_processing_stage,
         &global_context->getSettingsRef(),
         &global_context->getClientInfo(),
-        true);
+        true,
+        [&](const Progress & progress) { onProgress(progress); });
 
     if (send_external_tables)
         sendExternalTables(parsed_query);
@@ -1028,18 +1030,18 @@ void ClientBase::sendData(Block & sample, const ColumnsDescription & columns_des
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Column description is empty and it can't be built from sample from table. Cannot execute query.");
     }
-
     /// If INSERT data must be sent.
     auto * parsed_insert_query = parsed_query->as<ASTInsertQuery>();
     if (!parsed_insert_query)
         return;
 
-    if (need_render_progress)
+    bool have_data_in_stdin = !is_interactive && !stdin_is_a_tty && !std_in.eof();
+
+    if (need_render_progress && have_data_in_stdin)
     {
         /// Set total_bytes_to_read for current fd.
         FileProgress file_progress(0, std_in.size());
         progress_indication.updateProgress(Progress(file_progress));
-
         /// Set callback to be called on file progress.
         progress_indication.setFileProgressCallback(global_context, true);
     }

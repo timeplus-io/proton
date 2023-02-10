@@ -317,7 +317,7 @@ std::vector<String> Client::loadWarningMessages()
     connection->sendQuery(connection_parameters.timeouts, "SELECT message FROM system.warnings SETTINGS _tp_internal_system_open_sesame=true", "" /* query_id */,
                           QueryProcessingStage::Complete,
                           &global_context->getSettingsRef(),
-                          &global_context->getClientInfo(), false);
+                          &global_context->getClientInfo(), false, {});
     while (true)
     {
         Packet packet = connection->receivePacket();
@@ -335,13 +335,9 @@ std::vector<String> Client::loadWarningMessages()
                 continue;
 
             case Protocol::Server::Progress:
-                continue;
             case Protocol::Server::ProfileInfo:
-                continue;
             case Protocol::Server::Totals:
-                continue;
             case Protocol::Server::Extremes:
-                continue;
             case Protocol::Server::Log:
                 continue;
 
@@ -361,7 +357,6 @@ std::vector<String> Client::loadWarningMessages()
         }
     }
 }
-
 
 void Client::initialize(Poco::Util::Application & self)
 {
