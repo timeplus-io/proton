@@ -47,7 +47,7 @@ void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Ki
 std::pair<Int64, IntervalKind> extractInterval(const ASTFunction * ast);
 
 Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone);
-Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone, Int64 time_scale);
+Int64 addTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone, Int64 time_scale);
 
 WindowType toWindowType(const String & func_name);
 
@@ -75,7 +75,7 @@ public:
             case IntervalKind::Nanosecond:
             case IntervalKind::Microsecond:
             case IntervalKind::Millisecond:
-                return BaseScaleInterval{num_units, SCALE_SECOND, kind};
+                return BaseScaleInterval{static_cast<Int64>(std::ceil(num_units * IntervalKind(kind).toSeconds())), SCALE_SECOND, kind};
             /// Based on SCALE_SECOND
             case IntervalKind::Second:
                 return BaseScaleInterval{num_units, SCALE_SECOND, kind};

@@ -118,15 +118,15 @@ void WatermarkSettings::initWatermarkForGlobalAggr()
     {
         /// If `PERIODIC INTERVAL ...` is missing in `EMIT STREAM` query
         mode = EmitMode::PERIODIC;
-        emit_query_interval = 2;
-        emit_query_interval_kind = IntervalKind::Second;
+        emit_query_interval = 2000;
+        emit_query_interval_kind = IntervalKind::Millisecond;
     }
 }
 
 void Watermark::preProcess()
 {
     if (watermark_settings.mode == WatermarkSettings::EmitMode::PERIODIC)
-        watermark_ts = UTCSeconds::now();
+        watermark_ts = MonotonicMilliseconds::now();
 }
 
 void Watermark::process(Chunk & chunk)
@@ -137,8 +137,8 @@ void Watermark::process(Chunk & chunk)
     if (watermark_settings.global_aggr)
     {
         /// global aggr emitted by using wall clock time of the current server
-        last_event_seen_ts = UTCSeconds::now();
-        max_event_ts = UTCSeconds::now();
+        last_event_seen_ts = MonotonicMilliseconds::now();
+        max_event_ts = MonotonicMilliseconds::now();
         assignWatermark(chunk);
         return;
     }
@@ -162,9 +162,9 @@ void Watermark::assignWatermark(Chunk & chunk)
             assert(0);
             break;
         case WatermarkSettings::EmitMode::PERIODIC: {
-            auto now = UTCSeconds::now();
+            auto now = MonotonicMilliseconds::now();
             auto next_watermark_ts = addTime(
-                watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, DateLUT::instance());
+                watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, DateLUT::instance(), 3);
             if (now >= next_watermark_ts)
             {
                 auto chunk_ctx = chunk.getOrCreateChunkContext();

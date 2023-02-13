@@ -27,7 +27,13 @@ namespace
 {
 std::optional<IntervalKind> mapIntervalKind(const String & func_name)
 {
-    if (func_name == "to_interval_second")
+    // if (func_name == "to_interval_nanosecond")
+    //     return IntervalKind::Nanosecond;
+    // else if (func_name == "to_interval_microsecond")
+    //     return IntervalKind::Microsecond;
+    if (func_name == "to_interval_millisecond")
+        return IntervalKind::Millisecond;
+    else if (func_name == "to_interval_second")
         return IntervalKind::Second;
     else if (func_name == "to_interval_minute")
         return IntervalKind::Minute;
@@ -402,7 +408,7 @@ std::pair<Int64, IntervalKind> extractInterval(const ASTFunction * ast)
     return {interval, interval_kind};
 }
 
-ALWAYS_INLINE Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone)
+ALWAYS_INLINE Int64 addTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone)
 {
     switch (kind)
     {
@@ -410,16 +416,25 @@ ALWAYS_INLINE Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_u
         case IntervalKind::Nanosecond:
         case IntervalKind::Microsecond:
         case IntervalKind::Millisecond:
-            return static_cast<Int64>(AddTime<IntervalKind::Second>::execute(static_cast<UInt32>(time_sec), num_units, time_zone));
+            return static_cast<Int64>(AddTime<IntervalKind::Second>::execute(
+                static_cast<UInt32>(dt), static_cast<Int64>(std::ceil(num_units * IntervalKind(kind).toSeconds())), time_zone));
 
+    /// dt -> second
 #define CASE_WINDOW_KIND(KIND) \
     case IntervalKind::KIND: { \
-        return static_cast<Int64>(AddTime<IntervalKind::KIND>::execute(static_cast<UInt32>(time_sec), num_units, time_zone)); \
+        return static_cast<Int64>(AddTime<IntervalKind::KIND>::execute(static_cast<UInt32>(dt), num_units, time_zone)); \
     }
         CASE_WINDOW_KIND(Second)
         CASE_WINDOW_KIND(Minute)
         CASE_WINDOW_KIND(Hour)
         CASE_WINDOW_KIND(Day)
+#undef CASE_WINDOW_KIND
+
+    /// dt -> day
+#define CASE_WINDOW_KIND(KIND) \
+    case IntervalKind::KIND: { \
+        return static_cast<Int64>(AddTime<IntervalKind::KIND>::execute(static_cast<UInt16>(dt), num_units, time_zone)); \
+    }
         CASE_WINDOW_KIND(Week)
         CASE_WINDOW_KIND(Month)
         CASE_WINDOW_KIND(Quarter)
@@ -431,9 +446,21 @@ ALWAYS_INLINE Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_u
 
 ALWAYS_INLINE Int64 addTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone, Int64 scale)
 {
-    auto time_sec = dt / common::exp10_i64(static_cast<int>(scale));
-    auto ts_fractional = dt % common::exp10_i64(static_cast<int>(scale));
-    return addTime(time_sec, kind, num_units, time_zone) * common::exp10_i64(static_cast<int>(scale)) + ts_fractional;
+    if (kind >= IntervalKind::Second)
+    {
+        auto time_sec = dt / common::exp10_i64(static_cast<int>(scale));
+        auto ts_fractional = dt % common::exp10_i64(static_cast<int>(scale));
+        return addTime(time_sec, kind, num_units, time_zone) * common::exp10_i64(static_cast<int>(scale)) + ts_fractional;
+    }
+    else if (kind == IntervalKind::Millisecond)
+    {
+        if (scale >= 3)
+            return dt + num_units * common::exp10_i64(static_cast<int>(scale - 3));
+        else
+            return dt + num_units / common::exp10_i64(static_cast<int>(3 - scale));
+    }
+    else
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Window time doesn't support interval '{}'", IntervalKind(kind).toString());
 }
 
 ASTPtr makeASTInterval(Int64 num_units, IntervalKind kind)
