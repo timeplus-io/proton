@@ -41,7 +41,8 @@ public:
 
     void shutdown() override;
 
-    StoragePtr getTargetTable();
+    StoragePtr getTargetTable() const;
+    StoragePtr tryGetTargetTable() const;
 
     void checkValid() const;
 
@@ -66,8 +67,8 @@ public:
 
 private:
     /// Return true on success, false on failure
-    bool createInnerTableIfNecessary();
-    void createInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
+    void createInnerTable();
+    void doCreateInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
 
     void buildBackgroundPipeline();
     void executeSelectPipeline();
@@ -83,7 +84,6 @@ private:
 
     /// Target table
     StorageID target_table_id = StorageID::createEmpty();
-    StoragePtr target_table_storage = nullptr;
     bool has_inner_table = false;
     bool is_attach = false;
     bool is_virtual = false;
@@ -100,7 +100,6 @@ private:
     PipelineExecutorPtr background_executor;
     QueryPipelineBuilder background_pipeline;
     ThreadFromGlobalPool background_thread;
-    ThreadFromGlobalPool start_thread;
 
 protected:
     StorageMaterializedView(

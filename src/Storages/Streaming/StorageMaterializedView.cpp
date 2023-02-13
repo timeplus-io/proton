@@ -26,6 +26,7 @@
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageFactory.h>
 #include <Common/ProtonCommon.h>
+#include <Common/checkStackSize.h>
 
 namespace DB
 {
@@ -114,7 +115,7 @@ StorageMaterializedView::StorageMaterializedView(
 
         if (!attach_)
         {
-            auto target_table = getTargetTable();
+            auto target_table = tryGetTargetTable();
             if (!target_table)
                 throw Exception(ErrorCodes::INCORRECT_QUERY, "Target stream is not found", target_table_id.getFullTableName());
 
@@ -131,9 +132,14 @@ StorageMaterializedView::StorageMaterializedView(
     }
     else
     {
-        /// We will create a query to create an internal stream
-        /// For now, we create inner stream during startup, FIXME, why?
         target_table_id = StorageID(getStorageID().database_name, generateInnerTableName(getStorageID()), query.to_inner_uuid);
+
+        /// In virtual scenarios, inner stream is supposed to already exist
+        if (is_virtual)
+            return;
+
+        /// We will create a query to create an internal stream
+        createInnerTable();
     }
 }
 
@@ -156,11 +162,7 @@ StorageMaterializedView::~StorageMaterializedView()
 
 ///                             /- (inner_target_table)
 /// InMemoryTable + TargetTable
-///                             \- (into_target_table) so far non-support
-///
-///                             InMemoryTable                                       TargetTable
-/// global_aggr:    (view_properties, RESERVED_VIEW_VERSION)        (view_properties, RESERVED_VIEW_VERSION)
-/// others:         (view_properties)                               (view_properties)
+///                             \- (into_target_table)
 void StorageMaterializedView::startup()
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();
@@ -169,10 +171,8 @@ void StorageMaterializedView::startup()
     for (const auto & select_table_id : select_query.select_table_ids)
         DatabaseCatalog::instance().addDependency(select_table_id, storage_id);
 
-    start_thread = ThreadFromGlobalPool{[this]() {
-        createInnerTableIfNecessary();
+    if (!is_virtual)
         executeSelectPipeline();
-    }};
 }
 
 void StorageMaterializedView::shutdown()
@@ -181,9 +181,6 @@ void StorageMaterializedView::shutdown()
         return;
 
     cancelBackgroundPipeline();
-
-    if (start_thread.joinable())
-        start_thread.join();
 }
 
 void StorageMaterializedView::executeSelectPipeline()
@@ -247,9 +244,6 @@ void StorageMaterializedView::read(
     checkValid();
 
     auto storage = getTargetTable();
-    /// stop query, if the inner table has been deleted.
-    if (!storage)
-        throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Inner table of {}", getStorageID().getFullTableName());
 
     Block header;
     if (!column_names.empty())
@@ -298,8 +292,6 @@ void StorageMaterializedView::dropInnerTableIfAny(bool no_delay, ContextPtr loca
 {
     if (has_inner_table && target_table_id)
         InterpreterDropQuery::executeDropQuery(ASTDropQuery::Kind::Drop, getContext(), local_context, target_table_id, no_delay);
-
-    target_table_storage = nullptr;
 }
 
 void StorageMaterializedView::alter(const AlterCommands &, ContextPtr, AlterLockHolder &)
@@ -323,12 +315,10 @@ void StorageMaterializedView::checkTableCanBeRenamed() const
 
 void StorageMaterializedView::checkAlterIsPossible(const AlterCommands & commands, ContextPtr ctx) const
 {
-    auto target = target_table_storage;
-    if (!target)
-        target = DatabaseCatalog::instance().getTable(target_table_id, getContext());
+    if (!has_inner_table)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Materialized view with INTO clause doesn't support alter");
 
-    if (target)
-        target->checkAlterIsPossible(commands, ctx);
+    getTargetTable()->checkAlterIsPossible(commands, ctx);
 }
 
 void StorageMaterializedView::renameInMemory(const StorageID & new_table_id)
@@ -343,22 +333,18 @@ void StorageMaterializedView::renameInMemory(const StorageID & new_table_id)
         DatabaseCatalog::instance().updateDependency(select_table_id, old_table_id, select_table_id, getStorageID());
 }
 
-StoragePtr StorageMaterializedView::getTargetTable()
+StoragePtr StorageMaterializedView::getTargetTable() const
 {
-    /// Cache the target table storage
-    try
-    {
-        if (!target_table_storage)
-            target_table_storage = DatabaseCatalog::instance().getTable(target_table_id, getContext());
-    }
-    catch (Exception &)
-    {
-        /// sometimes during asynchronously deleting mv, the target might have be deleted already
-        LOG_ERROR(log, "inner table {} does not exists", target_table_id.getFullTableName());
-        return nullptr;
-    }
+    checkStackSize();
 
-    return target_table_storage;
+    return DatabaseCatalog::instance().getTable(target_table_id, getContext());
+}
+
+StoragePtr StorageMaterializedView::tryGetTargetTable() const
+{
+    checkStackSize();
+
+    return DatabaseCatalog::instance().tryGetTable(target_table_id, getContext());
 }
 
 void StorageMaterializedView::checkValid() const
@@ -375,18 +361,12 @@ void StorageMaterializedView::checkValid() const
 
 NamesAndTypesList StorageMaterializedView::getVirtuals() const
 {
-    /// So far we always have inner target table.
-    assert(target_table_storage);
-    return target_table_storage->getVirtuals();
+    return getTargetTable()->getVirtuals();
 }
 
-bool StorageMaterializedView::createInnerTableIfNecessary()
+void StorageMaterializedView::createInnerTable()
 {
-    if (is_attach || is_virtual || !has_inner_table)
-        /// In attach or virtual or `INTO [target stream]` scenarios, inner stream is supposed to already exist
-        return true;
-
-    assert(target_table_id);
+    assert(!is_attach && !is_virtual && has_inner_table);
 
     /// Init inner memory table and inner target table
     auto metadata_snapshot = getInMemoryMetadataPtr();
@@ -399,8 +379,8 @@ bool StorageMaterializedView::createInnerTableIfNecessary()
     {
         try
         {
-            createInnerTable(metadata_snapshot, local_context);
-            return true;
+            doCreateInnerTable(metadata_snapshot, local_context);
+            return;
         }
         catch (...)
         {
@@ -411,26 +391,19 @@ bool StorageMaterializedView::createInnerTableIfNecessary()
 
     if (max_retries <= 0)
     {
-        background_status.has_exception = true;
-        background_status.exception = std::make_exception_ptr(Exception(
-            ErrorCodes::RESOURCE_NOT_INITED,
-            "Failed to create inner stream for Materialized view '{}'",
-            getStorageID().getFullTableName()));
-
         LOG_ERROR(log, "Failed to create inner stream for Materialized view '{}'", getStorageID().getFullTableName());
-        return false;
+        throw Exception(
+            ErrorCodes::RESOURCE_NOT_INITED, "Failed to create inner stream for Materialized view '{}'", getStorageID().getFullTableName());
     }
-
-    return true;
 }
 
-void StorageMaterializedView::createInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
+void StorageMaterializedView::doCreateInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
 {
-    assert(has_inner_table);
+    assert(has_inner_table && target_table_id);
 
     /// If there is a Create request, then we need create the target inner table.
     /// Create inner target table query
-    ///   create stream <inner_target_table_id> (view_properties[, ProtonConsts::RESERVED_VIEW_VERSION]) engine = Stream(1, 1, rand());
+    ///   create stream <inner_target_table_id> (view_properties) engine = Stream(1, 1, rand());
     /// FIXME: In future, add order clause or remove engine ?
     auto manual_create_query = std::make_shared<ASTCreateQuery>();
     manual_create_query->setDatabase(target_table_id.getDatabaseName());
@@ -455,21 +428,18 @@ void StorageMaterializedView::createInnerTable(const StorageMetadataPtr & metada
     create_interpreter.setInternal(true);
     create_interpreter.execute();
 
-    target_table_storage
-        = DatabaseCatalog::instance().getTable({manual_create_query->getDatabase(), manual_create_query->getTable()}, local_context);
+    target_table_id = DatabaseCatalog::instance()
+                          .getTable({manual_create_query->getDatabase(), manual_create_query->getTable()}, getContext())
+                          ->getStorageID();
 
     updateStorageSettings();
 }
 
 void StorageMaterializedView::updateStorageSettings()
 {
-    auto target = getTargetTable();
-    if (target)
-    {
-        StorageInMemoryMetadata meta(*getInMemoryMetadataPtr());
-        meta.setSettingsChanges(target->getInMemoryMetadataPtr()->getSettingsChanges());
-        setInMemoryMetadata(meta);
-    }
+    StorageInMemoryMetadata meta(*getInMemoryMetadataPtr());
+    meta.setSettingsChanges(getTargetTable()->getInMemoryMetadataPtr()->getSettingsChanges());
+    setInMemoryMetadata(meta);
 }
 
 void StorageMaterializedView::buildBackgroundPipeline()
@@ -576,25 +546,14 @@ void StorageMaterializedView::executeBackgroundPipeline()
 
 StorageSnapshotPtr StorageMaterializedView::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const
 {
-    if (target_table_storage)
-    {
-        auto storage_snapshot = target_table_storage->getStorageSnapshot(metadata_snapshot, query_context)->clone();
-        /// Add virtuals, such as `_tp_version`
-        storage_snapshot->addVirtuals(getVirtuals());
-        return storage_snapshot;
-    }
-    else
-        /// TODO: Update dynamic object description for InMemoryTable ?
-        return std::make_shared<StorageSnapshot>(*this, metadata_snapshot);
+    return getTargetTable()->getStorageSnapshot(metadata_snapshot, query_context);
 }
 
 MergeTreeSettingsPtr StorageMaterializedView::getSettings() const
 {
-    if (target_table_storage)
-    {
-        if (auto * stream = target_table_storage->as<StorageStream>())
-            return stream->getSettings();
-    }
+    if (auto * stream = getTargetTable()->as<StorageStream>())
+        return stream->getSettings();
+
     return nullptr;
 }
 

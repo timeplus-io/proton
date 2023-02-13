@@ -216,8 +216,6 @@ StoragePtr CatalogService::createVirtualTableStorage(const String & query, const
     if (!create)
         return nullptr;
 
-    /// required for materialized view, virtual table does not execute background query
-    create->calculateVirtual();
     auto [table_name, storage]
         = createTableFromAST(*create, database, /* table_data_path_relative = */ "", global_context, false);
 

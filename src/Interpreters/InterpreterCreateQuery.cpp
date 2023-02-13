@@ -1048,8 +1048,6 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     auto database_name = create.database ? create.getDatabase() : current_database;
 
     /// proton: start
-    create.calculateVirtual();
-
     if (createStreamDistributed(database_name, create))
         return {};
 

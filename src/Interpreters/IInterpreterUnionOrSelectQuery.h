@@ -57,12 +57,12 @@ public:
         /// This is a distirbuted query on remote node, get required shard_num
         if (context->hasQueryContext() && context->getQueryContext()->hasScalar("_shard_num"))
         {
-            const auto * column_const = checkAndGetColumnConst<ColumnVector<UInt32>>(
+            const auto * column = checkAndGetColumn<ColumnVector<UInt32>>(
                 context->getQueryContext()->getScalar("_shard_num").getByPosition(0).column.get());
-            if (unlikely(!column_const))
+            if (unlikely(!column))
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "Don't get shard num from distributed query on remote node");
 
-            context->setShardToRead(column_const->getValue<UInt32>() - 1);  /// based on 0
+            context->setShardToRead(column->getData()[0] - 1);  /// based on 0
         }
         /// proton: ends.
     }

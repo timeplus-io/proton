@@ -115,10 +115,6 @@ public:
 
     bool isView() const { return is_ordinary_view || is_materialized_view; }
 
-    /// proton: starts. calculate and set 'is_virtual' for materialized view
-    void calculateVirtual() { is_virtual = is_materialized_view && to_inner_uuid != UUIDHelpers::Nil && !attach; }
-    /// proton: ends
-
     virtual QueryKind getQueryKind() const override { return QueryKind::Create; }
 
 protected:

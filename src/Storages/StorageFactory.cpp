@@ -197,7 +197,7 @@ StoragePtr StorageFactory::get(
         .constraints = constraints,
         .attach = query.attach,
         /// proton: starts
-        .is_virtual = query.is_virtual,
+        .is_virtual = relative_data_path.empty(),
         .is_random = query.is_random,
         /// proton: ends
         .has_force_restore_data_flag = has_force_restore_data_flag,
