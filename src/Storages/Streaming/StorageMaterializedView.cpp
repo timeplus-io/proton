@@ -23,6 +23,7 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
+#include <Storages/AlterCommands.h>
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageFactory.h>
 #include <Common/ProtonCommon.h>
@@ -171,6 +172,9 @@ void StorageMaterializedView::startup()
     for (const auto & select_table_id : select_query.select_table_ids)
         DatabaseCatalog::instance().addDependency(select_table_id, storage_id);
 
+    /// Sync target table settings
+    updateStorageSettings();
+
     if (!is_virtual)
         executeSelectPipeline();
 }
@@ -294,9 +298,10 @@ void StorageMaterializedView::dropInnerTableIfAny(bool no_delay, ContextPtr loca
         InterpreterDropQuery::executeDropQuery(ASTDropQuery::Kind::Drop, getContext(), local_context, target_table_id, no_delay);
 }
 
-void StorageMaterializedView::alter(const AlterCommands &, ContextPtr, AlterLockHolder &)
+void StorageMaterializedView::alter(const AlterCommands & commands, ContextPtr context_, AlterLockHolder & alter_lock_holder)
 {
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Altering Materialized view is not supported");
+    getTargetTable()->alter(commands, context_, alter_lock_holder);
+    updateStorageSettings();
 }
 
 void StorageMaterializedView::checkTableCanBeRenamed() const
@@ -316,7 +321,10 @@ void StorageMaterializedView::checkTableCanBeRenamed() const
 void StorageMaterializedView::checkAlterIsPossible(const AlterCommands & commands, ContextPtr ctx) const
 {
     if (!has_inner_table)
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Materialized view with INTO clause doesn't support alter");
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Materialized view with specified target stream can't be altered.");
+
+    if (!commands.isSettingsAlter())
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only materialized view's settings can be altered.");
 
     getTargetTable()->checkAlterIsPossible(commands, ctx);
 }
@@ -431,8 +439,6 @@ void StorageMaterializedView::doCreateInnerTable(const StorageMetadataPtr & meta
     target_table_id = DatabaseCatalog::instance()
                           .getTable({manual_create_query->getDatabase(), manual_create_query->getTable()}, getContext())
                           ->getStorageID();
-
-    updateStorageSettings();
 }
 
 void StorageMaterializedView::updateStorageSettings()
