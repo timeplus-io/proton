@@ -1,4 +1,5 @@
 import os, sys, logging, subprocess, time, datetime, json, csv, argparse, getopt
+from argparse import ArgumentParser
 from helpers.s3_helper import S3Helper
 from helpers.compress_files import compress_file_fast
 from helpers.utils import compose_up
@@ -284,76 +285,117 @@ if __name__ == "__main__":
     ci_runner_end = datetime.datetime.now()
     ci_runner_duration = ci_runner_end - ci_runner_start
 
+    parser = ArgumentParser(description="Proton functional tests")
 
-    try:
-        opts, args = getopt.getopt(
-            sys.argv[1:],
-            "",
-            [
-                "local",
-                "debug",
-                "settings=",
-                "test_suites=",
-                "loop=",
-                "id=",
-                "cluster_query_route_mode=",
-                "cluster_query_node=",
-                "create_stream_shards=",
-                "create_stream_replicas=",
-                "test_suite_timeout=",
-            ],
-        )
-    except (getopt.GetoptError) as error:
-        print(f"command error: {error}")
-        print(
-            f"usage: python3 ci_runner.py --local --debug --test_suites=smoke,materilize --loop=30 --id=1,2,3 --cluster_query_route_mode=none_stream_node_first/--query_node=proton-cluster-node1 --create_stream_shards=2, --create_stream_replicas=2'"
-        )
-        sys.exit(1)
-    print(f"opts = {opts}")
-    test_suite_timeout = DEFAULT_TEST_SUITE_TIMEOUT
-    for name, value in opts:
-        if name in ("--local", "-l"):
-            os.environ["PROTON_CI_MODE"] = "local"
-            run_mode = "local"
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument(
+        "--github",
+        action="store_const",
+        const = "github",
+        default= "github",
+        dest="run_mode",
+        help="Run tests in github action flow mode",
+    )     
+    group.add_argument(
+        "--local",
+        action="store_const",
+        const = "local",
+        default=None,
+        dest="run_mode",
+        help="Run tests in local mode",
+    )
+           
+    parser.add_argument( 
+        "--debug",
+        action = "store_true",
+        default = True, 
+        help="Run tests in debug mode to print debug log, otherwiese info log ouput")
 
-        if name in ("--debug"):
-            logging_level = "DEBUG"
+    parser.add_argument(
+        "-q", 
+        "--test_suites", 
+        default = None, 
+        help="Test suite name to be run")  
 
-        if name in ("--settings"):
-            if value == None or value == "":
-                print(f"usage: python3 ci_runner.py --settings=nativelog,redp")
-                sys.exit(1)
-            else:
-                settings = value.split(",")
+    parser.add_argument(
+        "-i", 
+        "--id", 
+        help="Test suite name to be run")                   
 
-        if name in ("--test_suites"):
-            os.environ["PROTON_TEST_SUITES"] = value
+    parser.add_argument(
+        "--loop",
+        default=1,
+        type=int,
+        help="Num of repeating running tests",
+    )
 
-        if name in ("--loop"):
-            if value.isdigit() == False:
-                print(f"usage: python3 ci_runner.py --local --loop=30")
-                sys.exit(1)
-            else:
-                loop = int(value)
-        if name in ("--id"):
-            os.environ["PROTON_TEST_IDS"] = value
+    parser.add_argument(
+        "-s", 
+        "--settings", 
+        default = "default", 
+        help="settings of proton for testing running on, mapping to the proton settings in proton/tests/stream/test_stream_smoke/configs/config.json")
+    
+    parser.add_argument(
+        "--cluster_query_route_mode", 
+        help="how to run query on cluster, e.g. none_stream_node_first")   
 
-        if name in ("--cluster_query_route_mode"):
-            os.environ["PROTON_CLUSTER_QUERY_ROUTE_MODE"] = value
+    parser.add_argument(
+        "--cluster_query_node", 
+        help="cluster node name for running queries on, e.g. proton-cluster-node1")
 
-        if name in ("--cluster_query_node"):
-            os.environ["PROTON_CLUSTER_QUERY_NODE"] = value
+    parser.add_argument(
+        "--create_stream_shards", 
+        help="shards to be created when creating stream, if set settings shards = <create_stream_shards> will be added to all the stream creating statement")
 
-        if name in ("--create_stream_shards"):
-            os.environ["PROTON_CREATE_STREAM_SHARDS"] = value
+    parser.add_argument(
+        "--create_stream_replicas", 
+        help="replicas to be created when creating stream, if set settings replicas = <create_stream_replicas> will be added to all the stream creating statement")                   
 
-        if name in ("--create_stream_replicas"):
-            os.environ["PROTON_CREATE_STREAM_REPLICAS"] = value
-        
-        if name in ("--test_suite_timeout"):
-            if str(value).isdigit():
-                os.environ["TEST_SUITE_TIMEOUT"] = value
-                test_suite_timeout = int(value)
+    parser.add_argument(
+        "--test_suite_timeout",
+        default=DEFAULT_TEST_SUITE_TIMEOUT,
+        type=int,
+        help="Test suite running time out timer, in seconds, 1200 seconds by default",
+    )    
+    
+    parser.add_argument("--tmp", help="Path to tmp dir")
+
+    args = parser.parse_args() 
+
+    envs = []
+    if args.run_mode:
+        run_mode = args.run_mode
+        os.environ["PROTON_CI_MODE"] = run_mode 
+
+    if args.debug:
+        logging_level = "DEBUG"
+
+    settings = args.settings.split(",")
+
+    if args.test_suites:
+        os.environ["PROTON_TEST_SUITES"] = args.test_suites
+    
+    if args.loop:
+        loop = args.loop
+    
+    if args.id:
+        os.environ["PROTON_TEST_IDS"] = args.id
+    
+    if args.cluster_query_route_mode:
+        os.environ["PROTON_CLUSTER_QUERY_ROUTE_MODE"] = args.cluster_query_route_mode
+
+    if args.cluster_query_node:
+        os.environ["PROTON_CLUSTER_QUERY_NODE"] = args.cluster_query_node
+
+    if args.create_stream_shards:
+        os.environ["PROTON_CREATE_STREAM_SHARDS"] = args.create_stream_shards
+
+    if args.create_stream_replicas:
+        os.environ["PROTON_CREATE_STREAM_REPLICAS"] = args.create_stream_replicas
+
+    if args.test_suite_timeout:
+        test_suite_timeout = args.test_suite_timeout
+        os.environ["TEST_SUITE_TIMEOUT"] = str(test_suite_timeout)
 
 
     console_handler = logging.StreamHandler(sys.stderr)

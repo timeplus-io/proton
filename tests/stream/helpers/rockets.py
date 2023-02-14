@@ -227,8 +227,8 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
 
     config["proton_ci_mode"] = proton_ci_mode
     config["proton_setting"] = proton_setting  # put proton_setting into config
-    config["test_suite_timeout"] =test_suite_timeout # put test_suite_timeout into config
-    config["test_case_timeout"] = test_case_timeout
+    config["test_suite_timeout"] = int(test_suite_timeout) # put test_suite_timeout into config
+    config["test_case_timeout"] = int(test_case_timeout)
     config["proton_create_stream_shards"] = proton_create_stream_shards
     config["proton_create_stream_replicas"] = proton_create_stream_replicas
 
@@ -1590,8 +1590,8 @@ def query_exists_cluster(config, query_proc, client, retry=300):
             return False
 
     except (BaseException, errors.ServerException) as error:
-        logger.debug(f"QYERT_EXISTS_CLUSTER_ERROR FATAL exception: proton_setting  = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, error = {error}")
-        raise Exception(f"QYERT_EXISTS_CLUSTER_ERROR FATAL exception: proton_setting  = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, error = {error}")
+        logger.debug(f"QUERY_EXISTS_CLUSTER_ERROR FATAL exception: proton_setting  = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, error = {error}")
+        raise Exception(f"QUERY_EXISTS_CLUSTER_ERROR FATAL exception: proton_setting  = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, error = {error}")
 
 def query_execute(config, child_conn, query_results_queue, alive, logging_level="INFO"):
     mp_mgr = (
@@ -3261,8 +3261,22 @@ def test_suite_run(
     test_suite_name = test_suite_set_dict.get("test_suite_name")
     proton_server_container_name = config.get("proton_server_container_name")
     config["test_suite_name"] = test_suite_name #test_suite_run is started to be run in a standalone process, set the test_suite_name in config, todo: logic for test_suite_run is not in multiple process
-    logger.info(f"proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, running starts......")
     test_suite = test_suite_set_dict.get("test_suite")
+    test_suite_timeout = config.get("test_suite_timeout")
+    if test_suite_timeout is None or test_suite_timeout == DEFAULT_TEST_SUITE_TIMEOUT:
+        test_suite_timeout = test_suite.get("test_suite_timeout")
+        if test_suite_timeout is None:
+            test_suite_timeout = DEFAULT_TEST_SUITE_TIMEOUT
+    rest_setting = config.get("rest_setting")
+
+    test_case_timeout = config.get("test_case_timeout")
+    if test_case_timeout is None or test_case_timeout == DEFAULT_CASE_TIMEOUT:
+        test_case_timeout = test_suite.get("test_case_timeout")
+        if test_case_timeout is None:
+            test_case_timeout = DEFAULT_CASE_TIMEOUT
+    rest_setting = config.get("rest_setting")
+
+    logger.info(f"proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, test_suite_timeout = {test_suite_timeout}, running starts......")
     query_results_queue = test_suite_set_dict.get("query_results_queue")
     # q_exec_client = test_suite_set_dict.get("query_exe_client")
 
@@ -3321,19 +3335,6 @@ def test_suite_run(
 
     
     #proton_setting = config.get("proton_setting")
-    test_suite_timeout = config.get("test_suite_timeout")
-    if test_suite_timeout is None or test_suite_timeout == DEFAULT_TEST_SUITE_TIMEOUT:
-        test_suite_timeout = test_suite.get("test_suite_timeout")
-        if test_suite_timeout is None:
-            test_suite_timeout = DEFAULT_TEST_SUITE_TIMEOUT
-    rest_setting = config.get("rest_setting")
-
-    test_case_timeout = config.get("test_case_timeout")
-    if test_case_timeout is None or test_case_timeout == DEFAULT_CASE_TIMEOUT:
-        test_case_timeout = test_suite.get("test_case_timeout")
-        if test_case_timeout is None:
-            test_case_timeout = DEFAULT_CASE_TIMEOUT
-    rest_setting = config.get("rest_setting")
 
 
     test_suite_timeout_hit = threading.Event() #set the test_suite_timeout_hit flag as False and start a timer to set this flag
