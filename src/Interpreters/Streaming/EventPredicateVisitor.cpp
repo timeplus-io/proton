@@ -155,6 +155,45 @@ std::tuple<SeekBy, Int64, bool> parseEventPredicate(ASTPtr left_ast, ASTPtr righ
 
     return {seek_by, seek_to, left_is_event_col};
 }
+
+SeekToInfoPtr parseSeekToInfo(ASTFunction * func, ContextPtr context)
+{
+    assert(func->arguments->children.size() == 2);
+    auto & left_arg = func->arguments->children[0];
+    auto & right_arg = func->arguments->children[1];
+
+    /// We only handle predicates like `_tp_sn >= / <= ...` or ` _tp_time >= / <= ...` etc simple predicates.
+    /// For complex predicates like `a_func(_tp_sn) >= / <= ...` are not supported.
+    auto [seek_by, seek_point, left_is_event_col] = parseEventPredicate(left_arg, right_arg, context);
+
+    if (seek_by == SeekBy::None)
+        return {};
+
+    if (left_is_event_col)
+    {
+        if (seekLeft(func->name))
+            /// Case-1: ` _tp_time >= ...`
+            return std::make_shared<SeekToInfo>(
+                right_arg->getColumnName(),
+                std::vector<Int64>{seek_point},
+                seek_by == SeekBy::EventTime ? SeekToType::ABSOLUTE_TIME : SeekToType::SEQUENCE_NUMBER);
+        else
+            /// Case-2: ` _tp_time <= ...`
+            return std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER);
+    }
+    else
+    {
+        if (seekRight(func->name))
+            /// Case-3: ` ... <= _tp_time`
+            return std::make_shared<SeekToInfo>(
+                left_arg->getColumnName(),
+                std::vector<Int64>{seek_point},
+                seek_by == SeekBy::EventTime ? SeekToType::ABSOLUTE_TIME : SeekToType::SEQUENCE_NUMBER);
+        else
+            /// Case-4: ` ... >= _tp_time`
+            return std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER);
+    }
+}
 }
 
 bool EventPredicateMatcher::needChildVisit(ASTPtr & node, ASTPtr & children)
@@ -181,48 +220,47 @@ void EventPredicateMatcher::visit(ASTPtr & ast, Data & data)
     if (!COMPARISON_FUNCS.contains(func->name))
         return;
 
-    assert(func->arguments->children.size() == 2);
-    auto & left_arg = func->arguments->children[0];
-    auto & right_arg = func->arguments->children[1];
-
-    /// We only handle predicates like `_tp_sn >= / <= ...` or ` _tp_time >= / <= ...` etc simple predicates.
-    /// For complex predicates like `a_func(_tp_sn) >= / <= ...` are not supported.
-    auto [seek_by, seek_point, left_is_event_col] = parseEventPredicate(left_arg, right_arg, data.context);
-
-    if (seek_by == SeekBy::None)
-        return;
-
-    if (data.event_predicate)
-        throw Exception(
-            ErrorCodes::UNEXPECTED_EXPRESSION,
-            "The event predicate '{}' conflicts with '{}'",
-            data.event_predicate->formatForErrorMessage(),
-            func->formatForErrorMessage());
-
-    if (left_is_event_col)
-    {
-        if (seekLeft(func->name))
-            data.seek_to_info = std::make_shared<SeekToInfo>(
-                right_arg->getColumnName(),
-                std::vector<Int64>{seek_point},
-                seek_by == SeekBy::EventTime ? SeekToType::ABSOLUTE_TIME : SeekToType::SEQUENCE_NUMBER);
-        else
-            data.seek_to_info
-                = std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER);
-    }
-    else
-    {
-        if (seekRight(func->name))
-            data.seek_to_info = std::make_shared<SeekToInfo>(
-                left_arg->getColumnName(),
-                std::vector<Int64>{seek_point},
-                seek_by == SeekBy::EventTime ? SeekToType::ABSOLUTE_TIME : SeekToType::SEQUENCE_NUMBER);
-        else
-            data.seek_to_info
-                = std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER);
-    }
-
-    data.event_predicate = ast;
+    if (auto seek_to_info = parseSeekToInfo(func, data.context))
+        data.seek_to_infos.emplace_back(seek_to_info);
 }
 
+
+SeekToInfoPtr EventPredicateMatcher::Data::tryGetSeekToInfo() const
+{
+    SeekToInfoPtr res;
+    for (auto seek_to_info : seek_to_infos)
+    {
+        if (!res)
+        {
+            res = seek_to_info;
+            continue;
+        }
+
+        /// For event predicate type, seek to priority (low -> high):
+        /// 'earliest' -> event time -> absolute sn
+        if (res->getSeekToType() == seek_to_info->getSeekToType())
+        {
+            /// Select info with lowest seek point, for examples:
+            /// 1) Both are time:
+            ///     `_tp_time` > '2022-10-1' and `_tp_time` > '2000-10-1'   =>  (seek_to=`2000-10-1`)
+            /// 2) Both are absolute sn:
+            ///     `_tp_sn` > 1 and `_tp_sn` > 2                           =>  (seek_to=1)
+            /// 3) Mix absolute sn and 'earliest':
+            ///     `_tp_sn` > 1 and `_tp_sn` < 5 (e.g. -2, 'earliest')     =>  (seek_to=1)
+            if (static_cast<UInt64>(seek_to_info->getSeekPoints()[0]) < static_cast<UInt64>(res->getSeekPoints()[0]))
+                res = seek_to_info;
+        }
+        else
+        {
+            /// We allow mixed use of different event predicate types, the event sequence number predicate
+            /// dominates `seek_to`, for examples:
+            /// `_tp_time` > '2022-10-1' and `_tp_sn` > 1                   =>  (seek_to=1)
+            /// 'earliest' and `_tp_time` > '2020-10-1'       =>  (seek_to='2020-10-1')
+            if (seek_to_info->getSeekToType() == SeekToType::SEQUENCE_NUMBER || res->getSeekTo() == "earliest")
+                res = seek_to_info;
+        }
+    }
+
+    return res;
+}
 }

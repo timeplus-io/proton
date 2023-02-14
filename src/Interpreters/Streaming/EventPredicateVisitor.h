@@ -15,10 +15,11 @@ public:
     struct Data
     {
         ContextPtr context;
-        SeekToInfoPtr seek_to_info;
-        ASTPtr event_predicate;
+        std::vector<SeekToInfoPtr> seek_to_infos;
 
-        Data(ContextPtr context_) : context(std::move(context_)) {}
+        Data(ContextPtr context_) : context(std::move(context_)) { }
+
+        SeekToInfoPtr tryGetSeekToInfo() const;
     };
 
     static void visit(ASTPtr & ast, Data & data);

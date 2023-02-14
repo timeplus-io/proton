@@ -324,6 +324,36 @@
           ]
         }
       ]
+    },
+    {
+      "id": 9,
+      "tags": ["seek_to"],
+      "name": "seek_to",
+      "description": "Multiple event predicates",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"2100", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time = '2022-12-01 00:00:01.111' or _tp_time = '2022-12-01 00:00:03.111'"},
+            {"client":"python","query_id":"2101", "depends_on_stream":"seek_to_stream","query_end_timer":1, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time >= '2022-12-01 00:00:04.111' and _tp_time >= '2022-12-01 00:00:02.111'"},
+            {"client":"python","query_id":"2102", "depends_on_stream":"seek_to_stream","query_end_timer":1, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time < '2022-12-01 00:00:03.111' and _tp_time > '2022-12-01 00:00:01.111'"},
+            {"client":"python","query_id":"2103", "depends_on_stream":"seek_to_stream","query_end_timer":1, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time <= '2022-12-01 00:00:03.111' and _tp_time <= '2022-12-01 00:00:04.111'"},
+            {"client":"python","query_id":"2104", "depends_on_stream":"seek_to_stream","query_end_timer":1, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time > '2022-12-01 00:00:03.111' and _tp_sn >= 0"},
+            {"client":"python","query_id":"2105", "depends_on_stream":"seek_to_stream","query_end_timer":1, "query_type": "stream", "query":"select s from seek_to_stream where _tp_sn > 0 and _tp_time < '2022-12-01 00:00:03.111'"},
+            {"client":"python","query_id":"2106", "depends_on_stream":"seek_to_stream","query_end_timer":1, "query_type": "stream", "query":"select s from seek_to_stream where _tp_sn < 5 and _tp_sn < 8 and _tp_sn < 4"},
+            {"client":"python","query_id":"2107", "depends_on_stream":"seek_to_stream","query_end_timer":1, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time != '2022-12-01 00:00:03.111' and _tp_time <= '2022-12-01 00:00:04.111' and _tp_time >= '2022-12-01 00:00:02.111'"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"2100", "expected_results":[["s1"], ["s3"]]},
+        {"query_id":"2101", "expected_results":[["s4"]]},
+        {"query_id":"2102", "expected_results":[["s2"]]},
+        {"query_id":"2103", "expected_results":[["s1"], ["s2"], ["s3"]]},
+        {"query_id":"2104", "expected_results":[["s4"]]},
+        {"query_id":"2105", "expected_results":[["s2"]]},
+        {"query_id":"2106", "expected_results":[["s1"], ["s2"], ["s3"], ["s4"]]},
+        {"query_id":"2107", "expected_results":[["s2"], ["s4"]]}
+      ]
     }
   ]
 }

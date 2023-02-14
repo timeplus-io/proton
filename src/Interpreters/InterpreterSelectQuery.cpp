@@ -3591,8 +3591,8 @@ void InterpreterSelectQuery::analyzeEventPredicateAsSeekTo()
 
     EventPredicateVisitor::Data data(context);
     EventPredicateVisitor(data).visit(query_ptr);
-    if (data.seek_to_info)
-        query_info.seek_to_info = data.seek_to_info;
+    if (auto seek_to_info = data.tryGetSeekToInfo())
+        query_info.seek_to_info = seek_to_info;
 }
 
 void InterpreterSelectQuery::analyzeStreamingMode()
