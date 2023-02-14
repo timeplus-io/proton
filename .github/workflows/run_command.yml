@@ -32,7 +32,7 @@ on:
       sanitizer:
         required: false
         type: string
-        default: 'address'
+        default: ''
       arch:
         required: false
         type: string

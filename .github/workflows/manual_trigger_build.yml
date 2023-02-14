@@ -29,8 +29,9 @@ on: # yamllint disable-line rule:truthy
         default: 'manual'
 
 jobs:
-  prepare:
+  prepare_sanitizer:
     runs-on: ubuntu-latest
+    if: github.event.inputs.build_type != 'release'
     outputs:
       command: |
         cd $GITHUB_WORKSPACE
@@ -65,8 +66,45 @@ jobs:
       - name: display command
         run: |
           echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_release:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.build_type == 'release'
+    outputs:
+      command: |
+        cd $GITHUB_WORKSPACE
+
+        # git config
+        git config user.name "proton-robot"
+        git config user.email "proton_robot@timeplus.io"
+
+        # prepare build cache
+        aws s3 cp --no-progress s3://tp-internal/proton/ci_cache/cache${ARCH:+_}$ARCH.tar.gz .
+        mkdir $GITHUB_WORKSPACE/ccache
+        tar -zxf ./cache${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache
+        rm cache${ARCH:+_}$ARCH.tar.gz
+
+        # compiling
+        ./docker/packager/packager --package-type binary --docker-image-version clang-15 --build-type release --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+
+        # clear compiling footprint
+        rm -rf $GITHUB_WORKSPACE/ccache
+        rm -rf build_docker
+
+        docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
+        cd $GITHUB_WORKSPACE/docker/server
+
+        # build docker image
+        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$TAG
+
+        # push docker image
+        docker push timeplus/proton:$TAG
+        echo "docker pull timeplus/proton:$TAG"
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
   build_x64:
-    needs: prepare
+    needs: prepare_sanitizer
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.inputs.arch == 'x64' && github.event.inputs.build_type != 'release'
     with:
@@ -78,7 +116,7 @@ jobs:
       arch: ${{ vars.X64_ARCH }}
       tag: ${{ github.event.inputs.tag }}
       command: |
-        ${{ needs.prepare.outputs.command }}
+        ${{ needs.prepare_sanitizer.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -88,7 +126,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   build_x64_release:
-    needs: prepare
+    needs: prepare_release
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.inputs.arch == 'x64' && github.event.inputs.build_type == 'release'
     with:
@@ -96,10 +134,11 @@ jobs:
       ec2-image-id: ${{ vars.X64_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
+      sanitizer: ""
       arch: ${{ vars.X64_ARCH }}
       tag: ${{ github.event.inputs.tag }}
       command: |
-        ${{ needs.prepare.outputs.command }}
+        ${{ needs.prepare_release.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -109,7 +148,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   build_arm:
-    needs: prepare
+    needs: prepare_sanitizer
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.inputs.arch == 'arm' && github.event.inputs.build_type != 'release'
     with:
@@ -121,7 +160,7 @@ jobs:
       arch: ${{ vars.ARM_ARCH }}
       tag: ${{ github.event.inputs.tag }}
       command: |
-        ${{ needs.prepare.outputs.command }}
+        ${{ needs.prepare_sanitizer.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -131,7 +170,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   build_arm_release:
-    needs: prepare
+    needs: prepare_release
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.inputs.arch == 'arm' && github.event.inputs.build_type == 'release'
     with:
@@ -139,10 +178,11 @@ jobs:
       ec2-image-id: ${{ vars.ARM_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
+      sanitizer: ""
       arch: ${{ vars.ARM_ARCH }}
       tag: ${{ github.event.inputs.tag }}
       command: |
-        ${{ needs.prepare.outputs.command }}
+        ${{ needs.prepare_release.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
