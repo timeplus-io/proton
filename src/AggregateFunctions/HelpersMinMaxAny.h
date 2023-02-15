@@ -1,7 +1,12 @@
 #pragma once
 
-#include <AggregateFunctions/AggregateFunctionMinMaxAny.h>
+#include "config.h"
+
+#if USE_ARG_MIN_MAX_FUNCS
 #include <AggregateFunctions/AggregateFunctionArgMinMax.h>
+#endif
+
+#include <AggregateFunctions/AggregateFunctionMinMaxAny.h>
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/Helpers.h>
 
@@ -52,6 +57,7 @@ static IAggregateFunction * createAggregateFunctionSingleValue(const String & na
     return new AggregateFunctionTemplate<Data<SingleValueDataGeneric>>(argument_type);
 }
 
+#if USE_ARG_MIN_MAX_FUNCS
 
 /// argMin, argMax
 template <template <typename> class MinMaxData, typename ResData>
@@ -126,5 +132,7 @@ static IAggregateFunction * createAggregateFunctionArgMinMax(const String & name
 
     return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataGeneric>(res_type, val_type);
 }
+
+#endif
 
 }

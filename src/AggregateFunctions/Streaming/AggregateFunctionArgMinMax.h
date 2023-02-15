@@ -1,5 +1,9 @@
 #pragma once
 
+#include "config.h"
+
+#if USE_ARG_MIN_MAX_FUNCS
+
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Core/Settings.h>
 #include <DataTypes/IDataType.h>
@@ -102,3 +106,5 @@ public:
 };
 }
 }
+
+#endif

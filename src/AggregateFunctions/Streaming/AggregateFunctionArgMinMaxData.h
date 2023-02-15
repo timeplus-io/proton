@@ -1,5 +1,9 @@
 #pragma once
 
+#include "config.h"
+
+#if USE_ARG_MIN_MAX_FUNCS
+
 #include "CountedArgValueMap.h"
 
 #include <Columns/ColumnDecimal.h>
@@ -275,3 +279,5 @@ public:
 };
 }
 }
+
+#endif

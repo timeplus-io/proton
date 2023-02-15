@@ -2,7 +2,7 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
-
+#include "config.h"
 
 namespace DB
 {
@@ -103,8 +103,11 @@ void registerAggregateFunctionSumRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionAvgRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsMaxRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsMinRetract(AggregateFunctionFactory & factory);
+
+#if USE_ARG_MIN_MAX_FUNCS
 void registerAggregateFunctionsArgMaxRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsArgMinRetract(AggregateFunctionFactory & factory);
+#endif
 }
 
 /// proton: ends.
@@ -190,8 +193,11 @@ void registerAggregateFunctions()
         Streaming::registerAggregateFunctionAvgRetract(factory);
         Streaming::registerAggregateFunctionsMaxRetract(factory);
         Streaming::registerAggregateFunctionsMinRetract(factory);
+
+        #if USE_ARG_MIN_MAX_FUNCS
         Streaming::registerAggregateFunctionsArgMaxRetract(factory);
         Streaming::registerAggregateFunctionsArgMinRetract(factory);
+        #endif
         /// proton: ends.
     }
 

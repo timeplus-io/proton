@@ -1,3 +1,7 @@
+#include "config.h"
+
+#if USE_ARG_MIN_MAX_FUNCS
+
 #include "HelpersArgMinMax.h"
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
@@ -23,3 +27,5 @@ void registerAggregateFunctionsArgMinRetract(AggregateFunctionFactory & factory)
 }
 }
 }
+
+#endif

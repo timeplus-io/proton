@@ -1,5 +1,9 @@
 #pragma once
 
+#include "config.h"
+
+#if USE_ARG_MIN_MAX_FUNCS
+
 #include <base/StringRef.h>
 #include <DataTypes/IDataType.h>
 #include <AggregateFunctions/IAggregateFunction.h>
@@ -109,5 +113,7 @@ public:
         this->data(place).result.insertResultInto(to);
     }
 };
+
+#endif
 
 }

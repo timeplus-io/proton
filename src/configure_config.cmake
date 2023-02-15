@@ -232,3 +232,13 @@ option(ENABLE_DEBUG_FUNCS "Enable debug functions" ${ENABLE_ALL_FUNCS})
 if (ENABLE_DEBUG_FUNCS)
     set(USE_DEBUG_FUNCS 1)
 endif()
+
+if (ENABLE_ALL_FUNCS AND NOT SANITIZE)
+    option(ENABLE_ARG_MIN_MAX_FUNCS "Enable arg_min/arg_max functions" ON)
+else()
+    option(ENABLE_ARG_MIN_MAX_FUNCS "Enable arg_min/arg_max functions" OFF)
+endif()
+
+if (ENABLE_ARG_MIN_MAX_FUNCS)
+    set(USE_ARG_MIN_MAX_FUNCS 1)
+endif()

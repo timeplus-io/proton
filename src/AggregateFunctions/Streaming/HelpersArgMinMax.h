@@ -1,5 +1,9 @@
 #pragma once
 
+#include "config.h"
+
+#if USE_ARG_MIN_MAX_FUNCS
+
 #include "AggregateFunctionArgMinMax.h"
 #include "AggregateFunctionArgMinMaxData.h"
 
@@ -93,3 +97,5 @@ static IAggregateFunction * createAggregateFunctionCountedArgMinMax(
 }
 }
 }
+
+#endif
