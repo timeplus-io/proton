@@ -23,6 +23,33 @@ namespace
 /// Globals
 const std::string SYSTEM_WALS_KEY = "cluster_settings.logstore";
 const std::string SYSTEM_WALS_KEY_PREFIX = SYSTEM_WALS_KEY + ".";
+
+
+int32_t bucketFetchWaitMax(int32_t fetch_wait_max_ms)
+{
+    if (fetch_wait_max_ms <= 10)
+        return 10;
+    else if (fetch_wait_max_ms <= 20)
+        return 20;
+    else if (fetch_wait_max_ms <= 30)
+        return 30;
+    else if (fetch_wait_max_ms <= 40)
+        return 40;
+    else if (fetch_wait_max_ms <= 50)
+        return 50;
+    else if (fetch_wait_max_ms <= 100)
+        return 100;
+    else if (fetch_wait_max_ms <= 200)
+        return 200;
+    else if (fetch_wait_max_ms <= 300)
+        return 300;
+    else if (fetch_wait_max_ms <= 400)
+        return 400;
+    else if (fetch_wait_max_ms <= 500)
+        return 500;
+
+    return 500;
+}
 }
 
 KafkaWALPool & KafkaWALPool::instance(const DB::ContextPtr & global_context)
@@ -367,9 +394,11 @@ KafkaWALConsumerMultiplexerPtr KafkaWALPool::getOrCreateConsumerMultiplexer(cons
     return *best_multiplexer;
 }
 
-KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const String & brokers, const KafkaWALAuth & auth)
+KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const String & brokers, const KafkaWALAuth & auth, int32_t fetch_wait_max_ms)
 {
     assert(!brokers.empty());
+
+    fetch_wait_max_ms = bucketFetchWaitMax(fetch_wait_max_ms);
 
     std::lock_guard lock{external_streaming_lock};
 
@@ -384,8 +413,14 @@ KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const Strin
     auto & consumers = external_streaming_consumers[brokers];
 
     for (const auto & consumer : consumers.second)
-        if (consumer.use_count() == 1)
+    {
+        const auto & consumer_settings = consumer->getSettings();
+        if (consumer.use_count() == 1 && consumer_settings.fetch_wait_max_ms == fetch_wait_max_ms)
+        {
+            LOG_INFO(log, "Reusing external Kafka consume with settings={}", consumer_settings.string());
             return consumer;
+        }
+    }
 
     /// consumer is used up and if we didn't reach maximum
     if (consumers.second.size() < consumers.first)
@@ -395,8 +430,11 @@ KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const Strin
                 DB::ErrorCodes::NOT_IMPLEMENTED,
                 "Invalid logstore kafka settings security_protocol: {}. Only plaintext or sasl_ssl are supported",
                 auth.security_protocol);
+
         /// Create one
         auto ksettings = std::make_unique<KafkaWALSettings>();
+
+        ksettings->fetch_wait_max_ms = fetch_wait_max_ms;
 
         ksettings->brokers = brokers;
 
@@ -407,6 +445,8 @@ KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const Strin
         /// We don't care offset checkpointing for WALs used for streaming processing,
         /// No auto commit
         ksettings->enable_auto_commit = false;
+
+        LOG_INFO(log, "Create new external Kafka consume with settings={}", ksettings->string());
 
         auto consumer = std::make_shared<KafkaWALSimpleConsumer>(std::move(ksettings));
         consumer->startup();

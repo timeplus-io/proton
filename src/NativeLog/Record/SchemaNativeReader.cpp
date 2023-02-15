@@ -198,7 +198,7 @@ ALWAYS_INLINE void SchemaNativeReader::readFullForRequestFull(uint32_t rows, con
         ++pos;
     }
 
-    res.sortColumnInplace(schema_ctx.column_positions.positions);
+    res.sortColumnsInplace(schema_ctx.column_positions.positions);
 }
 
 ALWAYS_INLINE void SchemaNativeReader::readFullForRequestPartial(uint32_t rows, const DB::Block & header, DB::Block & res)
@@ -308,7 +308,7 @@ ALWAYS_INLINE void SchemaNativeReader::readPartialForRequestFull(uint16_t column
         if (!column.column || column.column->empty())
             column.column = column.type->createColumn()->cloneResized(rows);
 
-    res.sortColumnInplace(schema_ctx.column_positions.positions);
+    res.sortColumnsInplace(schema_ctx.column_positions.positions);
 }
 
 ALWAYS_INLINE void

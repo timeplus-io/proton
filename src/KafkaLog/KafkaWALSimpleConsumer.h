@@ -62,6 +62,8 @@ public:
 
     std::vector<int64_t> offsetsForTimestamps(const std::string & topic, const std::vector<int64_t> & timestamps, int32_t timeout_ms=5000) const;
 
+    const KafkaWALSettings & getSettings() const { return *settings; }
+
 private:
     /// Poll consume errors
     void backgroundPoll() const;

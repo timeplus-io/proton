@@ -239,137 +239,45 @@ InterpreterSelectWithUnionQuery::buildCurrentChildInterpreter(const ASTPtr & ast
 
 InterpreterSelectWithUnionQuery::~InterpreterSelectWithUnionQuery() = default;
 
-Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_, ContextPtr context_, bool is_subquery)
+/// proton : starts. Calculate data stream semantic for the underlying subquery as well
+Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_, ContextPtr context_, bool is_subquery, Streaming::DataStreamSemantic * data_stream_semantic)
 {
+    SelectQueryOptions select_options;
+    select_options.analyze();
+
+    if (is_subquery)
+        select_options.subquery();
+
     if (!context_->hasQueryContext())
     {
-        if (is_subquery)
-            return InterpreterSelectWithUnionQuery(query_ptr_, context_, SelectQueryOptions().subquery().analyze()).getSampleBlock();
-        else
-            return InterpreterSelectWithUnionQuery(query_ptr_, context_, SelectQueryOptions().analyze()).getSampleBlock();
+        InterpreterSelectWithUnionQuery interpreter(query_ptr_, context_, select_options);
+        if (data_stream_semantic)
+            *data_stream_semantic = interpreter.getDataStreamSemantic();
+        return interpreter.getSampleBlock();
+    }
+
+    /// Using query string because query_ptr changes for every internal SELECT
+    auto key = queryToString(query_ptr_);
+
+    auto & data_stream_semantic_cache = context_->getDataStreamSemanticCache();
+    if (data_stream_semantic)
+    {
+        auto semantic_iter = data_stream_semantic_cache.find(key);
+        if (semantic_iter != data_stream_semantic_cache.end())
+            *data_stream_semantic = semantic_iter->second;
     }
 
     auto & cache = context_->getSampleBlockCache();
-    /// Using query string because query_ptr changes for every internal SELECT
-    auto key = queryToString(query_ptr_);
-    if (cache.find(key) != cache.end())
-    {
-        return cache[key];
-    }
+    auto cache_iter = cache.find(key);
+    if (cache_iter != cache.end())
+        return cache_iter->second;
 
-    if (is_subquery)
-    {
-        return cache[key]
-            = InterpreterSelectWithUnionQuery(query_ptr_, context_, SelectQueryOptions().subquery().analyze()).getSampleBlock();
-    }
-    else
-    {
-        return cache[key] = InterpreterSelectWithUnionQuery(query_ptr_, context_, SelectQueryOptions().analyze()).getSampleBlock();
-    }
+    InterpreterSelectWithUnionQuery interpreter(query_ptr_, context_, select_options);
+    data_stream_semantic_cache[key] = interpreter.getDataStreamSemantic();
+
+    return cache[key] = interpreter.getSampleBlock();
 }
-
-/// proton: starts
-bool InterpreterSelectWithUnionQuery::hasAggregation() const
-{
-    for (const auto & interpreter : nested_interpreters)
-    {
-        if (interpreter->hasAggregation())
-            return true;
-    }
-    return false;
-}
-
-bool InterpreterSelectWithUnionQuery::isStreaming() const
-{
-    for (const auto & interpreter : nested_interpreters)
-    {
-        if (interpreter->isStreaming())
-            return true;
-    }
-    return false;
-}
-
-bool InterpreterSelectWithUnionQuery::isChangelog() const
-{
-    for (const auto & interpreter : nested_interpreters)
-    {
-        if (interpreter->isChangelog())
-            return true;
-    }
-    return false;
-}
-
-bool InterpreterSelectWithUnionQuery::hasGlobalAggregation() const
-{
-    for (const auto & interpreter : nested_interpreters)
-    {
-        if (interpreter->hasGlobalAggregation())
-            return true;
-    }
-    return false;
-}
-
-bool InterpreterSelectWithUnionQuery::hasStreamingWindowFunc() const
-{
-    for (const auto & interpreter : nested_interpreters)
-    {
-        if (interpreter->hasStreamingWindowFunc())
-            return true;
-    }
-    return false;
-}
-
-Streaming::HashSemantic InterpreterSelectWithUnionQuery::getHashSemantic() const
-{
-    auto hash_semantic = nested_interpreters[0]->getHashSemantic();
-
-    for (const auto & interpreter : nested_interpreters)
-    {
-        if (interpreter->getHashSemantic() != hash_semantic)
-            return Streaming::HashSemantic::Append;
-    }
-
-    return hash_semantic;
-}
-
-ColumnsDescriptionPtr InterpreterSelectWithUnionQuery::getExtendedObjects() const
-{
-    if (nested_interpreters.size() == 1)
-        return nested_interpreters.front()->getExtendedObjects();
-
-    std::vector<ColumnsDescriptionPtr> object_columns_list;
-    object_columns_list.reserve(nested_interpreters.size());
-    for (const auto & interpreter : nested_interpreters)
-        object_columns_list.emplace_back(interpreter->getExtendedObjects());
-
-    /// We only merged the same objects based on the first interpreter objects, and get the least common type,
-    /// because union/intersect/except must be same output for each interpreter, for example:
-    /// interpreter-1 objects:
-    /// json a => tuple(x int, y int), json b => tuple(m string)
-    /// interpreter-2 objects:
-    /// json a => tuple(x double, y int64), json b => tuple(m int), json c => tuple(n string)
-    /// merged:
-    /// json a => tuple(x double, y int64), json b => tuple(m string)
-    auto merged_object_columns = std::make_shared<ColumnsDescription>(*object_columns_list.front());
-    for (size_t i = 1; i < object_columns_list.size(); ++i)
-        DB::updateObjectColumns(*merged_object_columns, object_columns_list[i]->getAllPhysical());
-    return merged_object_columns;
-}
-
-std::set<String> InterpreterSelectWithUnionQuery::getGroupByColumns() const
-{
-    std::set<String> group_by_columns;
-    if (nested_interpreters.size() == 1)
-        return nested_interpreters.front()->getGroupByColumns();
-
-    for (const auto & interpreter : nested_interpreters)
-    {
-        auto nested_group_by = interpreter->getGroupByColumns();
-        group_by_columns.insert(nested_group_by.begin(), nested_group_by.end());
-    }
-    return group_by_columns;
-}
-/// proton: ends
+/// proton : ends
 
 void InterpreterSelectWithUnionQuery::buildQueryPlan(QueryPlan & query_plan)
 {
@@ -478,5 +386,99 @@ void InterpreterSelectWithUnionQuery::ignoreWithTotals()
     for (auto & interpreter : nested_interpreters)
         interpreter->ignoreWithTotals();
 }
+
+/// proton: starts
+bool InterpreterSelectWithUnionQuery::hasAggregation() const
+{
+    for (const auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->hasAggregation())
+            return true;
+    }
+    return false;
+}
+
+bool InterpreterSelectWithUnionQuery::isStreaming() const
+{
+    for (const auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->isStreaming())
+            return true;
+    }
+    return false;
+}
+
+bool InterpreterSelectWithUnionQuery::hasGlobalAggregation() const
+{
+    for (const auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->hasGlobalAggregation())
+            return true;
+    }
+    return false;
+}
+
+bool InterpreterSelectWithUnionQuery::hasStreamingWindowFunc() const
+{
+    for (const auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->hasStreamingWindowFunc())
+            return true;
+    }
+    return false;
+}
+
+Streaming::DataStreamSemantic InterpreterSelectWithUnionQuery::getDataStreamSemantic() const
+{
+    auto hash_semantic = nested_interpreters[0]->getDataStreamSemantic();
+
+    for (const auto & interpreter : nested_interpreters)
+    {
+        /// In a union select, all individual selects shall have the same hash semantic
+        if (interpreter->getDataStreamSemantic() != hash_semantic)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Mixing different storage type in a union query is not supported");
+    }
+
+    return hash_semantic;
+}
+
+ColumnsDescriptionPtr InterpreterSelectWithUnionQuery::getExtendedObjects() const
+{
+    if (nested_interpreters.size() == 1)
+        return nested_interpreters.front()->getExtendedObjects();
+
+    std::vector<ColumnsDescriptionPtr> object_columns_list;
+    object_columns_list.reserve(nested_interpreters.size());
+    for (const auto & interpreter : nested_interpreters)
+        object_columns_list.emplace_back(interpreter->getExtendedObjects());
+
+    /// We only merged the same objects based on the first interpreter objects, and get the least common type,
+    /// because union/intersect/except must be same output for each interpreter, for example:
+    /// interpreter-1 objects:
+    /// json a => tuple(x int, y int), json b => tuple(m string)
+    /// interpreter-2 objects:
+    /// json a => tuple(x double, y int64), json b => tuple(m int), json c => tuple(n string)
+    /// merged:
+    /// json a => tuple(x double, y int64), json b => tuple(m string)
+    auto merged_object_columns = std::make_shared<ColumnsDescription>(*object_columns_list.front());
+    for (size_t i = 1; i < object_columns_list.size(); ++i)
+        DB::updateObjectColumns(*merged_object_columns, object_columns_list[i]->getAllPhysical());
+    return merged_object_columns;
+}
+
+std::set<String> InterpreterSelectWithUnionQuery::getGroupByColumns() const
+{
+    std::set<String> group_by_columns;
+    if (nested_interpreters.size() == 1)
+        return nested_interpreters.front()->getGroupByColumns();
+
+    for (const auto & interpreter : nested_interpreters)
+    {
+        auto nested_group_by = interpreter->getGroupByColumns();
+        group_by_columns.insert(nested_group_by.begin(), nested_group_by.end());
+    }
+    return group_by_columns;
+}
+/// proton: ends
 
 }

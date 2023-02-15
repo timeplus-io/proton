@@ -24,7 +24,22 @@ enum class Kind
     Right,
 };
 
-Kind toStreamingKind(JoinKind kind);
-Strictness toStreamingStrictness(JoinStrictness strictness, bool is_range);
+constexpr Kind flipKind(Kind lhs)
+{
+    switch (lhs)
+    {
+        case Kind::Inner:
+            return lhs;
+        case Kind::Left:
+            return Kind::Right;
+        case Kind::Right:
+            return Kind::Left;
+    }
+
+    UNREACHABLE();
+}
+
+Kind toJoinKind(JoinKind kind);
+Strictness toJoinStrictness(JoinStrictness strictness, bool is_range_join);
 }
 }

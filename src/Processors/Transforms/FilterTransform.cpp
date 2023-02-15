@@ -170,7 +170,7 @@ void FilterTransform::transform(Chunk & chunk)
     /// proton: starts
     if (num_filtered_rows == 0)
     {
-        if (chunk.hasChunkContext())
+        if (is_streaming)
             /// In streaming mode, we still like to propagate the empty chunk to downstream
             /// since downstream so far relies on upstreams data chunk or timer chunk to calculate
             /// timeout etc, for example, global aggregation or windowed aggregation

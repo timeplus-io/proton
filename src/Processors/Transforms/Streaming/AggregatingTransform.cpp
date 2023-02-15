@@ -1,4 +1,4 @@
-#include "AggregatingTransform.h"
+#include <Processors/Transforms/Streaming/AggregatingTransform.h>
 
 #include <Checkpoint/CheckpointCoordinator.h>
 #include <Common/ProtonCommon.h>

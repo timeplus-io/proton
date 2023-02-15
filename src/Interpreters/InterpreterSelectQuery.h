@@ -116,8 +116,7 @@ public:
     /// proton: starts
     bool hasAggregation() const override { return query_analyzer->hasAggregation(); }
     bool isStreaming() const override;
-    bool isChangelog() const override;
-    Streaming::HashSemantic getHashSemantic() const override;
+    Streaming::DataStreamSemantic getDataStreamSemantic() const override;
     std::set<String> getGroupByColumns() const override;
     bool hasStreamingWindowFunc() const override;
     Streaming::WindowType windowType() const;
@@ -201,11 +200,10 @@ private:
     void handleSeekToSetting();
     void analyzeEventPredicateAsSeekTo();
     void checkAndPrepareStreamingFunctions();
-    void analyzeStreamingMode(); /// analyze whether it is streaming query
-    void analyzeChangelogMode(); /// analyze whether it is changelog query
     void checkUDA();
 
     ColumnsDescriptionPtr getExtendedObjects() const override;
+    bool isChangelog() const;
     /// proton: ends
 
     enum class Modificator
@@ -246,8 +244,8 @@ private:
     Names required_columns_after_streaming_window;
     bool emit_version = false;
     bool has_user_defined_emit_strategy = false;
-    std::optional<bool> is_streaming;
-    std::optional<bool> is_changelog;
+    mutable std::optional<bool> is_streaming;
+    mutable std::optional<Streaming::DataStreamSemantic> data_stream_semantic;
     /// proton: ends
 
     /// Actions to calculate ALIAS if required.

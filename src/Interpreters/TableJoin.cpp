@@ -9,7 +9,6 @@
 #include <Core/Settings.h>
 
 #include <DataTypes/DataTypeNullable.h>
-#include <Dictionaries/DictionaryStructure.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 
 #include <Parsers/ASTExpressionList.h>
@@ -17,7 +16,6 @@
 #include <Parsers/queryToString.h>
 
 #include <Storages/IStorage.h>
-#include <Storages/StorageDictionary.h>
 #include <Storages/StorageJoin.h>
 
 #include <Common/logger_useful.h>
@@ -764,6 +762,30 @@ void TableJoin::validateRangeAsof(Int64 max_range) const
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Not a range join");
 
     range_asof_join_ctx.validate(max_range);
+}
+
+Block TableJoin::getRequiredLeftKeys(const Block & left_table_keys, std::vector<String> & keys_sources) const
+{
+    NameSet required_keys;
+    forAllKeys<LeftSideTag>(clauses, [&required_keys](const auto & name) {
+        required_keys.insert(name);
+        return true;
+    });
+
+    Block required_left_keys;
+    if (required_keys.empty())
+        return required_left_keys;
+
+    forAllKeys(clauses, [&](const auto & left_key_name, const auto & right_key_name) {
+        if (required_keys.contains(left_key_name) && !required_left_keys.has(left_key_name))
+        {
+            const auto & left_key = left_table_keys.getByName(left_key_name);
+            required_left_keys.insert(left_key);
+            keys_sources.push_back(right_key_name);
+        }
+        return true;
+    });
+    return required_left_keys;
 }
 /// proton : ends
 }

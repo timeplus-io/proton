@@ -1,10 +1,9 @@
-#include "RowRefs.h"
+#include  <Interpreters/Streaming/RowRefs.h>
 
 #include <base/types.h>
 #include <Common/typeid_cast.h>
 #include <Common/ColumnsHashing.h>
 #include <Columns/IColumn.h>
-#include <Columns/ColumnVector.h>
 #include <Columns/ColumnDecimal.h>
 
 
@@ -57,7 +56,7 @@ void callWithType(TypeIndex which, F && f)
             break;
     }
 
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 }
 
@@ -76,7 +75,6 @@ void AsofRowRefs::insert(
     TypeIndex type,
     const IColumn & asof_column,
     JoinBlockList * blocks,
-    JoinBlockList::iterator block,
     size_t row_num,
     ASOFJoinInequality inequality,
     size_t keep_versions)
@@ -92,7 +90,7 @@ void AsofRowRefs::insert(
 
         T key = column.getElement(row_num);
         bool ascending = (inequality == ASOFJoinInequality::Less) || (inequality == ASOFJoinInequality::LessOrEquals);
-        container->insert(Entry<T>(key, RowRefWithRefCount(blocks, block, row_num)), ascending);
+        container->insert(Entry<T>(key, RowRefWithRefCount(blocks, row_num)), ascending);
         container->truncateTo(keep_versions, ascending);
     };
 

@@ -155,10 +155,13 @@ public:
     Serializations getSerializations() const;
 
     /// proton: starts
-    void reserve(size_t count);
+    void reserve(size_t num_columns);
 
     /// in-place sort columns according to positions
-    void sortColumnInplace(const std::vector<UInt16> & positions);
+    void sortColumnsInplace(const std::vector<UInt16> & positions);
+
+    /// in-place sort columns according to header
+    void reorderColumnsInBlock(const Block & header);
 
     /// Deep clone, use cautiously. Most of time, we don't need deepClone
     Block deepClone() const;
@@ -166,6 +169,9 @@ public:
     bool hasWatermark() const { return info.hasWatermark(); }
 
     bool hasDynamicSubcolumns() const;
+
+    /// Copy row to target_block
+    void insertRow(size_t row_num, Block & target_block) const;
     /// proton: ends
 
 private:

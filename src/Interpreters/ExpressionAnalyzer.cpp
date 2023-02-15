@@ -27,6 +27,7 @@
 #include <Interpreters/Set.h>
 #include <Interpreters/TableJoin.h>
 #include <Interpreters/FullSortingMergeJoin.h>
+#include <Interpreters/replaceForPositionalArguments.h>
 
 #include <Processors/QueryPlan/ExpressionStep.h>
 
@@ -109,90 +110,6 @@ bool allowEarlyConstantFolding(const ActionsDAG & actions, const Settings & sett
 }
 
 Poco::Logger * getLogger() { return &Poco::Logger::get("ExpressionAnalyzer"); }
-
-bool checkPositionalArguments(ASTPtr & argument, const ASTSelectQuery * select_query, ASTSelectQuery::Expression expression)
-{
-    auto columns = select_query->select()->children;
-
-    const auto * group_by_expr_with_alias = dynamic_cast<const ASTWithAlias *>(argument.get());
-    if (group_by_expr_with_alias && !group_by_expr_with_alias->alias.empty())
-    {
-        for (const auto & column : columns)
-        {
-            const auto * col_with_alias = dynamic_cast<const ASTWithAlias *>(column.get());
-            if (col_with_alias)
-            {
-                const auto & alias = col_with_alias->alias;
-                if (!alias.empty() && alias == group_by_expr_with_alias->alias)
-                    return false;
-            }
-        }
-    }
-
-    const auto * ast_literal = typeid_cast<const ASTLiteral *>(argument.get());
-    if (!ast_literal)
-        return false;
-
-    auto which = ast_literal->value.getType();
-    if (which != Field::Types::UInt64)
-        return false;
-
-    auto pos = ast_literal->value.get<UInt64>();
-    if (!pos || pos > columns.size())
-        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Positional argument out of bounds: {} (exprected in range [1, {}]",
-                        pos, columns.size());
-
-    const auto & column = columns[--pos];
-    if (typeid_cast<const ASTIdentifier *>(column.get()))
-    {
-        argument = column->clone();
-    }
-    else if (typeid_cast<const ASTFunction *>(column.get()))
-    {
-        std::function<void(ASTPtr)> throw_if_aggregate_function = [&](ASTPtr node)
-        {
-            if (const auto * function = typeid_cast<const ASTFunction *>(node.get()))
-            {
-                auto is_aggregate_function = AggregateFunctionFactory::instance().isAggregateFunctionName(function->name);
-                if (is_aggregate_function)
-                {
-                    throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                                    "Illegal value (aggregate function) for positional argument in {}",
-                                    ASTSelectQuery::expressionToString(expression));
-                }
-                else
-                {
-                    if (function->arguments)
-                    {
-                        for (const auto & arg : function->arguments->children)
-                            throw_if_aggregate_function(arg);
-                    }
-                }
-            }
-        };
-
-        if (expression == ASTSelectQuery::Expression::GROUP_BY)
-            throw_if_aggregate_function(column);
-
-        argument = column->clone();
-    }
-    else
-    {
-        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                        "Illegal value for positional argument in {}",
-                        ASTSelectQuery::expressionToString(expression));
-    }
-
-    return true;
-}
-
-void replaceForPositionalArguments(ASTPtr & argument, const ASTSelectQuery * select_query, ASTSelectQuery::Expression expression)
-{
-    auto argument_with_replacement = argument->clone();
-    if (checkPositionalArguments(argument_with_replacement, select_query, expression))
-        argument = argument_with_replacement;
-}
 
 /// proton: starts.
 void tryTranslateToParametricAggregateFunction(
@@ -282,7 +199,7 @@ bool sanitizeBlock(Block & block, bool throw_if_cannot_create_column)
             if (isNotCreatable(col.type->getTypeId()))
             {
                 if (throw_if_cannot_create_column)
-                    throw Exception("Cannot create column of type " + col.type->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Cannot create column of type {}", col.type->getName());
 
                 return false;
             }
@@ -410,7 +327,7 @@ void ExpressionAnalyzer::analyzeAggregation(ActionsDAGPtr & temp_actions)
     auto * select_query = query->as<ASTSelectQuery>();
 
     makeAggregateDescriptions(temp_actions, aggregate_descriptions);
-    has_aggregation = !aggregate_descriptions.empty() || (select_query && (select_query->groupBy() || select_query->having()));
+    has_aggregation = !aggregate_descriptions.empty() || (select_query && select_query->groupBy());
 
     if (!has_aggregation)
     {
@@ -454,7 +371,7 @@ void ExpressionAnalyzer::analyzeAggregation(ActionsDAGPtr & temp_actions)
                         const auto & column_name = group_elements_ast[j]->getColumnName();
                         const auto * node = temp_actions->tryFindInOutputs(column_name);
                         if (!node)
-                            throw Exception("Unknown identifier (in GROUP BY): " + column_name, ErrorCodes::UNKNOWN_IDENTIFIER);
+                            throw Exception(ErrorCodes::UNKNOWN_IDENTIFIER, "Unknown identifier (in GROUP BY): {}", column_name);
 
                         /// Only removes constant keys if it's an initiator or distributed_group_by_no_merge is enabled.
                         if (getContext()->getClientInfo().distributed_depth == 0 || settings.distributed_group_by_no_merge > 0)
@@ -502,7 +419,7 @@ void ExpressionAnalyzer::analyzeAggregation(ActionsDAGPtr & temp_actions)
                     const auto & column_name = group_asts[i]->getColumnName();
                     const auto * node = temp_actions->tryFindInOutputs(column_name);
                     if (!node)
-                        throw Exception("Unknown identifier (in GROUP BY): " + column_name, ErrorCodes::UNKNOWN_IDENTIFIER);
+                        throw Exception(ErrorCodes::UNKNOWN_IDENTIFIER, "Unknown identifier (in GROUP BY): {}", column_name);
 
                     /// Only removes constant keys if it's an initiator or distributed_group_by_no_merge is enabled.
                     if (getContext()->getClientInfo().distributed_depth == 0 || settings.distributed_group_by_no_merge > 0)
@@ -543,7 +460,7 @@ void ExpressionAnalyzer::analyzeAggregation(ActionsDAGPtr & temp_actions)
             if (group_asts.empty())
             {
                 select_query->setExpression(ASTSelectQuery::Expression::GROUP_BY, {});
-                has_aggregation = select_query->having() || !aggregate_descriptions.empty();
+                has_aggregation = !aggregate_descriptions.empty();
             }
         }
 
@@ -1132,9 +1049,26 @@ JoinPtr SelectQueryExpressionAnalyzer::appendJoin(
         chain.addStep();
     }
 
+    /// proton : starts
+    /// We will need propagate `_tp_delta` to downstream for changelog query processing only
+    /// 1) `_tp_delta` was explicitly requested like `SELECT _tp_delta, i FROM left INNER JOIN right ON left.key = right.key`
+    /// 2) SELECT aggregation_functions FROM left INNER JOIN right ON left.key = right.key GROUP BY ..
+    bool delta_column_is_requested = syntax->unresolved_reserved_columns.contains(ProtonConsts::RESERVED_DELTA_FLAG);
+    bool project_delta_column = false;
+
+    if (auto * streaming_join = typeid_cast<Streaming::HashJoin *>(join.get()); streaming_join
+        && streaming_join->emitChangeLog())
+    {
+        project_delta_column = true;
+    }
+    else if (delta_column_is_requested)
+        throw Exception(ErrorCodes::UNKNOWN_IDENTIFIER, "'Unknown column '{}'", ProtonConsts::RESERVED_DELTA_FLAG);
+    /// proton : ends
+
     ExpressionActionsChain::Step & step = chain.lastStep(columns_after_array_join);
     chain.steps.push_back(std::make_unique<ExpressionActionsChain::JoinStep>(
-        syntax->analyzed_join, join, step.getResultColumns()));
+        syntax->analyzed_join, join, step.getResultColumns(), project_delta_column));
+
     chain.addStep();
     return join;
 }
@@ -1197,8 +1131,7 @@ static std::unique_ptr<QueryPlan> buildJoinedPlan(
     ContextPtr context,
     const ASTTablesInSelectQueryElement & join_element,
     TableJoin & analyzed_join,
-    SelectQueryOptions query_options,
-    Streaming::HashSemantic & hash_semantic)
+    SelectQueryOptions query_options)
 {
     /// Actions which need to be calculated on joined block.
     auto joined_block_actions = createJoinedBlockActions(context, analyzed_join);
@@ -1222,9 +1155,6 @@ static std::unique_ptr<QueryPlan> buildJoinedPlan(
         query_options.copy().setWithAllColumns().ignoreProjections(false).ignoreAlias(false));
     auto joined_plan = std::make_unique<QueryPlan>();
     interpreter->buildQueryPlan(*joined_plan);
-    /// proton : start
-    hash_semantic = interpreter->getHashSemantic();
-    /// proton : end
     {
         Block original_right_columns = interpreter->getSampleBlock();
         auto rename_dag = std::make_unique<ActionsDAG>(original_right_columns.getColumnsWithTypeAndName());
@@ -1318,8 +1248,7 @@ JoinPtr SelectQueryExpressionAnalyzer::makeJoin(
         return storage->getJoinLocked(analyzed_join, getContext());
     }
 
-    Streaming::HashSemantic right_hash_semantic = Streaming::HashSemantic::Append;
-    joined_plan = buildJoinedPlan(getContext(), join_element, *analyzed_join, query_options, right_hash_semantic);
+    joined_plan = buildJoinedPlan(getContext(), join_element, *analyzed_join, query_options);
 
     const ColumnsWithTypeAndName & right_columns = joined_plan->getCurrentDataStream().header.getColumnsWithTypeAndName();
     std::tie(left_convert_actions, right_convert_actions) = analyzed_join->createConvertingActions(left_columns, right_columns);
@@ -1336,28 +1265,9 @@ JoinPtr SelectQueryExpressionAnalyzer::makeJoin(
 
     JoinPtr join;
     if (syntax->streaming && joined_plan->isStreaming())
-    {
-        /// stream join stream case
-        /// Calculate left stream's hash semantic, FIXME, what about subquery ?
-        Streaming::HashSemantic left_hash_semantic = Streaming::HashSemantic::Append;
-        if (syntax->storage)
-        {
-            if (syntax->storage->isVersionedKvMode())
-                left_hash_semantic = Streaming::HashSemantic::VersionedKV;
-            else if (syntax->storage->isChangelogKvMode())
-                left_hash_semantic = Streaming::HashSemantic::ChangeLogKV;
-        }
-
-        auto keep_versions = getContext()->getSettingsRef().keep_versions;
-        return std::make_shared<Streaming::HashJoin>(
-            analyzed_join,
-            Streaming::JoinStreamDescription{Block{left_columns}, left_hash_semantic, keep_versions},
-            Streaming::JoinStreamDescription{joined_plan->getCurrentDataStream().header, right_hash_semantic, keep_versions});
-    }
+        join = chooseJoinAlgorithmStreaming(analyzed_join);
     else
-    {
         join = chooseJoinAlgorithm(analyzed_join, joined_plan, getContext());
-    }
     /// proton : ends
 
     return join;
@@ -1655,7 +1565,7 @@ ActionsDAGPtr SelectQueryExpressionAnalyzer::appendOrderBy(ExpressionActionsChai
     {
         auto * ast = child->as<ASTOrderByElement>();
         if (!ast || ast->children.empty())
-            throw Exception("Bad ORDER BY expression AST", ErrorCodes::UNKNOWN_TYPE_OF_AST_NODE);
+            throw Exception(ErrorCodes::UNKNOWN_TYPE_OF_AST_NODE, "Bad ORDER BY expression AST");
 
         if (getContext()->getSettingsRef().enable_positional_arguments)
             replaceForPositionalArguments(ast->children.at(0), select_query, ASTSelectQuery::Expression::ORDER_BY);
@@ -1886,7 +1796,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
     const FilterDAGInfoPtr & filter_info_,
     const Block & source_header,
     bool emit_version,
-    bool is_changelog)
+    Streaming::DataStreamSemantic data_stream_semantic)
     : first_stage(first_stage_)
     , second_stage(second_stage_)
     , need_aggregate(query_analyzer.hasAggregation())
@@ -1973,6 +1883,11 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             before_join = chain.getLastActions();
             join = query_analyzer.appendJoin(chain, converting_join_columns);
             chain.addStep();
+
+            /// proton : starts
+            if (const auto * streaming_join = typeid_cast<Streaming::HashJoin *>(join.get()); streaming_join && streaming_join->emitChangeLog())
+                force_internal_changelog_emit = true;
+            /// proton : ends
         }
 
         if (query_analyzer.appendWhere(chain, only_types || !first_stage))
@@ -2016,7 +1931,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             }
 
             /// We will need propagate `_tp_delta` to downstream for changelog query processing
-            if (is_changelog)
+            if (data_stream_semantic == Streaming::DataStreamSemantic::Changelog)
             {
                 auto & step = chain.getLastStep();
                 step.addRequiredOutput(ProtonConsts::RESERVED_DELTA_FLAG);
@@ -2041,6 +1956,20 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             query_analyzer.appendAggregateFunctionsArguments(chain, only_types || !first_stage);
 
             /// proton: starts.
+            /// Before finalize the chain, we will need add _tp_delta as required output
+            /// otherwise chain finalization will get rid of it.
+            /// For versioned_kv join versioned_kv case, we have patched up stream `JoinStep` to emit `_tp_delta`
+            /// and the `_tp_delta` column needs flow through the downstream pipe until aggregation.
+            /// Chain finalization will get rid of all unnecessary columns just before aggregation and only
+            /// keep around columns which are used for aggregation function and aggregated columns.
+            /// `_tp_delta` is neither a parameter to any aggregation functions nor aggregated columns, so it
+            /// will be erased of we don't explicitly require it.
+            if (force_internal_changelog_emit)
+            {
+                auto & step = chain.getLastStep();
+                step.addRequiredOutput(ProtonConsts::RESERVED_DELTA_FLAG);
+            }
+
             bool may_have_streaming_aggr_over = query_analyzer.syntax->streaming && has_window;
             if (may_have_streaming_aggr_over)
             {
@@ -2080,8 +2009,6 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                 /// During execution, we need patch the Aggregation Pipe as well to produce `emit_version()` column to match the ActionsDAG
                 query_analyzer.aggregated_columns.push_back({ProtonConsts::RESERVED_EMIT_VERSION, DataTypeFactory::instance().get("int64")});
             }
-
-            /// FIXME, `EMIT CHANGELOG` which requires emitting `_tp_delta`
             /// proton: ends
 
             if (query_analyzer.appendHaving(chain, only_types || !second_stage))
@@ -2252,7 +2179,7 @@ void ExpressionAnalysisResult::checkActions() const
             if (actions)
                 for (const auto & node : actions->getNodes())
                     if (node.type == ActionsDAG::ActionType::ARRAY_JOIN)
-                        throw Exception("PREWHERE cannot contain ARRAY JOIN action", ErrorCodes::ILLEGAL_PREWHERE);
+                        throw Exception(ErrorCodes::ILLEGAL_PREWHERE, "PREWHERE cannot contain ARRAY JOIN action");
         };
 
         check_actions(prewhere_info->prewhere_actions);
@@ -2343,5 +2270,22 @@ std::string ExpressionAnalysisResult::dump() const
 
     return ss.str();
 }
+
+/// proton : starts
+std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreaming(std::shared_ptr<TableJoin> analyzed_join)
+{
+    const auto & tables = analyzed_join->getTablesWithColumns();
+    assert(tables.size() == 2);
+
+    Streaming::DataStreamSemantic left_data_stream_semantic = tables[0].data_stream_semantic;
+    Streaming::DataStreamSemantic right_data_stream_semantic = tables[1].data_stream_semantic;
+
+    auto keep_versions = getContext()->getSettingsRef().keep_versions;
+    return std::make_shared<Streaming::HashJoin>(
+        analyzed_join,
+        Streaming::JoinStreamDescription{Block{}, left_data_stream_semantic, keep_versions}, /// We don't know the header of the left stream yet since it is not finalized
+        Streaming::JoinStreamDescription{joined_plan->getCurrentDataStream().header, right_data_stream_semantic, keep_versions});
+}
+/// proton : ends
 
 }

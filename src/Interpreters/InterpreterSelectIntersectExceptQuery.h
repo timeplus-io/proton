@@ -38,10 +38,9 @@ public:
     /// proton: starts
     bool hasAggregation() const override;
     bool isStreaming() const override;
-    bool isChangelog() const override;
     bool hasGlobalAggregation() const override;
     bool hasStreamingWindowFunc() const override;
-    Streaming::HashSemantic getHashSemantic() const override;
+    Streaming::DataStreamSemantic getDataStreamSemantic() const override;
 
     ColumnsDescriptionPtr getExtendedObjects() const override;
     std::set<String> getGroupByColumns() const override;

@@ -1,5 +1,5 @@
-#include "joinData.h"
-#include "HashJoin.h"
+#include <Interpreters/Streaming/HashJoin.h>
+#include <Interpreters/Streaming/joinData.h>
 
 #include <Interpreters/JoinUtils.h>
 
@@ -7,25 +7,20 @@ namespace DB
 {
 namespace Streaming
 {
-RightStreamBlocks::RightStreamBlocks(StreamData * stream_data_)
-    : stream_data(stream_data_), blocks(stream_data->metrics), maps(std::make_shared<HashJoinMapsVariants>())
+HashBlocks::HashBlocks(JoinMetrics & metrics)
+    : blocks(metrics), new_data_iter(blocks.end()), maps(std::make_unique<HashJoinMapsVariants>())
 {
+    /// FIXME, in some cases, `maps` is not needed
 }
 
-LeftStreamBlocks::LeftStreamBlocks(StreamData * stream_data_)
-    : stream_data(stream_data_), blocks(stream_data->metrics), new_data_iter(blocks.end())
+HashBlocks::HashBlocks(Block && block, JoinMetrics & metrics) : HashBlocks(metrics)
 {
+    addBlock(std::move(block));
 }
 
-LeftStreamBlocks::LeftStreamBlocks(Block && block, StreamData * stream_data_) : stream_data(stream_data_), blocks(stream_data->metrics)
-{
-    blocks.push_back(std::move(block));
-    new_data_iter = blocks.begin();
-    blocks.updateMetrics(new_data_iter->block);
-}
+HashBlocks::~HashBlocks() = default;
 
-template <typename V>
-size_t StreamData::removeOldBuckets(std::map<Int64, V> & blocks, std::string_view stream)
+size_t BufferedStreamData::removeOldBuckets(std::string_view stream)
 {
     Int64 watermark = join->combined_watermark;
     watermark -= bucket_size;
@@ -36,12 +31,12 @@ size_t StreamData::removeOldBuckets(std::map<Int64, V> & blocks, std::string_vie
     {
         std::scoped_lock lock(mutex);
 
-        for (auto iter = blocks.begin(); iter != blocks.end(); ++iter)
+        for (auto iter = time_bucket_hash_blocks.begin(); iter != time_bucket_hash_blocks.end(); ++iter)
         {
             if (iter->first <= watermark)
             {
                 buckets_to_remove.push_back(iter->first);
-                iter = blocks.erase(iter);
+                iter = time_bucket_hash_blocks.erase(iter);
             }
             else
                 break;
@@ -62,7 +57,7 @@ size_t StreamData::removeOldBuckets(std::map<Int64, V> & blocks, std::string_vie
     return remaining_bytes;
 }
 
-void StreamData::updateBucketSize()
+void BufferedStreamData::updateBucketSize()
 {
     bucket_size = (range_asof_join_ctx.upper_bound - range_asof_join_ctx.lower_bound + 1) / 2;
 
@@ -118,7 +113,7 @@ void StreamData::updateBucketSize()
         assert(0);
 }
 
-void StreamData::updateAsofJoinColumnPositionAndScale(UInt16 scale, size_t asof_col_pos_, TypeIndex type_index)
+void BufferedStreamData::updateAsofJoinColumnPositionAndScale(UInt16 scale, size_t asof_col_pos_, TypeIndex type_index)
 {
     range_asof_join_ctx.lower_bound *= intExp10(scale);
     range_asof_join_ctx.upper_bound *= intExp10(scale);
@@ -129,32 +124,22 @@ void StreamData::updateAsofJoinColumnPositionAndScale(UInt16 scale, size_t asof_
     range_splitter = createBlockRangeSplitter(type_index, asof_col_pos, bucket_size, true);
 }
 
-size_t LeftStreamData::removeOldData()
-{
-    return removeOldBuckets(blocks, "left");
-}
 
-void LeftStreamData::initCurrentJoinBlocks()
+void BufferedStreamData::addBlock(Block && block)
 {
-    current_join_blocks = std::make_shared<LeftStreamBlocks>(this);
-}
-
-JoinTupleMap & LeftStreamData::getJoinedMap()
-{
-    return current_join_blocks->joined_rows;
-}
-
-void LeftStreamData::insertBlock(Block && block)
-{
-    assert(current_join_blocks);
-
     std::scoped_lock lock(mutex);
-    block.info.setBlockID(block_id++);
-    current_join_blocks->insertBlock(std::move(block));
+    addBlockWithoutLock(std::move(block));
+}
+
+void BufferedStreamData::addBlockWithoutLock(Block && block)
+{
+    assert(current_hash_blocks);
+
+    current_hash_blocks->addBlock(std::move(block));
     setHasNewData(true);
 }
 
-void LeftStreamData::insertBlockToTimeBucket(Block && block)
+void BufferedStreamData::addBlockToTimeBucket(Block && block)
 {
     /// Categorize block according to time bucket, then we can prune the time bucketed blocks
     /// when `watermark` passed its time
@@ -173,17 +158,14 @@ void LeftStreamData::insertBlockToTimeBucket(Block && block)
                 continue;
             }
 
-            /// assign block ID
-            bucket_block.second.info.setBlockID(block_id++);
-
-            auto iter = blocks.find(bucket_block.first);
-            if (iter != blocks.end())
+            auto iter = time_bucket_hash_blocks.find(bucket_block.first);
+            if (iter != time_bucket_hash_blocks.end())
             {
-                iter->second->insertBlock(std::move(bucket_block.second));
+                iter->second->addBlock(std::move(bucket_block.second));
             }
             else
             {
-                blocks.emplace(bucket_block.first, std::make_shared<LeftStreamBlocks>(std::move(bucket_block.second), this));
+                time_bucket_hash_blocks.emplace(bucket_block.first, std::make_shared<HashBlocks>(std::move(bucket_block.second), metrics));
 
                 /// Update watermark
                 if (static_cast<Int64>(bucket_block.first) > current_watermark)
@@ -206,16 +188,6 @@ void LeftStreamData::insertBlockToTimeBucket(Block && block)
             watermark,
             bucket_size);
     }
-}
-
-size_t RightStreamData::removeOldData()
-{
-    return removeOldBuckets(hashed_blocks, "right");
-}
-
-void RightStreamData::initCurrentJoinBlocks()
-{
-    current_join_blocks = std::make_shared<RightStreamBlocks>(this);
 }
 }
 }

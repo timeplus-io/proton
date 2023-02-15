@@ -10,6 +10,7 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/SelectQueryInfo.h>
 
+
 namespace DB
 {
 
@@ -252,6 +253,10 @@ struct ExpressionAnalysisResult
     ManyExpressionActions order_by_elements_actions;
     ManyExpressionActions group_by_elements_actions;
 
+    /// proton : starts
+    bool force_internal_changelog_emit = false;
+    /// proton : ends
+
     ExpressionAnalysisResult() = default;
 
     ExpressionAnalysisResult(
@@ -263,7 +268,7 @@ struct ExpressionAnalysisResult
         const FilterDAGInfoPtr & filter_info,
         const Block & source_header,
         bool emit_version,
-        bool is_changelog);
+        Streaming::DataStreamSemantic data_stream_semantic);
 
     /// Filter for row-level security.
     bool hasFilter() const { return filter_info.get(); }
@@ -388,6 +393,10 @@ private:
     ActionsDAGPtr appendOrderBy(ExpressionActionsChain & chain, bool only_types, bool optimize_read_in_order, ManyExpressionActions &);
     bool appendLimitBy(ExpressionActionsChain & chain, bool only_types);
     ///  appendProjectResult
+
+    /// proton : starts
+    std::shared_ptr<IJoin> chooseJoinAlgorithmStreaming(std::shared_ptr<TableJoin> analyzed_join);
+    /// proton : ends
 };
 
 }

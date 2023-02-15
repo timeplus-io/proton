@@ -17,7 +17,7 @@ using HashJoinPtr = std::shared_ptr<HashJoin>;
 ///                     \
 ///                     JoinTransform
 ///                     /
-/// left stream -> ... ->
+/// right stream -> ... ->
 class JoinTransform final : public IProcessor
 {
 public:
@@ -58,6 +58,7 @@ public:
 
 private:
     void bufferDataAndJoin(std::vector<Block> && blocks);
+    void joinBidirectionally(std::vector<Block> && blocks);
     bool timeToJoin() const;
     void validateAsofJoinKey(const Block & left_input_header, const Block & right_input_header);
 
@@ -76,7 +77,8 @@ private:
     std::vector<decltype(&HashJoin::insertLeftBlock)> insert_funcs;
     std::array<std::atomic_bool , 2> port_can_have_more_data;
 
-    Chunk header_chunk;
+    const Block & output_header;
+    Chunk output_header_chunk;
     mutable std::mutex mutex;
     std::list<Chunk> output_chunks;
 

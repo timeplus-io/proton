@@ -2,7 +2,6 @@
 #include <memory>
 #include <Core/Settings.h>
 #include <Core/NamesAndTypes.h>
-
 #include <Core/SettingsEnums.h>
 
 #include <Interpreters/TreeRewriter.h>
@@ -21,9 +20,11 @@
 #include <Interpreters/UserDefinedSQLFunctionVisitor.h>
 #include <Interpreters/TableJoin.h>
 #include <Interpreters/ExpressionActions.h> /// getSmallestColumn()
-#include <Interpreters/getTableExpressions.h>
 #include <Interpreters/TreeOptimizer.h>
+#include <Interpreters/getTableExpressions.h>
 #include <Interpreters/replaceAliasColumnsInQuery.h>
+#include <Interpreters/replaceForPositionalArguments.h>
+
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/PredicateExpressionsOptimizer.h>
 
@@ -34,6 +35,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/ASTOrderByElement.h>
 #include <Parsers/queryToString.h>
 
 #include <DataTypes/NestedUtils.h>
@@ -320,6 +322,35 @@ struct ExistsExpressionData
 };
 
 using ExistsExpressionVisitor = InDepthNodeVisitor<OneTypeMatcher<ExistsExpressionData>, false>;
+
+struct ReplacePositionalArgumentsData
+{
+    using TypeToVisit = ASTSelectQuery;
+
+    static void visit(ASTSelectQuery & select_query, ASTPtr &)
+    {
+        if (select_query.groupBy())
+        {
+            for (auto & expr : select_query.groupBy()->children)
+                replaceForPositionalArguments(expr, &select_query, ASTSelectQuery::Expression::GROUP_BY);
+        }
+        if (select_query.orderBy())
+        {
+            for (auto & expr : select_query.orderBy()->children)
+            {
+                auto & elem = assert_cast<ASTOrderByElement &>(*expr).children.at(0);
+                replaceForPositionalArguments(elem, &select_query, ASTSelectQuery::Expression::ORDER_BY);
+            }
+        }
+        if (select_query.limitBy())
+        {
+            for (auto & expr : select_query.limitBy()->children)
+                replaceForPositionalArguments(expr, &select_query, ASTSelectQuery::Expression::LIMIT_BY);
+        }
+    }
+};
+
+using ReplacePositionalArgumentsVisitor = InDepthNodeVisitor<OneTypeMatcher<ReplacePositionalArgumentsData>, false>;
 
 /// Translate qualified names such as db.table.column, table.column, table_alias.column to names' normal form.
 /// Expand asterisks and qualified asterisks with column names.
@@ -1115,6 +1146,21 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
         }
     }
 
+    /// proton : starts. If there is un-resolved reserved name, save them first
+    /// and try to resolve them later when we have more information since some
+    /// reserved columns like `_tp_delta` can be generated in runtime (in ExpressionAnalyzer)
+    /// `_tp_delta` under streaming join only for now
+    if (columns_context.has_table_join)
+    {
+        auto iter = unknown_required_source_columns.find(ProtonConsts::RESERVED_DELTA_FLAG);
+        if (iter != unknown_required_source_columns.end())
+        {
+            unresolved_reserved_columns.insert(*iter);
+            unknown_required_source_columns.erase(iter);
+        }
+    }
+    /// proton : ends
+
     if (!unknown_required_source_columns.empty())
     {
         WriteBufferFromOwnString ss;
@@ -1169,10 +1215,6 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     }
 
     required_source_columns.swap(source_columns);
-    for (const auto & column : required_source_columns)
-    {
-        source_column_names.insert(column.name);
-    }
 }
 
 NameSet TreeRewriterResult::getArrayJoinSourceNameSet() const
@@ -1289,6 +1331,9 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
 
     /// proton: starts
     result.has_group_by = select_query->groupBy() != nullptr;
+    /// tables_with_columns has data stream semantics for join side
+    if (tables_with_columns.size() >= 2)
+        result.analyzed_join->setTablesWithColumns(tables_with_columns);
     /// proton: ends
 
     /// rewrite filters for select query, must go after getArrayJoinedColumns
@@ -1394,6 +1439,12 @@ void TreeRewriter::normalize(
 
     ExistsExpressionVisitor::Data exists;
     ExistsExpressionVisitor(exists).visit(query);
+
+    if (settings.enable_positional_arguments)
+    {
+        ReplacePositionalArgumentsVisitor::Data data_replace_positional_arguments;
+        ReplacePositionalArgumentsVisitor(data_replace_positional_arguments).visit(query);
+    }
 
     if (settings.transform_null_in)
     {

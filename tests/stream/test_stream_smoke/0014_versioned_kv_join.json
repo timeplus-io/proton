@@ -63,6 +63,71 @@
           ]
         }
       ]
+    },
+    {
+      "id": 2,
+      "tags": ["versioned_kv_join_versioned_kv"],
+      "name": "versioned_kv_inner_join_versioned_kv",
+      "description": "version_kv to versioned_kv inner join",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists vk_left_stream"},
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists vk_right_stream "},
+            {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists vk_left_stream (i int, s string) primary key s settings mode='versioned_kv'"},
+            {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists vk_right_stream (ii int, ss string) primary key ss settings mode='versioned_kv'"},
+            {"client":"python","query_id":"1502", "depends_on_stream":"vk_right_stream","query_end_timer":10, "query_type": "stream", "query":"select i, ii, s, _tp_delta from vk_left_stream join vk_right_stream on s=ss"},
+            {"client":"python", "query_type": "table","depends_on_stream":"vk_right_stream", "wait":5, "query": "insert into vk_right_stream(ii, ss) values (1, 's1')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into vk_left_stream(i, s) values (0, 's1')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into vk_left_stream(i, s) values (2, 's1')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into vk_right_stream(ii, ss) values (3, 's1')"},
+            {"client":"python","query_id":"1503", "wait": 3, "query_type": "table", "query":"select i, s from table(vk_left_stream) union select ii, ss from table(vk_right_stream)"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1502",
+          "expected_results":[
+            [0, 1, "s1", 1], [0, 1, "s1", -1], [2, 1, "s1", 1], [2, 1, "s1", -1], [2, 3, "s1", 1]
+          ]
+        },
+        {
+          "query_id":"1503",
+          "expected_results":[
+            [2, "s1"], [3, "s1"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "tags": ["versioned_kv_join_versioned_kv"],
+      "name": "versioned_kv_inner_join_versioned_kv_global_aggr",
+      "description": "version_kv to versioned_kv inner join global aggregation",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists vk_left_stream"},
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists vk_right_stream "},
+            {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists vk_left_stream (i int, s string) primary key s settings mode='versioned_kv'"},
+            {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists vk_right_stream (ii int, ss string) primary key ss settings mode='versioned_kv'"},
+            {"client":"python","query_id":"1504", "depends_on_stream":"vk_right_stream","query_end_timer":10, "query_type": "stream", "query":"select sum(i + ii) as total from vk_left_stream join vk_right_stream on s=ss group by s emit periodic 1s"},
+            {"client":"python", "query_type": "table","depends_on_stream":"vk_right_stream", "wait":5, "query": "insert into vk_right_stream(ii, ss) values (1, 's1')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into vk_left_stream(i, s) values (3, 's1')"},
+            {"client":"python", "query_type": "table", "wait":3, "query": "insert into vk_left_stream(i, s) values (2, 's1')"},
+            {"client":"python", "query_type": "table", "wait":3, "query": "insert into vk_right_stream(ii, ss) values (4, 's1')"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1504",
+          "expected_results":[
+            [4], [3], [6]
+          ]
+        }
+      ]
     }
   ]
 }

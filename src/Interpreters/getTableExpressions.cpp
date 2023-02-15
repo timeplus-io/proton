@@ -82,13 +82,14 @@ static NamesAndTypesList getColumnsFromTableExpression(
     ContextPtr context,
     NamesAndTypesList & materialized,
     NamesAndTypesList & aliases,
-    NamesAndTypesList & virtuals)
+    NamesAndTypesList & virtuals,
+    Streaming::DataStreamSemantic & data_stream_semantic) /// proton : data_stream_semantic
 {
     NamesAndTypesList names_and_type_list;
     if (table_expression.subquery)
     {
         const auto & subquery = table_expression.subquery->children.at(0);
-        names_and_type_list = InterpreterSelectWithUnionQuery::getSampleBlock(subquery, context, true).getNamesAndTypesList();
+        names_and_type_list = InterpreterSelectWithUnionQuery::getSampleBlock(subquery, context, true, &data_stream_semantic).getNamesAndTypesList();
     }
     else if (table_expression.table_function)
     {
@@ -100,6 +101,10 @@ static NamesAndTypesList getColumnsFromTableExpression(
         materialized = columns.getMaterialized();
         aliases = columns.getAliases();
         virtuals = function_storage->getVirtuals();
+
+        /// proton : starts. Calculate hash semantic
+        data_stream_semantic = Streaming::getDataStreamSemantic(function_storage);
+        /// proton : ends
     }
     else if (table_expression.database_and_table_name)
     {
@@ -111,6 +116,10 @@ static NamesAndTypesList getColumnsFromTableExpression(
         materialized = columns.getMaterialized();
         aliases = columns.getAliases();
         virtuals = table->getVirtuals();
+
+        /// proton : starts. Calculate hash semantic
+        data_stream_semantic = Streaming::getDataStreamSemantic(table);
+        /// proton : ends
     }
 
     return names_and_type_list;
@@ -144,8 +153,9 @@ TablesWithColumns getDatabaseAndTablesWithColumns(
         NamesAndTypesList materialized;
         NamesAndTypesList aliases;
         NamesAndTypesList virtuals;
+        Streaming::DataStreamSemantic data_stream_semantic = Streaming::DataStreamSemantic::Append;
         NamesAndTypesList names_and_types = getColumnsFromTableExpression(
-            *table_expression, context, materialized, aliases, virtuals);
+            *table_expression, context, materialized, aliases, virtuals, data_stream_semantic);
 
         removeDuplicateColumns(names_and_types);
 
@@ -167,6 +177,10 @@ TablesWithColumns getDatabaseAndTablesWithColumns(
 
         if (include_materialized_cols)
             table.addMaterializedColumns(materialized);
+
+        /// proton : starts
+        table.setDataStreamSemantic(data_stream_semantic);
+        /// proton : ends
     }
 
     return tables_with_columns;

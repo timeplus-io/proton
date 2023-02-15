@@ -7,7 +7,7 @@
 #include <Core/ProtocolDefines.h>
 
 /// proton: starts
-#include "convertToChunk.h"
+#include <Processors/Transforms/convertToChunk.h>
 /// proton: ends
 
 namespace ProfileEvents

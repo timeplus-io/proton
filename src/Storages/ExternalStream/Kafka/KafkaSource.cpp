@@ -98,7 +98,7 @@ void KafkaSource::readAndProcess()
     current_batch.clear();
     current_batch.reserve(header.columns());
 
-    auto res = consumer->consume(&KafkaSource::parseMessage, this, static_cast<uint32_t>(record_consume_batch_count), static_cast<int32_t>(record_consume_timeout), consume_ctx);
+    auto res = consumer->consume(&KafkaSource::parseMessage, this, record_consume_batch_count, record_consume_timeout, consume_ctx);
     if (res != ErrorCodes::OK)
         LOG_ERROR(log, "Failed to consume streaming, topic={} shard={} err={}", consume_ctx.topic, consume_ctx.partition, res);
 
@@ -242,6 +242,12 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
 
 void KafkaSource::initConsumer(const Kafka * kafka)
 {
+    if (query_context->getSettingsRef().record_consume_batch_count != 0)
+        record_consume_batch_count = static_cast<uint32_t>(query_context->getSettingsRef().record_consume_batch_count.value);
+
+    if (query_context->getSettingsRef().record_consume_timeout != 0)
+        record_consume_timeout = static_cast<int32_t>(query_context->getSettingsRef().record_consume_timeout.value);
+
     if (consume_ctx.offset == -1)
         consume_ctx.auto_offset_reset = "latest";
     else if (consume_ctx.offset == -2)
@@ -250,14 +256,8 @@ void KafkaSource::initConsumer(const Kafka * kafka)
     consume_ctx.enforce_offset = true;
     klog::KafkaWALAuth auth
         = {.security_protocol = kafka->securityProtocol(), .username = kafka->username(), .password = kafka->password()};
-    consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(kafka->brokers(), auth);
+    consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(kafka->brokers(), auth, record_consume_timeout);
     consumer->initTopicHandle(consume_ctx);
-
-    if (query_context->getSettingsRef().record_consume_batch_count != 0)
-        record_consume_batch_count = query_context->getSettingsRef().record_consume_batch_count;
-
-    if (query_context->getSettingsRef().record_consume_timeout != 0)
-        record_consume_timeout = query_context->getSettingsRef().record_consume_timeout;
 }
 
 void KafkaSource::initFormatExecutor(const Kafka * kafka)

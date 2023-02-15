@@ -6,7 +6,7 @@
 #include <DataTypes/Serializations/SerializationNumber.h>
 
 /// proton: starts.
-#include "Serializations/SerializationBool.h"
+#include <DataTypes/Serializations/SerializationBool.h>
 /// proton: ends.
 
 namespace DB

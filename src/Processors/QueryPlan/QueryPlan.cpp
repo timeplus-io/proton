@@ -199,6 +199,7 @@ QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
 
     /// proton : starts
     last_pipeline->setExecuteMode(queryExecuteMode(is_streaming, query_context->getSettingsRef()));
+    last_pipeline->setStreaming(is_streaming);
     /// proton : ends
 
     return last_pipeline;

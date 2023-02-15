@@ -9,6 +9,9 @@
 #include <optional>
 #include <Core/UUID.h>
 
+/// proton : starts
+#include <Interpreters/Streaming/JoinStreamDescription.h>
+/// proton : ends
 
 namespace DB
 {
@@ -52,6 +55,15 @@ struct TableWithColumnNamesAndTypes
     NamesAndTypesList hidden_columns; /// Not general columns like MATERIALIZED, ALIAS, VIRTUAL. They are omitted in * and t.* results by default.
     NamesAndTypesList alias_columns;
     NamesAndTypesList materialized_columns;
+
+    /// proton : starts. The data stream semantic bound to this storage or subquery
+    Streaming::DataStreamSemantic data_stream_semantic = Streaming::DataStreamSemantic::Append;
+
+    void setDataStreamSemantic(Streaming::DataStreamSemantic data_stream_semantic_)
+    {
+        data_stream_semantic = data_stream_semantic_;
+    }
+    /// proton : ends
 
     TableWithColumnNamesAndTypes(const DatabaseAndTableWithAlias & table_, const NamesAndTypesList & columns_)
         : table(table_)

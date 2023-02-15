@@ -1,8 +1,8 @@
 #pragma once
 
-#include "RangeAsofJoinContext.h"
-#include "joinBlockList.h"
-#include "joinTuple.h"
+#include <Interpreters/Streaming/RangeAsofJoinContext.h>
+#include <Interpreters/Streaming/joinBlockList.h>
+#include <Interpreters/Streaming/joinTuple.h>
 
 #include <Columns/IColumn.h>
 #include <Core/Block.h>
@@ -36,9 +36,11 @@ struct RowRefWithRefCount
     JoinBlockList::iterator block_iter;
     SizeT row_num;
 
+    /// We need this default ctor since hash table framework will call the default one initially
     RowRefWithRefCount() : blocks(nullptr), row_num(0) { }
-    RowRefWithRefCount(JoinBlockList * blocks_, JoinBlockList::iterator block_iter_, size_t row_num_)
-        : blocks(blocks_), block_iter(block_iter_), row_num(static_cast<SizeT>(row_num_))
+
+    RowRefWithRefCount(JoinBlockList * blocks_, size_t row_num_)
+        : blocks(blocks_), block_iter(blocks_->lastBlockIter()), row_num(static_cast<SizeT>(row_num_))
     {
         assert(blocks_);
     }
@@ -52,6 +54,9 @@ struct RowRefWithRefCount
     RowRefWithRefCount & operator=(const RowRefWithRefCount & other)
     {
         /// First deref existing block count
+        if (this == &other)
+            return *this;
+
         deref();
 
         blocks = other.blocks;
@@ -62,6 +67,21 @@ struct RowRefWithRefCount
             block_iter->ref();
 
         return *this;
+    }
+
+    /// If the current `block_iter` is the head of the block list and
+    /// it is just last reference to that block, then deref it will cause
+    /// removal of block list header
+    bool willDerefRemoveListHeader() const
+    {
+        assert(blocks);
+        return block_iter == blocks->begin() && block_iter->refCount() == 1;
+    }
+
+    Int64 blockID() const
+    {
+        assert(blocks);
+        return block_iter->block.info.blockID();
     }
 
     ~RowRefWithRefCount() { deref(); }
@@ -169,7 +189,6 @@ public:
         TypeIndex type,
         const IColumn & asof_column,
         JoinBlockList * blocks,
-        JoinBlockList::iterator block,
         size_t row_num,
         ASOFJoinInequality inequality,
         size_t keep_versions);

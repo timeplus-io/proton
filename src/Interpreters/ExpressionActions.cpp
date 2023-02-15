@@ -20,6 +20,10 @@
 #include <Common/JSONBuilder.h>
 #include <Core/SettingsEnums.h>
 
+/// proton : starts
+#include <DataTypes/DataTypeFactory.h>
+#include <Common/ProtonCommon.h>
+/// proton : ends
 
 #if defined(MEMORY_SANITIZER)
     #include <sanitizer/msan_interface.h>
@@ -1039,7 +1043,8 @@ void ExpressionActionsChain::ArrayJoinStep::finalize(const NameSet & required_ou
 ExpressionActionsChain::JoinStep::JoinStep(
     std::shared_ptr<TableJoin> analyzed_join_,
     JoinPtr join_,
-    const ColumnsWithTypeAndName & required_columns_)
+    const ColumnsWithTypeAndName & required_columns_,
+    bool project_delta_column)
     : Step({})
     , analyzed_join(std::move(analyzed_join_))
     , join(std::move(join_))
@@ -1049,6 +1054,15 @@ ExpressionActionsChain::JoinStep::JoinStep(
 
     result_columns = required_columns_;
     analyzed_join->addJoinedColumnsAndCorrectTypes(result_columns, true);
+
+    /// proton : starts. Add _tp_delta column
+    if (project_delta_column)
+    {
+        auto iter = std::find_if(result_columns.begin(), result_columns.end(), [](const auto & col) { return col.name == ProtonConsts::RESERVED_DELTA_FLAG; });
+        if (iter == result_columns.end())
+            result_columns.emplace_back(DataTypeFactory::instance().get("int8"), ProtonConsts::RESERVED_DELTA_FLAG);
+    }
+    /// proton : ends
 }
 
 void ExpressionActionsChain::JoinStep::finalize(const NameSet & required_output_)

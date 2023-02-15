@@ -40,7 +40,8 @@ void WatermarkTransform::transform(Chunk & chunk)
         return;
     }
 
-    watermark->process(chunk);
+    if (!chunk.avoidWatermark())
+        watermark->process(chunk);
 }
 
 void WatermarkTransform::initWatermark(

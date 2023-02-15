@@ -33,6 +33,7 @@
 #include <Common/logger_useful.h>
 #include <Common/ProtonCommon.h>
 #include <Common/randomSeed.h>
+#include <DataTypes/DataTypeFactory.h>
 
 
 namespace DB
@@ -1674,11 +1675,12 @@ std::vector<std::pair<Int32, Int64>> StorageStream::lastCommittedSequences() con
 
 void StorageStream::cacheVirtualColumnNamesAndTypes()
 {
-    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_APPEND_TIME, std::make_shared<DataTypeInt64>()));
-    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_INGEST_TIME, std::make_shared<DataTypeInt64>()));
-    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, std::make_shared<DataTypeInt64>()));
-    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()));
-    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_SHARD, std::make_shared<DataTypeInt32>()));
+    const auto & type_factory = DataTypeFactory::instance();
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_APPEND_TIME, type_factory.get("int64")));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_INGEST_TIME, type_factory.get("int64")));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, type_factory.get("int64")));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, type_factory.get("int64")));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_SHARD, type_factory.get("int32")));
 }
 
 void StorageStream::updateLogStoreCodec(const String & settings_codec)

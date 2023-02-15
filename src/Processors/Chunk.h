@@ -19,6 +19,7 @@ struct ChunkContext
     static constexpr UInt64 APPEND_TIME_FLAG = 0x2;
     static constexpr UInt64 HISTORICAL_DATA_START_FLAG = 0x4;
     static constexpr UInt64 HISTORICAL_DATA_END_FLAG = 0x8;
+    static constexpr UInt64 AVOID_WATERMARK_FLAG = 0x8000'0000'0000'0000;
 
     /// A pair of Int64, flags represent what they mean
     Streaming::SubstreamID id = Streaming::INVALID_SUBSTREAM_ID;
@@ -73,6 +74,10 @@ struct ChunkContext
             ts_2 = 0;
         }
     }
+
+    ALWAYS_INLINE void setAvoidWatermark() { flags |= AVOID_WATERMARK_FLAG; }
+
+    ALWAYS_INLINE bool avoidWatermark() const { return flags & AVOID_WATERMARK_FLAG; }
 
     ALWAYS_INLINE bool hasAppendTime() const { return flags & APPEND_TIME_FLAG; }
     ALWAYS_INLINE void setAppendTime(Int64 append_time)
@@ -242,6 +247,11 @@ public:
     void reserve(size_t num_columns)
     {
         columns.reserve(num_columns);
+    }
+
+    bool avoidWatermark() const
+    {
+        return chunk_ctx && chunk_ctx->avoidWatermark();
     }
     /// proton : ends
 

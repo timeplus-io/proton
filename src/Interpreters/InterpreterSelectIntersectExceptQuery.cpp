@@ -186,16 +186,6 @@ bool InterpreterSelectIntersectExceptQuery::isStreaming() const
     return false;
 }
 
-bool InterpreterSelectIntersectExceptQuery::isChangelog() const
-{
-    for (const auto & interpreter : nested_interpreters)
-    {
-        if (interpreter->isChangelog())
-            return true;
-    }
-    return false;
-}
-
 bool InterpreterSelectIntersectExceptQuery::hasGlobalAggregation() const
 {
     for (const auto & interpreter : nested_interpreters)
@@ -216,14 +206,14 @@ bool InterpreterSelectIntersectExceptQuery::hasStreamingWindowFunc() const
     return false;
 }
 
-Streaming::HashSemantic InterpreterSelectIntersectExceptQuery::getHashSemantic() const
+Streaming::DataStreamSemantic InterpreterSelectIntersectExceptQuery::getDataStreamSemantic() const
 {
-    auto hash_semantic = nested_interpreters[0]->getHashSemantic();
+    auto hash_semantic = nested_interpreters[0]->getDataStreamSemantic();
 
     for (const auto & interpreter : nested_interpreters)
     {
-        if (interpreter->getHashSemantic() != hash_semantic)
-            return Streaming::HashSemantic::Append;
+        if (interpreter->getDataStreamSemantic() != hash_semantic)
+            return Streaming::DataStreamSemantic::Append;
     }
 
     return hash_semantic;

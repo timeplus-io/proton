@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include <fmt/format.h>
+
 namespace klog
 {
 struct KafkaWALAuth
@@ -92,27 +94,29 @@ struct KafkaWALSettings
     {
         std::vector<std::string> settings;
 
-        settings.push_back("cluster_id=" + cluster_id);
-        settings.push_back("message_max_bytes=" + std::to_string(message_max_bytes));
-        settings.push_back("topic_metadata_refresh_interval_ms=" + std::to_string(topic_metadata_refresh_interval_ms));
-        settings.push_back("enable_idempotence=" + std::to_string(enable_idempotence));
-        settings.push_back("queue_buffering_max_messages=" + std::to_string(queue_buffering_max_messages));
-        settings.push_back("queue_buffering_max_kbytes=" + std::to_string(queue_buffering_max_kbytes));
-        settings.push_back("queue_buffering_max_ms=" + std::to_string(queue_buffering_max_ms));
-        settings.push_back("message_send_max_retries=" + std::to_string(message_send_max_retries));
-        settings.push_back("retry_backoff_ms=" + std::to_string(retry_backoff_ms));
-        settings.push_back("compression_codec=" + compression_codec);
-        settings.push_back("message_timeout_ms=" + std::to_string(message_timeout_ms));
-        settings.push_back("message_delivery_async_poll_ms=" + std::to_string(message_delivery_async_poll_ms));
-        settings.push_back("message_delivery_sync_poll_ms=" + std::to_string(message_delivery_sync_poll_ms));
-        settings.push_back("enable_auto_commit=" + std::to_string(enable_auto_commit));
-        settings.push_back("check_crcs=" + std::to_string(check_crcs));
-        settings.push_back("auto_commit_interval_ms=" + std::to_string(auto_commit_interval_ms));
-        settings.push_back("queued_min_messages=" + std::to_string(queued_min_messages));
-        settings.push_back("queued_max_messages_kbytes=" + std::to_string(queued_max_messages_kbytes));
-        settings.push_back("shared_subscription_flush_threshold_count=" + std::to_string(shared_subscription_flush_threshold_count));
-        settings.push_back("shared_subscription_flush_threshold_bytes=" + std::to_string(shared_subscription_flush_threshold_bytes));
-        settings.push_back("shared_subscription_flush_threshold_ms=" + std::to_string(shared_subscription_flush_threshold_ms));
+        settings.push_back(fmt::format("cluster_id={}", cluster_id));
+        settings.push_back(fmt::format("message_max_bytes={}", message_max_bytes));
+        settings.push_back(fmt::format("topic_metadata_refresh_interval_ms={}", topic_metadata_refresh_interval_ms));
+        settings.push_back(fmt::format("enable_idempotence={}", enable_idempotence));
+        settings.push_back(fmt::format("queue_buffering_max_messages={}", queue_buffering_max_messages));
+        settings.push_back(fmt::format("queue_buffering_max_kbytes={}", queue_buffering_max_kbytes));
+        settings.push_back(fmt::format("queue_buffering_max_ms={}", queue_buffering_max_ms));
+        settings.push_back(fmt::format("message_send_max_retries={}", message_send_max_retries));
+        settings.push_back(fmt::format("retry_backoff_ms={}", retry_backoff_ms));
+        settings.push_back(fmt::format("compression_codec={}", compression_codec));
+        settings.push_back(fmt::format("message_timeout_ms={}", message_timeout_ms));
+        settings.push_back(fmt::format("message_delivery_async_poll_ms={}", message_delivery_async_poll_ms));
+        settings.push_back(fmt::format("message_delivery_sync_poll_ms={}", message_delivery_sync_poll_ms));
+        settings.push_back(fmt::format("enable_auto_commit={}", enable_auto_commit));
+        settings.push_back(fmt::format("check_crcs={}", check_crcs));
+        settings.push_back(fmt::format("auto_commit_interval_ms={}", auto_commit_interval_ms));
+        settings.push_back(fmt::format("fetch_message_max_bytes={}", fetch_message_max_bytes));
+        settings.push_back(fmt::format("fetch_wait_max_ms={}", fetch_wait_max_ms));
+        settings.push_back(fmt::format("queued_min_messages={}", queued_min_messages));
+        settings.push_back(fmt::format("queued_max_messages_kbytes={}", queued_max_messages_kbytes));
+        settings.push_back(fmt::format("shared_subscription_flush_threshold_count={}", shared_subscription_flush_threshold_count));
+        settings.push_back(fmt::format("shared_subscription_flush_threshold_bytes={}", shared_subscription_flush_threshold_bytes));
+        settings.push_back(fmt::format("shared_subscription_flush_threshold_ms={}", shared_subscription_flush_threshold_ms));
 
         return boost::algorithm::join(settings, " ");
     }

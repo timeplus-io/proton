@@ -57,6 +57,7 @@ struct TreeRewriterResult
     /// proton: starts
     bool streaming = true;
     bool has_group_by = false;
+    NameSet unresolved_reserved_columns;
     /// proton: ends
 
     /// The backward mapping for array_join_alias_to_name.

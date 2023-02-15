@@ -153,14 +153,6 @@ void Block::initializeIndexByName()
         index_by_name.emplace(data[i].name, i);
 }
 
-
-void Block::reserve(size_t count)
-{
-    index_by_name.reserve(count);
-    data.reserve(count);
-}
-
-
 void Block::insert(size_t position, ColumnWithTypeAndName elem)
 {
     if (position > data.size())
@@ -818,23 +810,43 @@ Block concatenateBlocks(const std::vector<Block> & blocks)
 }
 
 /// proton: starts
-void Block::sortColumnInplace(const std::vector<UInt16> & positions)
+void Block::reserve(size_t num_columns)
 {
-    if (positions.empty())
+    index_by_name.reserve(num_columns);
+    data.reserve(num_columns);
+}
+
+void Block::sortColumnsInplace(const std::vector<UInt16> & positions)
+{
+    if (positions.size() <= 1)
         return;
 
-    auto pos_size = positions.size();
-    assert (pos_size == columns());
+    auto num_columns = columns();
+    assert (positions.size() == num_columns);
 
-    for (size_t pos = 0; pos < pos_size - 1; ++pos)
+    size_t exchanged = 0;
+    for (size_t i = 0; exchanged < num_columns - 1 && i < num_columns;)
     {
-        if (positions[pos] == pos)
-            /// already in place
-            continue;
+        auto target_pos = positions[i];
+        if (i != target_pos)
+        {
+            /// Move column at positions[pos] to pos
+            assert(target_pos < num_columns);
+            data[i].swap(data[target_pos]);
+            ++exchanged;
+        }
+        else
+            ++i;
+    }
 
-        /// Move column at schema_ctx.column_positions[pos] to pos
-        assert(positions[pos] < pos_size);
-        data[positions[pos]].swap(data[pos]);
+    if (exchanged)
+    {
+        /// Correct index_by_name
+        for (size_t i = 0; const auto & col : data)
+        {
+            index_by_name[col.name] = i;
+            ++i;
+        }
     }
 }
 
@@ -855,6 +867,66 @@ bool Block::hasDynamicSubcolumns() const
             return true;
 
     return false;
+}
+
+void Block::reorderColumnsInBlock(const Block & header)
+{
+    assert(header.columns() >= 1);
+
+    auto num_columns = columns();
+    if (num_columns <= 1)
+        return;
+
+    assert(num_columns >= header.columns());
+
+    if (num_columns == header.columns())
+    {
+        /// Fast
+        size_t exchanged = 0;
+        for (size_t i = 0; exchanged < num_columns - 1 && i < num_columns;)
+        {
+            auto target_pos = header.getPositionByName(data[i].name);
+            if (i != target_pos)
+            {
+                data[i].swap(data[target_pos]);
+                ++exchanged;
+            }
+            else
+                ++i;
+        }
+
+        /// Correct index_by_name
+        if (exchanged)
+        {
+            for (size_t i = 0; const auto & col : data)
+            {
+                index_by_name[col.name] = i;
+                ++i;
+            }
+        }
+    }
+    else
+    {
+        Block result;
+        result.reserve(header.columns());
+
+        for (const auto & col : header)
+        {
+            auto & target_col = getByName(col.name);
+            result.insert(std::move(target_col));
+        }
+
+        swap(result);
+    }
+}
+
+void Block::insertRow(size_t row_num, Block & target_block) const
+{
+    assert(row_num < rows());
+    assert(blocksHaveEqualStructure(*this, target_block));
+
+    for (size_t col_pos = 0; const auto & col : data)
+        target_block.getByPosition(col_pos++).column->assumeMutable()->insertFrom(*col.column, row_num);
 }
 /// proton: ends
 

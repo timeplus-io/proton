@@ -3220,6 +3220,12 @@ std::vector<String> Context::parseQueryStatusPollId(const String & poll_id) cons
     /// FIXME, check timestamp etc
     return result;
 }
+
+Context::DataStreamSemanticCache & Context::getDataStreamSemanticCache() const
+{
+    assert(hasQueryContext());
+    return getQueryContext()->data_stream_semantic_cache;
+}
 /// proton: ends.
 
 }

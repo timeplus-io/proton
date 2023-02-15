@@ -1,6 +1,6 @@
 #pragma once
 
-#include "joinMetrics.h"
+#include <Interpreters/Streaming/joinMetrics.h>
 
 #include <Core/Block.h>
 
@@ -14,6 +14,7 @@ struct RefCountBlock
     /// When refcount drops to zero, which means nobody is referencing any row
     /// in the block so the block will be GCed
     RefCountBlock(Block && block_) : block(std::move(block_)), refcnt(static_cast<uint32_t>(block.rows())) { }
+    RefCountBlock(const Block & block_) : block(block_), refcnt(static_cast<uint32_t>(block.rows())) { }
 
     RefCountBlock(RefCountBlock && other) noexcept: block(std::move(other.block)), refcnt(other.refcnt) { }
 
@@ -86,6 +87,19 @@ struct JoinBlockList
 
     bool empty() const { return blocks.empty(); }
 
+    auto lastBlockIter()
+    {
+        assert(!blocks.empty());
+        /// return std::prev(blocks.end());
+        return --blocks.end();
+    }
+
+    const Block * lastBlock() const
+    {
+        assert(!blocks.empty());
+        return &blocks.back().block;
+    }
+
     using iterator = std::list<RefCountBlock>::iterator;
     using const_iterator = std::list<RefCountBlock>::const_iterator;
 
@@ -97,8 +111,22 @@ struct JoinBlockList
     const_iterator begin() const { return blocks.begin(); }
     const_iterator end() const { return blocks.end(); }
 
-    void push_back(Block && block) { blocks.push_back(std::move(block)); }
+    void push_back(Block && block)
+    {
+        updateMetrics(block);
+        blocks.push_back(std::move(block));
+    }
 
+    void push_back(const Block & block)
+    {
+        updateMetrics(block);
+        blocks.push_back(block);
+    }
+
+    Int64 minTimestamp() const { return min_ts; }
+    Int64 maxTimestamp() const { return max_ts; }
+
+private:
     Int64 min_ts = std::numeric_limits<Int64>::max();
     Int64 max_ts = -1;
     size_t total_bytes = 0;

@@ -592,14 +592,14 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1044-1", "terminate":"manuel","wait":1, "query_type": "stream","depends_on_stream":"left_stream1,right_stream1", "query":"select count() as c from left_stream1 inner join right_stream1 on i=ii emit periodic 1s"},
+            {"client":"python","query_id":"1044-1", "terminate":"manuel","wait":1, "query_type": "stream","depends_on_stream":"left_stream1,right_stream1", "query":"select count() as c from left_stream1 inner join right_stream1 on i=ii emit periodic 1s settings join_max_wait_rows=1"},
             {"client":"python", "query_type": "table", "depends_on":"1044-1","wait":1,
               "query": "insert into right_stream1(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),
               (1, 's2', '2022-05-23 15:45:00'),
               (1, 's3', '2022-05-23 15:45:09')"
             },
-            {"client":"python", "query_type": "table","depends_on":"1044-1", "wait":0, "query": "insert into left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table","depends_on":"1044-1", "wait":1, "query": "insert into left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1044-1'"}
           ]
         }

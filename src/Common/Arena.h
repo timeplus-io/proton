@@ -102,6 +102,14 @@ private:
 
     /// proton: starts. Make arena time-aware for streaming processing to allow
     /// free MemoryChunk according to timestamp
+    /// How to enable memory recycling :
+    /// 1) Just right after ctor Arena and before any memory allocation from it, call arena.enableRecycle()
+    /// 2) For every memory allocation from arena, first call arena.setCurrentTimestamps(lower_bound, upper_bound),
+    ///    then the current Chunk which is used to allocate the memory will be tagged with the min_lower_bound, max_upper_bound timestamps.
+    ///    It is basically saying the `Chunk` contains data which spans [min_lower_bound, max_upper_bound]
+    /// 3) As timestamp progress, if clients don't need any data before `t`, call `arena.free(t)` which will walk through the chunk list
+    ///    and recycle these which have upper bound timestamp less than `t`.
+    /// 4) Depending on size etc, some of the recycled chunks will be added to `free_lists` for future memory allocation
     uint64_t current_max_timestamp = 0;
     uint64_t current_min_timestamp = 0;
 
@@ -429,6 +437,11 @@ public:
     void enableRecycle(bool enable_recycle)
     {
         recycle_enabled = enable_recycle;
+    }
+
+    void setCurrentTimestamps(uint64_t timestamp)
+    {
+        setCurrentTimestamps(timestamp, timestamp);
     }
 
     void setCurrentTimestamps(uint64_t min_timestamp, uint64_t max_timestamp)

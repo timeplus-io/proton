@@ -28,9 +28,13 @@ JoinStep::JoinStep(
     , join_max_wait_rows(join_max_wait_rows_)
     , join_max_cached_bytes(join_max_cached_bytes_)
 {
+    auto hash_join = std::dynamic_pointer_cast<HashJoin>(join);
+    /// We know the finalized left header
+    hash_join->initLeftStream(left_stream_.header);
+
     input_streams = {left_stream_, right_stream_};
     output_stream = DataStream{
-        .header = JoinTransform::transformHeader(left_stream_.header, std::dynamic_pointer_cast<HashJoin>(join)),
+        .header = JoinTransform::transformHeader(left_stream_.header, hash_join),
     };
 }
 

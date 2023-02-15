@@ -22,6 +22,8 @@
 #include <Common/logger_useful.h>
 
 /// proton : starts
+#include <Interpreters/DatabaseAndTableWithAlias.h>
+#include <Interpreters/Streaming/JoinStreamDescription.h>
 #include <Interpreters/Streaming/RangeAsofJoinContext.h>
 /// proton : ends
 
@@ -76,15 +78,31 @@ public:
             return key_names_right.size();
         }
 
-        String formatDebug() const
+        String formatDebug(bool short_format = false) const
         {
-            return fmt::format("Left keys: [{}] Right keys [{}] Condition columns: '{}', '{}'",
-                               fmt::join(key_names_left, ", "), fmt::join(key_names_right, ", "),
-                               condColumnNames().first, condColumnNames().second);
+            const auto & [left_cond, right_cond] = condColumnNames();
+
+            if (short_format)
+            {
+                return fmt::format("({}) = ({}){}{}", fmt::join(key_names_left, ", "), fmt::join(key_names_right, ", "),
+                                   !left_cond.empty() ? " AND " + left_cond : "", !right_cond.empty() ? " AND " + right_cond : "");
+            }
+
+            return fmt::format(
+                "Left keys: [{}] Right keys [{}] Condition columns: '{}', '{}'",
+                fmt::join(key_names_left, ", "), fmt::join(key_names_right, ", "), left_cond, right_cond);
         }
     };
 
     using Clauses = std::vector<JoinOnClause>;
+
+    static std::string formatClauses(const Clauses & clauses, bool short_format = false)
+    {
+        std::vector<std::string> res;
+        for (const auto & clause : clauses)
+            res.push_back("[" + clause.formatDebug(short_format) + "]");
+        return fmt::format("{}", fmt::join(res, "; "));
+    }
 
 private:
     /** Query of the form `SELECT expr(x) AS k FROM t1 ANY LEFT JOIN (SELECT expr(x) AS k FROM t2) USING k`
@@ -125,6 +143,7 @@ private:
 
     /// proton : starts.
     Streaming::RangeAsofJoinContext range_asof_join_ctx;
+    TablesWithColumns tables_with_columns;
     /// proton : ends
 
     /// All columns which can be read from joined table. Duplicating names are qualified.
@@ -198,10 +217,10 @@ public:
     {
         /// When join_algorithm = 'default' (not specified by user) we use hash or direct algorithm.
         /// It's behaviour that was initially supported
-        bool is_enbaled_by_default = val == JoinAlgorithm::DEFAULT
+        bool is_enabled_by_default = val == JoinAlgorithm::DEFAULT
                                   || val == JoinAlgorithm::HASH
                                   || val == JoinAlgorithm::DIRECT;
-        if (join_algorithm.isSet(JoinAlgorithm::DEFAULT) && is_enbaled_by_default)
+        if (join_algorithm.isSet(JoinAlgorithm::DEFAULT) && is_enabled_by_default)
             return true;
         return join_algorithm.isSet(val);
     }
@@ -247,7 +266,7 @@ public:
      * Only rows where conditions are met (where new columns have non-zero value) will be joined.
      *
      * NOTE: non-equi condition containing columns from different tables (like `... ON t1.id = t2.id AND t1.val > t2.val)
-     *     doesn't supported yet, it can be added later.
+     *     isn't supported yet, it can be added later.
      */
     void addJoinCondition(const ASTPtr & ast, bool is_left);
 
@@ -282,17 +301,6 @@ public:
 
     void setAsofInequality(ASOFJoinInequality inequality) { asof_inequality = inequality; }
     ASOFJoinInequality getAsofInequality() const { return asof_inequality; }
-
-    /// proton : starts
-    void setRangeAsofLeftInequality(ASOFJoinInequality inequality) { range_asof_join_ctx.left_inequality = inequality; }
-    void setRangeAsofRightInequality(ASOFJoinInequality inequality) { range_asof_join_ctx.right_inequality = inequality; }
-    void setRangeAsofLowerBound(Int64 lower_bound) { range_asof_join_ctx.lower_bound = lower_bound; }
-    void setRangeAsofUpperBound(Int64 upper_bound) { range_asof_join_ctx.upper_bound = upper_bound; }
-    void setRangeType(Streaming::RangeType range_type_) { range_asof_join_ctx.type = range_type_; }
-    const Streaming::RangeAsofJoinContext & rangeAsofJoinContext() const { return range_asof_join_ctx; }
-    void validateRangeAsof(Int64 max_range) const;
-    bool isRangeJoin() const { return range_asof_join_ctx.type != Streaming::RangeType::None; }
-    /// proton : ends
 
     ASTPtr leftKeysList() const;
     ASTPtr rightKeysList() const; /// For ON syntax only
@@ -331,6 +339,22 @@ public:
     bool isSpecialStorage() const { return !right_storage_name.empty() || right_storage_join || right_kv_storage; }
 
     std::shared_ptr<const IKeyValueEntity> getStorageKeyValue() { return right_kv_storage; }
+
+    /// proton : starts
+    void setTablesWithColumns(const TablesWithColumns & tables_with_columns_) { tables_with_columns = tables_with_columns_; }
+    const TablesWithColumns & getTablesWithColumns() { return tables_with_columns; }
+    void setRangeAsofLeftInequality(ASOFJoinInequality inequality) { range_asof_join_ctx.left_inequality = inequality; }
+    void setRangeAsofRightInequality(ASOFJoinInequality inequality) { range_asof_join_ctx.right_inequality = inequality; }
+    void setRangeAsofLowerBound(Int64 lower_bound) { range_asof_join_ctx.lower_bound = lower_bound; }
+    void setRangeAsofUpperBound(Int64 upper_bound) { range_asof_join_ctx.upper_bound = upper_bound; }
+    void setRangeType(Streaming::RangeType range_type_) { range_asof_join_ctx.type = range_type_; }
+    const Streaming::RangeAsofJoinContext & rangeAsofJoinContext() const { return range_asof_join_ctx; }
+    void validateRangeAsof(Int64 max_range) const;
+    bool isRangeJoin() const { return range_asof_join_ctx.type != Streaming::RangeType::None; }
+
+    /// For bidirectional hash join
+    Block getRequiredLeftKeys(const Block & right_table_keys, std::vector<String> & keys_sources) const;
+    /// proton : ends
 };
 
 }

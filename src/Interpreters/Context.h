@@ -33,6 +33,7 @@
 /// proton: starts
 #include <Interpreters/TimeParam.h>
 #include <Storages/Streaming/IngestMode.h>
+#include <Interpreters/Streaming/JoinStreamDescription.h>
 /// proton: ends
 
 
@@ -64,7 +65,6 @@ using InterserverCredentialsPtr = std::shared_ptr<const InterserverCredentials>;
 class InterserverIOHandler;
 class BackgroundSchedulePool;
 class MergeList;
-class ReplicatedFetchList;
 class Cluster;
 class Compiler;
 class MarkCache;
@@ -390,6 +390,8 @@ private:
 
     /// proton: starts. Parameters for time predicates of main table
     TimeParam time_param;
+    using DataStreamSemanticCache = std::unordered_map<std::string, Streaming::DataStreamSemantic>;
+    mutable DataStreamSemanticCache data_stream_semantic_cache;
     /// proton: end.
 
     Context();
@@ -412,6 +414,8 @@ public:
 
     const std::set<RequiredColumnTuple> & requiredColumns() const { return required_columns; }
     void addRequiredColumns(RequiredColumnTuple && column_tuple) { required_columns.insert(std::move(column_tuple)); }
+    /// Get data stream semantic for subquery
+    DataStreamSemanticCache & getDataStreamSemanticCache() const;
     /// proton: end
 
     String getPath() const;

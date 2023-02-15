@@ -61,7 +61,6 @@
 #include <Processors/Sources/NullSource.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <Processors/Transforms/AggregatingTransform.h>
-#include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/FilterTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
@@ -72,7 +71,6 @@
 
 #include <Functions/IFunction.h>
 #include <Core/Field.h>
-#include <Core/ProtocolDefines.h>
 #include <base/types.h>
 #include <base/sort.h>
 #include <Columns/Collator.h>
@@ -594,11 +592,11 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     if (has_input || !joined_tables.resolveTables())
         joined_tables.makeFakeTable(storage, metadata_snapshot, source_header);
 
-
     if (context->getCurrentTransaction() && context->getSettingsRef().throw_on_unsupported_query_inside_transaction)
     {
         if (storage)
             checkStorageSupportsTransactionsIfNeeded(storage, context);
+
         for (const auto & table : joined_tables.tablesWithColumns())
         {
             if (table.table.table.empty())
@@ -606,6 +604,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             auto maybe_storage = DatabaseCatalog::instance().tryGetTable({table.table.database, table.table.table}, context);
             if (!maybe_storage)
                 continue;
+
             checkStorageSupportsTransactionsIfNeeded(storage, context);
         }
     }
@@ -649,9 +648,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     }
 
     /// proton: starts.
-    analyzeStreamingMode();
-    analyzeChangelogMode();
-
     /// Before analyzing, handle settings seek_to
     handleSeekToSetting();
 
@@ -682,7 +678,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     StorageView * view = nullptr;
     if (storage)
         view = dynamic_cast<StorageView *>(storage.get());
-
 
     auto analyze = [&] (bool try_move_to_prewhere)
     {
@@ -819,7 +814,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
                         required_columns.push_back(name);
             }
 
-            if (isChangelog())
+            if (getDataStreamSemantic() == Streaming::DataStreamSemantic::Changelog)
             {
                 if (std::find(required_columns.begin(), required_columns.end(), ProtonConsts::RESERVED_DELTA_FLAG) == required_columns.end())
                     required_columns.push_back(ProtonConsts::RESERVED_DELTA_FLAG);
@@ -896,6 +891,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             query.setExpression(ASTSelectQuery::Expression::PREWHERE, std::make_shared<ASTLiteral>(false));
         need_analyze_again = true;
     }
+
     if (analysis_result.where_constant_filter_description.always_false || analysis_result.where_constant_filter_description.always_true)
     {
         if (analysis_result.where_constant_filter_description.always_true)
@@ -904,6 +900,15 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             query.setExpression(ASTSelectQuery::Expression::WHERE, std::make_shared<ASTLiteral>(false));
         need_analyze_again = true;
     }
+
+    /// proton : starts. If versioned_kv join versioned_kv mode, we will force changelog emit internally
+    if (analysis_result.force_internal_changelog_emit)
+    {
+        /// Replace changelog aggregation function
+        checkAndPrepareStreamingFunctions();
+        need_analyze_again = true;
+    }
+    /// proton : ends
 
     if (need_analyze_again)
     {
@@ -1046,7 +1051,7 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
         && options.to_stage > QueryProcessingStage::WithMergeableState;
 
     analysis_result = ExpressionAnalysisResult(
-        *query_analyzer, metadata_snapshot, first_stage, second_stage, options.only_analyze, filter_info, source_header, emit_version, isChangelog());
+        *query_analyzer, metadata_snapshot, first_stage, second_stage, options.only_analyze, filter_info, source_header, emit_version, getDataStreamSemantic());
 
     if (options.to_stage == QueryProcessingStage::Enum::FetchColumns)
     {
@@ -1632,6 +1637,8 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                             max_streams,
                             analysis_result.optimize_read_in_order);
                     }
+
+                    auto streaming_plan = query_plan.isStreaming();
                     /// proton : ends
 
                     join_step->setStepDescription(fmt::format("JOIN {}", expressions.join->pipelineType()));
@@ -1641,6 +1648,10 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
 
                     query_plan = QueryPlan();
                     query_plan.unitePlans(std::move(join_step), {std::move(plans)});
+
+                    /// proton : starts. Propagate `streaming`
+                    query_plan.setStreaming(streaming_plan);
+                    /// proton : ends
                 }
             }
 
@@ -3281,30 +3292,41 @@ void InterpreterSelectQuery::executeStreamingAggregation(
             emit_version));
 }
 
-bool InterpreterSelectQuery::isStreaming() const
+Streaming::DataStreamSemantic InterpreterSelectQuery::getDataStreamSemantic() const
 {
-    assert(is_streaming.has_value());
-    return *is_streaming;
-}
+    if (data_stream_semantic.has_value())
+        return *data_stream_semantic;
 
-bool InterpreterSelectQuery::isChangelog() const
-{
-    assert(is_changelog.has_value());
-    return *is_changelog;
-}
+    if (!isStreaming() || context->getSettingsRef().enforce_append_only.value)
+        data_stream_semantic = Streaming::DataStreamSemantic::Append;
 
-Streaming::HashSemantic InterpreterSelectQuery::getHashSemantic() const
-{
     if (storage)
     {
-        if (storage->isChangelogKvMode())
-            return Streaming::HashSemantic::ChangeLogKV;
-        else if (storage->isVersionedKvMode())
-            return Streaming::HashSemantic::VersionedKV;
+        if (storage->as<StorageView>())
+        {
+            auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
+            auto ctx = Context::createCopy(context);
+            ctx->setCollectRequiredColumns(false);
+            data_stream_semantic = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().analyze()).getDataStreamSemantic();
+        }
+        else
+        {
+            if (storage->isChangelogKvMode())
+                 data_stream_semantic = Streaming::DataStreamSemantic::ChangeLogKV;
+            else if (storage->isVersionedKvMode())
+                data_stream_semantic = Streaming::DataStreamSemantic::VersionedKV;
+            else if (storage->isChangelogMode())
+                data_stream_semantic = Streaming::DataStreamSemantic::Changelog;
+            else
+                data_stream_semantic = Streaming::DataStreamSemantic::Append;
+        }
     }
+    else if (interpreter_subquery)
+        data_stream_semantic = interpreter_subquery->getDataStreamSemantic();
+    else
+        data_stream_semantic = Streaming::DataStreamSemantic::Append;
 
-    /// FIXME, view, recurse into nested storage ?
-    return Streaming::HashSemantic::Append;
+    return *data_stream_semantic;
 }
 
 std::set<String> InterpreterSelectQuery::getGroupByColumns() const
@@ -3595,8 +3617,11 @@ void InterpreterSelectQuery::analyzeEventPredicateAsSeekTo()
         query_info.seek_to_info = seek_to_info;
 }
 
-void InterpreterSelectQuery::analyzeStreamingMode()
+bool InterpreterSelectQuery::isStreaming() const
 {
+    if (is_streaming.has_value())
+        return *is_streaming;
+
     /// We can simple determine the query type (stream or not) by the type of storage or subquery.
     /// Although `TreeRewriter` optimization may rewrite the subquery, it does not affect whether it is streaming
     bool streaming = false;
@@ -3631,31 +3656,8 @@ void InterpreterSelectQuery::analyzeStreamingMode()
         streaming = interpreter_subquery->isStreaming();
 
     is_streaming = streaming;
-}
 
-void InterpreterSelectQuery::analyzeChangelogMode()
-{
-    if (!isStreaming() || context->getSettingsRef().enforce_append_only.value)
-    {
-        is_changelog = false;
-        return;
-    }
-
-    if (storage)
-    {
-        if (storage->as<StorageView>())
-        {
-            auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
-            auto ctx = Context::createCopy(context);
-            ctx->setCollectRequiredColumns(false);
-            is_changelog = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().analyze()).isChangelog();
-        }
-        else
-            is_changelog = storage->isChangelogKvMode() || storage->isChangelogMode();
-
-    }
-    else if (interpreter_subquery)
-        is_changelog = interpreter_subquery->isChangelog();
+    return streaming;
 }
 
 ColumnsDescriptionPtr InterpreterSelectQuery::getExtendedObjects() const
@@ -3793,5 +3795,9 @@ void InterpreterSelectQuery::checkUDA()
     }
 }
 
+bool InterpreterSelectQuery::isChangelog() const
+{
+    return getDataStreamSemantic() == Streaming::DataStreamSemantic::Changelog || analysis_result.force_internal_changelog_emit;
+}
 /// proton: ends
 }
