@@ -29,6 +29,10 @@ jobs:
         rm -rf $GITHUB_WORKSPACE/ccache
         rm -rf build_docker
 
+        # unit test
+        $GITHUB_WORKSPACE/output/unit_tests_dbms --gtest_output=xml:unit_tests_dbms.xml ||:
+        aws s3 cp --no-progress unit_tests_dbms.xml s3://tp-internal/reports/proton/tests/CI/${GITHUB_REF_NAME}/${GITHUB_SHA}/ ||:
+
         docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
         cd $GITHUB_WORKSPACE/docker/server
 
