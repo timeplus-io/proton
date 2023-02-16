@@ -1,0 +1,4 @@
+Code: 36. DB::Exception: Received from localhost:8463. DB::Exception: Unexpected key `stream` in dictionary so
+urce configuration. (BAD_ARGUMENTS)                                                                           
+(query: SELECT dict_get('database_for_range_dict.range_dictionary', 'Tax', to_uint64(1), to_date('2019-05-15'));)
+, result:
