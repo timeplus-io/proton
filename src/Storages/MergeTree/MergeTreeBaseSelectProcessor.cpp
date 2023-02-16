@@ -665,7 +665,7 @@ Block MergeTreeBaseSelectProcessor::transformHeader(
         else
         {
             WhichDataType which(removeNullable(recursiveRemoveLowCardinality(prewhere_column.type)));
-            if (which.isInt() || which.isUInt())
+            if (which.isNativeInt() || which.isNativeUInt())
                 prewhere_column.column = prewhere_column.type->createColumnConst(block.rows(), 1u)->convertToFullColumnIfConst();
             else if (which.isFloat())
                 prewhere_column.column = prewhere_column.type->createColumnConst(block.rows(), 1.0f)->convertToFullColumnIfConst();
