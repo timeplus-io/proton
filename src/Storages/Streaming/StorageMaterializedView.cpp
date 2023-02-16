@@ -323,8 +323,10 @@ void StorageMaterializedView::checkAlterIsPossible(const AlterCommands & command
     if (!has_inner_table)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Materialized view with specified target stream can't be altered.");
 
-    if (!commands.isSettingsAlter())
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only materialized view's settings can be altered.");
+    auto metadata = getInMemoryMetadataPtr();
+    if (!std::all_of(
+            commands.begin(), commands.end(), [&](const AlterCommand & c) { return c.isSettingsAlter() || c.isTTLAlter(*metadata); }))
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only materialized view's settings/ttl can be altered.");
 
     getTargetTable()->checkAlterIsPossible(commands, ctx);
 }

@@ -96,13 +96,15 @@
                     {"client":"python", "wait":2, "query_type": "table", "query":"create materialized view mv_with_inner_stream as select _tp_time, i + 1 as ii from source_mv_stream"},
                     {"client":"python", "wait":2, "query_type": "table", "query":"create materialized view mv_with_target_stream into target_mv_stream as select _tp_time, i + 1 as ii from source_mv_stream"},
                     {"client":"python", "wait":1, "query_id":"2400", "query_type": "table","depends_on_stream":"mv_with_inner_stream", "query":"alter stream mv_with_inner_stream modify setting logstore_retention_bytes=1000000"},
-                    {"client":"python", "wait":1, "query_id":"2401", "query_type": "table","depends_on_stream":"mv_with_target_stream", "query":"alter stream mv_with_target_stream modify setting logstore_retention_bytes=1000000"}
+                    {"client":"python", "wait":1, "query_id":"2401", "query_type": "table","depends_on_stream":"mv_with_target_stream", "query":"alter stream mv_with_target_stream modify setting logstore_retention_bytes=1000000"},
+                    {"client":"python", "wait":1, "query_id":"2402", "query_type": "table","depends_on_stream":"mv_with_inner_stream", "query":"alter stream mv_with_inner_stream modify ttl now()-1d"}
                   ]
                 }
             ],
             "expected_results": [
                 {"query_id":"2400", "expected_results":[]},
-                {"query_id":"2401", "expected_results":["error_code:48"]}
+                {"query_id":"2401", "expected_results":["error_code:48"]},
+                {"query_id":"2402", "expected_results":[]}
             ]
         }
     ]
