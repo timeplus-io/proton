@@ -704,7 +704,7 @@ public:
             delta_col_pos(delta_col_pos_),
             window_desc(window_desc_)
         {
-            if (window_desc)
+            if (window_desc && window_desc->type != WindowType::NONE)
             {
                 time_col_is_datetime64 = isDateTime64(window_desc->argument_types[0]);
                 auto * func_ast = window_desc->func_ast->as<ASTFunction>();
