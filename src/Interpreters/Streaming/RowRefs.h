@@ -248,7 +248,8 @@ public:
         const IColumn & asof_column,
         size_t row_num,
         UInt64 src_block_id,
-        JoinTupleMap * joined_rows) const;
+        JoinTupleMap * joined_rows,
+        bool is_left_block) const;
 
     /// Find the last one
     const RowRef * findAsof(

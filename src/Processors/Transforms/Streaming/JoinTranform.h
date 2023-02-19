@@ -45,8 +45,6 @@ public:
         Block right_input_header,
         HashJoinPtr join_,
         size_t max_block_size_,
-        UInt64 join_max_wait_ms_,
-        UInt64 join_max_wait_rows_,
         UInt64 join_max_cached_bytes_,
         FinishCounterPtr finish_counter_ = nullptr);
 
@@ -57,9 +55,9 @@ public:
     static Block transformHeader(Block header, const HashJoinPtr & join);
 
 private:
-    void bufferDataAndJoin(std::vector<Block> && blocks);
     void joinBidirectionally(std::vector<Block> && blocks);
-    bool timeToJoin() const;
+    void rangeJoinBidirectionally(std::vector<Block> && blocks);
+
     void validateAsofJoinKey(const Block & left_input_header, const Block & right_input_header);
 
 private:
@@ -74,7 +72,6 @@ private:
     };
 
     std::vector<PortContext> port_contexts;
-    std::vector<decltype(&HashJoin::insertLeftBlock)> insert_funcs;
     std::array<std::atomic_bool , 2> port_can_have_more_data;
 
     const Block & output_header;
@@ -93,9 +90,7 @@ private:
     FinishCounterPtr finish_counter;
     [[maybe_unused]] std::shared_ptr<NotJoinedBlocks> non_joined_blocks;
     [[maybe_unused]] size_t max_block_size;
-    UInt64 join_max_wait_ms;
-    UInt64 join_max_wait_rows;
-    UInt64 join_max_cached_bytes;
+    [[maybe_unused]] UInt64 join_max_cached_bytes;
 
     mutable UInt64 last_join = 0;
     mutable UInt64 added_rows_since_last_join = 0;

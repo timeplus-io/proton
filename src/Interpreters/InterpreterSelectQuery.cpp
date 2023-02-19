@@ -1623,8 +1623,6 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                             joined_plan->getCurrentDataStream(),
                             expressions.join,
                             settings.max_block_size,
-                            settings.join_max_wait_ms,
-                            settings.join_max_wait_rows,
                             settings.join_max_cached_bytes);
                     }
                     else

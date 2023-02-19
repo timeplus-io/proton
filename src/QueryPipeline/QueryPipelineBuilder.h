@@ -189,8 +189,6 @@ public:
         std::unique_ptr<QueryPipelineBuilder> right,
         JoinPtr join,
         size_t max_block_size,
-        UInt64 join_max_wait_ms,
-        UInt64 join_max_wait_rows,
         UInt64 join_max_cached_bytes,
         Processors * collected_processors = nullptr);
     /// proton: ends.

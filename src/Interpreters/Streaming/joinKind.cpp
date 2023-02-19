@@ -33,7 +33,7 @@ Strictness toJoinStrictness(JoinStrictness strictness, bool is_range_join)
             if (is_range_join)
                 throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Stream join only supports any/all/asof/range join");
             else
-                return Strictness::Any;
+                return Strictness::Latest;
         case JoinStrictness::All:
             if (is_range_join)
                 return Strictness::Range;
@@ -41,9 +41,7 @@ Strictness toJoinStrictness(JoinStrictness strictness, bool is_range_join)
                 return Strictness::All;
         case JoinStrictness::Asof:
             if (is_range_join)
-                /// FIXME, when we support range asof, revise this
                 throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Stream join only supports any/all/asof/range join");
-                /// return Strictness::RangeAsof;
             else
                 return Strictness::Asof;
         default:

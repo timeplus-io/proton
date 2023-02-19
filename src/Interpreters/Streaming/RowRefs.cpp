@@ -211,11 +211,12 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(
     const IColumn & asof_column,
     size_t row_num,
     UInt64 src_block_id,
-    JoinTupleMap * joined_rows) const
+    JoinTupleMap * joined_rows,
+    bool is_left_block) const
 {
     std::vector<RowRef> results;
 
-    auto call = [&](const auto & t) {
+    auto call_for_left_block = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
         using ColumnType = ColumnVectorOrDecimal<T>;
         const auto & column = typeid_cast<const ColumnType &>(asof_column);
@@ -273,7 +274,6 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(
 
         assert(upper_iter->first >= lower_iter->first);
 
-        /// We need include value at upper_iter
         do
         {
             /// Add to results only if the right rows are not joined with the source rows in the src block
@@ -281,10 +281,80 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(
                 || !joined_rows->contains(
                     JoinTuple{src_block_id, lower_iter->second.block, static_cast<uint32_t>(row_num), lower_iter->second.row_num}))
                 results.push_back(lower_iter->second);
-        } while (lower_iter++ != upper_iter);
+        } while (lower_iter++ != upper_iter); /// We need include value at upper_iter, so postfix lower_iter++
     };
 
-    callWithType(type, call);
+    auto call_for_right_block = [&](const auto & t) {
+        using T = std::decay_t<decltype(t)>;
+        using ColumnType = ColumnVectorOrDecimal<T>;
+        const auto & column = typeid_cast<const ColumnType &>(asof_column);
+
+        T key = column.getElement(row_num);
+
+        auto & m = std::get<LookupPtr<T>>(lookups);
+
+        /// lower_bound [left_inequality] left_key - key [right_inequality] upper_bound
+        /// Example: lower_bound < left_key - key <= upper_bound
+        /// key + lower_bound < left_key <= key + upper_bound
+        /// Find key range : [key + lower_bound, key + upper_bound)
+
+        bool is_left_strict = range_join_ctx.left_inequality == ASOFJoinInequality::Greater;
+
+        if constexpr (is_decimal<T>)
+            key += static_cast<typename T::NativeType>(range_join_ctx.lower_bound);
+        else
+            key += static_cast<T>(range_join_ctx.lower_bound);
+
+        decltype(m->begin()) lower_iter;
+        if (is_left_strict)
+            lower_iter = m->upper_bound(key);
+        else
+            lower_iter = m->lower_bound(key);
+
+        if constexpr (is_decimal<T>)
+        {
+            key -= static_cast<typename T::NativeType>(range_join_ctx.lower_bound); /// restore
+            key += static_cast<typename T::NativeType>(range_join_ctx.upper_bound); /// upper bound
+        }
+        else
+        {
+            key -= static_cast<T>(range_join_ctx.lower_bound); /// restore
+            key += static_cast<T>(range_join_ctx.upper_bound); /// upper bound
+        }
+
+        if (lower_iter == m->end() || lower_iter->first > key)
+            /// all keys in the map < key + lower_bound or
+            /// all keys in the map > key + upper_bound
+            return;
+
+        bool is_right_strict = range_join_ctx.right_inequality == ASOFJoinInequality::Less;
+
+        /// >= key
+        auto upper_iter = m->lower_bound(key);
+
+        if (is_right_strict && upper_iter == m->begin())
+            return;
+
+        if (upper_iter == m->end() || is_right_strict || upper_iter->first > key)
+            /// We need back one step in these cases
+            --upper_iter;
+
+        assert(upper_iter->first >= lower_iter->first);
+
+        do
+        {
+            /// Add to results only if the left rows are not joined with the source rows in the src block
+            if (!joined_rows
+                || !joined_rows->contains(
+                    JoinTuple{src_block_id, lower_iter->second.block, static_cast<uint32_t>(row_num), lower_iter->second.row_num}))
+                results.push_back(lower_iter->second);
+        } while (lower_iter++ != upper_iter); /// We need include value at upper_iter, so postfix lower_iter++
+    };
+
+    if (is_left_block)
+        callWithType(type, call_for_left_block);
+    else
+        callWithType(type, call_for_right_block);
     return results;
 }
 

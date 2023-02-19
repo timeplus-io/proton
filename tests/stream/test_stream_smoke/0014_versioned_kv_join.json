@@ -73,7 +73,7 @@
         {
           "statements": [
             {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists vk_left_stream"},
-            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists vk_right_stream "},
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists vk_right_stream"},
             {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists vk_left_stream (i int, s string) primary key s settings mode='versioned_kv'"},
             {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists vk_right_stream (ii int, ss string) primary key ss settings mode='versioned_kv'"},
             {"client":"python","query_id":"1502", "depends_on_stream":"vk_right_stream","query_end_timer":10, "query_type": "stream", "query":"select i, ii, s, _tp_delta from vk_left_stream join vk_right_stream on s=ss"},

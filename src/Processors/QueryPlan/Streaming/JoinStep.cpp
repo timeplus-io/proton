@@ -19,13 +19,9 @@ JoinStep::JoinStep(
     const DataStream & right_stream_,
     JoinPtr join_,
     size_t max_block_size_,
-    UInt64 join_max_wait_ms_,
-    UInt64 join_max_wait_rows_,
     UInt64 join_max_cached_bytes_)
     : join(std::move(join_))
     , max_block_size(max_block_size_)
-    , join_max_wait_ms(join_max_wait_ms_)
-    , join_max_wait_rows(join_max_wait_rows_)
     , join_max_cached_bytes(join_max_cached_bytes_)
 {
     auto hash_join = std::dynamic_pointer_cast<HashJoin>(join);
@@ -48,8 +44,6 @@ QueryPipelineBuilderPtr JoinStep::updatePipeline(QueryPipelineBuilders pipelines
         std::move(pipelines[1]),
         join,
         max_block_size,
-        join_max_wait_ms,
-        join_max_wait_rows,
         join_max_cached_bytes,
         &processors);
 }

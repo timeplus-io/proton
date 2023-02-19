@@ -9,11 +9,10 @@ namespace Streaming
 /// Allows more optimal JOIN for typical cases.
 enum class Strictness
 {
-    Any, /// Semi Join with any value from filtering table. For LEFT JOIN with Any and RightAny are the same.
+    Latest, /// Semi Join with any value from filtering table. For LEFT JOIN with Any and RightAny are the same.
     All, /// If there are many suitable rows to join, use all of them and replicate rows of "left" table (usual semantic of JOIN).
     Asof, /// For the last JOIN column, pick the latest value
     Range,
-    RangeAsof,
 };
 
 /// Join method.

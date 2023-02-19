@@ -1,9 +1,9 @@
 #pragma once
 
-#include "JoinStreamDescription.h"
-#include "RowRefs.h"
-#include "joinData.h"
-#include "joinKind.h"
+#include <Interpreters/Streaming/JoinStreamDescription.h>
+#include <Interpreters/Streaming/RowRefs.h>
+#include <Interpreters/Streaming/joinData.h>
+#include <Interpreters/Streaming/joinKind.h>
 
 #include <Interpreters/HashJoin.h>
 #include <Interpreters/TableJoin.h>
@@ -15,22 +15,17 @@ namespace DB
 namespace Streaming
 {
 /// Streaming hash join: there are several join semantic
-/// 1) append-only `global join` append-only: SELECT * FROM left_stream INNER JOIN right_stream ON left_stream.key = right_stream.key;
-///    i. Continuously reading data from left stream and cache all of the data in-memory. Keep tracking `the un-joined new data`
-///    ii. Continuously reading data from right stream and build hashtable for right stream incrementally and continuously. Keep tracing `the un-joined new data`
-///    iii. Join the (new) data only periodically
-///    (LEFT_DATA + LEFT_NEW_DATA) x (RIGHT_DATA + RIGHT_NEW_DATA) => we only join the new data, so the every time it joins, it emits
-///    LEFT_NEW_DATA x (RIGHT_DATA + RIGHT_NEW_DATA) +  RIGHT_NEW_DATA x (LEFT_DATA + LEFT_NEW_DATA)
+/// 1) append-only `INNER JOIN` append-only: SELECT * FROM left_stream INNER JOIN right_stream ON left_stream.key = right_stream.key;
+///    i. Continuously reading data from left stream, cache all of the data in-memory and build hashtable for left stream continuously. Join new data from left stream with right hash table.
+///    ii. Continuously reading data from right stream, cache all of the data in-memory and build hashtable for right stream continuously. Join new data from right stream with left hash table.
 ///
 ///   Note, we don't recycle any data for global streaming join for now. So data will keep growing until hit a limit and the nwe abort
 ///   We treat global stream join as experimental only for now.
 ///
-/// 2) append-only `interval join` append-only: SELECT * FROM left_stream INNER JOIN right_stream ON left_stream.key = right_stream.key ON date_diff_within(10s);
-///    i. Continuously reading data from left stream, build time buckets and put data into appropriate buckets. Keep tracking `the un-joined new data / bucket` and its current timestamp.
-///    ii. Continuously reading data from right stream, build time buckets and put data into appropriate buckets. Keep tracking `the un-joined new data / bucket` and its current timestamp.
-///        In the meanwhile, build hashtable for the data in each bucket
-///    iii. Join the (new) data only according to time bucket periodically and progress the timestamp as `current_timestamp = std::min(current_left_timestamp, current_right_timestamp)`;
-///    IV. Prune expired buckets and their associated data.
+/// 2) append-only `INNER RANGE JOIN` append-only: SELECT * FROM left_stream INNER JOIN right_stream ON left_stream.key = right_stream.key ON date_diff_within(10s);
+///    i. Continuously reading data from left stream, build time buckets, put data into appropriate buckets and build hashtable for each bucket. Range join new data from left stream with the corresponding right bucket hash tables. Progress the timestamp.
+///    ii. Continuously reading data from right stream, build time buckets and put data into appropriate buckets and build hashtable for each bucket. Range join new data from right stream with the corresponding left bucket hash tables. Progress the timestamp.
+///    iii. Prune expired buckets and their associated data.
 ///
 ///    For example, current timestamp progresses to bucket-3, when there are new data in left_bucket-3 and there are 3 corresponding buckets on right stream as well. The join will look like below
 ///    [left_bucket-1, left_bucket-2, left_bucket-3 with new data] x [right_bucket-1, right_bucket-2, right_bucket-3] =>
@@ -39,20 +34,37 @@ namespace Streaming
 ///    current timestamp is still in bucket-3, so there may be some new data flows into `left_bucket-3` which can join `right_bucket-2`.
 ///    Similarly, we can't prune `left_bucket-2` as there may be some new data flowing into `right_bucket-3` which can join `left_bucket-2`.
 ///
-///    Note, Garbage collection depends on correct timestamp progressing for `interval join`. Old data will be discarded according to the current progressing timestamp.
+///    Note, Garbage collection depends on correct timestamp progression for `interval join`. Old data will be discarded according to the current progressing timestamp.
 ///    So progressing timestamp is something very important and challenging.
 ///
-/// 3) append-only `global join` versioned-kv: SELECT * FROM left_stream INNER JOIN right_versioned_kv_stream ON left_stream.key = right_versioned_kv_stream.key;
-///    i. Merge reading all historical data for versioned_kv and build hashtable for joined key. Merge reading means during query time, it will keeps max last X version of per key
-///       If a key has more than X versions, any older version will be discarded during merge reading. If a key doesn't have X versions, all versions will be kept.
-///       By default, only the latest version will be used.
-///    ii. After reading all historical data, continuously reading "new" data from right stream and in the meanwhile, update the hashtable to keep the last X versions per key.
-///       So there may be some garbage collection happening if a key has more than X versions.
-///    iii. Continuously reading data from left stream and in the meanwhile continuously join the left data with the right side hashtable with the closed version.
-///       Please note, we  don't buffer left stream data in-memory at all. So if a row in left stream can't find a match in the right hashtable,
-///       we don't hold onto this row in-memory for future possible join.
+/// 3) append-only `INNER JOIN` versioned-kv: SELECT * FROM left_stream INNER JOIN right_versioned_kv_stream ON left_stream.key = right_versioned_kv_stream.key;
+///    i. Merge reading all historical data for versioned_kv and build hashtable for joined key. Merge reading means during query time, it will keeps only the last version of per key
+///    ii. After reading all historical data, continuously reading "new" data from right stream and in the meanwhile, update the hashtable and keep the last versions per key.
+///       So there may be some garbage collection happening.
+///    iii. Continuously reading data from left stream and in the meanwhile continuously join the left data with the right side hashtable.
 ///
-///  4) versioned-kv `global join` versioned-kv: SELECT * FROM left_versioned_kv JOIN right_versioned_kv ON left_versioned_kv.key = right_versioned_kv.key;
+///    Please note, we  don't buffer left stream data in-memory at all. So if a row in left stream can't find a match in the right hashtable,
+///    we don't hold onto this row in-memory for future possible join. This join acts like a dynamic data enrichment
+///
+/// 4) append-only `INNER ASOF JOIN` versioned-kv: SELECT * FROM left_stream INNER ASOF JOIN right_versioned_kv_stream ON left_stream.key = right_versioned_kv_stream.key;
+///    i. Merge reading all historical data for versioned_kv and build hashtable for joined key. Merge reading means during query time, it will keeps last X version of per key
+///       By default, it keeps 3 versions per key.
+///    ii. After reading all historical data, continuously reading "new" data from right stream and in the meanwhile, update the hashtable and keep the last X versions per key.
+///       So there may be some garbage collection happening.
+///    iii. Continuously reading data from left stream and in the meanwhile continuously join the left data with the right side hashtable on join keys and on closest asof join keys.
+///
+///    Please note, we  don't buffer left stream data in-memory at all. So if a row in left stream can't find a match in the right hashtable,
+///    we don't hold onto this row in-memory for future possible join. This join acts like a dynamic data enrichment
+///
+///  5) append-only `INNER ASOF JOIN` append-only : SELECT * FROM left_stream INNER ASOF JOIN right_stream ON left_stream.key = right_stream.key AND left_stream._tp_time < right_stream._tp_time;
+///     i. Continuously reading data from right stream, build hash table on joined keys and also saves latest X versions of per key
+///       By default, it keeps 3 versions per key. So there may be some garbage collection happening.
+///     ii. Continuously reading data from left stream and in the meanwhile continuously join the left data with the right side hashtable on join keys and on closest asof join keys.
+///
+///    Please note, we  don't buffer left stream data in-memory at all. So if a row in left stream can't find a match in the right hashtable,
+///    we don't hold onto this row in-memory for future possible join. This join acts like a dynamic data enrichment
+///
+///  6) versioned-kv `INNER JOIN` versioned-kv: SELECT * FROM left_versioned_kv JOIN right_versioned_kv ON left_versioned_kv.key = right_versioned_kv.key;
 ///     i. Merge reading all historical data from left stream and build left hashtable for joined key. In parallel, merge reading all historical data from right stream and build right hashtable.
 ///        Keep tracking which part is new (un-joined) data for left stream and right stream.
 ///     ii. Continuously reading "new" data from left stream and update left hashtable. In parallel, continuously reading "new" data from right stream and update hashtable.
@@ -67,8 +79,12 @@ namespace Streaming
 ///
 ///     Note, this is a very special join with very special changelog semantic.
 ///
-///  5) append-only `global join` versioned-kv: SELECT * FROM left_stream ASOF JOIN right_versioned_kv_stream ON left_stream.key = right_versioned_kv_stream.key AND left.timestamp < right.timestamp;
+///  7) append-only `INNER LATEST JOIN` append-only: SELECT * FROM left_stream INNER LATEST JOIN right_versioned_kv_stream ON left_stream.key = right_versioned_kv_stream.key;
+///    i. Continuously reading data from left stream, build hashtable for right stream continuously and only keep the latest key / value
+///    ii. Continuously reading data from right stream, build hashtable for right stream continuously and only keep the latest key / value.
+///    iii. For every new incoming left block or right block, execute bidirectional hash join and emit joined results just like `versioned-kv join versioned-kv`
 ///
+///    Note this is a processing time version-kv join version-kv
 
 struct HashJoinMapsVariants;
 
@@ -85,38 +101,23 @@ public:
     /// When left stream header is known, init data structure in hash join for left stream
     void initLeftStream(const Block & left_header);
 
-    /// returns total bytes in left stream cache
-    size_t insertLeftBlock(Block left_input_block);
+    void transformHeader(Block & header);
 
-    /// returns total bytes in right stream cache
-    size_t insertRightBlock(Block right_input_block);
+    /// For non-bidirectional hash join
+    void insertRightBlock(Block right_block);
+    void joinLeftBlock(Block & left_block);
 
-    Block joinBlocks(size_t & left_cached_bytes, size_t & right_cached_bytes);
+    /// For bidirectional hash join
+    Block insertLeftBlockAndJoin(Block & left_block);
+    Block insertRightBlockAndJoin(Block & right_block, const Block & output_header);
 
-    /// For bidirectional join
-    /// Return retracted block
-    Block joinWithRightBlocks(Block & left_block);
-    Block joinWithLeftBlocks(Block & right_block, const Block & output_header);
+    /// For bidirectional range hash join
+    std::vector<Block> insertLeftBlockToRangeBucketsAndJoin(Block left_block);
+    std::vector<Block> insertRightBlockToRangeBucketsAndJoin(Block right_block, const Block & output_header);
 
-    bool needBufferLeftStream() const { return right_stream_desc.data_stream_semantic != DataStreamSemantic::VersionedKV; }
-
-    /// If append-only join append-only, versioned-kv join versioned-kv or changelog-kv join changelog-kv,
-    /// we do bi-directional hash join, so build hashtable for left stream
-    bool emitChangeLog() const
-    {
-        return (left_stream_desc.data_stream_semantic == DataStreamSemantic::VersionedKV
-                && left_stream_desc.data_stream_semantic == DataStreamSemantic::VersionedKV)
-            || (left_stream_desc.data_stream_semantic == DataStreamSemantic::ChangeLogKV
-                && right_stream_desc.data_stream_semantic == DataStreamSemantic::ChangeLogKV);
-    }
-
-    bool bidirectionalHashJoin() const
-    {
-        /// For any join, we don't need buffer left stream data, right stream is acting like
-        /// a dynamic dict with versioned key for real-time enrichment.
-        /// For this case, we only build hashtable for right stream data
-        return streaming_strictness != Strictness::Any;
-    }
+    bool emitChangeLog() const { return emit_changelog; }
+    bool bidirectionalHashJoin() const { return bidirectional_hash_join; }
+    bool rangeBidirectionalHashJoin() const { return range_bidirectional_hash_join; }
 
     UInt64 keepVersions() const { return right_stream_desc.keep_versions; }
 
@@ -163,7 +164,8 @@ public:
     ASOFJoinInequality getAsofInequality() const { return asof_inequality; }
     bool anyTakeLastRow() const { return any_take_last_row; }
 
-    const ColumnWithTypeAndName & rightAsofKeyColumn() const;
+    const ColumnWithTypeAndName & rightAsofKeyColumn() const { return right_asof_key_column;}
+    const ColumnWithTypeAndName & leftAsofKeyColumn() const { return left_asof_key_column; }
 
 /// Different types of keys for maps.
 #define APPLY_FOR_JOIN_VARIANTS(M) \
@@ -341,56 +343,57 @@ public:
     };
 
 private:
+    void checkJoinSemantic() const;
+    void init();
+    void initBufferedData();
+    void initHashMaps(std::vector<MapsVariant> & all_maps);
     void dataMapInit(MapsVariant &);
 
-    const Block & savedRightBlockSample() const { return right_data.buffered_data->sample_block; }
-    const Block & savedLeftBlockSample() const { return left_data.buffered_data->sample_block; }
+    void initLeftBlockStructure();
+    void initRightBlockStructure();
+    void initBlockStructure(Block & saved_block_sample, const Block & table_keys, const Block & sample_block_with_columns_to_add) const;
 
+    const Block & savedLeftBlockSample() const { return left_data.buffered_data->sample_block; }
+    const Block & savedRightBlockSample() const { return right_data.buffered_data->sample_block; }
+
+    /// Modify left block (update structure according to sample block) to save it in block list
+    Block prepareLeftBlock(const Block & block) const;
     /// Modify right block (update structure according to sample block) to save it in block list
     Block prepareRightBlock(const Block & block) const;
-    Block prepareLeftBlock(const Block & block) const;
-
     /// Remove columns which are not needed to be projected
     static Block prepareBlockToSave(const Block & block, const Block & sample_block);
 
-    void initRightBlockStructure();
-    void initLeftBlockStructure();
-    void initBlockStructure(Block & saved_block_sample, const Block & table_keys, const Block & sample_block_with_columns_to_add) const;
+    template <Kind KIND, Strictness STRICTNESS, typename Maps>
+    void joinBlockImplLeft(Block & left_block, const Block & block_with_columns_to_add, const std::vector<const Maps *> & maps_) const;
 
     template <Kind KIND, Strictness STRICTNESS, typename Maps>
-    void joinBlockImpl(Block & left_block, const Block & block_with_columns_to_add, const std::vector<const Maps *> & maps_) const;
-
-    template <Kind KIND, Strictness STRICTNESS, typename Maps>
-    void joinBlockImplLeft(Block & right_block, const Block & block_with_columns_to_add, const std::vector<const Maps *> & maps_) const;
+    void joinBlockImplRight(Block & right_block, const Block & block_with_columns_to_add, const std::vector<const Maps *> & maps_) const;
 
     void chooseHashMethod();
     static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
 
     bool empty() const;
 
-    void initBufferedData();
-
-    void initHashMaps(std::vector<MapsVariant> & all_maps);
-
     /// When left stream joins right stream, watermark calculation is more complicated.
     /// Firstly, each stream has its own watermark and progresses separately.
     /// Secondly, `combined_watermark` is calculated periodically according the watermarks in the left and right streams
     void calculateWatermark();
 
-    /// For global join without time bucket
-    Block joinBlocksAll(size_t & left_cached_bytes, size_t & right_cached_bytes);
-    Block joinBlocksBidirectional(size_t & left_cached_bytes, size_t & right_cached_bytes);
-    void doJoinBlock(Block & block);
-    void checkJoinSemantic() const;
+    Int64 doInsertLeftBlock(Block left_block, HashBlocksPtr target_hash_blocks);
+    Int64 doInsertRightBlock(Block right_block, HashBlocksPtr target_hash_blocks);
 
-    void addLeftHashBlock(Block source_block);
-    void addRightHashBlock(Block source_block);
+    /// For bidirectional hash join
+    /// Return retracted block if needs emit changelog, otherwise empty block
+    Block joinLeftBlockWithRightHashTable(Block & left_block);
+    Block joinRightBlockWithLeftHashTable(Block & right_block, const Block & output_header);
+
+    void doJoinLeftBlockWithRightHashTable(Block & left_block, HashBlocksPtr target_hash_blocks);
+    void doJoinRightBlockWithLeftHashTable(Block & left_block, HashBlocksPtr target_hash_blocks);
 
     /// `retract` does
     /// 1) Add result_block to JoinResults
     /// 2) Retract previous joined block. changelog emit
     Block retract(const Block & result_block);
-
 
 private:
     template <bool>
@@ -406,6 +409,10 @@ private:
     bool any_take_last_row; /// Overwrite existing values when encountering the same key again
     std::optional<TypeIndex> asof_type;
     ASOFJoinInequality asof_inequality;
+
+    /// Cache data members which avoid re-computation for every join
+    ColumnWithTypeAndName left_asof_key_column;
+    ColumnWithTypeAndName right_asof_key_column;
 
     std::vector<Sizes> key_sizes;
 
@@ -444,8 +451,13 @@ private:
 
     std::optional<JoinResults> join_results;
 
+    bool emit_changelog = false;
+    bool bidirectional_hash_join = true;
+    bool range_bidirectional_hash_join = true;
+
     Block totals;
 
+    /// Combined timestamp watermark progression of left stream and right stream
     std::atomic_int64_t combined_watermark = 0;
 
     JoinGlobalMetrics join_metrics;

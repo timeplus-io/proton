@@ -158,10 +158,10 @@ public:
     void reserve(size_t num_columns);
 
     /// in-place sort columns according to positions
-    void sortColumnsInplace(const std::vector<UInt16> & positions);
+    void reorderColumnsInplace(const std::vector<UInt16> & positions);
 
     /// in-place sort columns according to header
-    void reorderColumnsInBlock(const Block & header);
+    void reorderColumnsInplace(const Block & header);
 
     /// Deep clone, use cautiously. Most of time, we don't need deepClone
     Block deepClone() const;

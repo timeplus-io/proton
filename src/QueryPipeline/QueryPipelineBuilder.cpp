@@ -609,8 +609,6 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     std::unique_ptr<QueryPipelineBuilder> right,
     JoinPtr join,
     size_t max_block_size,
-    UInt64 join_max_wait_ms,
-    UInt64 join_max_wait_rows,
     UInt64 join_max_cached_bytes,
     Processors * collected_processors)
 {
@@ -659,8 +657,6 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
             right->getHeader(),
             std::dynamic_pointer_cast<Streaming::HashJoin>(join),
             max_block_size,
-            join_max_wait_ms,
-            join_max_wait_rows,
             join_max_cached_bytes,
             finish_counter);
 

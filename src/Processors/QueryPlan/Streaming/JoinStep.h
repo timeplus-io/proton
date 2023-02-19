@@ -19,8 +19,6 @@ public:
         const DataStream & right_stream_,
         JoinPtr join_,
         size_t max_block_size_,
-        UInt64 join_max_wait_ms_,
-        UInt64 join_max_wait_rows_,
         UInt64 join_max_cached_bytes);
 
     String getName() const override { return "StreamingJoin"; }
@@ -34,8 +32,6 @@ public:
 private:
     JoinPtr join;
     size_t max_block_size;
-    UInt64 join_max_wait_ms;
-    UInt64 join_max_wait_rows;
     UInt64 join_max_cached_bytes;
     Processors processors;
 };

@@ -42,6 +42,8 @@ struct BlockInfo
     bool hasOverflows() const { return is_overflows; }
 
     /// proton: starts
+    Int32 bucketNum() const { return bucket_num; }
+
     /// watermark = 0 => no watermark setup
     /// watermark = -1 => force flush
     /// watermark > 0 => timestamp watermark

@@ -8,14 +8,9 @@ namespace DB
 namespace Streaming
 {
 HashBlocks::HashBlocks(JoinMetrics & metrics)
-    : blocks(metrics), new_data_iter(blocks.end()), maps(std::make_unique<HashJoinMapsVariants>())
+    : blocks(metrics), maps(std::make_unique<HashJoinMapsVariants>())
 {
     /// FIXME, in some cases, `maps` is not needed
-}
-
-HashBlocks::HashBlocks(Block && block, JoinMetrics & metrics) : HashBlocks(metrics)
-{
-    addBlock(std::move(block));
 }
 
 HashBlocks::~HashBlocks() = default;
@@ -31,12 +26,12 @@ size_t BufferedStreamData::removeOldBuckets(std::string_view stream)
     {
         std::scoped_lock lock(mutex);
 
-        for (auto iter = time_bucket_hash_blocks.begin(); iter != time_bucket_hash_blocks.end(); ++iter)
+        for (auto iter = range_bucket_hash_blocks.begin(); iter != range_bucket_hash_blocks.end(); ++iter)
         {
             if (iter->first <= watermark)
             {
                 buckets_to_remove.push_back(iter->first);
-                iter = time_bucket_hash_blocks.erase(iter);
+                iter = range_bucket_hash_blocks.erase(iter);
             }
             else
                 break;
@@ -48,7 +43,7 @@ size_t BufferedStreamData::removeOldBuckets(std::string_view stream)
     if (!buckets_to_remove.empty())
         LOG_INFO(
             join->log,
-            "Removing data in time buckets={} in {} stream. Remaining bytes={} blocks={}",
+            "Removing data in range buckets={} in {} stream. Remaining bytes={} blocks={}",
             fmt::join(buckets_to_remove.begin(), buckets_to_remove.end(), ","),
             stream,
             metrics.total_bytes,
@@ -59,6 +54,8 @@ size_t BufferedStreamData::removeOldBuckets(std::string_view stream)
 
 void BufferedStreamData::updateBucketSize()
 {
+    /// We split the range to 2 half. Examples:
+    /// `date_diff_within(10)` => [-10, 10] => bucket_size = 10
     bucket_size = (range_asof_join_ctx.upper_bound - range_asof_join_ctx.lower_bound + 1) / 2;
 
     /// Given a left_bucket (base bucket 0), calculate the possible right buckets to join
@@ -74,43 +71,60 @@ void BufferedStreamData::updateBucketSize()
     /// 4. -2 < left.column - right.column < 18 (left column is generally greater than right column), right buckets to join [-2, -1, 0, 1]
     /// 5. 0 < left.column - right.column < 20 (left column is greater than right column), right buckets to join [-2, -1, 0]
 
-    join_start_bucket = 0; /// left_bucket - join_start_bucket * bucket_size
-    join_stop_bucket = 0; /// left_bucket + join_stop_bucket * bucket_size
+    join_start_bucket_offset = 0; /// left_bucket - join_start_bucket * bucket_size
+    join_stop_bucket_offset = 0;  /// left_bucket + join_stop_bucket * bucket_size
 
-    /// Bucket join: given a left bucket, the right joined blocks can possibly fall in range : [left_bucket - 2 * bucket_size, left_bucket + 2 * bucket_size]
+    /// Bucket join: given a left bucket, the right joined blocks can possibly fall
+    /// in range : [left_bucket - 2 * bucket_size, left_bucket + 2 * bucket_size]
+    /// But we can do better to join less buckets with the following :
+    /// join_start_bucket_offset, join_stop_bucket_offset calculation
+    /// right_buckets = [left_bucket - join_start_bucket_offset, left_bucket + join_stop_bucket_offset]
+
+    /// On other other handle, given a right bucket, the left joined blocks can possibly fall in range
+    /// left_buckets = [right_bucket - join_stop_bucket_offset, right_bucket + join_start_bucket_offset]
 
     if (range_asof_join_ctx.upper_bound == 0)
     {
-        /// case 1, [left_bucket, left_bucket + 2 * bucket_size]
-        join_start_bucket = 0;
-        join_stop_bucket = 2;
+        /// case 1: -20 < left.column - right.column < 0 (left column is less than right column), right buckets to join [0, 1, 2]
+        /// right_buckets = [left_bucket, left_bucket + 2 * bucket_size]
+        /// left_buckets = [right_bucket - 2 * bucket_size, left_bucket]
+        join_start_bucket_offset = 0;
+        join_stop_bucket_offset = 2 * bucket_size;
     }
     else if (range_asof_join_ctx.upper_bound < bucket_size)
     {
-        /// case 2, [left_bucket - 1 * bucket_size, left_bucket + 2 * bucket_size]
-        join_start_bucket = 1;
-        join_stop_bucket = 2;
+        /// case 2: -18 < left.column - right.column < 2 (left column is generally less than right column), right buckets to join [-1, 0, 1, 2]
+        /// right_buckets = [left_bucket - 1 * bucket_size, left_bucket + 2 * bucket_size]
+        /// left_buckets = [right_bucket - 2 * bucket_size, right_bucket + bucket_size]
+        join_start_bucket_offset = bucket_size;
+        join_stop_bucket_offset = 2 * bucket_size;
     }
     else if (range_asof_join_ctx.upper_bound == bucket_size)
     {
-        /// case 3, [left_bucket - 1 * bucket_size, left_bucket + 1 * bucket_size]
-        join_start_bucket = 1;
-        join_stop_bucket = 1;
+        /// case 3: -10 < left.column - right.column < 10 (left, right column is generally in the same range), right buckets to join [-1, 0, 1]
+        /// right_buckets = [left_bucket - 1 * bucket_size, left_bucket + 1 * bucket_size]
+        /// left_buckets = [right_bucket - 1 * bucket_size, right_bucket + 1 * bucket_size]
+        join_start_bucket_offset = bucket_size;
+        join_stop_bucket_offset = bucket_size;
     }
     else if (range_asof_join_ctx.upper_bound > bucket_size && range_asof_join_ctx.lower_bound < 0)
     {
-        /// case 4, [left_bucket - 2 * bucket_size, left_bucket + 1 * bucket_size]
-        join_start_bucket = 2;
-        join_stop_bucket = 1;
+        /// case 4: -2 < left.column - right.column < 18 (left column is generally greater than right column), right buckets to join [-2, -1, 0, 1]
+        /// right_buckets = [left_bucket - 2 * bucket_size, left_bucket + 1 * bucket_size]
+        /// left_buckets = [right_bucket - bucket_size, right_bucket + 2 * bucket_size]
+        join_start_bucket_offset = 2 * bucket_size;
+        join_stop_bucket_offset = bucket_size;
     }
     else if (range_asof_join_ctx.lower_bound == 0) /// we can't use upper_bound == 2 * bucket_size here for case like 0 < left - right < 13
     {
-        /// case 5, [left_bucket - 2 * bucket_size, left_bucket]
-        join_start_bucket = 2;
-        join_stop_bucket = 0;
+        /// case 5: 0 < left.column - right.column < 20 (left column is greater than right column), right buckets to join [-2, -1, 0]
+        /// right_buckets = [left_bucket - 2 * bucket_size, left_bucket]
+        /// left_buckets = [right_bucket, right_bucket + 2 * bucket_size]
+        join_start_bucket_offset = 2 * bucket_size;
+        join_stop_bucket_offset = 0;
     }
     else
-        assert(0);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid range=({}, {})", range_asof_join_ctx.lower_bound, range_asof_join_ctx.upper_bound);
 }
 
 void BufferedStreamData::updateAsofJoinColumnPositionAndScale(UInt16 scale, size_t asof_col_pos_, TypeIndex type_index)
@@ -125,32 +139,37 @@ void BufferedStreamData::updateAsofJoinColumnPositionAndScale(UInt16 scale, size
 }
 
 
-void BufferedStreamData::addBlock(Block && block)
-{
-    std::scoped_lock lock(mutex);
-    addBlockWithoutLock(std::move(block));
-}
-
-void BufferedStreamData::addBlockWithoutLock(Block && block)
+Int64 BufferedStreamData::addBlock(Block && block)
 {
     assert(current_hash_blocks);
 
-    current_hash_blocks->addBlock(std::move(block));
-    setHasNewData(true);
+    std::scoped_lock lock(mutex);
+    return addBlockWithoutLock(std::move(block), current_hash_blocks);
 }
 
-void BufferedStreamData::addBlockToTimeBucket(Block && block)
+Int64 BufferedStreamData::addBlockWithoutLock(Block && block, HashBlocksPtr & target_hash_blocks)
 {
-    /// Categorize block according to time bucket, then we can prune the time bucketed blocks
+    block.info.setBlockID(block_id++);
+    auto allocated_block_id = block.info.blockID();
+
+    target_hash_blocks->addBlock(std::move(block));
+
+    return allocated_block_id;
+}
+
+std::vector<BufferedStreamData::BucketBlock> BufferedStreamData::assignBlockToRangeBuckets(Block && block)
+{
+    /// Categorize block according to range bucket, then we can prune the range bucketed blocks
     /// when `watermark` passed its time
-    auto bucketed_blocks = range_splitter->split(std::move(block));
+    auto bucket_blocks = range_splitter->split(std::move(block));
 
     std::vector<std::pair<UInt64, size_t>> late_blocks;
 
+    /// Assign bucket blocks to each hash bucket
+    std::vector<BucketBlock> bucket_assigned_blocks;
+    bucket_assigned_blocks.reserve(bucket_blocks.size());
     {
-        std::scoped_lock lock(mutex);
-
-        for (auto & bucket_block : bucketed_blocks)
+        for (auto & bucket_block : bucket_blocks)
         {
             if (static_cast<Int64>(bucket_block.first) + bucket_size < join->combined_watermark)
             {
@@ -158,21 +177,26 @@ void BufferedStreamData::addBlockToTimeBucket(Block && block)
                 continue;
             }
 
-            auto iter = time_bucket_hash_blocks.find(bucket_block.first);
-            if (iter != time_bucket_hash_blocks.end())
+            HashBlocksPtr target_hash_bucket = nullptr;
             {
-                iter->second->addBlock(std::move(bucket_block.second));
-            }
-            else
-            {
-                time_bucket_hash_blocks.emplace(bucket_block.first, std::make_shared<HashBlocks>(std::move(bucket_block.second), metrics));
+                std::scoped_lock lock(mutex);
 
-                /// Update watermark
-                if (static_cast<Int64>(bucket_block.first) > current_watermark)
-                    current_watermark = bucket_block.first;
+                auto iter = range_bucket_hash_blocks.find(bucket_block.first);
+                if (iter == range_bucket_hash_blocks.end())
+                {
+                    std::tie(iter, std::ignore) = range_bucket_hash_blocks.emplace(bucket_block.first, newHashBlocks());
+
+                    /// Init hash table
+                    join->initHashMaps(iter->second->maps->map_variants);
+
+                    /// Update watermark
+                    if (static_cast<Int64>(bucket_block.first) > current_watermark)
+                        current_watermark = bucket_block.first;
+                }
+                target_hash_bucket = iter->second;
             }
 
-            setHasNewData(true);
+            bucket_assigned_blocks.emplace_back(bucket_block.first, std::move(bucket_block.second), std::move(target_hash_bucket));
         }
     }
 
@@ -181,13 +205,15 @@ void BufferedStreamData::addBlockToTimeBucket(Block && block)
     {
         LOG_INFO(
             join->log,
-            "Discard {} late events in time bucket {} of left stream since it is later than latest combined watermark {} with "
+            "Discard {} late events in range bucket {} of left stream since it is later than latest combined watermark {} with "
             "bucket_size={}",
             rows,
             bucket,
             watermark,
             bucket_size);
     }
+
+    return bucket_assigned_blocks;
 }
 }
 }

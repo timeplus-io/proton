@@ -816,7 +816,7 @@ void Block::reserve(size_t num_columns)
     data.reserve(num_columns);
 }
 
-void Block::sortColumnsInplace(const std::vector<UInt16> & positions)
+void Block::reorderColumnsInplace(const std::vector<UInt16> & positions)
 {
     if (positions.size() <= 1)
         return;
@@ -869,7 +869,7 @@ bool Block::hasDynamicSubcolumns() const
     return false;
 }
 
-void Block::reorderColumnsInBlock(const Block & header)
+void Block::reorderColumnsInplace(const Block & header)
 {
     assert(header.columns() >= 1);
 

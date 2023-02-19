@@ -58,7 +58,7 @@ void commonTest(const std::vector<Case> & cases, const DB::Streaming::RangeAsofJ
 
     for (const auto & test_case : cases)
     {
-        auto results{row_refs.findRange(asof_col.type->getTypeId(), range_ctx, *asof_col.column, test_case.row_num, 0, nullptr)};
+        auto results{row_refs.findRange(asof_col.type->getTypeId(), range_ctx, *asof_col.column, test_case.row_num, 0, nullptr, true)};
 
         /// expected matching rows: 0, 1, 2
         ASSERT_EQ(results.size(), test_case.expected_matching_rows.size());

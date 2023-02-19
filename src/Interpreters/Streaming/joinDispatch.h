@@ -1,7 +1,6 @@
 #pragma once
 
-#include "HashJoin.h"
-#include "joinKind.h"
+#include <Interpreters/Streaming/joinKind.h>
 
 #include <base/constexpr_helpers.h>
 
@@ -18,21 +17,21 @@ template <Kind kind, Strictness>
 struct MapGetter;
 
 template <>
-struct MapGetter<Kind::Left, Strictness::Any>
+struct MapGetter<Kind::Left, Strictness::Latest>
 {
     using Map = HashJoin::MapsOne;
     static constexpr bool flagged = false;
 };
 
 template <>
-struct MapGetter<Kind::Inner, Strictness::Any>
+struct MapGetter<Kind::Inner, Strictness::Latest>
 {
     using Map = HashJoin::MapsOne;
     static constexpr bool flagged = true;
 };
 
 template <>
-struct MapGetter<Kind::Right, Strictness::Any>
+struct MapGetter<Kind::Right, Strictness::Latest>
 {
     using Map = HashJoin::MapsAll;
     static constexpr bool flagged = true;
@@ -66,13 +65,6 @@ struct MapGetter<kind, Strictness::Asof>
 };
 
 template <Kind kind>
-struct MapGetter<kind, Strictness::RangeAsof>
-{
-    using Map = HashJoin::MapsRangeAsof;
-    static constexpr bool flagged = false;
-};
-
-template <Kind kind>
 struct MapGetter<kind, Strictness::Range>
 {
     using Map = HashJoin::MapsRangeAsof;
@@ -80,7 +72,7 @@ struct MapGetter<kind, Strictness::Range>
 };
 
 static constexpr std::array<Strictness, 5> STRICTNESSES
-    = {Strictness::All, Strictness::Range, Strictness::RangeAsof, Strictness::Asof, Strictness::Any};
+    = {Strictness::All, Strictness::Range, Strictness::Asof, Strictness::Latest};
 
 static constexpr std::array<Kind, 3> KINDS = {Kind::Left, Kind::Inner, Kind::Right};
 
