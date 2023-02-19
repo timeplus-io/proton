@@ -115,6 +115,11 @@ void ParserTablesInSelectQueryElement::parseJoinStrictness(Pos & pos, ASTTableJo
         table_join.strictness = JoinStrictness::Semi;
     else if (ParserKeyword("ANTI").ignore(pos) || ParserKeyword("ONLY").ignore(pos))
         table_join.strictness = JoinStrictness::Anti;
+    else if (ParserKeyword("LATEST").ignore(pos)) /// proton : starts. Stream latest join is treated like any join
+    {
+        table_join.strictness = JoinStrictness::Any;
+        table_join.is_latest_alias = true;
+    }
 }
 
 bool ParserTablesInSelectQueryElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)

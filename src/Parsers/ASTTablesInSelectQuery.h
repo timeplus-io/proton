@@ -70,6 +70,10 @@ struct ASTTableJoin : public IAST
     JoinStrictness strictness = JoinStrictness::Unspecified;
     JoinKind kind = JoinKind::Inner;
 
+    /// proton : starts
+    bool is_latest_alias = false;
+    /// proton : ends
+
     /// Condition. One of fields is non-nullptr.
     ASTPtr using_expression_list;
     ASTPtr on_expression;

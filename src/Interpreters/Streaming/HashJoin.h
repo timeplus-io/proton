@@ -98,8 +98,9 @@ public:
 
     ~HashJoin() noexcept override;
 
+    /// Do post initialization
     /// When left stream header is known, init data structure in hash join for left stream
-    void initLeftStream(const Block & left_header);
+    void postInit(const Block & left_header, const Block & output_header_, UInt64 join_max_cached_bytes_);
 
     void transformHeader(Block & header);
 
@@ -109,11 +110,11 @@ public:
 
     /// For bidirectional hash join
     Block insertLeftBlockAndJoin(Block & left_block);
-    Block insertRightBlockAndJoin(Block & right_block, const Block & output_header);
+    Block insertRightBlockAndJoin(Block & right_block);
 
     /// For bidirectional range hash join
     std::vector<Block> insertLeftBlockToRangeBucketsAndJoin(Block left_block);
-    std::vector<Block> insertRightBlockToRangeBucketsAndJoin(Block right_block, const Block & output_header);
+    std::vector<Block> insertRightBlockToRangeBucketsAndJoin(Block right_block);
 
     bool emitChangeLog() const { return emit_changelog; }
     bool bidirectionalHashJoin() const { return bidirectional_hash_join; }
@@ -353,6 +354,8 @@ private:
     void initRightBlockStructure();
     void initBlockStructure(Block & saved_block_sample, const Block & table_keys, const Block & sample_block_with_columns_to_add) const;
 
+    void checkLimits() const;
+
     const Block & savedLeftBlockSample() const { return left_data.buffered_data->sample_block; }
     const Block & savedRightBlockSample() const { return right_data.buffered_data->sample_block; }
 
@@ -385,7 +388,7 @@ private:
     /// For bidirectional hash join
     /// Return retracted block if needs emit changelog, otherwise empty block
     Block joinLeftBlockWithRightHashTable(Block & left_block);
-    Block joinRightBlockWithLeftHashTable(Block & right_block, const Block & output_header);
+    Block joinRightBlockWithLeftHashTable(Block & right_block);
 
     void doJoinLeftBlockWithRightHashTable(Block & left_block, HashBlocksPtr target_hash_blocks);
     void doJoinRightBlockWithLeftHashTable(Block & left_block, HashBlocksPtr target_hash_blocks);
@@ -455,6 +458,9 @@ private:
     bool bidirectional_hash_join = true;
     bool range_bidirectional_hash_join = true;
 
+    UInt64 join_max_cached_bytes = 0;
+
+    Block output_header;
     Block totals;
 
     /// Combined timestamp watermark progression of left stream and right stream

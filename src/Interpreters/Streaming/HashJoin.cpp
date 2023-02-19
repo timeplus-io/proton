@@ -863,12 +863,14 @@ void HashJoin::init()
 }
 
 /// Left stream header is only known at late stage after HashJoin is created
-void HashJoin::initLeftStream(const Block & left_header)
+void HashJoin::postInit(const Block & left_header, const Block & output_header_, UInt64 join_max_cached_bytes_)
 {
-    if (left_stream_desc.sample_block)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Left stream in join is already initialized");
+    if (left_stream_desc.sample_block || output_header)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Stream join is already post initialized");
 
+    join_max_cached_bytes = join_max_cached_bytes_;
     left_stream_desc.sample_block = left_header;
+    output_header = output_header_;
 
     /// If it is not bidirectional hash join, we don't care left header
     if (bidirectionalHashJoin())
@@ -1225,6 +1227,8 @@ inline Int64 HashJoin::doInsertRightBlock(Block right_block, HashBlocksPtr targe
         /// FIXME, we will need account the allocated bytes for null_map_holder / not_joined_map as well
         target_hash_blocks->blocks_nullmaps.emplace_back(target_hash_blocks->lastBlock(), null_map_holder);
 
+    checkLimits();
+
     return block_id;
 }
 
@@ -1281,6 +1285,8 @@ inline Int64 HashJoin::doInsertLeftBlock(Block left_block, HashBlocksPtr target_
     if (save_nullmap)
         /// FIXME, we will need account the allocated bytes for null_map_holder / not_joined_map as well
         target_hash_blocks->blocks_nullmaps.emplace_back(target_hash_blocks->lastBlock(), null_map_holder);
+
+    checkLimits();
 
     return block_id;
 }
@@ -1651,8 +1657,9 @@ inline void HashJoin::doJoinRightBlockWithLeftHashTable(Block & right_block, Has
 }
 
 /// Use right_block to join left hash table
-Block HashJoin::joinRightBlockWithLeftHashTable(Block & right_block, const Block & output_header)
+Block HashJoin::joinRightBlockWithLeftHashTable(Block & right_block)
 {
+    assert(output_header);
     assert(bidirectional_hash_join || range_bidirectional_hash_join);
 
     doJoinRightBlockWithLeftHashTable(right_block, left_data.buffered_data->getCurrentHashBlocksPtr());
@@ -1775,13 +1782,13 @@ Block HashJoin::insertLeftBlockAndJoin(Block & left_block)
     return joinLeftBlockWithRightHashTable(left_block);
 }
 
-Block HashJoin::insertRightBlockAndJoin(Block & right_block, const Block & output_header)
+Block HashJoin::insertRightBlockAndJoin(Block & right_block)
 {
     assert(!range_bidirectional_hash_join);
 
     right_block.info.setBlockID(doInsertRightBlock(right_block, right_data.buffered_data->getCurrentHashBlocksPtr()));
 
-    return joinRightBlockWithLeftHashTable(right_block, output_header);
+    return joinRightBlockWithLeftHashTable(right_block);
 }
 
 std::vector<Block> HashJoin::insertLeftBlockToRangeBucketsAndJoin(Block left_block)
@@ -1854,8 +1861,9 @@ std::vector<Block> HashJoin::insertLeftBlockToRangeBucketsAndJoin(Block left_blo
     return join_results;
 }
 
-std::vector<Block> HashJoin::insertRightBlockToRangeBucketsAndJoin(Block right_block, const Block & output_header)
+std::vector<Block> HashJoin::insertRightBlockToRangeBucketsAndJoin(Block right_block)
 {
+    assert(output_header);
     assert(range_bidirectional_hash_join);
 
     /// Insert
@@ -2072,6 +2080,21 @@ Block HashJoin::retract(const Block & result_block)
         /// col.column = col.type->createColumnConst(retracted_block.rows(), -1);
     }
     return retracted_block;
+}
+
+void HashJoin::checkLimits() const
+{
+    const auto & left_metrics = left_data.buffered_data->getJoinMetrics();
+    const auto & right_metrics = right_data.buffered_data->getJoinMetrics();
+    auto current_total_bytes = left_metrics.current_total_bytes + right_metrics.current_total_bytes;
+    if (current_total_bytes >= join_max_cached_bytes)
+        throw Exception(
+            ErrorCodes::SET_SIZE_LIMIT_EXCEEDED,
+            "Streaming join's memory reaches max size: {}, current total: {}, left total: {}, right total: {}",
+            join_max_cached_bytes,
+            current_total_bytes,
+            left_metrics.current_total_bytes,
+            right_metrics.current_total_bytes);
 }
 
 void HashJoin::checkJoinSemantic() const

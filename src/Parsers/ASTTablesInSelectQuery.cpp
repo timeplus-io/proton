@@ -174,7 +174,12 @@ void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, Format
                 break;
             case JoinStrictness::RightAny:
             case JoinStrictness::Any:
-                settings.ostr << "ANY ";
+                /// proton : starts. Latest join alias
+                if (is_latest_alias)
+                    settings.ostr << "LATEST ";
+                else
+                    settings.ostr << "ANY ";
+                /// proton : ends
                 break;
             case JoinStrictness::All:
                 settings.ostr << "ALL ";

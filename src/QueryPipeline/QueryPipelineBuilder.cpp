@@ -608,6 +608,7 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     std::unique_ptr<QueryPipelineBuilder> left,
     std::unique_ptr<QueryPipelineBuilder> right,
     JoinPtr join,
+    const Block & out_header,
     size_t max_block_size,
     UInt64 join_max_cached_bytes,
     Processors * collected_processors)
@@ -655,6 +656,7 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
         auto joining = std::make_shared<Streaming::JoinTransform>(
             left->getHeader(),
             right->getHeader(),
+            out_header,
             std::dynamic_pointer_cast<Streaming::HashJoin>(join),
             max_block_size,
             join_max_cached_bytes,

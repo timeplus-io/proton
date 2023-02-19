@@ -26,12 +26,9 @@ public:
     class FinishCounter
     {
     public:
-        explicit FinishCounter(size_t total_) : total(total_) {}
+        explicit FinishCounter(size_t total_) : total(total_) { }
 
-        bool isLast()
-        {
-            return finished.fetch_add(1) + 1 >= total;
-        }
+        bool isLast() { return finished.fetch_add(1) + 1 >= total; }
 
     private:
         const size_t total;
@@ -43,12 +40,13 @@ public:
     JoinTransform(
         Block left_input_header,
         Block right_input_header,
+        Block output_header,
         HashJoinPtr join_,
         size_t max_block_size_,
         UInt64 join_max_cached_bytes_,
         FinishCounterPtr finish_counter_ = nullptr);
 
-    String getName() const override { return "JoinTransform"; }
+    String getName() const override { return "StreamingJoinTransform"; }
     Status prepare() override;
     void work() override;
 
@@ -61,7 +59,6 @@ private:
     void validateAsofJoinKey(const Block & left_input_header, const Block & right_input_header);
 
 private:
-
     struct PortContext
     {
         explicit PortContext(InputPort * input_port_) : input_port(input_port_) { }
@@ -72,9 +69,8 @@ private:
     };
 
     std::vector<PortContext> port_contexts;
-    std::array<std::atomic_bool , 2> port_can_have_more_data;
+    std::array<std::atomic_bool, 2> port_can_have_more_data;
 
-    const Block & output_header;
     Chunk output_header_chunk;
     mutable std::mutex mutex;
     std::list<Chunk> output_chunks;
@@ -90,10 +86,6 @@ private:
     FinishCounterPtr finish_counter;
     [[maybe_unused]] std::shared_ptr<NotJoinedBlocks> non_joined_blocks;
     [[maybe_unused]] size_t max_block_size;
-    [[maybe_unused]] UInt64 join_max_cached_bytes;
-
-    mutable UInt64 last_join = 0;
-    mutable UInt64 added_rows_since_last_join = 0;
 };
 }
 }

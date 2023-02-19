@@ -4,7 +4,6 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/JoinUtils.h>
 #include <Interpreters/TableJoin.h>
 
 namespace DB
@@ -27,30 +26,29 @@ Block JoinTransform::transformHeader(Block header, const HashJoinPtr & join)
 JoinTransform::JoinTransform(
     Block left_input_header,
     Block right_input_header,
+    Block output_header,
     HashJoinPtr join_,
     size_t max_block_size_,
-    UInt64 join_max_cached_bytes_,
+    UInt64 join_max_cached_bytes,
     FinishCounterPtr finish_counter_)
-    : IProcessor(
-        {left_input_header, right_input_header}, {transformHeader(left_input_header, join_)}, ProcessorID::StreamingJoinTransformID)
+    : IProcessor({left_input_header, right_input_header}, {output_header}, ProcessorID::StreamingJoinTransformID)
     , port_can_have_more_data{true, true}
-    , output_header(outputs.front().getHeader())
     , output_header_chunk(outputs.front().getHeader().getColumns(), 0)
     , join(std::move(join_))
     , finish_counter(std::move(finish_counter_))
     , max_block_size(max_block_size_)
-    , join_max_cached_bytes(join_max_cached_bytes_)
 {
     assert(join);
 
     /// Validate asof join column data type
     validateAsofJoinKey(left_input_header, right_input_header);
 
+    /// We know the finalized left header, output header etc, post init HashJoin
+    join->postInit(left_input_header, output_header, join_max_cached_bytes);
+
     port_contexts.reserve(2);
     port_contexts.emplace_back(&inputs.front());
     port_contexts.emplace_back(&inputs.back());
-
-    last_join = MonotonicMilliseconds::now();
 }
 
 IProcessor::Status JoinTransform::prepare()
@@ -140,7 +138,6 @@ void JoinTransform::work()
             {
                 if (port_ctx.input_chunk.hasRows())
                 {
-                    added_rows_since_last_join += port_ctx.input_chunk.getNumRows();
                     auto block{port_ctx.input_port->getHeader().cloneWithColumns(port_ctx.input_chunk.detachColumns())};
                     blocks[i].swap(block);
                     has_data = true;
@@ -243,7 +240,7 @@ void JoinTransform::joinBidirectionally(std::vector<Block> && blocks)
     auto & right_block = blocks[1];
     if (right_block.rows())
     {
-        auto retracted_block = join->insertRightBlockAndJoin(right_block, output_header);
+        auto retracted_block = join->insertRightBlockAndJoin(right_block);
         auto right_block_rows = right_block.rows();
         if (right_block_rows)
         {
@@ -290,7 +287,10 @@ void JoinTransform::rangeJoinBidirectionally(std::vector<Block> && blocks)
                 /// Piggy-back watermark in header's chunk info if there is
                 /// We only do this piggy-back once
                 output_chunks.emplace_back(
-                    joined_blocks[i].getColumns(), joined_blocks[i].rows(), output_header_chunk.getChunkInfo(), output_header_chunk.getChunkContext());
+                    joined_blocks[i].getColumns(),
+                    joined_blocks[i].rows(),
+                    output_header_chunk.getChunkInfo(),
+                    output_header_chunk.getChunkContext());
 
                 output_header_chunk.setChunkInfo(nullptr);
                 output_header_chunk.setChunkContext(nullptr);
@@ -301,7 +301,7 @@ void JoinTransform::rangeJoinBidirectionally(std::vector<Block> && blocks)
     auto & right_block = blocks[1];
     if (right_block.rows())
     {
-        auto joined_blocks = join->insertRightBlockToRangeBucketsAndJoin(std::move(right_block), output_header);
+        auto joined_blocks = join->insertRightBlockToRangeBucketsAndJoin(std::move(right_block));
 
         std::scoped_lock lock(mutex);
 
@@ -316,7 +316,10 @@ void JoinTransform::rangeJoinBidirectionally(std::vector<Block> && blocks)
                 /// Piggy-back watermark in header's chunk info if there is
                 /// We only do this piggy-back once
                 output_chunks.emplace_back(
-                    joined_blocks[i].getColumns(), joined_blocks[i].rows(), output_header_chunk.getChunkInfo(), output_header_chunk.getChunkContext());
+                    joined_blocks[i].getColumns(),
+                    joined_blocks[i].rows(),
+                    output_header_chunk.getChunkInfo(),
+                    output_header_chunk.getChunkContext());
 
                 output_header_chunk.setChunkInfo(nullptr);
                 output_header_chunk.setChunkContext(nullptr);

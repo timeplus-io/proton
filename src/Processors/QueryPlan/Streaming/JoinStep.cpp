@@ -1,4 +1,4 @@
-#include "JoinStep.h"
+#include <Processors/QueryPlan/Streaming/JoinStep.h>
 
 #include <Interpreters/IJoin.h>
 #include <Interpreters/Streaming/HashJoin.h>
@@ -24,13 +24,9 @@ JoinStep::JoinStep(
     , max_block_size(max_block_size_)
     , join_max_cached_bytes(join_max_cached_bytes_)
 {
-    auto hash_join = std::dynamic_pointer_cast<HashJoin>(join);
-    /// We know the finalized left header
-    hash_join->initLeftStream(left_stream_.header);
-
     input_streams = {left_stream_, right_stream_};
     output_stream = DataStream{
-        .header = JoinTransform::transformHeader(left_stream_.header, hash_join),
+        .header = JoinTransform::transformHeader(left_stream_.header, std::dynamic_pointer_cast<HashJoin>(join)),
     };
 }
 
@@ -43,6 +39,7 @@ QueryPipelineBuilderPtr JoinStep::updatePipeline(QueryPipelineBuilders pipelines
         std::move(pipelines[0]),
         std::move(pipelines[1]),
         join,
+        output_stream->header,
         max_block_size,
         join_max_cached_bytes,
         &processors);

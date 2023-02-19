@@ -29,25 +29,17 @@ struct JoinMetrics
 struct JoinGlobalMetrics
 {
     size_t total_join = 0;
-    size_t no_new_data_skip = 0;
-    size_t range_bucket_no_new_data_skip = 0;
-    size_t range_bucket_no_intersection_skip = 0;
     size_t left_block_and_right_range_bucket_no_intersection_skip = 0;
     size_t right_block_and_left_range_bucket_no_intersection_skip = 0;
-    size_t only_join_new_data = 0;
 
     std::string string() const
     {
         return fmt::format(
-            "total_join={} no_new_data_skip={} range_bucket_no_new_data_skip={} range_bucket_no_intersection_skip={}  "
-            "left_block_and_right_range_bucket_no_intersection_skip={} right_block_and_left_range_bucket_no_intersection_skip={} only_join_new_data={}",
+            "total_join={} "
+            "left_block_and_right_range_bucket_no_intersection_skip={} right_block_and_left_range_bucket_no_intersection_skip={}",
             total_join,
-            no_new_data_skip,
-            range_bucket_no_new_data_skip,
-            range_bucket_no_intersection_skip,
             left_block_and_right_range_bucket_no_intersection_skip,
-            right_block_and_left_range_bucket_no_intersection_skip,
-            only_join_new_data);
+            right_block_and_left_range_bucket_no_intersection_skip);
     }
 };
 
