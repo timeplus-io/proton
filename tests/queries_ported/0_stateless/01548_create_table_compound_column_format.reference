@@ -1,0 +1,8 @@
+CREATE STREAM test
+(`a` int64, `b` NESTED(a int64)
+)
+ENGINE = TinyLog
+CREATE STREAM test
+(`a` int64, `b` TUPLE(a int64)
+)
+ENGINE = TinyLog
