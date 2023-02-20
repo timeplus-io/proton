@@ -13,6 +13,7 @@
 #include <Interpreters/AggregateFunctionOfGroupByKeysVisitor.h>
 #include <Interpreters/RewriteAnyFunctionVisitor.h>
 #include <Interpreters/RemoveInjectiveFunctionsVisitor.h>
+#include <Interpreters/FunctionMaskingArgumentCheckVisitor.h>
 #include <Interpreters/RedundantFunctionsInOrderByVisitor.h>
 #include <Interpreters/RewriteCountVariantsVisitor.h>
 #include <Interpreters/MonotonicityCheckVisitor.h>
@@ -142,6 +143,20 @@ void optimizeGroupBy(ASTSelectQuery * select_query, ContextPtr context)
             {
                 ++i;
                 continue;
+            }
+
+            /// don't optimize functions that shadow any of it's arguments, e.g.:
+            /// SELECT toString(dummy) as dummy FROM system.one GROUP BY dummy;
+            if (!function->alias.empty())
+            {
+                FunctionMaskingArgumentCheckVisitor::Data data{.alias=function->alias};
+                FunctionMaskingArgumentCheckVisitor(data).visit(function->arguments);
+
+                if (data.is_rejected)
+                {
+                    ++i;
+                    continue;
+                }
             }
 
             /// copy shared pointer to args in order to ensure lifetime
