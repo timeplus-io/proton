@@ -1,10 +1,19 @@
-name: WeeklyTest
+name: NightlyTest
 
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
   schedule:
-    # build at 00:30(UTC) on every Sunday
-    - cron:  '30 0 * * SUN'
+    # *     *     *     *     *
+    # ┬     ┬     ┬     ┬     ┬
+    # │     │     │     │     │
+    # │     │     │     │     │
+    # │     │     │     │     └───── day of the week (0 - 6) (0 is Sunday, or use names)
+    # │     │     │     └────────── month (1 - 12)
+    # │     │     └─────────────── day of the month (1 - 31)
+    # │     └──────────────────── hour (0 - 23)
+    # └───────────────────────── minute (0 - 59)
+    # build at 00:30(UTC) on every day
+    - cron:  '00 23 * * *'
 
 jobs:
   prepare_sanitizer:
