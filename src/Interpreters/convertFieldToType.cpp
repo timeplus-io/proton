@@ -32,6 +32,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int ARGUMENT_OUT_OF_BOUND;
+    extern const int CANNOT_PARSE_DATETIME;
     extern const int TYPE_MISMATCH;
     extern const int UNEXPECTED_DATA_AFTER_PARSED_VALUE;
 }
@@ -454,7 +455,7 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
         }
         catch (Exception & e)
         {
-            if (e.code() == ErrorCodes::UNEXPECTED_DATA_AFTER_PARSED_VALUE)
+            if (e.code() == ErrorCodes::UNEXPECTED_DATA_AFTER_PARSED_VALUE || e.code() == ErrorCodes::CANNOT_PARSE_DATETIME)
                 throw Exception(ErrorCodes::TYPE_MISMATCH, "Cannot convert string {} to type {}", src.get<String>(), type.getName());
 
             e.addMessage(fmt::format("while converting '{}' to {}", src.get<String>(), type.getName()));
