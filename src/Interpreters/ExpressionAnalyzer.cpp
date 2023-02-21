@@ -151,6 +151,21 @@ void tryTranslateToParametricAggregateFunction(
         argument_names = {argument_names[0]};
         types = {types[0]};
     }
+    else if (lower_name == "top_k_weighted")
+    {
+        /// Translate `top_k_weighted(key, weight, num, [, with_count, load_factor])` to `top_k_weighted(num[, with_count, load_factor])(key, weighted)`
+        auto size = arguments.size();
+        if (size < 3 || size > 5)
+            throw Exception(
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 3 to 5 arguments.", node->name);
+
+        ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+        expression_list->children.assign(arguments.begin() + 2, arguments.end());
+        parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+
+        argument_names = {argument_names[0], argument_names[1]};
+        types = {types[0], types[1]};
+    }
     else if (lower_name == "quantile")
     {
         /// Translate `quantile(key, level)` to `quantile(level)(key)`

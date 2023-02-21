@@ -120,6 +120,7 @@ createAggregateFunctionTopK(const std::string & name, const DataTypes & argument
     }
 
     /// Synatx: top_k(key, k [, with_count = true] [, load_factor = 1000)
+    /// Synatx: top_k_weighted(key, weighted, k,  [, with_count = true] [, load_factor = 1000)
     UInt64 threshold = 10; /// default values
     UInt64 load_factor = 1000;
     bool with_count = true;
