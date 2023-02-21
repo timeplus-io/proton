@@ -14,7 +14,7 @@ ASTPtr ASTExpressionList::clone() const
 
 void ASTExpressionList::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
-    if (frame.expression_list_prepend_whitespace)
+    if (frame.expression_list_prepend_whitespace && !settings.one_line )
         settings.ostr << ' ';
 
     for (ASTs::const_iterator it = children.begin(); it != children.end(); ++it)

@@ -45,7 +45,7 @@
                 {
                     "query_id": "401",
                     "expected_results": {
-                        "query": "SELECT\n  a.id, b.type, max(a.value), window_start AS joined_w_start, window_end AS joined_w_end\nFROM\n hop(test_rest, timestamp, INTERVAL 3 SECOND, INTERVAL 5 SECOND) AS a\nINNER JOIN table(test_rest_d) AS b ON a.id = b.id\nWHERE\n  (b.type = 'roof') OR (b.type = 'field') OR (b.type = 'wall')\nGROUP BY\n  a.id, b.type, window_start, window_end",
+                        "query": "SELECT \n  a.id, b.type, max(a.value), window_start AS joined_w_start, window_end AS joined_w_end\nFROM \n  hop(test_rest, timestamp, INTERVAL 3 SECOND, INTERVAL 5 SECOND) AS a\nINNER JOIN table(test_rest_d) AS b ON a.id = b.id\nWHERE \n  (b.type = 'roof') OR (b.type = 'field') OR (b.type = 'wall')\nGROUP BY \n  a.id, b.type, window_start, window_end",
                         "request_id": "any_value"
                     }
                 }
@@ -79,7 +79,7 @@
                 {
                     "query_id": "401",
                     "expected_results": {
-                        "query": "WITH transformed AS\n  (\n    SELECT\n      id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') AS transformed_timestamp\n    FROM\n test_session\n  )\nSELECT\n  top_k(value, 5, true, 30), array_join(max_k(value, 5)), window_start, window_end, __tp_session_id, id, location\nFROM\n session(transformed, transformed_timestamp, 2s, id, location)\nGROUP BY\n  __tp_session_id, window_start, window_end, id, location",
+                        "query": "WITH transformed AS\n  (\n    SELECT \n      id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') AS transformed_timestamp\n    FROM \n      test_session\n  )\nSELECT \n  top_k(value, 5, true, 30), array_join(max_k(value, 5)), window_start, window_end, __tp_session_id, id, location\nFROM \n  session(transformed, transformed_timestamp, 2s, id, location)\nGROUP BY \n  __tp_session_id, window_start, window_end, id, location",
                         "request_id": "any_value"
                     }
                 }

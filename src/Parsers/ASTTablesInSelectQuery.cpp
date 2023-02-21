@@ -109,17 +109,14 @@ void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState
 
     if (database_and_table_name)
     {
-        settings.ostr << " ";
         database_and_table_name->formatImpl(settings, state, frame);
     }
     else if (table_function)
     {
-        settings.ostr << " ";
         table_function->formatImpl(settings, state, frame);
     }
     else if (subquery)
     {
-        settings.ostr << " ";  /// proton: updated
         subquery->formatImpl(settings, state, frame);
     }
 
@@ -199,19 +196,19 @@ void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, Format
     switch (kind)
     {
         case JoinKind::Inner:
-            settings.ostr << "INNER JOIN";
+            settings.ostr << "INNER JOIN ";  /// proton: updated
             break;
         case JoinKind::Left:
-            settings.ostr << "LEFT JOIN";
+            settings.ostr << "LEFT JOIN ";  /// proton: updated
             break;
         case JoinKind::Right:
-            settings.ostr << "RIGHT JOIN";
+            settings.ostr << "RIGHT JOIN ";  /// proton: updated
             break;
         case JoinKind::Full:
-            settings.ostr << "FULL OUTER JOIN";
+            settings.ostr << "FULL OUTER JOIN ";  /// proton: updated
             break;
         case JoinKind::Cross:
-            settings.ostr << "CROSS JOIN";
+            settings.ostr << "CROSS JOIN ";  /// proton: updated
             break;
         case JoinKind::Comma:
             settings.ostr << ",";
