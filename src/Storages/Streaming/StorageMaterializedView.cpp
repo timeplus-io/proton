@@ -420,8 +420,7 @@ void StorageMaterializedView::doCreateInnerTable(const StorageMetadataPtr & meta
     manual_create_query->setTable(target_table_id.getTableName());
     manual_create_query->uuid = target_table_id.uuid;
 
-    auto names_and_types = metadata_snapshot->getColumns().getAll();
-    auto columns_ast = InterpreterCreateQuery::formatColumns(names_and_types);
+    auto columns_ast = InterpreterCreateQuery::formatColumns(metadata_snapshot->getColumns());
     auto new_columns_list = std::make_shared<ASTColumns>();
     new_columns_list->set(new_columns_list->columns, columns_ast);
 
@@ -499,6 +498,10 @@ void StorageMaterializedView::buildBackgroundPipeline()
         /// Internally inner table. The inner storage header shall be identical as the source header
         insert_columns = source_header.getNames();
         target_header = metadata_snapshot->getSampleBlock();
+
+        /// When inserted columns don't contains `_tp_time`, we will skip it, which will be filled by default
+        if (!source_header.has(ProtonConsts::RESERVED_EVENT_TIME))
+            target_header.erase(ProtonConsts::RESERVED_EVENT_TIME);
     }
 
     if (!blocksHaveEqualStructure(source_header, target_header))

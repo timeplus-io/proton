@@ -233,7 +233,8 @@ TEST(DDLHelper, getAlterTableParamOpCode)
 
 TEST(DDLHelper, checkAndPrepareCreateQueryForStream)
 {
-    /// add _tp_time and _tp_index_time
+    auto ctx = getContext().context;
+    /// add _tp_time
     DB::ASTPtr ast = queryToAST(R"###(
 CREATE STREAM default.tests
 (
@@ -245,7 +246,7 @@ CREATE STREAM default.tests
 ) ENGINE = Stream(1, 1, rand())
 )###");
     auto * create = ast->as<DB::ASTCreateQuery>();
-    DB::Streaming::checkAndPrepareCreateQueryForStream(*create);
+    DB::Streaming::checkAndPrepareCreateQueryForStream(*create, ctx);
     EXPECT_EQ(create->columns_list->columns->children.size(), 6);
 
     DB::ASTFunction * order_by = create->storage->order_by->as<DB::ASTFunction>();
@@ -264,7 +265,7 @@ CREATE STREAM default.tests
     `ttl`            datetime DEFAULT now()
 ) ENGINE = Stream(2, 1, rand()))###");
     create = ast->as<DB::ASTCreateQuery>();
-    EXPECT_THROW(DB::Streaming::checkAndPrepareCreateQueryForStream(*create), DB::Exception);
+    EXPECT_THROW(DB::Streaming::checkAndPrepareCreateQueryForStream(*create, ctx), DB::Exception);
 
     /// add event_time_column
     ast = queryToAST(R"###(
@@ -277,7 +278,7 @@ SETTINGS event_time_column = 'to_start_of_hour(timestamp)'
 )###");
     create = ast->as<DB::ASTCreateQuery>();
 
-    DB::Streaming::checkAndPrepareCreateQueryForStream(*create);
+    DB::Streaming::checkAndPrepareCreateQueryForStream(*create, ctx);
     EXPECT_EQ(ignoreEmptyChars(queryToString(*create)), ignoreEmptyChars(R"###(
 CREATE STREAM default.tests (
   `timestamp` datetime64(3) DEFAULT now64(3),

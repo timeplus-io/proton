@@ -10,7 +10,6 @@
 
 #include <Poco/JSON/Parser.h>
 
-
 namespace DB
 {
 namespace Streaming
@@ -22,9 +21,9 @@ void getAndValidateStorageSetting(
 void prepareEngine(ASTCreateQuery & create, ContextPtr ctx);
 /// prepare engine settings for REST API call
 void prepareEngineSettings(const ASTCreateQuery & create, ContextMutablePtr ctx);
-void checkAndPrepareColumns(ASTCreateQuery & create);
+void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context);
 void prepareOrderByAndPartitionBy(ASTCreateQuery & create);
-void checkAndPrepareCreateQueryForStream(ASTCreateQuery & create);
+void checkAndPrepareCreateQueryForStream(ASTCreateQuery & create, ContextPtr context);
 void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_list);
 TTLSettings parseTTLSettings(const String & payload);
 nlog::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams);

@@ -881,7 +881,7 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
         /// We only support `Stream` table engine for now
         return false;
 
-    Streaming::checkAndPrepareCreateQueryForStream(create);
+    Streaming::checkAndPrepareCreateQueryForStream(create, ctx);
 
     if (!ctx->isDistributedEnv())
     {
@@ -1053,8 +1053,9 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
     handleExternalStreamCreation(create);
 
-    if (create.is_random)
-        Streaming::checkAndPrepareColumns(create);
+    /// Prepare reserved columns for MaterializedView and RandomStream
+    if (create.is_materialized_view || create.is_random)
+        Streaming::checkAndPrepareColumns(create, getContext());
     /// proton: end
 
     // If this is a stub ATTACH query, read the query definition from the database

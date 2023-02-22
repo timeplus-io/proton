@@ -5,14 +5,19 @@
 
 #include <DistributedMetadata/CatalogService.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/InterpreterCreateQuery.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
+#include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include <TableFunctions/TableFunctionFactory.h>
 
 #include <Poco/JSON/Parser.h>
 #include <Poco/Net/HTTPRequest.h>
@@ -55,6 +60,41 @@ const std::vector<String> CREATE_TABLE_SETTINGS = {
     "logstore",
     "mode",
 };
+
+void normalizeColumns(ASTCreateQuery & create, ContextPtr context)
+{
+    if (create.columns_list)
+        return;
+
+    create.set(create.columns_list, std::make_shared<ASTColumns>());
+    if (!create.as_table.empty())
+    {
+        /// Case: `create stream t1 as test`
+        String as_database_name = context->resolveDatabase(create.as_database);
+        StoragePtr as_storage = DatabaseCatalog::instance().getTable({as_database_name, create.as_table}, context);
+
+        /// as_storage->getColumns() must be called under structure lock of other_table for CREATE ... AS other_table.
+        TableLockHolder as_storage_lock
+            = as_storage->lockForShare(context->getCurrentQueryId(), context->getSettingsRef().lock_acquire_timeout);
+        create.columns_list->setOrReplace(
+            create.columns_list->columns, InterpreterCreateQuery::formatColumns(as_storage->getInMemoryMetadataPtr()->getColumns()));
+    }
+    else if (create.select)
+    {
+        /// Case: `create stream t1 as select * from test`
+        Block as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), context);
+        create.columns_list->setOrReplace(
+            create.columns_list->columns, InterpreterCreateQuery::formatColumns(as_select_sample.getNamesAndTypesList()));
+    }
+    else if (create.as_table_function)
+    {
+        /// Case: `create stream t1 as dedup(test, i)`
+        /// Table function without columns list.
+        auto table_function = TableFunctionFactory::instance().get(create.as_table_function, context);
+        create.columns_list->setOrReplace(
+            create.columns_list->columns, InterpreterCreateQuery::formatColumns(table_function->getActualTableStructure(context)));
+    }
+}
 }
 
 void getAndValidateStorageSetting(
@@ -148,8 +188,11 @@ void prepareEngineSettings(const ASTCreateQuery & create, ContextMutablePtr ctx)
     ctx->setQueryParameter("url_parameters", uri.getRawQuery());
 }
 
-void checkAndPrepareColumns(ASTCreateQuery & create)
+void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
 {
+    /// Set and retrieve list of columns
+    normalizeColumns(create, context);
+
     /// columns_list should contains valid column definition
     if (!create.columns_list || !create.columns_list->columns || create.columns_list->columns->children.empty())
         throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Columns is empty no column has been defined.");
@@ -157,7 +200,7 @@ void checkAndPrepareColumns(ASTCreateQuery & create)
     ASTs & column_asts = create.columns_list->columns->children;
     Field event_time_default = ProtonConsts::DEFAULT_EVENT_TIME;
 
-    if (create.storage->settings && !create.storage->settings->changes.empty())
+    if (create.storage && create.storage->settings && !create.storage->settings->changes.empty())
         create.storage->settings->changes.tryGet("event_time_column", event_time_default);
 
     String event_time_default_expr;
@@ -315,7 +358,7 @@ void checkAndPrepareColumns(ASTCreateQuery & create)
     if (!has_delta_flag)
     {
         Field mode("");
-        if (create.storage->settings)
+        if (create.storage && create.storage->settings)
             create.storage->settings->changes.tryGet("mode", mode);
 
         if (mode == ProtonConsts::CHANGELOG_MODE || mode == ProtonConsts::CHANGELOG_KV_MODE)
@@ -359,9 +402,9 @@ void prepareOrderByAndPartitionBy(ASTCreateQuery & create)
     }
 }
 
-void checkAndPrepareCreateQueryForStream(ASTCreateQuery & create)
+void checkAndPrepareCreateQueryForStream(ASTCreateQuery & create, ContextPtr context)
 {
-    checkAndPrepareColumns(create);
+    checkAndPrepareColumns(create, context);
     prepareOrderByAndPartitionBy(create);
 }
 
