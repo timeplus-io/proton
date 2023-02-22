@@ -354,6 +354,46 @@
         {"query_id":"2106", "expected_results":[["s1"], ["s2"], ["s3"], ["s4"]]},
         {"query_id":"2107", "expected_results":[["s2"], ["s4"]]}
       ]
-    }
+    },
+    {
+      "id": 10,
+      "tags": ["seek_to"],
+      "name": "seek_to",
+      "description": "event predicate in materialized view",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "wait":2, "query_type": "table", "query":"drop view if exists seek_to_mv"},
+            {"client":"python", "wait":2, "query_type": "table", "query":"create materialized view seek_to_mv as (select window_start as win_start, window_end as win_end, sum(i) as cnt from tumble(seek_to_stream, 2s) where _tp_time >= '2022-12-01 00:00:01.111' group by window_start, window_end)"},
+            {"client":"python", "wait":5, "depends_on_stream":"seek_to_mv", "query_end_timer":3, "query_type": "stream", "query_id":"2100", "query":"select win_start, win_end, cnt from seek_to_mv where _tp_sn >= 0"},
+            {"client":"python", "depends_on_stream":"seek_to_mv", "wait":2, "query_type": "table", "query_id":"2101", "query":"select win_start, win_end, cnt from table(seek_to_mv)"},
+            {"client":"python", "query_end_timer":4, "query_type": "stream", "query_id":"2102", "query":"select window_start, sum(cnt) from tumble(seek_to_mv, win_start, 2s) where _tp_time >= now() - 1m group by window_start emit timeout 1s"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"2100",
+          "expected_results":[
+            ["2022-12-01 00:00:00+00:00", "2022-12-01 00:00:02+00:00", 1],
+            ["2022-12-01 00:00:02+00:00", "2022-12-01 00:00:04+00:00", 5]
+          ]
+        },
+        {
+          "query_id":"2101",
+          "expected_results":[
+            ["2022-12-01 00:00:00+00:00", "2022-12-01 00:00:02+00:00", 1],
+            ["2022-12-01 00:00:02+00:00", "2022-12-01 00:00:04+00:00", 5]
+          ]
+        },
+        {
+          "query_id":"2102",
+          "expected_results":[
+            ["2022-12-01 00:00:00+00:00", 1],
+            ["2022-12-01 00:00:02+00:00", 5]
+          ]
+        }
+      ]
+    }    
   ]
 }

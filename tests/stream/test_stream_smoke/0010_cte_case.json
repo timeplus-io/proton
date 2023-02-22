@@ -48,7 +48,7 @@
       ],
       "expected_results": [
         {"query_id":"1100", "expected_results":[[2, "1"], [3, "2"], [4, "3"]]},
-        {"query_id":"1101", "expected_results":["error_code:36"]}
+        {"query_id":"1101", "expected_results":"error_code:36"}
       ]
     }
   ]
