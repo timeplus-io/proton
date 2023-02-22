@@ -29,6 +29,27 @@
           ]
         }
       ]
+    },
+    {
+      "id": 1,
+      "tags": ["cte"],
+      "name": "cte-table",
+      "description": "table function shall work with simple CTE (no aggreagtion and no emit policy)",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists cte_stream"},
+            {"client":"python", "query_type": "table", "wait":3, "query":"create stream if not exists cte_stream(i int)"},
+            {"client":"python", "query_type": "table", "depends_on_stream":"cte_stream", "wait":3, "query": "insert into cte_stream(i) values (1),(2),(3)"},
+            {"client":"python", "query_type": "table", "query_id":"1100", "query":"with cte as (select i + 1, to_string(i) from cte_stream) select * from table(cte)"},
+            {"client":"python", "query_type": "table", "query_id":"1101", "query":"with cte as (select count() from cte_stream) select * from table(cte)"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"1100", "expected_results":[[2, "1"], [3, "2"], [4, "3"]]},
+        {"query_id":"1101", "expected_results":["error_code:36"]}
+      ]
     }
   ]
 }

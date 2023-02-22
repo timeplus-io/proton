@@ -1,6 +1,8 @@
 #include "TableFunctionHist.h"
 
 #include <Interpreters/Context.h>
+#include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageView.h>
@@ -44,15 +46,38 @@ StoragePtr TableFunctionHist::calculateColumnDescriptions(ContextPtr context)
     streaming = false;
 
     if (subquery)
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "table function can't be applied to subquery '{}'", storage_id.getNameForLogs());
+    {
+        InterpreterSelectWithUnionQuery interpreter(subquery->children[0], context, SelectQueryOptions().subquery().analyze());
+        if (interpreter.hasAggregation())
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS,
+                "table function only can be applied to subquery on non-aggreagtion query '{}' ",
+                storage_id.getNameForLogs());
 
-    auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
-    if (storage->as<StorageView>() || !supportStreamingQuery(storage))
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "table function can't be applied to {} '{}'", storage->getName(), storage_id.getNameForLogs());
+        columns = ColumnsDescription{interpreter.getSampleBlock().getNamesAndTypesList()};
+        return nullptr;
+    }
+    else
+    {
+        auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
+        if (auto * view = storage->as<StorageView>())
+        {
+            InterpreterSelectWithUnionQuery interpreter(
+                view->getInMemoryMetadataPtr()->getSelectQuery().inner_query, context, SelectQueryOptions().subquery().analyze());
+            if (interpreter.hasAggregation())
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "table function only can be applied to view on non-aggreagtion query '{}'",
+                    storage_id.getNameForLogs());
+        }
+        else if (!supportStreamingQuery(storage))
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS, "table function can't be applied to {} '{}'", storage->getName(), storage_id.getNameForLogs());
 
-    underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
-    columns = underlying_storage_snapshot->getMetadataForQuery()->getColumns();
-    return storage;
+        underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
+        columns = underlying_storage_snapshot->getMetadataForQuery()->getColumns();
+        return storage;
+    }
 }
 
 void registerTableFunctionHist(TableFunctionFactory & factory)

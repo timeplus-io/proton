@@ -241,7 +241,7 @@ void EmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_query)
     select_query.setExpression(ASTSelectQuery::Expression::EMIT, std::move(new_emit));
 
     if (log)
-        LOG_INFO(log, "(LastXForWindow) processed query: {}", queryToString(query, true));
+        LOG_INFO(log, "(LastXForTail) processed query: {}", queryToString(query, true));
 }
 
 /// Add `_tp_time >= now64(3, 'UTC') - last_interval` to WHERE clause, to do two things:

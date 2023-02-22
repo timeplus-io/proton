@@ -123,23 +123,34 @@ void ProxyStream::read(
 
     if (subquery)
     {
-        /// TODO: should we use a copy of context, instead of that from initial query?
+        auto sub_context = Context::createCopy(context_);
+        if (!isStreaming())
+            sub_context->applySettingChange({"query_mode", "table"});
+
         /// FIXME, we are re-interpreter subquery again ?
         SelectQueryOptions options;
         auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(
-            subquery->children[0], context_, options.subquery().noModify(), updated_column_names);
+            subquery->children[0], sub_context, options.subquery().noModify(), updated_column_names);
         if (interpreter_subquery)
         {
             interpreter_subquery->ignoreWithTotals();
             interpreter_subquery->buildQueryPlan(query_plan);
-            /// query_plan.addInterpreterContext(context);
+            query_plan.addInterpreterContext(sub_context);
         }
         return;
     }
 
     if (auto * view = storage->as<StorageView>())
-        return view->read(
-            query_plan, updated_column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+    {
+        auto view_context = Context::createCopy(context_);
+        if (!isStreaming())
+            view_context->applySettingChange({"query_mode", "table"});
+
+        view->read(
+            query_plan, updated_column_names, storage_snapshot, query_info, view_context, processed_stage, max_block_size, num_streams);
+        query_plan.addInterpreterContext(view_context);
+        return;
+    }
     else if (auto * materialized_view = storage->as<StorageMaterializedView>())
         return materialized_view->read(
             query_plan, updated_column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
@@ -148,14 +159,7 @@ void ProxyStream::read(
             query_plan, updated_column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     else if (auto * random_stream = storage->as<StorageRandom>())
         return random_stream->read(
-            query_plan,
-            updated_column_names,
-            storage_snapshot,
-            query_info,
-            context_,
-            processed_stage,
-            max_block_size,
-            num_streams);
+            query_plan, updated_column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     else if (nested_proxy_storage)
         return nested_proxy_storage->read(
             query_plan, updated_column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
@@ -300,8 +304,8 @@ bool ProxyStream::processTimestampStep(
     const auto & seek_to = context_->getSettingsRef().seek_to.value;
     bool backfill = !seek_to.empty() && seek_to != "latest" && seek_to != "earliest";
 
-    query_plan.addStep(std::make_unique<TimestampTransformStep>(
-        query_plan.getCurrentDataStream(), output_header, timestamp_func_desc, backfill));
+    query_plan.addStep(
+        std::make_unique<TimestampTransformStep>(query_plan.getCurrentDataStream(), output_header, timestamp_func_desc, backfill));
 
     return proc_time;
 }
@@ -356,8 +360,8 @@ void ProxyStream::processSessionStep(QueryPlan & query_plan, const SelectQueryIn
         query_plan.addStep(std::make_unique<Streaming::SessionStepWithSubstream>(
             query_plan.getCurrentDataStream(), std::move(output_header), streaming_func_desc));
     else
-        query_plan.addStep(std::make_unique<Streaming::SessionStep>(
-            query_plan.getCurrentDataStream(), std::move(output_header), streaming_func_desc));
+        query_plan.addStep(
+            std::make_unique<Streaming::SessionStep>(query_plan.getCurrentDataStream(), std::move(output_header), streaming_func_desc));
 }
 
 void ProxyStream::processWindowAssignmentStep(
@@ -386,7 +390,7 @@ bool ProxyStream::isRemote() const
     if (auto nested = getNestedStorage())
         return nested->isRemote();
 
-    return IStorage::isRemote(); 
+    return IStorage::isRemote();
 }
 
 bool ProxyStream::supportsParallelInsert() const
@@ -410,7 +414,7 @@ bool ProxyStream::supportsSubcolumns() const
     if (auto nested = getNestedStorage())
         return nested->supportsSubcolumns();
 
-    return IStorage::supportsSubcolumns(); 
+    return IStorage::supportsSubcolumns();
 }
 
 StoragePtr ProxyStream::getNestedStorage() const
@@ -421,7 +425,7 @@ StoragePtr ProxyStream::getNestedStorage() const
     if (storage)
         return storage;
 
-    return nullptr;  /// subquery
+    return nullptr; /// subquery
 }
 }
 }

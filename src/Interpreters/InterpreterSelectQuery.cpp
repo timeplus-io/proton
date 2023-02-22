@@ -3581,7 +3581,10 @@ void InterpreterSelectQuery::handleSeekToSetting()
     query_info.seek_to_info = std::make_shared<SeekToInfo>(seek_to);
 
     if (!isStreaming() && !seek_to.empty())
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It doesn't support `seek_to` setting in historical table query");
+    {
+        LOG_WARNING(log, "It doesn't support `seek_to` setting in historical table query, so ignored.");
+        return;
+    }
 
     if (query_info.seek_to_info->isTimeBased())
     {

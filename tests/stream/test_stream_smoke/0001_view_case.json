@@ -522,6 +522,29 @@
                 ["dev1", "123.3"],
                 ["dev3", "123.3"]]}
             ]
+        },
+        {
+          "id": 75,
+          "tags": ["view"],
+          "name": "view-table",
+          "description": "table function shall work with simple view (no aggreagtion and no emit policy)",
+          "steps":[
+            {
+              "statements": [
+                {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists view_stream"},
+                {"client":"python", "query_type": "table", "wait":3, "query":"create stream if not exists view_stream(i int)"},
+                {"client":"python", "query_type": "table", "depends_on_stream":"view_stream", "wait":3, "query": "insert into view_stream(i) values (1),(2),(3)"},
+                {"client":"python", "query_type": "table", "wait":2, "query":"create or replace view test_v_table as (select i + 1, to_string(i) from view_stream)"},
+                {"client":"python", "query_type": "table", "depends_on_stream":"test_v_table", "wait":2, "query_id":"1100", "query":"select * from table(test_v_table)"},
+                {"client":"python", "query_type": "table", "wait":2, "query":"create or replace view test_v_table as (select count() from view_stream)"},
+                {"client":"python", "query_type": "table", "depends_on_stream":"test_v_table", "wait":2, "query_id":"1101", "query":"select * from table(test_v_table)"}
+              ]
+            }
+          ],
+          "expected_results": [
+            {"query_id":"1100", "expected_results":[[2, "1"], [3, "2"], [4, "3"]]},
+            {"query_id":"1101", "expected_results":["error_code:36"]}
+          ]
         }
     ]
 }
