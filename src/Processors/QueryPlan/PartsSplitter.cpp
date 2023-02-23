@@ -196,7 +196,7 @@ ASTs buildFilters(const KeyDescription & primary_key, const std::vector<Values> 
     auto lexicographically_greater = [&](const Values & value)
     {
         // PK may contain functions of the table columns, so we need the actual PK AST with all expressions it contains.
-        ASTPtr pk_columns_as_tuple = makeASTFunction("tuple", primary_key.expression_list_ast->children);
+        ASTPtr pk_columns_as_tuple = makeASTFunction("tuple_cast", primary_key.expression_list_ast->children);
 
         ASTPtr value_ast = std::make_shared<ASTExpressionList>();
         for (size_t i = 0; i < value.size(); ++i)
@@ -209,7 +209,7 @@ ASTs buildFilters(const KeyDescription & primary_key, const std::vector<Values> 
                 component_ast = makeASTFunction("cast", std::move(component_ast), std::make_shared<ASTLiteral>(types.at(i)->getName()));
             value_ast->children.push_back(std::move(component_ast));
         }
-        ASTPtr values_as_tuple = makeASTFunction("tuple", value_ast->children);
+        ASTPtr values_as_tuple = makeASTFunction("tuple_cast", value_ast->children);
 
         return makeASTFunction("greater", pk_columns_as_tuple, values_as_tuple);
     };
