@@ -1,0 +1,44 @@
+-- Tags: use-rocksdb, long
+
+SET join_algorithm = 'direct';
+
+{% for stream_size in [10, 65555, 100000] -%}
+DROP STREAM IF EXISTS rdb_{{ stream_size }};
+{% endfor -%}
+
+{% for stream_size in [10, 65555, 100000] -%}
+
+CREATE STREAM rdb_{{ stream_size }} (key uint64, value string) ENGINE = EmbeddedRocksDB PRIMARY KEY (key);
+INSERT INTO rdb_{{ stream_size }}
+    SELECT (sipHash64(number) % {{ stream_size }}) as key, ('val' || to_string(key)) AS value
+    FROM numbers_mt({{ stream_size }});
+
+{% for block_size in [10, 11, 128, 129, 65505, 65506, 70000] -%}
+
+{% if block_size * 5000 > stream_size -%}
+
+SET max_block_size = {{ block_size }};
+
+{% for right_size in [table_size // 2, stream_size + stream_size // 4 + 1] -%}
+
+SELECT count() == (SELECT count() FROM rdb_{{ stream_size }} WHERE key < {{ right_size }})
+FROM (SELECT number as k FROM numbers_mt({{ right_size }})) as t1
+INNER JOIN rdb_{{ stream_size }} as rdb
+ON rdb.key == t1.k;
+
+SELECT count() == {{ right_size }} and countIf(value != '') == (SELECT count() FROM rdb_{{ stream_size }} WHERE key < {{ right_size }})
+FROM (SELECT number as k FROM numbers_mt({{ right_size }})) as t1
+LEFT JOIN rdb_{{ stream_size }} as rdb
+ON rdb.key == t1.k;
+
+{% endfor -%}
+
+{% endif -%}
+
+{% endfor -%}
+{% endfor -%}
+
+{% for stream_size in [10, 65555, 100000] -%}
+DROP STREAM IF EXISTS rdb_{{ stream_size }};
+{% endfor -%}
+

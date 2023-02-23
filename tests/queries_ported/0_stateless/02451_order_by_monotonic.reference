@@ -1,0 +1,22 @@
+3
+2022-09-09 12:00:00	0
+2022-09-09 12:00:00	1
+2022-09-09 12:00:00	0x
+2022-09-09 12:00:00	0x
+2022-09-09 12:00:00	1x
+  Prefix sort description: t ASC, c1 ASC
+  Result sort description: t ASC, c1 ASC
+  Prefix sort description: t ASC
+  Result sort description: t ASC
+  Prefix sort description: a DESC
+  Result sort description: a DESC
+  Prefix sort description: a DESC, b DESC
+  Result sort description: a DESC, b DESC
+  Prefix sort description: a DESC, b DESC
+  Result sort description: a DESC, b DESC
+  Prefix sort description: a DESC, b DESC
+  Result sort description: a DESC, b DESC
+  Prefix sort description: a DESC
+  Result sort description: a DESC, b ASC
+  Prefix sort description: a ASC
+  Result sort description: a ASC, b DESC

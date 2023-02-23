@@ -1,0 +1,4 @@
+=== ataptive granularity: stream one -; stream two + ===
+=== ataptive granularity: stream one -; stream two - ===
+=== ataptive granularity: stream one +; stream two + ===
+=== ataptive granularity: stream one +; stream two - ===

@@ -1,0 +1,14 @@
+{% for option_value in ['true', 'false'] -%}
+{% for date_fun in ['to_start_of_year', 'to_start_of_iso_year', 'to_start_of_quarter', 'to_start_of_month', 'to_start_of_week', 'to_monday', 'to_last_day_of_month'] -%}
+SELECT '{{ date_fun }};to_date;{{ option_value }}', {{ date_fun }}(to_date('1920-02-02')) SETTINGS enable_extended_results_for_datetime_functions = {{ option_value }};
+SELECT 'type;{{ date_fun }};to_date;{{ option_value }}', to_type_name({{ date_fun }}(to_date('1920-02-02'))) SETTINGS enable_extended_results_for_datetime_functions = {{ option_value }};
+SELECT '{{ date_fun }};to_datetime64;{{ option_value }}', {{ date_fun }}(to_datetime64('1920-02-02 10:20:30', 3)) SETTINGS enable_extended_results_for_datetime_functions = {{ option_value }};
+SELECT 'type;{{ date_fun }};to_datetime64;{{ option_value }}', to_type_name({{ date_fun }}(to_datetime64('1920-02-02 10:20:30', 3))) SETTINGS enable_extended_results_for_datetime_functions = {{ option_value }};
+{% endfor -%}
+{% for date_fun in ['to_start_of_day', 'to_start_of_hour', 'to_start_of_minute', 'to_start_of_five_minutes', 'to_start_of_ten_minutes', 'to_start_of_fifteen_minutes', 'time_slot'] -%}
+SELECT '{{ date_fun }};to_datetime64;{{ option_value }}', {{ date_fun }}(to_datetime64('1920-02-02 10:23:33.789', 3, 'UTC'), 'UTC') SETTINGS enable_extended_results_for_datetime_functions = {{ option_value }};
+SELECT 'type;{{ date_fun }};to_datetime64;{{ option_value }}', to_type_name({{ date_fun }}(to_datetime64('1920-02-02 10:20:30', 3, 'UTC'), 'UTC')) SETTINGS enable_extended_results_for_datetime_functions = {{ option_value }};
+{% endfor -%}
+SELECT 'to_start_of_day;to_date;{{ option_value }}', to_start_of_day(to_date('1920-02-02', 'utc'), 'utc') settings enable_extended_results_for_datetime_functions = {{ option_value }};
+SELECT 'type;to_start_of_day;to_date;{{ option_value }}', to_type_name(to_start_of_day(to_date('1920-02-02', 'utc'), 'utc')) settings enable_extended_results_for_datetime_functions = {{ option_value }};
+{% endfor -%}

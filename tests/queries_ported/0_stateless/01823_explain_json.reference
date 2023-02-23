@@ -1,0 +1,98 @@
+[
+  {
+    "Plan": {
+      "Node Type": "Union",
+      "Plans": [
+        {
+          "Node Type": "Expression",
+          "Plans": [
+            {
+              "Node Type": "ReadFromStorage"
+            }
+          ]
+        },
+        {
+          "Node Type": "Expression",
+          "Plans": [
+            {
+              "Node Type": "ReadFromStorage"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
+--------
+      "Header": [
+        {
+          "Name": "1",
+          "Type": "uint8"
+        },
+        {
+          "Name": "plus(2, dummy)",
+          "Type": "uint16"
+        }
+--------
+          "Node Type": "Aggregating",
+          "Header": [
+            {
+              "Name": "number",
+              "Type": "uint64"
+            },
+            {
+              "Name": "plus(number, 1)",
+              "Type": "uint64"
+            },
+            {
+              "Name": "quantile(number, 0.2)",
+              "Type": "float64"
+            },
+            {
+              "Name": "sum_if(number, greater(number, 0))",
+              "Type": "uint64"
+            }
+          ],
+          "Keys": ["number", "plus(number, 1)"],
+          "Aggregates": [
+            {
+              "Name": "quantile(number, 0.2)",
+              "Function": {
+                "Name": "quantile",
+                "Parameters": ["0.2"],
+                "Argument Types": ["uint64"],
+                "Result Type": "float64"
+              },
+              "Arguments": ["number"],
+              "Argument Positions": [0]
+            },
+            {
+              "Name": "sum_if(number, greater(number, 0))",
+              "Function": {
+                "Name": "sum_if",
+                "Argument Types": ["uint64", "bool"],
+                "Result Type": "uint64"
+              },
+              "Arguments": ["number", "greater(number, 0)"],
+              "Argument Positions": [0, 2]
+--------
+--------
+          "Node Type": "Distinct",
+          "Columns": ["int_div(number, 3)", "int_div(number, 2)"],
+--
+              "Node Type": "Distinct",
+              "Columns": ["int_div(number, 3)", "int_div(number, 2)"],
+--------
+              "Sort Description": [
+                {
+                  "Column": "number",
+                  "Ascending": false,
+                  "With Fill": false
+                },
+                {
+                  "Column": "plus(number, 1)",
+                  "Ascending": true,
+                  "With Fill": false
+                }
+              ],
+              "Limit": 3,

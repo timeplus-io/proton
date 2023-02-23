@@ -1,0 +1,4 @@
+low_cardinality(uint8)
+low_cardinality(uint8)
+low_cardinality(bool)
+low_cardinality(bool)

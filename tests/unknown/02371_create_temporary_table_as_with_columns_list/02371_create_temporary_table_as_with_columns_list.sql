@@ -1,0 +1,3 @@
+CREATE TEMPORARY STREAM test_02327 ENGINE = Memory() (name string) AS SELECT * FROM VALUES(('Vasya'), ('Petya')) ;
+SELECT * FROM test_02327;
+DROP STREAM test_02327;

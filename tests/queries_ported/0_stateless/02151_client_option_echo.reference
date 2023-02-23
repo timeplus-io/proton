@@ -1,0 +1,3 @@
+DROP STREAM IF EXISTS echo_test_0
+DROP STREAM IF EXISTS echo_test_2;
+DROP STREAM IF EXISTS echo_test_3
