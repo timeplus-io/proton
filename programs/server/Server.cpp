@@ -44,13 +44,13 @@
 #include <Interpreters/ExternalModelsLoader.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/loadMetadata.h>
-#include <Interpreters/UserDefinedSQLObjectsLoader.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Access/AccessControl.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/System/attachInformationSchemaTables.h>
 #include <Storages/Cache/ExternalDataSourceCache.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Functions/UserDefined/IUserDefinedSQLObjectsLoader.h>
 #include <Functions/registerFunctions.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <Formats/registerFormats.h>
@@ -87,8 +87,8 @@
 #include <DistributedMetadata/DDLService.h>
 #include <DistributedMetadata/PlacementService.h>
 #include <DistributedMetadata/TaskStatusService.h>
+#include <Functions/UserDefined/ExternalUserDefinedFunctionsLoader.h>
 #include <Interpreters/DiskUtilChecker.h>
-#include <Interpreters/ExternalUserDefinedFunctionsLoader.h>
 #include <KafkaLog/KafkaWALPool.h>
 #include <NativeLog/Server/NativeLog.h>
 #include <Server/RestRouterHandlers/RestRouterFactory.h>
@@ -1437,18 +1437,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// system logs may copy global context.
     global_context->setCurrentDatabaseNameInGlobalContext(default_database);
 
-    LOG_INFO(log, "Loading user defined objects from {}", path_str);
-    try
-    {
-        UserDefinedSQLObjectsLoader::instance().loadObjects(global_context);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, "Caught exception while loading user defined objects");
-        throw;
-    }
-    LOG_DEBUG(log, "Loaded user defined objects");
-
     LOG_INFO(log, "Loading metadata from {}", path_str);
 
     /// proton: start.
@@ -1483,6 +1471,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         database_catalog.loadDatabases();
         /// After loading validate that default database exists
         database_catalog.assertDatabaseExists(default_database);
+        /// Load user-defined SQL functions.
+        global_context->getUserDefinedSQLObjectsLoader().loadObjects();
     }
     catch (...)
     {

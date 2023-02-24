@@ -69,6 +69,10 @@ public:
 
     Documentation getDocumentation(const std::string & name) const;
 
+    /// proton: starts
+    bool hasNameOrAlias(const String & name) const override;
+    /// proton: ends
+
 private:
     using Functions = std::unordered_map<std::string, Value>;
 

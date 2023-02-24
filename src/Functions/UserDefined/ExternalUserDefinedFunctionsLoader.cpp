@@ -6,8 +6,8 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Functions/FunctionFactory.h>
-#include <Interpreters/UserDefinedExecutableFunction.h>
-#include <Interpreters/UserDefinedFunctionFactory.h>
+#include <Functions/UserDefined/UserDefinedExecutableFunction.h>
+#include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 
 /// proton: starts
 #include <Poco/JSON/Parser.h>
@@ -69,10 +69,10 @@ ExternalLoader::LoadablePtr ExternalUserDefinedFunctionsLoader::create(const std
     const std::string & key_in_config,
     const std::string &) const
 {
-    if (FunctionFactory::instance().hasNameOrAlias(name))
+    if (FunctionFactory::instance().hasBuiltInNameOrAlias(name))
         throw Exception(ErrorCodes::FUNCTION_ALREADY_EXISTS, "The function '{}' already exists", name);
 
-    if (AggregateFunctionFactory::instance().hasNameOrAlias(name))
+    if (AggregateFunctionFactory::instance().hasBuiltInNameOrAlias(name))
         throw Exception(ErrorCodes::FUNCTION_ALREADY_EXISTS, "The aggregate function '{}' already exists", name);
 
     /// proton: starts

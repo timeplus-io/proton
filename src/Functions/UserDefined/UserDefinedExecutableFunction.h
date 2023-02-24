@@ -1,44 +1,24 @@
 #pragma once
 
-#include <string>
-
-#include <DataTypes/IDataType.h>
-#include <Processors/Sources/ShellCommandSource.h>
+/// proton: starts
 #include <Interpreters/IExternalLoadable.h>
+#include <Processors/Sources/ShellCommandSource.h>
+#include "UserDefinedFunctionConfiguration.h"
 
+#include <string>
+/// proton: ends
 
 namespace DB
 {
 
-struct UserDefinedExecutableFunctionArgument
-{
-    DataTypePtr type;
-    String name;
-};
-
-struct UserDefinedExecutableFunctionParameter
-{
-    String name;
-    DataTypePtr type;
-};
-
-struct UserDefinedExecutableFunctionConfiguration
-{
-    std::string name;
-    std::string command;
-    std::vector<std::string> command_arguments;
-    std::vector<UserDefinedExecutableFunctionArgument> arguments;
-    std::vector<UserDefinedExecutableFunctionParameter> parameters;
-    DataTypePtr result_type;
-    String result_name;
-};
+class ShellCommandSourceCoordinator;
 
 class UserDefinedExecutableFunction final : public IExternalLoadable
 {
 public:
 
     UserDefinedExecutableFunction(
-        const UserDefinedExecutableFunctionConfiguration & configuration_,
+        const UserDefinedFunctionConfiguration & configuration_,
         std::shared_ptr<ShellCommandSourceCoordinator> coordinator_,
         const ExternalLoadableLifetime & lifetime_);
 
@@ -67,7 +47,7 @@ public:
         return std::make_shared<UserDefinedExecutableFunction>(configuration, coordinator, lifetime);
     }
 
-    const UserDefinedExecutableFunctionConfiguration & getConfiguration() const
+    const UserDefinedFunctionConfiguration & getConfiguration() const
     {
         return configuration;
     }
@@ -88,9 +68,8 @@ public:
     }
 
 private:
-    UserDefinedExecutableFunctionConfiguration configuration;
+    UserDefinedFunctionConfiguration configuration;
     std::shared_ptr<ShellCommandSourceCoordinator> coordinator;
     ExternalLoadableLifetime lifetime;
 };
-
 }

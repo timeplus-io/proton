@@ -111,10 +111,14 @@ public:
         return aliases.contains(name) || case_insensitive_aliases.contains(name);
     }
 
-    bool hasNameOrAlias(const String & name) const
+    /// proton: starts
+    bool hasBuiltInNameOrAlias(const String & name) const
     {
         return getMap().contains(name) || getCaseInsensitiveMap().contains(name) || isAlias(name);
     }
+
+    virtual bool hasNameOrAlias(const String & name) const { return hasBuiltInNameOrAlias(name); }
+    /// proton: ends
 
     /// Return the canonical name (the name used in registration) if it's different from `name`.
     const String & getCanonicalNameIfAny(const String & name) const

@@ -7,10 +7,10 @@
 #include <Formats/formatBlock.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/UserDefined/ExternalUserDefinedFunctionsLoader.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/ExternalUserDefinedFunctionsLoader.h>
 #include <Interpreters/castColumn.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/ShellCommandSource.h>
@@ -26,15 +26,15 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int UNSUPPORTED_METHOD;
-    /// proton: starts
-    extern const int REMOTE_CALL_FAILED;
-    extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
-    extern const int INVALID_DATA;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int UDF_INTERNAL_ERROR;
-    /// proton: ends
+extern const int UNSUPPORTED_METHOD;
+/// proton: starts
+extern const int REMOTE_CALL_FAILED;
+extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
+extern const int INVALID_DATA;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int UDF_INTERNAL_ERROR;
+/// proton: ends
 }
 
 class UserDefinedFunction final : public IFunction
@@ -331,6 +331,21 @@ bool UserDefinedFunctionFactory::isAggregateFunctionName(const String & function
         const auto & config = executable_function->getConfiguration();
 
         return config.is_aggregation;
+    }
+    return false;
+}
+
+bool UserDefinedFunctionFactory::isOrdinaryFunctionName(const String & function_name)
+{
+    const auto & loader = ExternalUserDefinedFunctionsLoader::instance(nullptr);
+    auto load_result = loader.getLoadResult(function_name);
+
+    if (load_result.object)
+    {
+        const auto executable_function = std::static_pointer_cast<const UserDefinedExecutableFunction>(load_result.object);
+        const auto & config = executable_function->getConfiguration();
+
+        return !config.is_aggregation;
     }
     return false;
 }

@@ -11,6 +11,9 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
+/// proton: starts
+#include <Functions/UserDefined/UserDefinedFunctionFactory.h>
+/// proton: ends
 
 namespace DB
 {
@@ -151,4 +154,21 @@ Documentation FunctionFactory::getDocumentation(const std::string & name) const
     return it->second.second;
 }
 
+/// proton: starts
+bool FunctionFactory::hasNameOrAlias(const String & name) const
+{
+    if (hasBuiltInNameOrAlias(name))
+        return true;
+
+    try
+    {
+        return UserDefinedFunctionFactory::instance().isOrdinaryFunctionName(name);
+    }
+    catch (...)
+    {
+        /// We ignore the failure of user defined function checking
+        return false;
+    }
+}
+/// proton: ends
 }

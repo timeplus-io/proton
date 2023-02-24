@@ -1,10 +1,12 @@
 #include <Functions/UserDefined/UserDefinedSQLFunctionFactory.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <Backups/RestorerFromBackup.h>
+/// proton: starts. Not support backup/restore related functionalities
+/// #include <Backups/RestorerFromBackup.h>
+/// proton: ends
 #include <Functions/FunctionFactory.h>
 #include <Functions/UserDefined/IUserDefinedSQLObjectsLoader.h>
-#include <Functions/UserDefined/UserDefinedExecutableFunctionFactory.h>
+#include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 #include <Functions/UserDefined/UserDefinedSQLObjectType.h>
 #include <Functions/UserDefined/UserDefinedSQLObjectsBackup.h>
 #include <Interpreters/Context.h>
@@ -101,13 +103,13 @@ UserDefinedSQLFunctionFactory & UserDefinedSQLFunctionFactory::instance()
 
 void UserDefinedSQLFunctionFactory::checkCanBeRegistered(const ContextPtr & context, const String & function_name, const IAST & create_function_query)
 {
-    if (FunctionFactory::instance().hasNameOrAlias(function_name))
+    if (FunctionFactory::instance().hasBuiltInNameOrAlias(function_name))
         throw Exception(ErrorCodes::FUNCTION_ALREADY_EXISTS, "The function '{}' already exists", function_name);
 
-    if (AggregateFunctionFactory::instance().hasNameOrAlias(function_name))
+    if (AggregateFunctionFactory::instance().hasBuiltInNameOrAlias(function_name))
         throw Exception(ErrorCodes::FUNCTION_ALREADY_EXISTS, "The aggregate function '{}' already exists", function_name);
 
-    if (UserDefinedExecutableFunctionFactory::instance().has(function_name, context))
+    if (UserDefinedFunctionFactory::instance().has(function_name, context))
         throw Exception(ErrorCodes::FUNCTION_ALREADY_EXISTS, "User defined executable function '{}' already exists", function_name);
 
     validateFunction(assert_cast<const ASTCreateFunctionQuery &>(create_function_query).function_core, function_name);
@@ -115,11 +117,11 @@ void UserDefinedSQLFunctionFactory::checkCanBeRegistered(const ContextPtr & cont
 
 void UserDefinedSQLFunctionFactory::checkCanBeUnregistered(const ContextPtr & context, const String & function_name)
 {
-    if (FunctionFactory::instance().hasNameOrAlias(function_name) ||
-        AggregateFunctionFactory::instance().hasNameOrAlias(function_name))
+    if (FunctionFactory::instance().hasBuiltInNameOrAlias(function_name) ||
+        AggregateFunctionFactory::instance().hasBuiltInNameOrAlias(function_name))
         throw Exception(ErrorCodes::CANNOT_DROP_FUNCTION, "Cannot drop system function '{}'", function_name);
 
-    if (UserDefinedExecutableFunctionFactory::instance().has(function_name, context))
+    if (UserDefinedFunctionFactory::instance().has(function_name, context))
         throw Exception(ErrorCodes::CANNOT_DROP_FUNCTION, "Cannot drop user defined executable function '{}'", function_name);
 }
 
@@ -241,13 +243,17 @@ void UserDefinedSQLFunctionFactory::backup(BackupEntriesCollector & backup_entri
 
 void UserDefinedSQLFunctionFactory::restore(RestorerFromBackup & restorer, const String & data_path_in_backup)
 {
-    auto restored_functions = restoreUserDefinedSQLObjects(restorer, data_path_in_backup, UserDefinedSQLObjectType::Function);
+    /// proton: starts. Not support backup/restore related functionalities
+    (void)restorer;
+    (void)data_path_in_backup;
+    /* auto restored_functions = restoreUserDefinedSQLObjects(restorer, data_path_in_backup, UserDefinedSQLObjectType::Function);
     const auto & restore_settings = restorer.getRestoreSettings();
     bool throw_if_exists = (restore_settings.create_function == RestoreUDFCreationMode::kCreate);
     bool replace_if_exists = (restore_settings.create_function == RestoreUDFCreationMode::kReplace);
     auto context = restorer.getContext();
     for (const auto & [function_name, create_function_query] : restored_functions)
-        registerFunction(context, function_name, create_function_query, throw_if_exists, replace_if_exists);
+        registerFunction(context, function_name, create_function_query, throw_if_exists, replace_if_exists); */
+    /// proton: ends
 }
 
 void UserDefinedSQLFunctionFactory::setAllFunctions(const std::vector<std::pair<String, ASTPtr>> & new_functions)

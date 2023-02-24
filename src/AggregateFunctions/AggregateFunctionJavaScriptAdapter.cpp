@@ -2,7 +2,7 @@
 
 #include <Core/DecimalFunctions.h>
 #include <Functions/FunctionsConversion.h>
-#include <Interpreters/UserDefinedFunctionConfiguration.h>
+#include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
 #include <V8/ConvertDataTypes.h>
 #include <V8/Utils.h>
 #include <Common/logger_useful.h>

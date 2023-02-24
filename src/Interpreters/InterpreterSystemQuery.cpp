@@ -7,11 +7,11 @@
 #include <Common/ShellCommand.h>
 #include <Common/FileCacheFactory.h>
 #include <Common/FileCache.h>
+#include <Functions/UserDefined/ExternalUserDefinedFunctionsLoader.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/ExternalModelsLoader.h>
-#include <Interpreters/ExternalUserDefinedFunctionsLoader.h>
 #include <Interpreters/EmbeddedDictionaries.h>
 #include <Interpreters/ActionLocksManager.h>
 #include <Interpreters/InterpreterRenameQuery.h>

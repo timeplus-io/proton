@@ -7,7 +7,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <IO/ReadBufferFromString.h>
 #include <Interpreters/IExternalLoadable.h>
-#include <Interpreters/UserDefinedFunctionConfiguration.h>
+#include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
 
 #include <gtest/gtest.h>
 #include <Poco/JSON/Parser.h>

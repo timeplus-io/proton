@@ -21,7 +21,7 @@
 #include <Functions/FunctionFactory.h>
 
 /// proton: starts
-#include <Interpreters/UserDefinedFunctionFactory.h>
+#include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 /// proton: ends
 
 namespace DB
@@ -194,16 +194,9 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
     }
 
     /// proton: starts. Check user defined aggr function
-    try
-    {
-        auto aggr = UserDefinedFunctionFactory::getAggregateFunction(name, argument_types, parameters, out_properties);
-        if (aggr)
-            return aggr;
-    }
-    catch (...)
-    {
-        /// We ignore the failure of user defined function checking
-    }
+    auto aggr = UserDefinedFunctionFactory::getAggregateFunction(name, argument_types, parameters, out_properties);
+    if (aggr)
+        return aggr;
     /// proton: ends
 
     String extra_info;
@@ -294,6 +287,24 @@ bool AggregateFunctionFactory::isAggregateFunctionName(const String & name) cons
     }
     /// proton: ends
 }
+
+/// proton: starts
+bool AggregateFunctionFactory::hasNameOrAlias(const String & name) const
+{
+    if (hasBuiltInNameOrAlias(name))
+        return true;
+
+    try
+    {
+        return UserDefinedFunctionFactory::instance().isAggregateFunctionName(name);
+    }
+    catch (...)
+    {
+        /// We ignore the failure of user defined function checking
+        return false;
+    }
+}
+/// proton: ends
 
 AggregateFunctionFactory & AggregateFunctionFactory::instance()
 {

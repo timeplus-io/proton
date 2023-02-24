@@ -14,7 +14,7 @@
 #include <Interpreters/Context.h>
 
 /// proton: starts
-#include <Interpreters/UserDefinedFunctionConfiguration.h>
+#include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
 #include <Processors/Formats/IRowInputFormat.h>
 #include <V8/ConvertDataTypes.h>
 #include <V8/Utils.h>

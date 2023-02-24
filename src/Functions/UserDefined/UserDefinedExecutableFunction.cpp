@@ -12,7 +12,7 @@ namespace DB
 {
 
 UserDefinedExecutableFunction::UserDefinedExecutableFunction(
-    const UserDefinedExecutableFunctionConfiguration & configuration_,
+    const UserDefinedFunctionConfiguration & configuration_,
     std::shared_ptr<ShellCommandSourceCoordinator> coordinator_,
     const ExternalLoadableLifetime & lifetime_)
     : configuration(configuration_)

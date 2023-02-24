@@ -4,7 +4,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
 /// proton: starts.
-#include <Interpreters/UserDefinedFunctionFactory.h>
+#include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSubquery.h>

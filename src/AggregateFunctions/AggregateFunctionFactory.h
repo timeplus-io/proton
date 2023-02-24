@@ -81,6 +81,10 @@ public:
 
     bool isAggregateFunctionName(const String & name) const;
 
+    /// proton: starts
+    bool hasNameOrAlias(const String & name) const override;
+    /// proton: ends
+
 private:
     AggregateFunctionPtr getImpl(
         const String & name,

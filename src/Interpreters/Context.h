@@ -61,6 +61,7 @@ class EmbeddedDictionaries;
 class ExternalDictionariesLoader;
 class ExternalModelsLoader;
 class ExternalUserDefinedFunctionsLoader;
+class IUserDefinedSQLObjectsLoader;
 class InterserverCredentials;
 using InterserverCredentialsPtr = std::shared_ptr<const InterserverCredentials>;
 class InterserverIOHandler;
@@ -671,24 +672,28 @@ public:
     /// Returns the current constraints (can return null).
     std::shared_ptr<const SettingsConstraintsAndProfileIDs> getSettingsConstraintsAndCurrentProfiles() const;
 
-    const EmbeddedDictionaries & getEmbeddedDictionaries() const;
-    const ExternalDictionariesLoader & getExternalDictionariesLoader() const;
     const ExternalModelsLoader & getExternalModelsLoader() const;
-    const ExternalUserDefinedFunctionsLoader & getExternalUserDefinedExecutableFunctionsLoader() const;
-    EmbeddedDictionaries & getEmbeddedDictionaries();
-    ExternalDictionariesLoader & getExternalDictionariesLoader();
-    ExternalDictionariesLoader & getExternalDictionariesLoaderUnlocked();
-    ExternalUserDefinedFunctionsLoader & getExternalUserDefinedExecutableFunctionsLoader();
-    ExternalUserDefinedFunctionsLoader & getExternalUserDefinedExecutableFunctionsLoaderUnlocked();
     ExternalModelsLoader & getExternalModelsLoader();
     ExternalModelsLoader & getExternalModelsLoaderUnlocked();
+    void loadOrReloadModels(const Poco::Util::AbstractConfiguration & config);
+
+    const ExternalDictionariesLoader & getExternalDictionariesLoader() const;
+    ExternalDictionariesLoader & getExternalDictionariesLoader();
+    ExternalDictionariesLoader & getExternalDictionariesLoaderUnlocked();
+    const EmbeddedDictionaries & getEmbeddedDictionaries() const;
+    EmbeddedDictionaries & getEmbeddedDictionaries();
     void tryCreateEmbeddedDictionaries(const Poco::Util::AbstractConfiguration & config) const;
     void loadOrReloadDictionaries(const Poco::Util::AbstractConfiguration & config);
+
+    const ExternalUserDefinedFunctionsLoader & getExternalUserDefinedExecutableFunctionsLoader() const;
+    ExternalUserDefinedFunctionsLoader & getExternalUserDefinedExecutableFunctionsLoader();
+    ExternalUserDefinedFunctionsLoader & getExternalUserDefinedExecutableFunctionsLoaderUnlocked();
+    const IUserDefinedSQLObjectsLoader & getUserDefinedSQLObjectsLoader() const;
+    IUserDefinedSQLObjectsLoader & getUserDefinedSQLObjectsLoader();
     /// proton: starts
     void loadOrReloadUserDefinedExecutableFunctions();
     Streaming::MetaStoreJSONConfigRepository * getMetaStoreJSONConfigRepository() const;
     /// proton: ends
-    void loadOrReloadModels(const Poco::Util::AbstractConfiguration & config);
 
 #if USE_NLP
     SynonymsExtensions & getSynonymsExtensions() const;

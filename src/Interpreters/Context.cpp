@@ -42,7 +42,9 @@
 #include <Dictionaries/Embedded/GeoDictionariesLoader.h>
 #include <Interpreters/EmbeddedDictionaries.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
-#include <Interpreters/ExternalUserDefinedFunctionsLoader.h>
+#include <Functions/UserDefined/ExternalUserDefinedFunctionsLoader.h>
+#include <Functions/UserDefined/IUserDefinedSQLObjectsLoader.h>
+#include <Functions/UserDefined/createUserDefinedSQLObjectsLoader.h>
 #include <Interpreters/ExternalModelsLoader.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ProcessList.h>
@@ -208,8 +210,12 @@ struct ContextSharedPart
     ExternalLoaderXMLConfigRepository * external_dictionaries_config_repository = nullptr;
     scope_guard dictionaries_xmls;
 
+    /// proton: starts
     Streaming::MetaStoreJSONConfigRepository * user_defined_executable_functions_config_repository = nullptr;
+    /// proton: ends
     scope_guard user_defined_executable_functions_xmls;
+
+    mutable std::unique_ptr<IUserDefinedSQLObjectsLoader> user_defined_sql_objects_loader;
 
 #if USE_NLP
     mutable std::optional<SynonymsExtensions> synonyms_extensions;
@@ -338,6 +344,8 @@ struct ContextSharedPart
             access_control->stopPeriodicReloadingUsersConfigs();
         if (external_dictionaries_loader)
             external_dictionaries_loader->enablePeriodicUpdates(false);
+        if (user_defined_sql_objects_loader)
+            user_defined_sql_objects_loader->stopWatching();
 
         if (external_models_loader)
             external_models_loader->enablePeriodicUpdates(false);
@@ -364,6 +372,7 @@ struct ContextSharedPart
         TransactionLog::shutdownIfAny();
 
         std::unique_ptr<SystemLogs> delete_system_logs;
+        std::unique_ptr<IUserDefinedSQLObjectsLoader> delete_user_defined_sql_objects_loader;
         {
             auto lock = std::lock_guard(mutex);
 
@@ -391,6 +400,7 @@ struct ContextSharedPart
             user_defined_executable_functions_xmls.reset();
 
             delete_system_logs = std::move(system_logs);
+            delete_user_defined_sql_objects_loader = std::move(user_defined_sql_objects_loader);
             embedded_dictionaries.reset();
             external_dictionaries_loader.reset();
             /// proton: starts
@@ -422,6 +432,7 @@ struct ContextSharedPart
 
         /// Can be removed without context lock
         delete_system_logs.reset();
+        delete_user_defined_sql_objects_loader.reset();
 
         total_memory_tracker.resetOvercommitTracker();
     }
@@ -1576,6 +1587,22 @@ Streaming::MetaStoreJSONConfigRepository * Context::getMetaStoreJSONConfigReposi
     return shared->user_defined_executable_functions_config_repository;
 }
 /// proton: ends
+
+const IUserDefinedSQLObjectsLoader & Context::getUserDefinedSQLObjectsLoader() const
+{
+    auto lock = getLock();
+    if (!shared->user_defined_sql_objects_loader)
+        shared->user_defined_sql_objects_loader = createUserDefinedSQLObjectsLoader(getGlobalContext());
+    return *shared->user_defined_sql_objects_loader;
+}
+
+IUserDefinedSQLObjectsLoader & Context::getUserDefinedSQLObjectsLoader()
+{
+    auto lock = getLock();
+    if (!shared->user_defined_sql_objects_loader)
+        shared->user_defined_sql_objects_loader = createUserDefinedSQLObjectsLoader(getGlobalContext());
+    return *shared->user_defined_sql_objects_loader;
+}
 
 #if USE_NLP
 

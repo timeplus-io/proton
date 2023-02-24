@@ -30,6 +30,8 @@ public:
     getAggregateFunction(const String & name, const DataTypes & types, const Array & parameters, AggregateFunctionProperties & properties);
 
     static bool isAggregateFunctionName(const String & function_name);
+
+    static bool isOrdinaryFunctionName(const String & function_name);
     /// proton: ends
 
     static FunctionOverloadResolverPtr tryGet(const String & function_name, ContextPtr context);

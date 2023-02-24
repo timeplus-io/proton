@@ -4,7 +4,7 @@
 #include "Functions/UserDefined/UserDefinedSQLObjectType.h"
 
 #include <Common/StringUtils/StringUtils.h>
-#include <Common/atomicRename.h>
+#include <Common/renameat2.h>
 #include <Common/escapeForFileName.h>
 #include <Common/logger_useful.h>
 #include <Common/quoteString.h>

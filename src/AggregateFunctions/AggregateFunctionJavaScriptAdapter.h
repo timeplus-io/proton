@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Interpreters/UserDefinedFunctionConfiguration.h>
+#include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
 
 #include <AggregateFunctions/IAggregateFunction.h>
 

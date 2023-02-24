@@ -28,6 +28,7 @@
 
 #include <Processors/QueryPlan/QueryPlan.h>
 
+#include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 #include <Interpreters/ActionsVisitor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
@@ -35,7 +36,6 @@
 #include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/Set.h>
-#include <Interpreters/UserDefinedFunctionFactory.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/interpretSubquery.h>
