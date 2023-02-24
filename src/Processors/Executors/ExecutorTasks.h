@@ -32,6 +32,7 @@ class ExecutorTasks
     /// For single thread, will wait for async tasks only when task_queue is empty.
     PollingQueue async_task_queue;
 
+    /// Maximum amount of threads. Constant after initialization, based on `max_threads` setting.
     size_t num_threads = 0;
 
     /// This is the total number of waited async tasks which are not executed yet.

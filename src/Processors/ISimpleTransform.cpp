@@ -39,7 +39,6 @@ ISimpleTransform::Status ISimpleTransform::prepare()
 
         if (!no_more_data_needed)
             return Status::PortFull;
-
     }
 
     /// Stop if don't need more data.

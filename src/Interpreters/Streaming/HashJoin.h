@@ -192,9 +192,6 @@ public:
 
     enum class Type
     {
-        EMPTY,
-        CROSS,
-        DICT,
 #define M(NAME) NAME,
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -220,13 +217,6 @@ public:
         {
             switch (which)
             {
-                case Type::EMPTY:
-                    break;
-                case Type::CROSS:
-                    break;
-                case Type::DICT:
-                    break;
-
 #define M(NAME) \
     case Type::NAME: \
         NAME = std::make_unique<typename decltype(NAME)::element_type>(); \
@@ -240,13 +230,6 @@ public:
         {
             switch (which)
             {
-                case Type::EMPTY:
-                    return 0;
-                case Type::CROSS:
-                    return 0;
-                case Type::DICT:
-                    return 0;
-
 #define M(NAME) \
     case Type::NAME: \
         return NAME ? NAME->size() : 0;
@@ -261,13 +244,6 @@ public:
         {
             switch (which)
             {
-                case Type::EMPTY:
-                    return 0;
-                case Type::CROSS:
-                    return 0;
-                case Type::DICT:
-                    return 0;
-
 #define M(NAME) \
     case Type::NAME: \
         return NAME ? NAME->getBufferSizeInBytes() : 0;
@@ -282,13 +258,6 @@ public:
         {
             switch (which)
             {
-                case Type::EMPTY:
-                    return 0;
-                case Type::CROSS:
-                    return 0;
-                case Type::DICT:
-                    return 0;
-
 #define M(NAME) \
     case Type::NAME: \
         return NAME ? NAME->getBufferSizeInCells() : 0;
@@ -375,8 +344,6 @@ private:
     void chooseHashMethod();
     static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
 
-    bool empty() const;
-
     /// When left stream joins right stream, watermark calculation is more complicated.
     /// Firstly, each stream has its own watermark and progresses separately.
     /// Secondly, `combined_watermark` is calculated periodically according the watermarks in the left and right streams
@@ -399,9 +366,6 @@ private:
     Block retract(const Block & result_block);
 
 private:
-    template <bool>
-    friend class NotJoinedHash;
-
     std::shared_ptr<TableJoin> table_join;
     JoinKind kind;
     JoinStrictness strictness;
@@ -416,6 +380,7 @@ private:
     /// Cache data members which avoid re-computation for every join
     ColumnWithTypeAndName left_asof_key_column;
     ColumnWithTypeAndName right_asof_key_column;
+    std::vector<std::pair<String, String>> cond_column_names;
 
     std::vector<Sizes> key_sizes;
 
@@ -436,6 +401,8 @@ private:
         Block required_keys;
         /// Left table column names that are sources for required_right_keys columns
         std::vector<String> required_keys_sources;
+
+        bool validated_join_key_types = false;
     };
 
     /// Note: when left block joins right hashtable, use `right_data`

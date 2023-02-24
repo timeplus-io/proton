@@ -42,8 +42,6 @@ struct HashBlocks
 
     std::unique_ptr<HashJoinMapsVariants> maps;
     BlockNullmapList blocks_nullmaps; /// Nullmaps for blocks of "right" table (if needed)
-
-    JoinTupleMap joined_rows;
 };
 using HashBlocksPtr = std::shared_ptr<HashBlocks>;
 
@@ -105,12 +103,6 @@ struct BufferedStreamData
     void updateBucketSize();
 
     size_t removeOldBuckets(std::string_view stream);
-
-    JoinTupleMap & getCurrentJoinedMap()
-    {
-        assert(current_hash_blocks);
-        return current_hash_blocks->joined_rows;
-    }
 
     const HashJoinMapsVariants & getCurrentMapsVariants() const
     {

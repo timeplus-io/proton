@@ -29,14 +29,12 @@ JoinTransform::JoinTransform(
     Block output_header,
     HashJoinPtr join_,
     size_t max_block_size_,
-    UInt64 join_max_cached_bytes,
-    FinishCounterPtr finish_counter_)
+    UInt64 join_max_cached_bytes)
     : IProcessor({left_input_header, right_input_header}, {output_header}, ProcessorID::StreamingJoinTransformID)
-    , port_can_have_more_data{true, true}
     , output_header_chunk(outputs.front().getHeader().getColumns(), 0)
     , join(std::move(join_))
-    , finish_counter(std::move(finish_counter_))
     , max_block_size(max_block_size_)
+    , logger(&Poco::Logger::get("StreamingJoinTransform"))
 {
     assert(join);
 
@@ -46,9 +44,9 @@ JoinTransform::JoinTransform(
     /// We know the finalized left header, output header etc, post init HashJoin
     join->postInit(left_input_header, output_header, join_max_cached_bytes);
 
-    port_contexts.reserve(2);
-    port_contexts.emplace_back(&inputs.front());
-    port_contexts.emplace_back(&inputs.back());
+    input_ports_with_data.reserve(2);
+    input_ports_with_data.emplace_back(&inputs.front());
+    input_ports_with_data.emplace_back(&inputs.back());
 }
 
 IProcessor::Status JoinTransform::prepare()
@@ -62,7 +60,7 @@ IProcessor::Status JoinTransform::prepare()
     {
         output.finish();
 
-        for (auto & port_ctx : port_contexts)
+        for (auto & port_ctx : input_ports_with_data)
             port_ctx.input_port->close();
 
         return Status::Finished;
@@ -70,7 +68,7 @@ IProcessor::Status JoinTransform::prepare()
 
     if (!output.canPush())
     {
-        for (auto & port_ctx : port_contexts)
+        for (auto & port_ctx : input_ports_with_data)
             port_ctx.input_port->setNotNeeded();
 
         return Status::PortFull;
@@ -83,137 +81,171 @@ IProcessor::Status JoinTransform::prepare()
         return Status::PortFull;
     }
 
-    for (size_t i = 0; auto & port_ctx : port_contexts)
+    Status status = Status::NeedData;
+
+    for (size_t i = 0; auto & input_port_with_data : input_ports_with_data)
     {
-        if (port_ctx.has_input)
+        if (input_port_with_data.input_chunk)
         {
             return Status::Ready;
         }
-        else if (port_ctx.input_port->isFinished())
+        else if (input_port_with_data.input_port->isFinished())
         {
             output.finish();
+            /// Close the other input port
+            input_ports_with_data[(i + 1) % input_ports_with_data.size()].input_port->close();
             return Status::Finished;
         }
         else
         {
-            /// If we have cached too much data for that stream already, don't try to pull more
-            if (port_can_have_more_data[i])
-                port_ctx.input_port->setNeeded();
+            input_port_with_data.input_port->setNeeded();
+
+            if (input_port_with_data.input_port->hasData())
+            {
+                /// After pulling the data, we set NotNeeded flag bit to avoid data pull
+                /// in-balance between the 2 streams
+                input_port_with_data.input_chunk = input_port_with_data.input_port->pull(true);
+                status = Status::Ready;
+            }
         }
         ++i;
     }
 
-    for (size_t i = 0; auto & port_ctx : port_contexts)
-    {
-        if (port_ctx.input_port->hasData() && port_can_have_more_data[i])
-        {
-            port_ctx.input_chunk = port_ctx.input_port->pull(true);
-            port_ctx.has_input = true;
-        }
-        ++i;
-    }
-
-    for (auto & port_ctx : port_contexts)
-    {
-        if (port_ctx.has_input)
-            return Status::Ready;
-    }
-
-    return Status::NeedData;
+    return status;
 }
 
 void JoinTransform::work()
 {
-    bool has_data = false;
+    int64_t local_watermark_lower_bound = std::numeric_limits<int64_t>::max();
+    int64_t local_watermark_upper_bound = std::numeric_limits<int64_t>::max();
+
     bool has_watermark = false;
-    std::vector<Block> blocks(2, Block{});
+    bool has_data = false;
+
+    Chunks chunks;
     {
         std::scoped_lock lock(mutex);
 
-        assert(port_contexts[0].has_input || port_contexts[1].has_input);
+        assert(input_ports_with_data[0].input_chunk || input_ports_with_data[1].input_chunk);
 
-        for (size_t i = 0; auto & port_ctx : port_contexts)
+        for (size_t i = 0; auto & input_port_with_data : input_ports_with_data)
         {
-            if (port_ctx.has_input)
+            if (input_port_with_data.input_chunk)
             {
-                if (port_ctx.input_chunk.hasRows())
+                if (input_port_with_data.input_chunk.hasWatermark())
                 {
-                    auto block{port_ctx.input_port->getHeader().cloneWithColumns(port_ctx.input_chunk.detachColumns())};
-                    blocks[i].swap(block);
-                    has_data = true;
-                }
+                    auto watermark_bound = input_port_with_data.input_chunk.getChunkContext()->getWatermarkWithoutSubstreamID();
 
-                if (port_ctx.input_chunk.hasWatermark())
-                {
-                    /// We will use one of the watermark if both of them are present at port
-                    /// FIXME
-                    output_header_chunk.setChunkContext(port_ctx.input_chunk.getChunkContext());
+                    /// We need lower for both
+                    local_watermark_lower_bound = std::min(local_watermark_lower_bound, watermark_bound.second);
+                    local_watermark_upper_bound = std::min(local_watermark_upper_bound, watermark_bound.first);
                     has_watermark = true;
                 }
 
-                port_ctx.has_input = false;
-            }
+                if (input_port_with_data.input_chunk.hasRows())
+                    has_data = true;
 
+                chunks[i].swap(input_port_with_data.input_chunk);
+            }
             ++i;
         }
-    }
 
-    if (!has_data)
-    {
-        if (has_watermark)
-        {
-            /// Pure watermark chunk, propagate it
-            std::scoped_lock lock(mutex);
+        /// We propagate empty chunk with or without watermark
+        if (!has_data)
             output_chunks.emplace_back(output_header_chunk.clone());
-            output_header_chunk.setChunkInfo(nullptr);
-            output_header_chunk.setChunkContext(nullptr);
-        }
-        return;
     }
 
+    assert(local_watermark_lower_bound <= local_watermark_upper_bound);
+
+    if (has_data)
+        doJoin(std::move(chunks));
+
+    /// Piggy-back watermark
+    /// We only do this piggy-back once for the last output chunk if there is
+    if (has_watermark)
+    {
+        std::scoped_lock lock(mutex);
+        if (!output_chunks.empty())
+        {
+            auto & last_chunk = output_chunks.back();
+            setupWatermark(last_chunk, local_watermark_lower_bound, local_watermark_upper_bound);
+        }
+        else
+        {
+            /// If there is no join result or chunks don't have data but have watermark, we still need propagate the watermark
+            propagateWatermark(local_watermark_lower_bound, local_watermark_upper_bound);
+        }
+    }
+}
+
+void JoinTransform::propagateWatermark(int64_t local_watermark_lower_bound, int64_t local_watermark_upper_bound)
+{
+    auto chunk = output_header_chunk.clone();
+    if (setupWatermark(chunk, local_watermark_lower_bound, local_watermark_upper_bound))
+        output_chunks.emplace_back(std::move(chunk));
+}
+
+inline bool JoinTransform::setupWatermark(Chunk & chunk, int64_t local_watermark_lower_bound, int64_t local_watermark_upper_bound)
+{
+    /// Watermark shall never regress
+    if (local_watermark_upper_bound > watermark_upper_bound && local_watermark_lower_bound > watermark_lower_bound)
+    {
+        watermark_upper_bound = local_watermark_upper_bound;
+        watermark_lower_bound = local_watermark_lower_bound;
+
+        /// Propagate it
+        chunk.getOrCreateChunkContext()->setWatermark(watermark_upper_bound, watermark_lower_bound);
+        return true;
+    }
+    return false;
+}
+
+inline void JoinTransform::doJoin(Chunks chunks)
+{
     if (join->rangeBidirectionalHashJoin())
     {
-        rangeJoinBidirectionally(std::move(blocks));
+        rangeJoinBidirectionally(std::move(chunks));
     }
     else if (join->bidirectionalHashJoin())
     {
-        joinBidirectionally(std::move(blocks));
+        joinBidirectionally(std::move(chunks));
     }
     else
     {
         /// First insert right block to update the build-side hash table
-        if (blocks[1])
-            join->insertRightBlock(std::move(blocks[1]));
+        if (chunks[1])
+            join->insertRightBlock(input_ports_with_data[1].input_port->getHeader().cloneWithColumns(chunks[1].detachColumns()));
 
         /// Then use left block to join the right updated hash table
         /// Please note in this mode, right stream data only changes won't trigger join since left stream data is not buffered
-        if (blocks[0])
+        if (chunks[0])
         {
-            join->joinLeftBlock(blocks[0]);
-            if (blocks[0])
+            auto joined_block = input_ports_with_data[0].input_port->getHeader().cloneWithColumns(chunks[0].detachColumns());
+            join->joinLeftBlock(joined_block);
+
+            if (auto rows = joined_block.rows(); rows > 0)
             {
                 std::scoped_lock lock(mutex);
-                /// Piggy-back watermark in header's chunk info if there is
-                output_chunks.emplace_back(
-                    blocks[0].getColumns(), blocks[0].rows(), output_header_chunk.getChunkInfo(), output_header_chunk.getChunkContext());
-                output_header_chunk.setChunkInfo(nullptr);
-                output_header_chunk.setChunkContext(nullptr);
+                output_chunks.emplace_back(joined_block.getColumns(), rows);
             }
         }
     }
 }
 
-void JoinTransform::joinBidirectionally(std::vector<Block> && blocks)
+inline void JoinTransform::joinBidirectionally(Chunks chunks)
 {
-    /// We need buffer left and right stream data
-    /// And we also join each block every time
+    std::array<decltype(&Streaming::HashJoin::insertLeftBlockAndJoin), 2> join_funcs
+        = {&Streaming::HashJoin::insertLeftBlockAndJoin, &Streaming::HashJoin::insertRightBlockAndJoin};
 
-    auto & left_block = blocks[0];
-    if (left_block.rows())
+    for (size_t i = 0; i < chunks.size(); ++i)
     {
-        auto retracted_block = join->insertLeftBlockAndJoin(left_block);
-        auto left_block_rows = left_block.rows();
-        if (left_block_rows)
+        if (chunks[i].getNumRows() == 0)
+            continue;
+
+        auto block = input_ports_with_data[i].input_port->getHeader().cloneWithColumns(chunks[i].detachColumns());
+        auto retracted_block = std::invoke(join_funcs[i], join.get(), block);
+
+        if (auto rows = block.rows(); rows > 0)
         {
             std::scoped_lock lock(mutex);
 
@@ -227,104 +259,28 @@ void JoinTransform::joinBidirectionally(std::vector<Block> && blocks)
                 output_chunks.emplace_back(retracted_block.getColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
             }
 
-            /// Piggy-back watermark in header's chunk info if there is
-            /// We only do this piggy-back once
-            output_chunks.emplace_back(
-                left_block.getColumns(), left_block_rows, output_header_chunk.getChunkInfo(), output_header_chunk.getChunkContext());
-
-            output_header_chunk.setChunkInfo(nullptr);
-            output_header_chunk.setChunkContext(nullptr);
-        }
-    }
-
-    auto & right_block = blocks[1];
-    if (right_block.rows())
-    {
-        auto retracted_block = join->insertRightBlockAndJoin(right_block);
-        auto right_block_rows = right_block.rows();
-        if (right_block_rows)
-        {
-            std::scoped_lock lock(mutex);
-
-            /// First emit retracted block
-            auto retracted_block_rows = retracted_block.rows();
-            if (retracted_block_rows)
-            {
-                /// Don't watermark this block. We can concat retracted / result blocks or use avoid watermarking
-                auto chunk_ctx = std::make_shared<ChunkContext>();
-                chunk_ctx->setAvoidWatermark();
-                output_chunks.emplace_back(retracted_block.getColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
-            }
-
-            /// Piggy-back watermark in header's chunk info if there is
-            /// We only do this piggy-back once
-            output_chunks.emplace_back(
-                right_block.getColumns(), right_block_rows, output_header_chunk.getChunkInfo(), output_header_chunk.getChunkContext());
-
-            output_header_chunk.setChunkInfo(nullptr);
-            output_header_chunk.setChunkContext(nullptr);
+            output_chunks.emplace_back(block.getColumns(), rows);
         }
     }
 }
 
-void JoinTransform::rangeJoinBidirectionally(std::vector<Block> && blocks)
+inline void JoinTransform::rangeJoinBidirectionally(Chunks chunks)
 {
-    auto & left_block = blocks[0];
-    if (left_block.rows())
+    std::array<decltype(&Streaming::HashJoin::insertLeftBlockToRangeBucketsAndJoin), 2> join_funcs
+        = {&Streaming::HashJoin::insertLeftBlockToRangeBucketsAndJoin, &Streaming::HashJoin::insertRightBlockToRangeBucketsAndJoin};
+
+    for (size_t i = 0; i < chunks.size(); ++i)
     {
-        auto joined_blocks = join->insertLeftBlockToRangeBucketsAndJoin(std::move(left_block));
+        if (chunks[i].getNumRows() == 0)
+            continue;
+
+        auto block = input_ports_with_data[i].input_port->getHeader().cloneWithColumns(chunks[i].detachColumns());
+        auto joined_blocks = std::invoke(join_funcs[i], join.get(), block);
 
         std::scoped_lock lock(mutex);
 
-        for (size_t i = 0, size = joined_blocks.size(); i < size; ++i)
-        {
-            if (i != size - 1)
-            {
-                output_chunks.emplace_back(joined_blocks[i].getColumns(), joined_blocks[i].rows());
-            }
-            else
-            {
-                /// Piggy-back watermark in header's chunk info if there is
-                /// We only do this piggy-back once
-                output_chunks.emplace_back(
-                    joined_blocks[i].getColumns(),
-                    joined_blocks[i].rows(),
-                    output_header_chunk.getChunkInfo(),
-                    output_header_chunk.getChunkContext());
-
-                output_header_chunk.setChunkInfo(nullptr);
-                output_header_chunk.setChunkContext(nullptr);
-            }
-        }
-    }
-
-    auto & right_block = blocks[1];
-    if (right_block.rows())
-    {
-        auto joined_blocks = join->insertRightBlockToRangeBucketsAndJoin(std::move(right_block));
-
-        std::scoped_lock lock(mutex);
-
-        for (size_t i = 0, size = joined_blocks.size(); i < size; ++i)
-        {
-            if (i != size - 1)
-            {
-                output_chunks.emplace_back(joined_blocks[i].getColumns(), joined_blocks[i].rows());
-            }
-            else
-            {
-                /// Piggy-back watermark in header's chunk info if there is
-                /// We only do this piggy-back once
-                output_chunks.emplace_back(
-                    joined_blocks[i].getColumns(),
-                    joined_blocks[i].rows(),
-                    output_header_chunk.getChunkInfo(),
-                    output_header_chunk.getChunkContext());
-
-                output_header_chunk.setChunkInfo(nullptr);
-                output_header_chunk.setChunkContext(nullptr);
-            }
-        }
+        for (size_t j = 0, size = joined_blocks.size(); j < size; ++j)
+            output_chunks.emplace_back(joined_blocks[j].getColumns(), joined_blocks[j].rows());
     }
 }
 

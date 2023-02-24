@@ -65,6 +65,13 @@ struct ChunkContext
         return Streaming::WatermarkBound{id, ts_1, ts_2};
     }
 
+    ALWAYS_INLINE std::pair<Int64, Int64> getWatermarkWithoutSubstreamID() const
+    {
+        assert(hasWatermark());
+
+        return {ts_1, ts_2};
+    }
+
     ALWAYS_INLINE void clearWatermark()
     {
         if (hasWatermark())

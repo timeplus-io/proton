@@ -644,10 +644,6 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     right->resize(1);
     left->resize(1);
 
-    /// This counter is needed for every Joining except totals, to decide which Joining will generate non joined rows.
-    /// FIXME FinishCounter
-    auto finish_counter = std::make_shared<Streaming::JoinTransform::FinishCounter>(1);
-
     auto lit = left->pipe.output_ports.begin();
     auto rit = right->pipe.output_ports.begin();
 
@@ -659,8 +655,7 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
             out_header,
             std::dynamic_pointer_cast<Streaming::HashJoin>(join),
             max_block_size,
-            join_max_cached_bytes,
-            finish_counter);
+            join_max_cached_bytes);
 
         connect(**lit, joining->getInputs().front());
         connect(**rit, joining->getInputs().back());

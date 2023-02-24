@@ -248,7 +248,6 @@ public:
         const IColumn & asof_column,
         size_t row_num,
         UInt64 src_block_id,
-        JoinTupleMap * joined_rows,
         bool is_left_block) const;
 
     /// Find the last one
@@ -257,8 +256,7 @@ public:
         const RangeAsofJoinContext & range_join_ctx,
         const IColumn & asof_column,
         size_t row_num,
-        UInt64 src_block_id,
-        JoinTupleMap * joined_rows) const;
+        UInt64 src_block_id) const;
 
 private:
     // Lookups can be stored in a HashTable because it is memmovable

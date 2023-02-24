@@ -180,13 +180,11 @@ public:
         const Block & saved_block_sample,
         const HashJoin & join,
         std::vector<JoinOnKeyColumns> && join_on_keys_,
-        JoinTupleMap * joined_rows_,
         const RangeAsofJoinContext & range_join_ctx_,
         bool is_asof_join,
         bool is_left_block_ = true)
         : join_on_keys(std::move(join_on_keys_))
         , rows_to_add(block.rows())
-        , joined_rows(joined_rows_)
         , range_join_ctx(range_join_ctx_)
         , src_block_id(block.info.blockID())
         , is_left_block(is_left_block_)
@@ -285,7 +283,6 @@ public:
     bool need_filter = false;
 
     /// proton : starts
-    JoinTupleMap * joined_rows;
     const RangeAsofJoinContext & range_join_ctx;
     UInt64 src_block_id;
     bool is_left_block;
@@ -329,7 +326,7 @@ struct JoinFeatures
 };
 
 template <typename Map, bool add_missing>
-bool addFoundRowAll(
+void addFoundRowAll(
     const typename Map::mapped_type & mapped,
     AddedColumns & added_columns,
     IColumn::Offset & current_offset,
@@ -338,21 +335,11 @@ bool addFoundRowAll(
     if constexpr (add_missing)
         added_columns.applyLazyDefaults();
 
-    bool added = false;
     for (auto it = mapped.begin(); it.ok(); ++it)
     {
-        auto result
-            = added_columns.joined_rows->insert(JoinTuple{added_columns.src_block_id, it->block, row_num_in_left_block, it->row_num});
-        if (result.second)
-        {
-            /// Is not joined yet
-            added_columns.appendFromBlock<false>(*it->block, it->row_num);
-            ++current_offset;
-            added = true;
-        }
+        added_columns.appendFromBlock<false>(*it->block, it->row_num);
+        ++current_offset;
     }
-
-    return added;
 };
 
 template <bool add_missing, bool need_offset>
@@ -385,8 +372,6 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
     IColumn::Filter filter;
     if constexpr (need_filter)
         filter = IColumn::Filter(rows, 0);
-
-    assert(added_columns.joined_rows);
 
     Arena pool;
 
@@ -431,7 +416,6 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
                             asof_key,
                             i,
                             added_columns.src_block_id,
-                            added_columns.joined_rows,
                             added_columns.is_left_block);
                         !row_refs.empty())
                     {
@@ -441,11 +425,6 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
                         {
                             added_columns.appendFromBlock<jf.add_missing>(*row_ref.block, row_ref.row_num);
                             ++current_offset;
-
-                            assert(added_columns.joined_rows);
-                            [[maybe_unused]] auto result = added_columns.joined_rows->insert(
-                                JoinTuple{added_columns.src_block_id, row_ref.block, i, row_ref.row_num});
-                            assert(result.second);
                         }
                     }
                     else
@@ -459,11 +438,6 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
 
                     if (const auto * found = mapped.findAsof(asof_type, asof_inequality, asof_key, i))
                     {
-                        assert(added_columns.joined_rows);
-
-                        /// If there are multiple same asof key elements, the current algorithm can pick the first one
-                        /// to join which may be already joined. So far we don't pass joined_rows to further
-                        /// filtering in `findAsof(...)` for perf concern.
                        setUsed<need_filter>(filter, i);
                        added_columns.appendFromBlock<jf.add_missing>(found->block_iter->block, found->row_num);
                     }
@@ -472,8 +446,8 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
                 }
                 else if constexpr (jf.is_all_join)
                 {
-                    if (addFoundRowAll<Map, jf.add_missing>(mapped, added_columns, current_offset, i))
-                        setUsed<need_filter>(filter, i);
+                    setUsed<need_filter>(filter, i);
+                    addFoundRowAll<Map, jf.add_missing>(mapped, added_columns, current_offset, i);
                 }
                 else if constexpr ((jf.is_latest_join) && jf.right)
                 {
@@ -573,9 +547,6 @@ IColumn::Filter switchJoinColumns(const std::vector<const Maps *> & mapv, AddedC
     }
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
-
-        default:
-            throw Exception(ErrorCodes::UNSUPPORTED_JOIN_KEYS, "Unsupported JOIN keys (type: {})", type);
     }
 }
 
@@ -727,16 +698,6 @@ size_t insertFromBlockImpl(
 {
     switch (type)
     {
-        case HashJoin::Type::EMPTY:
-            assert(false);
-            return 0;
-        case HashJoin::Type::CROSS:
-            assert(false);
-            return 0; /// Do nothing. We have already saved block, and it is enough.
-        case HashJoin::Type::DICT:
-            assert(false);
-            return 0; /// No one should call it with Type::DICT.
-
 #define M(TYPE) \
     case HashJoin::Type::TYPE: \
         return insertFromBlockImplType< \
@@ -747,7 +708,6 @@ size_t insertFromBlockImpl(
             APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
     }
-    UNREACHABLE();
 }
 
 inline void addDeltaColumn(Block & block, size_t rows)
@@ -860,6 +820,12 @@ void HashJoin::init()
     if (any_take_last_row)
         /// Rewrite strictness to choose `HashJoin::MapsOne` hash table : left, inner + any => MapsOne
         streaming_strictness = Strictness::Latest;
+
+    /// Cache condition column names
+    const auto & on_exprs = table_join->getClauses();
+    cond_column_names.reserve(on_exprs.size());
+    for (const auto & on_expr : on_exprs)
+        cond_column_names.push_back(on_expr.condColumnNames());
 }
 
 /// Left stream header is only known at late stage after HashJoin is created
@@ -1028,11 +994,6 @@ void HashJoin::dataMapInit(MapsVariant & map)
 {
     joinDispatchInit(streaming_kind, streaming_strictness, map);
     joinDispatch(streaming_kind, streaming_strictness, map, [&](auto, auto, auto & map_) { map_.create(hash_method_type); });
-}
-
-bool HashJoin::empty() const
-{
-    return hash_method_type == Type::EMPTY;
 }
 
 bool HashJoin::alwaysReturnsEmptySet() const
@@ -1300,11 +1261,8 @@ void HashJoin::joinBlockImplLeft(Block & left_block, const Block & block_with_co
     std::vector<JoinOnKeyColumns> join_on_keys;
     join_on_keys.reserve(on_exprs.size());
     for (size_t i = 0, disjuncts = on_exprs.size(); i < disjuncts; ++i)
-    {
-        const auto & key_names = on_exprs[i].key_names_left;
-        /// FIXME, `conColumnNames` are calculate for each join, cache it
-        join_on_keys.emplace_back(left_block, key_names, on_exprs[i].condColumnNames().first, key_sizes[i]);
-    }
+        join_on_keys.emplace_back(left_block, on_exprs[i].key_names_left, cond_column_names[i].first, key_sizes[i]);
+
     size_t existing_columns = left_block.columns();
 
     /** If you use FULL or RIGHT JOIN, then the columns from the "left" stream must be materialized.
@@ -1327,7 +1285,6 @@ void HashJoin::joinBlockImplLeft(Block & left_block, const Block & block_with_co
         savedRightBlockSample(),
         *this,
         std::move(join_on_keys),
-        &left_data.buffered_data->getCurrentJoinedMap(),
         left_data.buffered_data->range_asof_join_ctx,
         jf.is_asof_join || jf.is_range_join);
 
@@ -1435,10 +1392,8 @@ void HashJoin::joinBlockImplRight(Block & right_block, const Block & block_with_
     std::vector<JoinOnKeyColumns> join_on_keys;
     join_on_keys.reserve(on_exprs.size());
     for (size_t i = 0, disjuncts = on_exprs.size(); i < disjuncts; ++i)
-    {
-        const auto & key_names = on_exprs[i].key_names_right;
-        join_on_keys.emplace_back(right_block, key_names, on_exprs[i].condColumnNames().second, key_sizes[i]);
-    }
+        join_on_keys.emplace_back(right_block, on_exprs[i].key_names_right, cond_column_names[i].second, key_sizes[i]);
+
     size_t existing_columns = right_block.columns();
 
     /** If you use FULL or RIGHT JOIN, then the columns from the "left" stream must be materialized.
@@ -1461,7 +1416,6 @@ void HashJoin::joinBlockImplRight(Block & right_block, const Block & block_with_
         savedLeftBlockSample(),
         *this,
         std::move(join_on_keys),
-        &right_data.buffered_data->getCurrentJoinedMap(),
         right_data.buffered_data->range_asof_join_ctx,
         /*is_asof_join=*/ jf.is_range_join,
         /*is_left_block=*/ false);
@@ -1568,16 +1522,21 @@ void HashJoin::joinBlock(Block & block, ExtraBlockPtr & /*not_processed*/)
 
 inline void HashJoin::doJoinLeftBlockWithRightHashTable(Block & left_block, HashBlocksPtr target_hash_blocks)
 {
-    for (const auto & onexpr : table_join->getClauses())
+    if (unlikely(!left_data.validated_join_key_types))
     {
-        auto cond_column_name = onexpr.condColumnNames();
-        JoinCommon::checkTypesOfKeys(
-            left_block,
-            onexpr.key_names_left,
-            cond_column_name.first,
-            right_stream_desc.sample_block,
-            onexpr.key_names_right,
-            cond_column_name.second);
+        for (size_t i = 0; const auto & onexpr : table_join->getClauses())
+        {
+            const auto & cond_column_name = cond_column_names[i];
+            JoinCommon::checkTypesOfKeys(
+                left_block,
+                onexpr.key_names_left,
+                cond_column_name.first,
+                right_stream_desc.sample_block,
+                onexpr.key_names_right,
+                cond_column_name.second);
+            ++i;
+        }
+        left_data.validated_join_key_types = true;
     }
 
     std::vector<const std::decay_t<decltype(target_hash_blocks->maps->map_variants[0])> *> maps_vector;
@@ -1629,16 +1588,22 @@ Block HashJoin::joinLeftBlockWithRightHashTable(Block & left_block)
 
 inline void HashJoin::doJoinRightBlockWithLeftHashTable(Block & right_block, HashBlocksPtr target_hash_blocks)
 {
-    for (const auto & on_expr : table_join->getClauses())
+    if (unlikely(!right_data.validated_join_key_types))
     {
-        auto cond_column_name = on_expr.condColumnNames();
-        JoinCommon::checkTypesOfKeys(
-            right_block,
-            on_expr.key_names_right,
-            cond_column_name.second,
-            left_stream_desc.sample_block,
-            on_expr.key_names_left,
-            cond_column_name.first);
+        for (size_t i = 0; const auto & on_expr : table_join->getClauses())
+        {
+            const auto & cond_column_name = cond_column_names[i];
+            JoinCommon::checkTypesOfKeys(
+                right_block,
+                on_expr.key_names_right,
+                cond_column_name.second,
+                left_stream_desc.sample_block,
+                on_expr.key_names_left,
+                cond_column_name.first);
+
+            ++i;
+        }
+        right_data.validated_join_key_types = true;
     }
 
     std::vector<const std::decay_t<decltype(target_hash_blocks->maps->map_variants[0])> *> maps_vector;
@@ -2026,12 +1991,7 @@ Block HashJoin::retract(const Block & result_block)
     std::vector<JoinOnKeyColumns> join_on_keys;
     join_on_keys.reserve(on_exprs.size());
     for (size_t i = 0; i < disjuncts; ++i)
-    {
-        /// FIXME, can we assume left keys are always in result_block ?
-        const auto & key_names = on_exprs[i].key_names_left;
-        /// FIXME, `conColumnNames` are calculate for each join, cache it
-        join_on_keys.emplace_back(result_block, key_names, on_exprs[i].condColumnNames().first, key_sizes[i]);
-    }
+        join_on_keys.emplace_back(result_block, on_exprs[i].key_names_left, cond_column_names[i].first, key_sizes[i]);
 
     using MapsVariantType = std::decay_t<decltype(join_results->maps->map_variants[0])>;
     std::vector<MapsVariantType *> maps_vector;
@@ -2064,9 +2024,6 @@ Block HashJoin::retract(const Block & result_block)
         }
             APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
-
-            default:
-                UNREACHABLE();
         }
     });
 

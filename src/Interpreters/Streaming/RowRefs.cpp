@@ -1,10 +1,10 @@
-#include  <Interpreters/Streaming/RowRefs.h>
+#include <Interpreters/Streaming/RowRefs.h>
 
-#include <base/types.h>
-#include <Common/typeid_cast.h>
-#include <Common/ColumnsHashing.h>
-#include <Columns/IColumn.h>
 #include <Columns/ColumnDecimal.h>
+#include <Columns/IColumn.h>
+#include <base/types.h>
+#include <Common/ColumnsHashing.h>
+#include <Common/typeid_cast.h>
 
 
 namespace DB
@@ -211,7 +211,6 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(
     const IColumn & asof_column,
     size_t row_num,
     UInt64 src_block_id,
-    JoinTupleMap * joined_rows,
     bool is_left_block) const
 {
     std::vector<RowRef> results;
@@ -276,11 +275,7 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(
 
         do
         {
-            /// Add to results only if the right rows are not joined with the source rows in the src block
-            if (!joined_rows
-                || !joined_rows->contains(
-                    JoinTuple{src_block_id, lower_iter->second.block, static_cast<uint32_t>(row_num), lower_iter->second.row_num}))
-                results.push_back(lower_iter->second);
+            results.push_back(lower_iter->second);
         } while (lower_iter++ != upper_iter); /// We need include value at upper_iter, so postfix lower_iter++
     };
 
@@ -343,11 +338,7 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(
 
         do
         {
-            /// Add to results only if the left rows are not joined with the source rows in the src block
-            if (!joined_rows
-                || !joined_rows->contains(
-                    JoinTuple{src_block_id, lower_iter->second.block, static_cast<uint32_t>(row_num), lower_iter->second.row_num}))
-                results.push_back(lower_iter->second);
+            results.push_back(lower_iter->second);
         } while (lower_iter++ != upper_iter); /// We need include value at upper_iter, so postfix lower_iter++
     };
 
@@ -359,12 +350,7 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(
 }
 
 const RowRef * RangeAsofRowRefs::findAsof(
-    TypeIndex type,
-    const RangeAsofJoinContext & range_join_ctx,
-    const IColumn & asof_column,
-    size_t row_num,
-    UInt64 src_block_id,
-    JoinTupleMap * joined_rows) const
+    TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num, UInt64 src_block_id) const
 {
     RowRef * result = nullptr;
 
@@ -426,10 +412,7 @@ const RowRef * RangeAsofRowRefs::findAsof(
         assert(upper_iter->first <= key);
         assert(upper_iter->first >= lower_iter->first);
 
-        if (!joined_rows
-            || !joined_rows->contains(
-                JoinTuple{src_block_id, upper_iter->second.block, static_cast<uint32_t>(row_num), upper_iter->second.row_num}))
-            result = &upper_iter->second;
+        result = &upper_iter->second;
     };
 
     callWithType(type, call);
