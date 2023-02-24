@@ -51,7 +51,7 @@ public:
 
     void loadLogStore(uint64_t last_commited_index, uint64_t logs_to_keep);
 
-    void flushLogStore();
+    void flushAndShutDownLogStore();
 
     /// Called on server start, in our case we don't use any separate logic for load
     nuraft::ptr<nuraft::cluster_config> load_config() override

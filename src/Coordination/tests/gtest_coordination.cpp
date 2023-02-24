@@ -389,6 +389,7 @@ TEST_P(CoordinationTest, ChangelogTestCompaction)
     EXPECT_EQ(changelog.start_index(), 3);
     EXPECT_EQ(changelog.next_slot(), 4);
     EXPECT_EQ(changelog.last_entry()->get_term(), 20);
+    // nothing should be deleted
     EXPECT_TRUE(fs::exists("./logs/changelog_1_5.bin" + params.extension));
 
     auto e1 = getLogEntry("hello world", 30);
@@ -405,6 +406,7 @@ TEST_P(CoordinationTest, ChangelogTestCompaction)
     EXPECT_TRUE(fs::exists("./logs/changelog_6_10.bin" + params.extension));
 
     changelog.compact(6);
+    std::this_thread::sleep_for(std::chrono::microseconds(1000));
 
     EXPECT_FALSE(fs::exists("./logs/changelog_1_5.bin" + params.extension));
     EXPECT_TRUE(fs::exists("./logs/changelog_6_10.bin" + params.extension));
@@ -1458,6 +1460,7 @@ TEST_P(CoordinationTest, TestRotateIntervalChanges)
     }
 
     changelog_2.compact(105);
+    std::this_thread::sleep_for(std::chrono::microseconds(1000));
 
     EXPECT_FALSE(fs::exists("./logs/changelog_1_100.bin" + params.extension));
     EXPECT_TRUE(fs::exists("./logs/changelog_101_110.bin" + params.extension));
@@ -1477,6 +1480,7 @@ TEST_P(CoordinationTest, TestRotateIntervalChanges)
     }
 
     changelog_3.compact(125);
+    std::this_thread::sleep_for(std::chrono::microseconds(1000));
     EXPECT_FALSE(fs::exists("./logs/changelog_101_110.bin" + params.extension));
     EXPECT_FALSE(fs::exists("./logs/changelog_111_117.bin" + params.extension));
     EXPECT_FALSE(fs::exists("./logs/changelog_118_124.bin" + params.extension));

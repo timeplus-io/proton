@@ -422,6 +422,8 @@ struct ContextSharedPart
 
         /// Can be removed without context lock
         delete_system_logs.reset();
+
+        total_memory_tracker.resetOvercommitTracker();
     }
 
     bool hasTraceCollector() const
