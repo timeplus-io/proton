@@ -1,10 +1,13 @@
-import os, sys, logging, subprocess, time, datetime, json, csv, argparse, getopt
+import os, sys, logging, subprocess, time, datetime, json, csv, argparse, getopt, traceback
 from argparse import ArgumentParser
 from helpers.s3_helper import S3Helper
 from helpers.compress_files import compress_file_fast
 from helpers.utils import compose_up
+from helpers.event_util import Event,TestEventTag,TestEvent
 import multiprocessing as mp
 import pytest
+from timeplus import Stream, Environment
+
 
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter(
@@ -132,9 +135,14 @@ def proton_python_driver_install():
 
     time.sleep(1)
 
+
+
+
+
 def ci_runner(
     local_all_results_folder_path,
     setting_config,
+    test_result_shared_list,
     run_mode="local",
     pr_number="0",
     commit_sha="0",
@@ -151,6 +159,7 @@ def ci_runner(
     s3_helper = S3Helper("https://s3.amazonaws.com")
     multi_protons = setting_config.get("multi_protons")
     proton_server_container_name_list = []
+    test_result = ""
     if multi_protons == True:#if multi_protons is True, there are multiple settings for allocating the test suites on configs
         for key in setting_config["settings"]:
             proton_server_container_name_str = setting_config["settings"][key].get("proton_server_container_name")
@@ -168,7 +177,7 @@ def ci_runner(
         proton_server_container_name_list = proton_server_container_name_str.split(',') #for multi containers in clustering settings
         #proton_server_container_name = proton_server_container_name_list[0] #todo: handle multi containers in clustering scenario
         ci_runner_params_from_config = setting_config.get("ci_runner_params")
-        print(f"ci_runner: ci_runner_params_from_config = {ci_runner_params_from_config}") #todo: currently only single env setting support ci_runner_params, need to optimize to support ci_runner_params per env
+        #print(f"ci_runner: ci_runner_params_from_config = {ci_runner_params_from_config}") #todo: currently only single env setting support ci_runner_params, need to optimize to support ci_runner_params per env
         if ci_runner_params_from_config is not None and len(ci_runner_params_from_config) > 0: #todo: currently only single env setting support ci_runner_params, need to optimize to support ci_runner_params per env
             for param in ci_runner_params_from_config:
                 print(f"ci_runner: setting = {setting}, param = {param}")
@@ -205,6 +214,11 @@ def ci_runner(
             "--self-contained-html",
         ]
     )
+    
+    if test_result_shared_list != None:
+        test_result_shared_list.append(
+            {"proton_setting": setting, "retcode": retcode}
+        )
 
     setting_running_test_end = datetime.datetime.now()
     setting_test_duration = setting_running_test_end - setting_running_start
@@ -265,10 +279,8 @@ def ci_runner(
             print(f"::notice ::Proton server log url: {proton_log_folder_url}")
     else:
         print("ci_runner: local mode, no report uploaded.")
-    
-            
-
-
+    return retcode
+                   
 
 if __name__ == "__main__":
     # logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -284,6 +296,10 @@ if __name__ == "__main__":
     ci_runner_start = datetime.datetime.now()
     ci_runner_end = datetime.datetime.now()
     ci_runner_duration = ci_runner_end - ci_runner_start
+    test_result_shared_list = [] #shared list for collecting result from ci_runner processes
+    mp_mgr = mp.Manager()
+    test_result_shared_list = mp_mgr.list()
+    
 
     parser = ArgumentParser(description="Proton functional tests")
 
@@ -308,7 +324,7 @@ if __name__ == "__main__":
     parser.add_argument( 
         "--debug",
         action = "store_true",
-        default = True, 
+        default = False, 
         help="Run tests in debug mode to print debug log, otherwiese info log ouput")
 
     parser.add_argument(
@@ -351,6 +367,12 @@ if __name__ == "__main__":
         "--create_stream_replicas", 
         help="replicas to be created when creating stream, if set settings replicas = <create_stream_replicas> will be added to all the stream creating statement")                   
 
+    parser.add_argument( 
+        "--no_retry",
+        action = "store_true",
+        default = False, 
+        help="Run tests without retry")   
+    
     parser.add_argument(
         "--test_suite_timeout",
         default=DEFAULT_TEST_SUITE_TIMEOUT,
@@ -359,9 +381,7 @@ if __name__ == "__main__":
     )    
     
     parser.add_argument("--tmp", help="Path to tmp dir")
-
-    args = parser.parse_args() 
-
+    args = parser.parse_args()
     envs = []
     if args.run_mode:
         run_mode = args.run_mode
@@ -393,9 +413,17 @@ if __name__ == "__main__":
     if args.create_stream_replicas:
         os.environ["PROTON_CREATE_STREAM_REPLICAS"] = args.create_stream_replicas
 
+    if args.no_retry is not None:
+        if args.no_retry is True:
+            test_retry = "False"
+        else:
+            test_retry = "True"
+        os.environ["TEST_RETRY"] = test_retry
+    
     if args.test_suite_timeout:
         test_suite_timeout = args.test_suite_timeout
         os.environ["TEST_SUITE_TIMEOUT"] = str(test_suite_timeout)
+
 
 
     console_handler = logging.StreamHandler(sys.stderr)
@@ -407,12 +435,68 @@ if __name__ == "__main__":
         logger.setLevel(logging.DEBUG)
 
     logger.info(
-        f"ci_runner starting: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}, test_suite_timeout = {test_suite_timeout} starts"
+        f"ci_runner starting: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}, test_retry = {test_retry}, test_suite_timeout = {test_suite_timeout} starts"
     )
+
+    if run_mode == "github":
+        pr_number = os.getenv("GITHUB_REF_NAME", "0")
+        commit_sha = os.getenv("GITHUB_SHA", "0")
+    else:
+        pr_number = "0"
+        commit_sha = "0"
+
+    args_vars = vars(args)
+    args_dict = {}
+    for key, value in args_vars.items():
+        if value is None:
+            value = 'None'
+        arg_dict = {key:value}
+        args_dict = {**args_dict, **arg_dict}
+    
+    print(f"args_dict = {args_dict}")
+
+    #initialize test event fields
+    test_command_details = {"test_command_details": {"test_program":__file__.split("/")[-1],"test_paras": args_dict}} #put ci_runner parameters into tag of test_event
+    event_id = None
+    repo_name = 'proton'
+    test_name = 'ci_runner'
+    test_type = 'ci_smoke'
+    event_type = 'test_event'
+    event_detailed_type = 'status'
+    stream_name = 'test_event_2' #todo: read from test config
+    api_key = os.environ.get("TIMEPLUS_API_KEY")
+    api_address = os.environ.get("TIMEPLUS_ADDRESS")
+    work_space = os.environ.get("TIMEPLUS_WORKSPACE")
+    sanitizer = os.environ.get("SANITIZER","")
+    if len(sanitizer) == 0:
+        build_type = "release_build"
+    else:
+        build_type = sanitizer
+    os_info = os.getenv("RUNNER_OS", "Linux")
+    pr_number = os.getenv("GITHUB_REF_NAME", "0")
+    commit_sha = os.getenv("GITHUB_SHA", "0")
+    platform_info = os.getenv("RUNNER_ARCH", "x86_64")
+    version = "0.2"
+    timeplus_env = Environment().address(api_address).workspace(work_space).apikey(api_key) 
+    test_id = None
+    event_id = None
+    test_result = "None"
+    try: #write status start test_event to timeplus 
+        test_event_tag = TestEventTag.create(repo_name, test_id, test_name, test_type,build_type, pr_number, commit_sha,os_info, platform_info,{})
+        event_details = 'start'
+        test_event = Event.create(event_type, event_detailed_type, event_details)    
+        #test_id = test_event_write(test_id, repo_name, test_name, test_type, detailed_type, details, timeplus_env, stream_name,event_type, test_command_details, build_type, pr_number, commit_sha, os_info, platform_info, version)        
+        test_event_start = TestEvent.create(test_event_tag, test_event, {}, version)
+        test_info_tag = test_event_start.test_event_tag.test_info_tag
+        print(f"test_event_start = {test_event_start}\n test_info_tag = {test_info_tag}")
+        test_event_start.write(timeplus_env, stream_name)
+        os.environ["TIMPLUS_TEST_ID"] = test_info_tag.test_id #set env var for test_id to pass to rockets
+    except(BaseException) as error:
+        logger.debug(f"timeplus event write exception: {error}")
+        traceback.print_exc()    
 
     logger.info(f"Check proton_python_driver and install...")
     proton_python_driver_install()
-
 
     if run_mode == "local":
         env_docker_compose_res = True
@@ -437,7 +521,7 @@ if __name__ == "__main__":
         if setting_config is None:
             raise Exception(f"no config for setting = {setting} found in {config_file_path}")  
         logger.debug(f"ci_runner: setting_config for setting = {setting} = {setting_config}")
-        args = (cur_dir, setting_config, run_mode, "0", "0", setting, logging_level)
+        args = (cur_dir, setting_config,test_result_shared_list, run_mode, "0", "0", setting, logging_level)
         proc = mp.Process(target=ci_runner, args=args)
         proc.start()
         #logger.debug(f"args = {args}, ci_runner proc starts...")
@@ -445,15 +529,40 @@ if __name__ == "__main__":
         time.sleep(5)
     for proc in procs:
         proc.join()
-    
+
     ci_runner_end = datetime.datetime.now()
     
     ci_runner_duration = ci_runner_end - ci_runner_start
 
     logger.info(
         f"ci_runner end: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}, test_suite_timeout = {test_suite_timeout}, ci_runner_duration = {ci_runner_duration.seconds} seconds, ends"
-    )    
+    )
+
+
+
     # while i < loop:
     #    ci_runner(cur_dir, run_mode, logging_level = logging_level)
     #    i += 1
 
+    test_result_str = "success"
+    detailed_summary = []
+    for item in test_result_shared_list: #retcode: {'proton_setting': 'default', 'retcode': <ExitCode.TESTS_FAILED: 1>}:
+        setting = item.get('proton_setting')
+        retcode_str = str(item.get('retcode'))
+        if "FAILED" in retcode_str:
+            test_result_str = 'failed'
+        detailed_summary.append({setting:retcode_str})
+    
+    logger.info(f"test_result_str = {test_result_str}")           
+    test_result = {"test_result": test_result_str, "detailed_summary": detailed_summary}
+    try: #write status start test_event to timeplus                
+        event_details = 'end'
+        test_event_end = Event.create(event_type, event_detailed_type, event_details, **test_result)
+        test_event_end = TestEvent.create(test_event_tag, test_event_end, {}, version)
+        print(f"test_event_end = {test_event_end}")
+        test_event_end.write(timeplus_env, stream_name) 
+
+
+    except(BaseException) as error:
+        logger.debug(f"timeplus event write exception: {error}")
+        traceback.print_exc()  
