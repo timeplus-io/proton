@@ -201,9 +201,9 @@ public:
         type_name.reserve(num_columns_to_add);
         right_indexes.reserve(num_columns_to_add);
 
-        for (const auto & src_column : block_with_columns_to_add)
+        if (is_left_block)
         {
-            if (is_left_block)
+            for (const auto & src_column : block_with_columns_to_add)
             {
                 /// Column names `src_column.name` and `qualified_name` can differ for StorageJoin,
                 /// because it uses not qualified right block column names
@@ -212,7 +212,18 @@ public:
                 if (!block.has(qualified_name))
                     addColumn(src_column, qualified_name);
             }
-            else
+
+            if (is_asof_join)
+            {
+                assert(join_on_keys.size() == 1);
+                const ColumnWithTypeAndName & right_asof_column = join.rightAsofKeyColumn();
+                addColumn(right_asof_column, right_asof_column.name);
+                asof_key = join_on_keys[0].key_columns.back();
+            }
+        }
+        else
+        {
+            for (const auto & src_column : block_with_columns_to_add)
             {
                 /// This is a right block which means it is bi-directional hash join and
                 /// it is right block join left hash table, we don't need rename column name.
@@ -220,19 +231,10 @@ public:
                 if (!block.has(src_column.name))
                     addColumn(src_column, src_column.name);
             }
-        }
 
-        if (is_asof_join)
-        {
-            assert(join_on_keys.size() == 1);
-            if (is_left_block)
+            if (is_asof_join)
             {
-                const ColumnWithTypeAndName & right_asof_column = join.rightAsofKeyColumn();
-                addColumn(right_asof_column, right_asof_column.name);
-                asof_key = join_on_keys[0].key_columns.back();
-            }
-            else
-            {
+                assert(join_on_keys.size() == 1);
                 const ColumnWithTypeAndName & left_asof_column = join.leftAsofKeyColumn();
                 addColumn(left_asof_column, left_asof_column.name);
                 asof_key = join_on_keys[0].key_columns.back();
@@ -729,7 +731,7 @@ HashJoin::HashJoin(
     , asof_inequality(table_join->getAsofInequality())
     , left_stream_desc(std::move(left_join_stream_desc_))
     , right_stream_desc(std::move(right_join_stream_desc_))
-    , log(&Poco::Logger::get("StreamingHashJoin"))
+    , logger(&Poco::Logger::get("StreamingHashJoin"))
 {
     checkJoinSemantic();
     init();
@@ -755,7 +757,7 @@ HashJoin::HashJoin(
     initHashMaps(right_data.buffered_data->getCurrentMapsVariants().map_variants);
 
     LOG_INFO(
-        log,
+        logger,
         "({}) hash type: {}, kind: {}, strictness: {}, keys : {}, right header: {}",
         fmt::ptr(this),
         toString(hash_method_type),
@@ -766,7 +768,7 @@ HashJoin::HashJoin(
 
     if (streaming_strictness == Strictness::Range)
         LOG_INFO(
-            log,
+            logger,
             "Range join: {} join_start_bucket={} join_stop_bucket={}",
             table_join->rangeAsofJoinContext().string(),
             left_data.buffered_data->join_start_bucket_offset,
@@ -776,7 +778,7 @@ HashJoin::HashJoin(
 HashJoin::~HashJoin() noexcept
 {
     LOG_INFO(
-        log,
+        logger,
         "Left stream metrics: {}, right stream metrics: {}, join metrics: {}, retract buffer metrics: {}",
         left_data.buffered_data->getJoinMetrics().string(),
         right_data.buffered_data->getJoinMetrics().string(),
@@ -871,11 +873,11 @@ void HashJoin::transformHeader(Block & header)
 {
     if (range_bidirectional_hash_join)
     {
-        joinLeftBlockWithRightHashTable(header);
+        joinBlockWithHashTable<true>(header, right_data.buffered_data->getCurrentHashBlocksPtr());
     }
     else if (bidirectional_hash_join)
     {
-        joinLeftBlockWithRightHashTable(header);
+        joinBlockWithHashTable<true>(header, right_data.buffered_data->getCurrentHashBlocksPtr());
 
         /// Fix the emit changelog header
         if (emitChangeLog() && !header.has(ProtonConsts::RESERVED_DELTA_FLAG))
@@ -1117,118 +1119,81 @@ Block HashJoin::prepareBlockToSave(const Block & block, const Block & sample_blo
     return structured_block;
 }
 
-Block HashJoin::prepareRightBlock(const Block & block) const
+template <bool is_left_block>
+Block HashJoin::prepareBlock(const Block & block) const
 {
-    return prepareBlockToSave(block, savedRightBlockSample());
-}
-
-Block HashJoin::prepareLeftBlock(const Block & block) const
-{
-    return prepareBlockToSave(block, savedLeftBlockSample());
+    if constexpr (is_left_block)
+        return prepareBlockToSave(block, savedLeftBlockSample());
+    else
+        return prepareBlockToSave(block, savedRightBlockSample());
 }
 
 bool HashJoin::addJoinedBlock(const Block & block, bool /*check_limits*/)
 {
-    doInsertRightBlock(block, right_data.buffered_data->getCurrentHashBlocksPtr()); /// Copy the block
+    doInsertBlock<false>(block, right_data.buffered_data->getCurrentHashBlocksPtr()); /// Copy the block
     return true;
 }
 
-inline Int64 HashJoin::doInsertRightBlock(Block right_block, HashBlocksPtr target_hash_blocks)
+template<bool is_left_block>
+Int64 HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks)
 {
     /// FIXME, there are quite some block copies
     /// FIXME, all_key_columns shall hold shared_ptr to columns instead of raw ptr
     /// then we can update `source_block` in place
-    ColumnRawPtrMap all_key_columns = JoinCommon::materializeColumnsInplaceMap(right_block, table_join->getAllNames(JoinTableSide::Right));
+    JoinTableSide side = JoinTableSide::Left;
+    if constexpr (!is_left_block)
+        side = JoinTableSide::Right;
 
-    Block block_to_save = prepareRightBlock(right_block);
+    ColumnRawPtrMap all_key_columns = JoinCommon::materializeColumnsInplaceMap(block, table_join->getAllNames(side));
+
+    Block block_to_save = prepareBlock<is_left_block>(block);
 
     /// FIXME, multiple disjuncts OR clause
     const auto & on_expr = table_join->getClauses().front();
 
     ColumnRawPtrs key_columns;
-    for (const auto & name : on_expr.key_names_right)
+    const Names * key_names;
+    if constexpr (is_left_block)
+        key_names = &on_expr.key_names_left;
+    else
+        key_names = &on_expr.key_names_right;
+
+    for (const auto & name : *key_names)
         key_columns.push_back(all_key_columns[name]);
 
     /// We will insert to the map only keys, where all components are not NULL.
     ConstNullMapPtr null_map{};
     ColumnPtr null_map_holder = extractNestedColumnsAndNullMap(key_columns, null_map);
 
-    /// If RIGHT or FULL save blocks with nulls for NotJoinedBlocks
+    /// If LEFT, RIGHT or FULL save blocks with nulls for NotJoinedBlocks
+    bool is_not_inner;
+    if constexpr (is_left_block)
+        is_not_inner = isLeftOrFull(kind);
+    else
+        is_not_inner = isRightOrFull(kind);
+
     UInt8 save_nullmap = 0;
-    if (isRightOrFull(kind) && null_map)
+    if (is_not_inner && null_map)
     {
         /// Save rows with NULL keys
         for (size_t i = 0; !save_nullmap && i < null_map->size(); ++i)
             save_nullmap |= (*null_map)[i];
     }
 
+    /// Add `block_to_save` to target stream data
     /// Note `block_to_save` may be empty for cases in which the query doesn't care other non-key columns.
     /// For example, SELECT count() FROM stream_a JOIN stream_b ON i=ii;
     auto rows = key_columns[0]->size();
 
-    std::scoped_lock lock(right_data.buffered_data->mutex);
+    JoinData * join_data;
+    if constexpr (is_left_block)
+        join_data = &left_data;
+    else
+        join_data = &right_data;
 
-    auto block_id = right_data.buffered_data->addBlockWithoutLock(std::move(block_to_save), target_hash_blocks);
+    std::scoped_lock lock(join_data->buffered_data->mutex);
 
-    joinDispatch(
-        streaming_kind, streaming_strictness, target_hash_blocks->maps->map_variants[0], [&](auto /*kind_*/, auto strictness_, auto & map) {
-            [[maybe_unused]] size_t size = insertFromBlockImpl<strictness_>(
-                *this,
-                hash_method_type,
-                map,
-                rows,
-                key_columns,
-                key_sizes[0],
-                &target_hash_blocks->blocks,
-                null_map,
-                target_hash_blocks->pool);
-        });
-
-    if (save_nullmap)
-        /// FIXME, we will need account the allocated bytes for null_map_holder / not_joined_map as well
-        target_hash_blocks->blocks_nullmaps.emplace_back(target_hash_blocks->lastBlock(), null_map_holder);
-
-    checkLimits();
-
-    return block_id;
-}
-
-inline Int64 HashJoin::doInsertLeftBlock(Block left_block, HashBlocksPtr target_hash_blocks)
-{
-    /// FIXME, all_key_columns shall hold shared_ptr to columns instead of raw ptr
-    /// then we can update `block` in place
-    ColumnRawPtrMap all_key_columns = JoinCommon::materializeColumnsInplaceMap(left_block, table_join->getAllNames(JoinTableSide::Left));
-
-    Block block_to_save = prepareLeftBlock(left_block);
-
-    /// FIXME, multiple disjuncts OR clause
-    const auto & on_expr = table_join->getClauses().front();
-
-    ColumnRawPtrs key_columns;
-    for (const auto & name : on_expr.key_names_left)
-        key_columns.push_back(all_key_columns[name]);
-
-    /// We will insert to the map only keys, where all components are not NULL.
-    ConstNullMapPtr null_map{};
-    ColumnPtr null_map_holder = extractNestedColumnsAndNullMap(key_columns, null_map);
-
-    /// If LEFT or FULL save blocks with nulls for NotJoinedBlocks
-    UInt8 save_nullmap = 0;
-    if (isLeftOrFull(kind) && null_map)
-    {
-        /// Save rows with NULL keys
-        for (size_t i = 0; !save_nullmap && i < null_map->size(); ++i)
-            save_nullmap |= (*null_map)[i];
-    }
-
-    /// Add `block_to_save` to left stream data
-    /// Note `block_to_save` may be empty for cases in which the query doesn't care other non-key columns.
-    /// For example, SELECT count() FROM stream_a JOIN stream_b ON i=ii;
-    auto rows = key_columns[0]->size();
-
-    std::scoped_lock lock(left_data.buffered_data->mutex);
-
-    auto block_id = left_data.buffered_data->addBlockWithoutLock(std::move(block_to_save), target_hash_blocks);
+    auto block_id = join_data->buffered_data->addBlockWithoutLock(std::move(block_to_save), target_hash_blocks);
 
     joinDispatch(streaming_kind, streaming_strictness, target_hash_blocks->maps->map_variants[0], [&](auto /*kind_*/, auto strictness_, auto & map) {
         [[maybe_unused]] size_t size = insertFromBlockImpl<strictness_>(
@@ -1252,18 +1217,33 @@ inline Int64 HashJoin::doInsertLeftBlock(Block left_block, HashBlocksPtr target_
     return block_id;
 }
 
-template <Kind KIND, Strictness STRICTNESS, typename Maps>
-void HashJoin::joinBlockImplLeft(Block & left_block, const Block & block_with_columns_to_add, const std::vector<const Maps *> & maps_) const
+/// Join left block with right hash table or join right block with left hash table
+template <bool is_left_block, Kind KIND, Strictness STRICTNESS, typename Maps>
+void HashJoin::joinBlockImpl(Block & block, const Block & block_with_columns_to_add, const std::vector<const Maps *> & maps_) const
 {
+    /// joining -> the "left" side
+    /// joined -> the "right" side
+    /// When `is_left_block = false`, `joining` is actually the `right` stream, and `joined` is actually the `left` stream
+    const JoinData * joining_data = &left_data;
+    const JoinData * joined_data = &right_data;
+
+    if constexpr (!is_left_block)
+        std::swap(joining_data, joined_data);
+
     constexpr JoinFeatures<KIND, STRICTNESS> jf;
 
     const auto & on_exprs = table_join->getClauses();
     std::vector<JoinOnKeyColumns> join_on_keys;
     join_on_keys.reserve(on_exprs.size());
-    for (size_t i = 0, disjuncts = on_exprs.size(); i < disjuncts; ++i)
-        join_on_keys.emplace_back(left_block, on_exprs[i].key_names_left, cond_column_names[i].first, key_sizes[i]);
+    for (size_t i = 0; i < on_exprs.size(); ++i)
+    {
+        if constexpr (is_left_block)
+            join_on_keys.emplace_back(block, on_exprs[i].key_names_left, cond_column_names[i].first, key_sizes[i]);
+        else
+            join_on_keys.emplace_back(block, on_exprs[i].key_names_right, cond_column_names[i].second, key_sizes[i]);
+    }
 
-    size_t existing_columns = left_block.columns();
+    size_t existing_columns = block.columns();
 
     /** If you use FULL or RIGHT JOIN, then the columns from the "left" stream must be materialized.
       * Because if they are constants, then in the "not joined" rows, they may have different values
@@ -1279,56 +1259,73 @@ void HashJoin::joinBlockImplLeft(Block & left_block, const Block & block_with_co
       *  but they will not be used at this stage of joining (and will be in `AdderNonJoined`), and they need to be skipped.
       * For ASOF, the last column is used as the ASOF column
       */
+
+    const Block * joined_sample_block;
+    if constexpr (is_left_block)
+        joined_sample_block = &savedRightBlockSample();
+    else
+        joined_sample_block = &savedLeftBlockSample();
+
     AddedColumns added_columns(
         block_with_columns_to_add,
-        left_block,
-        savedRightBlockSample(),
+        block,
+        *joined_sample_block,
         *this,
         std::move(join_on_keys),
-        left_data.buffered_data->range_asof_join_ctx,
-        jf.is_asof_join || jf.is_range_join);
+        joining_data->buffered_data->range_asof_join_ctx,
+        jf.is_asof_join || jf.is_range_join,
+        is_left_block);
 
-    bool has_required_right_keys = (right_data.required_keys.columns() != 0);
-    added_columns.need_filter = jf.need_filter || has_required_right_keys;
+    bool has_required_joined_keys = (joined_data->required_keys.columns() != 0);
+    added_columns.need_filter = jf.need_filter || has_required_joined_keys;
 
     IColumn::Filter row_filter = switchJoinColumns<KIND, STRICTNESS>(maps_, added_columns, hash_method_type);
 
-    for (size_t i = 0, added_col_size = added_columns.size(); i < added_col_size; ++i)
-        left_block.insert(added_columns.moveColumn(i));
+    for (size_t i = 0; i < added_columns.size(); ++i)
+        block.insert(added_columns.moveColumn(i));
 
-    std::vector<size_t> right_keys_to_replicate [[maybe_unused]];
+    std::vector<size_t> joined_keys_to_replicate [[maybe_unused]];
 
     if constexpr (jf.need_filter)
     {
         /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
+        /// FIXME, what it actually does ?
         for (size_t i = 0; i < existing_columns; ++i)
-            left_block.safeGetByPosition(i).column = left_block.safeGetByPosition(i).column->filter(row_filter, -1);
+            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(row_filter, -1);
 
-        /// Add join key columns from right block if needed using value from left table because of equality
-        for (size_t i = 0, required_keys_size = right_data.required_keys.columns(); i < required_keys_size; ++i)
+        /// Add join key columns from joined block if needed using value from joining table because of equality
+        for (size_t i = 0; i < joined_data->required_keys.columns(); ++i)
         {
-            const auto & right_key = right_data.required_keys.getByPosition(i);
+            const auto & joined_key = joined_data->required_keys.getByPosition(i);
             // renamed ???
-            if (!left_block.findByName(right_key.name))
+            if (!block.findByName(joined_key.name))
             {
-                const auto & left_name = right_data.required_keys_sources[i];
-
                 /// asof or range column is already in block.
-                if ((jf.is_asof_join || jf.is_range_join) && right_key.name == table_join->getOnlyClause().key_names_right.back())
+                const String * joined_key_name_in_clause;
+                if constexpr (is_left_block)
+                    joined_key_name_in_clause = &table_join->getOnlyClause().key_names_right.back();
+                else
+                    joined_key_name_in_clause = &table_join->getOnlyClause().key_names_left.back();
+
+                if ((jf.is_asof_join || jf.is_range_join) && joined_key.name == *joined_key_name_in_clause)
                     continue;
 
-                const auto & col = left_block.getByName(left_name);
-                bool is_nullable = JoinCommon::isNullable(right_key.type);
-                auto right_col_name = getTableJoin().renamedRightColumnName(right_key.name);
-                ColumnWithTypeAndName right_col(col.column, col.type, right_col_name);
-                if (right_col.type->lowCardinality() != right_key.type->lowCardinality())
-                    JoinCommon::changeLowCardinalityInplace(right_col);
-                right_col = JoinCommon::correctNullability(std::move(right_col), is_nullable);
-                left_block.insert(right_col);
+                const auto & joining_col_name = joined_data->required_keys_sources[i];
+                const auto & col = block.getByName(joining_col_name);
+                bool is_nullable = JoinCommon::isNullable(joined_key.type);
+
+                /// We need rename right colum name if `is_left_block is true`
+                /// Otherwise keep the column name as it is as column from actual left block don't require a renaming
+                ColumnWithTypeAndName joined_key_col(
+                    col.column, col.type, is_left_block ? getTableJoin().renamedRightColumnName(joined_key.name) : joined_key.name);
+                if (joined_key_col.type->lowCardinality() != joined_key.type->lowCardinality())
+                    JoinCommon::changeLowCardinalityInplace(joined_key_col);
+                joined_key_col = JoinCommon::correctNullability(std::move(joined_key_col), is_nullable);
+                block.insert(std::move(joined_key_col));
             }
         }
     }
-    else if (has_required_right_keys)
+    else if (has_required_joined_keys)
     {
         /// Some trash to represent IColumn::Filter as ColumnUInt8 needed for ColumnNullable::applyNullMap()
         auto null_map_filter_ptr = ColumnUInt8::create();
@@ -1336,33 +1333,38 @@ void HashJoin::joinBlockImplLeft(Block & left_block, const Block & block_with_co
         null_map_filter.getData().swap(row_filter);
         const IColumn::Filter & filter = null_map_filter.getData();
 
-        /// Add join key columns from right block if needed.
-        for (size_t i = 0, required_keys_size = right_data.required_keys.columns(); i < required_keys_size; ++i)
+        /// Add joined key columns from joined block if needed.
+        for (size_t i = 0; i < joined_data->required_keys.columns(); ++i)
         {
-            const auto & right_key = right_data.required_keys.getByPosition(i);
-            auto right_col_name = getTableJoin().renamedRightColumnName(right_key.name);
-            if (!left_block.findByName(right_col_name /*right_key.name*/))
+            const auto & joined_key = joined_data->required_keys.getByPosition(i);
+            auto joined_col_name = is_left_block ? getTableJoin().renamedRightColumnName(joined_key.name) : joined_key.name;
+            if (!block.findByName(joined_col_name))
             {
-                const auto & left_name = right_data.required_keys_sources[i];
-
                 /// asof column is already in block.
-                if ((jf.is_asof_join || jf.is_range_join) && right_key.name == table_join->getOnlyClause().key_names_right.back())
+                const String * joined_key_name_in_clause;
+                if constexpr (is_left_block)
+                    joined_key_name_in_clause = &table_join->getOnlyClause().key_names_right.back();
+                else
+                    joined_key_name_in_clause = &table_join->getOnlyClause().key_names_left.back();
+
+                if ((jf.is_asof_join || jf.is_range_join) && joined_key.name == *joined_key_name_in_clause)
                     continue;
 
-                const auto & col = left_block.getByName(left_name);
-                bool is_nullable = JoinCommon::isNullable(right_key.type);
+                const auto & joining_col_name = joined_data->required_keys_sources[i];
+                const auto & col = block.getByName(joining_col_name);
+                bool is_nullable = JoinCommon::isNullable(joined_key.type);
 
                 ColumnPtr thin_column = JoinCommon::filterWithBlanks(col.column, filter);
 
-                ColumnWithTypeAndName right_col(thin_column, col.type, right_col_name);
-                if (right_col.type->lowCardinality() != right_key.type->lowCardinality())
-                    JoinCommon::changeLowCardinalityInplace(right_col);
-                right_col = JoinCommon::correctNullability(std::move(right_col), is_nullable, null_map_filter);
-                left_block.insert(right_col);
+                ColumnWithTypeAndName joined_key_col(thin_column, col.type, joined_col_name);
+                if (joined_key_col.type->lowCardinality() != joined_key.type->lowCardinality())
+                    JoinCommon::changeLowCardinalityInplace(joined_key_col);
+                joined_key_col = JoinCommon::correctNullability(std::move(joined_key_col), is_nullable, null_map_filter);
+                block.insert(std::move(joined_key_col));
 
                 if constexpr (jf.need_replication)
-                    right_keys_to_replicate.push_back(left_block.getPositionByName(right_key.name));
-            }
+                    joined_keys_to_replicate.push_back(block.getPositionByName(joined_key.name));
+           }
         }
     }
 
@@ -1372,140 +1374,11 @@ void HashJoin::joinBlockImplLeft(Block & left_block, const Block & block_with_co
 
         /// If ALL ... JOIN - we replicate all the columns except the new ones.
         for (size_t i = 0; i < existing_columns; ++i)
-            left_block.safeGetByPosition(i).column = left_block.safeGetByPosition(i).column->replicate(*offsets_to_replicate);
+            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(*offsets_to_replicate);
 
-        /// Replicate additional right keys
-        for (size_t pos : right_keys_to_replicate)
-            left_block.safeGetByPosition(pos).column = left_block.safeGetByPosition(pos).column->replicate(*offsets_to_replicate);
-    }
-}
-
-/// Join right block with left hash table
-template <Kind KIND, Strictness STRICTNESS, typename Maps>
-void HashJoin::joinBlockImplRight(Block & right_block, const Block & block_with_columns_to_add, const std::vector<const Maps *> & maps_) const
-{
-    constexpr JoinFeatures<KIND, STRICTNESS> jf;
-
-    assert(!jf.is_asof_join);
-
-    const auto & on_exprs = table_join->getClauses();
-    std::vector<JoinOnKeyColumns> join_on_keys;
-    join_on_keys.reserve(on_exprs.size());
-    for (size_t i = 0, disjuncts = on_exprs.size(); i < disjuncts; ++i)
-        join_on_keys.emplace_back(right_block, on_exprs[i].key_names_right, cond_column_names[i].second, key_sizes[i]);
-
-    size_t existing_columns = right_block.columns();
-
-    /** If you use FULL or RIGHT JOIN, then the columns from the "left" stream must be materialized.
-      * Because if they are constants, then in the "not joined" rows, they may have different values
-      *  - default values, which can differ from the values of these constants.
-      */
-    ///if constexpr (jf.right || jf.full)
-    ///{
-    ///    materializeBlockInplace(block);
-    ///}
-
-    /** For LEFT/INNER JOIN, the saved blocks do not contain keys.
-      * For FULL/RIGHT JOIN, the saved blocks contain keys;
-      * but they will not be used at this stage of joining (and will be in `AdderNonJoined`), and they need to be skipped.
-      * For ASOF, the last column is used as the ASOF column
-      */
-    AddedColumns added_columns(
-        block_with_columns_to_add,
-        right_block,
-        savedLeftBlockSample(),
-        *this,
-        std::move(join_on_keys),
-        right_data.buffered_data->range_asof_join_ctx,
-        /*is_asof_join=*/ jf.is_range_join,
-        /*is_left_block=*/ false);
-
-    bool has_required_left_keys = (left_data.required_keys.columns() != 0);
-    added_columns.need_filter = jf.need_filter || has_required_left_keys;
-
-    IColumn::Filter row_filter = switchJoinColumns<KIND, STRICTNESS>(maps_, added_columns, hash_method_type);
-
-    for (size_t i = 0, added_col_size = added_columns.size(); i < added_col_size; ++i)
-        right_block.insert(added_columns.moveColumn(i));
-
-    std::vector<size_t> left_keys_to_replicate [[maybe_unused]];
-
-    if constexpr (jf.need_filter)
-    {
-        /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
-        for (size_t i = 0; i < existing_columns; ++i)
-            right_block.safeGetByPosition(i).column = right_block.safeGetByPosition(i).column->filter(row_filter, -1);
-
-        /// Add join key columns from right block if needed using value from left table because of equality
-        for (size_t i = 0, required_keys_size = left_data.required_keys.columns(); i < required_keys_size; ++i)
-        {
-            const auto & left_key = left_data.required_keys.getByPosition(i);
-            if (!right_block.findByName(left_key.name))
-            {
-                const auto & right_name = left_data.required_keys_sources[i];
-
-                /// range column is already in block.
-                if (jf.is_range_join && left_key.name == table_join->getOnlyClause().key_names_left.back())
-                    continue;
-
-                const auto & col = right_block.getByName(right_name);
-                bool is_nullable = JoinCommon::isNullable(left_key.type);
-                ColumnWithTypeAndName left_col(col.column, col.type, left_key.name);
-                if (left_col.type->lowCardinality() != left_key.type->lowCardinality())
-                    JoinCommon::changeLowCardinalityInplace(left_col);
-                left_col = JoinCommon::correctNullability(std::move(left_col), is_nullable);
-                right_block.insert(left_col);
-            }
-        }
-    }
-    else if (has_required_left_keys)
-    {
-        /// Some trash to represent IColumn::Filter as ColumnUInt8 needed for ColumnNullable::applyNullMap()
-        auto null_map_filter_ptr = ColumnUInt8::create();
-        ColumnUInt8 & null_map_filter = assert_cast<ColumnUInt8 &>(*null_map_filter_ptr);
-        null_map_filter.getData().swap(row_filter);
-        const IColumn::Filter & filter = null_map_filter.getData();
-
-        /// Add join key columns from left block if needed.
-        for (size_t i = 0, required_keys_size = left_data.required_keys.columns(); i < required_keys_size; ++i)
-        {
-            const auto & left_key = left_data.required_keys.getByPosition(i);
-            if (!right_block.findByName(left_key.name))
-            {
-                const auto & right_name = left_data.required_keys_sources[i];
-
-                /// range column is already in block.
-                if (jf.is_range_join && left_key.name == table_join->getOnlyClause().key_names_left.back())
-                    continue;
-
-                const auto & col = right_block.getByName(right_name);
-                bool is_nullable = JoinCommon::isNullable(left_key.type);
-
-                ColumnPtr thin_column = JoinCommon::filterWithBlanks(col.column, filter);
-
-                ColumnWithTypeAndName left_col(thin_column, col.type, left_key.name);
-                if (left_col.type->lowCardinality() != left_key.type->lowCardinality())
-                    JoinCommon::changeLowCardinalityInplace(left_col);
-                left_col = JoinCommon::correctNullability(std::move(left_col), is_nullable, null_map_filter);
-                right_block.insert(left_col);
-
-                if constexpr (jf.need_replication)
-                    left_keys_to_replicate.push_back(right_block.getPositionByName(left_key.name));
-            }
-        }
-    }
-
-    if constexpr (jf.need_replication)
-    {
-        std::unique_ptr<IColumn::Offsets> & offsets_to_replicate = added_columns.offsets_to_replicate;
-
-        /// If ALL ... JOIN - we replicate all the columns except the new ones.
-        for (size_t i = 0; i < existing_columns; ++i)
-            right_block.safeGetByPosition(i).column = right_block.safeGetByPosition(i).column->replicate(*offsets_to_replicate);
-
-        /// Replicate additional right keys
-        for (size_t pos : left_keys_to_replicate)
-            right_block.safeGetByPosition(pos).column = right_block.safeGetByPosition(pos).column->replicate(*offsets_to_replicate);
+        /// Replicate additional joined keys
+        for (size_t pos : joined_keys_to_replicate)
+            block.safeGetByPosition(pos).column = block.safeGetByPosition(pos).column->replicate(*offsets_to_replicate);
     }
 }
 
@@ -1520,31 +1393,41 @@ void HashJoin::joinBlock(Block & block, ExtraBlockPtr & /*not_processed*/)
     throw Exception(ErrorCodes::LOGICAL_ERROR, "HashJoin::joinBlock shall not be called in stream join");
 }
 
-inline void HashJoin::doJoinLeftBlockWithRightHashTable(Block & left_block, HashBlocksPtr target_hash_blocks)
+template<bool is_left_block>
+void HashJoin::doJoinBlockWithHashTable(Block & block, HashBlocksPtr target_hash_blocks)
 {
-    if (unlikely(!left_data.validated_join_key_types))
+    JoinData * joining_data = &left_data;
+    JoinData * joined_data = &right_data;
+    if constexpr (!is_left_block)
+        std::swap(joining_data, joined_data);
+
+    if (unlikely(!joining_data->validated_join_key_types))
     {
         for (size_t i = 0; const auto & onexpr : table_join->getClauses())
         {
             const auto & cond_column_name = cond_column_names[i];
             JoinCommon::checkTypesOfKeys(
-                left_block,
-                onexpr.key_names_left,
-                cond_column_name.first,
-                right_stream_desc.sample_block,
-                onexpr.key_names_right,
-                cond_column_name.second);
+                block,
+                is_left_block ? onexpr.key_names_left : onexpr.key_names_right,
+                is_left_block ? cond_column_name.first : cond_column_name.second,
+                is_left_block ? right_stream_desc.sample_block : left_stream_desc.sample_block,
+                is_left_block ? onexpr.key_names_right : onexpr.key_names_left,
+                is_left_block ? cond_column_name.second : cond_column_name.first);
             ++i;
         }
-        left_data.validated_join_key_types = true;
+        joining_data->validated_join_key_types = true;
     }
 
     std::vector<const std::decay_t<decltype(target_hash_blocks->maps->map_variants[0])> *> maps_vector;
     for (size_t i = 0; i < table_join->getClauses().size(); ++i)
         maps_vector.push_back(&target_hash_blocks->maps->map_variants[i]);
 
-    if (joinDispatch(streaming_kind, streaming_strictness, maps_vector, [&](auto kind_, auto strictness_, auto & maps_vector_) {
-            joinBlockImplLeft<kind_, strictness_>(left_block, right_data.sample_block_with_columns_to_add, maps_vector_);
+    auto flipped_kind = streaming_kind;
+    if constexpr (!is_left_block)
+        flipped_kind = flipKind(streaming_kind);
+
+    if (joinDispatch(flipped_kind, streaming_strictness, maps_vector, [&](auto kind_, auto strictness_, auto & maps_vector_) {
+            joinBlockImpl<is_left_block, kind_, strictness_>(block, joined_data->sample_block_with_columns_to_add, maps_vector_);
         }))
     {
         /// Joined
@@ -1561,94 +1444,37 @@ void HashJoin::joinLeftBlock(Block & left_block)
     /// SELECT * FROM append_only [INNER | LEFT | RIGHT | FULL] JOIN versioned_kv
     /// SELECT * FROM append_only ASOF JOIN versioned_kv
     /// SELECT * FROM append_only ASOF JOIN right_append_only
-    doJoinLeftBlockWithRightHashTable(left_block, right_data.buffered_data->getCurrentHashBlocksPtr());
+    doJoinBlockWithHashTable<true>(left_block, right_data.buffered_data->getCurrentHashBlocksPtr());
 }
 
-/// Use left_block to join right hash table
-Block HashJoin::joinLeftBlockWithRightHashTable(Block & left_block)
+template <bool is_left_block>
+Block HashJoin::joinBlockWithHashTable(Block & block, HashBlocksPtr target_hash_blocks)
 {
     assert(bidirectional_hash_join || range_bidirectional_hash_join);
 
-    doJoinLeftBlockWithRightHashTable(left_block, right_data.buffered_data->getCurrentHashBlocksPtr());
+    doJoinBlockWithHashTable<is_left_block>(block, std::move(target_hash_blocks));
 
     if (emit_changelog)
     {
-        auto rows = left_block.rows();
+        auto rows = block.rows();
         if (rows)
         {
-            if (!left_block.has(ProtonConsts::RESERVED_DELTA_FLAG))
-                addDeltaColumn(left_block, rows);
+            if (!block.has(ProtonConsts::RESERVED_DELTA_FLAG))
+                addDeltaColumn(block, rows);
 
-            return retract(left_block);
+            if constexpr (!is_left_block)
+            {
+                /// Re-arrange columns according to output header
+                block.reorderColumnsInplace(output_header);
+                /// assertBlocksHaveEqualStructure(right_block, output_header, "Join Left");
+                /// assert(blocksHaveEqualStructure(right_block, output_header));
+            }
+
+            return retract(block);
         }
     }
-
-    return {};
-}
-
-inline void HashJoin::doJoinRightBlockWithLeftHashTable(Block & right_block, HashBlocksPtr target_hash_blocks)
-{
-    if (unlikely(!right_data.validated_join_key_types))
-    {
-        for (size_t i = 0; const auto & on_expr : table_join->getClauses())
-        {
-            const auto & cond_column_name = cond_column_names[i];
-            JoinCommon::checkTypesOfKeys(
-                right_block,
-                on_expr.key_names_right,
-                cond_column_name.second,
-                left_stream_desc.sample_block,
-                on_expr.key_names_left,
-                cond_column_name.first);
-
-            ++i;
-        }
-        right_data.validated_join_key_types = true;
-    }
-
-    std::vector<const std::decay_t<decltype(target_hash_blocks->maps->map_variants[0])> *> maps_vector;
-    for (size_t i = 0, disjuncts = table_join->getClauses().size(); i < disjuncts; ++i)
-        maps_vector.push_back(&target_hash_blocks->maps->map_variants[i]);
-
-    auto flipped_kind = flipKind(streaming_kind);
-    if (joinDispatch(flipped_kind, streaming_strictness, maps_vector, [&](auto kind_, auto strictness_, auto & maps_vector_) {
-            joinBlockImplRight<kind_, strictness_>(right_block, left_data.sample_block_with_columns_to_add, maps_vector_);
-        }))
-    {
-        /// Joined
-    }
-    else
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong JOIN combination: {} {}", strictness, kind);
-}
-
-/// Use right_block to join left hash table
-Block HashJoin::joinRightBlockWithLeftHashTable(Block & right_block)
-{
-    assert(output_header);
-    assert(bidirectional_hash_join || range_bidirectional_hash_join);
-
-    doJoinRightBlockWithLeftHashTable(right_block, left_data.buffered_data->getCurrentHashBlocksPtr());
-
-    if (emit_changelog)
-    {
-        auto rows = right_block.rows();
-
-        if (rows)
-        {
-            if (!right_block.has(ProtonConsts::RESERVED_DELTA_FLAG))
-                addDeltaColumn(right_block, rows);
-
-            /// Re-arrange columns according to output header
-            right_block.reorderColumnsInplace(output_header);
-
-            /// assertBlocksHaveEqualStructure(right_block, output_header, "Join Left");
-            /// assert(blocksHaveEqualStructure(right_block, output_header));
-
-            return retract(right_block);
-        }
-    }
-    else
-        right_block.reorderColumnsInplace(output_header);
+    else if constexpr (!is_left_block)
+        block.reorderColumnsInplace(output_header);
 
     return {};
 }
@@ -1735,86 +1561,111 @@ void HashJoin::insertRightBlock(Block right_block)
 {
     assert(!range_bidirectional_hash_join);
 
-    doInsertRightBlock(std::move(right_block), right_data.buffered_data->getCurrentHashBlocksPtr());
+    doInsertBlock<false>(std::move(right_block), right_data.buffered_data->getCurrentHashBlocksPtr());
 }
 
 Block HashJoin::insertLeftBlockAndJoin(Block & left_block)
 {
-    assert(bidirectional_hash_join);
+    assert(bidirectional_hash_join && !range_bidirectional_hash_join);
 
-    left_block.info.setBlockID(doInsertLeftBlock(left_block, left_data.buffered_data->getCurrentHashBlocksPtr()));
+    left_block.info.setBlockID(doInsertBlock<true>(left_block, left_data.buffered_data->getCurrentHashBlocksPtr()));
 
-    return joinLeftBlockWithRightHashTable(left_block);
+    return joinBlockWithHashTable<true>(left_block, right_data.buffered_data->getCurrentHashBlocksPtr());
 }
 
 Block HashJoin::insertRightBlockAndJoin(Block & right_block)
 {
-    assert(!range_bidirectional_hash_join);
+    assert(output_header);
+    assert(bidirectional_hash_join && !range_bidirectional_hash_join);
 
-    right_block.info.setBlockID(doInsertRightBlock(right_block, right_data.buffered_data->getCurrentHashBlocksPtr()));
+    right_block.info.setBlockID(doInsertBlock<false>(right_block, right_data.buffered_data->getCurrentHashBlocksPtr()));
 
-    return joinRightBlockWithLeftHashTable(right_block);
+    return joinBlockWithHashTable<false>(right_block, left_data.buffered_data->getCurrentHashBlocksPtr());
 }
 
-std::vector<Block> HashJoin::insertLeftBlockToRangeBucketsAndJoin(Block left_block)
+template <bool is_left_block>
+std::vector<Block> HashJoin::insertBlockToRangeBucketsAndJoin(Block block)
 {
-    assert(left_block.rows());
+    assert(block.rows());
     assert(range_bidirectional_hash_join);
 
+    auto joining_data = left_data.buffered_data.get();
+    auto joined_data = right_data.buffered_data.get();
+    if constexpr (!is_left_block)
+        std::swap(joining_data, joined_data);
+
     /// Insert
-    auto bucket_blocks = left_data.buffered_data->assignBlockToRangeBuckets(std::move(left_block));
+    auto bucket_blocks = joining_data->assignBlockToRangeBuckets(std::move(block));
     for (auto & bucket_block : bucket_blocks)
         /// Here we copy over the block since the block will be used to join which will modify the columns in-place
-        bucket_block.block.info.setBlockID(doInsertLeftBlock(bucket_block.block, std::move(bucket_block.hash_blocks)));
+        bucket_block.block.info.setBlockID(doInsertBlock<is_left_block>(bucket_block.block, std::move(bucket_block.hash_blocks)));
 
-    std::vector<Block> join_results;
-    join_results.reserve(bucket_blocks.size());
+    std::vector<Block> joined_blocks;
+    joined_blocks.reserve(bucket_blocks.size());
 
     /// Join
     for (auto & bucket_block : bucket_blocks)
     {
-        auto left_bucket = bucket_block.bucket;
-        assert(left_bucket > 0);
+        auto joining_bucket = bucket_block.bucket;
+        assert(joining_bucket > 0);
 
+        /// Here we explicitly order the lock of the mutex to avoid deadlock
         std::scoped_lock lock(left_data.buffered_data->mutex, right_data.buffered_data->mutex);
 
-        /// Find the right range buckets to join
-        auto & right_range_bucket_hash_blocks = right_data.buffered_data->getRangeBucketHashBlocks();
+        /// Find the range buckets to join
+        auto & joined_range_bucket_hash_blocks = joined_data->getRangeBucketHashBlocks();
 
-        auto lower_bound = left_bucket - left_data.buffered_data->join_start_bucket_offset;
-        auto right_iter = right_range_bucket_hash_blocks.lower_bound(lower_bound);
+        auto bucket_offset = joining_data->join_start_bucket_offset;
+        if constexpr (!is_left_block)
+            bucket_offset = joining_data->join_stop_bucket_offset;
 
-        if (right_iter == right_range_bucket_hash_blocks.end())
+        auto lower_bound = joining_bucket - bucket_offset;
+        auto joined_range_bucket_iter = joined_range_bucket_hash_blocks.lower_bound(lower_bound);
+        if (joined_range_bucket_iter == joined_range_bucket_hash_blocks.end())
             /// no joined data
             continue;
 
-        auto upper_bound = left_bucket + left_data.buffered_data->join_stop_bucket_offset;
-        for (auto right_end = right_range_bucket_hash_blocks.end(); right_iter != right_end; ++right_iter)
+        bucket_offset = joining_data->join_stop_bucket_offset;
+        if constexpr (!is_left_block)
+            bucket_offset = joining_data->join_start_bucket_offset;
+        auto upper_bound = joining_bucket + bucket_offset;
+
+        for (auto joined_range_bucket_end = joined_range_bucket_hash_blocks.end(); joined_range_bucket_iter != joined_range_bucket_end; ++joined_range_bucket_iter)
         {
-            if (right_iter->first > upper_bound)
+            if (joined_range_bucket_iter->first > upper_bound)
                 /// Reaching the upper bound of right bucket to join
                 break;
 
-            auto & right_bucket_blocks = right_iter->second;
+            auto & joined_bucket_blocks = joined_range_bucket_iter->second;
 
             /// Although we are bucketing blocks, but the real min/max in 2 buckets may not be join-able
-            /// If [min, max] of left bucket doesn't intersect with right time bucket as a whole,
+            /// If [min, max] of the joining bucket doesn't intersect with joined range bucket as a whole,
             /// we are sure there will be no join-able rows for the whole bucket
-            if (!left_data.buffered_data->intersect(
+            bool has_intersect = false;
+            if constexpr (is_left_block)
+                has_intersect = joining_data->intersect(
                     bucket_block.block.info.watermark_lower_bound,
                     bucket_block.block.info.watermark,
-                    right_bucket_blocks->blocks.minTimestamp(),
-                    right_bucket_blocks->blocks.maxTimestamp()))
+                    joined_bucket_blocks->blocks.minTimestamp(),
+                    joined_bucket_blocks->blocks.maxTimestamp());
+            else
+                has_intersect = joining_data->intersect(
+                    joined_bucket_blocks->blocks.minTimestamp(),
+                    joined_bucket_blocks->blocks.maxTimestamp(),
+                    bucket_block.block.info.watermark_lower_bound,
+                    bucket_block.block.info.watermark);
+
+            if (!has_intersect)
             {
                 ++join_metrics.left_block_and_right_range_bucket_no_intersection_skip;
                 continue;
             }
 
             auto join_block = bucket_block.block; /// We will need make a copy since bucket_block.block can join several buckets
-            doJoinLeftBlockWithRightHashTable(join_block, right_bucket_blocks);
+            doJoinBlockWithHashTable<is_left_block>(join_block, joined_bucket_blocks);
 
             if (join_block.rows())
-                join_results.emplace_back(std::move(join_block));
+                joined_blocks.emplace_back(std::move(join_block));
         }
     }
 
@@ -1823,80 +1674,24 @@ std::vector<Block> HashJoin::insertLeftBlockToRangeBucketsAndJoin(Block left_blo
     left_data.buffered_data->removeOldBuckets("left_stream");
     right_data.buffered_data->removeOldBuckets("right_stream");
 
-    return join_results;
+    return joined_blocks;
+}
+
+std::vector<Block> HashJoin::insertLeftBlockToRangeBucketsAndJoin(Block left_block)
+{
+    return insertBlockToRangeBucketsAndJoin<true>(std::move(left_block));
 }
 
 std::vector<Block> HashJoin::insertRightBlockToRangeBucketsAndJoin(Block right_block)
 {
     assert(output_header);
-    assert(range_bidirectional_hash_join);
 
-    /// Insert
-    auto bucket_blocks = right_data.buffered_data->assignBlockToRangeBuckets(std::move(right_block));
-    for (auto & bucket_block: bucket_blocks)
-        /// Here we copy over the block since the block will be used to join which will modify the columns in-place
-        bucket_block.block.info.setBlockID(doInsertRightBlock(bucket_block.block, std::move(bucket_block.hash_blocks)));
+    auto joined_blocks = insertBlockToRangeBucketsAndJoin<false>(std::move(right_block));
 
-    std::vector<Block> join_results;
-    join_results.reserve(bucket_blocks.size());
-
-    /// Join
-    for (auto & bucket_block : bucket_blocks)
-    {
-        auto right_bucket = bucket_block.bucket;
-        assert(right_bucket > 0);
-
-        std::scoped_lock lock(left_data.buffered_data->mutex, right_data.buffered_data->mutex);
-
-        /// Find the right range buckets to join
-        auto & left_range_bucket_hash_blocks = left_data.buffered_data->getRangeBucketHashBlocks();
-
-        auto lower_bound = right_bucket - right_data.buffered_data->join_stop_bucket_offset;
-        auto left_iter = left_range_bucket_hash_blocks.lower_bound(lower_bound);
-
-        if (left_iter == left_range_bucket_hash_blocks.end())
-            /// no joined data
-            continue;
-
-        auto upper_bound = right_bucket + right_data.buffered_data->join_start_bucket_offset;
-        for (auto left_end = left_range_bucket_hash_blocks.end(); left_iter != left_end; ++left_iter)
-        {
-            if (left_iter->first > upper_bound)
-                /// Reaching the upper bound of left bucket to join
-                break;
-
-            auto & left_bucket_blocks = left_iter->second;
-
-            /// Although we are bucketing blocks, but the real min/max in 2 buckets may not be join-able
-            /// If [min, max] of left bucket doesn't intersect with right time bucket as a whole,
-            /// we are sure there will be no join-able rows for the whole bucket
-            if (!right_data.buffered_data->intersect(
-                    left_bucket_blocks->blocks.minTimestamp(),
-                    left_bucket_blocks->blocks.maxTimestamp(),
-                    bucket_block.block.info.watermark_lower_bound,
-                    bucket_block.block.info.watermark))
-            {
-                ++join_metrics.right_block_and_left_range_bucket_no_intersection_skip;
-                continue;
-            }
-
-            auto join_block = bucket_block.block; /// We will need make a copy since bucket_block.block can join several buckets
-            doJoinRightBlockWithLeftHashTable(join_block, left_bucket_blocks);
-
-            if (join_block.rows())
-                join_results.emplace_back(std::move(join_block));
-        }
-    }
-
-    for (auto & block : join_results)
+    for (auto & block : joined_blocks)
         block.reorderColumnsInplace(output_header);
 
-    calculateWatermark();
-
-    left_data.buffered_data->removeOldBuckets("left_stream");
-    right_data.buffered_data->removeOldBuckets("right_stream");
-
-    return join_results;
+    return joined_blocks;
 }
 
 void HashJoin::calculateWatermark()
@@ -1915,7 +1710,7 @@ void HashJoin::calculateWatermark()
         combined_watermark = new_combined_watermark;
 
         LOG_INFO(
-            log,
+            logger,
             "Progress combined_watermark={} from last_combined_watermark={} (left_watermark={}, right_watermark={})",
             new_combined_watermark,
             last_combined_watermark,
@@ -2066,8 +1861,8 @@ void HashJoin::checkJoinSemantic() const
     /// SELECT * FROM (SELECT * FROM left WHERE left.value > 10) as left INNER JOIN right ON left.key = right.key
     for (const auto & on_expr : table_join->getClauses())
     {
-        const auto & cond_column_names = on_expr.condColumnNames();
-        if (!cond_column_names.first.empty() || !cond_column_names.second.empty())
+        const auto & on_expr_cond_column_names = on_expr.condColumnNames();
+        if (!on_expr_cond_column_names.first.empty() || !on_expr_cond_column_names.second.empty())
             throw Exception(
                 ErrorCodes::NOT_IMPLEMENTED, "Streaming join doesn't support predicates in JOIN ON clause. Use WHERE predicate instead");
     }
@@ -2105,14 +1900,13 @@ void HashJoin::checkJoinSemantic() const
     /// `left anti`: if there are non-matching rows from left stream, returning these non-matching rows with default value filling for right projected columns
     /// `right anti`: if there are non-matching rows from right stream, returning these non-matching rows with default value filling left projected columns
 
-    /// So far we only support the following join combinations
-
-    /// Check overall join kind. Only support inner join for now
     /// A 4 dimensions array : Left DataStreamSemantic, Kind, Strictness, Right DataStreamSemantic
+    /// There are 4 * 6 * 5 * 4 = 480 total combinations
 
     using SupportMatrix
         = std::unordered_map<DataStreamSemantic, std::unordered_map<JoinKind, std::unordered_map<JoinStrictness, std::unordered_map<DataStreamSemantic, bool>>>>;
 
+    /// So far we only support these join combinations
     static const SupportMatrix support_matrix = {
         {DataStreamSemantic::Append,
          {{

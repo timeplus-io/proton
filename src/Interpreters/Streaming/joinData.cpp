@@ -42,7 +42,7 @@ size_t BufferedStreamData::removeOldBuckets(std::string_view stream)
 
     if (!buckets_to_remove.empty())
         LOG_INFO(
-            join->log,
+            join->logger,
             "Removing data in range buckets={} in {} stream. Remaining bytes={} blocks={}",
             fmt::join(buckets_to_remove.begin(), buckets_to_remove.end(), ","),
             stream,
@@ -204,7 +204,7 @@ std::vector<BufferedStreamData::BucketBlock> BufferedStreamData::assignBlockToRa
     for (auto [bucket, rows] : late_blocks)
     {
         LOG_INFO(
-            join->log,
+            join->logger,
             "Discard {} late events in range bucket {} of left stream since it is later than latest combined watermark {} with "
             "bucket_size={}",
             rows,

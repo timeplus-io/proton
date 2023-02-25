@@ -31,10 +31,11 @@ JoinTransform::JoinTransform(
     size_t max_block_size_,
     UInt64 join_max_cached_bytes)
     : IProcessor({left_input_header, right_input_header}, {output_header}, ProcessorID::StreamingJoinTransformID)
-    , output_header_chunk(outputs.front().getHeader().getColumns(), 0)
     , join(std::move(join_))
     , max_block_size(max_block_size_)
+    , output_header_chunk(outputs.front().getHeader().getColumns(), 0)
     , logger(&Poco::Logger::get("StreamingJoinTransform"))
+    , input_ports_with_data{InputPortWithData{&inputs.front()}, InputPortWithData{&inputs.back()}}
 {
     assert(join);
 
@@ -43,10 +44,6 @@ JoinTransform::JoinTransform(
 
     /// We know the finalized left header, output header etc, post init HashJoin
     join->postInit(left_input_header, output_header, join_max_cached_bytes);
-
-    input_ports_with_data.reserve(2);
-    input_ports_with_data.emplace_back(&inputs.front());
-    input_ports_with_data.emplace_back(&inputs.back());
 }
 
 IProcessor::Status JoinTransform::prepare()
@@ -128,13 +125,13 @@ void JoinTransform::work()
 
         assert(input_ports_with_data[0].input_chunk || input_ports_with_data[1].input_chunk);
 
-        for (size_t i = 0; auto & input_port_with_data : input_ports_with_data)
+        for (size_t i = 0; i < input_ports_with_data.size(); ++i)
         {
-            if (input_port_with_data.input_chunk)
+            if (input_ports_with_data[i].input_chunk)
             {
-                if (input_port_with_data.input_chunk.hasWatermark())
+                if (input_ports_with_data[i].input_chunk.hasWatermark())
                 {
-                    auto watermark_bound = input_port_with_data.input_chunk.getChunkContext()->getWatermarkWithoutSubstreamID();
+                    auto watermark_bound = input_ports_with_data[i].input_chunk.getChunkContext()->getWatermarkWithoutSubstreamID();
 
                     /// We need lower for both
                     local_watermark_lower_bound = std::min(local_watermark_lower_bound, watermark_bound.second);
@@ -142,12 +139,11 @@ void JoinTransform::work()
                     has_watermark = true;
                 }
 
-                if (input_port_with_data.input_chunk.hasRows())
+                if (input_ports_with_data[i].input_chunk.hasRows())
                     has_data = true;
 
-                chunks[i].swap(input_port_with_data.input_chunk);
+                chunks[i].swap(input_ports_with_data[i].input_chunk);
             }
-            ++i;
         }
 
         /// We propagate empty chunk with or without watermark
@@ -166,15 +162,10 @@ void JoinTransform::work()
     {
         std::scoped_lock lock(mutex);
         if (!output_chunks.empty())
-        {
-            auto & last_chunk = output_chunks.back();
-            setupWatermark(last_chunk, local_watermark_lower_bound, local_watermark_upper_bound);
-        }
+            setupWatermark(output_chunks.back(), local_watermark_lower_bound, local_watermark_upper_bound);
         else
-        {
             /// If there is no join result or chunks don't have data but have watermark, we still need propagate the watermark
             propagateWatermark(local_watermark_lower_bound, local_watermark_upper_bound);
-        }
     }
 }
 
@@ -279,7 +270,7 @@ inline void JoinTransform::rangeJoinBidirectionally(Chunks chunks)
 
         std::scoped_lock lock(mutex);
 
-        for (size_t j = 0, size = joined_blocks.size(); j < size; ++j)
+        for (size_t j = 0; j < joined_blocks.size(); ++j)
             output_chunks.emplace_back(joined_blocks[j].getColumns(), joined_blocks[j].rows());
     }
 }

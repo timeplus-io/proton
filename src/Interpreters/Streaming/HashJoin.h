@@ -109,12 +109,25 @@ public:
     void joinLeftBlock(Block & left_block);
 
     /// For bidirectional hash join
+    /// There are 2 blocks returned : joined block via parameter and retracted block via returned-value if there is
     Block insertLeftBlockAndJoin(Block & left_block);
     Block insertRightBlockAndJoin(Block & right_block);
 
-    /// For bidirectional range hash join
+    /// For bidirectional range hash join, there may be multiple joined blocks
     std::vector<Block> insertLeftBlockToRangeBucketsAndJoin(Block left_block);
     std::vector<Block> insertRightBlockToRangeBucketsAndJoin(Block right_block);
+
+    /** Add block of data from right hand of JOIN to the map.
+      * Returns false, if some limit was exceeded and you should not insert more data.
+      * This is legacy API which we don't use in streaming hash join
+      */
+    bool addJoinedBlock(const Block & block, bool check_limits) override;
+
+    /** Join data from the map (that was previously built by calls to addJoinedBlock) to the block with data from "left" table.
+      * Could be called from different threads in parallel.
+      * This is legacy API which we don't use in streaming hash join
+      */
+    void joinBlock(Block & block, ExtraBlockPtr & not_processed) override;
 
     bool emitChangeLog() const { return emit_changelog; }
     bool bidirectionalHashJoin() const { return bidirectional_hash_join; }
@@ -124,17 +137,7 @@ public:
 
     const TableJoin & getTableJoin() const override { return *table_join; }
 
-    /** Add block of data from right hand of JOIN to the map.
-      * Returns false, if some limit was exceeded and you should not insert more data.
-      */
-    bool addJoinedBlock(const Block & block, bool check_limits) override;
-
     void checkTypesOfKeys(const Block & block) const override;
-
-    /** Join data from the map (that was previously built by calls to addJoinedBlock) to the block with data from "left" table.
-      * Could be called from different threads in parallel.
-      */
-    void joinBlock(Block & block, ExtraBlockPtr & not_processed) override;
 
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
       */
@@ -165,7 +168,7 @@ public:
     ASOFJoinInequality getAsofInequality() const { return asof_inequality; }
     bool anyTakeLastRow() const { return any_take_last_row; }
 
-    const ColumnWithTypeAndName & rightAsofKeyColumn() const { return right_asof_key_column;}
+    const ColumnWithTypeAndName & rightAsofKeyColumn() const { return right_asof_key_column; }
     const ColumnWithTypeAndName & leftAsofKeyColumn() const { return left_asof_key_column; }
 
 /// Different types of keys for maps.
@@ -221,7 +224,7 @@ public:
     case Type::NAME: \
         NAME = std::make_unique<typename decltype(NAME)::element_type>(); \
         break;
-                    APPLY_FOR_JOIN_VARIANTS(M)
+                APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
             }
         }
@@ -233,7 +236,7 @@ public:
 #define M(NAME) \
     case Type::NAME: \
         return NAME ? NAME->size() : 0;
-                    APPLY_FOR_JOIN_VARIANTS(M)
+                APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
             }
 
@@ -247,7 +250,7 @@ public:
 #define M(NAME) \
     case Type::NAME: \
         return NAME ? NAME->getBufferSizeInBytes() : 0;
-                    APPLY_FOR_JOIN_VARIANTS(M)
+                APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
             }
 
@@ -261,7 +264,7 @@ public:
 #define M(NAME) \
     case Type::NAME: \
         return NAME ? NAME->getBufferSizeInCells() : 0;
-                    APPLY_FOR_JOIN_VARIANTS(M)
+                APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
             }
 
@@ -323,47 +326,49 @@ private:
     void initRightBlockStructure();
     void initBlockStructure(Block & saved_block_sample, const Block & table_keys, const Block & sample_block_with_columns_to_add) const;
 
+    void chooseHashMethod();
+    static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
+
     void checkLimits() const;
 
     const Block & savedLeftBlockSample() const { return left_data.buffered_data->sample_block; }
     const Block & savedRightBlockSample() const { return right_data.buffered_data->sample_block; }
 
-    /// Modify left block (update structure according to sample block) to save it in block list
-    Block prepareLeftBlock(const Block & block) const;
-    /// Modify right block (update structure according to sample block) to save it in block list
-    Block prepareRightBlock(const Block & block) const;
+    /// Modify left or right block (update structure according to sample block) to save it in block list
+    template <bool is_left_block>
+    Block prepareBlock(const Block & block) const;
+
     /// Remove columns which are not needed to be projected
     static Block prepareBlockToSave(const Block & block, const Block & sample_block);
 
-    template <Kind KIND, Strictness STRICTNESS, typename Maps>
-    void joinBlockImplLeft(Block & left_block, const Block & block_with_columns_to_add, const std::vector<const Maps *> & maps_) const;
+    /// For range bidirectional hash join
+    template <bool is_left_block>
+    std::vector<Block> insertBlockToRangeBucketsAndJoin(Block block);
 
-    template <Kind KIND, Strictness STRICTNESS, typename Maps>
-    void joinBlockImplRight(Block & right_block, const Block & block_with_columns_to_add, const std::vector<const Maps *> & maps_) const;
-
-    void chooseHashMethod();
-    static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
-
-    /// When left stream joins right stream, watermark calculation is more complicated.
-    /// Firstly, each stream has its own watermark and progresses separately.
-    /// Secondly, `combined_watermark` is calculated periodically according the watermarks in the left and right streams
-    void calculateWatermark();
-
-    Int64 doInsertLeftBlock(Block left_block, HashBlocksPtr target_hash_blocks);
-    Int64 doInsertRightBlock(Block right_block, HashBlocksPtr target_hash_blocks);
+    template<bool is_left_block>
+    Int64 doInsertBlock(Block block, HashBlocksPtr target_hash_blocks);
 
     /// For bidirectional hash join
     /// Return retracted block if needs emit changelog, otherwise empty block
-    Block joinLeftBlockWithRightHashTable(Block & left_block);
-    Block joinRightBlockWithLeftHashTable(Block & right_block);
+    template <bool is_left_block>
+    Block joinBlockWithHashTable(Block & block, HashBlocksPtr target_hash_blocks);
 
-    void doJoinLeftBlockWithRightHashTable(Block & left_block, HashBlocksPtr target_hash_blocks);
-    void doJoinRightBlockWithLeftHashTable(Block & left_block, HashBlocksPtr target_hash_blocks);
+    template <bool is_left_block>
+    void doJoinBlockWithHashTable(Block & block, HashBlocksPtr target_hash_blocks);
+
+    /// Join left block with right hash table or join right block with left hash table
+    template <bool is_left_block, Kind KIND, Strictness STRICTNESS, typename Maps>
+    void joinBlockImpl(Block & block, const Block & block_with_columns_to_add, const std::vector<const Maps *> & maps_) const;
 
     /// `retract` does
     /// 1) Add result_block to JoinResults
     /// 2) Retract previous joined block. changelog emit
     Block retract(const Block & result_block);
+
+    /// When left stream joins right stream, watermark calculation is more complicated.
+    /// Firstly, each stream has its own watermark and progresses separately.
+    /// Secondly, `combined_watermark` is calculated periodically according the watermarks in the left and right streams
+    void calculateWatermark();
 
 private:
     std::shared_ptr<TableJoin> table_join;
@@ -435,7 +440,7 @@ private:
 
     JoinGlobalMetrics join_metrics;
 
-    Poco::Logger * log;
+    Poco::Logger * logger;
 };
 
 struct HashJoinMapsVariants

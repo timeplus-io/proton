@@ -56,15 +56,6 @@ private:
         Chunk input_chunk;
     };
 
-    mutable std::mutex mutex;
-
-    std::vector<InputPortWithData> input_ports_with_data;
-    std::list<Chunk> output_chunks;
-    Chunk output_header_chunk;
-
-    int64_t watermark_lower_bound = std::numeric_limits<int64_t>::min();
-    int64_t watermark_upper_bound = std::numeric_limits<int64_t>::min();
-
     /// std::atomic_bool stop_reading = false;
     [[maybe_unused]] bool process_non_joined = true;
 
@@ -73,7 +64,17 @@ private:
     [[maybe_unused]] std::shared_ptr<NotJoinedBlocks> non_joined_blocks;
     [[maybe_unused]] size_t max_block_size;
 
+    Chunk output_header_chunk;
+
     Poco::Logger * logger;
+
+    mutable std::mutex mutex;
+
+    std::array<InputPortWithData, 2> input_ports_with_data;
+    std::list<Chunk> output_chunks;
+
+    int64_t watermark_lower_bound = std::numeric_limits<int64_t>::min();
+    int64_t watermark_upper_bound = std::numeric_limits<int64_t>::min();
 };
 }
 }
