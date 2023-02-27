@@ -61,6 +61,7 @@ void LocalConnection::updateProgress(const Progress & value)
 void LocalConnection::sendQuery(
     const ConnectionTimeouts &,
     const String & query,
+    const NameToNameMap & query_parameters,
     const String & query_id,
     UInt64 stage,
     const Settings *,
@@ -68,6 +69,9 @@ void LocalConnection::sendQuery(
     bool,
     std::function<void(const Progress &)> process_progress_callback)
 {
+    if (!query_parameters.empty())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "clickhouse local does not support query parameters");
+
     query_context = session.makeQueryContext();
     query_context->setCurrentQueryId(query_id);
     if (send_progress)

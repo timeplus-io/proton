@@ -55,6 +55,8 @@
 /// for simplicity (sometimes it may be more convenient in some use cases).
 /// VERSION_REVISION is used like internal versioning like ckpt versioning.
 /// DBMS_TCP_PROTOCOL_VERSION is used like client-server, server-server communication
-#define DBMS_TCP_PROTOCOL_VERSION 54455
+#define DBMS_TCP_PROTOCOL_VERSION 54459
 //
 //#define DBMS_MIN_PROTOCOL_VERSION_WITH_INITIAL_QUERY_START_TIME 54449
+
+#define DBMS_MIN_PROTOCOL_VERSION_WITH_PARAMETERS 54459

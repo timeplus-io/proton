@@ -974,8 +974,13 @@ public:
     /// Query parameters for prepared statements.
     bool hasQueryParameters() const;
     const NameToNameMap & getQueryParameters() const;
+
+    /// Throws if parameter with the given name already set.
     void setQueryParameter(const String & name, const String & value);
     void setQueryParameters(const NameToNameMap & parameters) { query_parameters = parameters; }
+
+    /// Overrides values of existing parameters.
+    void addQueryParameters(const NameToNameMap & parameters);
 
     /// proton: starts. Getter and setter method for time param
     const TimeParam & getTimeParam() const { return time_param; }
