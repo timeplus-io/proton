@@ -34,7 +34,7 @@
       "id": 1,
       "tags": ["cte"],
       "name": "cte-table",
-      "description": "table function shall work with simple CTE (no aggreagtion and no emit policy)",
+      "description": "table function shall work with simple CTE (no aggreagtion)",
       "steps":[
         {
           "statements": [

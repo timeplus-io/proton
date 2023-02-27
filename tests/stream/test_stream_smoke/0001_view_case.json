@@ -527,7 +527,7 @@
           "id": 75,
           "tags": ["view","bug"],
           "name": "view-table",
-          "description": "table function shall work with simple view (no aggreagtion and no emit policy), error_code:60 on kafka mode",
+          "description": "table function shall work with simple view (no aggreagtion), error_code:60 on kafka mode",
           "steps":[
             {
               "statements": [

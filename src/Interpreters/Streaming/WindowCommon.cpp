@@ -367,8 +367,20 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
 
 void checkIntervalAST(const ASTPtr & ast, const String & msg)
 {
-    if (!isIntervalAST(ast))
-        throw Exception(msg, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    assert(ast);
+    auto func_node = ast->as<ASTFunction>();
+    if (func_node)
+    {
+        auto kind = mapIntervalKind(func_node->name);
+        if (kind)
+        {
+            if (*kind <= IntervalKind::Day)
+                return;
+            else
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "{}: the max interval kind supported is DAY.", msg);
+        }
+    }
+    throw Exception(msg, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
 void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Kind & kind)
@@ -408,7 +420,7 @@ std::pair<Int64, IntervalKind> extractInterval(const ASTFunction * ast)
     return {interval, interval_kind};
 }
 
-ALWAYS_INLINE Int64 addTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone)
+ALWAYS_INLINE Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone)
 {
     switch (kind)
     {
@@ -417,12 +429,12 @@ ALWAYS_INLINE Int64 addTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, 
         case IntervalKind::Microsecond:
         case IntervalKind::Millisecond:
             return static_cast<Int64>(AddTime<IntervalKind::Second>::execute(
-                static_cast<UInt32>(dt), static_cast<Int64>(std::ceil(num_units * IntervalKind(kind).toSeconds())), time_zone));
+                static_cast<UInt32>(time_sec), static_cast<Int64>(std::ceil(num_units * IntervalKind(kind).toSeconds())), time_zone));
 
-    /// dt -> second
+    /// Based on second
 #define CASE_WINDOW_KIND(KIND) \
     case IntervalKind::KIND: { \
-        return static_cast<Int64>(AddTime<IntervalKind::KIND>::execute(static_cast<UInt32>(dt), num_units, time_zone)); \
+        return static_cast<Int64>(AddTime<IntervalKind::KIND>::execute(static_cast<UInt32>(time_sec), num_units, time_zone)); \
     }
         CASE_WINDOW_KIND(Second)
         CASE_WINDOW_KIND(Minute)
@@ -430,10 +442,13 @@ ALWAYS_INLINE Int64 addTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, 
         CASE_WINDOW_KIND(Day)
 #undef CASE_WINDOW_KIND
 
-    /// dt -> day
+    /// Based on day
 #define CASE_WINDOW_KIND(KIND) \
     case IntervalKind::KIND: { \
-        return static_cast<Int64>(AddTime<IntervalKind::KIND>::execute(static_cast<UInt16>(dt), num_units, time_zone)); \
+        UInt16 days_part = static_cast<UInt16>(time_sec / (24 * 60 * 60)); \
+        Int64 seconds_part = time_sec % (24 * 60 * 60); \
+        auto days = AddTime<IntervalKind::KIND>::execute(days_part, num_units, time_zone); \
+        return static_cast<Int64>(days * (24 * 60 * 60)) + seconds_part; \
     }
         CASE_WINDOW_KIND(Week)
         CASE_WINDOW_KIND(Month)
