@@ -78,7 +78,7 @@ if (NOT ENABLE_MISC_FUNCS)
             # rowNumberInAllBlocks.cpp
             ignore.cpp
             indexHint.cpp
-            identity.cpp
+            # identity.cpp
             bar.cpp
             hasColumnInTable.cpp
             # isFinite.cpp
