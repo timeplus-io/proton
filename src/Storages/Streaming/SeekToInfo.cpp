@@ -1,6 +1,8 @@
 #include "SeekToInfo.h"
 
 #include <IO/ReadBufferFromString.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
 #include <IO/parseDateTimeBestEffort.h>
 #include <NativeLog/Record/Record.h>
 #include <base/ClockUtils.h>
@@ -224,5 +226,32 @@ std::pair<SeekToType, std::vector<int64_t>> SeekToInfo::parse(const String & see
 
     assert(last_seek_type);
     return {*last_seek_type, std::move(seek_points)};
+}
+
+String SeekToInfo::getSeekToForSettings() const
+{
+    if (isTimeBased())
+    {
+        /// Timestamp formats
+        /// 1) absolute time string: '2020-01-01T01:12:45.123+08:00', now()-1d
+        /// 2) relative time: -1m
+        /// Transform seek_point (time based) to ISO timestamp string
+        WriteBufferFromOwnString wb;
+        for (size_t i = 0; const auto & seek_point : seek_points)
+        {
+            if (i != 0)
+                wb.write(',');
+            writeDateTimeTextISO(seek_point, 3, wb, DateLUT::instance("UTC"));
+            ++i;
+        }
+        return wb.str();
+    }
+    else
+    {
+        /// Sequence ID formats:
+        /// 1) absolute sn: 1000,2000,3000,
+        /// 2) relative sn : latest,earliest
+        return seek_to;
+    }
 }
 }

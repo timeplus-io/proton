@@ -650,13 +650,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     /// proton: starts.
     /// Before analyzing, handle settings seek_to
     handleSeekToSetting();
-
-    /// Analyze event predicates in WHERE clause like `WHERE _tp_time > 2023-01-01 00:01:01` or `WHERE _tp_sn > 1000`
-    /// and create `SeekToInfo` objects to represent these predicates for streaming store rewinding in a streaming query.
-    /// FIXME: in the short term, we only support strict event prediction, which event column must be `_tp_time` or `_tp_sn`:
-    /// 1) Don't support alias
-    /// 2) Don't support column identifier with table prefix, such as `a._tp_time`
-    analyzeEventPredicateAsSeekTo();
     /// proton: ends.
 
     joined_tables.rewriteDistributedInAndJoins(query_ptr);
@@ -679,6 +672,15 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     if (storage)
         view = dynamic_cast<StorageView *>(storage.get());
 
+    /// proton: starts. If ProxyStream over a view or subquery like CTE, we are going to rewrite it.
+    Streaming::ProxyStream * proxy_stream = nullptr;
+    if (storage)
+    {
+        if (auto * proxy = storage->as<Streaming::ProxyStream>(); proxy && proxy->isProxyingSubqueryOrView())
+            proxy_stream = proxy;
+    }
+    /// proton: ends.
+
     auto analyze = [&] (bool try_move_to_prewhere)
     {
         /// Allow push down and other optimizations for VIEW: replace with subquery and rewrite it.
@@ -687,6 +689,17 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             view->replaceWithSubquery(getSelectQuery(), view_table, metadata_snapshot);
 
         /// proton: starts.
+        /// Allow push down and other optimizations for ProxyStream: replace with subquery and rewrite it. For exmaples:
+        ///  `with cte as select * from test select sum(i) from tumble(cte, 2s) where _tp_sn > 0`
+        /// Replaced and optimized:
+        ///  `select sum(i) from (select i from test where _tp_sn > 0)`
+        /// NOTE: Through called `ProxyStream::replaceWithSubquery` and `ProxyStream::restoreProxyStreamName`,
+        /// we will get an optimized subquery for ProxyStream (@query_info.proxy_stream_query)
+        ASTPtr saved_proxy_stream;
+        if (proxy_stream)
+            saved_proxy_stream = proxy_stream->replaceWithSubquery(getSelectQuery());
+        /// proton: ends.
+
         TreeRewriterResult tree_rewriter_result(source_header.getNamesAndTypesList(), storage, storage_snapshot);
         tree_rewriter_result.streaming = isStreaming();
 
@@ -720,6 +733,15 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             query_info.view_query = view->restoreViewName(getSelectQuery(), view_table);
             view = nullptr;
         }
+
+        /// proton: starts.
+        if (proxy_stream)
+        {
+            /// Restore original proxy stream name. Save rewritten subquery for future usage in StreamProxy.
+            query_info.proxy_stream_query = proxy_stream->restoreProxyStreamName(getSelectQuery(), saved_proxy_stream);
+            proxy_stream = nullptr;
+        }
+        /// proton: ends.
 
         if (try_move_to_prewhere && storage && storage->canMoveConditionsToPrewhere() && query.where() && !query.prewhere())
         {
@@ -840,6 +862,10 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         }
 
         /// proton: starts.
+        /// Analyze event predicates in WHERE clause like `WHERE _tp_time > 2023-01-01 00:01:01` or `WHERE _tp_sn > 1000`
+        /// and create `SeekToInfo` objects to represent these predicates for streaming store rewinding in a streaming query.
+        analyzeEventPredicateAsSeekTo();
+
         /// Calculate structure of the result.
         result_header = getSampleBlockImpl();
         /// proton, FIXME. For distributed streaming query in future, we may need conditionally remove __tp_ts from result header

@@ -27,6 +27,7 @@ struct SeekToInfo
     const String & getSeekTo() const { return seek_to; }
     const std::vector<Int64> & getSeekPoints() const { return seek_points; }
     const SeekToType & getSeekToType() const { return type; }
+    String getSeekToForSettings() const;
 
     bool isTimeBased() const { return type == SeekToType::ABSOLUTE_TIME || type == SeekToType::RELATIVE_TIME; }
 

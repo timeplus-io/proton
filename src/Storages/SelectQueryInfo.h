@@ -143,6 +143,9 @@ struct SelectQueryInfo
     ASTPtr query;
     ASTPtr view_query; /// Optimized VIEW query
     ASTPtr original_query; /// Unmodified query for projection analysis
+    /// proton: starts.
+    ASTPtr proxy_stream_query;  /// Optimized nested query in StreamProxy
+    /// proton: ends.
 
     std::shared_ptr<const StorageLimitsList> storage_limits;
 
