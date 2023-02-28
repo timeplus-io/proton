@@ -100,12 +100,14 @@
             "description": "json object column",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_type": "table","depends_on_stream": "test_json_obj", "wait":1,"query":
+                    {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json_obj"},
+                    {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_obj (json json, timestamp datetime64(3) default now64(3))"},
+                    {"client":"python", "query_type": "table","depends_on_stream": "test_json_obj", "wait":2,"query":
                         "insert into test_json_obj (json, timestamp) values
                         ('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:01')"
                     },
-                    {"client":"python", "query_id":"1203", "depends_on_stream": "test_json_obj", "query":"select json.data.id, json.data.value, json.tag from test_json_obj limit 1 settings seek_to='earliest'"},
-                    {"client":"python", "query_id":"1204", "query_type": "table" ,"depends_on_stream": "test_json_obj", "query":"select json.data.id, json.data.value, json.tag from table(test_json_obj)"}
+                    {"client":"python", "query_id":"1203", "depends_on_stream": "test_json_obj", "wait":3, "query":"select json.data.id, json.data.value, json.tag from test_json_obj limit 1 settings seek_to='earliest'"},
+                    {"client":"python", "query_id":"1204", "query_type": "table" ,"depends_on_stream": "test_json_obj","wait":2, "query":"select json.data.id, json.data.value, json.tag from table(test_json_obj)"}
                     ]}
             ],
             "expected_results": [

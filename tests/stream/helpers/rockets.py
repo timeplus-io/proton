@@ -62,6 +62,8 @@ import multiprocessing as mp
 from clickhouse_driver import Client, errors
 from requests.api import request
 from helpers.utils import compose_up
+from timeplus import Stream, Environment
+from helpers.event_util import Event,EventRecord,TestEventTag, TestSuiteInfoTag, TestSuiteEventTag
 
 
 cur_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -90,6 +92,8 @@ CASE_RETRY_UP_LIMIT = 5 #test suite case retry up limit, test_suite_run retry ca
 CASE_RETRY_TIMES = 3 #if retry again if failed case found in retry 
 TEST_SUITE_LAUNCH_INTERVAL = 10 #default value will be covered by the setting in config file
 # alive = mp.Value('b', True)
+TIME_STR_FORMAT = "%y/%m/%d, %H:%M:%S"
+
 
 
 def rockets_env_var_get():  # todo: need refactor
@@ -220,12 +224,17 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     if config == None:
         with open(config_file) as f:
             configs = json.load(f)
+        timeplus_event_stream = configs.get("timeplus_event_stream") #todo: distribute global configs into configs
+        timeplus_event_version = configs.get("timeplus_event_version")
         #logger.debug(f"rockets_context: configs reading from config file: {configs}")
         config = configs.get(proton_setting)
         logger.debug(f"setting = {proton_setting},config = {config}")
 
     if config == None:
         raise Exception("No config env vars nor config file")
+    
+    test_event_tag = os.environ.get("TIMEPLUS_TEST_EVENT_TAG", None)
+    #timeplus_event_stream = os.environ.get("timeplus_event_stream")   
 
     config["proton_ci_mode"] = proton_ci_mode
     config["proton_setting"] = proton_setting  # put proton_setting into config
@@ -234,6 +243,12 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     config["test_case_timeout"] = int(test_case_timeout)
     config["proton_create_stream_shards"] = proton_create_stream_shards
     config["proton_create_stream_replicas"] = proton_create_stream_replicas
+    if test_event_tag is not None:
+        test_event_tag = json.loads(test_event_tag)
+        config["test_event_tag"] = test_event_tag
+    config["timeplus_event_stream"] = timeplus_event_stream
+    config["timeplus_event_version"] = timeplus_event_version
+
 
     if (
         "cluster" in proton_setting
@@ -2610,8 +2625,9 @@ def depends_on_stream_exist(table_ddl_url, depends_on_stream_list, query_id = No
     logger.debug(f"depends_on_stream_list = {depends_on_stream_list}")
     table_info_list = []
     for depends_on_stream in depends_on_stream_list:
-        retry = 100
+        retry = 500
         table_info = table_exist(table_ddl_url, depends_on_stream)
+        logger.debug(f"start to check depends_on_stream = {depends_on_stream}")
         while table_info is None and retry > 0:
             time.sleep(0.1)
             table_info = table_exist(table_ddl_url, depends_on_stream)
@@ -3104,60 +3120,14 @@ def reset_tables_of_test_inputs(client, config, table_schemas, test_case):
                                     create_table_rest(config, table_schema)
                                     tables_recreated.append(name)
 
-                                #     logger.debug(
-                                    #     f"drop stream and re-create once case starts, table_ddl_url = {table_ddl_url}, table_schema = {table_schema}"
-                                    # )
-                                    # res = client.execute(f"drop stream if exists {table}")
-                                    # logger.debug(f"drop stream if exists {table} res = {res}")                                
-                                    # check_count = 100
-                                    # check_interval = 1
-                                    # time.sleep(check_interval)                                
-                                    # while table_exist(table_ddl_url, table) and check_count > 0:
-                                    #     logger.debug(
-                                    #         f"{name} not dropped succesfully yet, wait ..."
-                                    #     )
-                                    #     time.sleep(check_interval)
-                                    #     check_count -= 1
-                                    
-                                    # if table_exist(table_ddl_url, table) and check_count <= 0:
-                                    #     logger.info(f"raise DROP_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")
-                                    #     raise Exception(f"DROP_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")                                   
-                                    # logger.debug(
-                                    #     f"drop stream and re-create once case starts, table {table} is dropped"
-                                    # )
 
-                                    #create_table_rest(config, table_schema)
-                                    # check_count = 100
-                                    # check_interval = 1
-                                    # time.sleep(check_interval)                                 
-                                    # while table_exist(table_ddl_url, table) is None and check_count > 0:
-                                    #     logger.debug(
-                                    #         f"{name} not recreated successfully yet, wait ..."
-                                    #     )
-                                    #     time.sleep(check_interval)
-                                    #     check_count -= 1
-                                    # if check_count <= 0:
-                                    #     logger.info(f"raise CREATE_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")
-                                    #     raise Exception(f"CREATE_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")                                                                       
-                                #     tables_recreated.append(name)
                                 elif name == table and not table_exist(
                                      table_ddl_url, table
                                  ):
 
                                     create_table_rest(config, table_schema)
                                     tables_recreated.append(name)
-                        #             check_count = 100
-                        #             check_interval = 1
-                        #             time.sleep(check_interval)                                 
-                        #             while table_exist(table_ddl_url, table) is None and check_count > 0:
-                        #                 logger.debug(
-                        #                     f"{name} not recreated successfully yet, wait ..."
-                        #                 )
-                        #                 time.sleep(check_interval)
-                        #                 check_count -= 1
-                        #             if check_count <= 0:
-                        #                 logger.info(f"raise CREATE_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")
-                        #                 raise Exception(f"CREATE_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")                                                                       
+
                                     
         if len(tables_recreated) > 0:
             logger.debug(f"tables: {tables_recreated} are dropted and recreated.")
@@ -3271,6 +3241,18 @@ def test_case_collect(test_suite, tests_2_run, test_ids_set, proton_setting):
         raise Exception(f"test case collection exception, error = {error}") 
     return test_run_list
 
+def test_suite_event_write(test_suite_event,test_suite_name, setting_config, test_suite_config, test_event_tag, version, timeplus_env, timeplus_stream_name):
+    try:      
+        
+        test_suite_info_tag = TestSuiteInfoTag(None, test_suite_name, setting_config, test_suite_config)
+        test_suite_event_tag = TestSuiteEventTag(test_event_tag, test_suite_info_tag.value)
+        test_suite_event_record = EventRecord(None, test_suite_event,test_suite_event_tag, version)
+        test_suite_event_record.write(timeplus_env, timeplus_stream_name)
+        return test_suite_event_record
+    except(BaseException) as error:
+        logger.debug(f"timeplus event write exception: {error}")
+        traceback.print_exc()
+        return     
 
 def test_suite_run(
     config,
@@ -3291,6 +3273,35 @@ def test_suite_run(
     test_suite = test_suite_set_dict.get("test_suite")
     test_retry = config.get("test_retry")
     test_suite_timeout = config.get("test_suite_timeout")
+    test_event_tag = config.get("test_event_tag")
+    test_event_version = config.get("timeplus_event_version")
+    timeplus_event_stream = config.get("timeplus_event_stream")
+    if test_suite != None and len(test_suite) != 0:
+        test_suite_config = test_suite.get("test_suite_config")
+    else:
+        test_suite_config = {}    
+    
+
+    api_key = os.environ.get("TIMEPLUS_API_KEY")
+    api_address = os.environ.get("TIMEPLUS_ADDRESS")
+    work_space = os.environ.get("TIMEPLUS_WORKSPACE")
+
+
+    if test_event_tag is not None and api_key is not None and api_address is not None and work_space is not None:
+        try:
+
+            timeplus_env = Environment().address(api_address).workspace(work_space).apikey(api_key)       
+            event_type = 'test_suite_event'
+            event_detailed_type = 'status'
+            event_details = 'start'
+            test_suite_event_start = Event.create(event_type, event_detailed_type, event_details)
+            test_suite_event = test_suite_event_write(test_suite_event_start,test_suite_name, config, test_suite_config, test_event_tag, test_event_version, timeplus_env, timeplus_event_stream)
+
+        except(BaseException) as error:
+            logger.debug(f"timeplus event write exception: {error}")
+            traceback.print_exc() 
+
+
     if test_suite_timeout is None or test_suite_timeout == DEFAULT_TEST_SUITE_TIMEOUT:
         test_suite_timeout = test_suite.get("test_suite_timeout")
         if test_suite_timeout is None:
@@ -3304,7 +3315,7 @@ def test_suite_run(
             test_case_timeout = DEFAULT_CASE_TIMEOUT
     rest_setting = config.get("rest_setting")
 
-    logger.info(f"proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, test_retry = {test_retry}, test_suite_timeout = {test_suite_timeout}, running starts......")
+    logger.info(f"proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, test_retry = {test_retry}, test_suite_timeout = {test_suite_timeout},test_event_tag = {test_event_tag}, test_running starts......")
     query_results_queue = test_suite_set_dict.get("query_results_queue")
     # q_exec_client = test_suite_set_dict.get("query_exe_client")
 
@@ -3340,6 +3351,7 @@ def test_suite_run(
         test_suite_launch_interval = TEST_SUITE_LAUNCH_INTERVAL
     logger.debug(f"watch: proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name},to_start_at = {to_start_at}")
     if to_start_at is not None: #if no last_test_suite_lanuched_at in config, that means the 1st test suite running on the env
+        to_start_at = datetime.datetime.strptime(to_start_at, TIME_STR_FORMAT)
         sleep_time = to_start_at - datetime.datetime.now()
         logger.debug(f"watch: proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name},sleep_time = {sleep_time}")
         # if sleep_time.days < 0:
@@ -3359,18 +3371,15 @@ def test_suite_run(
     test_id = '' #initialize test_id
 
     # run the test suite in a standlone process
-    
-
-    
+        
     #proton_setting = config.get("proton_setting")
-
 
     test_suite_timeout_hit = threading.Event() #set the test_suite_timeout_hit flag as False and start a timer to set this flag
     def timeout_flag(timeout_hit_event): #timeout_hit_event is a threading.Event, todo: use signal.signal() to register a signal handler and signal.alarm(timeout)
         try:
             timeout_hit_event.set()
-            #query_exe_client.terminate()
-            query_exe_client.send_signal(signal.SIGINT)
+            query_exe_client.terminate()
+            #query_exe_client.send_signal(signal.SIGINT)
             message_2_send = "case_result_done"
             q_exec_client_conn.send(message_2_send)
             q_exec_client_conn.send("tear_down_done")
@@ -3423,8 +3432,7 @@ def test_suite_run(
     test_sets = []  # test_set for collecting testing results of all test_suites
     if test_suite != None and len(test_suite) != 0:
         test_id_run = 0
-
-        test_suite_config = test_suite.get("test_suite_config")
+        #test_suite_config = test_suite.get("test_suite_config")
         if test_suite_config != None:
             table_schemas = test_suite_config.get("table_schemas")
         else:
@@ -3768,10 +3776,30 @@ def test_suite_run(
 
             logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name} running ends")
             logger.info(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, test_run_list_len = {test_run_list_len}, test_suite_passed_total = {test_suite_passed_total}, test_suite_case_run_duration = {test_suite_case_run_duration.seconds} seconds, test_suite_run_duration = {test_suite_run_duration.seconds} seconds, test_suite_run_status: ")
-            for test_set in test_sets_2_run:
-                logger.info(f'test_id = {test_set["test_id"]}, test_status = {test_set["status"]},case_retried = {test_set["case_retried"]}, test_result = {test_set["test_result"]}, test_case_duration = {test_set["test_case_duration"]} seconds')
-        
 
+            if test_event_tag is not None and api_key is not None and api_address is not None and work_space is not None:
+                try:
+                    test_suite_result_running_summary = {"test_run_list_len": test_run_list_len, "test_suite_passed_total":test_suite_passed_total, "test_suite_case_run_duration": test_suite_case_run_duration.seconds}
+                    test_case_run_summary_list = []
+                    test_suite_result_flag = 1
+                    for test_set in test_sets_2_run:
+                        test_case_run_summary = {"test_id":test_set["test_id"],"test_status": test_set["status"], "case_retried": test_set["case_retried"], "test_result":test_set["test_result"], "test_case_duration": test_set["test_case_duration"]}
+                        if not test_set["test_result"]:
+                            test_suite_result_flag = test_suite_result_flag * 0
+                        test_case_run_summary_list.append(test_case_run_summary)
+                        logger.info(f'test_id = {test_set["test_id"]}, test_status = {test_set["status"]},case_retried = {test_set["case_retried"]}, test_result = {test_set["test_result"]}, test_case_duration = {test_set["test_case_duration"]} seconds')
+                    if test_suite_result_flag:
+                        test_suite_result = {"test_suite_result": "success", "detailed_summary":{**test_suite_result_running_summary, **{"test_case_results":test_case_run_summary_list}}}
+                    else:
+                        test_suite_result = {"test_suite_result": "failed", "detailed_summary":{**test_suite_result_running_summary, **{"test_case_results":test_case_run_summary_list}}}
+                    event_details = 'end'
+                    test_suite_event_end = Event.create(event_type, event_detailed_type, event_details, **test_suite_result)
+
+                    test_suite_event = test_suite_event_write(test_suite_event_end,test_suite_name, config, test_suite_config, test_event_tag, test_event_version, timeplus_env, timeplus_event_stream)
+                    print(f"test_suite_event = {test_suite_event}")
+                except(BaseException) as error:
+                    logger.debug(f"timeplus event write exception: {error}")
+                    traceback.print_exc() 
 
         test_suite_result_done_queue.put(test_suite_result_summary)
         test_suite_result_done_queue.join()
@@ -4089,15 +4117,20 @@ def run_test_suites(config, test_suite_run_ctl_queue, test_suites_selected_sets,
     if multi_protons == True: #if multi_protons is True, there are multiple settings for allocating the test suites on configs
 
         proton_configs = list(config["settings"].values())
-        for proton_config in proton_configs:
+        for proton_config in proton_configs: #todo: auto read attributes from config and distribute the config to each setting
             proton_config["proton_ci_mode"] = config["proton_ci_mode"]
             proton_config["proton_setting"] = config["proton_setting"] 
             proton_config["test_suite_timeout"] = config["test_suite_timeout"]
             proton_config['test_retry'] = config['test_retry'] 
-            proton_config["test_case_timeout"] = config["test_case_timeout"] 
+            proton_config["test_case_timeout"] = config["test_case_timeout"]
+            test_event_tag = config.get("test_event_tag")
+            if test_event_tag is not None: 
+                proton_config["test_event_tag"] = test_event_tag
+            proton_config["timeplus_event_stream"] = config["timeplus_event_stream"]
+            proton_config["timeplus_event_version"] = config["timeplus_event_version"]
             proton_config["proton_create_stream_shards"] = config["proton_create_stream_shards"] 
             proton_config["proton_create_stream_replicas"] = config["proton_create_stream_replicas"]
-            proton_cluster_query_node = config.get("proton_cluster_query_node")
+            proton_cluster_query_node = config.get("proton_cluster_query_node")          
             if proton_cluster_query_node is not None: #todo: support and optimize handle multi cluster settings in one env later.
                 proton_config["proton_cluster_query_node"] = config["proton_cluster_query_node"]
             proton_cluster_query_route_mode = config.get ("proton_cluster_query_route_mode")
@@ -4143,9 +4176,14 @@ def run_test_suites(config, test_suite_run_ctl_queue, test_suites_selected_sets,
         if to_start_at is None:
             if j//len(proton_configs) > 0:
                 to_start_at = datetime.datetime.now() + datetime.timedelta(seconds=test_suite_launch_interval)
+                to_start_at_str = to_start_at.strftime(TIME_STR_FORMAT)
+            else:
+                to_start_at_str = None
         else:
+            to_start_at = datetime.datetime.strptime(to_start_at, TIME_STR_FORMAT)
             to_start_at = to_start_at + datetime.timedelta(seconds=test_suite_launch_interval)
-        proton_config["to_start_at"] =  to_start_at
+            to_start_at_str = to_start_at.strftime(TIME_STR_FORMAT)
+        proton_config["to_start_at"] =  to_start_at_str
         test_suite_runner = mp.Process(
             target=test_suite_run,
             args=(

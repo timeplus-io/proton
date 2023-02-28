@@ -3,7 +3,7 @@ from argparse import ArgumentParser
 from helpers.s3_helper import S3Helper
 from helpers.compress_files import compress_file_fast
 from helpers.utils import compose_up
-from helpers.event_util import Event,TestEventTag,TestEvent
+from helpers.event_util import Event,EventRecord,TestEventTag
 import multiprocessing as mp
 import pytest
 from timeplus import Stream, Environment
@@ -299,6 +299,7 @@ if __name__ == "__main__":
     test_result_shared_list = [] #shared list for collecting result from ci_runner processes
     mp_mgr = mp.Manager()
     test_result_shared_list = mp_mgr.list()
+    configs = None
     
 
     parser = ArgumentParser(description="Proton functional tests")
@@ -455,6 +456,12 @@ if __name__ == "__main__":
     
     print(f"args_dict = {args_dict}")
 
+    with open(config_file_path) as f:
+        configs = json.load(f)     
+    
+    timeplus_event_stream = configs.get("timeplus_event_stream") #todo: distribute global configs into configs
+    timeplus_event_version = configs.get("timeplus_event_version")
+
     #initialize test event fields
     test_command_details = {"test_command_details": {"test_program":__file__.split("/")[-1],"test_paras": args_dict}} #put ci_runner parameters into tag of test_event
     event_id = None
@@ -463,10 +470,10 @@ if __name__ == "__main__":
     test_type = 'ci_smoke'
     event_type = 'test_event'
     event_detailed_type = 'status'
-    stream_name = 'test_event_2' #todo: read from test config
-    api_key = os.environ.get("TIMEPLUS_API_KEY")
-    api_address = os.environ.get("TIMEPLUS_ADDRESS")
-    work_space = os.environ.get("TIMEPLUS_WORKSPACE")
+    #stream_name = 'test_event_2' #todo: read from test config
+    api_key = os.environ.get("TIMEPLUS_API_KEY", None)
+    api_address = os.environ.get("TIMEPLUS_ADDRESS", None)
+    work_space = os.environ.get("TIMEPLUS_WORKSPACE", None)
     sanitizer = os.environ.get("SANITIZER","")
     if len(sanitizer) == 0:
         build_type = "release_build"
@@ -476,25 +483,29 @@ if __name__ == "__main__":
     pr_number = os.getenv("GITHUB_REF_NAME", "0")
     commit_sha = os.getenv("GITHUB_SHA", "0")
     platform_info = os.getenv("RUNNER_ARCH", "x86_64")
-    version = "0.2"
-    timeplus_env = Environment().address(api_address).workspace(work_space).apikey(api_key) 
+    # version = "0.1"
     test_id = None
     event_id = None
     test_result = "None"
-    try: #write status start test_event to timeplus 
-        test_event_tag = TestEventTag.create(repo_name, test_id, test_name, test_type,build_type, pr_number, commit_sha,os_info, platform_info,{})
-        event_details = 'start'
-        test_event = Event.create(event_type, event_detailed_type, event_details)    
-        #test_id = test_event_write(test_id, repo_name, test_name, test_type, detailed_type, details, timeplus_env, stream_name,event_type, test_command_details, build_type, pr_number, commit_sha, os_info, platform_info, version)        
-        test_event_start = TestEvent.create(test_event_tag, test_event, {}, version)
-        test_info_tag = test_event_start.test_event_tag.test_info_tag
-        print(f"test_event_start = {test_event_start}\n test_info_tag = {test_info_tag}")
-        test_event_start.write(timeplus_env, stream_name)
-        os.environ["TIMPLUS_TEST_ID"] = test_info_tag.test_id #set env var for test_id to pass to rockets
-    except(BaseException) as error:
-        logger.debug(f"timeplus event write exception: {error}")
-        traceback.print_exc()    
-
+    if api_address is not None and api_key is not None and work_space is not None:
+        try: #write status start test_event to timeplus 
+            timeplus_env = Environment().address(api_address).workspace(work_space).apikey(api_key) 
+            test_event_tag = TestEventTag.create(repo_name, test_id, test_name, test_type,build_type, pr_number, commit_sha,os_info, platform_info)
+            event_details = 'start'
+            test_event_start = Event.create(event_type, event_detailed_type, event_details)    
+            test_event_record_start = EventRecord.create(None, test_event_start, test_event_tag, timeplus_event_version)
+            test_info_tag = test_event_tag.test_info_tag
+            test_event_record_start.write(timeplus_env, timeplus_event_stream)
+            os.environ["TIMEPLUS_TEST_EVENT_TAG"] = json.dumps(test_event_tag.value) #set env var for test_id to pass to rockets
+            print(f"test_event_start sent")
+            # test_event_tag_from_env = os.getenv("TIMEPLUS_TEST_EVENT_TAG")
+            # print(f"test_event_tag_from_env = {test_event_tag_from_env}")
+        except(BaseException) as error:
+            logger.debug(f"timeplus event write exception: {error}")
+            traceback.print_exc()
+    else:
+        print(f"one of TIMEPLUS_API_KEY,TIMEPLUS_ADDRESS,TIMEPLUS_WORKSPACE is not found in ENV")   
+            
     logger.info(f"Check proton_python_driver and install...")
     proton_python_driver_install()
 
@@ -515,8 +526,8 @@ if __name__ == "__main__":
     procs = []
     for setting in settings:
         logger.debug(f"setting = {setting}, get config...")
-        with open(config_file_path) as f:
-            configs = json.load(f)          
+        # with open(config_file_path) as f:
+        #     configs = json.load(f)          
         setting_config = configs.get(setting) #if settings is not null, then read different setting config and start processes
         if setting_config is None:
             raise Exception(f"no config for setting = {setting} found in {config_file_path}")  
@@ -544,25 +555,32 @@ if __name__ == "__main__":
     #    ci_runner(cur_dir, run_mode, logging_level = logging_level)
     #    i += 1
 
-    test_result_str = "success"
+    
+    test_result_flag = 1
     detailed_summary = []
     for item in test_result_shared_list: #retcode: {'proton_setting': 'default', 'retcode': <ExitCode.TESTS_FAILED: 1>}:
         setting = item.get('proton_setting')
         retcode_str = str(item.get('retcode'))
-        if "FAILED" in retcode_str:
-            test_result_str = 'failed'
+        if "OK" not in retcode_str:
+            test_result_flag = test_result_flag * 0
         detailed_summary.append({setting:retcode_str})
+    
+    if test_result_flag:
+        test_result_str = "success"
+    else:
+        test_result_str = "failed"
     
     logger.info(f"test_result_str = {test_result_str}")           
     test_result = {"test_result": test_result_str, "detailed_summary": detailed_summary}
-    try: #write status start test_event to timeplus                
-        event_details = 'end'
-        test_event_end = Event.create(event_type, event_detailed_type, event_details, **test_result)
-        test_event_end = TestEvent.create(test_event_tag, test_event_end, {}, version)
-        print(f"test_event_end = {test_event_end}")
-        test_event_end.write(timeplus_env, stream_name) 
+    if api_address is not None and api_key is not None and work_space is not None:
+        try: #write status start test_event to timeplus                
+            event_details = 'end'
+            test_event_end = Event.create(event_type, event_detailed_type, event_details, **test_result)
+            test_event_record_end = EventRecord.create(None, test_event_end, test_event_tag, timeplus_event_version)
+            print(f"test_event_end = {test_event_end}")
+            test_event_record_end.write(timeplus_env, timeplus_event_stream) 
 
 
-    except(BaseException) as error:
-        logger.debug(f"timeplus event write exception: {error}")
-        traceback.print_exc()  
+        except(BaseException) as error:
+            logger.debug(f"timeplus event write exception: {error}")
+            traceback.print_exc()  

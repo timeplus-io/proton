@@ -22,18 +22,18 @@ TIMEPLUS_CONNECTION_RETRY = 3; #when T+ workspace connection error, retry how ma
 #         self._setting_event = setting_event
 
 class TestInfoTag():
-    def __init__(self, test_id, test_name, test_type, tag = {}):
-        print(f"TestInfoTag.__init__: test_id = {test_id}")
+    def __init__(self, test_id, test_name, test_type, **optional_test_info_tags):
         if test_id is None:
             self._test_id = str(uuid.uuid1())
         else:
             self._test_id = test_id        
         self._test_name = test_name
         self._test_type = test_type
-        self._tag = tag
-        test_info = {"test_info": {"test_id": self._test_id, "test_name": self._test_name, "test_type": test_type}}
-        tag = {**test_info, **tag}
-        self._tag = tag
+        if optional_test_info_tags is not None:
+            test_info = {"test_info": {**{"test_id": self._test_id, "test_name": self._test_name, "test_type": test_type}, **optional_test_info_tags}}
+        else:
+            test_info = {"test_info": {"test_id": self._test_id, "test_name": self._test_name, "test_type": test_type}}
+        self._value = test_info
 
     @property
     def test_id(self):   
@@ -57,62 +57,65 @@ class TestInfoTag():
             return None
 
     @property
-    def tag(self):   
-        if self._tag is not None:
-            return self._tag
+    def value(self):   
+        if self._value is not None:
+            return self._value
         else:
             return None 
 
     def __str__(self): 
-        return f"{self._tag}"
+        return f"{self._value}"
 
 class BuildInfoTag():
-    def __init__(self, build_type, pr_number, commit_sha, tag = {}):
+    def __init__(self, build_type, pr_number, commit_sha, **optional_build_info_tags):
         self._build_type = build_type
         self._pr_number = pr_number
         self._commit_sha = commit_sha
-        self._tag = tag
-        build_info = {"build_info": {"build_type": build_type, "pr_number": pr_number, "commit_sha": commit_sha}}
-        tag = {**build_info, **tag}
-        self._tag = tag    
+        if optional_build_info_tags is not None:
+            build_info = {"build_info": {**{"build_type": build_type, "pr_number": pr_number, "commit_sha": commit_sha},**optional_build_info_tags}}
+        else:
+            build_info = {"build_info": {"build_type": build_type, "pr_number": pr_number, "commit_sha": commit_sha}}
+        self._value = build_info    
     @property
-    def tag(self):   
-        if self._tag is not None:
-            return self._tag
+    def value(self):   
+        if self._value is not None:
+            return self._value
         else:
             return None 
 
     def __str__(self): 
-        return f"{self._tag}"
+        return f"{self._value}"
     
 class RunTimeInfoTag():
-    def __init__(self, os_info, platform_info, tag = {}):
+    def __init__(self, os_info, platform_info, **optional_run_time_info_tags):
         self._os_info = os_info
         self._platform_info = platform_info
-        self._tag = tag
-        run_time_info = {"run_time_info": {"os":os_info, "platform":platform_info}}
-        tag = {**run_time_info, **tag}
-        self._tag = tag    
+        if optional_run_time_info_tags is not None:
+            run_time_info = {"run_time_info": {**{"os":os_info, "platform":platform_info}, **optional_run_time_info_tags}}
+        else:
+            run_time_info = {"run_time_info": {"os":os_info, "platform":platform_info}}
+        self._value = run_time_info    
     @property
-    def tag(self):   
-        if self._tag is not None:
-            return self._tag
+    def value(self):   
+        if self._value is not None:
+            return self._value
         else:
             return None 
 
     def __str__(self): 
-        return f"{self._tag}"
+        return f"{self._value}"
 
 class TestEventTag:
-    def __init__(self, repo_name, test_info_tag, build_info_tag, runtime_info_tag, tag = {}):
+    def __init__(self, repo_name, test_info_tag, build_info_tag, runtime_info_tag, **optional_tags):
         self._test_info_tag = test_info_tag
         self._build_info_tag = build_info_tag
         self._runtime_info_tag = runtime_info_tag
-        self._tag = tag
+        if optional_tags is not None:
+            tag = optional_tags
         self._repo_name = repo_name       
         repo_name = {"repo_name": repo_name} #compose repo_name        
-        tag = {**repo_name, **test_info_tag.tag, **build_info_tag.tag, **runtime_info_tag.tag, **tag}
-        self._tag = tag
+        value = {**repo_name, **test_info_tag.value, **build_info_tag.value, **runtime_info_tag.value, **tag}
+        self._value = value
 
     @property
     def test_info_tag(self):   
@@ -136,29 +139,77 @@ class TestEventTag:
             return None 
 
     @property
-    def tag(self):   
-        if self._tag is not None:
-            return self._tag
+    def value(self):   
+        if self._value is not None:
+            return self._value
         else:
             return None 
 
 
     def __str__(self): 
-        return f"{self._tag}"         
+        return f"{self._value}"         
 
     @classmethod
-    def create(cls, repo_name, test_id, test_name, test_type, build_type, pr_number, commit_sha, os_info, platform_info, tag):
+    def create(cls, repo_name, test_id, test_name, test_type, build_type, pr_number, commit_sha, os_info, platform_info, **optional_tags):
         try:
             test_info_tag = TestInfoTag(test_id, test_name, test_type)
             build_info_tag = BuildInfoTag(build_type, pr_number, commit_sha)
             runtime_info_tag = RunTimeInfoTag(os_info, platform_info)
-            test_event_tag = TestEventTag(repo_name, test_info_tag, build_info_tag, runtime_info_tag)
+            test_event_tag = TestEventTag(repo_name, test_info_tag, build_info_tag, runtime_info_tag, **optional_tags)
             return test_event_tag
         except(BaseException) as error:
             print(f"TestEvent.create Exception = error")
             traceback.print_exc()
-            return None   
+            return None    
 
+class TestSuiteInfoTag():
+    def __init__(self, test_suite_id, test_suite_name, setting_config, test_suite_config, **optional_test_suite_tags):
+        if test_suite_id is None:
+            test_suite_id = str(uuid.uuid1())
+        self._test_suite_name = test_suite_name
+        self._setting_config = setting_config
+        self._test_suite_config = test_suite_config
+        test_suite_info_tag = {"test_suite_id": test_suite_id,"test_suite_name": test_suite_name,"setting_config": setting_config, "test_suite_config": test_suite_config}
+        if optional_test_suite_tags is not None:
+            test_suite_info_tag = {"test_suite_info": {**test_suite_info_tag, **optional_test_suite_tags}}
+        else:
+            test_suite_info_tag = {"test_suite_info": {"test_suite_id": test_suite_id,"test_suite_name": test_suite_name,"setting_config": setting_config, "test_suite_config": test_suite_config}}
+
+        self._value = test_suite_info_tag
+
+    @property
+    def value(self):   
+        if self._value is not None:
+            return self._value
+        else:
+            return None 
+
+    def __str__(self): 
+        return f"{self._value}" 
+
+
+class TestSuiteEventTag():
+    def __init__(self,test_event_tag_dict, test_suite_info_tag_dict, **optional_test_suite_event_tags):
+        self._test_event_tag = test_event_tag_dict
+        self._test_suite_tag = test_suite_info_tag_dict
+        self._optional_test_suite_event_tags = optional_test_suite_event_tags
+        if optional_test_suite_event_tags is not None:
+            value = {**test_event_tag_dict, **test_suite_info_tag_dict, **optional_test_suite_event_tags}
+        else:
+            value = {**test_event_tag_dict, **test_suite_info_tag_dict}       
+        
+        self._value = value
+    @property
+    def value(self):   
+        if self._value is not None:
+            return self._value
+        else:
+            return None 
+
+
+    def __str__(self): 
+        return f"{self._value}" 
+    
 
 class Event():
     def __init__(self, event_type, detailed_type, details, **optional_event_msg):
@@ -170,16 +221,16 @@ class Event():
         if optional_event_msg is not None:
             event_payload = {**event_payload, **optional_event_msg}
         self._event_payload = event_payload
-        event = {"event_type": event_type, "payload":event_payload}
-        self._event = event #compose event 
+        value = {"event_type": event_type, "payload":event_payload}
+        self._value = value #compose event 
     @property
-    def event(self):   
-        if self._event is not None:
-            return self._event
+    def value(self):   
+        if self._value is not None:
+            return self._value
         else:
             return None
     def __str__(self): 
-        return f"{self._event}"
+        return f"{self._value}"
     @classmethod
     def create(cls, event_type, event_detailed_type, event_details, **optional_event_msg):
         try:
@@ -191,15 +242,16 @@ class Event():
             return None                
 
 class EventRecord():
-    def __init__(self, event_id, event, tag, version):
+    def __init__(self, event_id, event_obj, tag_obj, version):
         if event_id is None:
             self._event_id = str(uuid.uuid1())
-        self._event = event #todo: json validate
+        self._event = event_obj
         version_dict = {"version":str(version)}
-        if tag is None:
-            self._tag = version_dict
+        self._tag = tag_obj
+        if tag_obj is None:
+            self._tag_value = version_dict
         else:
-            self._tag = {**version_dict, **tag} #todo: json validate
+            self._tag_value = {**version_dict, **tag_obj.value} #todo: json validate
         self._timestamp = str(datetime.datetime.now())
 
         self._version = version
@@ -225,6 +277,8 @@ class EventRecord():
         else:
             return None
 
+
+
     @property
     def version(self):   
         if self._version is not None:
@@ -241,7 +295,7 @@ class EventRecord():
             return None
 
     def __str__(self): 
-        return "{"+ f"event_id = {self._event_id}, event = {self._event}, tag = {self._tag}, timestamp = {self._timestamp}" + "}"
+        return "{"+ f"event_id = {self._event_id}, event = {self._event}, tag = {self._tag},version = {self._version}, timestamp = {self._timestamp}" + "}"
     
     def write(
         self,
@@ -263,16 +317,18 @@ class EventRecord():
                     .column("timestamp", "datetime64(3)")
                     
                 )
-                field_names = ["event_id", "event", "tag", "timestamp"] 
+                field_names = ["event_id", "event", "tag", "timestamp"]
+                print(f"self._event.value = {self._event.value}")
+                print(f"self._tag_value = {self._tag_value}")  
                 row_data = [
                     self._event_id,
-                    json.dumps(self._event.event),
-                    json.dumps(self._tag),
+                    json.dumps(self._event.value),
+                    json.dumps(self._tag_value),
                     self._timestamp,
 
                 ]
                 
-                print(f"field_names = {field_names} \n row_data = {row_data}")
+                logger.debug(f"field_names = {field_names} \n row_data = {row_data}")
 
                 stream.ingest(field_names, [row_data])
                 retry_flag = False
@@ -285,32 +341,44 @@ class EventRecord():
                 retry += 1        
         return None
 
-
-
-class TestEvent(EventRecord):
-    def __init__(self, test_event_tag, event, tag = {}, version = '0.1'):
-        self._test_event_tag = test_event_tag
-        tag = {**test_event_tag.tag, **tag}
-        self._tag = tag #compose tag
-        self._event = event
-        super().__init__(None, event, tag, version)   
-    
-    @property
-    def test_event_tag(self):   
-        if self._test_event_tag is not None:
-            return self._test_event_tag
-        else:
-            return None 
-    
     @classmethod
-    def create(cls, test_event_tag, event, tag, version):
+    def create(cls, event_id, event, tag, version):
         try:
-            test_event = TestEvent(test_event_tag, event, tag, version)
-            return test_event
+            event = EventRecord(event_id, event, tag, version)
+            return event
         except(BaseException) as error:
             print(f"TestEvent.create Exception = error")
             traceback.print_exc()
-            return None                                      
+            return None 
+
+
+# class TestEvent(EventRecord):
+#     def __init__(self, test_event_tag, event, version, **optional_tags):
+#         self._test_event_tag = test_event_tag
+#         if optional_tags is not None:
+#             tag = {**test_event_tag.tag, **optional_tags}
+#         else:
+#             tag = test_event_tag
+#         self._tag = tag #compose tag
+#         self._event = event
+#         super().__init__(None, event, tag, version)   
+    
+#     @property
+#     def test_event_tag(self):   
+#         if self._test_event_tag is not None:
+#             return self._test_event_tag
+#         else:
+#             return None 
+    
+#     @classmethod
+#     def create(cls, test_event_tag, event, version, **optional_tags):
+#         try:
+#             test_event = TestEvent(test_event_tag, event, version, **optional_tags)
+#             return test_event
+#         except(BaseException) as error:
+#             print(f"TestEvent.create Exception = error")
+#             traceback.print_exc()
+#             return None                                      
 
 # def test_event_write(
 #     test_id,
@@ -340,53 +408,53 @@ class TestEvent(EventRecord):
 #     return res
 
 
-class TestPerSetEvent(TestEvent):
-    def __init__(self, setting_id, setting_name, test_suites, test_id, repo_name, test_name, test_type, event_type, detailed_type, details, tag = {}, version = '0.1'):
-        if setting_id is None:
-            self._setting_id = str(uuid.uuid1())
-        else:
-            self._setting_id = setting_id
-        self._setting_name = setting_name
-        self._test_suites = test_suites
-        setting_info = {"setting_info": {"setting_id": setting_id, "setting_name": setting_name, "test_suites":test_suites}}
-        tag = {**setting_info, **tag}             
-        super().__init__(test_id, repo_name, test_name, test_type, event_type, detailed_type, details, tag = {}, version = '0.1')    
+# class TestPerSetEvent(TestEvent):
+#     def __init__(self, setting_id, setting_name, test_suites, test_id, repo_name, test_name, test_type, event_type, detailed_type, details, tag = {}, version = '0.1'):
+#         if setting_id is None:
+#             self._setting_id = str(uuid.uuid1())
+#         else:
+#             self._setting_id = setting_id
+#         self._setting_name = setting_name
+#         self._test_suites = test_suites
+#         setting_info = {"setting_info": {"setting_id": setting_id, "setting_name": setting_name, "test_suites":test_suites}}
+#         tag = {**setting_info, **tag}             
+#         super().__init__(test_id, repo_name, test_name, test_type, event_type, detailed_type, details, tag = {}, version = '0.1')    
 
-    @property
-    def setting_id(self):   
-        if self._setting_id is not None:
-            return self._setting_id
-        else:
-            return None
+#     @property
+#     def setting_id(self):   
+#         if self._setting_id is not None:
+#             return self._setting_id
+#         else:
+#             return None
 
-    @property
-    def setting_name(self):   
-        if self._setting_name is not None:
-            return self._setting_name
-        else:
-            return None
+#     @property
+#     def setting_name(self):   
+#         if self._setting_name is not None:
+#             return self._setting_name
+#         else:
+#             return None
 
-    @property
-    def test_suites(self):   
-        if self._test_suites is not None:
-            return self._test_suites
-        else:
-            return None
+#     @property
+#     def test_suites(self):   
+#         if self._test_suites is not None:
+#             return self._test_suites
+#         else:
+#             return None
 
-    def __str__(self):
-        super_str_res = super().__str__() 
-        return (f"self.setting_id = {self._setting_id}, self.setting_name = {self._setting_name}, self.test_suites = {self._test_suites}" + super_str_res)    
+#     def __str__(self):
+#         super_str_res = super().__str__() 
+#         return (f"self.setting_id = {self._setting_id}, self.setting_name = {self._setting_name}, self.test_suites = {self._test_suites}" + super_str_res)    
 
-    def write(
-        self,
-        env,  
-        stream_name
-    ):
+#     def write(
+#         self,
+#         env,  
+#         stream_name
+#     ):
         
-        test_id = super().write(env, stream_name)
-        #os.environ["TIMPLUS_TEST_ID"] = str(self._test_id) #set env var for test_id
-        print(f"TestPerSetEvent write: self._setting_id = {self._setting_id}")
-        return self._setting_id
+#         test_id = super().write(env, stream_name)
+#         #os.environ["TIMPLUS_TEST_ID"] = str(self._test_id) #set env var for test_id
+#         print(f"TestPerSetEvent write: self._setting_id = {self._setting_id}")
+#         return self._setting_id
 
 if __name__ == "__main__":
     #test_event = Event('proton', 'test_event', {"detailed-type": "test_status", "detail": {"status":"start"}}, 'a0001', {"source": "ci_node_1", "source_type":"ci", "platform": "linux", "build_type": "sanitizer"})

@@ -41,7 +41,7 @@
             {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists cte_stream"},
             {"client":"python", "query_type": "table", "wait":3, "query":"create stream if not exists cte_stream(i int)"},
             {"client":"python", "query_type": "table", "depends_on_stream":"cte_stream", "wait":3, "query": "insert into cte_stream(i) values (1),(2),(3)"},
-            {"client":"python", "query_type": "table", "query_id":"1100","depends_on_stream":"cte_stream","wati":5, "query":"with cte as (select i + 1, to_string(i) from cte_stream) select * from table(cte)"},
+            {"client":"python", "query_type": "table", "query_id":"1100","depends_on_stream":"cte_stream","wait":5, "query":"with cte as (select i + 1, to_string(i) from cte_stream) select * from table(cte)"},
             {"client":"python", "query_type": "table", "query_id":"1101","depends_on_stream":"cte_stream","wait":2, "query":"with cte as (select count() from cte_stream) select * from table(cte)"}
           ]
         }

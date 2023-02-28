@@ -1,4 +1,6 @@
 {
+    "timeplus_event_stream": "test_event",
+    "timeplus_event_version": "0.1",
     "rest_setting": {
         "host_url": "http://localhost:3218",
         "http_snapshot_url": "http://localhost:8123",
