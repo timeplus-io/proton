@@ -16,8 +16,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 #pq.write_table(tab, "time32_test.parquet")
 #pq.write_table(tab64, "time64_test.parquet")
 
-#${CLICKHOUSE_CLIENT} --query "drop stream dt_test"
-${CLICKHOUSE_CLIENT} --query "create stream dt_test (timestamp DateTime('UTC')) engine=Memory()"
+${CLICKHOUSE_CLIENT} --query "drop stream dt_test"
+${CLICKHOUSE_CLIENT} --query "create stream dt_test (timestamp dateime32('UTC')) engine=Memory()"
 
 cat ${CURDIR}/data_parquet/time32_test.parquet | ${CLICKHOUSE_CLIENT} --query "insert into dt_test FORMAT Parquet"
 

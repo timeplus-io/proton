@@ -9,6 +9,7 @@ $CLICKHOUSE_CLIENT --query="INSERT INTO t_uuid VALUES ('3f5ffba3-19ff-4f3d-8861-
 $CLICKHOUSE_CLIENT --query="SELECT Id FROM t_uuid FORMAT TSV" > "${CLICKHOUSE_TMP}"/data.tsv
 
 echo FROM RAW DATA && cat "${CLICKHOUSE_TMP}"/data.tsv
+echo "${CLICKHOUSE_TMP} HHHHHHHHHHH"
 echo TRANSFORMED TO && $CLICKHOUSE_OBFUSCATOR --structure "Id uuid" --input-format TSV --output-format TSV --seed dsrub < "${CLICKHOUSE_TMP}"/data.tsv 2>/dev/null
 
 $CLICKHOUSE_CLIENT --query="DROP STREAM t_uuid"
