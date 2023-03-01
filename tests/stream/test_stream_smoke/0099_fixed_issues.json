@@ -196,6 +196,25 @@
         {"query_id":"9907", "expected_results":"error_code:43"},
         {"query_id":"9908", "expected_results":"error_code:43"}
       ]
+    },
+    {
+      "id": 7,
+      "tags": ["join", "union"],
+      "name": "#2229",
+      "description": "streaming join with union query",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test_stream_2229"},
+            {"client":"python", "query_type": "table", "wait":2, "query": "create stream test_stream_2229(i int)"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2229", "wait":3, "query_id":"9900", "query_end_timer":5, "query":"with cte as (select * from test_stream_2229 union select * from test_stream_2229) select i from test_stream_2229 join cte using(i)"},
+            {"client":"python", "query_type": "table", "depends_on_stream":"test_stream_2229", "wait":5, "query": "insert into test_stream_2229(i) values(1)(2)(3)"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":[[1],[2],[3],[1],[2],[3]]}
+      ]
     }
   ]
 }

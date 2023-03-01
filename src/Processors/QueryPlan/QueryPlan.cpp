@@ -96,6 +96,11 @@ void QueryPlan::unitePlans(QueryPlanStepPtr step, std::vector<std::unique_ptr<Qu
         max_threads = std::max(max_threads, plan->max_threads);
         resources = std::move(plan->resources);
     }
+
+    /// proton: starts. Propagate `streaming`
+    for (auto & plan : plans)
+        is_streaming |= plan->isStreaming();
+    /// protno: ends.
 }
 
 void QueryPlan::addStep(QueryPlanStepPtr step)
