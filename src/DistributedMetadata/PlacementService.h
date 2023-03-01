@@ -32,9 +32,9 @@ public:
     std::vector<NodeMetricsPtr> nodes() const;
 
     bool ready() const override { return started.test() && nodes().size(); }
+    void preShutdown();
 
 private:
-    void preShutdown();
     void processRecords(const nlog::RecordPtrs & records) override;
     String role() const override { return "placement"; }
     String cleanupPolicy() const override { return "compact"; }

@@ -1383,9 +1383,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         /// Proton starts : we like to shutdown ExternalGrokPatterns here explicitly since it depends on
         /// ScheduleThreadPool in `global_context` which will be deleted after calling `global_context->shutdown()`
-        /// which causes use after free segfault when ExternalGrokPatterns tries to deactivate its task from the
+        /// which causes use after free segfault when ExternalGrokPatterns/PlacementService tries to deactivate its task from the
         /// ScheduleThreadPool which doesn't exist any more
         ExternalGrokPatterns::instance(global_context).shutdown();
+        DB::PlacementService::instance(global_context).preShutdown();
         /// proton : ends
 
         global_context->shutdown();
