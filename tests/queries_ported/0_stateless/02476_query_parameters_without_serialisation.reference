@@ -1,0 +1,9 @@
+42	hello	2022-08-04 18:30:53	{'2b95a497-3a5d-49af-bf85-15763318cde7':[1.2,3.4]}
+uint64	string	datetime	map(uuid, array(float32))
+42	[1,2,3]	{'abc':22,'def':33}	[[4,5,6],[7],[8,9]]	{10:[11,12],13:[14,15]}	{'ghj':{'klm':[16,17]},'nop':{'rst':[18]}}
+int64	array(uint8)	map(string, uint8)	array(array(uint8))	map(uint8, array(uint8))	map(string, map(string, array(uint8)))
+5
+[[['a','b','c'],['d','e','f']],[['g','h','i'],['j','k','l']]]	array(array(array(string)))
+(((1,'a','2b95a497-3a5d-49af-bf85-15763318cde7',3.14)))	tuple(tuple(tuple(int32, string, uuid, float32)))
+[{1:(2,'2022-08-04 18:30:53','s'),3:(4,'2020-08-04 18:30:53','t')}]	array(map(uint64, tuple(int16, datetime, string)))
+{'a':[(1,{10:1,20:2}),(2,{30:3,40:4})],'b':[(3,{50:5,60:6}),(4,{70:7,80:8})]}	map(string, array(tuple(uint8, map(uint32, int64))))

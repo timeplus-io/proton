@@ -1251,6 +1251,15 @@ void Context::clampToSettingsConstraints(SettingsChanges & changes) const
     getSettingsConstraintsAndCurrentProfiles()->constraints.clamp(settings, changes);
 }
 
+void Context::resetSettingsToDefaultValue(const std::vector<String> & names)
+{
+    auto lock = getLock();
+    for (const String & name: names)
+    {
+        settings.setDefaultValue(name);
+    }
+}
+
 std::shared_ptr<const SettingsConstraintsAndProfileIDs> Context::getSettingsConstraintsAndCurrentProfiles() const
 {
     auto lock = getLock();

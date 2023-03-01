@@ -669,6 +669,9 @@ public:
     void checkSettingsConstraints(SettingsChanges & changes) const;
     void clampToSettingsConstraints(SettingsChanges & changes) const;
 
+    /// Reset settings to default value
+    void resetSettingsToDefaultValue(const std::vector<String> & names);
+
     /// Returns the current constraints (can return null).
     std::shared_ptr<const SettingsConstraintsAndProfileIDs> getSettingsConstraintsAndCurrentProfiles() const;
 

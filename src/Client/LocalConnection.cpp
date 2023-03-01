@@ -70,7 +70,7 @@ void LocalConnection::sendQuery(
     std::function<void(const Progress &)> process_progress_callback)
 {
     if (!query_parameters.empty())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "clickhouse local does not support query parameters");
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "proton local does not support query parameters");
 
     query_context = session.makeQueryContext();
     query_context->setCurrentQueryId(query_id);

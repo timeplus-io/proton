@@ -62,6 +62,8 @@ public:
 
     /// Resets all the settings to their default values.
     void resetToDefault();
+    /// Resets specified setting to its default value.
+    void resetToDefault(std::string_view name);
 
     bool has(std::string_view name) const { return hasBuiltin(name) || hasCustom(name); }
     static bool hasBuiltin(std::string_view name);
@@ -313,6 +315,14 @@ void BaseSettings<Traits_>::resetToDefault()
 
     if constexpr (Traits::allow_custom_settings)
         custom_settings_map.clear();
+}
+
+template <typename Traits_>
+void BaseSettings<Traits_>::resetToDefault(std::string_view name)
+{
+    const auto & accessor = Traits::Accessor::instance();
+    if (size_t index = accessor.find(name); index != static_cast<size_t>(-1))
+        accessor.resetValueToDefault(*this, index);
 }
 
 template <typename Traits_>
