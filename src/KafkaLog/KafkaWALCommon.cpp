@@ -25,6 +25,7 @@ namespace ErrorCodes
     extern const int MSG_SIZE_TOO_LARGE;
     extern const int INTERNAL_INGEST_BUFFER_FULL;
     extern const int INVALID_LOGSTORE_REPLICATION_FACTOR;
+    extern const int TIMEOUT_EXCEEDED;
 }
 
 /// Allowed chars are ASCII alphanumerics, '.', '_' and '-'. '_' is used as escaped char in the form '_xx' where xx
@@ -90,6 +91,9 @@ int32_t mapErrorCode(rd_kafka_resp_err_t err, bool retriable)
 
         case RD_KAFKA_RESP_ERR_INVALID_REPLICATION_FACTOR:
             return DB::ErrorCodes::INVALID_LOGSTORE_REPLICATION_FACTOR;
+
+        case RD_KAFKA_RESP_ERR__TIMED_OUT:
+            return DB::ErrorCodes::TIMEOUT_EXCEEDED;
 
         default:
             return DB::ErrorCodes::UNKNOWN_EXCEPTION;

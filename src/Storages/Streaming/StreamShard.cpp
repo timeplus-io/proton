@@ -1001,7 +1001,7 @@ std::vector<Int64> StreamShard::getOffsets(const SeekToInfoPtr & seek_to_info) c
         return seek_to_info->getSeekPoints();
 
     if (kafka)
-        return kafka->log->offsetsForTimestamps(kafka->topic(), seek_to_info->getSeekPoints(), shards);
+        return kafka->log->offsetsForTimestamps(kafka->topic(), seek_to_info->getSeekPoints());
     else
         return sequencesForTimestamps(seek_to_info->getSeekPoints());
 }
