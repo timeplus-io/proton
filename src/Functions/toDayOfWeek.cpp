@@ -1,13 +1,13 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/DateTimeTransforms.h>
-#include <Functions/FunctionDateOrDateTimeToSomething.h>
+#include <Functions/FunctionCustomWeekToSomething.h>
 #include <DataTypes/DataTypesNumber.h>
 
 
 namespace DB
 {
 
-using FunctionToDayOfWeek = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToDayOfWeekImpl>;
+using FunctionToDayOfWeek = FunctionCustomWeekToSomething<DataTypeUInt8, ToDayOfWeekImpl>;
 
 REGISTER_FUNCTION(ToDayOfWeek)
 {

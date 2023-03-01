@@ -199,12 +199,12 @@ private:
 
         static void dayOfWeek(char * target, Time source, const DateLUTImpl & timezone)
         {
-            *target += ToDayOfWeekImpl::execute(source, timezone);
+            *target += ToDayOfWeekImpl::execute(source, 0, timezone);
         }
 
         static void dayOfWeek0To6(char * target, Time source, const DateLUTImpl & timezone)
         {
-            auto day = ToDayOfWeekImpl::execute(source, timezone);
+            auto day = ToDayOfWeekImpl::execute(source, 0, timezone);
             *target += (day == 7 ? 0 : day);
         }
 
