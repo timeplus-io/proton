@@ -28,12 +28,6 @@
 #include <Interpreters/DiskUtilChecker.h>
 /// proton: ends
 
-namespace CurrentMetrics
-{
-    extern const Metric MemoryTracking;
-}
-
-
 namespace DB
 {
 
@@ -385,7 +379,7 @@ uint64_t updateJemallocEpoch()
 }
 
 template <typename Value>
-static void saveJemallocMetricImpl(AsynchronousMetricValues & values,
+static Value saveJemallocMetricImpl(AsynchronousMetricValues & values,
     const std::string & jemalloc_full_name,
     const std::string & clickhouse_full_name)
 {
@@ -393,22 +387,23 @@ static void saveJemallocMetricImpl(AsynchronousMetricValues & values,
     size_t size = sizeof(value);
     mallctl(jemalloc_full_name.c_str(), &value, &size, nullptr, 0);
     values[clickhouse_full_name] = value;
+    return value;
 }
 
 template<typename Value>
-static void saveJemallocMetric(AsynchronousMetricValues & values,
+static Value saveJemallocMetric(AsynchronousMetricValues & values,
     const std::string & metric_name)
 {
-    saveJemallocMetricImpl<Value>(values,
+    return saveJemallocMetricImpl<Value>(values,
         fmt::format("stats.{}", metric_name),
         fmt::format("jemalloc.{}", metric_name));
 }
 
 template<typename Value>
-static void saveAllArenasMetric(AsynchronousMetricValues & values,
+static Value saveAllArenasMetric(AsynchronousMetricValues & values,
     const std::string & metric_name)
 {
-    saveJemallocMetricImpl<Value>(values,
+    return saveJemallocMetricImpl<Value>(values,
         fmt::format("stats.arenas.{}.{}", MALLCTL_ARENAS_ALL, metric_name),
         fmt::format("jemalloc.arenas.all.{}", metric_name));
 }
@@ -639,10 +634,39 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         }
     }
 
+#if defined(OS_LINUX) || defined(OS_FREEBSD)
+    MemoryStatisticsOS::Data memory_statistics_data = memory_stat.get();
+#endif
+
+#if USE_JEMALLOC
+    // 'epoch' is a special mallctl -- it updates the statistics. Without it, all
+    // the following calls will return stale values. It increments and returns
+    // the current epoch number, which might be useful to log as a sanity check.
+    auto epoch = updateJemallocEpoch();
+    new_values["jemalloc.epoch"] = epoch;
+
+    // Collect the statistics themselves.
+    saveJemallocMetric<size_t>(new_values, "allocated");
+    saveJemallocMetric<size_t>(new_values, "active");
+    saveJemallocMetric<size_t>(new_values, "metadata");
+    saveJemallocMetric<size_t>(new_values, "metadata_thp");
+    saveJemallocMetric<size_t>(new_values, "resident");
+    saveJemallocMetric<size_t>(new_values, "mapped");
+    saveJemallocMetric<size_t>(new_values, "retained");
+    saveJemallocMetric<size_t>(new_values, "background_thread.num_threads");
+    saveJemallocMetric<uint64_t>(new_values, "background_thread.num_runs");
+    saveJemallocMetric<uint64_t>(new_values, "background_thread.run_intervals");
+    saveAllArenasMetric<size_t>(new_values, "pactive");
+    saveAllArenasMetric<size_t>(new_values, "pdirty");
+    saveAllArenasMetric<size_t>(new_values, "pmuzzy");
+    saveAllArenasMetric<size_t>(new_values, "dirty_purged");
+    saveAllArenasMetric<size_t>(new_values, "muzzy_purged");
+#endif
+
     /// Process process memory usage according to OS
 #if defined(OS_LINUX) || defined(OS_FREEBSD)
     {
-        MemoryStatisticsOS::Data data = memory_stat.get();
+        MemoryStatisticsOS::Data & data = memory_statistics_data;
 
         new_values["MemoryVirtual"] = data.virt;
         new_values["MemoryResident"] = data.resident;
@@ -658,26 +682,39 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         {
             Int64 amount = total_memory_tracker.get();
             Int64 peak = total_memory_tracker.getPeak();
-            Int64 new_amount = data.resident;
+            Int64 rss = data.resident;
+            Int64 free_memory_in_allocator_arenas = 0;
+
+#if USE_JEMALLOC
+            /// According to jemalloc man, pdirty is:
+            ///
+            ///     Number of pages within unused extents that are potentially
+            ///     dirty, and for which madvise() or similar has not been called.
+            ///
+            /// So they will be subtracted from RSS to make accounting more
+            /// accurate, since those pages are not really RSS but a memory
+            /// that can be used at anytime via jemalloc.
+            free_memory_in_allocator_arenas = je_malloc_pdirty * getPageSize();
+#endif
 
             /// proton : starts
             new_values["MemoryTracker.Amount"] = amount;
             new_values["MemoryTracker.Peak"] = peak;
 
-            Int64 difference = new_amount - amount;
+            Int64 difference = rss - amount;
 
             /// Log only if difference is high (50MB). This is for convenience. The threshold is arbitrary.
             if (difference >= 52'428'800 || difference <= -52'428'800)
                 LOG_INFO(log,
-                    "MemoryTracking: was {}, peak {}, will set to {} (RSS), difference: {}",
+                    "MemoryTracking: was {}, peak {}, free memory in arenas {}, will set to {} (RSS), difference: {}",
                     ReadableSize(amount),
                     ReadableSize(peak),
-                    ReadableSize(new_amount),
+                    ReadableSize(free_memory_in_allocator_arenas),
+                    ReadableSize(rss),
                     ReadableSize(difference));
             /// proton : ends
 
-            total_memory_tracker.set(new_amount);
-            CurrentMetrics::set(CurrentMetrics::MemoryTracking, new_amount);
+            total_memory_tracker.setRSS(rss, free_memory_in_allocator_arenas);
         }
     }
 #endif
@@ -1438,31 +1475,6 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                 new_values[name] = server_metric.current_threads;
         }
     }
-
-#if USE_JEMALLOC
-    // 'epoch' is a special mallctl -- it updates the statistics. Without it, all
-    // the following calls will return stale values. It increments and returns
-    // the current epoch number, which might be useful to log as a sanity check.
-    auto epoch = updateJemallocEpoch();
-    new_values["jemalloc.epoch"] = epoch;
-
-    // Collect the statistics themselves.
-    saveJemallocMetric<size_t>(new_values, "allocated");
-    saveJemallocMetric<size_t>(new_values, "active");
-    saveJemallocMetric<size_t>(new_values, "metadata");
-    saveJemallocMetric<size_t>(new_values, "metadata_thp");
-    saveJemallocMetric<size_t>(new_values, "resident");
-    saveJemallocMetric<size_t>(new_values, "mapped");
-    saveJemallocMetric<size_t>(new_values, "retained");
-    saveJemallocMetric<size_t>(new_values, "background_thread.num_threads");
-    saveJemallocMetric<uint64_t>(new_values, "background_thread.num_runs");
-    saveJemallocMetric<uint64_t>(new_values, "background_thread.run_intervals");
-    saveAllArenasMetric<size_t>(new_values, "pactive");
-    saveAllArenasMetric<size_t>(new_values, "pdirty");
-    saveAllArenasMetric<size_t>(new_values, "pmuzzy");
-    saveAllArenasMetric<size_t>(new_values, "dirty_purged");
-    saveAllArenasMetric<size_t>(new_values, "muzzy_purged");
-#endif
 
     /// Add more metrics as you wish.
 
