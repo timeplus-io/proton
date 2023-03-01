@@ -1,6 +1,7 @@
 #include "SQLAnalyzerRestRouterHandler.h"
 #include "SchemaValidator.h"
 
+#include <Interpreters/ApplyWithGlobalVisitor.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/QueryProfileVisitor.h>
 #include <Parsers/ASTAlterQuery.h>
@@ -248,6 +249,12 @@ std::pair<String, Int32> SQLAnalyzerRestRouterHandler::executePost(const Poco::J
         QueryProfileMatcher::Data profile;
         QueryProfileVisitor visitor(profile);
         visitor.visit(ast);
+
+        /// Propagate WITH statement to children ASTSelect.
+        if (settings.enable_global_with_statement)
+        {
+            ApplyWithGlobalVisitor().visit(ast);
+        }
 
         Block block;
 
