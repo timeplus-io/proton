@@ -47,6 +47,8 @@ struct SeekToInfo
 };
 
 using SeekToInfoPtr = std::shared_ptr<SeekToInfo>;
+using SeekToInfos = std::vector<SeekToInfoPtr>;
+using SeekToInfosOfStreams = std::unordered_map<size_t, SeekToInfos>;
 
 std::pair<int64_t, bool> tryParseAbsoluteTimeSeek(const String & seek_to);
 }

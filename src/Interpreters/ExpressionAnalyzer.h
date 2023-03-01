@@ -10,6 +10,9 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/SelectQueryInfo.h>
 
+/// proton: starts.
+#include <Storages/Streaming/SeekToInfo.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -324,6 +327,13 @@ public:
     bool hasGlobalSubqueries() { return has_global_subqueries; }
     bool hasTableJoin() const { return syntax->ast_join; }
 
+    /// proton: starts.
+private:
+    SeekToInfoPtr seek_to_info_of_joined_table;
+
+public:
+    void setSeekToInfoForJoinedTable(SeekToInfoPtr seek_to_info_) { seek_to_info_of_joined_table = seek_to_info_; }
+    /// proton: ends.
 
     bool useGroupingSetKey() const { return aggregation_keys_list.size() > 1; }
 

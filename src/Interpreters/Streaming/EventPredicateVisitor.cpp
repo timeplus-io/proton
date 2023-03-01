@@ -4,6 +4,7 @@
 #include <Interpreters/evaluateConstantExpression.h>
 #include <NativeLog/Record/Record.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
@@ -20,6 +21,8 @@ extern const int BAD_ARGUMENTS;
 extern const int UNEXPECTED_EXPRESSION;
 }
 
+namespace Streaming
+{
 namespace
 {
 std::unordered_set<String> COMPARISON_FUNCS = {
@@ -40,13 +43,6 @@ bool seekRight(const String & func_name)
 {
     return (func_name == "equals" || func_name == "less" || func_name == "less_or_equals");
 }
-
-enum class SeekBy : uint8_t
-{
-    None,
-    EventTime,
-    EventSequenceNumber
-};
 
 Int64 parseSeekToTimestamp(const Field & value, DataTypePtr type)
 {
@@ -110,61 +106,68 @@ Int64 evaluateConstantSeekTo(SeekBy seek_by, ASTPtr ast, ContextPtr context)
         throw;
     }
 }
-
-SeekBy parseSeekBy(ASTPtr ast)
-{
-    if (auto identifier_opt = tryGetIdentifierName(ast); identifier_opt.has_value())
-    {
-        if (*identifier_opt == ProtonConsts::RESERVED_EVENT_TIME)
-            return SeekBy::EventTime;
-        else if (*identifier_opt == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID)
-            return SeekBy::EventSequenceNumber;
-    }
-    return SeekBy::None;
 }
 
-std::tuple<SeekBy, Int64, bool> parseEventPredicate(ASTPtr left_ast, ASTPtr right_ast, ContextPtr context)
+std::pair<size_t, SeekBy> EventPredicateMatcher::Data::parseSeekBy(ASTPtr ast) const
 {
-    SeekBy left_seek_by = parseSeekBy(left_ast);
-    SeekBy right_seek_by = parseSeekBy(right_ast);
+    SeekBy seek_by = SeekBy::None;
+    if (auto * identifier = ast->as<ASTIdentifier>(); identifier && IdentifierSemantic::getColumnName(*identifier).has_value())
+    {
+        auto short_name = identifier->shortName();
+        if (short_name == ProtonConsts::RESERVED_EVENT_TIME)
+            seek_by = SeekBy::EventTime;
+        else if (short_name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID)
+            seek_by = SeekBy::EventSequenceNumber;
+    }
+
+    if (seek_by == SeekBy::None)
+        return {0, SeekBy::None};
+
+    auto stream_pos = membership_collector.getIdentsMembership(ast);
+    if (!stream_pos.has_value())
+        throw Exception(ErrorCodes::UNEXPECTED_EXPRESSION, "Unknown column identifier '{}'", ast->formatForErrorMessage());
+
+    return {stream_pos.value(), seek_by};
+}
+
+std::tuple<size_t, SeekBy, Int64, bool> EventPredicateMatcher::Data::parseEventPredicate(ASTPtr left_arg_ast, ASTPtr right_arg_ast) const
+{
+    auto [left_stream_pos, left_seek_by] = parseSeekBy(left_arg_ast);
+    auto [right_stream_pos, right_seek_by] = parseSeekBy(right_arg_ast);
 
     if (left_seek_by == SeekBy::None && right_seek_by == SeekBy::None)
-        return {SeekBy::None, 0, false}; /// None
+        return {0, SeekBy::None, 0, false}; /// None
 
     if (left_seek_by != SeekBy::None && right_seek_by != SeekBy::None)
         throw Exception(
             ErrorCodes::UNEXPECTED_EXPRESSION,
             "Invalid event predicate. Comparison between {} and {} is not supported",
-            left_ast->formatForErrorMessage(),
-            right_ast->formatForErrorMessage());
+            left_arg_ast->formatForErrorMessage(),
+            right_arg_ast->formatForErrorMessage());
 
     /// Check whether is seek to constant expr
-    SeekBy seek_by;
-    Int64 seek_to;
     bool left_is_event_col = left_seek_by != SeekBy::None;
     if (left_is_event_col)
     {
-        seek_by = left_seek_by;
-        seek_to = evaluateConstantSeekTo(seek_by, right_ast, context);
+        auto seek_to = evaluateConstantSeekTo(left_seek_by, right_arg_ast, getContext());
+        return {left_stream_pos, left_seek_by, seek_to, left_is_event_col};
     }
     else
     {
-        seek_by = right_seek_by;
-        seek_to = evaluateConstantSeekTo(seek_by, left_ast, context);
+        auto seek_to = evaluateConstantSeekTo(right_seek_by, left_arg_ast, getContext());
+        return {right_stream_pos, right_seek_by, seek_to, left_is_event_col};
     }
-
-    return {seek_by, seek_to, left_is_event_col};
 }
 
-SeekToInfoPtr parseSeekToInfo(ASTFunction * func, ContextPtr context)
+std::pair<size_t, SeekToInfoPtr> EventPredicateMatcher::Data::parseSeekToInfo(ASTFunction * func) const
 {
-    assert(func->arguments->children.size() == 2);
+    assert(func && func->arguments->children.size() == 2);
     auto & left_arg = func->arguments->children[0];
     auto & right_arg = func->arguments->children[1];
 
     /// We only handle predicates like `_tp_sn >= / <= ...` or ` _tp_time >= / <= ...` etc simple predicates.
     /// For complex predicates like `a_func(_tp_sn) >= / <= ...` are not supported.
-    auto [seek_by, seek_point, left_is_event_col] = parseEventPredicate(left_arg, right_arg, context);
+    auto [stream_pos, seek_by, seek_point, left_is_event_col] = parseEventPredicate(left_arg, right_arg);
 
     if (seek_by == SeekBy::None)
         return {};
@@ -173,62 +176,45 @@ SeekToInfoPtr parseSeekToInfo(ASTFunction * func, ContextPtr context)
     {
         if (seekLeft(func->name))
             /// Case-1: ` _tp_time >= ...`
-            return std::make_shared<SeekToInfo>(
-                right_arg->getColumnName(),
-                std::vector<Int64>{seek_point},
-                seek_by == SeekBy::EventTime ? SeekToType::ABSOLUTE_TIME : SeekToType::SEQUENCE_NUMBER);
+            return {
+                stream_pos,
+                std::make_shared<SeekToInfo>(
+                    right_arg->getColumnName(),
+                    std::vector<Int64>{seek_point},
+                    seek_by == SeekBy::EventTime ? SeekToType::ABSOLUTE_TIME : SeekToType::SEQUENCE_NUMBER)};
         else
             /// Case-2: ` _tp_time <= ...`
-            return std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER);
+            return {
+                stream_pos, std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER)};
     }
     else
     {
         if (seekRight(func->name))
             /// Case-3: ` ... <= _tp_time`
-            return std::make_shared<SeekToInfo>(
-                left_arg->getColumnName(),
-                std::vector<Int64>{seek_point},
-                seek_by == SeekBy::EventTime ? SeekToType::ABSOLUTE_TIME : SeekToType::SEQUENCE_NUMBER);
+            return {
+                stream_pos,
+                std::make_shared<SeekToInfo>(
+                    left_arg->getColumnName(),
+                    std::vector<Int64>{seek_point},
+                    seek_by == SeekBy::EventTime ? SeekToType::ABSOLUTE_TIME : SeekToType::SEQUENCE_NUMBER)};
         else
             /// Case-4: ` ... >= _tp_time`
-            return std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER);
+            return {
+                stream_pos, std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER)};
     }
 }
-}
 
-bool EventPredicateMatcher::needChildVisit(ASTPtr & node, ASTPtr & children)
+SeekToInfoPtr EventPredicateMatcher::Data::tryGetSeekToInfo(size_t table_pos) const
 {
-    /// For now, only support event predicate in where clause
-    if (auto * select = node->as<ASTSelectQuery>())
-    {
-        if (select->where().get() == children.get())
-            return true;
-        else
-            return false;
-    }
+    if (seek_to_infos.size() > 2)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "After query optimized, there still are more than 2 streams.");
 
-    /// Don't descent into table functions and subqueries and special case for ArrayJoin.
-    return !(node->as<ASTTableExpression>() || node->as<ASTSubquery>() || node->as<ASTArrayJoin>());
-}
+    auto iter = seek_to_infos.find(table_pos);
+    if (iter == seek_to_infos.end())
+        return nullptr;
 
-void EventPredicateMatcher::visit(ASTPtr & ast, Data & data)
-{
-    auto * func = ast->as<ASTFunction>();
-    if (!func)
-        return;
-
-    if (!COMPARISON_FUNCS.contains(func->name))
-        return;
-
-    if (auto seek_to_info = parseSeekToInfo(func, data.context))
-        data.seek_to_infos.emplace_back(seek_to_info);
-}
-
-
-SeekToInfoPtr EventPredicateMatcher::Data::tryGetSeekToInfo() const
-{
     SeekToInfoPtr res;
-    for (auto seek_to_info : seek_to_infos)
+    for (auto seek_to_info : iter->second)
     {
         if (!res)
         {
@@ -262,5 +248,34 @@ SeekToInfoPtr EventPredicateMatcher::Data::tryGetSeekToInfo() const
     }
 
     return res;
+}
+
+bool EventPredicateMatcher::needChildVisit(ASTPtr & node, ASTPtr & children)
+{
+    /// For now, only support event predicate in where clause
+    if (auto * select = node->as<ASTSelectQuery>())
+    {
+        if (select->where().get() == children.get())
+            return true;
+        else
+            return false;
+    }
+
+    /// Don't descent into table functions and subqueries and special case for ArrayJoin.
+    return !(node->as<ASTTableExpression>() || node->as<ASTSubquery>() || node->as<ASTArrayJoin>());
+}
+
+void EventPredicateMatcher::visit(ASTPtr & ast, Data & data)
+{
+    auto * func = ast->as<ASTFunction>();
+    if (!func)
+        return;
+
+    if (!COMPARISON_FUNCS.contains(func->name))
+        return;
+
+    if (auto [stream_pos, seek_to_info] = data.parseSeekToInfo(func); seek_to_info)
+        data.seek_to_infos[stream_pos].emplace_back(seek_to_info);
+}
 }
 }

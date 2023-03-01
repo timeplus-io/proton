@@ -3639,10 +3639,21 @@ void InterpreterSelectQuery::analyzeEventPredicateAsSeekTo()
     if (!isStreaming() || !context->getSettingsRef().seek_to.value.empty())
         return;
 
-    EventPredicateVisitor::Data data(context);
-    EventPredicateVisitor(data).visit(query_ptr);
-    if (auto seek_to_info = data.tryGetSeekToInfo())
+    Streaming::EventPredicateVisitor::Data data(getSelectQuery(), context);
+    Streaming::EventPredicateVisitor(data).visit(query_ptr);
+
+    /// Try set seek to info for the left table
+    if (auto seek_to_info = data.tryGetSeekToInfoForLeftStream())
         query_info.seek_to_info = seek_to_info;
+
+    /// Try set seek to info for the right table if exists
+    if (auto seek_to_info_of_right_stream = data.tryGetSeekToInfoForRightStream())
+    {
+        if (!query_analyzer->hasTableJoin())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown seek to info");
+
+        query_analyzer->setSeekToInfoForJoinedTable(seek_to_info_of_right_stream);
+    }
 }
 
 bool InterpreterSelectQuery::isStreaming() const

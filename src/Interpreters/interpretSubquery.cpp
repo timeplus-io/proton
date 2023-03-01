@@ -29,7 +29,11 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
 }
 
 std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
-    const ASTPtr & table_expression, ContextPtr context, const Names & required_source_columns, const SelectQueryOptions & options)
+    const ASTPtr & table_expression,
+    ContextPtr context,
+    const Names & required_source_columns,
+    const SelectQueryOptions & options,
+    SeekToInfoPtr seek_to_info) /// proton: added seek_to_info
 {
     if (auto * expr = table_expression->as<ASTTableExpression>())
     {
@@ -41,7 +45,9 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
         else if (expr->database_and_table_name)
             table = expr->database_and_table_name;
 
-        return interpretSubquery(table, context, required_source_columns, options);
+        /// proton: starts. Added seek_to_info
+        return interpretSubquery(table, context, required_source_columns, options, seek_to_info);
+        /// proton: ends.
     }
 
     /// Subquery or table name. The name of the table is similar to the subquery `SELECT * FROM t`.
@@ -67,6 +73,12 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
     subquery_settings.max_result_bytes = 0;
     /// The calculation of `extremes` does not make sense and is not necessary (if you do it, then the `extremes` of the subquery can be taken instead of the whole query).
     subquery_settings.extremes = false;
+
+    /// proton: starts. Support seek to for subquery
+    if (seek_to_info)
+        subquery_settings.seek_to = seek_to_info->getSeekToForSettings();
+    /// proton: ends.
+
     subquery_context->setSettings(subquery_settings);
 
     auto subquery_options = options.subquery();
@@ -116,5 +128,4 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
 
     return std::make_shared<InterpreterSelectWithUnionQuery>(query, subquery_context, subquery_options, required_source_columns);
 }
-
 }

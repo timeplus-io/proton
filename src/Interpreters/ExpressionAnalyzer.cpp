@@ -1146,7 +1146,8 @@ static std::unique_ptr<QueryPlan> buildJoinedPlan(
     ContextPtr context,
     const ASTTablesInSelectQueryElement & join_element,
     TableJoin & analyzed_join,
-    SelectQueryOptions query_options)
+    SelectQueryOptions query_options,
+    SeekToInfoPtr seek_to_info) /// proton: added seek_to_info
 {
     /// Actions which need to be calculated on joined block.
     auto joined_block_actions = createJoinedBlockActions(context, analyzed_join);
@@ -1167,7 +1168,9 @@ static std::unique_ptr<QueryPlan> buildJoinedPlan(
         join_element.table_expression,
         context,
         original_right_column_names,
-        query_options.copy().setWithAllColumns().ignoreProjections(false).ignoreAlias(false));
+        query_options.copy().setWithAllColumns().ignoreProjections(false).ignoreAlias(false),
+        seek_to_info); /// proton: added seek_to_info
+
     auto joined_plan = std::make_unique<QueryPlan>();
     interpreter->buildQueryPlan(*joined_plan);
     {
@@ -1263,7 +1266,9 @@ JoinPtr SelectQueryExpressionAnalyzer::makeJoin(
         return storage->getJoinLocked(analyzed_join, getContext());
     }
 
-    joined_plan = buildJoinedPlan(getContext(), join_element, *analyzed_join, query_options);
+    /// proton: starts. Support seek to joined table
+    joined_plan = buildJoinedPlan(getContext(), join_element, *analyzed_join, query_options, seek_to_info_of_joined_table);
+    /// proton: ends.
 
     const ColumnsWithTypeAndName & right_columns = joined_plan->getCurrentDataStream().header.getColumnsWithTypeAndName();
     std::tie(left_convert_actions, right_convert_actions) = analyzed_join->createConvertingActions(left_columns, right_columns);
