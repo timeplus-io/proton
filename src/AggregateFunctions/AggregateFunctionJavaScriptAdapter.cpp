@@ -351,20 +351,21 @@ void AggregateFunctionJavaScriptAdapter::merge(AggregateDataPtr __restrict place
     V8::run(blueprint.isolate.get(), blueprint.global_context, std::move(merge_func));
 }
 
-bool AggregateFunctionJavaScriptAdapter::shouldFinalize(AggregateDataPtr __restrict place) const
+size_t AggregateFunctionJavaScriptAdapter::getEmitTimes(AggregateDataPtr __restrict place) const
 {
-    /// Only when UDA has its own emit strategy, it then make sense to check `should_finalize`
-    return blueprint.has_user_defined_emit_strategy && this->data(place).should_finalize;
+    /// Only when UDA has its own emit strategy, it then make sense to check `emit_times`
+    return blueprint.has_user_defined_emit_strategy ? this->data(place).emit_times : 0;
 }
 
-bool AggregateFunctionJavaScriptAdapter::flush(AggregateDataPtr __restrict place) const
+size_t AggregateFunctionJavaScriptAdapter::flush(AggregateDataPtr __restrict place) const
+
 {
     /// First, get instance of UDF (part of the Aggregate Data) and prepare JavaScript execution context
     auto & data = this->data(place);
-    bool should_finalize = false;
+    size_t emit_times = 0;
 
     if (data.columns.empty() || data.columns[0]->empty())
-        return should_finalize;
+        return emit_times;
 
     auto process_func = [&](v8::Isolate * isolate_, v8::Local<v8::Context> & ctx, v8::TryCatch & try_catch) {
         v8::Local<v8::Object> local_obj = v8::Local<v8::Object>::New(isolate_, data.uda_instance);
@@ -385,14 +386,14 @@ bool AggregateFunctionJavaScriptAdapter::flush(AggregateDataPtr __restrict place
 
         /// Forth, check if the UDA should emit only it has emit strategy
         if (blueprint.has_user_defined_emit_strategy && !res->IsUndefined())
-            should_finalize = V8::from_v8<bool>(isolate_, res);
+            emit_times = V8::from_v8<size_t>(isolate_, res);
     };
 
     V8::run(blueprint.isolate.get(), blueprint.global_context, std::move(process_func));
 
-    data.should_finalize = should_finalize;
+    data.emit_times = emit_times;
     data.reinitCache();
-    return should_finalize;
+    return emit_times;
 }
 
 /// Serialize the result related field of Aggregate Data
@@ -458,7 +459,7 @@ void AggregateFunctionJavaScriptAdapter::deserialize(
 void AggregateFunctionJavaScriptAdapter::insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const
 {
     auto & data = this->data(place);
-    if (blueprint.has_user_defined_emit_strategy && !data.should_finalize)
+    if (blueprint.has_user_defined_emit_strategy && data.emit_times == 0)
         return;
 
     /// Flush what we have if there is still buffered data
@@ -476,10 +477,30 @@ void AggregateFunctionJavaScriptAdapter::insertResultInto(AggregateDataPtr __res
             V8::throwException(
                 isolate_, try_catch, ErrorCodes::UDF_INTERNAL_ERROR, "Failed to invoke 'finalize' function of JavaScript UDA");
 
-        V8::insertResult(isolate_, to, config.result_type, false, res);
+        if (res->IsNullOrUndefined())
+            throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Javascript UDA does not return the aggregate result");
+
+        /// FIXME: in future, it should support array as return type, in that case UDA should always return Array(Array) and should document this requirement of UDA.
+
+        /// Whether or not it is a UDA with own emit strategy
+        if (hasUserDefinedEmit())
+        {
+            if (!res->IsArray())
+                throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Javascript UDA does not return the aggregate results in array");
+
+            size_t num_of_results = res.As<v8::Array>()->Length();
+            if (num_of_results != data.emit_times)
+                throw Exception(
+                    ErrorCodes::UDF_INTERNAL_ERROR,
+                    "Javascript UDA should emit {} times but only return {} results",
+                    data.emit_times,
+                    num_of_results);
+        }
+
+        V8::insertResult(isolate_, to, config.result_type, hasUserDefinedEmit(), res);
     };
 
     V8::run(blueprint.isolate.get(), blueprint.global_context, std::move(finalize_func));
-    data.should_finalize = false;
+    data.emit_times = 0;
 }
 }

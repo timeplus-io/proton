@@ -174,11 +174,11 @@ public:
         merge(place, rhs, arena);
     }
 
-    /// Whether or not the aggregation should do finalization. So far only meaningful for user defined aggregate function
-    virtual bool shouldFinalize(AggregateDataPtr __restrict /*place*/) const { return false; }
+    /// Get the number of emits, 0 means no emit, >1 means it has some aggregate results to emit. So far only used for user defined aggregate function
+    virtual size_t getEmitTimes(AggregateDataPtr __restrict /*place*/) const  { return 0; }
 
-    /// Usually called after every batch to flush cached data to function. Only meaning for UDA for now.
-    virtual bool flush(AggregateDataPtr __restrict /*place*/) const { return false; }
+    /// Usually called after every batch to flush cached data to function. Only meaningful for UDA for now.
+    virtual size_t flush(AggregateDataPtr __restrict /*place*/) const { return 0; }
 
     /// UDA may has its own emit strategy instead of depending on system watermark
     virtual bool hasUserDefinedEmit() const { return false; }
@@ -843,8 +843,25 @@ public:
         }
         catch (...)
         {
-            for (size_t destroy_index = batch_index; destroy_index < row_end; ++destroy_index)
-                static_cast<const Derived *>(this)->destroy(places[destroy_index] + place_offset);
+            /// proton: starts
+            /// a Exception has been caught here, there are two cases:
+            /// Case 1: destroy_place_after_insert == true
+            /// In this case, if a exception throws, delete the state of aggregate function with exception and aggregate function executed
+            /// before this function in 'insertResultIntoBatch' and delete the states of the rest aggregate functions in 'convertToBlockImplFinal'.
+            /// Because in this case, place' has been set to 'nullptr' in 'convertToBlockImplFinal' already, the 'destroyImpl' method will not
+            /// destroy the states twice.
+            ///
+            /// Case 2: destroy_place_after_insert == false
+            /// in this case, do not delete the state of any aggregate function neither in 'insertResultIntoBatch' nor in 'convertToBlockImplFinal'
+            /// even if a exception throws.
+            /// Because in this case (place != nullptr) the 'destroyImpl' method will destroy all the states of all aggregate functions together
+            /// and it will not be destroyed the states twice neither.
+            if (destroy_place_after_insert)
+            {
+                for (size_t destroy_index = batch_index; destroy_index < row_end; ++destroy_index)
+                    static_cast<const Derived *>(this)->destroy(places[destroy_index] + place_offset);
+            }
+            /// proton: ends
 
             throw;
         }

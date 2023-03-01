@@ -135,11 +135,25 @@ void AggregatingTransformWithSubstream::emitVersion(Block & block, const Substre
 {
     assert(substream_ctx);
 
-    Int64 version = substream_ctx->version++;
-    block.insert(
-        {params->version_type->createColumnConst(block.rows(), version)->convertToFullColumnIfConst(),
-         params->version_type,
-         ProtonConsts::RESERVED_EMIT_VERSION});
+    size_t rows = block.rows();
+    if (params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
+    {
+        /// For UDA with own emit strategy, possibly a block can trigger multiple emits for a substream, each emit cause version+1
+        /// each emit only has one result, therefore we can count emit times by row number
+        auto col = params->version_type->createColumn();
+        col->reserve(rows);
+        for (size_t i = 0; i < rows; i++)
+            col->insert(substream_ctx->version++);
+        block.insert({std::move(col), params->version_type, ProtonConsts::RESERVED_EMIT_VERSION});
+    }
+    else
+    {
+        Int64 version = substream_ctx->version++;
+        block.insert(
+            {params->version_type->createColumnConst(rows, version)->convertToFullColumnIfConst(),
+             params->version_type,
+             ProtonConsts::RESERVED_EMIT_VERSION});
+    }
 }
 
 void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx)

@@ -26,7 +26,7 @@ String UDA_CEP1 = R"###(
         this.result = 0;
     },
     process: function(prices) {
-        var emit = false;
+        var emit = 0;
         for (let i = 0; i < prices.length; i++) {
             if (this.last_down_price < 0 || prices[i] <= this.last_down_price) {
                 this.last_down_price = prices[i];
@@ -35,7 +35,7 @@ String UDA_CEP1 = R"###(
                 this.result = this.down_duration;
                 this.last_down_price = prices[i];
                 this.down_duration = 1
-                emit = true;
+                emit = 1;
             }
         }
         return emit;

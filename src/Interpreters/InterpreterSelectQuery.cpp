@@ -138,6 +138,7 @@ namespace ErrorCodes
     extern const int UNSUPPORTED;
     extern const int FUNCTION_NOT_ALLOWED;
     extern const int DATABASE_ACCESS_DENIED;
+    extern const int UDA_NOT_APPLICABLE;
     /// proton: ends
 }
 
@@ -3820,6 +3821,11 @@ void InterpreterSelectQuery::checkUDA()
                 query_info.has_javascript_uda = true;
         }
     }
+
+    /// UDA with own emit strategy only support stream query
+    if (!isStreaming() && has_user_defined_emit_strategy)
+        throw Exception(
+            ErrorCodes::UDA_NOT_APPLICABLE, "User Defined Aggregate function with own emit strategy cannot be used in non-streaming query");
 }
 
 bool InterpreterSelectQuery::isChangelog() const

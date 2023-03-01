@@ -40,8 +40,8 @@ struct JavaScriptAggrFunctionState
     /// Cached rows
     MutableColumns columns;
 
-    /// Whether the current group should emit
-    bool should_finalize = false;
+    /// the number of emits, 0 means no emit, >1 means it has some aggregate results to emit
+    size_t emit_times = 0;
 
     /// JavaScript UDA code looks like below. For far, it can only contain member functions and the has_customized_emit bool data member or function
     /// {
@@ -116,11 +116,11 @@ public:
     /// Merge with other Aggregate Data, maybe used before finalize result
     void merge(AggregateDataPtr __restrict /*place*/, ConstAggregateDataPtr /*rhs*/, Arena *) const override;
 
-    /// Whether or not the aggregation should emit
-    bool shouldFinalize(AggregateDataPtr __restrict /*place*/) const override;
+    /// Get the number of emits, 0 means no emit, >1 means it has some aggregate results to emit
+    size_t getEmitTimes(AggregateDataPtr __restrict /*place*/) const override;
 
-    /// Send the cached rows to User Defined Aggregate function
-    bool flush(AggregateDataPtr __restrict /*place*/) const override;
+    /// Send the cached rows to User Defined Aggregate function, return the number of emits
+    size_t flush(AggregateDataPtr __restrict /*place*/) const override;
 
     bool hasUserDefinedEmit() const override { return blueprint.has_user_defined_emit_strategy; }
 

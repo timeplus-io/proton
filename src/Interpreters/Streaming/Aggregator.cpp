@@ -56,6 +56,7 @@ namespace ErrorCodes
     extern const int CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS;
     extern const int LOGICAL_ERROR;
     extern const int RECOVER_CHECKPOINT_FAILED;
+    extern const int AGGREGATE_FUNCTION_NOT_APPLICABLE;
 }
 
 namespace Streaming
@@ -794,7 +795,7 @@ template <bool no_more_keys, bool use_compiled_functions, typename Method>
                     auto * map = reinterpret_cast<AggregateDataPtr *>(method.data.data());
                     const auto * key = state.getKeyData();
                     for (size_t cur = row_begin; !need_finalization && cur < row_end; ++cur)
-                        need_finalization = inst->batch_that->shouldFinalize(map[key[cur]] + inst->state_offset);
+                        need_finalization = (inst->batch_that->getEmitTimes(map[key[cur]] + inst->state_offset) > 0);
                 }
             }
             return need_finalization;
@@ -917,13 +918,13 @@ template <bool no_more_keys, bool use_compiled_functions, typename Method>
         {
             AggregateDataPtr * places_ptr = places.get();
             /// It is ok to re-flush if it is flush already, then we don't need maintain a map to check if it is ready flushed
-            for (size_t i = row_begin; i < row_end; ++i)
+            for (size_t j = row_begin; j < row_end; ++j)
             {
-                if (places_ptr[i])
+                if (places_ptr[j])
                 {
-                    inst->batch_that->flush(places_ptr[i] + inst->state_offset);
+                    inst->batch_that->flush(places_ptr[j] + inst->state_offset);
                     if (!need_finalization)
-                        need_finalization = inst->batch_that->shouldFinalize(places_ptr[i] + inst->state_offset);
+                        need_finalization = (inst->batch_that->getEmitTimes(places_ptr[j] + inst->state_offset) > 0);
                 }
             }
         }
@@ -1013,7 +1014,7 @@ template <bool use_compiled_functions>
             inst->batch_that->flush(res + inst->state_offset);
 
             if (!should_finalize)
-                should_finalize = inst->batch_that->shouldFinalize(res + inst->state_offset);
+                should_finalize = (inst->batch_that->getEmitTimes(res + inst->state_offset) > 0);
         }
     }
 
@@ -1640,15 +1641,34 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
     auto clear_states = shouldClearStates(action, true);
     data.forEachValue([&](const auto & key, auto & mapped)
     {
-        method.insertKeyIntoColumns(key, key_columns, key_sizes_ref);
-        places.emplace_back(mapped);
+        /// For UDA with own emit strategy, there are two special cases to be handled:
+        /// 1. not all groups need to  be emitted. therefore proton needs to pick groups
+        /// that should emits, and only emit those groups while keep other groups unchanged.
+        /// 2. a single block trigger multiple emits. In this case, proton need insert the
+        /// same key multiple times for each emit result of this group.
 
-        /// Mark the cell as destroyed so it will not be destroyed in destructor.
-        /// proton: starts. Here we push the `mapped` to `places`, for streaming
-        /// case, we don't want aggregate function to destroy the places
-        if (clear_states)
-            mapped = nullptr;
-        /// proton: ends
+        /// for non-UDA or UDA without emit strategy, 'should_emit' is always true.
+        /// For UDA with emit strategy, it is true only if the group should emit.
+        size_t emit_times = 1;
+        if (params.group_by == Params::GroupBy::USER_DEFINED)
+        {
+            assert(aggregate_functions.size() == 1);
+            emit_times = aggregate_functions[0]->getEmitTimes(mapped + offsets_of_aggregate_states[0]);
+        }
+
+        if (emit_times > 0)
+        {
+            /// duplicate key for each emit
+            for (size_t i = 0; i < emit_times; i++)
+                method.insertKeyIntoColumns(key, key_columns, key_sizes_ref);
+            places.emplace_back(mapped);
+
+            /// Mark the cell as destroyed so it will not be destroyed in destructor.
+            /// proton: starts. Here we push the `mapped` to `places`, for streaming
+            /// case, we don't want aggregate function to destroy the places
+            if (clear_states)
+                mapped = nullptr;
+        }
     });
 
     std::exception_ptr exception;
@@ -1748,8 +1768,28 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
             }
         }
 
-        size_t offset = offsets_of_aggregate_states[aggregate_functions_destroy_index];
-        aggregate_functions[aggregate_functions_destroy_index]->destroyBatch(0, places.size(), places.data(), offset);
+        bool is_state = aggregate_functions[aggregate_functions_destroy_index]->isState();
+        bool destroy_place_after_insert = !is_state && clear_states;
+        if (destroy_place_after_insert)
+        {
+            /// When aggregate_functions[aggregate_functions_destroy_index-1] throws Exception, there are two cases:
+            /// Case 1: destroy_place_after_insert == true
+            /// In this case, if a exception throws, delete the state of aggregate function with exception and aggregate function executed
+            /// before this function in 'insertResultIntoBatch' and delete the states of the rest aggregate functions in 'convertToBlockImplFinal'.
+            /// Because in this case, place' has been set to 'nullptr' in 'convertToBlockImplFinal' already, the 'destroyImpl' method will not
+            /// destroy the states twice.
+            ///
+            /// Case 2: destroy_place_after_insert == false
+            /// in this case, do not delete the state of any aggregate function neither in 'insertResultIntoBatch' nor in 'convertToBlockImplFinal'
+            /// even if a exception throws.
+            /// Because in this case (place != nullptr) the 'destroyImpl' method will destroy all the states of all aggregate functions together
+            /// and it will not be destroyed the states twice neither.
+
+            /// To avoid delete the state twice, only when destroy_place_after_insert == true, it should destroy
+            /// the states of the rest aggregate functions (not executed after the aggregate function with exception below.
+            size_t offset = offsets_of_aggregate_states[aggregate_functions_destroy_index];
+            aggregate_functions[aggregate_functions_destroy_index]->destroyBatch(0, places.size(), places.data(), offset);
+        }
     }
 
     if (exception)
