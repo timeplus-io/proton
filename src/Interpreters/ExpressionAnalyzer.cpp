@@ -137,7 +137,7 @@ void tryTranslateToParametricAggregateFunction(
         argument_names.erase(argument_names.begin() + 1);
         types.erase(types.begin() + 1);
     }
-    else if (lower_name == "top_k")
+    else if (lower_name == "top_k" || lower_name == "top_k_exact")
     {
         /// Translate `top_k(key, num[, with_count, load_factor])` to `top_k(num[, with_count, load_factor])(key)`
         auto size = arguments.size();
@@ -152,7 +152,7 @@ void tryTranslateToParametricAggregateFunction(
         argument_names = {argument_names[0]};
         types = {types[0]};
     }
-    else if (lower_name == "top_k_weighted")
+    else if (lower_name == "top_k_weighted" || lower_name == "top_k_exact_weighted")
     {
         /// Translate `top_k_weighted(key, weight, num, [, with_count, load_factor])` to `top_k_weighted(num[, with_count, load_factor])(key, weighted)`
         auto size = arguments.size();
