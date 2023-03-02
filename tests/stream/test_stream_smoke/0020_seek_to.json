@@ -499,6 +499,34 @@
         {"query_id":"2100", "expected_results":"error_code:47"},
         {"query_id":"2101", "expected_results":"error_code:47"}
       ]
+    },
+    {
+      "id": 13,
+      "tags": ["seek_to"],
+      "name": "seek_to",
+      "description": "seek to earliest",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"2100", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time > earliest_timestamp()"},
+            {"client":"python","query_id":"2101", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time >= earliest_ts()"},
+            {"client":"python","query_id":"2102", "depends_on_stream":"seek_to_stream","query_end_timer":4, "query_type": "stream", "query":"select a.i, count() from seek_to_stream as a join seek_to_stream as b on a.i = b.i join seek_to_stream as c on b.i = c.i where a._tp_time >= earliest_ts() and b._tp_time >= '2022-12-01 00:00:02.111' and c._tp_time >= '2022-12-01 00:00:03.111' group by a.i emit periodic 1s"},
+            {"client":"python","query_id":"2103", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time = earliest_ts()"},
+            {"client":"python","query_id":"2104", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time != earliest_ts()"},
+            {"client":"python","query_id":"2105", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time < earliest_ts()"},
+            {"client":"python","query_id":"2106", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time <= earliest_ts()"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"2100", "expected_results":[["s1"], ["s2"], ["s3"], ["s4"]]},
+        {"query_id":"2101", "expected_results":[["s1"], ["s2"], ["s3"], ["s4"]]},
+        {"query_id":"2102", "expected_results":[[3, 1], [4, 1]]},
+        {"query_id":"2103", "expected_results":"error_code:183"},
+        {"query_id":"2104", "expected_results":"error_code:183"},
+        {"query_id":"2105", "expected_results":"error_code:183"},
+        {"query_id":"2106", "expected_results":"error_code:183"}
+      ]
     }
   ]
 }

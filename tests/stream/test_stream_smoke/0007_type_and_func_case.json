@@ -745,6 +745,24 @@
                     ["[(('c', 'c', Decimal('3'), Decimal('3'), Decimal('3'), Decimal('3')),), (('b', 'b', Decimal('2'), Decimal('2'), Decimal('2'), Decimal('2')),)]"]
                 ]}
             ]
+        },
+        {
+            "id": 34,
+            "tags": ["func"],
+            "name": "earliest_timestamp",
+            "description": "Tests covering function earliest_timestamp() and alias earliest_ts()",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python","query_id":"800", "query_type": "table", "query":"select earliest_timestamp('UTC'), earliest_ts('UTC')"},
+                  {"client":"python","query_id":"801", "query_type": "table", "query":"select to_timezone(earliest_timestamp(), 'UTC'), to_timezone(earliest_ts(), 'Asia/Shanghai')"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"800", "expected_results":[["1970-01-01 00:00:00+00:00", "1970-01-01 00:00:00+00:00"]]},
+              {"query_id":"801", "expected_results":[["1970-01-01 00:00:00+00:00", "1970-01-01 08:00:00+08:00"]]}
+            ]
         }
     ]
 }

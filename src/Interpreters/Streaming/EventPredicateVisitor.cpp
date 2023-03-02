@@ -71,12 +71,18 @@ Int64 parseSeekToTimestamp(const Field & value, DataTypePtr type)
 Int64 parseSeekToSequenceNumber(const Field & value, DataTypePtr type)
 {
     if (isNativeInteger(type))
-        return value.get<Int64>();
-    else
-        throw Exception(ErrorCodes::UNEXPECTED_EXPRESSION, "The event sequence id predicate requrie a constant number or expression");
+    {
+        Int64 sn = value.get<Int64>();
+        if (sn >= 0)
+            return sn;
+    }
+
+    throw Exception(
+        ErrorCodes::UNEXPECTED_EXPRESSION,
+        "The event sequence id predicate requrie a constant number or expression greater than or equal to 0");
 }
 
-Int64 evaluateConstantSeekTo(SeekBy seek_by, ASTPtr ast, ContextPtr context)
+Int64 evaluateConstantSeekTo(SeekBy seek_by, ASTPtr & ast, ContextPtr context)
 {
     try
     {
@@ -105,6 +111,41 @@ Int64 evaluateConstantSeekTo(SeekBy seek_by, ASTPtr ast, ContextPtr context)
 
         throw;
     }
+}
+
+SeekToInfoPtr tryParseAndCheckSeekToEarliestInfo(const ASTFunction & predicate_func, SeekBy seek_by, bool left_is_event_col)
+{
+    if (seek_by != SeekBy::EventTime)
+        return nullptr;
+
+    if (left_is_event_col)
+    {
+        if (auto * right_func = predicate_func.arguments->children[1]->as<ASTFunction>();
+            right_func && right_func->name == "earliest_timestamp")
+        {
+            /// Only support `_tp_time > earliest_timestamp()` or `_tp_time >= earliest_ts()`
+            if (predicate_func.name == "greater" || predicate_func.name == "greater_or_equals")
+                return std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER);
+            else
+                throw Exception(
+                    ErrorCodes::UNEXPECTED_EXPRESSION, "Invalid event time predicate '{}'", predicate_func.formatForErrorMessage());
+        }
+    }
+    else
+    {
+        if (auto * left_func = predicate_func.arguments->children[0]->as<ASTFunction>();
+            left_func && left_func->name == "earliest_timestamp")
+        {
+            /// Only support `earliest_timestamp() < _tp_time` or `earliest_ts() <= _tp_time`
+            if (predicate_func.name == "less" || predicate_func.name == "less_or_equals")
+                return std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER);
+            else
+                throw Exception(
+                    ErrorCodes::UNEXPECTED_EXPRESSION, "Invalid event time predicate '{}'", predicate_func.formatForErrorMessage());
+        }
+    }
+
+    return nullptr;
 }
 }
 
@@ -159,11 +200,11 @@ std::tuple<size_t, SeekBy, Int64, bool> EventPredicateMatcher::Data::parseEventP
     }
 }
 
-std::pair<size_t, SeekToInfoPtr> EventPredicateMatcher::Data::parseSeekToInfo(ASTFunction * func) const
+std::pair<size_t, SeekToInfoPtr> EventPredicateMatcher::Data::parseSeekToInfo(const ASTFunction & func, ASTPtr & ast) const
 {
-    assert(func && func->arguments->children.size() == 2);
-    auto & left_arg = func->arguments->children[0];
-    auto & right_arg = func->arguments->children[1];
+    assert(func.arguments->children.size() == 2);
+    auto & left_arg = func.arguments->children[0];
+    auto & right_arg = func.arguments->children[1];
 
     /// We only handle predicates like `_tp_sn >= / <= ...` or ` _tp_time >= / <= ...` etc simple predicates.
     /// For complex predicates like `a_func(_tp_sn) >= / <= ...` are not supported.
@@ -172,9 +213,17 @@ std::pair<size_t, SeekToInfoPtr> EventPredicateMatcher::Data::parseSeekToInfo(AS
     if (seek_by == SeekBy::None)
         return {};
 
+    /// Special cases: seek to earliest
+    if (auto earliset_info = tryParseAndCheckSeekToEarliestInfo(func, seek_by, left_is_event_col))
+    {
+        /// Optimize this predicate to constant true, e.g. `where _tp_time > earliest_ts()` -> `where true`
+        ast = std::make_shared<ASTLiteral>(true);
+        return {stream_pos, earliset_info};
+    }
+
     if (left_is_event_col)
     {
-        if (seekLeft(func->name))
+        if (seekLeft(func.name))
             /// Case-1: ` _tp_time >= ...`
             return {
                 stream_pos,
@@ -189,7 +238,7 @@ std::pair<size_t, SeekToInfoPtr> EventPredicateMatcher::Data::parseSeekToInfo(AS
     }
     else
     {
-        if (seekRight(func->name))
+        if (seekRight(func.name))
             /// Case-3: ` ... <= _tp_time`
             return {
                 stream_pos,
@@ -274,7 +323,7 @@ void EventPredicateMatcher::visit(ASTPtr & ast, Data & data)
     if (!COMPARISON_FUNCS.contains(func->name))
         return;
 
-    if (auto [stream_pos, seek_to_info] = data.parseSeekToInfo(func); seek_to_info)
+    if (auto [stream_pos, seek_to_info] = data.parseSeekToInfo(*func, ast); seek_to_info)
         data.seek_to_infos[stream_pos].emplace_back(seek_to_info);
 }
 }

@@ -148,7 +148,7 @@ std::pair<SeekToType, int64_t> doParse(const String & seek_to, bool utc)
             "Invalid seek_to '{}'. 'seek_to' supports to seek to a time based or a sequence number based. For examples: time based "
             "supports to ISO8601 format or negative relative time (e.g. 2020-01-01T01:12:45Z or 2020-01-01T01:12:45.123+08:00 or -10s or "
             "-6m or "
-            "-2h or -1d), sequence number based supports to 'eraliest' or 'latest' or integer greater than 0",
+            "-2h or -1d), sequence number based supports to 'eraliest' or 'latest' or integer greater than or equal to 0",
             seek_to);
 }
 }

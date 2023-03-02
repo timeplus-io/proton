@@ -26,10 +26,12 @@ public:
 
     struct Data : WithContext
     {
+    private:
         /// Allow multiple streams: stream_pos - SeekToInfos
         SeekToInfosOfStreams seek_to_infos;
         const IdentifierMembershipCollector membership_collector;
 
+    public:
         Data(const ASTSelectQuery & select, ContextPtr context_) : WithContext(context_), membership_collector(select, getContext()) { }
 
         SeekToInfoPtr tryGetSeekToInfoForLeftStream() const { return tryGetSeekToInfo(0); }
@@ -37,7 +39,7 @@ public:
 
     private:
         SeekToInfoPtr tryGetSeekToInfo(size_t stream_pos) const;
-        std::pair<size_t, SeekToInfoPtr> parseSeekToInfo(ASTFunction * func) const;
+        std::pair<size_t, SeekToInfoPtr> parseSeekToInfo(const ASTFunction & func, ASTPtr & ast) const;
         std::tuple<size_t, SeekBy, Int64, bool> parseEventPredicate(ASTPtr left_ast, ASTPtr right_ast) const;
         std::pair<size_t, SeekBy> parseSeekBy(ASTPtr ast) const;
 
