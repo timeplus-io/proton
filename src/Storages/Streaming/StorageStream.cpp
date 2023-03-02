@@ -543,6 +543,7 @@ void StorageStream::readConcat(
     if (plans.size() == 1)
     {
         query_plan = std::move(*plans.front());
+        query_plan.setMaxThreads(1);
         return;
     }
 
@@ -554,6 +555,7 @@ void StorageStream::readConcat(
     auto union_step = std::make_unique<UnionStep>(std::move(input_streams));
     union_step->setStepDescription(description);
     query_plan.unitePlans(std::move(union_step), std::move(plans));
+    query_plan.setMaxThreads(plans.size());
 }
 
 void StorageStream::readStreaming(
@@ -615,6 +617,7 @@ void StorageStream::readStreaming(
     auto pipe = Pipe::unitePipes(std::move(pipes));
     auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), description, query_info.storage_limits);
     query_plan.addStep(std::move(read_step));
+    query_plan.setMaxThreads(shards_to_read.size());
 }
 
 void StorageStream::read(

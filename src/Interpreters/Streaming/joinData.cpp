@@ -7,8 +7,7 @@ namespace DB
 {
 namespace Streaming
 {
-HashBlocks::HashBlocks(JoinMetrics & metrics)
-    : blocks(metrics), maps(std::make_unique<HashJoinMapsVariants>())
+HashBlocks::HashBlocks(JoinMetrics & metrics) : blocks(metrics), maps(std::make_unique<HashJoinMapsVariants>())
 {
     /// FIXME, in some cases, `maps` is not needed
 }
@@ -72,7 +71,7 @@ void BufferedStreamData::updateBucketSize()
     /// 5. 0 < left.column - right.column < 20 (left column is greater than right column), right buckets to join [-2, -1, 0]
 
     join_start_bucket_offset = 0; /// left_bucket - join_start_bucket * bucket_size
-    join_stop_bucket_offset = 0;  /// left_bucket + join_stop_bucket * bucket_size
+    join_stop_bucket_offset = 0; /// left_bucket + join_stop_bucket * bucket_size
 
     /// Bucket join: given a left bucket, the right joined blocks can possibly fall
     /// in range : [left_bucket - 2 * bucket_size, left_bucket + 2 * bucket_size]
@@ -124,7 +123,8 @@ void BufferedStreamData::updateBucketSize()
         join_stop_bucket_offset = 0;
     }
     else
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid range=({}, {})", range_asof_join_ctx.lower_bound, range_asof_join_ctx.upper_bound);
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR, "Invalid range=({}, {})", range_asof_join_ctx.lower_bound, range_asof_join_ctx.upper_bound);
 }
 
 void BufferedStreamData::updateAsofJoinColumnPositionAndScale(UInt16 scale, size_t asof_col_pos_, TypeIndex type_index)
@@ -214,6 +214,59 @@ std::vector<BufferedStreamData::BucketBlock> BufferedStreamData::assignBlockToRa
     }
 
     return bucket_assigned_blocks;
+}
+
+String BufferedStreamData::joinMetricsString() const
+{
+    size_t total_buckets = range_bucket_hash_blocks.size() + (current_hash_blocks ? 1 : 0);
+    size_t total_blocks_cached = 0;
+    size_t total_blocks_bytes_cached = 0;
+    size_t total_blocks_allocated_bytes_cached = 0;
+    size_t total_blocks_rows_cached = 0;
+    size_t total_blocks_nullmaps_cached = 0;
+    size_t total_arena_bytes = 0;
+    size_t total_arena_chunks = 0;
+    size_t total_keys_cached = 0;
+
+    auto accumulateOneHashBlocks = [&](auto & hashed_blocks) {
+        assert(hashed_blocks);
+        total_blocks_cached += hashed_blocks->blocks.size();
+        for (const auto & block : hashed_blocks->blocks)
+        {
+            total_blocks_rows_cached += block.block.rows();
+            total_blocks_bytes_cached += block.block.allocatedBytes();
+            total_blocks_allocated_bytes_cached += block.block.allocatedBytes();
+        }
+
+        total_blocks_nullmaps_cached += hashed_blocks->blocks_nullmaps.size();
+
+        total_arena_bytes += hashed_blocks->pool.size();
+        total_arena_chunks += hashed_blocks->pool.numOfChunks();
+
+        if (hashed_blocks->maps)
+            total_keys_cached += hashed_blocks->maps->size(join);
+    };
+
+    for (const auto & [_, hashed_blocks] : range_bucket_hash_blocks)
+        accumulateOneHashBlocks(hashed_blocks);
+
+    if (current_hash_blocks)
+        accumulateOneHashBlocks(current_hash_blocks);
+
+    return fmt::format(
+        "total_buckets={}, total_blocks_cached={}, total_blocks_bytes_cached={}, total_blocks_allocated_bytes_cached={}, "
+        "total_blocks_rows_cached={}, total_blocks_nullmaps_cached={}, total_arena_bytes={}, total_arena_chunks={}, total_keys_cached={}; recorded_join_metrics={}, next_block_id={}",
+        total_buckets,
+        total_blocks_cached,
+        total_blocks_bytes_cached,
+        total_blocks_allocated_bytes_cached,
+        total_blocks_rows_cached,
+        total_blocks_nullmaps_cached,
+        total_arena_bytes,
+        total_arena_chunks,
+        total_keys_cached,
+        metrics.string(),
+        block_id);
 }
 }
 }

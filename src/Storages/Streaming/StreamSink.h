@@ -1,29 +1,19 @@
 #pragma once
 
-#include "IngestMode.h"
+#include <Storages/Streaming/IngestMode.h>
 
 #include <KafkaLog/Results.h>
 #include <NativeLog/Requests/AppendRequest.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Storages/StorageInMemoryMetadata.h>
+#include <Core/BlockWithShard.h>
 
 namespace DB
 {
 class Context;
-class Block;
 class StorageStream;
 struct StorageSnapshot;
 using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
-
-struct BlockWithShard
-{
-    Block block;
-    int32_t shard;
-
-    BlockWithShard(Block && block_, int32_t shard_) : block(std::move(block_)), shard(shard_) { }
-};
-
-using BlocksWithShard = std::vector<BlockWithShard>;
 
 class StreamSink final : public SinkToStorage
 {

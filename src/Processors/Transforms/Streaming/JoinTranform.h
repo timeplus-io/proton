@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Interpreters/Streaming/HashJoin.h>
+#include <Interpreters/Streaming/IHashJoin.h>
 #include <Processors/IProcessor.h>
 
 namespace DB
@@ -9,8 +9,6 @@ class NotJoinedBlocks;
 
 namespace Streaming
 {
-using HashJoinPtr = std::shared_ptr<HashJoin>;
-
 /// Streaming join rows from left stream to right stream
 /// It has 2 inputs, the first one is left stream and the second one is right stream.
 /// These 2 input streams will be pulled concurrently
@@ -45,8 +43,6 @@ private:
     void joinBidirectionally(Chunks chunks);
     void rangeJoinBidirectionally(Chunks chunks);
 
-    void validateAsofJoinKey(const Block & left_input_header, const Block & right_input_header);
-
 private:
     struct InputPortWithData
     {
@@ -60,6 +56,8 @@ private:
     [[maybe_unused]] bool process_non_joined = true;
 
     HashJoinPtr join;
+    bool range_bidirectional_hash_join = false;
+    bool bidirectional_hash_join = false;
 
     [[maybe_unused]] std::shared_ptr<NotJoinedBlocks> non_joined_blocks;
     [[maybe_unused]] size_t max_block_size;

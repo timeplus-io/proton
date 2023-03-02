@@ -4,8 +4,11 @@
 #include <Interpreters/Streaming/RowRefs.h>
 #include <Interpreters/Streaming/joinData.h>
 #include <Interpreters/Streaming/joinKind.h>
+#include <Interpreters/Streaming/IHashJoin.h>
 
-#include <Interpreters/HashJoin.h>
+#include <Common/HashTable/HashMap.h>
+#include <Common/HashTable/FixedHashMap.h>
+#include <Interpreters/AggregationCommon.h>
 #include <Interpreters/TableJoin.h>
 #include <Common/ColumnUtils.h>
 #include <Common/ProtonCommon.h>
@@ -88,61 +91,50 @@ namespace Streaming
 
 struct HashJoinMapsVariants;
 
-class HashJoin final : public IJoin
+class HashJoin final : public IHashJoin
 {
 public:
     HashJoin(
         std::shared_ptr<TableJoin> table_join_,
-        JoinStreamDescription left_join_stream_desc_,
-        JoinStreamDescription right_join_stream_desc_);
+        JoinStreamDescriptionPtr left_join_stream_desc_,
+        JoinStreamDescriptionPtr right_join_stream_desc_);
 
     ~HashJoin() noexcept override;
 
     /// Do post initialization
     /// When left stream header is known, init data structure in hash join for left stream
-    void postInit(const Block & left_header, const Block & output_header_, UInt64 join_max_cached_bytes_);
+    void postInit(const Block & left_header, const Block & output_header_, UInt64 join_max_cached_bytes_) override;
 
-    void transformHeader(Block & header);
+    void transformHeader(Block & header) override;
 
     /// For non-bidirectional hash join
-    void insertRightBlock(Block right_block);
-    void joinLeftBlock(Block & left_block);
+    void insertRightBlock(Block right_block) override;
+    void joinLeftBlock(Block & left_block) override;
 
     /// For bidirectional hash join
     /// There are 2 blocks returned : joined block via parameter and retracted block via returned-value if there is
-    Block insertLeftBlockAndJoin(Block & left_block);
-    Block insertRightBlockAndJoin(Block & right_block);
+    Block insertLeftBlockAndJoin(Block & left_block) override;
+    Block insertRightBlockAndJoin(Block & right_block) override;
 
     /// For bidirectional range hash join, there may be multiple joined blocks
-    std::vector<Block> insertLeftBlockToRangeBucketsAndJoin(Block left_block);
-    std::vector<Block> insertRightBlockToRangeBucketsAndJoin(Block right_block);
+    std::vector<Block> insertLeftBlockToRangeBucketsAndJoin(Block left_block) override;
+    std::vector<Block> insertRightBlockToRangeBucketsAndJoin(Block right_block) override;
 
-    /** Add block of data from right hand of JOIN to the map.
-      * Returns false, if some limit was exceeded and you should not insert more data.
-      * This is legacy API which we don't use in streaming hash join
-      */
+    /// "Legacy API", use insertRightBlock()
     bool addJoinedBlock(const Block & block, bool check_limits) override;
 
-    /** Join data from the map (that was previously built by calls to addJoinedBlock) to the block with data from "left" table.
-      * Could be called from different threads in parallel.
-      * This is legacy API which we don't use in streaming hash join
-      */
+    /// "Legacy API", use joinLeftBlock()
     void joinBlock(Block & block, ExtraBlockPtr & not_processed) override;
 
-    bool emitChangeLog() const { return emit_changelog; }
-    bool bidirectionalHashJoin() const { return bidirectional_hash_join; }
-    bool rangeBidirectionalHashJoin() const { return range_bidirectional_hash_join; }
+    bool emitChangeLog() const override { return emit_changelog; }
+    bool bidirectionalHashJoin() const override { return bidirectional_hash_join; }
+    bool rangeBidirectionalHashJoin() const override { return range_bidirectional_hash_join; }
 
-    UInt64 keepVersions() const { return right_stream_desc.keep_versions; }
+    UInt64 keepVersions() const { return right_data.join_stream_desc->keep_versions; }
 
     const TableJoin & getTableJoin() const override { return *table_join; }
 
     void checkTypesOfKeys(const Block & block) const override;
-
-    /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
-      */
-    void setTotals(const Block & block) override { totals = block; }
-    const Block & getTotals() const override { return totals; }
 
     bool isFilled() const override { return false; }
 
@@ -161,6 +153,27 @@ public:
 
     bool alwaysReturnsEmptySet() const final;
 
+    void getKeyColumnPositions(std::vector<size_t> & left_key_column_positions, std::vector<size_t> & right_key_column_positions, bool include_asof_key_column) const override
+    {
+        auto calc_key_positions = [](const auto & key_column_names, const auto & header, auto & key_column_positions) {
+            key_column_positions.reserve(key_column_names.size());
+            for (const auto & name : key_column_names)
+                key_column_positions.push_back(header.getPositionByName(name));
+        };
+
+        calc_key_positions(table_join->getOnlyClause().key_names_left, left_data.join_stream_desc->sample_block, left_key_column_positions);
+        calc_key_positions(table_join->getOnlyClause().key_names_right, right_data.join_stream_desc->sample_block, right_key_column_positions);
+
+        if (!include_asof_key_column && (streaming_strictness == Strictness::Range || streaming_strictness == Strictness::Asof))
+        {
+            left_key_column_positions.pop_back();
+            right_key_column_positions.pop_back();
+        }
+
+        assert(!left_key_column_positions.empty());
+        assert(!right_key_column_positions.empty());
+    }
+
     JoinKind getKind() const { return kind; }
     JoinStrictness getStrictness() const { return strictness; }
     Strictness getStreamingStrictness() const { return streaming_strictness; }
@@ -168,8 +181,8 @@ public:
     ASOFJoinInequality getAsofInequality() const { return asof_inequality; }
     bool anyTakeLastRow() const { return any_take_last_row; }
 
-    const ColumnWithTypeAndName & rightAsofKeyColumn() const { return right_asof_key_column; }
-    const ColumnWithTypeAndName & leftAsofKeyColumn() const { return left_asof_key_column; }
+    const ColumnWithTypeAndName & rightAsofKeyColumn() const { return right_data.asof_key_column; }
+    const ColumnWithTypeAndName & leftAsofKeyColumn() const { return left_data.asof_key_column; }
 
 /// Different types of keys for maps.
 #define APPLY_FOR_JOIN_VARIANTS(M) \
@@ -278,14 +291,10 @@ public:
     using MapsRangeAsof = MapsTemplate<RangeAsofRowRefs>;
     using MapsVariant = std::variant<MapsOne, MapsAll, MapsAsof, MapsRangeAsof>;
 
+    size_t sizeOfMapsVariant(const MapsVariant & maps_variant) const;
+
     /// bool isUsed(size_t off) const { return used_flags.getUsedSafe(off); }
     /// bool isUsed(const Block * block_ptr, size_t row_idx) const { return used_flags.getUsedSafe(block_ptr, row_idx); }
-
-    void setAsofJoinColumnPositionAndScale(UInt16 scale, size_t left_asof_col_pos, size_t right_asof_col_pos, TypeIndex type_index)
-    {
-        left_data.buffered_data->updateAsofJoinColumnPositionAndScale(scale, left_asof_col_pos, type_index);
-        right_data.buffered_data->updateAsofJoinColumnPositionAndScale(scale, right_asof_col_pos, type_index);
-    }
 
     friend struct BufferedStreamData;
 
@@ -299,6 +308,8 @@ public:
             block.info.setBlockID(block_id++);
             blocks.updateMetrics(block);
         }
+
+        String joinMetricsString(const HashJoin * join) const;
 
         std::mutex mutex;
 
@@ -329,6 +340,8 @@ private:
     void chooseHashMethod();
     static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
 
+    void validateAsofJoinKey();
+
     void checkLimits() const;
 
     const Block & savedLeftBlockSample() const { return left_data.buffered_data->sample_block; }
@@ -345,7 +358,7 @@ private:
     template <bool is_left_block>
     std::vector<Block> insertBlockToRangeBucketsAndJoin(Block block);
 
-    template<bool is_left_block>
+    template <bool is_left_block>
     Int64 doInsertBlock(Block block, HashBlocksPtr target_hash_blocks);
 
     /// For bidirectional hash join
@@ -383,19 +396,21 @@ private:
     ASOFJoinInequality asof_inequality;
 
     /// Cache data members which avoid re-computation for every join
-    ColumnWithTypeAndName left_asof_key_column;
-    ColumnWithTypeAndName right_asof_key_column;
     std::vector<std::pair<String, String>> cond_column_names;
 
     std::vector<Sizes> key_sizes;
 
-    /// Left stream related
-    JoinStreamDescription left_stream_desc;
-    /// Right stream related
-    JoinStreamDescription right_stream_desc;
-
     struct JoinData
     {
+        explicit JoinData(JoinStreamDescriptionPtr join_stream_desc_) : join_stream_desc(std::move(join_stream_desc_))
+        {
+            assert(join_stream_desc);
+        }
+
+        JoinStreamDescriptionPtr join_stream_desc;
+
+        ColumnWithTypeAndName asof_key_column;
+
         BufferedStreamDataPtr buffered_data;
 
         /// Block with columns from the (left or) right-side table except key columns.
@@ -433,7 +448,6 @@ private:
     UInt64 join_max_cached_bytes = 0;
 
     Block output_header;
-    Block totals;
 
     /// Combined timestamp watermark progression of left stream and right stream
     std::atomic_int64_t combined_watermark = 0;
@@ -445,6 +459,7 @@ private:
 
 struct HashJoinMapsVariants
 {
+    size_t size(const HashJoin * join) const;
     std::vector<HashJoin::MapsVariant> map_variants;
 };
 

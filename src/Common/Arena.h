@@ -434,6 +434,11 @@ public:
     }
 
     /// proton: starts
+    size_t numOfChunks() const
+    {
+        return chunks;
+    }
+
     void enableRecycle(bool enable_recycle)
     {
         recycle_enabled = enable_recycle;

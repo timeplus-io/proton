@@ -9,12 +9,15 @@
 #include <Columns/ColumnVector.h>
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>
+#include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <Functions/FunctionHelpers.h>
 #include <Interpreters/JoinUtils.h>
 #include <Interpreters/NullableUtils.h>
 #include <Interpreters/TableJoin.h>
+#include <Common/ColumnsHashing.h>
 #include <Common/ProtonCommon.h>
 #include <Common/assert_cast.h>
 #include <Common/logger_useful.h>
@@ -413,12 +416,7 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
                     const IColumn & asof_key = added_columns.asofKey();
 
                     if (auto row_refs = mapped.findRange(
-                            asof_type,
-                            added_columns.range_join_ctx,
-                            asof_key,
-                            i,
-                            added_columns.src_block_id,
-                            added_columns.is_left_block);
+                            asof_type, added_columns.range_join_ctx, asof_key, i, added_columns.src_block_id, added_columns.is_left_block);
                         !row_refs.empty())
                     {
                         setUsed<need_filter>(filter, i);
@@ -440,8 +438,8 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
 
                     if (const auto * found = mapped.findAsof(asof_type, asof_inequality, asof_key, i))
                     {
-                       setUsed<need_filter>(filter, i);
-                       added_columns.appendFromBlock<jf.add_missing>(found->block_iter->block, found->row_num);
+                        setUsed<need_filter>(filter, i);
+                        added_columns.appendFromBlock<jf.add_missing>(found->block_iter->block, found->row_num);
                     }
                     else
                         addNotFoundRow<jf.add_missing, jf.need_replication>(added_columns, current_offset);
@@ -497,9 +495,10 @@ template <Kind KIND, Strictness STRICTNESS, typename KeyGetter, typename Map, bo
 IColumn::Filter joinColumnsSwitchMultipleDisjuncts(
     std::vector<KeyGetter> && key_getter_vector, const std::vector<const Map *> & mapv, AddedColumns & added_columns)
 {
-    return mapv.size() > 1
-        ? joinColumns<KIND, STRICTNESS, KeyGetter, Map, need_filter, has_null_map, true>(std::forward<std::vector<KeyGetter>>(key_getter_vector), mapv, added_columns)
-        : joinColumns<KIND, STRICTNESS, KeyGetter, Map, need_filter, has_null_map, false>(std::forward<std::vector<KeyGetter>>(key_getter_vector), mapv, added_columns);
+    return mapv.size() > 1 ? joinColumns<KIND, STRICTNESS, KeyGetter, Map, need_filter, has_null_map, true>(
+               std::forward<std::vector<KeyGetter>>(key_getter_vector), mapv, added_columns)
+                           : joinColumns<KIND, STRICTNESS, KeyGetter, Map, need_filter, has_null_map, false>(
+                               std::forward<std::vector<KeyGetter>>(key_getter_vector), mapv, added_columns);
 }
 
 template <Kind KIND, Strictness STRICTNESS, typename KeyGetter, typename Map>
@@ -511,16 +510,20 @@ IColumn::Filter joinColumnsSwitchNullability(
     if (added_columns.need_filter)
     {
         if (has_null_map)
-            return joinColumnsSwitchMultipleDisjuncts<KIND, STRICTNESS, KeyGetter, Map, true, true>(std::forward<std::vector<KeyGetter>>(key_getter_vector), mapv, added_columns);
+            return joinColumnsSwitchMultipleDisjuncts<KIND, STRICTNESS, KeyGetter, Map, true, true>(
+                std::forward<std::vector<KeyGetter>>(key_getter_vector), mapv, added_columns);
         else
-            return joinColumnsSwitchMultipleDisjuncts<KIND, STRICTNESS, KeyGetter, Map, true, false>(std::forward<std::vector<KeyGetter>>(key_getter_vector), mapv, added_columns);
+            return joinColumnsSwitchMultipleDisjuncts<KIND, STRICTNESS, KeyGetter, Map, true, false>(
+                std::forward<std::vector<KeyGetter>>(key_getter_vector), mapv, added_columns);
     }
     else
     {
         if (has_null_map)
-            return joinColumnsSwitchMultipleDisjuncts<KIND, STRICTNESS, KeyGetter, Map, false, true>(std::forward<std::vector<KeyGetter>>(key_getter_vector), mapv, added_columns);
+            return joinColumnsSwitchMultipleDisjuncts<KIND, STRICTNESS, KeyGetter, Map, false, true>(
+                std::forward<std::vector<KeyGetter>>(key_getter_vector), mapv, added_columns);
         else
-            return joinColumnsSwitchMultipleDisjuncts<KIND, STRICTNESS, KeyGetter, Map, false, false>(std::forward<std::vector<KeyGetter>>(key_getter_vector), mapv, added_columns);
+            return joinColumnsSwitchMultipleDisjuncts<KIND, STRICTNESS, KeyGetter, Map, false, false>(
+                std::forward<std::vector<KeyGetter>>(key_getter_vector), mapv, added_columns);
     }
 }
 
@@ -544,8 +547,7 @@ IColumn::Filter switchJoinColumns(const std::vector<const Maps *> & mapv, AddedC
             key_getter_vector.push_back( \
                 std::move(createKeyGetter<KeyGetter, is_asof_join>(join_on_key.key_columns, join_on_key.key_sizes))); \
         } \
-        return joinColumnsSwitchNullability<KIND, STRICTNESS, KeyGetter>( \
-            std::move(key_getter_vector), a_map_type_vector, added_columns); \
+        return joinColumnsSwitchNullability<KIND, STRICTNESS, KeyGetter>(std::move(key_getter_vector), a_map_type_vector, added_columns); \
     }
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -556,7 +558,8 @@ IColumn::Filter switchJoinColumns(const std::vector<const Maps *> & mapv, AddedC
 template <typename Map, typename KeyGetter>
 struct Inserter
 {
-    static ALWAYS_INLINE void insertAll(const HashJoin &, Map & map, KeyGetter & key_getter, const Block * stored_block, size_t i, Arena & pool)
+    static ALWAYS_INLINE void
+    insertAll(const HashJoin &, Map & map, KeyGetter & key_getter, const Block * stored_block, size_t i, Arena & pool)
     {
         auto emplace_result = key_getter.emplaceKey(map, i, pool);
 
@@ -567,13 +570,8 @@ struct Inserter
             emplace_result.getMapped().insert({stored_block, i}, pool);
     }
 
-    static ALWAYS_INLINE void insertOne(
-        const HashJoin & join,
-        Map & map,
-        KeyGetter & key_getter,
-        JoinBlockList * blocks,
-        size_t i,
-        Arena & pool)
+    static ALWAYS_INLINE void
+    insertOne(const HashJoin & join, Map & map, KeyGetter & key_getter, JoinBlockList * blocks, size_t i, Arena & pool)
     {
         auto emplace_result = key_getter.emplaceKey(map, i, pool);
 
@@ -657,8 +655,7 @@ size_t NO_INLINE insertFromBlockImplTypeCase(
         if constexpr (is_range_asof_join)
             Inserter<Map, KeyGetter>::insertRangeAsof(join, map, key_getter, blocks->lastBlock(), i, pool, *asof_column);
         else if constexpr (is_asof_join)
-            Inserter<Map, KeyGetter>::insertAsof(
-                join, map, key_getter, blocks, i, pool, *asof_column, join.keepVersions());
+            Inserter<Map, KeyGetter>::insertAsof(join, map, key_getter, blocks, i, pool, *asof_column, join.keepVersions());
         else if constexpr (mapped_one)
             Inserter<Map, KeyGetter>::insertOne(join, map, key_getter, blocks, i, pool);
         else
@@ -707,7 +704,7 @@ size_t insertFromBlockImpl(
             typename KeyGetterForType<HashJoin::Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
             join, *maps.TYPE, rows, key_columns, key_sizes, blocks, null_map, pool); \
         break;
-            APPLY_FOR_JOIN_VARIANTS(M)
+        APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
     }
 }
@@ -723,31 +720,32 @@ inline void addDeltaColumn(Block & block, size_t rows)
 }
 
 HashJoin::HashJoin(
-    std::shared_ptr<TableJoin> table_join_, JoinStreamDescription left_join_stream_desc_, JoinStreamDescription right_join_stream_desc_)
+    std::shared_ptr<TableJoin> table_join_,
+    JoinStreamDescriptionPtr left_join_stream_desc_,
+    JoinStreamDescriptionPtr right_join_stream_desc_)
     : table_join(std::move(table_join_))
     , kind(table_join->kind())
     , strictness(table_join->strictness())
     , any_take_last_row(false)
     , asof_inequality(table_join->getAsofInequality())
-    , left_stream_desc(std::move(left_join_stream_desc_))
-    , right_stream_desc(std::move(right_join_stream_desc_))
+    , right_data(std::move(right_join_stream_desc_))
+    , left_data(std::move(left_join_stream_desc_))
     , logger(&Poco::Logger::get("StreamingHashJoin"))
 {
-    checkJoinSemantic();
     init();
 
     if (table_join->oneDisjunct())
     {
         const auto & key_names_right = table_join->getOnlyClause().key_names_right;
         JoinCommon::splitAdditionalColumns(
-            key_names_right, right_stream_desc.sample_block, right_data.table_keys, right_data.sample_block_with_columns_to_add);
+            key_names_right, right_data.join_stream_desc->sample_block, right_data.table_keys, right_data.sample_block_with_columns_to_add);
         right_data.required_keys = table_join->getRequiredRightKeys(right_data.table_keys, right_data.required_keys_sources);
     }
     else
     {
         /// required right keys concept does not work well if multiple disjuncts, we need all keys
         /// SELECT * FROM left JOIN right ON left.key = right.key OR left.value = right.value
-        right_data.sample_block_with_columns_to_add = right_data.table_keys = materializeBlock(right_stream_desc.sample_block);
+        right_data.sample_block_with_columns_to_add = right_data.table_keys = materializeBlock(right_data.join_stream_desc->sample_block);
     }
 
     initRightBlockStructure();
@@ -764,7 +762,7 @@ HashJoin::HashJoin(
         toString(kind),
         toString(strictness),
         TableJoin::formatClauses(table_join->getClauses(), true),
-        right_stream_desc.sample_block.dumpStructure());
+        right_data.join_stream_desc->sample_block.dumpStructure());
 
     if (streaming_strictness == Strictness::Range)
         LOG_INFO(
@@ -779,32 +777,35 @@ HashJoin::~HashJoin() noexcept
 {
     LOG_INFO(
         logger,
-        "Left stream metrics: {}, right stream metrics: {}, join metrics: {}, retract buffer metrics: {}",
-        left_data.buffered_data->getJoinMetrics().string(),
-        right_data.buffered_data->getJoinMetrics().string(),
+        "Left stream metrics: {}, right stream metrics: {}, global join metrics: {}, retract buffer metrics: {}",
+        left_data.buffered_data->joinMetricsString(),
+        right_data.buffered_data->joinMetricsString(),
         join_metrics.string(),
-        join_results ? join_results->metrics.string() : "");
+        join_results ? join_results->joinMetricsString(this) : "");
 }
 
 void HashJoin::init()
 {
+    checkJoinSemantic();
+
     streaming_kind = Streaming::toJoinKind(kind);
     streaming_strictness = Streaming::toJoinStrictness(strictness, table_join->isRangeJoin());
 
     /// There are only 2 case so far we will need emit changelog
     /// 1. append-only [inner] latest join append-only
     /// 2. versioned-kv [inner] join versioned-kv
-    emit_changelog = (left_stream_desc.data_stream_semantic == DataStreamSemantic::VersionedKV
-                      && right_stream_desc.data_stream_semantic == DataStreamSemantic::VersionedKV)
-        || (left_stream_desc.data_stream_semantic == DataStreamSemantic::Append
-            && right_stream_desc.data_stream_semantic == DataStreamSemantic::Append && streaming_strictness == Strictness::Latest);
+    emit_changelog = (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV
+                      && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV)
+        || (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
+            && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
+            && streaming_strictness == Strictness::Latest);
 
     /// So far there are 3 cases which doesn't require bidirectional join
     /// SELECT * FROM append_only JOIN versioned_kv ON append_only.key = versioned_kv.key;
     /// SELECT * FROM append_only ASOF JOIN versioned_kv ON append_only.key = versioned_kv.key AND append_only.timestamp < versioned_kv.timestamp;
     /// SELECT * FROM left_append_only ASOF JOIN right_append_only ON left_append_only.key = right_append_only.key AND left_append_only.timestamp < right_append_only.timestamp;
-    auto data_enrichment_join = (left_stream_desc.data_stream_semantic == DataStreamSemantic::Append
-                                 && right_stream_desc.data_stream_semantic == DataStreamSemantic::VersionedKV)
+    auto data_enrichment_join = (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
+                                 && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV)
         || strictness == JoinStrictness::Asof;
 
     bidirectional_hash_join = !data_enrichment_join;
@@ -816,7 +817,7 @@ void HashJoin::init()
 
     /// Strictness::Any in streaming join means take the latest row to join
     any_take_last_row = (streaming_strictness == Strictness::Latest)
-        || (right_stream_desc.data_stream_semantic == DataStreamSemantic::VersionedKV && streaming_strictness == Strictness::All)
+        || (right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV && streaming_strictness == Strictness::All)
         || emitChangeLog();
 
     if (any_take_last_row)
@@ -833,35 +834,37 @@ void HashJoin::init()
 /// Left stream header is only known at late stage after HashJoin is created
 void HashJoin::postInit(const Block & left_header, const Block & output_header_, UInt64 join_max_cached_bytes_)
 {
-    if (left_stream_desc.sample_block || output_header)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Stream join is already post initialized");
+    if (output_header)
+        return;
 
     join_max_cached_bytes = join_max_cached_bytes_;
-    left_stream_desc.sample_block = left_header;
+    left_data.join_stream_desc->sample_block = left_header;
     output_header = output_header_;
 
+    validateAsofJoinKey();
+
     /// If it is not bidirectional hash join, we don't care left header
-    if (bidirectionalHashJoin())
+    if (bidirectional_hash_join)
     {
         /// left stream sample block's column may be not inited yet
-        JoinCommon::createMissedColumns(left_stream_desc.sample_block);
+        JoinCommon::createMissedColumns(left_data.join_stream_desc->sample_block);
         if (table_join->oneDisjunct())
         {
             const auto & key_names_left = table_join->getOnlyClause().key_names_left;
             JoinCommon::splitAdditionalColumns(
-                key_names_left, left_stream_desc.sample_block, left_data.table_keys, left_data.sample_block_with_columns_to_add);
+                key_names_left, left_data.join_stream_desc->sample_block, left_data.table_keys, left_data.sample_block_with_columns_to_add);
             left_data.required_keys = table_join->getRequiredLeftKeys(left_data.table_keys, left_data.required_keys_sources);
         }
         else
         {
-            left_data.sample_block_with_columns_to_add = left_data.table_keys = materializeBlock(left_stream_desc.sample_block);
+            left_data.sample_block_with_columns_to_add = left_data.table_keys = materializeBlock(left_data.join_stream_desc->sample_block);
         }
 
         initLeftBlockStructure();
 
         initHashMaps(left_data.buffered_data->getCurrentMapsVariants().map_variants);
 
-        if (emitChangeLog())
+        if (emit_changelog)
         {
             join_results.emplace();
             initHashMaps(join_results->maps->map_variants);
@@ -994,8 +997,11 @@ HashJoin::Type HashJoin::chooseMethod(const ColumnRawPtrs & key_columns, Sizes &
 
 void HashJoin::dataMapInit(MapsVariant & map)
 {
-    joinDispatchInit(streaming_kind, streaming_strictness, map);
-    joinDispatch(streaming_kind, streaming_strictness, map, [&](auto, auto, auto & map_) { map_.create(hash_method_type); });
+    [[maybe_unused]] auto inited = joinDispatchInit(streaming_kind, streaming_strictness, map);
+    assert(inited);
+
+    inited = joinDispatch(streaming_kind, streaming_strictness, map, [&](auto, auto, auto & map_) { map_.create(hash_method_type); });
+    assert(inited);
 }
 
 bool HashJoin::alwaysReturnsEmptySet() const
@@ -1054,7 +1060,7 @@ void HashJoin::initLeftBlockStructure()
 
     if (streaming_strictness == Strictness::Range || streaming_strictness == Strictness::Asof)
         /// It should be nullable if nullable_right_side is true
-        left_asof_key_column = savedLeftBlockSample().getByName(table_join->getOnlyClause().key_names_left.back());
+        left_data.asof_key_column = savedLeftBlockSample().getByName(table_join->getOnlyClause().key_names_left.back());
 }
 
 void HashJoin::initRightBlockStructure()
@@ -1067,7 +1073,7 @@ void HashJoin::initRightBlockStructure()
 
     if (streaming_strictness == Strictness::Range || streaming_strictness == Strictness::Asof)
         /// It should be nullable if nullable_right_side is true
-        right_asof_key_column = savedRightBlockSample().getByName(table_join->getOnlyClause().key_names_right.back());
+        right_data.asof_key_column = savedRightBlockSample().getByName(table_join->getOnlyClause().key_names_right.back());
 }
 
 void HashJoin::initBlockStructure(
@@ -1075,8 +1081,7 @@ void HashJoin::initBlockStructure(
 {
     bool multiple_disjuncts = !table_join->oneDisjunct();
     /// We could remove key columns for LEFT | INNER HashJoin but we should keep them for JoinSwitcher (if any).
-    bool save_key_columns
-        = !table_join->isEnabledAlgorithm(JoinAlgorithm::AUTO) || isRightOrFull(kind) || multiple_disjuncts;
+    bool save_key_columns = !table_join->isEnabledAlgorithm(JoinAlgorithm::AUTO) || isRightOrFull(kind) || multiple_disjuncts;
     if (save_key_columns)
         saved_block_sample = table_keys.cloneEmpty();
     else if (streaming_strictness == Strictness::Range || streaming_strictness == Strictness::Asof)
@@ -1134,7 +1139,7 @@ bool HashJoin::addJoinedBlock(const Block & block, bool /*check_limits*/)
     return true;
 }
 
-template<bool is_left_block>
+template <bool is_left_block>
 Int64 HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks)
 {
     /// FIXME, there are quite some block copies
@@ -1195,18 +1200,19 @@ Int64 HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks)
 
     auto block_id = join_data->buffered_data->addBlockWithoutLock(std::move(block_to_save), target_hash_blocks);
 
-    joinDispatch(streaming_kind, streaming_strictness, target_hash_blocks->maps->map_variants[0], [&](auto /*kind_*/, auto strictness_, auto & map) {
-        [[maybe_unused]] size_t size = insertFromBlockImpl<strictness_>(
-            *this,
-            hash_method_type,
-            map,
-            rows,
-            key_columns,
-            key_sizes[0],
-            &target_hash_blocks->blocks,
-            null_map,
-            target_hash_blocks->pool);
-    });
+    joinDispatch(
+        streaming_kind, streaming_strictness, target_hash_blocks->maps->map_variants[0], [&](auto /*kind_*/, auto strictness_, auto & map) {
+            [[maybe_unused]] size_t size = insertFromBlockImpl<strictness_>(
+                *this,
+                hash_method_type,
+                map,
+                rows,
+                key_columns,
+                key_sizes[0],
+                &target_hash_blocks->blocks,
+                null_map,
+                target_hash_blocks->pool);
+        });
 
     if (save_nullmap)
         /// FIXME, we will need account the allocated bytes for null_map_holder / not_joined_map as well
@@ -1364,7 +1370,7 @@ void HashJoin::joinBlockImpl(Block & block, const Block & block_with_columns_to_
 
                 if constexpr (jf.need_replication)
                     joined_keys_to_replicate.push_back(block.getPositionByName(joined_key.name));
-           }
+            }
         }
     }
 
@@ -1390,10 +1396,10 @@ void HashJoin::checkTypesOfKeys(const Block & block) const
 
 void HashJoin::joinBlock(Block & block, ExtraBlockPtr & /*not_processed*/)
 {
-    throw Exception(ErrorCodes::LOGICAL_ERROR, "HashJoin::joinBlock shall not be called in stream join");
+    joinLeftBlock(block);
 }
 
-template<bool is_left_block>
+template <bool is_left_block>
 void HashJoin::doJoinBlockWithHashTable(Block & block, HashBlocksPtr target_hash_blocks)
 {
     JoinData * joining_data = &left_data;
@@ -1403,17 +1409,19 @@ void HashJoin::doJoinBlockWithHashTable(Block & block, HashBlocksPtr target_hash
 
     if (unlikely(!joining_data->validated_join_key_types))
     {
-        for (size_t i = 0; const auto & onexpr : table_join->getClauses())
+        const auto & join_clauses = table_join->getClauses();
+        for (size_t i = 0; i < join_clauses.size(); ++i)
         {
+            const auto & onexpr = join_clauses[i];
             const auto & cond_column_name = cond_column_names[i];
+
             JoinCommon::checkTypesOfKeys(
                 block,
                 is_left_block ? onexpr.key_names_left : onexpr.key_names_right,
                 is_left_block ? cond_column_name.first : cond_column_name.second,
-                is_left_block ? right_stream_desc.sample_block : left_stream_desc.sample_block,
+                joined_data->join_stream_desc->sample_block,
                 is_left_block ? onexpr.key_names_right : onexpr.key_names_left,
                 is_left_block ? cond_column_name.second : cond_column_name.first);
-            ++i;
         }
         joining_data->validated_join_key_types = true;
     }
@@ -1444,6 +1452,9 @@ void HashJoin::joinLeftBlock(Block & left_block)
     /// SELECT * FROM append_only [INNER | LEFT | RIGHT | FULL] JOIN versioned_kv
     /// SELECT * FROM append_only ASOF JOIN versioned_kv
     /// SELECT * FROM append_only ASOF JOIN right_append_only
+
+    std::scoped_lock lock(right_data.buffered_data->mutex);
+
     doJoinBlockWithHashTable<true>(left_block, right_data.buffered_data->getCurrentHashBlocksPtr());
 }
 
@@ -1454,9 +1465,9 @@ Block HashJoin::joinBlockWithHashTable(Block & block, HashBlocksPtr target_hash_
 
     doJoinBlockWithHashTable<is_left_block>(block, std::move(target_hash_blocks));
 
+    auto rows = block.rows();
     if (emit_changelog)
     {
-        auto rows = block.rows();
         if (rows)
         {
             if (!block.has(ProtonConsts::RESERVED_DELTA_FLAG))
@@ -1474,7 +1485,8 @@ Block HashJoin::joinBlockWithHashTable(Block & block, HashBlocksPtr target_hash_
         }
     }
     else if constexpr (!is_left_block)
-        block.reorderColumnsInplace(output_header);
+        if (rows > 0)
+            block.reorderColumnsInplace(output_header);
 
     return {};
 }
@@ -1570,6 +1582,8 @@ Block HashJoin::insertLeftBlockAndJoin(Block & left_block)
 
     left_block.info.setBlockID(doInsertBlock<true>(left_block, left_data.buffered_data->getCurrentHashBlocksPtr()));
 
+    std::scoped_lock lock(right_data.buffered_data->mutex);
+
     return joinBlockWithHashTable<true>(left_block, right_data.buffered_data->getCurrentHashBlocksPtr());
 }
 
@@ -1579,6 +1593,8 @@ Block HashJoin::insertRightBlockAndJoin(Block & right_block)
     assert(bidirectional_hash_join && !range_bidirectional_hash_join);
 
     right_block.info.setBlockID(doInsertBlock<false>(right_block, right_data.buffered_data->getCurrentHashBlocksPtr()));
+
+    std::scoped_lock lock(left_data.buffered_data->mutex);
 
     return joinBlockWithHashTable<false>(right_block, left_data.buffered_data->getCurrentHashBlocksPtr());
 }
@@ -1630,7 +1646,8 @@ std::vector<Block> HashJoin::insertBlockToRangeBucketsAndJoin(Block block)
             bucket_offset = joining_data->join_start_bucket_offset;
         auto upper_bound = joining_bucket + bucket_offset;
 
-        for (auto joined_range_bucket_end = joined_range_bucket_hash_blocks.end(); joined_range_bucket_iter != joined_range_bucket_end; ++joined_range_bucket_iter)
+        for (auto joined_range_bucket_end = joined_range_bucket_hash_blocks.end(); joined_range_bucket_iter != joined_range_bucket_end;
+             ++joined_range_bucket_iter)
         {
             if (joined_range_bucket_iter->first > upper_bound)
                 /// Reaching the upper bound of right bucket to join
@@ -1803,20 +1820,20 @@ Block HashJoin::retract(const Block & result_block)
         switch (hash_method_type)
         {
 #define M(TYPE) \
-        case HashJoin::Type::TYPE: { \
-            using MapTypeVal = typename std::remove_reference_t<decltype(Maps::TYPE)>::element_type; \
-            using KeyGetter = typename KeyGetterForType<HashJoin::Type::TYPE, MapTypeVal>::Type; \
-            std::vector<MapTypeVal *> a_map_type_vector(mapv.size()); \
-            std::vector<KeyGetter> key_getter_vector; \
-            for (size_t d = 0; d < disjuncts; ++d) \
-            { \
-                const auto & join_on_key = join_on_keys[d]; \
-                a_map_type_vector[d] = mapv[d]->TYPE.get(); \
-                key_getter_vector.push_back(std::move(createKeyGetter<KeyGetter, false>(join_on_key.key_columns, join_on_key.key_sizes))); \
-            }  \
-            doRetract(result_block, std::move(key_getter_vector), a_map_type_vector, *join_results, retracted_block); \
-            break; \
-        }
+    case HashJoin::Type::TYPE: { \
+        using MapTypeVal = typename std::remove_reference_t<decltype(Maps::TYPE)>::element_type; \
+        using KeyGetter = typename KeyGetterForType<HashJoin::Type::TYPE, MapTypeVal>::Type; \
+        std::vector<MapTypeVal *> a_map_type_vector(mapv.size()); \
+        std::vector<KeyGetter> key_getter_vector; \
+        for (size_t d = 0; d < disjuncts; ++d) \
+        { \
+            const auto & join_on_key = join_on_keys[d]; \
+            a_map_type_vector[d] = mapv[d]->TYPE.get(); \
+            key_getter_vector.push_back(std::move(createKeyGetter<KeyGetter, false>(join_on_key.key_columns, join_on_key.key_sizes))); \
+        } \
+        doRetract(result_block, std::move(key_getter_vector), a_map_type_vector, *join_results, retracted_block); \
+        break; \
+    }
             APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
         }
@@ -1849,6 +1866,57 @@ void HashJoin::checkLimits() const
             right_metrics.current_total_bytes);
 }
 
+void HashJoin::validateAsofJoinKey()
+{
+    if (streaming_strictness == Strictness::All || streaming_strictness == Strictness::Asof || streaming_strictness == Strictness::Latest)
+        return;
+
+    if (table_join->rangeAsofJoinContext().type != RangeType::Interval)
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "Only time interval range join is supported in stream to stream join. Use `date_diff(...) or date_diff_within(...) function.");
+
+    const auto & join_clause = table_join->getOnlyClause();
+
+    auto check_type = [](const Block & header, size_t col_pos) {
+        auto type = header.getByPosition(col_pos).type;
+        if (!isDateTime64(type) && !isDateTime(type))
+            throw DB::Exception(
+                ErrorCodes::NOT_IMPLEMENTED, "The range column in stream to stream join only supports datetime64 or datetime column types");
+    };
+
+    auto left_asof_col_pos = left_data.join_stream_desc->sample_block.getPositionByName(join_clause.key_names_left.back());
+    auto right_asof_col_pos = right_data.join_stream_desc->sample_block.getPositionByName(join_clause.key_names_right.back());
+
+    check_type(left_data.join_stream_desc->sample_block, left_asof_col_pos);
+    check_type(right_data.join_stream_desc->sample_block, right_asof_col_pos);
+
+    const auto & left_asof_col_with_type = left_data.join_stream_desc->sample_block.getByPosition(left_asof_col_pos);
+    const auto & right_asof_col_with_type = right_data.join_stream_desc->sample_block.getByPosition(right_asof_col_pos);
+
+    if (left_asof_col_with_type.type->getTypeId() != right_asof_col_with_type.type->getTypeId())
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "The columns in stream to stream range join have different column types");
+
+    UInt32 scale = 0;
+    if (isDateTime64(left_asof_col_with_type.type))
+    {
+        /// Check scale
+        auto * left_datetime64_type = checkAndGetDataType<DataTypeDateTime64>(left_asof_col_with_type.type.get());
+        assert(left_datetime64_type);
+
+        auto * right_datetime64_type = checkAndGetDataType<DataTypeDateTime64>(right_asof_col_with_type.type.get());
+        assert(right_datetime64_type);
+
+        if (left_datetime64_type->getScale() != right_datetime64_type->getScale())
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "The datetime64 columns in stream to stream range join have different scales");
+
+        scale = left_datetime64_type->getScale();
+    }
+
+    left_data.buffered_data->updateAsofJoinColumnPositionAndScale(scale, left_asof_col_pos, left_asof_col_with_type.type->getTypeId());
+    right_data.buffered_data->updateAsofJoinColumnPositionAndScale(scale, right_asof_col_pos, left_asof_col_with_type.type->getTypeId());
+}
+
 void HashJoin::checkJoinSemantic() const
 {
     if (!table_join->oneDisjunct())
@@ -1871,10 +1939,10 @@ void HashJoin::checkJoinSemantic() const
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED,
             "'{} stream' {} {} JOIN '{} stream' is not supported",
-            magic_enum::enum_name(left_stream_desc.data_stream_semantic),
+            magic_enum::enum_name(left_data.join_stream_desc->data_stream_semantic),
             toString(kind),
             toString(strictness),
-            magic_enum::enum_name(right_stream_desc.data_stream_semantic));
+            magic_enum::enum_name(right_data.join_stream_desc->data_stream_semantic));
     };
 
     /// [INNER] JOIN : only matching rows are returned
@@ -1903,157 +1971,114 @@ void HashJoin::checkJoinSemantic() const
     /// A 4 dimensions array : Left DataStreamSemantic, Kind, Strictness, Right DataStreamSemantic
     /// There are 4 * 6 * 5 * 4 = 480 total combinations
 
-    using SupportMatrix
-        = std::unordered_map<DataStreamSemantic, std::unordered_map<JoinKind, std::unordered_map<JoinStrictness, std::unordered_map<DataStreamSemantic, bool>>>>;
+    using SupportMatrix = std::unordered_map<
+        DataStreamSemantic,
+        std::unordered_map<JoinKind, std::unordered_map<JoinStrictness, std::unordered_map<DataStreamSemantic, bool>>>>;
 
     /// So far we only support these join combinations
     static const SupportMatrix support_matrix = {
         {DataStreamSemantic::Append,
          {{
               JoinKind::Left,
-              {{JoinStrictness::All,
-                {{DataStreamSemantic::Append, true},
-                 {DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof,
-                {{DataStreamSemantic::Append, false},
-                 {DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any,
-                {{DataStreamSemantic::Append, false},
-                 {DataStreamSemantic::VersionedKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}}},
           },
-          { /// Append
+          {
+              /// Append
               JoinKind::Inner,
-              {{JoinStrictness::All,
-                {{DataStreamSemantic::Append, true},
-                 {DataStreamSemantic::VersionedKV, true}}},
-               {JoinStrictness::Asof,
-                {{DataStreamSemantic::Append, true},
-                 {DataStreamSemantic::VersionedKV, true}}},
-               {JoinStrictness::Any,
-                {{DataStreamSemantic::Append, true},
-                 {DataStreamSemantic::VersionedKV, true}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}}},
           },
-          { /// Append
+          {
+              /// Append
               JoinKind::Right,
-              {{JoinStrictness::All,
-                {{DataStreamSemantic::Append, false},
-                 {DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof,
-                {{DataStreamSemantic::Append, false},
-                 {DataStreamSemantic::VersionedKV, false}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
                {JoinStrictness::Any,
-                {{DataStreamSemantic::Append, false},
-                 {DataStreamSemantic::ChangeLogKV, false},
-                 {DataStreamSemantic::VersionedKV, false}}}},
+                {{DataStreamSemantic::Append, false}, {DataStreamSemantic::ChangeLogKV, false}, {DataStreamSemantic::VersionedKV, false}}}},
           },
-          { /// Append
+          {
+              /// Append
               JoinKind::Full,
-              {{JoinStrictness::All,
-                {{DataStreamSemantic::Append, false},
-                 {DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof,
-                {{DataStreamSemantic::Append, false},
-                 {DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any,
-                {{DataStreamSemantic::Append, false},
-                 {DataStreamSemantic::VersionedKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}}},
           }}},
         {DataStreamSemantic::Changelog,
          {{
               JoinKind::Left,
-              {{JoinStrictness::All,
-                {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof,
-                {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any,
-                {{DataStreamSemantic::VersionedKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
           },
-          { /// Changelog
+          {
+              /// Changelog
               JoinKind::Inner,
-              {{JoinStrictness::All,
-                {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof,
-                {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any,
-                {{DataStreamSemantic::VersionedKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
           }}},
         {DataStreamSemantic::ChangeLogKV,
          {{
               JoinKind::Left,
-              {{JoinStrictness::All,
-                {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Asof,
-                {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Any,
-                {{DataStreamSemantic::ChangeLogKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::ChangeLogKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::ChangeLogKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::ChangeLogKV, false}}}},
           },
-          { /// ChangelogKV
+          {
+              /// ChangelogKV
               JoinKind::Inner,
-              {{JoinStrictness::All,
-                {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Asof,
-                {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Any,
-                {{DataStreamSemantic::ChangeLogKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::ChangeLogKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::ChangeLogKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::ChangeLogKV, false}}}},
           },
-          { /// ChangelogKV
+          {
+              /// ChangelogKV
               JoinKind::Right,
-              {{JoinStrictness::All,
-                {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Asof,
-                {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Any,
-                {{DataStreamSemantic::ChangeLogKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::ChangeLogKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::ChangeLogKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::ChangeLogKV, false}}}},
           },
-          { /// ChangelogKV
+          {
+              /// ChangelogKV
               JoinKind::Full,
-              {{JoinStrictness::All,
-                {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Asof,
-                {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Any,
-                {{DataStreamSemantic::ChangeLogKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::ChangeLogKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::ChangeLogKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::ChangeLogKV, false}}}},
           }}},
         {DataStreamSemantic::VersionedKV,
          {{
               JoinKind::Left,
-              {{JoinStrictness::All,
-                {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof,
-                {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any,
-                {{DataStreamSemantic::VersionedKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
           },
-          { /// VersionedKV
+          {
+              /// VersionedKV
               JoinKind::Inner,
-              {{JoinStrictness::All,
-                {{DataStreamSemantic::VersionedKV, true}}},
-               {JoinStrictness::Asof,
-                {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any,
-                {{DataStreamSemantic::VersionedKV, true}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, true}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, true}}}},
           },
-          { /// VersionedKV
+          {
+              /// VersionedKV
               JoinKind::Right,
-              {{JoinStrictness::All,
-                {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof,
-                {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any,
-                {{DataStreamSemantic::VersionedKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
           },
-          { /// VersionedKV
+          {
+              /// VersionedKV
               JoinKind::Full,
-              {{JoinStrictness::All,
-                {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof,
-                {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any,
-                {{DataStreamSemantic::VersionedKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
           }}},
     };
 
-    auto left_data_stream_semantic_iter = support_matrix.find(left_stream_desc.data_stream_semantic);
+    auto left_data_stream_semantic_iter = support_matrix.find(left_data.join_stream_desc->data_stream_semantic);
     if (left_data_stream_semantic_iter == support_matrix.end())
         throw_ex();
 
@@ -2065,10 +2090,74 @@ void HashJoin::checkJoinSemantic() const
     if (strictness_iter == kind_iter->second.end())
         throw_ex();
 
-    auto right_data_stream_semantic_iter = strictness_iter->second.find(right_stream_desc.data_stream_semantic);
+    auto right_data_stream_semantic_iter = strictness_iter->second.find(right_data.join_stream_desc->data_stream_semantic);
     if (right_data_stream_semantic_iter == strictness_iter->second.end() || !right_data_stream_semantic_iter->second)
         throw_ex();
 }
 
+size_t HashJoin::sizeOfMapsVariant(const MapsVariant & maps_variant) const
+{
+    size_t size = 0;
+    joinDispatch(streaming_kind, streaming_strictness, maps_variant, [&](auto /*kind_*/, auto /*strictness_*/, auto & maps) {
+        switch (hash_method_type)
+        {
+#define M(TYPE) \
+    case HashJoin::Type::TYPE: \
+        size = maps.TYPE->size(); \
+        break;
+            APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+        }
+    });
+    return size;
 }
+
+String HashJoin::JoinResults::joinMetricsString(const HashJoin * join) const
+{
+    size_t total_blocks_cached = blocks.size();
+    size_t total_blocks_bytes_cached = 0;
+    size_t total_blocks_allocated_bytes_cached = 0;
+    size_t total_blocks_rows_cached = 0;
+    size_t total_arena_bytes = 0;
+    size_t total_arena_chunks = 0;
+    size_t total_keys_cached = 0;
+
+    for (const auto & block : blocks)
+    {
+        total_blocks_rows_cached += block.block.rows();
+        total_blocks_bytes_cached += block.block.allocatedBytes();
+        total_blocks_allocated_bytes_cached += block.block.allocatedBytes();
+    }
+
+    total_arena_bytes += pool.size();
+    total_arena_chunks += pool.numOfChunks();
+
+    if (maps)
+        total_keys_cached += maps->size(join);
+
+    return fmt::format(
+        "total_blocks_cached={}, total_blocks_bytes_cached={}, total_blocks_allocated_bytes_cached={}, "
+        "total_blocks_rows_cached={}, total_arena_bytes={}, total_arena_chunks={}, total_keys_cached={}; recorded_join_metrics={}, "
+        "next_block_id={}",
+        total_blocks_cached,
+        total_blocks_bytes_cached,
+        total_blocks_allocated_bytes_cached,
+        total_blocks_rows_cached,
+        total_arena_bytes,
+        total_arena_chunks,
+        total_keys_cached,
+        metrics.string(),
+        block_id);
+}
+
+size_t HashJoinMapsVariants::size(const HashJoin * join) const
+{
+    size_t total_keys = 0;
+    for (const auto & maps : map_variants)
+        total_keys += join->sizeOfMapsVariant(maps);
+
+    return total_keys;
+}
+
+};
 }

@@ -65,6 +65,7 @@
 /// proton: starts
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Streaming/HashJoin.h>
+#include <Interpreters/Streaming/ConcurrentHashJoin.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 #include <Storages/Streaming/ProxyStream.h>
 #include <Common/ProtonCommon.h>
@@ -1071,7 +1072,7 @@ JoinPtr SelectQueryExpressionAnalyzer::appendJoin(
     bool delta_column_is_requested = syntax->unresolved_reserved_columns.contains(ProtonConsts::RESERVED_DELTA_FLAG);
     bool project_delta_column = false;
 
-    if (auto * streaming_join = typeid_cast<Streaming::HashJoin *>(join.get()); streaming_join
+    if (auto * streaming_join = dynamic_cast<Streaming::IHashJoin *>(join.get()); streaming_join
         && streaming_join->emitChangeLog())
     {
         project_delta_column = true;
@@ -1905,7 +1906,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             chain.addStep();
 
             /// proton : starts
-            if (const auto * streaming_join = typeid_cast<Streaming::HashJoin *>(join.get()); streaming_join && streaming_join->emitChangeLog())
+            if (const auto * streaming_join = dynamic_cast<Streaming::IHashJoin *>(join.get()); streaming_join && streaming_join->emitChangeLog())
                 force_internal_changelog_emit = true;
             /// proton : ends
         }
@@ -2301,10 +2302,21 @@ std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreami
     Streaming::DataStreamSemantic right_data_stream_semantic = tables[1].data_stream_semantic;
 
     auto keep_versions = getContext()->getSettingsRef().keep_versions;
-    return std::make_shared<Streaming::HashJoin>(
-        analyzed_join,
-        Streaming::JoinStreamDescription{Block{}, left_data_stream_semantic, keep_versions}, /// We don't know the header of the left stream yet since it is not finalized
-        Streaming::JoinStreamDescription{joined_plan->getCurrentDataStream().header, right_data_stream_semantic, keep_versions});
+    auto max_threads = getContext()->getSettingsRef().max_threads;
+
+    auto left_join_stream_desc = std::make_shared<Streaming::JoinStreamDescription>(
+        Block{},
+        left_data_stream_semantic,
+        keep_versions); /// We don't know the header of the left stream yet since it is not finalized
+
+    auto right_join_stream_desc = std::make_shared<Streaming::JoinStreamDescription>(
+        joined_plan->getCurrentDataStream().header, right_data_stream_semantic, keep_versions);
+
+    if (analyzed_join->allowParallelHashJoin())
+        return std::make_shared<Streaming::ConcurrentHashJoin>(
+            analyzed_join, max_threads, std::move(left_join_stream_desc), std::move(right_join_stream_desc));
+    else
+        return std::make_shared<Streaming::HashJoin>(analyzed_join, std::move(left_join_stream_desc), std::move(right_join_stream_desc));
 }
 /// proton : ends
 

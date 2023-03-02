@@ -33,5 +33,7 @@ struct JoinStreamDescription
     DataStreamSemantic data_stream_semantic;
     UInt64 keep_versions;
 };
+
+using JoinStreamDescriptionPtr = std::shared_ptr<JoinStreamDescription>;
 }
 }

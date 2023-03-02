@@ -118,6 +118,8 @@ struct BufferedStreamData
 
     const JoinMetrics & getJoinMetrics() const { return metrics; }
 
+    String joinMetricsString() const;
+
     const auto & getRangeBucketHashBlocks() const { return range_bucket_hash_blocks; }
     auto & getRangeBucketHashBlocks() { return range_bucket_hash_blocks; }
 

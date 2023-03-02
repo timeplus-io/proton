@@ -150,8 +150,18 @@ public:
     {
         auto num_threads = pipe.maxParallelStreams();
 
-        if (max_threads) //-V1051
-            num_threads = std::min(num_threads, max_threads);
+        /// proton : starts, we will need take the max of pipe's max parallel streams and user provided max_threads
+        if (is_streaming)
+        {
+            if (max_threads) //-V1051
+                num_threads = std::max(num_threads, max_threads);
+        }
+        else
+        {
+            if (max_threads) //-V1051
+                num_threads = std::min(num_threads, max_threads);
+        }
+        /// proton : ends
 
         return std::max<size_t>(1, num_threads);
     }
@@ -191,6 +201,7 @@ public:
         const Block & out_header,
         size_t max_block_size,
         UInt64 join_max_cached_bytes,
+        size_t max_streams,
         Processors * collected_processors = nullptr);
     /// proton: ends.
 
@@ -208,6 +219,7 @@ private:
 
     /// proton : starts
     ExecuteMode exec_mode = ExecuteMode::NORMAL;
+    bool is_streaming = false;
     /// proton : ends
 
     void checkInitialized();

@@ -800,8 +800,13 @@ Block concatenateBlocks(const std::vector<Block> & blocks)
         columns[i]->reserve(num_rows);
         for (const auto & block : blocks)
         {
-            const auto & tmp_column = *block.getByPosition(i).column;
-            columns[i]->insertRangeFrom(tmp_column, 0, block.rows());
+            /// proton : starts, check block has rows
+            if (block.rows() > 0)
+            {
+                const auto & tmp_column = *block.getByPosition(i).column;
+                columns[i]->insertRangeFrom(tmp_column, 0, block.rows());
+            }
+            /// proton : ends
         }
     }
 

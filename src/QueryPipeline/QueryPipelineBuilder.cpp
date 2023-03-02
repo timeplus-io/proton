@@ -1,8 +1,6 @@
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
 #include <Processors/QueryPlan/ExpressionStep.h>
-#include <Processors/ResizeProcessor.h>
-#include <Processors/LimitTransform.h>
 #include <Processors/Transforms/TotalsHavingTransform.h>
 #include <Processors/Transforms/ExtremesTransform.h>
 #include <Processors/Transforms/CreatingSetsTransform.h>
@@ -11,20 +9,18 @@
 #include <Processors/Transforms/MergeJoinTransform.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Executors/PipelineExecutor.h>
-#include <Processors/Transforms/PartialSortingTransform.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
-#include <IO/WriteHelpers.h>
 #include <Interpreters/IJoin.h>
 #include <Interpreters/TableJoin.h>
 #include <Common/typeid_cast.h>
-#include <Core/SortDescription.h>
 #include <Processors/DelayedPortsProcessor.h>
 #include <Processors/RowsBeforeLimitCounter.h>
 #include <Processors/Sources/RemoteSource.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 
 /// proton : starts
-#include <Interpreters/Streaming/HashJoin.h>
+#include <Interpreters/Streaming/IHashJoin.h>
+#include <Interpreters/Streaming/ConcurrentHashJoin.h>
 #include <Processors/Transforms/Streaming/JoinTranform.h>
 /// proton : ends
 
@@ -602,6 +598,8 @@ void QueryPipelineBuilder::setStreaming(bool is_streaming_)
 {
     for (const auto & processor : pipe.processors)
         processor->setStreaming(is_streaming_);
+
+    is_streaming = is_streaming_;
 }
 
 std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreaming(
@@ -610,7 +608,8 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     JoinPtr join,
     const Block & out_header,
     size_t max_block_size,
-    UInt64 join_max_cached_bytes,
+    size_t join_max_cached_bytes,
+    size_t max_streams,
     Processors * collected_processors)
 {
     left->checkInitializedAndNotCompleted();
@@ -632,28 +631,81 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     if (left->hasTotals() || right->hasTotals())
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Streaming join doesn't support totals");
 
-    /// (left)  ->
-    /// (left)  ->   resize(1) ->
-    /// (left)  ->                \
-    ///                            -> JoinTransform
-    /// (right) ->                /
-    /// (right) ->   resize(1) ->
-    /// (right) ->
-
     /// FIXME : multi-substream co-partition join
-    right->resize(1);
-    left->resize(1);
+
+    size_t left_max_parallel_streams = std::max(left->pipe.max_parallel_streams, left->getNumStreams());
+    size_t right_max_parallel_streams = std::max(right->pipe.max_parallel_streams, right->getNumStreams());
+
+    size_t num_transforms = 0;
+
+    if (join->supportParallelJoin())
+    {
+        /// This is the current implementation
+        /// (left)  ->                       -> (left-1) ──────┐─────────────────────────> JoinTransform (Joined) ────┐
+        /// (left)  ->   resize(max_streams) -> (left-2) ──────│──────┐──────────────────> JoinTransform (Joined) ────│
+        /// (left)  ->                       -> (left-3) ──────│──────│──────┐───────────> JoinTransform (Joined) ────│
+        ///                                  -> (left-4) ──────│──────│──────│──────┐────> JoinTransform (Joined) ────│
+        ///                                                    │      │      │      │                                 │
+        /// (right) ->                       -> (right-1) ─────┘      │      │      │                        ConcurrentHashJoin (light shuffle)
+        /// (right) ->   resize(max_streams) -> (right-2) ────────────┘      │      │                                 │──── HashJoin-1
+        /// (right) ->                       -> (right-3) ───────────────────┘      │                                 │──── HashJoin-2
+        /// (right) ->                       -> (right-4) ──────────────────────────┘                                 │──── HashJoin-3
+        ///                                                                                                           │──── HashJoin-4
+        /// We can consider doing light shuffling and then do parallel co-partition joining,
+        /// then we don't need `ConcurrentHashJoin`
+        /// To be enhanced
+        /// (left)  ->                        -> (left-1) ──────┐─────────────────────────> JoinTransform (Joined) ──── HashJoin-1
+        /// (left)  ->   shuffle(max_streams) -> (left-2) ──────│──────┐──────────────────> JoinTransform (Joined) ──── HashJoin-2
+        /// (left)  ->                        -> (left-3) ──────│──────│──────┐───────────> JoinTransform (Joined) ──── HashJoin-3
+        ///                                   -> (left-4) ──────│──────│──────│──────┐────> JoinTransform (Joined) ──── HashJoin-4
+        ///                                                     │      │      │      │
+        /// (right) ->                        -> (right-1) ─────┘      │      │      │
+        /// (right) ->   shuffle(max_streams) -> (right-2) ────────────┘      │      │
+        /// (right) ->                        -> (right-3) ───────────────────┘      │
+        /// (right) ->                        -> (right-4) ──────────────────────────┘
+
+        max_streams = std::max<size_t>({left_max_parallel_streams, right_max_parallel_streams, max_streams});
+        num_transforms = max_streams;
+
+        if (left->getNumStreams() != max_streams)
+            left->resize(max_streams);
+
+        if (right->getNumStreams() != max_streams)
+            right->resize(max_streams);
+
+        auto * concurrent_hash_join = typeid_cast<Streaming::ConcurrentHashJoin *>(join.get());
+        assert(concurrent_hash_join);
+        concurrent_hash_join->rescale(max_streams);
+    }
+    else
+    {
+        /// (left)  ->
+        /// (left)  ->   resize(1) ->
+        /// (left)  ->                \
+        ///                            -> JoinTransform
+        /// (right) ->                /
+        /// (right) ->   resize(1) ->
+        /// (right) ->
+        /// (right) ->
+
+        right->resize(1);
+        left->resize(1);
+        num_transforms = 1;
+    }
+
+    assert(num_transforms == left->pipe.output_ports.size());
+    assert(num_transforms == right->pipe.output_ports.size());
 
     auto lit = left->pipe.output_ports.begin();
     auto rit = right->pipe.output_ports.begin();
 
-    for (size_t i = 0; i < 1; ++i)
+    for (size_t i = 0; i < num_transforms; ++i)
     {
         auto joining = std::make_shared<Streaming::JoinTransform>(
             left->getHeader(),
             right->getHeader(),
             out_header,
-            std::dynamic_pointer_cast<Streaming::HashJoin>(join),
+            std::dynamic_pointer_cast<Streaming::IHashJoin>(join),
             max_block_size,
             join_max_cached_bytes);
 
@@ -680,7 +732,11 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     /// left->pipe.max_parallel_streams = std::max<size_t>({left->pipe.max_parallel_streams, right->pipe.max_parallel_streams, 2ull});
     /// For multiple stream to stream join, each stream actually needs its own stream to progress. So the max parallel stream is actually
     /// a sum of all involved streams
-    left->pipe.max_parallel_streams = left->pipe.max_parallel_streams + right->pipe.max_parallel_streams;
+    if (num_transforms == 1)
+        left->pipe.max_parallel_streams = left_max_parallel_streams + right_max_parallel_streams;
+    else
+        left->pipe.max_parallel_streams = 2 * num_transforms;
+
     return left;
 }
 /// proton: ends.
