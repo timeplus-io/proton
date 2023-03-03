@@ -23,26 +23,24 @@ String UDA_CEP1 = R"###(
     initialize : function() {
         this.last_down_price = -1.0;
         this.down_duration = 0;
-        this.result = 0;
+        this.result = [];
     },
     process: function(prices) {
-        var emit = 0;
         for (let i = 0; i < prices.length; i++) {
             if (this.last_down_price < 0 || prices[i] <= this.last_down_price) {
                 this.last_down_price = prices[i];
                 this.down_duration = this.down_duration + 1;
             } else {
-                this.result = this.down_duration;
+                this.result.push(this.down_duration);
                 this.last_down_price = prices[i];
-                this.down_duration = 1
-                emit = 1;
+                this.down_duration = 1;
             }
         }
-        return emit;
+        return this.result.length;
     },
     finalize: function () {
         var old_result = this.result;
-        this.result = 0;
+        this.result = [];
         return old_result;
     },
     has_customized_emit : true
