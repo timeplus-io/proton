@@ -19,7 +19,7 @@ JoinStep::JoinStep(
     const DataStream & right_stream_,
     JoinPtr join_,
     size_t max_block_size_,
-    UInt64 join_max_cached_bytes_,
+    size_t join_max_cached_bytes_,
     size_t max_streams_)
     : join(std::move(join_))
     , max_block_size(max_block_size_)

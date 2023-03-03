@@ -97,7 +97,7 @@ WatermarkSettings::WatermarkSettings(ASTPtr query, TreeRewriterResultPtr syntax_
     }
     else
     {
-        if (window_desc)
+        if (window_desc && window_desc->type != WindowType::NONE)
         {
             if (mode == WatermarkSettings::EmitMode::NONE)
                 mode = WatermarkSettings::EmitMode::WATERMARK;

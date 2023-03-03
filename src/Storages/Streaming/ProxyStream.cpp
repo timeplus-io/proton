@@ -294,11 +294,12 @@ void ProxyStream::buildStreamingProcessingQueryPlan(
     const SelectQueryInfo & query_info,
     const StorageSnapshotPtr & storage_snapshot,
     const ContextPtr & context_,
-    bool need_watermark) const
+    bool need_watermark,
+    size_t curr_proxy_depth) const
 {
     if (nested_proxy_storage)
         nested_proxy_storage->as<ProxyStream>()->buildStreamingProcessingQueryPlan(
-            query_plan, required_columns_after_streaming_window, query_info, storage_snapshot, context_, need_watermark);
+            query_plan, required_columns_after_streaming_window, query_info, storage_snapshot, context_, need_watermark, ++curr_proxy_depth);
 
     if (!streaming_func_desc)
         return;
@@ -309,6 +310,10 @@ void ProxyStream::buildStreamingProcessingQueryPlan(
         /// Insert dedup step
         query_plan.addStep(std::make_unique<DedupTransformStep>(
             query_plan.getCurrentDataStream(), query_plan.getCurrentDataStream().header, streaming_func_desc));
+
+        /// In case `select count() from dedup(stream, s)`, no streamign window, but still need watermark
+        if (need_watermark && curr_proxy_depth == 1)
+            processWatermarkStep(query_plan, query_info, false);
     }
     else if (streaming_func_desc->type != WindowType::NONE)
     {
@@ -356,9 +361,7 @@ bool ProxyStream::processTimestampStep(
 
 void ProxyStream::processWatermarkStep(QueryPlan & query_plan, const SelectQueryInfo & query_info, bool proc_time) const
 {
-    assert(streaming_func_desc && (streaming_func_desc->type != WindowType::NONE));
-
-    if (streaming_func_desc->type == WindowType::SESSION)
+    if (streaming_func_desc && streaming_func_desc->type == WindowType::SESSION)
     {
         processSessionStep(query_plan, query_info);
     }

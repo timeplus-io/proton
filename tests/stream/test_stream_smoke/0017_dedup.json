@@ -106,7 +106,7 @@
     },
     {
       "id": 4,
-      "tags": ["dedup", "bug"],
+      "tags": ["dedup"],
       "name": "dedup-expression",
       "description": "dedup with explicit function expression limits",
       "steps":[

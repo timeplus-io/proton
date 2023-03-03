@@ -82,7 +82,8 @@ public:
         const SelectQueryInfo & select_info,
         const StorageSnapshotPtr & storage_snapshot,
         const ContextPtr & context_,
-        bool need_watermark) const;
+        bool need_watermark,
+        size_t curr_proxy_depth = 1) const;
 
 private:
     void validateProxyChain() const;
