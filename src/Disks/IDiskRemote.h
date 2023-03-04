@@ -135,7 +135,8 @@ public:
 
     virtual void removeFromRemoteFS(const std::vector<String> & paths) = 0;
 
-    static AsynchronousReaderPtr getThreadPoolReader();
+    static IAsynchronousReader & getThreadPoolReader();
+
     static ThreadPool & getThreadPoolWriter();
 
     DiskPtr getMetadataDiskIfExistsOrSelf() override { return metadata_disk; }

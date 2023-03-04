@@ -416,10 +416,6 @@ if (TARGET ch_contrib::nuraft)
 endif()
 
 # proton: starts
-if (TARGET ch_contrib::liburing)
-    dbms_target_link_libraries(PRIVATE ch_contrib::liburing)
-endif()
-
 if (TARGET ch_contrib::muduo_base)
     dbms_target_link_libraries(PUBLIC ch_contrib::muduo_base)
 endif()
@@ -533,6 +529,11 @@ endif()
 
 if (TARGET ch_contrib::msgpack)
     target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::msgpack)
+endif()
+
+if (TARGET ch_contrib::liburing)
+    target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::liburing)
+    target_include_directories (clickhouse_common_io SYSTEM BEFORE PUBLIC ${LIBURING_COMPAT_INCLUDE_DIR} ${LIBURING_INCLUDE_DIR})
 endif()
 
 target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::fast_float)

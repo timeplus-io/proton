@@ -292,7 +292,11 @@
     M(MergeTreeMetadataCacheDelete, "Number of rocksdb deletes(used for merge tree metadata cache)") \
     M(MergeTreeMetadataCacheSeek, "Number of rocksdb seeks(used for merge tree metadata cache)") \
     M(MergeTreeMetadataCacheHit, "Number of times the read of meta file was done from MergeTree metadata cache") \
-    M(MergeTreeMetadataCacheMiss, "Number of times the read of meta file was not done from MergeTree metadata cache")
+    M(MergeTreeMetadataCacheMiss, "Number of times the read of meta file was not done from MergeTree metadata cache") \
+    M(IOUringSQEsSubmitted, "Total number of io_uring SQEs submitted") \
+    M(IOUringSQEsResubmits, "Total number of io_uring SQE resubmits performed") \
+    M(IOUringCQEsCompleted, "Total number of successfully completed io_uring CQEs") \
+    M(IOUringCQEsFailed, "Total number of completed io_uring CQEs with failures")
 
 namespace ProfileEvents
 {

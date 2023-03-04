@@ -91,6 +91,7 @@ class ZooKeeperLog;
 class SessionLog;
 class ProcessorsProfileLog;
 class TransactionsInfoLog;
+class IAsynchronousReader;
 class StorageS3Settings;
 class IDatabase;
 class DDLWorker;
@@ -1021,6 +1022,19 @@ public:
     OrdinaryBackgroundExecutorPtr getMovesExecutor() const;
     OrdinaryBackgroundExecutorPtr getFetchesExecutor() const;
     OrdinaryBackgroundExecutorPtr getCommonExecutor() const;
+
+    enum class FilesystemReaderType
+    {
+        SYNCHRONOUS_LOCAL_FS_READER,
+        ASYNCHRONOUS_LOCAL_FS_READER,
+        ASYNCHRONOUS_REMOTE_FS_READER,
+    };
+
+    IAsynchronousReader & getThreadPoolReader(FilesystemReaderType type) const;
+
+    size_t getThreadPoolReaderSize(FilesystemReaderType type) const;
+
+    ThreadPool & getThreadPoolWriter() const;
 
     /** Get settings for reading from filesystem. */
     ReadSettings getReadSettings() const;

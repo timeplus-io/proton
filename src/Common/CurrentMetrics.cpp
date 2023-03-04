@@ -81,6 +81,8 @@
     M(ActiveSyncDrainedConnections, "Number of active connections drained synchronously.") \
     M(AsynchronousReadWait, "Number of threads waiting for asynchronous read.") \
     M(BackgroundSchedulePoolNativeLogTask, "Number of active threads in the NativeLog schedule pool.") \
+    M(IOUringPendingEvents, "Number of io_uring SQEs waiting to be submitted") \
+    M(IOUringInFlightEvents, "Number of io_uring SQEs in flight") \
 
 namespace CurrentMetrics
 {

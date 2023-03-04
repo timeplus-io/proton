@@ -2,9 +2,17 @@
 
 #Release, RelWithDebInfo, Debug
 build_type="$1"
-sanitizer="$2" # address
 build_type="${build_type:=Release}"
-sanitizer="${sanitizer}"
+
+sanitizer=""
+if [ "$build_type" = "Debug" ]; then
+    sanitizer="address"
+fi
+
+enable_jemalloc="OFF"
+if [ -z "$sanitizer" ]; then
+    enable_jemalloc="ON"
+fi
 
 cmake .. \
     -DCMAKE_BUILD_TYPE=${build_type} \
@@ -25,11 +33,11 @@ cmake .. \
     -DENABLE_SIMDJSON=ON \
     -DENABLE_ROCKSDB=ON \
     -DENABLE_REPLXX=ON \
-    -DENABLE_JEMALLOC=ON \
+    -DENABLE_JEMALLOC=${enable_jemalloc} \
     -DENABLE_SSL=ON \
     -DENABLE_BZIP2=ON \
     -DENABLE_PROTOBUF=ON \
-    -DENABLE_URING=ON \
+    -DENABLE_LIBURING=ON \
     -DENABLE_UTILS=ON \
     -DENABLE_THINLTO=OFF \
     -DENABLE_CLANG_TIDY=OFF \

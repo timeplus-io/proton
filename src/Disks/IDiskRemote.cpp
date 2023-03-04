@@ -664,12 +664,13 @@ String IDiskRemote::getUniqueId(const String & path) const
 }
 
 
-AsynchronousReaderPtr IDiskRemote::getThreadPoolReader()
+IAsynchronousReader & IDiskRemote::getThreadPoolReader()
 {
-    constexpr size_t pool_size = 50;
-    constexpr size_t queue_size = 1000000;
-    static AsynchronousReaderPtr reader = std::make_shared<ThreadPoolRemoteFSReader>(pool_size, queue_size);
-    return reader;
+    auto context = Context::getGlobalContextInstance();
+    if (!context)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Global context not initialized");
+
+    return context->getThreadPoolReader(Context::FilesystemReaderType::ASYNCHRONOUS_REMOTE_FS_READER);
 }
 
 UInt32 IDiskRemote::getRefCount(const String & path) const
@@ -679,10 +680,11 @@ UInt32 IDiskRemote::getRefCount(const String & path) const
 
 ThreadPool & IDiskRemote::getThreadPoolWriter()
 {
-    constexpr size_t pool_size = 100;
-    constexpr size_t queue_size = 1000000;
-    static ThreadPool writer(pool_size, pool_size, queue_size);
-    return writer;
+    auto context = Context::getGlobalContextInstance();
+    if (!context)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Global context not initialized");
+
+    return context->getThreadPoolWriter();
 }
 
 }

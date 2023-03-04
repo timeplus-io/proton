@@ -21,6 +21,8 @@ public:
 
     std::future<Result> submit(Request request) override;
 
+    void wait() override {}
+
     struct RemoteFSFileDescriptor;
 };
 

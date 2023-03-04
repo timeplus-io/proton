@@ -56,7 +56,7 @@ std::future<IAsynchronousReader::Result> AsynchronousReadBufferFromFileDescripto
         });
     }
 
-    return reader->submit(request);
+    return reader.submit(request);
 }
 
 
@@ -132,7 +132,7 @@ void AsynchronousReadBufferFromFileDescriptor::finalize()
 
 
 AsynchronousReadBufferFromFileDescriptor::AsynchronousReadBufferFromFileDescriptor(
-    AsynchronousReaderPtr reader_,
+    IAsynchronousReader & reader_,
     Int32 priority_,
     int fd_,
     size_t buf_size,
@@ -140,7 +140,7 @@ AsynchronousReadBufferFromFileDescriptor::AsynchronousReadBufferFromFileDescript
     size_t alignment,
     std::optional<size_t> file_size_)
     : ReadBufferFromFileBase(buf_size, existing_memory, alignment, file_size_)
-    , reader(std::move(reader_))
+    , reader(reader_)
     , priority(priority_)
     , required_alignment(alignment)
     , fd(fd_)

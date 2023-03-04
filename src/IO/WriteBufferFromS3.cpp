@@ -65,7 +65,7 @@ WriteBufferFromS3::WriteBufferFromS3(
     size_t max_single_part_upload_size_,
     std::optional<std::map<String, String>> object_metadata_,
     size_t buffer_size_,
-    ScheduleFunc schedule_,
+    ThreadPoolCallbackRunner<void> schedule_,
     const String & blob_name_,
     FileCachePtr cache_)
     : BufferWithOwnMemory<WriteBuffer>(buffer_size_, nullptr, 0)
@@ -298,7 +298,7 @@ void WriteBufferFromS3::writePart()
                 /// Releasing lock and condvar notification.
                 bg_tasks_condvar.notify_one();
             }
-        });
+        }, 0);
     }
     else
     {
@@ -435,7 +435,7 @@ void WriteBufferFromS3::makeSinglepartUpload()
                 /// Releasing lock and condvar notification.
                 bg_tasks_condvar.notify_one();
             }
-        });
+        }, 0);
     }
     else
     {

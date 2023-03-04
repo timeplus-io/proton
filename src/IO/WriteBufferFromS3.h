@@ -16,8 +16,10 @@
 
 #include <IO/BufferWithOwnMemory.h>
 #include <IO/WriteBuffer.h>
+#include <Interpreters/threadPoolCallbackRunner.h>
 
 #include <aws/core/utils/memory/stl/AWSStringStream.h>
+
 
 namespace Aws::S3
 {
@@ -56,7 +58,7 @@ public:
         size_t max_single_part_upload_size_,
         std::optional<std::map<String, String>> object_metadata_ = std::nullopt,
         size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE,
-        ScheduleFunc schedule_ = {},
+        ThreadPoolCallbackRunner<void> schedule_ = {},
         const String & blob_name = "",
         FileCachePtr cache_ = nullptr);
 
@@ -113,7 +115,7 @@ private:
 
     /// Following fields are for background uploads in thread pool (if specified).
     /// We use std::function to avoid dependency of Interpreters
-    ScheduleFunc schedule;
+    const ThreadPoolCallbackRunner<void> schedule;
     std::unique_ptr<PutObjectTask> put_object_task;
     std::list<UploadPartTask> upload_object_tasks;
     int num_added_bg_tasks = 0;

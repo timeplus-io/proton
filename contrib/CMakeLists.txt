@@ -113,6 +113,7 @@ add_contrib (base64-cmake base64)
 add_contrib (simdjson-cmake simdjson)
 add_contrib (rapidjson-cmake rapidjson)
 add_contrib (fastops-cmake fastops)
+add_contrib (liburing-cmake liburing)
 add_contrib (curl-cmake curl)
 add_contrib (azure-cmake azure)
 add_contrib (sentry-native-cmake sentry-native) # requires: curl
@@ -147,7 +148,6 @@ add_contrib (xxHash-cmake xxHash)
 
 # proton: starts
 option(ENABLE_MUDUO "Enable muduo lib" YES)
-add_contrib (liburing-cmake liburing)
 add_contrib (muduo-cmake muduo)
 
 # enable v8 build by default to support UDA and UDF

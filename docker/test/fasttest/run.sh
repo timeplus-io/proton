@@ -179,6 +179,7 @@ function clone_submodules
             contrib/hashidsxx
             contrib/morton-nd
             contrib/xxHash
+            contrib/liburing
         )
 
         git submodule sync
@@ -201,6 +202,7 @@ function run_cmake
         "-DENABLE_NURAFT=1"
         "-DENABLE_JEMALLOC=1"
         "-DENABLE_REPLXX=1"
+        "-DENABLE_LIBURING=1"
     )
 
     # TODO remove this? we don't use ccache anyway. An option would be to download it

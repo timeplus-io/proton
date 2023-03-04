@@ -172,7 +172,7 @@ std::unique_ptr<ReadBufferFromFileBase> DiskWebServer::readFile(const String & p
 
     if (read_settings.remote_fs_method == RemoteFSReadMethod::threadpool)
     {
-        auto reader = IDiskRemote::getThreadPoolReader();
+        auto & reader = IDiskRemote::getThreadPoolReader();
         return std::make_unique<AsynchronousReadIndirectBufferFromRemoteFS>(reader, read_settings, std::move(web_impl), min_bytes_for_seek);
     }
     else
