@@ -3338,12 +3338,14 @@ def test_suite_run(
     api_key = os.environ.get("TIMEPLUS_API_KEY")
     api_address = os.environ.get("TIMEPLUS_ADDRESS")
     work_space = os.environ.get("TIMEPLUS_WORKSPACE")
+    if work_space is not None and work_space != '':
+        api_address = api_address + "/" + work_space    
 
 
-    if test_event_tag is not None and api_key is not None and api_address is not None and work_space is not None:
+    if test_event_tag is not None and api_key is not None and api_address is not None:
         try:
 
-            timeplus_env = Environment().address(api_address).workspace(work_space).apikey(api_key)       
+            timeplus_env = Environment().address(api_address).apikey(api_key)       
             event_type = 'test_suite_event'
             event_detailed_type = 'status'
             event_details = 'start'
@@ -3812,6 +3814,18 @@ def test_suite_run(
                     "test_suite_passed_total": test_suite_passed_total,
                     "proton_server_container_name": proton_server_container_name,
                 }
+                if test_event_tag is not None and api_key is not None and api_address is not None:
+                    try:
+                        event_type = 'test_suite_event'
+                        event_detailed_type = 'exception'
+                        formatted_lines = traceback.format_exc()
+                        event_details = {"error": f"{error}", "traceback": formatted_lines}
+                        test_suite_event_exception = Event.create(event_type, event_detailed_type, event_details)
+                        test_suite_event = test_suite_event_write(test_suite_event_exception,test_suite_name, config, test_suite_config, test_event_tag, test_event_version, timeplus_env, timeplus_event_stream)
+                        print(f"test_suite_event = {test_suite_event}")
+                    except(BaseException) as error:
+                        logger.debug(f"timeplus event write exception: {error}")
+                        traceback.print_exc()                 
 
 
             finally:
@@ -3829,7 +3843,7 @@ def test_suite_run(
             for test_set in test_sets_2_run:
                 logger.info(f'test_id = {test_set["test_id"]}, test_status = {test_set["status"]},case_retried = {test_set["case_retried"]}, test_result = {test_set["test_result"]}, test_case_duration = {test_set["test_case_duration"]} seconds')            
 
-            if test_event_tag is not None and api_key is not None and api_address is not None and work_space is not None:
+            if test_event_tag is not None and api_key is not None and api_address is not None:
                 try:
                     test_suite_result_running_summary = {"test_run_list_len": test_run_list_len, "test_suite_passed_total":test_suite_passed_total, "test_suite_case_run_duration": test_suite_case_run_duration.seconds}
                     test_case_run_summary_list = []

@@ -474,6 +474,8 @@ if __name__ == "__main__":
     api_key = os.environ.get("TIMEPLUS_API_KEY", None)
     api_address = os.environ.get("TIMEPLUS_ADDRESS", None)
     work_space = os.environ.get("TIMEPLUS_WORKSPACE", None)
+    if work_space is not None and work_space != '':
+        api_address = api_address + "/" + work_space
     sanitizer = os.environ.get("SANITIZER","")
     if len(sanitizer) == 0:
         build_type = "release_build"
@@ -487,9 +489,9 @@ if __name__ == "__main__":
     test_id = None
     event_id = None
     test_result = "None"
-    if api_address is not None and api_key is not None and work_space is not None:
+    if api_address is not None and api_key is not None:
         try: #write status start test_event to timeplus 
-            timeplus_env = Environment().address(api_address).workspace(work_space).apikey(api_key) 
+            timeplus_env = Environment().address(api_address).apikey(api_key) 
             test_event_tag = TestEventTag.create(repo_name, test_id, test_name, test_type,build_type, pr_number, commit_sha,os_info, platform_info)
             event_details = 'start'
             test_event_start = Event.create(event_type, event_detailed_type, event_details)    
@@ -572,7 +574,7 @@ if __name__ == "__main__":
     
     logger.info(f"test_result_str = {test_result_str}")           
     test_result = {"test_result": test_result_str, "detailed_summary": detailed_summary}
-    if api_address is not None and api_key is not None and work_space is not None:
+    if api_address is not None and api_key is not None:
         try: #write status start test_event to timeplus                
             event_details = 'end'
             test_event_end = Event.create(event_type, event_detailed_type, event_details, **test_result)
