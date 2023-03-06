@@ -1,0 +1,397 @@
+{
+    "test_suite_name": "type_and_func1",
+    "test_suite_config":{
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
+    },
+    "commments":
+        "Tests covering the steam query smoke cases.",
+    "tests": [
+
+        {
+            "id": 18,
+            "tags": ["func"],
+            "name": "array sum",
+            "description": "calculate array_sum for integer & float",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "wait":1, "query_id": "802", "query_end_timer": 5, "query":"SELECT [1, 1, 1] AS a, array_sum(a)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query_id": "803", "query_end_timer": 5, "query":"SELECT [1.5, 2.2, 3] AS a, array_sum(a)"}
+                    ]}
+            ],
+
+            "expected_results": [
+                {"query_id":"802", "expected_results":[
+                    ["[1, 1, 1]", 3]]},
+                {"query_id":"803", "expected_results":[
+                    ["[1.5, 2.2, 3.0]", 6.7]]}
+            ]
+        },
+        {
+            "id": 19,
+            "tags": ["lags", "cluster_table_bug"],
+            "name": "lags on table as view, tail lags with array_sum",
+            "description": "create a stream, and create a view with xirr check xirr",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists lags_v1"},
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_lags1"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_lags1(id int, income float, time datetime64(3))"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_lags1", "wait":1, "query":"insert into t_lags1(id, income, time)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:02')(1, -1000, '2020-01-05 09:01:03')(1, 3100, '2020-01-18 09:01:04')(1, 100, '2020-03-09 09:01:05')"},
+                    {"client":"python", "query_type": "table", "wait":3, "query":"create view if not exists lags_v1 as select id, lags(income, 1, 10) as income_lags, array_sum(income_lags) as lags_sum from table(t_lags1) order by time desc limit 1"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "801", "query":"select id, income_lags, lags_sum from lags_v1"}
+
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["1", "[3100.0, -1000.0, -1000.0, -1000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]", 100.0]
+                ]}
+            ]
+        },
+        {
+            "id": 20,
+            "tags": ["lags", "cluster_table_bug"],
+            "name": "lags on table as view, latest lags with array_sum",
+            "description": "create a stream, and create a view with lags check arry_sum of latest lags",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists lags_v1"},
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_lags1"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_lags1(id int, income float, time datetime64(3))"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_lags1", "wait":1, "query":"insert into t_lags1(id, income, time)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:02')(1, -1000, '2020-01-05 09:01:03')(1, 3100, '2020-01-18 09:01:04')(1, 100, '2020-03-09 09:01:05')"},
+                    {"client":"python", "query_type": "table", "wait":3, "query":"create view if not exists lags_v1 as select id, latest(lags(income, 1, 10)) as income_lags_latest, array_sum(income_lags_latest) as income_lags_sum from table(t_lags1) group by id"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "801", "query":"select id, income_lags_latest, income_lags_sum from lags_v1"}
+
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["1", "[3100.0, -1000.0, -1000.0, -1000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]", 100.0]
+                ]}
+            ]
+        },
+        {
+            "id": 21,
+            "tags": ["lags"],
+            "name": "lags on table as materialized view, latest lags with array_sum",
+            "description": "create a stream, and create a materialized view with lags check arry_sum of latest lags",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists lags_mv1"},
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_lags1"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_lags1(id int, income float, time datetime64(3))"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_lags1", "wait":1, "query":"insert into t_lags1(id, income, time)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:02')(1, -1000, '2020-01-05 09:01:03')(1, 3100, '2020-01-18 09:01:04')(1, 100, '2020-03-09 09:01:05')"},
+                    {"client":"python", "query_type": "table", "wait":3, "query":"create materialized view if not exists lags_mv1 as select id, latest(lags(income, 1, 10)) as income_lags_latest, array_sum(income_lags_latest) as income_lags_sum from t_lags1 group by id settings seek_to='earliest'"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"lags_mv1","wait":5,"query_id": "801", "query":"select id, income_lags_latest, income_lags_sum from lags_mv1 limit 1 settings seek_to='earliest'"}
+
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["1", "[3100.0, -1000.0, -1000.0, -1000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]", 100.0]
+                ]}
+            ]
+        },
+        {
+            "id": 22,
+            "tags": ["bool"],
+            "name": "tail with bool check in where",
+            "description": "create a stream, tail with bool check in where",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists bool_v1"},
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool1"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool1(id int, value int, bool_f bool, time datetime64(3))"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_bool1", "wait":1, "query":"insert into t_bool1(id, value, bool_f,time)values(1, -1000, true, '2020-01-02 00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05 09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')"},
+                    {"client":"python", "query_type": "table", "wait":3,"query_id": "801", "query":"select id, value, bool_f from t_bool1 where bool_f=true limit 1 settings seek_to = 'earliest'"}
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["1", "-1000", "True"]
+                ]}
+            ]
+        },
+        {
+            "id": 23,
+            "tags": ["bool", "bug"],
+            "name": "view with bool",
+            "description": "create a view with subquery and have tumble window",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists bool_v1"},
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool1"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool1(id int, value int, bool_f bool, time datetime64(3))"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_bool1", "wait":1, "query":"insert into t_bool1(id, value, bool_f,time)values(1, -1000, true, '2020-01-02 00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05 09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')"},
+                    {"client":"python", "query_type": "table", "wait":3,"query":"create view if not exists bool_v1 as with transformed as (select id, value, bool_f, time from t_bool1) select window_start, window_end, id, bool_f, count(bool_f) from tumble(transformed, time, 1s)  group by id, bool_f, window_start, window_end  settings seek_to='earliest'"},
+                    {"client":"python", "query_type": "stream", "query_end_timer":6,"wait":1,"query_id": "801", "query":"select id, bool_f, count() from bool_v1 group by id, bool_f"}
+
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["1", "False", 2],
+                ["1", "True", 2]
+                ]}
+            ]
+        },
+        {
+            "id": 24,
+            "tags": ["bool", "cluster_table_bug"],
+            "name": "materialized view with bool",
+            "description": "create a materialized view with subquery and have tumble window, and count() group by id, bool_f on the mv",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists bool_mv1"},
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool1"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool1(id int, value int, bool_f bool, time datetime64(3))"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_bool1", "wait":2, "query":"insert into t_bool1(id, value, bool_f,time)values(1, -1000, true, '2020-01-02 00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05 09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')"},
+                    {"client":"python", "query_type": "table","wait":3,"query":" create materialized view if not exists bool_mv1 as with transformed as (select id, value, bool_f, time from t_bool1) select window_start as ws, window_end as we, id, bool_f, count(bool_f) from tumble(transformed, time, 1s)  group by id, bool_f, window_start, window_end  settings seek_to='earliest'"},
+                    {"client":"python", "query_type": "table","wait":10, "depends_on_stream":"bool_mv1","query_id": "801", "query":"select id, bool_f, count() from table(bool_mv1) group by id, bool_f"}
+
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["1", "False", 2],
+                ["1", "True", 2]
+                ]}
+            ]
+        },
+        {
+            "id": 25,
+            "tags": ["bool", "cluster_table_bug"],
+            "name": "comparison bool",
+            "description": "comparison operations == != > < >= <=  return bool result",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool1"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool1(id int, value int, bool_f bool, time datetime64(3))"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_bool1", "wait":1, "query":"insert into t_bool1(id, value, bool_f,time) values(1, -1000, true, '2020-01-02 00:00:01')(1, 0,true, '2020-01-03 09:01:02')(1, 1, false, '2020-01-05 09:01:03')(1, 2, false, '2020-01-18 09:01:04')"},
+                    {"client":"python", "query_type": "table","wait":3, "query_id": "801", "query":"select if(1<2,'a','b'), 0 as v1, 'true' as v2, v1>0, v2='true', v1=true, v2=true, value=1, value!=1, value>1, value<=1, value<1, value>=1 from table(t_bool1) where id = 1 and id != 0 and to_uint8(id)"}
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["a", 0, "true", "False", "True", "False", "True", "False", "True", "False", "True", "True", "False"],
+                ["a", 0, "true", "False", "True", "False", "True", "False", "True", "False", "True", "True", "False"],
+                ["a", 0, "true", "False", "True", "False", "True", "True", "False", "False", "True", "False", "True"],
+                ["a", 0, "true", "False", "True", "False", "True", "False", "True", "True", "False", "False", "True"]
+                ]}
+            ]
+        },
+        {
+            "id": 26,
+            "tags": ["func", "cluster_table_bug"],
+            "name": "to_bool",
+            "description": "convert uint, string to bool",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool1"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool1(bool_s string, bool_i uint8, bool_f bool)"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_bool1", "wait":1, "query":"insert into t_bool1(bool_s, bool_i, bool_f) values('true', 0, true)('false', 1, false)"},
+                    {"client":"python", "query_type": "table","wait":3,"query_id": "801", "query":"select to_bool('true'), to_bool('false'), to_bool(1), to_bool(0), to_bool(true), to_bool(false), to_bool(bool_s), to_bool(bool_i), to_bool(bool_f) from table(t_bool1)"}
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["True", "False", "True", "False", "True", "False", "True", "False", "True"],
+                ["True", "False", "True", "False", "True", "False", "False", "True", "False"]
+                ]}
+            ]
+        },
+        {
+            "id": 27,
+            "tags": ["bool"],
+            "name": "finite_nan",
+            "description": "check finite, nan",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "801", "query":"SELECT 1/0 as infimum, is_finite(infimum), is_infinite(infimum), if_not_finite(infimum, 42), is_nan(NaN)"}
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["inf", "False", "True", 42, "True"]
+                ]}
+            ]
+        },
+        {
+            "id": 28,
+            "tags": ["func", "cluster_table_bug"],
+            "name": "json_extrac_array",
+            "description": "extract array from json string",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_json_raw1"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_json_raw1(raw string)"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_json_raw1", "wait":1, "query":"insert into t_json_raw1(raw) values('')('[1, 2]')('[\"abc\", \"xyz\"]')"},
+                    {"client":"python", "query_type": "table","wait":3,"query_id": "801", "query":"select raw, json_extract_array(raw) as tags, tags[1], tags[2] from table(t_json_raw1)"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "802", "query":"select '{\"a\":1,\"tags\":[\"x\",\"y\"]}' as raw, json_extract_array(raw:tags) as tags, tags[1], tags[2]"}
+                    ]}
+            ],
+
+            "expected_results": [
+                {"query_id":"801", "expected_results":[
+                    ["", "[]", "", ""],
+                    ["[1, 2]", "['1', '2']", "1", "2"],
+                    ["[\"abc\", \"xyz\"]", "['abc', 'xyz']", "abc", "xyz"]
+                ]},
+                {"query_id":"802", "expected_results":[
+                    ["{\"a\":1,\"tags\":[\"x\",\"y\"]}", "['x', 'y']", "x", "y"]
+                ]}
+            ]
+        },
+        {
+            "id": 29,
+            "tags": ["func", "cluster_table_bug"],
+            "name": "array_element",
+            "description": "extract element from json array string",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_json_raw1"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_json_raw1(raw string)"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_json_raw1", "wait":1, "query":"insert into t_json_raw1(raw) values('')('[1, 2]')('[\"abc\", \"xyz\"]')"},
+                    {"client":"python", "query_type": "table","wait":3,"query_id": "801", "query":"select raw, raw[*], raw[1], raw[2] from table(t_json_raw1)"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "802", "query":"select '{\"a\":1,\"tags\":[\"x\",\"y\"]}' as raw, raw:tags[*], raw:tags[1], raw:tags[2]"}
+                    ]}
+            ],
+
+            "expected_results": [
+                {"query_id":"801", "expected_results":[
+                    ["", "[]", "", ""],
+                    ["[1, 2]", "['1', '2']", "1", "2"],
+                    ["[\"abc\", \"xyz\"]", "['abc', 'xyz']", "abc", "xyz"]
+                ]},
+                {"query_id":"802", "expected_results":[
+                    ["{\"a\":1,\"tags\":[\"x\",\"y\"]}", "['x', 'y']", "x", "y"]
+                ]}
+            ]
+        },
+        {
+            "id": 30,
+            "tags": ["geo"],
+            "name": "point_in_polygon",
+            "description": "point in polygon",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "801", "query":"SELECT point_in_polygon((3., 3.), [(6, 0), (8, 4), (5, 8), (0, 2)]) AS res"}
+                ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["True"]
+                ]}
+            ]
+        },
+        {
+            "id": 31,
+            "tags": ["type", "cluster_table_bug"],
+            "name": "low_cardinality(bool)",
+            "description": "low_cardinality(bool)",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists lineorder_flat1"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"CREATE STREAM lineorder_flat1
+                    (`LO_ORDERKEY` uint32, `LO_LINENUMBER` uint8, `LO_CUSTKEY` uint32, `LO_PARTKEY` uint32, `LO_SUPPKEY` uint32, `LO_ORDERDATE` date, `LO_ORDERPRIORITY` low_cardinality(string), `LO_SHIPPRIORITY` uint8, `LO_QUANTITY` uint8, `LO_EXTENDEDPRICE` uint32, `LO_ORDTOTALPRICE` uint32, `LO_DISCOUNT` uint8, `LO_REVENUE` uint32, `LO_SUPPLYCOST` uint32, `LO_TAX` uint8, `LO_COMMITDATE` date, `LO_SHIPMODE` low_cardinality(string), `C_NAME` string, `C_ADDRESS` string, `C_CITY` low_cardinality(string), `C_NATION` low_cardinality(string), `C_REGION` low_cardinality(string), `C_PHONE` string, `C_MKTSEGMENT` low_cardinality(string), `S_NAME` string, `S_ADDRESS` string, `S_CITY` low_cardinality(string), `S_NATION` low_cardinality(string), `S_REGION` low_cardinality(string), `S_PHONE` string, `P_NAME` string, `P_MFGR` low_cardinality(string), `P_CATEGORY` low_cardinality(string), `P_BRAND` low_cardinality(string), `P_COLOR` low_cardinality(string), `P_TYPE` low_cardinality(string), `P_SIZE` uint8, `P_CONTAINER` low_cardinality(string)
+                    )"},
+                    {"client":"python", "query_type": "table","wait":3,"query_id": "801", "query":"SELECT  sum(LO_REVENUE), to_year(LO_ORDERDATE) AS year, P_BRAND FROM table(lineorder_flat1) WHERE (P_CATEGORY = 'MFGR#12') AND (S_REGION = 'AMERICA') GROUP BY  year, P_BRAND ORDER BY  year ASC, P_BRAND ASC"}
+                ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ]}
+            ]
+        },
+        {
+            "id": 32,
+            "tags": ["func"],
+            "name": "bool functions",
+            "description": "some bool funtions",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "801", "query":"select multi_if(multi_search_any('hello world',['hello']),'a','default')"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "802", "query":"select multi_match_any('hello world', ['hello1', 'world'])"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "803", "query":"select not_ilike('hello world', '%hellO %'), not_like('hello world', '%hellO %'), like('hello world', '%hellO %'), match('hello world', 'world')"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"select * from system.asynchronous_metric_log where metric='AsynchronousMetricsCalculationTimeSpent'"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "804", "query":"SELECT to_uint64(1) IN (SELECT * FROM system.numbers LIMIT 1100000)"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "805", "query":"SELECT -1 IN (-1), -1 IN (1, -1, 2), 1. IN (1), 1.1 IN (1, -1), 1. IN (3, 1., -1), 1 IN (3, 2, 1), to_int16(-1) IN (255), materialize(-1) IN (-1), materialize(-1) IN (1, -1, 2), materialize(1.) IN (1), materialize(1.1) IN (1, -1), materialize(1.) IN (3, 1., -1), materialize(1) IN (3, 2, 1), materialize(to_int16(-1)) IN (255)"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "806", "query":"SELECT DISTINCT array_filter(x -> not_empty(x), array_join([[''], ['is_registred'], ['registration_month','user_login','is_registred'], ['is_registred'], ['is_registred'], ['']]))"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "807", "query":"SELECT has([0, 0, 1], 1), has([0, 0, 0], 1), not 1, not false, true where true"}
+                ]}
+            ],
+
+            "expected_results": [
+                {"query_id":"801", "expected_results":[["a"]]},
+                {"query_id":"802", "expected_results":[["True"]]},
+                {"query_id":"803", "expected_results":[["False", "True", "False", "True"]]},
+                {"query_id":"804", "expected_results":[["True"]]},
+                {"query_id":"805", "expected_results":[["True", "True", "True", "False", "True", "True", "False", "True", "True", "True", "False", "True", "True", "False"]]},
+                {"query_id":"806", "expected_results":[["[]"], ["['is_registred']"], ["['registration_month', 'user_login', 'is_registred']"]]},
+                {"query_id":"807", "expected_results":[["True", "False", "False", "True", "True"]]}
+            ]
+        },
+        {
+            "id": 33,
+            "tags": ["func"],
+            "name": "max_k function",
+            "description": "Tests covering max_k aggregation with decimal argument and nested tuple",
+            "steps":[
+                {
+                "statements": [
+                    {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists maxk_types1"},
+                    {"client":"python", "query_type": "table", "wait":2, "query": "create stream maxk_types1(uint8 uint8,uint16 uint16,uint32 uint32,uint64 uint64,uint128 uint128,uint256 uint256,int8 int8,int16 int16,int32 int32,int64 int64,int128 int128,int256 int256,float32 float32,float64 float64,date date,date32 date32,datetime datetime,datetime64 datetime64,string string,fixed_string fixed_string(1),enum enum('a'=1,'b'=2,'c'=3),enum16 enum16('a'=1,'b'=2,'c'=3),decimal32 decimal32(5),decimal64 decimal64(5),decimal128 decimal128(5),decimal256 decimal256(5))"},
+                    {"client":"python", "query_type": "table", "wait":2, "query":"insert into maxk_types1(uint8 ,uint16 ,uint32 ,uint64 ,uint128 ,uint256 ,int8 ,int16 ,int32 ,int64 ,int128 ,int256 ,float32 ,float64 ,date ,date32 ,datetime ,datetime64 ,string ,fixed_string ,enum ,enum16 ,decimal32 ,decimal64 ,decimal128 ,decimal256) values(1,1,1,1,1,1, 1,1,1,1,1,1, 1.0,1.0, '2022-12-16','2022-12-16', '2022-03-24 17:17:17','2022-03-24 17:17:17' ,'a','a' , 'a','a' ,1.00,1.00,1.00,1.00)"},
+                    {"client":"python", "query_type": "table", "wait":2, "query":"insert into maxk_types1(uint8 ,uint16 ,uint32 ,uint64 ,uint128 ,uint256 ,int8 ,int16 ,int32 ,int64 ,int128 ,int256 ,float32 ,float64 ,date ,date32 ,datetime ,datetime64 ,string ,fixed_string ,enum ,enum16 ,decimal32 ,decimal64 ,decimal128 ,decimal256) values(2,2,2,2,2,2, 2,2,2,2,2,2, 2.0,2.0, '2022-12-16','2022-12-16', '2022-12-16 17:17:17','2022-12-16 17:17:17' ,'b','b' , 'b','b' ,2.00,2.00,2.00,2.00)"},
+                    {"client":"python", "query_type": "table", "wait":2, "query":"insert into maxk_types1(uint8 ,uint16 ,uint32 ,uint64 ,uint128 ,uint256 ,int8 ,int16 ,int32 ,int64 ,int128 ,int256 ,float32 ,float64 ,date ,date32 ,datetime ,datetime64 ,string ,fixed_string ,enum ,enum16 ,decimal32 ,decimal64 ,decimal128 ,decimal256) values(3,3,3,3,3,3, 3,3,3,3,3,3, 3.0,3.0, '2022-12-16','2022-12-16', '2022-12-16 17:17:17','2022-12-16 17:17:17' ,'c','c' , 'c','c' ,3.00,3.00,3.00,3.00)"},
+                    {"client":"python", "query_type": "table", "query_id":"800", "wait":2, "query":"select max_k(decimal128,2) from table(maxk_types1)"},
+                    {"client":"python", "query_type": "table", "query_id":"801", "wait":2, "query":"select max_k((decimal32,string),2) from table(maxk_types1)"},
+                    {"client":"python", "query_type": "table", "query_id":"802", "wait":2, "query":"select max_k(((string,decimal32),decimal64),2,uint8) from table(maxk_types1)"},
+                    {"client":"python", "query_type": "table", "query_id":"803", "wait":2, "query":"select max_k( (uint8,uint16,uint32,uint64,uint128,uint256,int8,int16,int32,int64,int128,int256,float32,float64),2 ) from table(maxk_types1)"},
+                    {"client":"python", "query_type": "table", "query_id":"804", "wait":2, "query":"select max_k( (date,date32,datetime,datetime64,string,fixed_string),2 ) from table(maxk_types1)"},
+                    {"client":"python", "query_type": "table", "query_id":"805", "wait":2, "query":"select max_k( (enum,enum16,decimal32,decimal64,decimal128,decimal256),2 ) from table(maxk_types1)"}
+                ]
+                }
+            ],
+            "expected_results": [
+                {"query_id":"800", "expected_results":[
+                    ["[Decimal('3'), Decimal('2')]"]
+                ]},
+                {"query_id":"801", "expected_results":[
+                    ["[((Decimal('3'), 'c'),), ((Decimal('2'), 'b'),)]"]
+                ]},
+                {"query_id":"802", "expected_results":[
+                    ["[((('c', Decimal('3')), Decimal('3')), 3), ((('b', Decimal('2')), Decimal('2')), 2)]"]
+                ]},
+                {"query_id":"803", "expected_results":[
+                    ["[((3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3.0, 3.0),), ((2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2.0, 2.0),)]"]
+                ]},
+                {"query_id":"804", "expected_results":[
+                    ["[((datetime.date(2022, 12, 16), datetime.date(2022, 12, 16), datetime.datetime(2022, 12, 16, 17, 17, 17), datetime.datetime(2022, 12, 16, 17, 17, 17), 'c', 'c'),), ((datetime.date(2022, 12, 16), datetime.date(2022, 12, 16), datetime.datetime(2022, 12, 16, 17, 17, 17), datetime.datetime(2022, 12, 16, 17, 17, 17), 'b', 'b'),)]"]
+                ]},
+                {"query_id":"805", "expected_results":[
+                    ["[(('c', 'c', Decimal('3'), Decimal('3'), Decimal('3'), Decimal('3')),), (('b', 'b', Decimal('2'), Decimal('2'), Decimal('2'), Decimal('2')),)]"]
+                ]}
+            ]
+        },
+        {
+            "id": 34,
+            "tags": ["func"],
+            "name": "earliest_timestamp",
+            "description": "Tests covering function earliest_timestamp() and alias earliest_ts()",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python","query_id":"800", "query_type": "table", "query":"select earliest_timestamp('UTC'), earliest_ts('UTC')"},
+                  {"client":"python","query_id":"801", "query_type": "table", "query":"select to_timezone(earliest_timestamp(), 'UTC'), to_timezone(earliest_ts(), 'Asia/Shanghai')"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"800", "expected_results":[["1970-01-01 00:00:00+00:00", "1970-01-01 00:00:00+00:00"]]},
+              {"query_id":"801", "expected_results":[["1970-01-01 00:00:00+00:00", "1970-01-01 08:00:00+08:00"]]}
+            ]
+        }
+    ]
+}
+

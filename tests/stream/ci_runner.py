@@ -25,7 +25,7 @@ cur_dir = os.path.dirname(os.path.abspath(__file__))
 config_file_path = f"{cur_dir}/test_stream_smoke/configs/config.json"
 
 docker_compose_file_path = f"{cur_dir}/test_stream_smoke/configs/docker-compose.yaml"
-DEFAULT_TEST_SUITE_TIMEOUT = 1200 #seconds
+DEFAULT_TEST_SUITE_TIMEOUT = 900 #seconds
 
 
 def compress_logs(self, dir, relpaths, result_path):
