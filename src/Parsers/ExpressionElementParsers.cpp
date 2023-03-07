@@ -1963,6 +1963,7 @@ const char * ParserAlias::restricted_keywords[] =
     "EMIT",
     /// proton: starts.
     "PARTITION",
+    "LATEST",
     /// proton: ends.
     nullptr
 };
