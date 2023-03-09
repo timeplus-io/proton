@@ -370,9 +370,9 @@ def kill_query(proton_client, query_2_kill, logging_level="INFO"):
     #    logger.setLevel(logging.INFO)
     # else:
     #    logger.setLevel(logging.DEBUG)
-    logger.debug(
-        f"kill_query starts, logger={logger}, logger.handler = {logger.handlers}, logger.level = {logger.level}"
-    )
+    # logger.debug(
+    #     f"kill_query starts, logger={logger}, logger.handler = {logger.handlers}, logger.level = {logger.level}"
+    # )
     
     try:
     
@@ -383,9 +383,9 @@ def kill_query(proton_client, query_2_kill, logging_level="INFO"):
             f"kill_query: datetime.now = {datetime.datetime.now()}, kill_sql = {kill_sql} to be called."
         )
         kill_res = proton_client.execute(kill_sql)
-        logger.info(
-            f"kill query_id = {query_2_kill}: kill_sql = {kill_sql} cmd executed, kill_res = {kill_res} was called"
-        )
+        # logger.info(
+        #     f"kill query_id = {query_2_kill}: kill_sql = {kill_sql} cmd executed, kill_res = {kill_res} was called"
+        # )
 
         retry = 100 #kill_query retry 100 times
 
@@ -395,10 +395,11 @@ def kill_query(proton_client, query_2_kill, logging_level="INFO"):
             retry -= 1
             logger.debug(f"kill_query: kill_res = {kill_res} was called")
         if retry <= 0:
-            return False
             logger.info(
                 f"kill query_id = {query_2_kill}, kill_sql = {kill_sql} cmd executed but failed to kill after 100 times retry."
-            )    
+            )            
+            return False
+    
         else:
             logger.info(
                 f"kill query_id = {query_2_kill}, kill_sql = {kill_sql} cmd executed and success."
@@ -1223,7 +1224,7 @@ def query_run_py(
             running_state_check_res = query_state_check(query_states_dict, 'running', test_id, depends_on)            
             depends_on_exists = False
             depends_on_exists = query_exists(depends_on, client=pyclient)
-            print(f"query_run_py: depends_on_exists = {depends_on_exists}, query_states_dict = {query_states_dict}")
+            #print(f"query_run_py: depends_on_exists = {depends_on_exists}, query_states_dict = {query_states_dict}")
             if not depends_on_exists: #todo: error handling logic and error code
                 logger.info(
                     f"QUERY_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, proton_server_container_name = {proton_server_container_name},test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} does not be found during 30s after {query_id} was started, raise Fatal Error, the depends_on query may failed to start in 30s or exits/ends unexpectedly."
@@ -1260,9 +1261,9 @@ def query_run_py(
 
         if wait != None:
             wait = int(wait)
-            logger.debug(f"proton_setting = {proton_setting},proton_server_container_name = {proton_server_container_name}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, start wait for {wait} to start run query = {query}")
+            #logger.debug(f"proton_setting = {proton_setting},proton_server_container_name = {proton_server_container_name}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, start wait for {wait} to start run query = {query}")
             time.sleep(wait)
-            logger.debug(f"proton_setting = {proton_setting},proton_server_container_name = {proton_server_container_name}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, end wait for {wait} to start run query = {query}")
+            #logger.debug(f"proton_setting = {proton_setting},proton_server_container_name = {proton_server_container_name}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, end wait for {wait} to start run query = {query}")
 
         try: # do trace_stream logic
             if "trace_stream" in statement_2_run:
@@ -1496,10 +1497,10 @@ def query_run_py(
                         "query_id_type": query_id_type,
                     }
                 
-                    logger.debug(
-                        f"proton_setting = {proton_setting}, proton_server_container_name = {proton_server_container_name},test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_id = {query_id}, query_results: {query_results} collected from query_result_iter at {datetime.datetime.now()}"
+                    # logger.debug(
+                    #     f"proton_setting = {proton_setting}, proton_server_container_name = {proton_server_container_name},test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_id = {query_id}, query_results: {query_results} collected from query_result_iter at {datetime.datetime.now()}"
                         
-                    )
+                    # )
                     message_2_send = json.dumps(query_results)
                     if query_results_queue != None:
                         query_results_queue.put(message_2_send)
@@ -1519,9 +1520,9 @@ def query_run_py(
                         "query_result": f"error_code:{error.code}",
                         "query_id_type": query_id_type,
                     }
-                    logger.debug(
-                        f"proton_setting = {proton_setting},proton_server_container_name = {proton_server_container_name}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, db exception, none-cancel query_results: {query_results}"
-                    )
+                    # logger.debug(
+                    #     f"proton_setting = {proton_setting},proton_server_container_name = {proton_server_container_name}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, db exception, none-cancel query_results: {query_results}"
+                    # )
                     message_2_send = json.dumps(query_results)
                     if query_results_queue != None:
                         query_results_queue.put(message_2_send)
@@ -2489,9 +2490,9 @@ def input_batch_rest(config, test_suite_name, test_id, input_batch, table_schema
                 )
                 raise Exception(f"INPUT_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, depends_on = {depends_on} for input not found")
 
-        logger.debug(
-            f"depends_on = {depends_on}, query_states_dict = {query_states_dict}, depends_on_exists = {depends_on_exists}"
-        )
+        # logger.debug(
+        #     f"depends_on = {depends_on}, query_states_dict = {query_states_dict}, depends_on_exists = {depends_on_exists}"
+        # )
 
         if wait != None:
             #logger.debug(f"wait for {wait}s to start inputs.")
@@ -2577,21 +2578,23 @@ def find_schema(table_name, table_schemas):
 
 
 def scan_statement_and_kill(statement, pyclient): #scan batch inputs or query statement for kill keywords and execute kill query
-    kill = str(statement.get("kill"))
+    kill = statement.get("kill")
     kill_list = None
     if kill is not None:
+        kill = str(kill)
         kill_list = kill.split(",")
-    kill_wait = statement.get("kill_wait")
+        kill_wait = statement.get("kill_wait")
 
-    if kill_wait is not None:
-        time.sleep(int(kill_wait))
-    
-    if kill_list is not None and len(kill_list) > 0:
-        for item in kill_list:
-            res = kill_query(pyclient, item)
-        if not res:
-            logger.debug(f"QUERY TERMINATE FAILED: kill_list = {kill_list}, res = {res}")
-    return res   
+        if kill_wait is not None:
+            time.sleep(int(kill_wait))
+        
+        if kill_list is not None and len(kill_list) > 0:
+            for item in kill_list:
+                res = kill_query(pyclient, item)
+            if not res:
+                logger.debug(f"QUERY TERMINATE FAILED: kill_list = {kill_list}, res = {res}")
+        return res
+    return True
 
 def input_walk_through_rest(
     config,
@@ -2665,7 +2668,7 @@ def input_walk_through_rest(
 
 def drop_table_if_exist_rest(table_ddl_url, table_name):  #todo: combine drop_table_if_exist_rest and drop_table_if_exist_py to drop_table_if_exist, therefore try python drop when rest drop fail.
     logger = mp.get_logger()
-    logger.debug(f"watch: table_ddl_url, table_name = {table_name}")
+    #logger.debug(f"watch: table_ddl_url, table_name = {table_name}")
     drop_start_time = datetime.datetime.now()
     try:
         if table_exist(table_ddl_url, table_name):
@@ -3550,7 +3553,7 @@ def test_suite_run(
     if to_start_at is not None: #if no last_test_suite_lanuched_at in config, that means the 1st test suite running on the env
         to_start_at = datetime.datetime.strptime(to_start_at, TIME_STR_FORMAT)
         sleep_time = to_start_at - datetime.datetime.now()
-        logger.debug(f"watch: proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name},sleep_time = {sleep_time}")
+        #logger.debug(f"watch: proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name},sleep_time = {sleep_time}")
         # if sleep_time.days < 0:
         #     sleep_time = test_suite_launch_interval
         # else:
@@ -4008,7 +4011,6 @@ def test_suite_run(
                 except(BaseException) as error:
                     logger.debug(f"timeplus event write exception: {error}")
                     traceback.print_exc() 
-        print(f"Watch: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, running here")
         test_suite_result_done_queue.put(test_suite_result_summary)
         if not test_suite_timeout_hit.is_set():    
             test_suite_result_done_queue.join()    
@@ -4364,7 +4366,6 @@ def run_test_suites(config, test_suite_run_ctl_queue, test_suites_selected_sets,
                         if key == "test_suite_launch_interval":
                             test_suite_launch_interval = int(value) #get the interval for lanuch concurrent test_suite running, if interval is too small in kafka mode, Code: 159 error will happen and lots case would be failed.        
             config["test_suite_launch_interval"] = test_suite_launch_interval       
-    logger.debug(f"watch: proton_configs = {proton_configs}")
     i = 0 #count for the proton_settings in config when multi_protons == True
     j = 0 #counter for test_suites launch
     
