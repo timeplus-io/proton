@@ -197,6 +197,22 @@ void StorageMaterializedView::executeSelectPipeline()
         /// Build inner background query pipeline and keep it alive during the lifetime of Proton
         buildBackgroundPipeline();
 
+        /// During server bootstrap, we shall startup all tables in parallel, so here
+        /// needs validity check before ingest into target stream.
+        const auto & target = getTargetTable()->as<StorageStream &>();
+        auto times = 50; /// Timeout 5s
+        while (!target.isReady())
+        {
+            if (times-- == 0)
+                throw Exception(
+                    ErrorCodes::RESOURCE_NOT_INITED,
+                    "Timeout, wait for target stream '{}' started",
+                    target.getStorageID().getNameForLogs());
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            LOG_INFO(log, "Wait for target stream '{}' started", target.getStorageID().getNameForLogs());
+        }
+
         /// Run background pipeline
         executeBackgroundPipeline();
         LOG_INFO(log, "Started background select query pipeline", getStorageID().getFullTableName());
