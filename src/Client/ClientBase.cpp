@@ -9,11 +9,12 @@
 
 #include "config.h"
 
-#include <base/argsToConfig.h>
 #include <Common/DateLUT.h>
 #include <Common/MemoryTracker.h>
+#include <base/argsToConfig.h>
 #include <base/LineReader.h>
 #include <Common/scope_guard_safe.h>
+#include <base/safeExit.h>
 #include <Common/Exception.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/tests/gtest_global_context.h>
@@ -221,18 +222,17 @@ std::atomic_flag exit_on_signal;
 class QueryInterruptHandler : private boost::noncopyable
 {
 public:
-    QueryInterruptHandler() { exit_on_signal.clear(); }
-
-    ~QueryInterruptHandler() { exit_on_signal.test_and_set(); }
-
+    static void start() { exit_on_signal.clear(); }
+    /// Return true if the query was stopped.
+    static bool stop() { return exit_on_signal.test_and_set(); }
     static bool cancelled() { return exit_on_signal.test(); }
 };
 
-/// This signal handler is set only for sigint.
+/// This signal handler is set only for SIGINT.
 void interruptSignalHandler(int signum)
 {
-    if (exit_on_signal.test_and_set())
-        _exit(signum);
+    if (QueryInterruptHandler::stop())
+        safeExit(128 + signum);
 }
 
 
@@ -242,22 +242,22 @@ ClientBase::ClientBase() = default;
 
 void ClientBase::setupSignalHandler()
 {
-     exit_on_signal.test_and_set();
+    QueryInterruptHandler::stop();
 
-     struct sigaction new_act;
-     memset(&new_act, 0, sizeof(new_act));
+    struct sigaction new_act;
+    memset(&new_act, 0, sizeof(new_act));
 
-     new_act.sa_handler = interruptSignalHandler;
-     new_act.sa_flags = 0;
+    new_act.sa_handler = interruptSignalHandler;
+    new_act.sa_flags = 0;
 
 #if defined(OS_DARWIN)
     sigemptyset(&new_act.sa_mask);
 #else
-     if (sigemptyset(&new_act.sa_mask))
+    if (sigemptyset(&new_act.sa_mask))
         throw Exception(ErrorCodes::CANNOT_SET_SIGNAL_HANDLER, "Cannot set signal handler.");
 #endif
 
-     if (sigaction(SIGINT, &new_act, nullptr))
+    if (sigaction(SIGINT, &new_act, nullptr))
         throw Exception(ErrorCodes::CANNOT_SET_SIGNAL_HANDLER, "Cannot set signal handler.");
 }
 
@@ -654,6 +654,9 @@ while (retries_left)
     {
         try
         {
+            QueryInterruptHandler::start();
+            SCOPE_EXIT({ QueryInterruptHandler::stop(); });
+
             connection->sendQuery(
                 connection_parameters.timeouts,
                 query,
@@ -695,9 +698,6 @@ while (retries_left)
 /// Also checks if query execution should be cancelled.
 void ClientBase::receiveResult(ASTPtr parsed_query)
 {
-    bool cancelled = false;
-    QueryInterruptHandler query_interrupt_handler;
-
     // TODO: get the poll_interval from commandline.
     const auto receive_timeout = connection_parameters.timeouts.receive_timeout;
     constexpr size_t default_poll_interval = 1000000; /// in microseconds
@@ -729,7 +729,7 @@ void ClientBase::receiveResult(ASTPtr parsed_query)
                 };
 
                 /// handler received sigint
-                if (query_interrupt_handler.cancelled())
+                if (QueryInterruptHandler::cancelled())
                 {
                     cancel_query();
                 }
@@ -766,7 +766,7 @@ void ClientBase::receiveResult(ASTPtr parsed_query)
 /// Receive a part of the result, or progress info or an exception and process it.
 /// Returns true if one should continue receiving packets.
 /// Output of result is suppressed if query was cancelled.
-bool ClientBase::receiveAndProcessPacket(ASTPtr parsed_query, bool cancelled)
+bool ClientBase::receiveAndProcessPacket(ASTPtr parsed_query, bool cancelled_)
 {
     Packet packet = connection->receivePacket();
 
@@ -776,7 +776,7 @@ bool ClientBase::receiveAndProcessPacket(ASTPtr parsed_query, bool cancelled)
             return true;
 
         case Protocol::Server::Data:
-            if (!cancelled)
+            if (!cancelled_)
                 onData(packet.block, parsed_query);
             return true;
 
@@ -789,12 +789,12 @@ bool ClientBase::receiveAndProcessPacket(ASTPtr parsed_query, bool cancelled)
             return true;
 
         case Protocol::Server::Totals:
-            if (!cancelled)
+            if (!cancelled_)
                 onTotals(packet.block, parsed_query);
             return true;
 
         case Protocol::Server::Extremes:
-            if (!cancelled)
+            if (!cancelled_)
                 onExtremes(packet.block, parsed_query);
             return true;
 
@@ -1108,7 +1108,8 @@ void ClientBase::sendData(Block & sample, const ColumnsDescription & columns_des
 
             sendDataFromPipe(
                 std::move(pipe),
-                parsed_query
+                parsed_query,
+                have_data_in_stdin
             );
         }
         catch (Exception & e)
@@ -1116,6 +1117,9 @@ void ClientBase::sendData(Block & sample, const ColumnsDescription & columns_des
             e.addMessage("data for INSERT was parsed from file");
             throw;
         }
+
+        if (have_data_in_stdin)
+            sendDataFromStdin(sample, columns_description_for_query, parsed_query);
     }
     else if (parsed_insert_query->data)
     {
@@ -1123,7 +1127,9 @@ void ClientBase::sendData(Block & sample, const ColumnsDescription & columns_des
         ReadBufferFromMemory data_in(parsed_insert_query->data, parsed_insert_query->end - parsed_insert_query->data);
         try
         {
-            sendDataFrom(data_in, sample, columns_description_for_query, parsed_query);
+            sendDataFrom(data_in, sample, columns_description_for_query, parsed_query, have_data_in_stdin);
+            if (have_data_in_stdin)
+                sendDataFromStdin(sample, columns_description_for_query, parsed_query);
         }
         catch (Exception & e)
         {
@@ -1139,29 +1145,14 @@ void ClientBase::sendData(Block & sample, const ColumnsDescription & columns_des
     }
     else if (!is_interactive)
     {
-        if (need_render_progress)
-        {
-            /// Add callback to track reading from fd.
-            std_in.setProgressCallback(global_context);
-        }
-
-        /// Send data read from stdin.
-        try
-        {
-            sendDataFrom(std_in, sample, columns_description_for_query, parsed_query);
-        }
-        catch (Exception & e)
-        {
-            e.addMessage("data for INSERT was parsed from stdin");
-            throw;
-        }
+        sendDataFromStdin(sample, columns_description_for_query, parsed_query);
     }
     else
         throw Exception("No data to insert", ErrorCodes::NO_DATA_TO_INSERT);
 }
 
 
-void ClientBase::sendDataFrom(ReadBuffer & buf, Block & sample, const ColumnsDescription & columns_description, ASTPtr parsed_query)
+void ClientBase::sendDataFrom(ReadBuffer & buf, Block & sample, const ColumnsDescription & columns_description, ASTPtr parsed_query, bool have_more_data)
 {
     String current_format = insert_format;
 
@@ -1183,10 +1174,10 @@ void ClientBase::sendDataFrom(ReadBuffer & buf, Block & sample, const ColumnsDes
         });
     }
 
-    sendDataFromPipe(std::move(pipe), parsed_query);
+    sendDataFromPipe(std::move(pipe), parsed_query, have_more_data);
 }
 
-void ClientBase::sendDataFromPipe(Pipe&& pipe, ASTPtr parsed_query)
+void ClientBase::sendDataFromPipe(Pipe&& pipe, ASTPtr parsed_query, bool have_more_data)
 {
     QueryPipeline pipeline(std::move(pipe));
     PullingAsyncPipelineExecutor executor(pipeline);
@@ -1216,9 +1207,30 @@ void ClientBase::sendDataFromPipe(Pipe&& pipe, ASTPtr parsed_query)
         }
     }
 
-    connection->sendData({}, "", false);
+    if (!have_more_data)
+        connection->sendData({}, "", false);
 }
 
+
+void ClientBase::sendDataFromStdin(Block & sample, const ColumnsDescription & columns_description, ASTPtr parsed_query)
+{
+    if (need_render_progress)
+    {
+        /// Add callback to track reading from fd.
+        std_in.setProgressCallback(global_context);
+    }
+
+    /// Send data read from stdin.
+    try
+    {
+        sendDataFrom(std_in, sample, columns_description, parsed_query);
+    }
+    catch (Exception & e)
+    {
+        e.addMessage("data for INSERT was parsed from stdin");
+        throw;
+    }
+}
 
 /// Process Log packets, used when inserting data by blocks
 void ClientBase::receiveLogs(ASTPtr parsed_query)
@@ -1273,6 +1285,7 @@ void ClientBase::processParsedSingleQuery(const String & full_query, const Strin
 {
     resetOutput();
     have_error = false;
+    cancelled = false;
     client_exception.reset();
     server_exception.reset();
 
@@ -1400,6 +1413,9 @@ MultiQueryProcessingStage ClientBase::analyzeMultiQueryText(
     String & query_to_execute, ASTPtr & parsed_query, const String & all_queries_text,
     std::optional<Exception> & current_exception)
 {
+    if (!is_interactive && cancelled)
+        return MultiQueryProcessingStage::QUERIES_END;
+
     if (this_query_begin >= all_queries_end)
         return MultiQueryProcessingStage::QUERIES_END;
 

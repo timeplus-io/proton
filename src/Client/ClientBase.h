@@ -105,7 +105,7 @@ protected:
 
 private:
     void receiveResult(ASTPtr parsed_query);
-    bool receiveAndProcessPacket(ASTPtr parsed_query, bool cancelled);
+    bool receiveAndProcessPacket(ASTPtr parsed_query, bool cancelled_);
     void receiveLogs(ASTPtr parsed_query);
     bool receiveSampleBlock(Block & out, ColumnsDescription & columns_description, ASTPtr parsed_query);
     bool receiveEndOfQuery();
@@ -122,8 +122,9 @@ private:
 
     void sendData(Block & sample, const ColumnsDescription & columns_description, ASTPtr parsed_query);
     void sendDataFrom(ReadBuffer & buf, Block & sample,
-                      const ColumnsDescription & columns_description, ASTPtr parsed_query);
-    void sendDataFromPipe(Pipe && pipe, ASTPtr parsed_query);
+                      const ColumnsDescription & columns_description, ASTPtr parsed_query, bool have_more_data = false);
+    void sendDataFromPipe(Pipe && pipe, ASTPtr parsed_query, bool have_more_data = false);
+    void sendDataFromStdin(Block & sample, const ColumnsDescription & columns_description, ASTPtr parsed_query);
     void sendExternalTables(ASTPtr parsed_query);
 
     void initBlockOutputStream(const Block & block, ASTPtr parsed_query);
@@ -239,6 +240,8 @@ protected:
     } profile_events;
 
     QueryProcessingStage::Enum query_processing_stage;
+
+    bool cancelled = false;
 };
 
 }
