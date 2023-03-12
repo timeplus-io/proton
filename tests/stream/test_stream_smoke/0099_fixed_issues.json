@@ -22,7 +22,7 @@
             {"client":"python", "query_type": "table", "wait":2, "query_id":"9900", "query": "create stream ttp_truck_track(`lpn` string, `vno` string, `drc` string, `drcCode` int32, `wgs84Lat` float32, `wgs84Lon` float32, `gcj02Lat` float32, `gcj02Lon` float32, `province` nullable(string), `city` nullable(string), `country` nullable(string), `spd` float32, `mil` float32, `time` string, `adr` string)"},
             {"client":"python", "query_type": "table", "wait":5, "query_id":"9901","depends_on_stream":"ttp_truck_track", "query": "create materialized view mv_truck_track as (select * from ttp_truck_track where date_diff('second', _tp_time, now()) < 30)"},
             {"client":"python", "query_type": "table", "wait":5, "query_id":"9902", "depends_on_stream":"mv_truck_track", "query": "create materialized view if not exists mv_1 as (select now() as time, count_distinct(lpn) as cnt from mv_truck_track emit last 10m and periodic 10s)"},
-            {"client":"python", "query_type": "table", "wait":5, "query_id":"9903", "depends_on_stream":"mv_truck_track", "query": "create materialized view if not exists mv_2 as (select now() as time, count_distinct(lpn) as cnt from mv_truck_track emit last 10m and periodic 10s)"}
+            {"client":"python", "query_type": "table", "wait":5, "query_id":"9903", "depends_on_stream":"mv_truck_track","drop_view":"mv_2, mv_1, mv_truck_track", "drop_view_wait":2, "query": "create materialized view if not exists mv_2 as (select now() as time, count_distinct(lpn) as cnt from mv_truck_track emit last 10m and periodic 10s)"}
           ]
         }
       ],
@@ -71,7 +71,7 @@
             {"client":"python", "query_type": "table", "wait":2, "query":"drop stream if exists test_substream_1"},
             {"client":"python", "query_type": "table", "wait":5, "query":"create stream test_substream_1(id int, value int)"},
             {"client":"python", "query_id":"9900", "terminate": "manual", "query_type": "stream", "wait":1, "depends_on_stream":"test_substream_1", "query":"select id, min_k(value, 1), max_k(value, 1), top_k(value, 1) from test_substream_1 partition by id order by id limit 2"},
-            {"client":"python", "query_type": "table", "wait":3, "query": "insert into test_substream_1(id, value) values (1, 1), (2, 2), (2, 1), (1, 2), (2, 1), (1, 2)"},
+            {"client":"python", "query_type": "table", "depends_on": 9900,"wait":3, "query": "insert into test_substream_1(id, value) values (1, 1), (2, 2), (2, 1), (1, 2), (2, 1), (1, 2)"},
             {"client":"python", "query_type": "table", "query_id":"9901", "wait":2, "query":"select id, min_k(value, 1), max_k(value, 1), top_k(value, 1) from table(test_substream_1) partition by id group by id order by id"},
             {"client":"python", "wait": 5, "run_mode":"table", "query_type": "table", "query":"kill query where query_id = '9900'"}
           ]
@@ -150,7 +150,7 @@
             {"client":"python", "query_type": "table", "wait":3, "query": "insert into test_stream_1934(value) values(2)"},
             {"client":"python", "query_type": "table", "wait":3, "query": "insert into test_stream_1934(value) values(3)"},
             {"client":"python", "query_type": "stream", "query_id":"9900", "query_end_timer":3, "query":"select `count()`, _tp_shard, _tp_sn from test_mv_1934 where _tp_sn >= 0"},
-            {"client":"python", "query_type": "stream", "query_id":"9901", "query_end_timer":3, "query":"select `count()`, _tp_shard, _tp_sn from test_mv_1934 where _tp_time >= now() - 1m"}
+            {"client":"python", "query_type": "stream", "query_id":"9901", "query_end_timer":3,"drop_view":"test_mv_1934", "drop_view_wait":2, "query":"select `count()`, _tp_shard, _tp_sn from test_mv_1934 where _tp_time >= now() - 1m"}
           ]
         }
       ],

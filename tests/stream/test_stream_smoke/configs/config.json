@@ -202,8 +202,12 @@
         "ci_runner_params":[
             {
                 "test_suite_launch_interval": 20
-            }
+            }           
         ],
+        "sql_settings_to_support":
+            {
+                "create":{"shards": 3, "if_not_exists": true}
+            },        
         "settings": {
 
             "proton_redp":{

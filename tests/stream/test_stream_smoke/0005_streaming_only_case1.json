@@ -104,19 +104,7 @@
                         "type": "string"
                     }
 
-                ]},
-                {
-                    "name": "test_stream_only1_v",
-                    "type": "view",
-                    "create_sql": "create view if not exists test_stream_only1_v as select * from test_stream_only1",
-                    "drop_sql": "drop view test_stream_only1_v"
-                },
-                {
-                    "name": "test_stream_only1_join_v",
-                    "type": "view",
-                    "create_sql": "create view if not exists test_stream_only1_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time from test_stream_only1 as a join table(test_stream_only1_d) as b on a.id =b.id",
-                    "drop_sql": "drop view test_stream_only1_v"
-                }
+                ]}
 
         ],
         "setup": {
@@ -762,7 +750,7 @@
                 ["dev2", 2,  "2021-11-02 20:00:00", "2021-11-02 20:00:05"]
                 ]}]
         },
-
+        
         {
             "id": 47,
             "tags": ["view"],
@@ -770,7 +758,9 @@
             "description": "tumble sum based on tail join table view",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"601-1", "query_type": "stream", "query_end_timer":1, "query":"select id, type, sum(value), window_start, window_end from tumble(test_stream_only1_join_v, timestamp, 5s) group by id, type, window_start, window_end"}]},
+                    {"client":"python", "query_type": "table","wait":2,"query":"drop view if exists test_stream_only1_join_v"},
+                    {"client":"python", "query_type": "table","wait":2,"query":"create view if not exists test_stream_only1_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time from test_stream_only1 as a join table(test_stream_only1_d) as b on a.id =b.id"},
+                    {"client":"python","query_id":"601-1", "query_type": "stream", "query_end_timer":1, "drop_view":"test_stream_only1_join_v", "drop_view_wait":2, "query":"select id, type, sum(value), window_start, window_end from tumble(test_stream_only1_join_v, timestamp, 5s) group by id, type, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test_stream_only1","depends_on":"601-1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -804,7 +794,9 @@
             "description": "global sum based on tail join table view",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"601-1", "query_type": "stream", "query_end_timer":7, "query":"select type, count(value) from test_stream_only1_join_v group by type limit 5 emit periodic 5s"}]},
+                    {"client":"python", "query_type": "table","wait":2,"query":"drop view if exists test_stream_only1_join_v"},
+                    {"client":"python", "query_type": "table","wait":2,"query":"create view if not exists test_stream_only1_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time from test_stream_only1 as a join table(test_stream_only1_d) as b on a.id =b.id"},                    
+                    {"client":"python","query_id":"601-1", "query_type": "stream", "query_end_timer":7,"drop_view":"test_stream_only1_join_v", "drop_view_wait":2, "query":"select type, count(value) from test_stream_only1_join_v group by type limit 5 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test_stream_only1","depends_on":"601-1","wait":1, "data": [
                       ["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
@@ -820,7 +812,7 @@
                       ["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                       ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"],
                       ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
-                ]}               
+                ]}                               
             ],
             "expected_results": [{"query_id":"601-1", "expected_results":
                 [["roof", 2],
@@ -990,7 +982,7 @@
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists test_stream_only1_stream_sum_view"},
                     {"client":"python", "query_type": "table", "wait": 1, "query":"create materialized view test_stream_only1_stream_sum_view as select id, sum(value) as sum_value from test_stream_only1 group by id emit periodic 5s"},
-                    {"client":"python", "query_id":"601-1", "query_type": "stream","depends_on_stream":"test_stream_only1_stream_sum_view","wait":5, "terminate":"manual", "query":"select id, sum_value from test_stream_only1_stream_sum_view"}]},
+                    {"client":"python", "query_id":"601-1", "query_type": "stream","depends_on_stream":"test_stream_only1_stream_sum_view","wait":5, "terminate":"manual","drop_view":"test_stream_only1_stream_sum_view", "drop_view_wait":2, "query":"select id, sum_value from test_stream_only1_stream_sum_view"}]},
                 {"inputs": [
                     {"table_name":"test_stream_only1","depends_on":"601-1", "wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -1006,8 +998,7 @@
                     ]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 6, "depends_on":"601-1", "query_type": "table", "query":"kill query where query_id = '601-1'"},
-                    {"client":"python", "wait": 2, "query_type": "table", "query_end_timer": 3, "query":"drop view if exists test_stream_only1_stream_sum_view"}
+                    {"client":"python", "wait": 6, "depends_on":"601-1", "query_type": "table", "query":"kill query where query_id = '601-1'"}
                 ]
                 }
             ],

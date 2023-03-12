@@ -158,6 +158,9 @@ def ci_runner(
     pytest_logging_level_set = f"--log-cli-level={logging_level}"
     s3_helper = S3Helper("https://s3.amazonaws.com")
     multi_protons = setting_config.get("multi_protons")
+    global_sql_settings = setting_config.get("sql_settings") 
+    global_sql_settings_str = json.dumps(global_sql_settings) #todo: unify the procedure of ci_runner env var setting and passing to rockets 
+    os.environ["SQL_SETTINGS"] = global_sql_settings_str     
     proton_server_container_name_list = []
     test_result = ""
     if multi_protons == True:#if multi_protons is True, there are multiple settings for allocating the test suites on configs

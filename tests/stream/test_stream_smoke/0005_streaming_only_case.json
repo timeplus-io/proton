@@ -104,19 +104,7 @@
                         "type": "string"
                     }
 
-                ]},
-                {
-                    "name": "test_stream_only_v",
-                    "type": "view",
-                    "create_sql": "create view if not exists test_stream_only_v as select * from test_stream_only",
-                    "drop_sql": "drop view test_stream_only_v"
-                },
-                {
-                    "name": "test_stream_only_join_v",
-                    "type": "view",
-                    "create_sql": "create view if not exists test_stream_only_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time from test_stream_only as a join table(test_stream_only_d) as b on a.id =b.id",
-                    "drop_sql": "drop view test_stream_only_v"
-                }
+                ]}
 
         ],
         "setup": {

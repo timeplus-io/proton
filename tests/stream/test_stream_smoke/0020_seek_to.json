@@ -304,8 +304,8 @@
             {"client":"python", "query_type": "table", "query":"create view seek_to_view2 as select t, s, _tp_time, _tp_sn from (select *, _tp_sn from seek_to_stream)"},
             {"client":"python", "query_id":"2100", "depends_on_stream":"seek_to_view1", "query_end_timer":2, "query_type": "stream", "query":"select t, s from seek_to_view1 where time = '2022-12-01 00:00:01.111'"},
             {"client":"python", "query_id":"2101", "depends_on_stream":"seek_to_view2", "query_end_timer":2, "query_type": "stream", "query":"select t, s from seek_to_view2 where _tp_sn = 0"},
-            {"client":"python", "query_id":"2102", "depends_on_stream":"seek_to_view1", "query_end_timer":2, "query_type": "stream", "query":"select window_start, count() from tumble(seek_to_view1, time, 2s) where time >= '2022-12-01 00:00:01.111' group by window_start"},
-            {"client":"python", "query_id":"2103", "depends_on_stream":"seek_to_view2", "query_end_timer":2, "query_type": "stream", "query":"select window_start, count() from tumble(seek_to_view2, 2s) where _tp_sn >= 0 group by window_start"}
+            {"client":"python", "query_id":"2102", "depends_on_stream":"seek_to_view1", "query_end_timer":2, "query_type": "stream","drop_view":"seek_to_view1", "drop_view_wait":2, "query":"select window_start, count() from tumble(seek_to_view1, time, 2s) where time >= '2022-12-01 00:00:01.111' group by window_start"},
+            {"client":"python", "query_id":"2103", "depends_on_stream":"seek_to_view2", "query_end_timer":2, "query_type": "stream","drop_view":"seek_to_view2", "drop_view_wait":2, "query":"select window_start, count() from tumble(seek_to_view2, 2s) where _tp_sn >= 0 group by window_start"}
           ]
         }
       ],
@@ -398,7 +398,7 @@
             {"client":"python", "wait":2, "query_type": "table", "query":"create materialized view seek_to_mv as (select window_start as win_start, window_end as win_end, sum(i) as cnt from tumble(seek_to_stream, 2s) where _tp_time >= '2022-12-01 00:00:01.111' group by window_start, window_end)"},
             {"client":"python", "wait":5, "depends_on_stream":"seek_to_mv", "query_end_timer":3, "query_type": "stream", "query_id":"2100", "query":"select win_start, win_end, cnt from seek_to_mv where _tp_sn >= 0"},
             {"client":"python", "depends_on_stream":"seek_to_mv", "wait":5, "query_type": "table", "query_id":"2101", "query":"select win_start, win_end, cnt from table(seek_to_mv)"},
-            {"client":"python", "query_end_timer":4, "query_type": "stream", "query_id":"2102", "query":"select window_start, sum(cnt) from tumble(seek_to_mv, win_start, 2s) where _tp_time >= now() - 1m group by window_start emit timeout 1s"}
+            {"client":"python", "query_end_timer":4, "query_type": "stream", "query_id":"2102","drop_view":"seek_to_mv", "drop_view_wait":2, "query":"select window_start, sum(cnt) from tumble(seek_to_mv, win_start, 2s) where _tp_time >= now() - 1m group by window_start emit timeout 1s"}
           ]
         }
       ],
@@ -471,7 +471,7 @@
             {"client":"python", "wait":2, "query_type": "stream", "query_id":"2100", "depends_on_stream":"seek_to_mv,seek_to_view,seek_to_stream", "query_end_timer":2, "query":"with cte as (select i, _tp_time from seek_to_mv union select i, _tp_time from seek_to_view) select i, s from cte as a join seek_to_stream as b using (i) where a._tp_time >= '2022-12-01 00:00:00.111' and b._tp_time <= '2022-12-01 00:00:02.111'"},
             {"client":"python", "wait":2, "query_type": "stream", "query_id":"2101", "depends_on_stream":"seek_to_mv,seek_to_view,seek_to_stream", "query_end_timer":2, "query":"with cte as (select i, _tp_time from seek_to_mv union select i, _tp_time from seek_to_view) select i, s from seek_to_stream as a join cte as b using (i) where a._tp_time >= '2022-12-01 00:00:00.111' and b._tp_time <= '2022-12-01 00:00:03.111'"},
             {"client":"python", "wait":2, "query_type": "stream", "query_id":"2102", "depends_on_stream":"seek_to_mv,seek_to_view,seek_to_stream", "query_end_timer":4, "query":"with cte as (select i, _tp_time from seek_to_mv union select i, _tp_time from seek_to_view) select count() from cte as a join seek_to_stream as b using (i) where a._tp_time >= '2022-12-01 00:00:00.111' and b._tp_time <= '2022-12-01 00:00:02.111'"},
-            {"client":"python", "wait":2, "query_type": "stream", "query_id":"2103", "depends_on_stream":"seek_to_mv,seek_to_view,seek_to_stream", "query_end_timer":4, "query":"with cte as (select i, _tp_time from seek_to_mv union select i, _tp_time from seek_to_view) select count() from seek_to_stream as a join cte as b using (i) where a._tp_time >= '2022-12-01 00:00:00.111' and b._tp_time <= '2022-12-01 00:00:03.111'"}
+            {"client":"python", "wait":2, "query_type": "stream", "query_id":"2103", "depends_on_stream":"seek_to_mv,seek_to_view,seek_to_stream", "query_end_timer":4,"drop_view":"seek_to_mv,seek_to_view", "drop_view_wait":2, "query":"with cte as (select i, _tp_time from seek_to_mv union select i, _tp_time from seek_to_view) select count() from seek_to_stream as a join cte as b using (i) where a._tp_time >= '2022-12-01 00:00:00.111' and b._tp_time <= '2022-12-01 00:00:03.111'"}
           ]
         }
       ],

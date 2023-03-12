@@ -103,19 +103,7 @@
                         "type": "string"
                     }
 
-                ]},
-                {
-                    "name": "test_v",
-                    "type": "view",
-                    "create_sql": "create view if not exists test_v as select * from test",
-                    "drop_sql": "drop view test_v"
-                },
-                {
-                    "name": "test_join_v",
-                    "type": "view",
-                    "create_sql": "create view if not exists test_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time from test as a join table(test_d) as b on a.id =b.id",
-                    "drop_sql": "drop view test_join_v"
-                }
+                ]}
 
         ],
         "setup": {
@@ -155,7 +143,7 @@
                     ]},
                     {"table_name": "test", "data": [["dev6", "ca", 66, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:04"]]}
                     ,
-                    {"table_name": "test","kill":"101,102", "kill_wait":1, "data": [["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:10"]]}
+                    {"table_name": "test","kill":"101,102", "kill_wait":5, "data": [["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:10"]]}
                 ]},
 
                 {"statements": [
@@ -900,7 +888,7 @@
             "description": "global stream aggregation join table w/where",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "terminate":"manuel", "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' group by a.id, b.type limit 3 emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","wait":1, "terminate":"manuel", "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' group by a.id, b.type limit 3 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -911,7 +899,7 @@
                     {"table_name":"test", "data": [["dev3", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev5", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 76, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
-                    {"table_name":"test","kill":"101", "kill_wait":6, "data": [["dev6", "ca", 80, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                    {"table_name":"test","kill":"101", "kill_wait":7, "data": [["dev6", "ca", 80, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
                     ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
                     ["dev9", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]}

@@ -17,7 +17,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_type"},
                     {"client":"python", "query_type": "table","wait":2, "query":"create stream test_type (uuid uuid, int int, uint uint8, string string, float float, decimal decimal32(3), date date, datetime datetime, enum enum('a'=1, 'b'=2, 'z'=26), tuple tuple(s string, i int), ipv4 ipv4, ipv6 ipv6, map map(string, int), nullable nullable(datetime64), timestamp datetime64(3) default now64(3))"},
                     {"client":"python", "query_type": "table", "depends_on_stream":"test_type", "wait":1, "query":"insert into test_type (uuid, int, uint, string, float, decimal, date, datetime, enum, tuple, ipv4, ipv6, map, nullable, timestamp) values ('4c6a2a19-4f9f-456f-b076-c43ef97255a7', -1234567, 1234567, '{@string}', 12345.123, 123456.123, to_date('2022-03-24'), to_datetime('2022-03-24 17:17:17'), 'a', ('a', 0), '192.168.168.168', '2a02:aa08:e000:3100::20', {'key1':111}, null ,'2020-01-01 11:11:11')"},
-                    {"client":"python","query_id":"801-1", "query_end_timer":2, "query_type": "stream", "query":"select uuid, int, uint, string, float, decimal, date, datetime, enum, tuple, ipv4, ipv6, map, nullable from test_type settings seek_to = 'earliest'"}
+                    {"client":"python","query_id":"801-1", "query_end_timer":2,"drop_stream":"test_type","drop_stream_wait":2, "query_type": "stream", "query":"select uuid, int, uint, string, float, decimal, date, datetime, enum, tuple, ipv4, ipv6, map, nullable from test_type settings seek_to = 'earliest'"}
                     ]}
             ],
 
@@ -89,7 +89,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists t_fixeds"},
                     {"client":"python", "query_type": "table","wait":2, "query":"create stream t_fixeds (fixeds fixed_string(32))"},
                     {"client":"python", "query_type": "table", "wait":1, "query":"insert into t_fixeds (fixeds) values ('{@fixed_string32}')"},
-                    {"client":"python","query_id":"801-1", "query_end_timer":2, "query_type": "stream", "query":"select fixeds from t_fixeds settings seek_to = 'earliest'"}
+                    {"client":"python","query_id":"801-1", "query_end_timer":2, "query_type": "stream","drop_stream":"t_fixeds", "drop_stream_wait":2, "query":"select fixeds from t_fixeds settings seek_to = 'earliest'"}
                     ]}
             ],
 
@@ -163,7 +163,6 @@
             "description": "create a stream t_float_map with low_cardinality type and ingest, query, but of proton-python-driver",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists float_map_view"},
                     {"client":"python", "query_type": "table", "wait":2, "query":"drop stream if exists t_float_map"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_float_map (id string, value_str string)"},
                     {"client":"python", "query_type": "stream", "depends_on_stream":"t_float_map", "query_id": "801-1","wait":1, "query_end_timer": 10, "query":"select emit_version(), group_array(id) as ids, group_array(latest_value_str) as latest_value_strs, map_cast(ids, latest_value_strs) as id_value_strs, id_value_strs['a'] as id_value_a, to_float(id_value_a) from (select id, latest(value_str) as latest_value_str from t_float_map group by id order by id) limit 1"},
@@ -183,12 +182,11 @@
             "description": "create a stream t_float_map with low_cardinality type and ingest, query, but of proton-python-driver",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists float_map_view"},
                     {"client":"python", "query_type": "table", "wait":2, "query":"drop view if exists emit_version_view"},
                     {"client":"python", "query_type": "table", "wait":2, "query":"drop stream if exists t_float_map"},
                     {"client":"python", "query_type": "table","wait":5, "query":"create stream t_float_map (id string, value_str string)"},
                     {"client":"python", "query_type": "table", "depends_on_stream":"t_float_map","wait":1, "query":"create view if not exists emit_version_view as select emit_version(), group_array(id) as ids, group_array(latest_value_str) as latest_value_strs, map_cast(ids, latest_value_strs) as id_value_strs, id_value_strs['a'] as id_value_a, to_float(id_value_a) from (select id, latest(value_str) as latest_value_str from t_float_map group by id order by id)"},
-                    {"client":"python", "query_type": "stream","depends_on_stream":"emit_version_view","wait":2, "query_id": "801-1", "query_end_timer": 10, "query":"select * from emit_version_view limit 1"},
+                    {"client":"python", "query_type": "stream","depends_on_stream":"emit_version_view","wait":2, "query_id": "801-1", "query_end_timer": 10,  "drop_view":"emit_version_view", "drop_view_wait":2,"query":"select * from emit_version_view limit 1"},
                     {"client":"python", "query_type": "table", "wait":5,"depends_on":"801-1", "query":"insert into t_float_map (id, value_str) values ('a', '100.1') ('b', '200.1') ('c', '300.1')"},
                     {"client":"python", "query_type": "table", "wait":6, "query":"select 1"}
                     ]}
@@ -230,7 +228,7 @@
                     {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_timeout"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_timeout(id int, value int, time datetime64(3,'UTC'))"},
                     {"client":"python", "query_type": "table", "wait":1,"depends_on_stream":"t_timeout", "query":"create materialized view if not exists timeout_v as select emit_version(), id, count() from  tumble(t_timeout, time, 5s) group by id, window_end emit timeout 5s"},
-                    {"client":"python", "query_type": "stream","wait":5, "depends_on_stream":"timeout_v","query_id": "801-1", "query_end_timer": 11, "query":"select * EXCEPT (_tp_time) from timeout_v settings seek_to='earliest'"},
+                    {"client":"python", "query_type": "stream","wait":5, "depends_on_stream":"timeout_v","query_id": "801-1", "query_end_timer": 11,"drop_view":"timeout_v", "drop_view_wait":2, "query":"select * EXCEPT (_tp_time) from timeout_v settings seek_to='earliest'"},
                     {"client":"python", "query_type": "table", "wait":1,"depends_on":"801-1", "query":"insert into t_timeout(id, value, time)values(1, 10, '2020-01-01 00:00:00')(2, 10, '2020-01-01 00:00:00') (3, 10, '2020-01-01 00:00:00') (1, 20, '2020-01-01 00:00:00') (2, 20, '2020-01-01 00:00:00')(3, 20, '2020-01-01 00:00:00') (1, 30, '2020-01-01 00:00:05')(1, 10, '2020-01-01 00:00:06')"},
                     {"client":"python", "query_type": "table", "wait":6, "query":"select 1"}
                     ]}
@@ -255,7 +253,7 @@
                     {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_dedup"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_dedup(id int, value int, time datetime64(3,'UTC'))"},
                     {"client":"python", "query_type": "table", "wait":1, "depends_on_stream":"t_dedup","query":"create view if not exists dedup_v as select id, value, time, to_string(time) as time_string from dedup(t_dedup, id, value, to_string(time))"},
-                    {"client":"python", "query_type": "stream","wait":1, "query_id": "801-1", "query_end_timer": 11, "query":"select emit_version(), id, count() from tumble(dedup_v, time, 5s) group by id, window_end"},
+                    {"client":"python", "query_type": "stream","wait":1, "query_id": "801-1", "query_end_timer": 11, "drop_view":"dedup_v", "drop_view_wait":2,"query":"select emit_version(), id, count() from tumble(dedup_v, time, 5s) group by id, window_end"},
                     {"client":"python", "query_type": "table", "wait":2,"depends_on":"801-1", "query":"insert into t_dedup(id, value, time)values(1, 10, '2020-01-01 00:00:00')(2, 10, '2020-01-01 00:00:00') (3, 10, '2020-01-01 00:00:00') (1, 10, '2020-01-01 00:00:00') (2, 10, '2020-01-01 00:00:00')(3, 10, '2020-01-01 00:00:00') (1, 10, '2020-01-01 00:00:05')(1, 10, '2020-01-01 00:00:06')"}
                     ]}
             ],
@@ -278,7 +276,7 @@
                     {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_dedup"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_dedup(id int, value int, time datetime64(3,'UTC'))"},
                     {"client":"python", "query_type": "table","depends_on_stream":"t_dedup", "wait":1, "query":"create view if not exists dedup_v as select id, value, time, to_string(time) as time_string from dedup(t_dedup, id, value, time_string)"},
-                    {"client":"python", "query_type": "stream","wait":1, "query_id": "801-1", "query_end_timer": 11, "query":"select emit_version(), id, count() from tumble(dedup_v, time, 5s) group by id, window_end"},
+                    {"client":"python", "query_type": "stream","wait":1, "query_id": "801-1", "query_end_timer": 11,"drop_view":"dedup_v", "drop_view_wait":2, "query":"select emit_version(), id, count() from tumble(dedup_v, time, 5s) group by id, window_end"},
                     {"client":"python", "query_type": "table", "wait":1,"depends_on":"801-1", "query":"insert into t_dedup(id, value, time)values(1, 10, '2020-01-01 00:00:00')(2, 10, '2020-01-01 00:00:00') (3, 10, '2020-01-01 00:00:00') (1, 10, '2020-01-01 00:00:00') (2, 10, '2020-01-01 00:00:00')(3, 10, '2020-01-01 00:00:00') (1, 10, '2020-01-01 00:00:05')(1, 10, '2020-01-01 00:00:06')"}
                     ]}
             ],
@@ -302,7 +300,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_dedup(id int, value int, time datetime64(3,'UTC'))"},
                     {"client":"python", "query_type": "table", "wait":1,"depends_on_stream":"t_dedup", "query":"insert into t_dedup(id, value, time)values(1, 10, '2020-01-01 00:00:00')(2, 10, '2020-01-01 00:00:00') (3, 10, '2020-01-01 00:00:00') (1, 10, '2020-01-01 00:00:00') (2, 10, '2020-01-01 00:00:00')(3, 10, '2020-01-01 00:00:00') (1, 10, '2020-01-01 00:00:05')(1, 10, '2020-01-01 00:00:06')"},
                     {"client":"python", "query_type": "table", "wait":3, "query":"create view if not exists dedup_v as select id, value, time, to_string(time) as time_string from dedup(table(t_dedup), id, value, to_string(time))"},
-                    {"client":"python", "query_type": "table","wait":1,"query_id": "801-1", "query":"select id, count() from dedup_v group by id"}
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "801-1","drop_view":"dedup_v", "drop_view_wait":2, "query":"select id, count() from dedup_v group by id"}
 
                     ]}
             ],
@@ -326,7 +324,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_xirr(id int, income float, date date)"},
                     {"client":"python", "query_type": "table","depends_on_stream":"t_xirr", "wait":1, "query":"insert into t_xirr(id, income, date)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:01')(1, -1000, '2020-01-05 09:01:01')(1, 3100, '2020-01-18 09:01:01')(1, 100, '2020-03-09 09:01:01')"},
                     {"client":"python", "query_type": "table", "wait":3, "query":"create view if not exists xirr_v as select id, count(), xirr(income, date, 0.1) as xirr from table(t_xirr) group by id"},
-                    {"client":"python", "query_type": "table","wait":1,"query_id": "801-1", "query":"select id, count(), avg(xirr) from xirr_v group by id"}
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "801-1","drop_view":"xirr_v", "drop_view_wait":2, "query":"select id, count(), avg(xirr) from xirr_v group by id"}
 
                     ]}
             ],
@@ -348,7 +346,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_xirr(id int, income float, date datetime64)"},
                     {"client":"python", "query_type": "table", "depends_on_stream":"t_xirr","wait":1, "query":"insert into t_xirr(id, income, date)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:01')(1, -1000, '2020-01-05 09:01:01')(1, 3100, '2020-01-18 09:01:01')(1, 100, '2020-03-09 09:01:01')"},
                     {"client":"python", "query_type": "table", "wait":3, "query":"create view if not exists xirr_v as select id, count(), xirr(income, to_date(date), 0.1) as xirr from table(t_xirr) group by id"},
-                    {"client":"python", "query_type": "table","wait":1,"query_id": "801-1", "query":"select id, count(), avg(xirr) from xirr_v group by id"}
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "801-1","drop_view":"xirr_v", "drop_view_wait":2, "query":"select id, count(), avg(xirr) from xirr_v group by id"}
 
                     ]}
             ],
@@ -369,7 +367,7 @@
                     {"client":"python", "query_type": "table", "wait":2, "query":"drop stream if exists t_xirr"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_xirr(id int, income float, date date)"},
                     {"client":"python", "query_type": "table", "depends_on_stream":"t_xirr","wait":1, "query":"create view if not exists xirr_v as select window_start, window_end, xirr(income, date) as xirr from tumble(t_xirr, to_datetime(date), interval 40 day) group by window_start, window_end"},
-                    {"client":"python", "query_type": "stream","depends_on_stream": "xirr_v", "wait":1, "query_id": "801-1", "query_end_timer": 5, "query":"select count(), avg(xirr) from xirr_v"},
+                    {"client":"python", "query_type": "stream","depends_on_stream": "xirr_v", "wait":1, "query_id": "801-1", "query_end_timer": 5,"drop_view":"xirr_v", "drop_view_wait":2, "query":"select count(), avg(xirr) from xirr_v"},
                     {"client":"python", "query_type": "table", "wait":3,"depends_on":"801-1", "query":"insert into t_xirr(id, income, date)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:01')(1, -1000, '2020-01-05 09:01:01')(1, 3100, '2020-01-18 09:01:01')(1, 100, '2020-03-09 09:01:01')"}
                     ]}
             ],

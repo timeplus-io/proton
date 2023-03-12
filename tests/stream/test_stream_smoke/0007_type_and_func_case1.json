@@ -38,7 +38,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_lags1(id int, income float, time datetime64(3))"},
                     {"client":"python", "query_type": "table","depends_on_stream":"t_lags1", "wait":1, "query":"insert into t_lags1(id, income, time)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:02')(1, -1000, '2020-01-05 09:01:03')(1, 3100, '2020-01-18 09:01:04')(1, 100, '2020-03-09 09:01:05')"},
                     {"client":"python", "query_type": "table", "wait":3, "query":"create view if not exists lags_v1 as select id, lags(income, 1, 10) as income_lags, array_sum(income_lags) as lags_sum from table(t_lags1) order by time desc limit 1"},
-                    {"client":"python", "query_type": "table","wait":1,"query_id": "801", "query":"select id, income_lags, lags_sum from lags_v1"}
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "801", "drop_view":"lags_v1", "drop_view_wait":2, "query":"select id, income_lags, lags_sum from lags_v1"}
 
                     ]}
             ],
@@ -60,7 +60,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_lags1(id int, income float, time datetime64(3))"},
                     {"client":"python", "query_type": "table","depends_on_stream":"t_lags1", "wait":1, "query":"insert into t_lags1(id, income, time)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:02')(1, -1000, '2020-01-05 09:01:03')(1, 3100, '2020-01-18 09:01:04')(1, 100, '2020-03-09 09:01:05')"},
                     {"client":"python", "query_type": "table", "wait":3, "query":"create view if not exists lags_v1 as select id, latest(lags(income, 1, 10)) as income_lags_latest, array_sum(income_lags_latest) as income_lags_sum from table(t_lags1) group by id"},
-                    {"client":"python", "query_type": "table","wait":1,"query_id": "801", "query":"select id, income_lags_latest, income_lags_sum from lags_v1"}
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "801","drop_view":"lags_v1", "drop_view_wait":2, "query":"select id, income_lags_latest, income_lags_sum from lags_v1"}
 
                     ]}
             ],
@@ -82,7 +82,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_lags1(id int, income float, time datetime64(3))"},
                     {"client":"python", "query_type": "table","depends_on_stream":"t_lags1", "wait":1, "query":"insert into t_lags1(id, income, time)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:02')(1, -1000, '2020-01-05 09:01:03')(1, 3100, '2020-01-18 09:01:04')(1, 100, '2020-03-09 09:01:05')"},
                     {"client":"python", "query_type": "table", "wait":3, "query":"create materialized view if not exists lags_mv1 as select id, latest(lags(income, 1, 10)) as income_lags_latest, array_sum(income_lags_latest) as income_lags_sum from t_lags1 group by id settings seek_to='earliest'"},
-                    {"client":"python", "query_type": "table","depends_on_stream":"lags_mv1","wait":5,"query_id": "801", "query":"select id, income_lags_latest, income_lags_sum from lags_mv1 limit 1 settings seek_to='earliest'"}
+                    {"client":"python", "query_type": "table","depends_on_stream":"lags_mv1","wait":5,"query_id": "801","drop_view":"lags_mv1", "drop_view_wait":2, "query":"select id, income_lags_latest, income_lags_sum from lags_mv1 limit 1 settings seek_to='earliest'"}
 
                     ]}
             ],
@@ -99,7 +99,6 @@
             "description": "create a stream, tail with bool check in where",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists bool_v1"},
                     {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool1"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool1(id int, value int, bool_f bool, time datetime64(3))"},
                     {"client":"python", "query_type": "table","depends_on_stream":"t_bool1", "wait":1, "query":"insert into t_bool1(id, value, bool_f,time)values(1, -1000, true, '2020-01-02 00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05 09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')"},
@@ -124,7 +123,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool1(id int, value int, bool_f bool, time datetime64(3))"},
                     {"client":"python", "query_type": "table","depends_on_stream":"t_bool1", "wait":1, "query":"insert into t_bool1(id, value, bool_f,time)values(1, -1000, true, '2020-01-02 00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05 09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')"},
                     {"client":"python", "query_type": "table", "wait":3,"query":"create view if not exists bool_v1 as with transformed as (select id, value, bool_f, time from t_bool1) select window_start, window_end, id, bool_f, count(bool_f) from tumble(transformed, time, 1s)  group by id, bool_f, window_start, window_end  settings seek_to='earliest'"},
-                    {"client":"python", "query_type": "stream", "query_end_timer":6,"wait":1,"query_id": "801", "query":"select id, bool_f, count() from bool_v1 group by id, bool_f"}
+                    {"client":"python", "query_type": "stream", "query_end_timer":6,"wait":1,"query_id": "801","drop_view":"bool_v1", "drop_view_wait":2, "query":"select id, bool_f, count() from bool_v1 group by id, bool_f"}
 
                     ]}
             ],
@@ -147,7 +146,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool1(id int, value int, bool_f bool, time datetime64(3))"},
                     {"client":"python", "query_type": "table","depends_on_stream":"t_bool1", "wait":2, "query":"insert into t_bool1(id, value, bool_f,time)values(1, -1000, true, '2020-01-02 00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05 09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')"},
                     {"client":"python", "query_type": "table","wait":3,"query":" create materialized view if not exists bool_mv1 as with transformed as (select id, value, bool_f, time from t_bool1) select window_start as ws, window_end as we, id, bool_f, count(bool_f) from tumble(transformed, time, 1s)  group by id, bool_f, window_start, window_end  settings seek_to='earliest'"},
-                    {"client":"python", "query_type": "table","wait":10, "depends_on_stream":"bool_mv1","query_id": "801", "query":"select id, bool_f, count() from table(bool_mv1) group by id, bool_f"}
+                    {"client":"python", "query_type": "table","wait":10, "depends_on_stream":"bool_mv1","query_id": "801","drop_view":"bool_mv1", "drop_view_wait":2, "query":"select id, bool_f, count() from table(bool_mv1) group by id, bool_f"}
 
                     ]}
             ],
@@ -168,7 +167,8 @@
                     {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool1"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool1(id int, value int, bool_f bool, time datetime64(3))"},
                     {"client":"python", "query_type": "table","depends_on_stream":"t_bool1", "wait":1, "query":"insert into t_bool1(id, value, bool_f,time) values(1, -1000, true, '2020-01-02 00:00:01')(1, 0,true, '2020-01-03 09:01:02')(1, 1, false, '2020-01-05 09:01:03')(1, 2, false, '2020-01-18 09:01:04')"},
-                    {"client":"python", "query_type": "table","wait":3, "query_id": "801", "query":"select if(1<2,'a','b'), 0 as v1, 'true' as v2, v1>0, v2='true', v1=true, v2=true, value=1, value!=1, value>1, value<=1, value<1, value>=1 from table(t_bool1) where id = 1 and id != 0 and to_uint8(id)"}
+                    {"client":"python", "query_type": "table","wait":3, "query_id": "801", "query":"select if(1<2,'a','b'), 0 as v1, 'true' as v2, v1>0, v2='true', v1=true, v2=true, value=1, value!=1, value>1, value<=1, value<1, value>=1 from table(t_bool1) where id = 1 and id != 0 and to_uint8(id)"},
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool1"}
                     ]}
             ],
 
@@ -190,7 +190,8 @@
                     {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool1"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool1(bool_s string, bool_i uint8, bool_f bool)"},
                     {"client":"python", "query_type": "table","depends_on_stream":"t_bool1", "wait":1, "query":"insert into t_bool1(bool_s, bool_i, bool_f) values('true', 0, true)('false', 1, false)"},
-                    {"client":"python", "query_type": "table","wait":3,"query_id": "801", "query":"select to_bool('true'), to_bool('false'), to_bool(1), to_bool(0), to_bool(true), to_bool(false), to_bool(bool_s), to_bool(bool_i), to_bool(bool_f) from table(t_bool1)"}
+                    {"client":"python", "query_type": "table","wait":3,"query_id": "801", "query":"select to_bool('true'), to_bool('false'), to_bool(1), to_bool(0), to_bool(true), to_bool(false), to_bool(bool_s), to_bool(bool_i), to_bool(bool_f) from table(t_bool1)"},
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool1"}
                     ]}
             ],
 
