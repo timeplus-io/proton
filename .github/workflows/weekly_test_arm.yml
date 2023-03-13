@@ -40,10 +40,10 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   test_address:
     needs: prepare
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: c6g.4xlarge
-      ec2-image-id: ami-08076d7610b11c9f7
+      ec2-image-id: ami-0f3dbc4cc9994fdee
       submodules: 'recursive'
       sanitizer: "address"
       tag: 'sanitizer'
@@ -62,10 +62,10 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_thread:
     needs: prepare
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: c6g.4xlarge
-      ec2-image-id: ami-08076d7610b11c9f7
+      ec2-image-id: ami-0f3dbc4cc9994fdee
       submodules: 'recursive'
       sanitizer: "thread"
       tag: 'sanitizer'
@@ -84,10 +84,10 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_memory:
     needs: prepare
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: c6g.4xlarge
-      ec2-image-id: ami-08076d7610b11c9f7
+      ec2-image-id: ami-0f3dbc4cc9994fdee
       submodules: 'recursive'
       sanitizer: "memory"
       tag: 'sanitizer'
@@ -106,10 +106,10 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_undefined:
     needs: prepare
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: c6g.4xlarge
-      ec2-image-id: ami-08076d7610b11c9f7
+      ec2-image-id: ami-0f3dbc4cc9994fdee
       submodules: 'recursive'
       sanitizer: "undefined"
       tag: 'sanitizer'
@@ -128,10 +128,10 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_release:
     needs: prepare
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: c6g.4xlarge
-      ec2-image-id: ami-08076d7610b11c9f7
+      ec2-image-id: ami-0f3dbc4cc9994fdee
       submodules: 'recursive'
       sanitizer: ""
       tag: 'release'

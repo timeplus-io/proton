@@ -114,10 +114,10 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   test_address_x64:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI}}
+      ec2-image-id: ${{ vars.X64_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: "address"
@@ -138,10 +138,10 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_thread_x64:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI}}
+      ec2-image-id: ${{ vars.X64_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: "thread"
@@ -162,10 +162,10 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_memory_x64:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI}}
+      ec2-image-id: ${{ vars.X64_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: "memory"
@@ -186,10 +186,10 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_undefined_x64:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI}}
+      ec2-image-id: ${{ vars.X64_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: "undefined"
@@ -210,10 +210,10 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_release_x64:
     needs: prepare_release
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI}}
+      ec2-image-id: ${{ vars.X64_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: ""
@@ -231,10 +231,10 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   test_address_arm:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI}}
+      ec2-image-id: ${{ vars.ARM_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: "address"
@@ -252,10 +252,10 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   test_thread_arm:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI}}
+      ec2-image-id: ${{ vars.ARM_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: "thread"
@@ -273,10 +273,10 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   test_memory_arm:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI}}
+      ec2-image-id: ${{ vars.ARM_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: "memory"
@@ -294,10 +294,10 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   test_undefined_arm:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI}}
+      ec2-image-id: ${{ vars.ARM_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: "undefined"
@@ -315,10 +315,10 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   test_release_arm:
     needs: prepare_release
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI}}
+      ec2-image-id: ${{ vars.ARM_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: ""

@@ -4,19 +4,23 @@ on:
       ec2-image-id:
         type: string
         required: false
-        default: ami-045a86d6d301ab637
+        default: ami-042a37e33a285c22b
       ec2-instance-type:
         type: string
         required: false
         default: c4.4xlarge
+      key-name:
+        type: string
+        required: false
+        default: perf-long
       ec2-subnet-id:
         type: string
         required: false
-        default: subnet-7f670619
+        default: subnet-0390bf48ec3e870ab
       ec2-security-group-id:
         type: string
         required: false
-        default: sg-0b08bfc9785de435e
+        default: sg-02993a2e1fa61b1c7
       ec2-volume-size:
         type: string
         required: false
@@ -82,8 +86,9 @@ jobs:
         id: start-ec2-runner
         uses: timeplus-io/ec2-github-runner@main
         with:
-          mode: start
+          mode: start_spot
           github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          key-name: ${{ inputs.key-name }}
           ec2-image-id: ${{ inputs.ec2-image-id }}
           ec2-instance-type: ${{ inputs.ec2-instance-type }}
           ec2-volume-size: ${{ inputs.ec2-volume-size }}
