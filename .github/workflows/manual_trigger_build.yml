@@ -109,7 +109,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   build_x64:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.inputs.arch == 'x64' && github.event.inputs.build_type != 'release'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -131,7 +131,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   build_x64_release:
     needs: prepare_release
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.inputs.arch == 'x64' && github.event.inputs.build_type == 'release'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -153,7 +153,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   build_arm:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.inputs.arch == 'arm' && github.event.inputs.build_type != 'release'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
@@ -175,7 +175,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   build_arm_release:
     needs: prepare_release
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.inputs.arch == 'arm' && github.event.inputs.build_type == 'release'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}

@@ -114,7 +114,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   test_address_x64:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -138,7 +138,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_thread_x64:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -162,7 +162,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_memory_x64:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -186,7 +186,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_undefined_x64:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -210,7 +210,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_release_x64:
     needs: prepare_release
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -231,7 +231,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   test_address_arm:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -252,7 +252,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   test_thread_arm:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -273,7 +273,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   test_memory_arm:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -294,7 +294,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   test_undefined_arm:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -315,7 +315,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   test_release_arm:
     needs: prepare_release
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}

@@ -63,7 +63,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   test_address_x64:
     needs: prepare
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}

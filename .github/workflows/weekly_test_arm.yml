@@ -40,7 +40,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   test_address:
     needs: prepare
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ami-0f3dbc4cc9994fdee
@@ -62,7 +62,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_thread:
     needs: prepare
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ami-0f3dbc4cc9994fdee
@@ -84,7 +84,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_memory:
     needs: prepare
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ami-0f3dbc4cc9994fdee
@@ -106,7 +106,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_undefined:
     needs: prepare
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ami-0f3dbc4cc9994fdee
@@ -128,7 +128,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   test_release:
     needs: prepare
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ami-0f3dbc4cc9994fdee

@@ -9,7 +9,7 @@ on: # yamllint disable-line rule:truthy
 
 jobs:
   Build:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-042a37e33a285c22b
@@ -61,7 +61,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   BuildArm:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ami-0f3dbc4cc9994fdee
@@ -108,7 +108,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   CommitTag:
     needs: [Build, BuildArm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-826-support-spot-instance
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-042a37e33a285c22b
