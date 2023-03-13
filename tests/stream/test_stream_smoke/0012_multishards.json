@@ -22,7 +22,7 @@
         {
           "statements": [
             {"client":"python","query_id":"1300", "wait":3,"terminate":"manual", "query_type": "stream", "query":"select i from multishards_stream;"},
-            {"client":"python", "query_type": "table","depends_on":1300, "wait":5, "query": "insert into multishards_stream(i) values (1)"},
+            {"client":"python", "query_type": "table","depends_on":1300, "wait":4, "query": "insert into multishards_stream(i) values (1)"},
             {"client":"python", "query_type": "table", "query": "insert into multishards_stream(i) values (2)"},
             {"client":"python", "query_type": "table","kill":"1300","kill_wait":3, "query": "insert into multishards_stream(i) values (3)"}
           ]
@@ -46,7 +46,7 @@
         {
           "statements": [
             {"client":"python","query_id":"1301", "wait":1,"terminate":"manual", "query_type": "stream", "query":"select sum(i) as s from multishards_stream limit 1 emit periodic 10s;"},
-            {"client":"python", "query_type": "table","depends_on":1301, "wait":2, "query": "insert into multishards_stream(i) values (1)"},
+            {"client":"python", "query_type": "table","depends_on":1301, "wait":1, "query": "insert into multishards_stream(i) values (1)"},
             {"client":"python", "query_type": "table", "query": "insert into multishards_stream(i) values (2)"},
             {"client":"python", "query_type": "table", "kill":"1301","kill_wait":15, "query": "insert into multishards_stream(i) values (3)"}             
           ]

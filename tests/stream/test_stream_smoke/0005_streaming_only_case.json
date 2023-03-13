@@ -138,7 +138,7 @@
 
 
                 {"inputs": [
-                    {"table_name": "test_stream_only", "depends_on":"602", "wait":3, "data": [
+                    {"table_name": "test_stream_only", "depends_on":"602", "wait":2, "data": [
                         ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
                         ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:03"]
                     ]},
@@ -221,7 +221,7 @@
                     {"client":"python", "query_id":601, "query_type": "stream", "terminate":"auto", "query_end_timer": 2, "query":"select max(value), window_start, window_end from tumble(test_stream_only, timestamp, interval 5 second) group by window_start, window_end emit stream"}
                 ]},
                 {"inputs": [
-                    {"table_name":"test_stream_only","depends_on":"601", "wait":1, "data": [
+                    {"table_name":"test_stream_only","depends_on":"601", "data": [
                         ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:14"],
                         ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:13"]
                     ]},
@@ -269,7 +269,7 @@
                 {"statements": [
                     {"client":"python", "query_id": "601", "query_type": "stream", "query_end_timer": 1,"query":"select id, max(value), window_start, window_end from tumble(test_stream_only, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only", "depends_on":"601","wait":1, "data":[
+                    {"table_name":"test_stream_only", "depends_on":"601", "data":[
                         ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
                         ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:03"]
                     ]},
@@ -297,7 +297,7 @@
                 {"statements": [
                     {"client":"python", "query_id":"601" ,"query_type": "stream", "query_end_timer": 1,"query":"select window_start, window_end, count(*) from tumble(test_stream_only, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 2 second"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only", "depends_on":"601","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:30"]]},
+                    {"table_name":"test_stream_only", "depends_on":"601","data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:30"]]},
                     {"table_name":"test_stream_only", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:31"]]},
                     {"table_name":"test_stream_only", "data": [["dev2", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:32"]]},
                     {"table_name":"test_stream_only", "data": [["dev2", "ca", 59.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:50"]]},
@@ -320,7 +320,7 @@
                 {"statements": [
                     {"client":"python", "query_id":"601", "query_type": "stream", "query_end_timer": 1,"query":"select window_start, window_end, count(*) from tumble(test_stream_only, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only", "depends_on":"601","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:50"]]},
+                    {"table_name":"test_stream_only", "depends_on":"601","data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:50"]]},
                     {"table_name":"test_stream_only", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:51"]]},
                     {"table_name":"test_stream_only", "data": [["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:55"]]},
                     {"table_name":"test_stream_only", "data": [["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:57"]]}
@@ -341,7 +341,7 @@
                 {"statements": [
                     {"client":"python", "query_id":"601", "query_type": "stream", "query_end_timer": 1,"query":"select window_start, window_end, count(*) from tumble(test_stream_only, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 3 second"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only","depends_on":"601","wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    {"table_name":"test_stream_only","depends_on":"601", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
                     {"table_name":"test_stream_only", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
@@ -361,7 +361,7 @@
                 {"statements": [
                     {"client":"python", "query_id":"601", "query_type": "stream", "query_end_timer": 1,"query":"select window_start, window_end, count(*) from tumble(test_stream_only, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 3 second"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only", "depends_on":"601","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    {"table_name":"test_stream_only", "depends_on":"601","data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
                     {"table_name":"test_stream_only", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
@@ -384,7 +384,7 @@
                 {"statements": [
                     {"client":"python","query_id":"601", "query_type": "stream", "query_end_timer": 1,"query":"select id, max(value), window_start, window_end from hop(test_stream_only, timestamp, interval 3 second, interval 5 second) group by id, window_start, window_end emit stream"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only","depends_on":"601","wait":1, "data": [
+                    {"table_name":"test_stream_only","depends_on":"601", "data": [
                         ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
                         ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:03"]
                     ]},
@@ -415,7 +415,7 @@
                 {"statements": [
                     {"client":"python","query_id":"601", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), window_start, window_end from hop(test_stream_only, timestamp, interval 2 second, interval 5 second) group by id, window_start, window_end"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only","depends_on":"601","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_stream_only","depends_on":"601", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 58.3, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
                     {"table_name":"test_stream_only", "data": [["dev1", "ca", 59, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
@@ -478,7 +478,7 @@
                 {"statements": [
                     {"client":"python", "query_id":"601", "query_type": "stream","query_end_timer": 1, "query":"select location, count(*), window_start, window_end from hop(test_stream_only, timestamp, interval 3 second, interval 5 second) group by location, window_start, window_end emit stream after watermark and delay interval 2 second"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only","depends_on":"601","wait":1, "data": [["dev1", "ca", 51, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
+                    {"table_name":"test_stream_only","depends_on":"601", "data": [["dev1", "ca", 51, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
                     ["dev1", "ca", 99, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:02"],
                     ["dev1", "ca", 87, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:01"],
                     ["dev2", "ca", 66, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:03"]]},
@@ -509,7 +509,7 @@
                 {"statements": [
                     {"client":"python", "query_id":"601", "query_type": "stream", "query_end_timer":8, "query":"select id, max(value) from test_stream_only group by id limit 4 emit periodic 5s"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only","depends_on":"601", "wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    {"table_name":"test_stream_only","depends_on":"601","data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
                     {"table_name":"test_stream_only", "data": [["dev2", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
@@ -540,7 +540,7 @@
                 {"statements": [
                     {"client":"python","query_id":"601", "query_type": "stream", "query_end_timer":8, "query":"select id, sum(distinct value), count(distinct value) from test_stream_only group by id limit 4 emit periodic 5s"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only", "depends_on":"601","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    {"table_name":"test_stream_only", "depends_on":"601","data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
                     {"table_name":"test_stream_only", "data": [["dev2", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
@@ -607,7 +607,7 @@
                 {"statements": [
                     {"client":"python","query_id":"601", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), window_start, window_end from tumble(test_stream_only_no_default_tp_time, timestamp, 5s) group by id, window_start, window_end limit 6 emit after watermark and delay 2s and last 6s"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only_no_default_tp_time", "depends_on":"601", "wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    {"table_name":"test_stream_only_no_default_tp_time", "depends_on":"601","data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
                     {"table_name":"test_stream_only_no_default_tp_time", "data": [["dev3", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
@@ -641,7 +641,7 @@
                 {"statements": [
                     {"client":"python","query_id":"601", "query_type": "stream", "query_end_timer":8, "query":"select id, sum(distinct value), window_end from tumble(test_stream_only_no_default_tp_time, timestamp, 5s) group by id, window_end emit after watermark and delay 2s and last 1s"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only_no_default_tp_time","depends_on":"601","wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    {"table_name":"test_stream_only_no_default_tp_time","depends_on":"601", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
                     {"table_name":"test_stream_only_no_default_tp_time", "data": [["dev3", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
@@ -675,7 +675,7 @@
                 {"statements": [
                     {"client":"python","query_id":"601", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), window_end from tumble(test_stream_only, to_datetime(json_extract_string(json, 'create_time')), interval 5 second) group by id, window_end"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only", "depends_on":"601","wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
+                    {"table_name":"test_stream_only", "depends_on":"601","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2020-02-02 20:01:03"]]},
                     {"table_name":"test_stream_only", "data": [["dev1", "ca", 59, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2020-02-02 20:01:06"],
@@ -706,7 +706,7 @@
                 {"statements": [
                     {"client":"python","query_id":"601", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), window_end from hop(test_stream_only, to_time(json_extract_string(json, 'create_time')), interval 2 second, interval 5 second) where window_end < '2021-11-02 20:00:09' group by id, window_end"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only","depends_on":"601","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
+                    {"table_name":"test_stream_only","depends_on":"601", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2020-02-02 20:01:03"]]},
                     {"table_name":"test_stream_only", "data": [["dev1", "ca", 59, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2020-02-02 20:01:06"],
@@ -740,7 +740,7 @@
                 {"statements": [
                     {"client":"python","query_id":"601", "query_type": "stream", "query_end_timer":1, "query":"select a.id, b.type, a.value from test_stream_only as a join table(test_stream_only_d) as b on a.id = b.id"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only", "depends_on":"601","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    {"table_name":"test_stream_only", "depends_on":"601","data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
                     {"table_name":"test_stream_only", "data": [["dev4", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
@@ -859,7 +859,7 @@
                 {"statements": [
                     {"client":"python","query_id":"601", "query_type": "stream","query_end_timer":6, "query":"select a.id, b.type, max(value) from test_stream_only as a join table(test_stream_only_d) as b on a.id = b.id group by a.id, b.type limit 7 emit periodic 5s"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only", "depends_on":"601","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    {"table_name":"test_stream_only", "depends_on":"601","data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
                     {"table_name":"test_stream_only", "data": [["dev4", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
@@ -892,7 +892,7 @@
                 {"statements": [
                     {"client":"python","query_id":"601", "query_type": "stream", "query_end_timer":6, "query":"select a.id, b.type, max(value) from test_stream_only as a join table(test_stream_only_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' group by a.id, b.type limit 3 emit periodic 5s"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only","depends_on":"601","wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    {"table_name":"test_stream_only","depends_on":"601", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
                     {"table_name":"test_stream_only", "data": [["dev4", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],

@@ -125,7 +125,7 @@
                     {"client":"python", "query_type": "table", "wait":1,"query":"drop stream if exists t_latest"},
                     {"client":"python", "query_type": "table","wait":2, "query":"create stream t_latest (name string, price int)"},
                     {"client":"python","query_id":"801-1", "query_end_timer":4, "query_type": "stream", "query":"select group_array(name) as names,group_array(latest_price) as prices,map_cast(names, prices) as name_prices, (name_prices['id1']/2 + name_prices['id2']/2) as comb_price from (select name,latest(price) as latest_price from t_latest group by name emit periodic 5s) limit 1"},
-                    {"client":"python", "query_type": "table", "depends_on": "801-1", "wait":1, "query":"insert into t_latest (name, price) values ('id1', 100) ('id2', 200)"},
+                    {"client":"python", "query_type": "table", "depends_on": "801-1", "query":"insert into t_latest (name, price) values ('id1', 100) ('id2', 200)"},
                     {"client":"python", "query_type": "table", "wait":1, "query":"insert into t_latest (name, price) values ('id1', 500) ('id2', 300)"},
                     {"client":"python", "query_type": "table", "wait":1, "query":"insert into t_latest (name, price) values ('id1', 300) ('id2', 1000)"}
 
@@ -146,7 +146,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists t_float_map"},
                     {"client":"python", "query_type": "table","wait":2, "query":"create stream t_float_map (id string, value_str string)"},
                     {"client":"python","query_id":"801-1", "query_type": "stream","depends_on_stream":"t_float_map", "wait":1,"query_end_timer":4, "query":" select group_array(id) as ids, group_array(latest_value_str) as latest_value_strs, map_cast(ids, latest_value_strs) as id_value_strs, id_value_strs['a'] as id_value_a, to_float(id_value_a) from (select id, latest(value_str) as latest_value_str from t_float_map group by id order by id) limit 1"},
-                    {"client":"python", "query_type": "table", "depends_on": "801-1", "wait":3, "query":"insert into t_float_map (id, value_str) values ('a', '100.1')('b', '200.1')('c', '300.1')"}
+                    {"client":"python", "query_type": "table", "depends_on": "801-1", "wait":2, "query":"insert into t_float_map (id, value_str) values ('a', '100.1')('b', '200.1')('c', '300.1')"}
 
 
                     ]}

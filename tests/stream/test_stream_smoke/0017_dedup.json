@@ -21,8 +21,8 @@
         {
           "statements": [
             {"client":"python","query_id":"1800", "wait":2,"terminate":"manual", "query_type": "stream", "query":"select i, s from dedup(dedup_stream, s)"},
-            {"client":"python", "query_type": "table","depends_on":1800, "wait":1, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
-            {"client":"python", "query_type": "table","depends_on":1800, "wait":1,"kill":"1800","kill_wait":5, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"}
+            {"client":"python", "query_type": "table","depends_on":1800, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
+            {"client":"python", "query_type": "table","depends_on":1800,"kill":"1800","kill_wait":5, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"}
           ]
         }
       ],
@@ -44,8 +44,8 @@
         {
           "statements": [
             {"client":"python","query_id":"1801", "wait":2,"terminate":"manual", "query_type": "stream", "query":"select i, s from dedup(dedup_stream, s, 1s)"},
-            {"client":"python", "query_type": "table","depends_on":1801, "wait":1, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
-            {"client":"python", "query_type": "table","depends_on":1801, "wait":2,"kill":"1801","kill_wait":5, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"}
+            {"client":"python", "query_type": "table","depends_on":1801, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
+            {"client":"python", "query_type": "table","depends_on":1801, "wait":1,"kill":"1801","kill_wait":5, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"}
           ]
         }
       ],
@@ -67,8 +67,8 @@
         {
           "statements": [
             {"client":"python","query_id":"1802", "wait":2,"terminate":"manual", "query_type": "stream", "query":"select i, s from dedup(dedup_stream, s, 0s, 2)"},
-            {"client":"python", "query_type": "table","depends_on":1802, "wait":1, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
-            {"client":"python", "query_type": "table","depends_on":1802, "wait":1,"kill":"1802","kill_wait":5, "query": "insert into dedup_stream(i, s) values (2, 's2'), (3, 's3'), (1, 's1')"}
+            {"client":"python", "query_type": "table","depends_on":1802, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
+            {"client":"python", "query_type": "table","depends_on":1802, "kill":"1802","kill_wait":5, "query": "insert into dedup_stream(i, s) values (2, 's2'), (3, 's3'), (1, 's1')"}
           ]
         }
       ],
@@ -90,8 +90,8 @@
         {
           "statements": [
             {"client":"python","query_id":"1803", "wait":2,"terminate":"manual", "query_type": "stream", "query":"select i, s from dedup(dedup_stream, s, 1s, 2)"},
-            {"client":"python", "query_type": "table","depends_on":1803, "wait":1, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
-            {"client":"python", "query_type": "table","depends_on":1803, "wait":2,"kill":"1803","kill_wait":5, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"}
+            {"client":"python", "query_type": "table","depends_on":1803, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
+            {"client":"python", "query_type": "table","depends_on":1803, "wait":1,"kill":"1803","kill_wait":5, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"}
           ]
         }
       ],
@@ -114,7 +114,7 @@
           "statements": [
             {"client":"python","query_id":"1800", "wait":2,"terminate":"manual", "query_type": "stream", "query":"select i from dedup(dedup_stream, s:time)"},
             {"client":"python","query_id":"1801", "wait":2,"terminate":"manual", "query_type": "stream", "query":"select count() from dedup(dedup_stream, s:time) emit periodic 10s"},
-            {"client":"python", "query_type": "table","depends_on":1801, "wait":1,"kill":"1800,1801","kill_wait":12, "query": "insert into dedup_stream(i, s) values (1, '{\"time\": \"2023-1-1\"}')(2, '{\"time\": \"2023-1-1\"}')(3, '{\"time\": \"2023-1-2\"}')"}
+            {"client":"python", "query_type": "table","depends_on":1801,"kill":"1800,1801","kill_wait":12, "query": "insert into dedup_stream(i, s) values (1, '{\"time\": \"2023-1-1\"}')(2, '{\"time\": \"2023-1-1\"}')(3, '{\"time\": \"2023-1-2\"}')"}
           ]
         }
       ],

@@ -1248,6 +1248,7 @@ def query_run_py(
                 )
             else:
                 logger.info(f"proton_setting = {proton_setting},test_suite_name = {test_suite_name}, test_id = {test_id}, proton_server_container_name = {proton_server_container_name},  query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} exists")
+            time.sleep(1) # for waiting the depends_on query ready.
 
         if depends_on_done is not None:
             done_state_check_res = query_state_check(query_states_dict, DONE_STATE, test_id, depends_on_done) 
@@ -2410,7 +2411,7 @@ def input_batch_rest(config, test_suite_name, test_id, input_batch, table_schema
     try:
         proton_setting = config.get("proton_setting")
         logger.debug(
-            f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, input_batch_rest: input_batch = {input_batch}, table_schema = {table_schema}"
+            f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, input_batch_rest: input_batch = {input_batch}, table_schema = {table_schema}, input_batch_rest starts."
         )
         rest_setting = config.get("rest_setting")
         input_url = rest_setting.get("ingest_url")
@@ -2510,20 +2511,22 @@ def input_batch_rest(config, test_suite_name, test_id, input_batch, table_schema
                         depends_on_exists = False
                     time.sleep(0.2)
                     retry -= 1
-
+            time.sleep(1) #wait 0.5 seconds for dpends_on stream ready, if no wait sometimes data will be missed in the query
             if not depends_on_exists:
                 logger.debug(
-                    f"INPUT_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, depends_on = {depends_on} for input not found, raise exception."
+                    f"INPUT_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, depends_on = {depends_on}, query_states_dict = {query_states_dict} for input not found, raise exception."
                 )
-                raise Exception(f"INPUT_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, depends_on = {depends_on} for input not found")
-
+                raise Exception(f"INPUT_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, depends_on = {depends_on}, query_states_dict = {query_states_dict} for input not found")
+        else:
+            running_state_check_res = 'no_depends_on'
         # logger.debug(
         #     f"depends_on = {depends_on}, query_states_dict = {query_states_dict}, depends_on_exists = {depends_on_exists}"
         # )
-
         depends_on_done = input_batch.get("depends_on_done")
         if depends_on_done is not None:
             done_state_check_res = query_state_check(query_states_dict, DONE_STATE, test_id, depends_on)
+        else:
+            done_state_check_res = 'no_depends_on_done'
 
 
         if wait != None:
@@ -2552,9 +2555,9 @@ def input_batch_rest(config, test_suite_name, test_id, input_batch, table_schema
             )  # get data from inputs batch dict as rest ingest body.
         input_rest_body = json.dumps(input_rest_body)
         input_url = f"{input_url}/{table_name}"
-        logger.debug(
-            f"input_batch_rest: input_url = {input_url}, input_rest_body = {input_rest_body} to be called"
-        )
+        # logger.debug(
+        #     f"input_batch_rest: input_url = {input_url}, input_rest_body = {input_rest_body} to be called"
+        # )
 
         # retry = 50
         # while table_exist(table_ddl_url, table_name) is None and retry > 0:
@@ -2575,7 +2578,7 @@ def input_batch_rest(config, test_suite_name, test_id, input_batch, table_schema
 
         res = requests.post(input_url, data=input_rest_body)
         logger.debug(
-            f"input_batch_rest: response of requests.post of input_url = {input_url}, data = {input_rest_body} request res = {res}"
+            f"input_batch_rest: response of requests.post of input_url = {input_url}, data = {input_rest_body}, running_state_check_res = {running_state_check_res},done_state_check_res = {done_state_check_res}, request res = {res}"
         )
 
         assert res.status_code == 200, f"res.status_code = {res.status_code}"
@@ -2594,9 +2597,9 @@ def input_batch_rest(config, test_suite_name, test_id, input_batch, table_schema
         """
         return input_batch_record
     except (BaseException) as error:
-        logger.debug(f"INPUT_BATCH_REST_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, error = {error}")
+        logger.debug(f"INPUT_BATCH_REST_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id},running_state_check_res = {running_state_check_res},done_state_check_res = {done_state_check_res},  error = {error}")
         traceback.print_exc()
-        raise Exception(f"table_name = {table_name} for input not found")
+        raise Exception(f"INPUT_BATCH_REST_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id},running_state_check_res = {running_state_check_res},done_state_check_res = {done_state_check_res},  error = {error}")
         #return input_batch_record
 
 
@@ -3776,6 +3779,7 @@ def test_suite_run(
                     tables_setup = test_suite_env_setup(
                         client, config, test_suite_name, test_suite_config
                     ) #setup env for test suite running
+                    time.sleep(1) #sleep after test_suite_env_setup, for some streams created during test_suite_evn_setup, sleep to wait the stream setting up done
                     logger.info(
                         f"test_suite_name = {test_suite_name}, tables_setup = {tables_setup} done."
                     )

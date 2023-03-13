@@ -21,7 +21,7 @@
         {
           "statements": [
             {"client":"python","query_id":"2000", "depends_on_stream":"limit_by_stream","query_end_timer":4, "query_type": "stream", "query":"select s, latest(i) as i, emit_version() as version from limit_by_stream group by s order by i desc limit 2 by version"},
-            {"client":"python", "query_type": "table","depends_on":2000,"depends_on_stream":"limit_by_stream", "wait":1, "query": "insert into limit_by_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3'), (4, 's4')"}
+            {"client":"python", "query_type": "table","depends_on":2000,"depends_on_stream":"limit_by_stream", "query": "insert into limit_by_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3'), (4, 's4')"}
           ]
         }
       ],
@@ -43,7 +43,7 @@
         {
           "statements": [
             {"client":"python","query_id":"2001", "depends_on_stream":"limit_by_stream","query_end_timer":5, "query_type": "stream", "query":"select s, count(), sum(i) as total, avg(i), min(i), max(i) from tumble(limit_by_stream, 2s) group by window_start, s order by total desc limit 2 by window_start"},
-            {"client":"python", "query_type": "table","depends_on":2001,"depends_on_stream":"limit_by_stream", "wait":1,
+            {"client":"python", "query_type": "table","depends_on":2001,"depends_on_stream":"limit_by_stream", 
               "query": "insert into limit_by_stream(i, s, _tp_time) values (1, 's1', '2022-01-01 00:00:00'), (2, 's2', '2022-01-01 00:00:00'), (3, 's3', '2022-01-01 00:00:01')"},
             {"client":"python", "query_type": "table", "wait":1,
               "query": "insert into limit_by_stream(i, s, _tp_time) values (11, 's1', '2022-01-01 00:00:02'), (22, 's2', '2022-01-01 00:00:03'), (33, 's3', '2022-01-01 00:00:03')"},

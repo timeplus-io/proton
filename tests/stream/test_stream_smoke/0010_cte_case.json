@@ -17,7 +17,7 @@
             {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists cte"},
             {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists cte(i int)"},
             {"client":"python","query_id":"1100", "depends_on_stream":"cte","query_end_timer":6, "query_type": "stream", "query":"with dedup_cte as (select * from cte) select i from dedup(dedup_cte, i)"},
-            {"client":"python", "query_type": "table","depends_on":1100, "depends_on_stream":"cte", "wait":3, "query": "insert into cte(i) values (1),(2),(3),(1),(2)"}
+            {"client":"python", "query_type": "table","depends_on":1100, "depends_on_stream":"cte", "wait":2, "query": "insert into cte(i) values (1),(2),(3),(1),(2)"}
           ]
         }
       ],
