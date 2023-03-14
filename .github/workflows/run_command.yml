@@ -110,6 +110,7 @@ jobs:
       TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
       TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
     steps:
       - name: Configure AWS credentials from Test account
         uses: aws-actions/configure-aws-credentials@v1
