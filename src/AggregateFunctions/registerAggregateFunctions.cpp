@@ -46,6 +46,7 @@ void registerAggregateFunctionsUniq(AggregateFunctionFactory &);
 void registerAggregateFunctionUniqCombined(AggregateFunctionFactory &);
 void registerAggregateFunctionUniqUpTo(AggregateFunctionFactory &);
 void registerAggregateFunctionTopK(AggregateFunctionFactory &);
+void registerAggregateFunctionTopKExact(AggregateFunctionFactory &);
 void registerAggregateFunctionsBitwise(AggregateFunctionFactory &);
 void registerAggregateFunctionsBitmap(AggregateFunctionFactory &);
 void registerAggregateFunctionsMaxIntersections(AggregateFunctionFactory &);
@@ -154,6 +155,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionUniqCombined(factory);
         registerAggregateFunctionUniqUpTo(factory);
         registerAggregateFunctionTopK(factory);
+        registerAggregateFunctionTopKExact(factory);
         registerAggregateFunctionsBitwise(factory);
         registerAggregateFunctionCramersV(factory);
         registerAggregateFunctionTheilsU(factory);

@@ -140,6 +140,7 @@ void tryTranslateToParametricAggregateFunction(
     else if (lower_name == "top_k" || lower_name == "top_k_exact")
     {
         /// Translate `top_k(key, num[, with_count, load_factor])` to `top_k(num[, with_count, load_factor])(key)`
+        /// Translate `top_k_exact(key, num[, with_count, limit_memory_size])` to `top_k_exact(num[, with_count, limit_memory_size])(key)`
         auto size = arguments.size();
         if (size < 2 || size > 4)
             throw Exception(
@@ -155,6 +156,7 @@ void tryTranslateToParametricAggregateFunction(
     else if (lower_name == "top_k_weighted" || lower_name == "top_k_exact_weighted")
     {
         /// Translate `top_k_weighted(key, weight, num, [, with_count, load_factor])` to `top_k_weighted(num[, with_count, load_factor])(key, weighted)`
+        /// Translate `top_k_exact_weighted(key, weight, num, [, with_count, limit_memory_size])` to `top_k_exact_weighted(num[, with_count, limit_memory_size])(key, weighted)`
         auto size = arguments.size();
         if (size < 3 || size > 5)
             throw Exception(
