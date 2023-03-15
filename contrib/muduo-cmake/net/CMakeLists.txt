@@ -27,6 +27,10 @@ set (net_SRCS
     ${LIBRARY_DIR}/muduo/net/Socket.cc
 )
 
+if(OS_DARWIN)
+  list(REMOVE_ITEM net_SRCS ${LIBRARY_DIR}/muduo/net/poller/EPollPoller.cc)
+endif()
+
 add_subdirectory(http)
 add_subdirectory(inspect)
 
