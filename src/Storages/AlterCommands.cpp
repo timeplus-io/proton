@@ -608,7 +608,9 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
     }
     else if (type == MODIFY_QUERY)
     {
-        metadata.select = SelectQueryDescription::getSelectQueryFromASTForMatView(select, context);
+        /// proton: starts. Rename to `getSelectQueryFromASTForView`
+        metadata.select = SelectQueryDescription::getSelectQueryFromASTForView(select, context);
+        /// proton: ends.
     }
     else if (type == MODIFY_SETTING)
     {

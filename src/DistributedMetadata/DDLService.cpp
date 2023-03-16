@@ -31,6 +31,11 @@ namespace ErrorCodes
     extern const int UNRETRIABLE_ERROR;
     extern const int UNKNOWN_EXCEPTION;
     extern const int RESOURCE_NOT_INITED;
+    extern const int STREAM_ALREADY_EXISTS;
+    extern const int UNKNOWN_STREAM;
+    extern const int SYNTAX_ERROR;
+    extern const int UNKNOWN_DATABASE;
+    extern const int DATABASE_ALREADY_EXISTS;
 }
 
 namespace
@@ -53,23 +58,21 @@ namespace
     constexpr Int32 MAX_RETRIES = 3;
 
     /// FIXME, add other un-retriable error codes
-    const std::vector<String> UNRETRIABLE_ERROR_CODES = {
-        "57", /// Stream already exists.
-        "60", /// Stream does not exist.
-        "62", /// Syntax error.
-        "81", /// Database does not exist.
-        "82", /// Database already  exists.
-    };
-
-    bool isUnretriableError(const String & err_msg)
+    bool isUnretriableError(int error)
     {
-        for (const auto & err_code : UNRETRIABLE_ERROR_CODES)
+        switch (error)
         {
-            if (err_msg.find("code:" + err_code) != String::npos || err_msg.find("Code: " + err_code) != String::npos)
+            case 2008:  /// ErrorCodes::UNRETRIABLE_ERROR
+            case 57:    /// ErrorCodes::STREAM_ALREADY_EXISTS
+            case 60:    /// ErrorCodes::UNKNOWN_STREAM
+            case 62:    /// ErrorCodes::SYNTAX_ERROR
+            case 81:    /// ErrorCodes::UNKNOWN_DATABASE
+            case 82:    /// ErrorCodes::DATABASE_ALREADY_EXISTS
+            case 630:   /// ErrorCodes::HAVE_DEPENDENT_OBJECTS
                 return true;
+            default:
+                return false;
         }
-
-        return false;
     }
 
     int toErrorCode(int http_code, const String & error_message)
@@ -80,7 +83,7 @@ namespace
         if (http_code < 0)
             return ErrorCodes::UNRETRIABLE_ERROR;
 
-        return isUnretriableError(error_message) ? ErrorCodes::UNRETRIABLE_ERROR : ErrorCodes::UNKNOWN_EXCEPTION;
+        return Streaming::extractErrorCodeFromMsg(error_message);
     }
 
     String getTableCategory(const nlog::Record & record)
@@ -317,7 +320,7 @@ Int32 DDLService::doDDL(
         if (err == ErrorCodes::OK)
             return err;
 
-        if (err == ErrorCodes::UNRETRIABLE_ERROR)
+        if (isUnretriableError(err))
         {
             LOG_ERROR(log, "Failed to request uri={} due to unrecoverable failure, error_code={}", uri.toString(), err);
             return err;
@@ -366,7 +369,9 @@ void DDLService::doDDLOnHosts(
         }
     }
 
-    if (finished_callback)
+    /// Any finished then call the finished callback
+    /// FIXME: rollback ?
+    if (finished_callback && failed_hosts.size() != target_hosts.size())
         finished_callback();
 
     if (failed_hosts.empty())

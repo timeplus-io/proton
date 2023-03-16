@@ -101,9 +101,11 @@ StorageView::StorageView(
 
     if (!query.select)
         throw Exception("SELECT query is not specified for " + getName(), ErrorCodes::INCORRECT_QUERY);
-    SelectQueryDescription description;
 
-    description.inner_query = query.select->ptr();
+    /// proton: start.
+    auto description = SelectQueryDescription::getSelectQueryFromASTForView(query.select->clone(), local_context);
+    /// proton; ends.
+
     storage_metadata.setSelectQuery(description);
     setInMemoryMetadata(storage_metadata);
 }
@@ -234,6 +236,23 @@ StorageSnapshotPtr StorageView::getStorageSnapshot(const StorageMetadataPtr & me
     }
     else
         return std::make_shared<StorageSnapshot>(*this, metadata_snapshot);
+}
+
+void StorageView::startup()
+{
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    auto storage_id = getStorageID();
+    const auto & select_query = metadata_snapshot->getSelectQuery();
+    for (const auto & select_table_id : select_query.select_table_ids)
+        DatabaseCatalog::instance().addDependency(select_table_id, storage_id);
+}
+
+void StorageView::shutdown()
+{
+    auto storage_id = getStorageID();
+    const auto & select_query = getInMemoryMetadataPtr()->getSelectQuery();
+    for (const auto & select_table_id : select_query.select_table_ids)
+        DatabaseCatalog::instance().removeDependency(select_table_id, storage_id);
 }
 /// proton: ends.
 

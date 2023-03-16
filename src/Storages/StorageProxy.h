@@ -145,7 +145,7 @@ public:
     }
 
     CheckResults checkData(const ASTPtr & query , ContextPtr context) override { return getNested()->checkData(query, context); }
-    void checkTableCanBeDropped() const override { getNested()->checkTableCanBeDropped(); }
+    void checkTableCanBeDropped(ContextPtr context) const override { getNested()->checkTableCanBeDropped(context); }
     bool storesDataOnDisk() const override { return getNested()->storesDataOnDisk(); }
     Strings getDataPaths() const override { return getNested()->getDataPaths(); }
     StoragePolicyPtr getStoragePolicy() const override { return getNested()->getStoragePolicy(); }

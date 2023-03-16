@@ -31,7 +31,6 @@ public:
 
     void alter(const AlterCommands & commands, ContextPtr context, AlterLockHolder & alter_lock_holder) override;
 
-    void checkTableCanBeRenamed() const override;
     /// Use inner target storage to check Alter command
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context) const override;
 

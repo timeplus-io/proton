@@ -21,6 +21,10 @@
 #include <Interpreters/misc.h>
 #include <set>
 
+/// proton: starts.
+#include <TableFunctions/TableFunctionFactory.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -150,6 +154,10 @@ private:
             tryVisit<ASTTableIdentifier>(table_expression.database_and_table_name);
         else if (table_expression.subquery)
             tryVisit<ASTSubquery>(table_expression.subquery);
+        /// proton: starts.
+        else if (table_expression.table_function)
+            tryVisit<ASTFunction>(table_expression.table_function);
+        /// proton: ends.
     }
 
     void visit(const ASTTableIdentifier & identifier, ASTPtr & ast) const
@@ -176,6 +184,9 @@ private:
     {
         bool is_operator_in = functionIsInOrGlobalInOperator(function.name);
         bool is_dict_get = functionIsDictGet(function.name);
+        /// proton: starts.
+        bool is_table_func = TableFunctionFactory::instance().isTableFunctionName(function.name);
+        /// proton: ends.
 
         for (auto & child : function.children)
         {
@@ -223,6 +234,31 @@ private:
                         if (!tryVisit<ASTTableIdentifier>(child->children[i]))
                             visit(child->children[i]);
                     }
+                    /// proton: starts.
+                    /// <table_func>(<stream_name>|<cte_subquery>, ...)
+                    else if (is_table_func && i == 0)
+                    {
+                        auto & stream_ast = child->children[i];
+                        if (auto * identifier = stream_ast->as<ASTIdentifier>(); identifier && !identifier->compound()) /// stream_name
+                        {
+                            auto qualified_identifier = std::make_shared<ASTTableIdentifier>(database_name, identifier->name());
+                            if (!identifier->alias.empty())
+                                qualified_identifier->setAlias(identifier->alias);
+                            stream_ast = qualified_identifier;
+                            return;
+                        }
+
+                        if (tryVisit<ASTTableIdentifier>(stream_ast))
+                            return;
+
+                        if (tryVisit<ASTSubquery>(stream_ast))
+                            return;
+
+                        /// nested table function
+                        if (tryVisit<ASTFunction>(stream_ast))
+                            return;
+                    }
+                    /// proton: ends.
                     else
                     {
                         visit(child->children[i]);

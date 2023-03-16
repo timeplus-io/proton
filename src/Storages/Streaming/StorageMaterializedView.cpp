@@ -90,13 +90,7 @@ StorageMaterializedView::StorageMaterializedView(
     /// If `INTO [target stream]` is not specified, use inner stream
     has_inner_table = query.to_table_id.empty();
 
-    auto select = SelectQueryDescription::getSelectQueryFromASTForMatView(query.select->clone(), local_context);
-
-    /// FIXME, we shall fix the above resolution ?
-    /// Fix database name for tables if we didn't resolve them otherwise addDependency / removeDependency will fail
-    for (auto & select_table_id : select.select_table_ids)
-        if (select_table_id.database_name.empty())
-            select_table_id.database_name = table_id_.getDatabaseName();
+    auto select = SelectQueryDescription::getSelectQueryFromASTForView(query.select->clone(), local_context);
 
     storage_metadata.setSelectQuery(select);
     setInMemoryMetadata(storage_metadata);
@@ -172,6 +166,8 @@ void StorageMaterializedView::startup()
     for (const auto & select_table_id : select_query.select_table_ids)
         DatabaseCatalog::instance().addDependency(select_table_id, storage_id);
 
+    DatabaseCatalog::instance().addDependency(target_table_id, storage_id);
+
     /// Sync target table settings
     updateStorageSettings();
 
@@ -185,6 +181,13 @@ void StorageMaterializedView::shutdown()
         return;
 
     cancelBackgroundPipeline();
+
+    auto storage_id = getStorageID();
+    const auto & select_query = getInMemoryMetadataPtr()->getSelectQuery();
+    for (const auto & select_table_id : select_query.select_table_ids)
+        DatabaseCatalog::instance().removeDependency(select_table_id, storage_id);
+
+    DatabaseCatalog::instance().removeDependency(target_table_id, storage_id);
 }
 
 void StorageMaterializedView::executeSelectPipeline()
@@ -300,11 +303,6 @@ void StorageMaterializedView::read(
 
 void StorageMaterializedView::drop()
 {
-    auto table_id = getStorageID();
-    const auto & select_query = getInMemoryMetadataPtr()->getSelectQuery();
-    for (const auto & select_table_id : select_query.select_table_ids)
-        DatabaseCatalog::instance().removeDependency(select_table_id, table_id);
-
     dropInnerTableIfAny(true, getContext());
 }
 
@@ -318,20 +316,6 @@ void StorageMaterializedView::alter(const AlterCommands & commands, ContextPtr c
 {
     getTargetTable()->alter(commands, context_, alter_lock_holder);
     updateStorageSettings();
-}
-
-void StorageMaterializedView::checkTableCanBeRenamed() const
-{
-    auto dependencies = DatabaseCatalog::instance().getDependencies(getStorageID());
-    if (!dependencies.empty())
-    {
-        WriteBufferFromOwnString ss;
-        ss << dependencies.begin()->getFullTableName();
-        for (auto iter = dependencies.begin() + 1; iter != dependencies.end(); ++iter)
-            ss << ", " << iter->getFullTableName();
-
-        throw Exception("Cannot rename, there are some dependencies: " + ss.str(), ErrorCodes::NOT_IMPLEMENTED);
-    }
 }
 
 void StorageMaterializedView::checkAlterIsPossible(const AlterCommands & commands, ContextPtr ctx) const

@@ -3139,7 +3139,7 @@ def drop_if_exist_py(client, type, table_name):
             if str.upper(type) == "VIEW":
                 sql_2_run = f"drop view if exists {table_name}"
             elif str.upper(type) == "STREAM":
-                sql_2_run = f"drop stream if exists {table_name}"
+                sql_2_run = f"drop stream if exists {table_name} settings enable_dependency_check = false"
             res_drop = client.execute(sql_2_run)
             logger.debug(f"drop {type} {table_name} is executed, res_drop = {res_drop}")
             retry = 100
@@ -3357,32 +3357,33 @@ def reset_tables_of_test_inputs(client, config, table_schemas, test_case):
                         logger.debug(
                             f"proton_setting = {proton_setting},test_suite_name = {test_suite_name}, proton_server_container_name = {proton_server_container_name},  drop stream and re-create once case starts, table_ddl_url = {table_ddl_url}, table = {table}"
                         )                        
-                        drop_table_if_exist_rest(table_ddl_url, table)
-                        # if table_exist(table_ddl_url, table):
-                        #     res = client.execute(f"drop stream if exists {table}")
-                        #     logger.debug(f"drop stream if exists {table} res = {res}")
-                        #     drop_start_time = datetime.datetime.now()
-                        #     logger.info(
-                        #         f"drop stream if exists {table} is called successfully"
-                        #     )
-                        #     check_count = 100
-                        #     check_interval = 1
-                        #     time.sleep(check_interval)
-                        #     while table_exist(table_ddl_url, table) and check_count > 0:
-                        #         time.sleep(check_interval)
-                        #         check_count -= 1
+                        #drop_table_if_exist_rest(table_ddl_url, table)
+                        if table_exist(table_ddl_url, table):
+                            drop_if_exist_py(client, 'stream', table)
+                            # res = client.execute(f"drop stream if exists {table} settings enable_dependency_check = false")
+                            # logger.debug(f"drop stream if exists {table} res = {res}")
+                            # drop_start_time = datetime.datetime.now()
+                            # logger.info(
+                            #     f"drop stream if exists {table} is called successfully"
+                            # )
+                            # check_count = 100
+                            # check_interval = 1
+                            # time.sleep(check_interval)
+                            # while table_exist(table_ddl_url, table) and check_count > 0:
+                            #     time.sleep(check_interval)
+                            #     check_count -= 1
                             
-                        #     if check_count <= 0:
-                        #         logger.info(f"raise DROP_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")
-                        #         raise Exception(f"DROP_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")                              
-                        #     drop_complete_time = datetime.datetime.now()
-                        #     time_spent = drop_complete_time - drop_start_time
-                        #     time_spent_ms = time_spent.total_seconds() * 1000
-                        #     global TABLE_DROP_RECORDS
-                        #     TABLE_DROP_RECORDS.append(
-                        #         {"table_name": {table}, "time_spent": time_spent_ms}
-                        #     )
-                        #     logger.info(f"table {table} is dropped, {time_spent_ms} spent.")
+                            # if check_count <= 0:
+                            #     logger.info(f"raise DROP_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")
+                            #     raise Exception(f"DROP_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, check_count = {check_count}, check_interval = {check_interval} hit")                              
+                            # drop_complete_time = datetime.datetime.now()
+                            # time_spent = drop_complete_time - drop_start_time
+                            # time_spent_ms = time_spent.total_seconds() * 1000
+                            # global TABLE_DROP_RECORDS
+                            # TABLE_DROP_RECORDS.append(
+                            #     {"table_name": {table}, "time_spent": time_spent_ms}
+                            # )
+                            # logger.info(f"table {table} is dropped, {time_spent_ms} spent.")
                                                
 
                         if table_schemas != None:
@@ -3390,7 +3391,7 @@ def reset_tables_of_test_inputs(client, config, table_schemas, test_case):
                                 name = table_schema.get("name")
                                 tables_recreated.append(name)                                
                                 if name == table and table_exist(table_ddl_url, table):
-                                    drop_table_if_exist_rest(table_ddl_url, table)
+                                    #drop_table_if_exist_rest(table_ddl_url, table)
                                     create_table_rest(config, table_schema)
                                     tables_recreated.append(name)
 
@@ -4083,6 +4084,8 @@ def test_suite_run(
                         test_suite_result = {"test_suite_result": "success", "detailed_summary":{**test_suite_result_running_summary, **{"test_case_results":test_case_run_summary_list}}}
                     else:
                         test_suite_result = {"test_suite_result": "failed", "detailed_summary":{**test_suite_result_running_summary, **{"test_case_results":test_case_run_summary_list}}}
+                    event_type = 'test_suite_event'
+                    event_detailed_type = 'status'                    
                     event_details = 'end'
                     test_suite_event_end = Event.create(event_type, event_detailed_type, event_details, **test_suite_result)
 
@@ -4173,7 +4176,9 @@ def case_result_check(test_set, order_check=False, logging_level="INFO"):
 
         # if result == "aborted":
         #     test_set["statements_results_designed"] = "aborted"
-        # test_set["statements_results_designed"] = statements_results_designed
+        statements_results_designed_of_test_set = test_set.get("statements_results_designed")
+        if statements_results_designed_of_test_set is None:
+            test_set["statements_results_designed"] = statements_results_designed
 
         #logging.info(f'\n proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, statements_results_designated = {statements_results_designed}')    
 

@@ -14,6 +14,10 @@
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Storages/AlterCommands.h>
 
+/// proton: starts.
+#include <Parsers/ASTSelectWithUnionQuery.h>
+#include <ranges>
+/// proton: ends.
 
 namespace DB
 {
@@ -22,6 +26,9 @@ namespace ErrorCodes
     extern const int STREAM_IS_DROPPED;
     extern const int NOT_IMPLEMENTED;
     extern const int DEADLOCK_AVOIDED;
+    /// proton: starts.
+    extern const int HAVE_DEPENDENT_OBJECTS;
+    /// proton: ends.
 }
 
 bool IStorage::isVirtualColumn(const String & column_name, const StorageMetadataPtr & metadata_snapshot) const
@@ -224,10 +231,16 @@ NameDependencies IStorage::getDependentViewsByColumn(ContextPtr context) const
         auto depend_table = DatabaseCatalog::instance().getTable(depend_id, context);
         if (depend_table->getInMemoryMetadataPtr()->select.inner_query)
         {
-            const auto & select_query = depend_table->getInMemoryMetadataPtr()->select.inner_query;
-            auto required_columns = InterpreterSelectQuery(select_query, context, SelectQueryOptions{}.noModify()).getRequiredColumns();
-            for (const auto & col_name : required_columns)
-                name_deps[col_name].push_back(depend_id.table_name);
+            /// proton: starts. MV supported union query for now
+            /// FIXME: Need to check membership of required columns
+            const auto & select_with_union_query = depend_table->getInMemoryMetadataPtr()->select.inner_query;
+            for (const auto & select_query : select_with_union_query->as<ASTSelectWithUnionQuery&>().list_of_selects->children)
+            {
+                auto required_columns = InterpreterSelectQuery(select_query, context, SelectQueryOptions{}.noModify()).getRequiredColumns();
+                for (const auto & col_name : required_columns)
+                    name_deps[col_name].push_back(depend_id.table_name);
+            }
+            /// proton: ends.
         }
     }
     return name_deps;
@@ -289,5 +302,39 @@ std::string FilterDAGInfo::dump() const
 
     return ss.str();
 }
+
+/// proton: starts.
+void IStorage::checkTableCanBeDropped(ContextPtr context) const
+{
+    if (context->getSettingsRef().enable_dependency_check.value)
+    {
+        if (const auto & dependencies = DatabaseCatalog::instance().getDependencies(getStorageID()); !dependencies.empty())
+        {
+            const auto & dependencies_views = dependencies | std::views::transform([](const auto & elem) { return elem.getNameForLogs(); });
+            throw Exception(
+                ErrorCodes::HAVE_DEPENDENT_OBJECTS,
+                "Cannot drop '{}', because some views depend on it: {}",
+                getStorageID().getNameForLogs(),
+                fmt::join(dependencies_views, ", "));
+        }
+    }
+}
+
+void IStorage::checkTableCanBeRenamed(ContextPtr context) const
+{
+    if (context->getSettingsRef().enable_dependency_check.value)
+    {
+        if (const auto & dependencies = DatabaseCatalog::instance().getDependencies(getStorageID()); !dependencies.empty())
+        {
+            const auto & dependencies_views = dependencies | std::views::transform([](const auto & elem) { return elem.getNameForLogs(); });
+            throw Exception(
+                ErrorCodes::HAVE_DEPENDENT_OBJECTS,
+                "Cannot rename '{}', because some views depend on it: {}",
+                getStorageID().getNameForLogs(),
+                fmt::join(dependencies_views, ", "));
+        }
+    }
+}
+/// proton: ends.
 
 }

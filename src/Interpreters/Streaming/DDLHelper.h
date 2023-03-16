@@ -35,5 +35,7 @@ String getJSONFromSystemQuery(const ASTSystemQuery & system);
 
 void waitForDDLOps(
     Poco::Logger * log, const ContextMutablePtr & ctx, bool force_sync, UInt64 timeout = ProtonConsts::DEFAULT_DDL_TIMEOUT_MS);
+
+int extractErrorCodeFromMsg(const String & err_msg);
 }
 }

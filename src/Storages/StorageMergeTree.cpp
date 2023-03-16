@@ -311,8 +311,12 @@ StorageMergeTree::write(const ASTPtr & /*query*/, const StorageMetadataPtr & met
         *this, metadata_snapshot, settings.max_partitions_per_insert_block, local_context);
 }
 
-void StorageMergeTree::checkTableCanBeDropped() const
+/// proton: starts. Add views dependencies check
+void StorageMergeTree::checkTableCanBeDropped(ContextPtr context) const
 {
+    IStorage::checkTableCanBeDropped(context);
+/// proton: ends.
+
     auto table_id = getStorageID();
     getContext()->checkTableCanBeDropped(table_id.database_name, table_id.table_name, getTotalActiveSizeInBytes());
 }

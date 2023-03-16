@@ -44,6 +44,9 @@ public:
     bool supportsDynamicSubcolumns() const override { return true; }
     StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const override;
 
+    void startup() override;
+    void shutdown() override;
+
 private:
     ContextMutablePtr local_context;
     /// proton: ends.

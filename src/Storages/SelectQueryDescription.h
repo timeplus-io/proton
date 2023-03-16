@@ -16,7 +16,9 @@ struct SelectQueryDescription
 
     /// Parse description from select query for materialized view. Also
     /// validates query.
-    static SelectQueryDescription getSelectQueryFromASTForMatView(const ASTPtr & select, ContextPtr context);
+    /// proton: starts. Rename to `getSelectQueryFromASTForView`
+    static SelectQueryDescription getSelectQueryFromASTForView(const ASTPtr & select, ContextPtr context);
+    /// proton: ends.
 
     SelectQueryDescription() = default;
     SelectQueryDescription(const SelectQueryDescription & other);

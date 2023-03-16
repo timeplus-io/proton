@@ -302,10 +302,14 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
             {
                 /// If DROP DICTIONARY query is not used, check if Dictionary can be dropped with DROP TABLE query
                 if (!query.is_dictionary)
-                    table->checkTableCanBeDetached();
+                    /// proton: starts.
+                    table->checkTableCanBeDetached(context_);
+                    /// proton: ends.
             }
             else
-                table->checkTableCanBeDetached();
+                /// proton: starts.
+                table->checkTableCanBeDetached(context_);
+                /// proton: ends.
 
             table->flushAndShutdown();
             TableExclusiveLockHolder table_lock;
@@ -338,7 +342,9 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
                 throw Exception(ErrorCodes::STREAM_IS_READ_ONLY, "Stream is read-only");
                 /// proton: ends
 
-            table->checkTableCanBeDropped();
+            /// proton: starts.
+            table->checkTableCanBeDropped(context_);
+            /// proton: ends.
 
             auto table_lock = table->lockExclusively(context_->getCurrentQueryId(), context_->getSettingsRef().lock_acquire_timeout);
             auto metadata_snapshot = table->getInMemoryMetadataPtr();
@@ -353,10 +359,14 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
             {
                 /// If DROP DICTIONARY query is not used, check if Dictionary can be dropped with DROP TABLE query
                 if (!query.is_dictionary)
-                    table->checkTableCanBeDropped();
+                    /// proton: starts.
+                    table->checkTableCanBeDropped(context_);
+                    /// proton: ends.
             }
             else
-                table->checkTableCanBeDropped();
+                /// proton: starts.
+                table->checkTableCanBeDropped(context_);
+                /// proton: ends.
 
             table->flushAndShutdown();
 

@@ -223,14 +223,16 @@ void DatabaseAtomic::renameTable(ContextPtr local_context, const String & table_
     if (dictionary && !table->isDictionary())
         throw Exception(ErrorCodes::INCORRECT_QUERY, "Use RENAME/EXCHANGE TABLE (instead of RENAME/EXCHANGE DICTIONARY) for tables");
 
-    table->checkTableCanBeRenamed();
+    /// proton: starts.
+    table->checkTableCanBeRenamed(local_context);
+    /// proton: ends.
     StoragePtr other_table;
     if (exchange)
     {
         other_table = other_db.getTableUnlocked(to_table_name, other_db_lock);
         if (dictionary && !other_table->isDictionary())
             throw Exception(ErrorCodes::INCORRECT_QUERY, "Use RENAME/EXCHANGE TABLE (instead of RENAME/EXCHANGE DICTIONARY) for tables");
-        other_table->checkTableCanBeRenamed();
+        other_table->checkTableCanBeRenamed(local_context);
     }
 
     /// NOTE: replica will be lost if server crashes before the following rename

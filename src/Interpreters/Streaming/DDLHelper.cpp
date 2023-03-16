@@ -670,7 +670,7 @@ void waitForDDLOps(Poco::Logger * log, const ContextMutablePtr & ctx, bool force
             if (task_status->status == TaskStatusService::TaskStatus::SUCCEEDED)
                 break;
             else if (task_status->status == TaskStatusService::TaskStatus::FAILED)
-                throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Fail to do DDL. reason: {}", task_status->reason);
+                throw Exception(extractErrorCodeFromMsg(task_status->reason), "Fail to do DDL. reason: {}", task_status->reason);
         }
 
         if (wait_time > timeout)
@@ -684,5 +684,14 @@ void waitForDDLOps(Poco::Logger * log, const ContextMutablePtr & ctx, bool force
     }
 }
 
+int extractErrorCodeFromMsg(const String & err_msg)
+{
+    if (auto pos = err_msg.find("Code: "); pos != String::npos)
+        return std::atoi(err_msg.c_str() + pos + 6);
+    else if(auto pos = err_msg.find("code:"); pos != String::npos)
+        return std::atoi(err_msg.c_str() + pos + 5);
+    else
+        return 0;
+}
 }
 }

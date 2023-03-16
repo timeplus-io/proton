@@ -21,8 +21,8 @@ public:
 
     ~StorageDictionary() override;
 
-    void checkTableCanBeDropped() const override;
-    void checkTableCanBeDetached() const override;
+    void checkTableCanBeDropped(ContextPtr context) const override;
+    void checkTableCanBeDetached(ContextPtr context) const override;
 
     Pipe read(
         const Names & column_names,

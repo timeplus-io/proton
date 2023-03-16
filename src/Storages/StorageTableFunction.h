@@ -155,7 +155,7 @@ public:
     }
 
     bool isView() const override { return false; }
-    void checkTableCanBeDropped() const override {}
+    void checkTableCanBeDropped(ContextPtr) const override {}
 
 private:
     mutable std::mutex nested_mutex;

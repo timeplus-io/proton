@@ -96,7 +96,7 @@ public:
 
     void alter(const AlterCommands & commands, ContextPtr context, AlterLockHolder & alter_lock_holder) override;
 
-    void checkTableCanBeDropped() const override;
+    void checkTableCanBeDropped(ContextPtr context) const override;
 
     ActionLock getActionLock(StorageActionBlockType action_type) override;
 

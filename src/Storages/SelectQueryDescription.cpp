@@ -11,6 +11,7 @@
 #include <Interpreters/ApplyWithAliasVisitor.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
 #include <Interpreters/Streaming/WindowCommon.h>
+#include <TableFunctions/TableFunctionFactory.h>
 /// proton: ends.
 
 namespace DB
@@ -63,6 +64,8 @@ ASTSelectWithUnionQuery * tryGetSubquery(const ASTPtr ast)
 }
 
 /// proton: starts. For streaming materialized view, we don't need to limit the number of selects anymore
+void extractFromTableFunction(const ASTFunction & ast_func, std::vector<StorageID> & storage_ids, ContextPtr context);
+
 void extractDependentTableFromSelectQuery(
     std::vector<StorageID> & storage_ids, ASTSelectWithUnionQuery & select_query, ContextPtr context, bool add_default_db = true)
 {
@@ -78,35 +81,37 @@ void extractDependentTableFromSelectQuery(
         {
             /// stream name
             if (auto storage_id_opt = tryGetStorageID(table_expression->database_and_table_name))
-            {
                 storage_ids.emplace_back(*storage_id_opt);
-            }
             /// <window_func>(<stream_name>|<cte_subquery>, ...)
             else if (table_expression->table_function)
-            {
-                auto * ast_func = table_expression->table_function->as<ASTFunction>();
-                assert(ast_func && ast_func->arguments);
-                if (auto storage_id_opt = tryGetStorageID(ast_func->arguments->children.at(0)))
-                    storage_ids.emplace_back(*storage_id_opt); /// <stream_name>
-                else if (auto * subquery = tryGetSubquery(ast_func->arguments->children.at(0)))
-                    extractDependentTableFromSelectQuery(storage_ids, *subquery, context, false); /// <cte_subquery>
-                else
-                    throw Exception(
-                        ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW,
-                        "'{}' is not supported for MATERIALIZED VIEW",
-                        ast_func->getAliasOrColumnName());
-            }
+                extractFromTableFunction(table_expression->table_function->as<ASTFunction &>(), storage_ids, context);
             /// (subquery)
             else if (auto * subquery = tryGetSubquery(table_expression->subquery))
-            {
                 extractDependentTableFromSelectQuery(storage_ids, *subquery, context, false);
-            }
             else
                 throw Exception(
-                    "Logical error while creating MATERIALIZED VIEW. Could not retrieve stream name from select query",
+                    "Logical error while creating VIEW or MATERIALIZED VIEW. Could not retrieve stream name from select query",
                     DB::ErrorCodes::LOGICAL_ERROR);
         }
     }
+}
+
+void extractFromTableFunction(const ASTFunction & ast_func, std::vector<StorageID> & storage_ids, ContextPtr context)
+{
+    assert(ast_func.arguments);
+    const auto & table_arg = ast_func.arguments->children.at(0);
+    if (auto storage_id_opt = tryGetStorageID(table_arg))
+        storage_ids.emplace_back(*storage_id_opt); /// <stream_name>
+    else if (auto * subquery = tryGetSubquery(table_arg))
+        extractDependentTableFromSelectQuery(storage_ids, *subquery, context, false); /// <cte_subquery>
+    else if (auto * nested_func = table_arg->as<ASTFunction>();
+             nested_func && TableFunctionFactory::instance().isTableFunctionName(nested_func->name))
+        extractFromTableFunction(*nested_func, storage_ids, context); /// <nested_table_function>
+    else
+        throw Exception(
+            ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW,
+            "'{}' is not supported while creating VIEW or MATERIALIZED VIEW",
+            ast_func.getAliasOrColumnName());
 }
 
 void checkAllowedQueries(const ASTSelectWithUnionQuery & select_query)
@@ -127,7 +132,8 @@ void checkAllowedQueries(const ASTSelectWithUnionQuery & select_query)
 
 }
 
-SelectQueryDescription SelectQueryDescription::getSelectQueryFromASTForMatView(const ASTPtr & select, ContextPtr context)
+/// Rename to `getSelectQueryFromASTForView`
+SelectQueryDescription SelectQueryDescription::getSelectQueryFromASTForView(const ASTPtr & select, ContextPtr context)
 {
     SelectQueryDescription result;
     result.inner_query = select->clone();

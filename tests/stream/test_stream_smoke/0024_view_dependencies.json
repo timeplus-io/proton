@@ -1,0 +1,114 @@
+{
+    "test_suite_name": "view_dependencies",
+    "comments":
+        "Test suite covering the view/materialized view dependencies check smoke cases.",
+    "test_suite_config": {
+        "setup": {
+            "statements": [
+              {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists stream0024"},
+              {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists stream0024(i int)"}
+            ]
+        },
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug"]}}
+    },
+    "tests": [
+        {
+            "id": 0,
+            "tags": ["view_dependencies"],
+            "name": "view_denpendencies_with_stream",
+            "description": "create a view or materialized view with source stream, then try drop/rename source stream",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop view if exists view_with_source_stream"},
+                    {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_source_stream1"},
+                    {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_source_stream2"},
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists target_stream0024"},
+                    {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists target_stream0024(i int)"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "stream0024", "wait":2, "query":"create view view_with_source_stream as select * from stream0024"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "stream0024", "wait":2, "query_id":"2500", "query": "drop stream stream0024"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "stream0024", "query_id":"2501", "query": "rename stream stream0024 to tmp"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "view_with_source_stream", "query": "drop view view_with_source_stream"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "stream0024", "wait":2, "query":"create materialized view mv_with_source_stream1 as select * from stream0024"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "stream0024", "wait":2, "query_id":"2502", "query": "drop stream stream0024"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "stream0024", "query_id":"2503", "query": "rename stream stream0024 to tmp"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "mv_with_source_stream1", "query": "drop view mv_with_source_stream1"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "stream0024,target_stream0024", "wait":2, "query":"create materialized view mv_with_source_stream2 into target_stream0024 as select * from stream0024"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "stream0024", "wait":2, "query_id":"2504", "query": "drop stream stream0024"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "stream0024", "query_id":"2505", "query": "rename stream stream0024 to tmp"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "target_stream0024", "query_id":"2506", "query": "drop stream target_stream0024"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "target_stream0024", "query_id":"2507", "query": "rename stream target_stream0024 to tmp"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "mv_with_source_stream2", "query": "drop view mv_with_source_stream2"}
+                  ]
+                }
+            ],
+            "expected_results": [
+                {"query_id":"2500", "expected_results":"error_code:630"},
+                {"query_id":"2501", "expected_results":"error_code:630"},
+                {"query_id":"2502", "expected_results":"error_code:630"},
+                {"query_id":"2503", "expected_results":"error_code:630"},
+                {"query_id":"2504", "expected_results":"error_code:630"},
+                {"query_id":"2505", "expected_results":"error_code:630"},
+                {"query_id":"2506", "expected_results":"error_code:630"},
+                {"query_id":"2507", "expected_results":"error_code:630"}
+            ]
+        },
+        {
+            "id": 1,
+            "tags": ["view_dependencies"],
+            "name": "view_denpendencies_with_view",
+            "description": "create a view or materialized view with source view, then try drop/rename source view",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop view if exists source_view"},
+                    {"client":"python", "query_type": "table", "query":"drop view if exists view_with_source_view"},
+                    {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_source_view"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "stream0024", "wait":2,"query":"create view source_view as select * from stream0024"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "source_view", "wait":2, "query":"create view view_with_source_view as select * from source_view"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "source_view", "wait":2, "query_id":"2500", "query": "drop stream source_view"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "source_view", "query_id":"2501", "query": "rename stream source_view to tmp"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "view_with_source_view", "query": "drop view view_with_source_view"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "source_view", "wait":2, "query":"create materialized view mv_with_source_view as select * from source_view"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "source_view", "wait":2, "query_id":"2502", "query": "drop stream source_view"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "source_view", "query_id":"2503", "query": "rename stream source_view to tmp"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "mv_with_source_view", "query": "drop view mv_with_source_view"}
+                  ]
+                }
+            ],
+            "expected_results": [
+                {"query_id":"2500", "expected_results":"error_code:630"},
+                {"query_id":"2501", "expected_results":"error_code:630"},
+                {"query_id":"2502", "expected_results":"error_code:630"},
+                {"query_id":"2503", "expected_results":"error_code:630"}
+            ]
+        },
+        {
+            "id": 2,
+            "tags": ["view_dependencies"],
+            "name": "view_denpendencies_with_mv",
+            "description": "create a view or materialized view with source mv, then try drop/rename source mv",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop view if exists source_mv"},
+                    {"client":"python", "query_type": "table", "query":"drop view if exists view_with_source_mv"},
+                    {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_source_mv"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "stream0024", "wait":2,"query":"create view source_mv as select * from stream0024"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "source_mv", "wait":2, "query":"create view view_with_source_mv as select * from source_mv"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "source_mv", "wait":2, "query_id":"2500", "query": "drop stream source_mv"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "source_mv", "query_id":"2501", "query": "rename stream source_mv to tmp"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "view_with_source_mv", "query": "drop view view_with_source_mv"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "source_mv", "wait":2, "query":"create materialized view mv_with_source_mv as select * from source_mv"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "source_mv", "wait":2, "query_id":"2502", "query": "drop stream source_mv"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "source_mv", "query_id":"2503", "query": "rename stream source_mv to tmp"},
+                    {"client":"python", "query_type": "table", "depends_on_stream": "mv_with_source_mv", "query": "drop view mv_with_source_mv"}
+                  ]
+                }
+            ],
+            "expected_results": [
+                {"query_id":"2500", "expected_results":"error_code:630"},
+                {"query_id":"2501", "expected_results":"error_code:630"},
+                {"query_id":"2502", "expected_results":"error_code:630"},
+                {"query_id":"2503", "expected_results":"error_code:630"}
+            ]
+        }
+    ]
+}

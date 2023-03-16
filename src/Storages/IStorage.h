@@ -426,7 +426,9 @@ public:
         throw Exception("Truncate is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    virtual void checkTableCanBeRenamed() const {}
+    /// proton: starts. Add views dependencies check by default
+    virtual void checkTableCanBeRenamed(ContextPtr context) const;
+    /// proton: ends.
 
     /** Rename the table.
       * Renaming a name in a file with metadata, the name in the list of tables in the RAM, is done separately.
@@ -574,9 +576,14 @@ public:
     /// Checks that table could be dropped right now
     /// Otherwise - throws an exception with detailed information.
     /// We do not use mutex because it is not very important that the size could change during the operation.
-    virtual void checkTableCanBeDropped() const {}
+    /// proton: starts. Add views dependencies check by default
+    virtual void checkTableCanBeDropped(ContextPtr context) const;
+    /// proton: ends.
+
     /// Similar to above but checks for DETACH. It's only used for DICTIONARIES.
-    virtual void checkTableCanBeDetached() const {}
+    /// proton: starts.
+    virtual void checkTableCanBeDetached(ContextPtr) const {}
+    /// proton: ends.
 
     /// Returns true if Storage may store some data on disk.
     /// NOTE: may not be equivalent to !getDataPaths().empty()

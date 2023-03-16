@@ -144,8 +144,11 @@ StorageDictionary::~StorageDictionary()
     removeDictionaryConfigurationFromRepository();
 }
 
-void StorageDictionary::checkTableCanBeDropped() const
+/// proton: starts. Add views dependencies check
+void StorageDictionary::checkTableCanBeDropped(ContextPtr context) const
 {
+    IStorage::checkTableCanBeDropped(context);
+
     if (location == Location::SameDatabaseAndNameAsDictionary)
         throw Exception(ErrorCodes::CANNOT_DETACH_DICTIONARY_AS_STREAM,
             "Cannot drop/detach dictionary {} as stream, use DROP DICTIONARY or DETACH DICTIONARY query instead",
@@ -158,10 +161,11 @@ void StorageDictionary::checkTableCanBeDropped() const
         /// proton: ends
 }
 
-void StorageDictionary::checkTableCanBeDetached() const
+void StorageDictionary::checkTableCanBeDetached(ContextPtr context) const
 {
-    checkTableCanBeDropped();
+    checkTableCanBeDropped(context);
 }
+/// proton: ends.
 
 Pipe StorageDictionary::read(
     const Names & column_names,

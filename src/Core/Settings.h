@@ -765,9 +765,8 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(Int64, async_ingest_block_timeout_ms, 120000, "Max duration for a block to commit before it is considered expired during async ingestion", 0) \
     M(UInt64, aysnc_ingest_max_outstanding_blocks, 10000, "Max outstanding blocks to be committed during async ingestion", 0) \
     M(Bool, _tp_internal_system_open_sesame, false, "Control the access to system.* streams", 0) \
-    /** proton: starts */                                    \
     M(UInt64, javascript_max_memory_bytes, 100 * 1024 * 1024, "Maximum heap size of javascript UDA/UDF in bytes", 0) \
-    /** proton: ends. */
+    M(Bool, enable_dependency_check, true, "Enable the dependency check of view/materialized view", 0) \
 // End of CONFIGURABLE_GLOBAL_SETTINGS
 
 #define LIST_OF_SETTINGS(M)    \
