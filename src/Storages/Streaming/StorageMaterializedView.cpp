@@ -500,7 +500,7 @@ void StorageMaterializedView::buildBackgroundPipeline()
         target_header = metadata_snapshot->getSampleBlock();
 
         /// When inserted columns don't contains `_tp_time`, we will skip it, which will be filled by default
-        if (!source_header.has(ProtonConsts::RESERVED_EVENT_TIME))
+        if (!source_header.has(ProtonConsts::RESERVED_EVENT_TIME) && target_header.has(ProtonConsts::RESERVED_EVENT_TIME))
             target_header.erase(ProtonConsts::RESERVED_EVENT_TIME);
     }
 
