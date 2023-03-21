@@ -1170,6 +1170,11 @@ def input_client(
     # table_name = source.get("table_name")
     result_keep = source.get("result_keep")
     loop_times = int(source.get("loop_times"))
+    wait = source.get("wait")
+    if wait is not None:
+        logger.debug(f"wait for {wait} seconds and then start the input.")
+        time.sleep(int(wait))
+        
 
     start_from = source.get("$start_from")
     if start_from is None:
