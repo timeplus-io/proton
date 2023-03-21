@@ -367,6 +367,9 @@ void StorageMaterializedView::checkValid() const
             getExceptionErrorCode(background_status.exception),
             "Bad MaterializedView, please drop it or try recovery by restart server. background exception: {}",
             getExceptionMessage(background_status.exception, false));
+
+    if (!background_thread.joinable())
+        throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Background resources are initializing");
 }
 
 NamesAndTypesList StorageMaterializedView::getVirtuals() const

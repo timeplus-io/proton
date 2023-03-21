@@ -317,6 +317,8 @@ private:
 
     void updateLogStoreCodec(const String & settings_codec);
 
+    void checkReady() const;
+
 private:
     Int32 replication_factor;
     Int32 shards;

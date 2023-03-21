@@ -51,6 +51,7 @@ extern const int RECEIVED_ERROR_TOO_MANY_REQUESTS;
 extern const int UNKNOWN_EXCEPTION;
 extern const int INTERNAL_ERROR;
 extern const int UNSUPPORTED_PARAMETER;
+extern const int RESOURCE_NOT_INITED;
 }
 
 namespace ActionLocks
@@ -630,6 +631,8 @@ void StorageStream::read(
     size_t max_block_size,
     size_t num_streams)
 {
+    checkReady();
+
     auto shards_to_read = getRequiredShardsToRead(context_, query_info);
 
     /// [DISTIRBUTED] This is a distributed query
@@ -944,6 +947,8 @@ std::optional<UInt64> StorageStream::totalBytes(const Settings & settings) const
 
 SinkToStoragePtr StorageStream::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_)
 {
+    checkReady();
+
     /// check if exceed the total storage quota if will interrupt any running INSERT query
     DiskUtilChecker::instance(context_).check();
     return std::make_shared<StreamSink>(*this, metadata_snapshot, context_);
@@ -1698,4 +1703,9 @@ void StorageStream::updateLogStoreCodec(const String & settings_codec)
         logstore_codec = CompressionMethodByte::NONE;
 }
 
+void StorageStream::checkReady() const
+{
+    if (!isReady())
+        throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Background resources are initializing");
+}
 }
