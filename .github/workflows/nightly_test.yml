@@ -57,6 +57,15 @@ jobs:
 
             export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
             env
+
+            # make virtualenv
+            ln -s /usr/bin/python3 /usr/bin/python
+            apt-get update
+            apt install python3-venv -y
+            python -m venv env
+            source env/bin/activate
+
+            pip install -r helpers/requirements.txt
             pip3 install -r helpers/requirements.txt
             python3 ci_runner.py --debug --settings=redp,nativelog
 
@@ -103,6 +112,15 @@ jobs:
 
             export PROTON_VERSION=testing-$ARCH-$GITHUB_SHA
             env
+
+            # make virtualenv
+            ln -s /usr/bin/python3 /usr/bin/python
+            apt-get update
+            apt install python3-venv -y
+            python -m venv env
+            source env/bin/activate
+
+            pip install -r helpers/requirements.txt
             pip3 install -r helpers/requirements.txt
             python3 ci_runner.py --debug --settings=redp,nativelog
 

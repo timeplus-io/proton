@@ -30,8 +30,16 @@ jobs:
         export PROTON_VERSION=$TAG
         env
 
+        # make virtualenv
+        ln -s /usr/bin/python3 /usr/bin/python
+        apt search python3-venv
+        apt-get update
+        apt install python3-venv -y
+        python -m venv env
+        source env/bin/activate
+
+        pip install -r helpers/requirements.txt
         pip3 install -r helpers/requirements.txt
-        pip3 list
         python3 ci_runner.py --debug --settings=redp,nativelog
 
         echo "check test result"
