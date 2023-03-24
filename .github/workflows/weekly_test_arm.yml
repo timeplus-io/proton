@@ -1,54 +1,49 @@
 # FIXME: merge this workflow into weekly_test
-name: WeeklyTestARM
+name: debug_workflow
 
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
-  schedule:
-    # build at 00:30(UTC) on every Sunday
-    - cron:  '30 1 * * SUN'
+    inputs:
+      max_minutes:
+        description: 'After $max_minutes debug environment will be terminate. Or you can run `touch /finish` to terminate the env'
+        required: true
+        default: '60'
+      arch:
+        description: 'Hardware architecture'
+        required: true
+        default: x64
+        type: choice
+        options:
+        - x64
+        - arm
+
 
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    outputs:
-      command: |
-            cd $GITHUB_WORKSPACE
-            git config user.name "proton-robot"
-            git config user.email "proton_robot@timeplus.io"
-            mkdir $GITHUB_WORKSPACE/ccache
-            echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
-            ./docker/packager/packager --package-type binary --docker-image-version aarch64-clang-15 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
-            docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
-            cd $GITHUB_WORKSPACE/docker/server
-            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:testing-$SANITIZER-$GITHUB_SHA
-            docker push timeplus/proton:testing-$SANITIZER-$GITHUB_SHA
-            cd $GITHUB_WORKSPACE/tests/stream
-
-            tar -zcf ./cache-arm${SANITIZER:+_}$SANITIZER.tar.gz -C $GITHUB_WORKSPACE/ccache .
-            aws s3 cp --no-progress ./cache-arm${SANITIZER:+_}$SANITIZER.tar.gz s3://tp-internal/proton/
-
-            export PROTON_VERSION=testing-$SANITIZER-$GITHUB_SHA
-            env
-            pip3 install -r helpers/requirements.txt
-            python3 ci_runner.py --debug --settings=redp,nativelog
-
-            cat $GITHUB_WORKSPACE/tests/stream/.status
-            cat $GITHUB_WORKSPACE/tests/stream/.status | grep nativelog:ExitCode.OK | grep redp:ExitCode.OK
-    steps:
-      - name: display command
-        run: |
-          echo 'command: ${{ steps.set_command.outputs.command }}'
-  test_address:
-    needs: prepare
+  debug_on_x64:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: github.event.inputs.arch == 'x64'
     with:
-      ec2-instance-type: c6g.4xlarge
-      ec2-image-id: ami-0f3dbc4cc9994fdee
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
       sanitizer: "address"
+      arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
       command: |
-        ${{ needs.prepare.outputs.command }}
+        counter=0
+        while [ $counter -lt ${{ github.event.inputs.max_minutes }} ]
+        do
+            if [ -e /finished ]
+            then
+                echo "/finished exists, will terminate debug environment."
+                ::exit::success
+            else
+                sleep 60
+                counter=$((counter+1))
+            fi
+        done
+        echo "timeout, will terminate debug environment"
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -60,83 +55,31 @@ jobs:
       TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
       TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
-  test_thread:
-    needs: prepare
+  debug_on_arm:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: github.event.inputs.arch == 'arm'
     with:
-      ec2-instance-type: c6g.4xlarge
-      ec2-image-id: ami-0f3dbc4cc9994fdee
+      ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.ARM_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
-      sanitizer: "thread"
+      sanitizer: "address"
+      arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
       command: |
-        ${{ needs.prepare.outputs.command }}
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
-      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
-  test_memory:
-    needs: prepare
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    with:
-      ec2-instance-type: c6g.4xlarge
-      ec2-image-id: ami-0f3dbc4cc9994fdee
-      submodules: 'recursive'
-      sanitizer: "memory"
-      tag: 'sanitizer'
-      command: |
-        ${{ needs.prepare.outputs.command }}
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
-      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
-  test_undefined:
-    needs: prepare
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    with:
-      ec2-instance-type: c6g.4xlarge
-      ec2-image-id: ami-0f3dbc4cc9994fdee
-      submodules: 'recursive'
-      sanitizer: "undefined"
-      tag: 'sanitizer'
-      command: |
-        ${{ needs.prepare.outputs.command }}
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
-      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
-  test_release:
-    needs: prepare
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    with:
-      ec2-instance-type: c6g.4xlarge
-      ec2-image-id: ami-0f3dbc4cc9994fdee
-      submodules: 'recursive'
-      sanitizer: ""
-      tag: 'release'
-      command: |
-        ${{ needs.prepare.outputs.command }}
+        counter=0
+        while [ $counter -lt ${{ github.event.inputs.max_minutes }} ]
+        do
+            if [ -e /finished ]
+            then
+                echo "/finished exists, will terminate debug environment."
+                exit 0
+            else
+                sleep 60
+                counter=$((counter+1))
+            fi
+        done
+        echo "timeout, will terminate debug environment"
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
