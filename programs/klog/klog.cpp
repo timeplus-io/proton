@@ -493,7 +493,7 @@ BenchmarkSettings parseArgs(int argc, char ** argv)
 
     po::options_description global = createOptionsDescription("Global options", getTerminalWidth());
     auto cmds = global.add_options();
-    cmds("command", value<String>()->default_value("help"), "<procuer|consume|topic> subcommand to execute");
+    cmds("command", value<String>()->default_value("help"), "<produce|consume|topic> subcommand to execute");
     cmds("subargs", value<vector<String>>(), "Arguments for subcommand");
 
     po::positional_options_description pos;

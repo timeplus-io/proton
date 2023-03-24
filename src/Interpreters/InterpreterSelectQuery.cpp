@@ -837,7 +837,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
                         required_columns.push_back(name);
             }
 
-            if (getDataStreamSemantic() == Streaming::DataStreamSemantic::Changelog)
+            if (isChangelog() && !analysis_result.force_internal_changelog_emit)
             {
                 if (std::find(required_columns.begin(), required_columns.end(), ProtonConsts::RESERVED_DELTA_FLAG) == required_columns.end())
                     required_columns.push_back(ProtonConsts::RESERVED_DELTA_FLAG);
@@ -3338,7 +3338,7 @@ Streaming::DataStreamSemantic InterpreterSelectQuery::getDataStreamSemantic() co
         else
         {
             if (storage->isChangelogKvMode())
-                 data_stream_semantic = Streaming::DataStreamSemantic::ChangeLogKV;
+                 data_stream_semantic = Streaming::DataStreamSemantic::ChangelogKV;
             else if (storage->isVersionedKvMode())
                 data_stream_semantic = Streaming::DataStreamSemantic::VersionedKV;
             else if (storage->isChangelogMode())
@@ -3842,7 +3842,7 @@ void InterpreterSelectQuery::checkUDA()
 
 bool InterpreterSelectQuery::isChangelog() const
 {
-    return getDataStreamSemantic() == Streaming::DataStreamSemantic::Changelog || analysis_result.force_internal_changelog_emit;
+    return getDataStreamSemantic() == Streaming::DataStreamSemantic::Changelog || getDataStreamSemantic() == Streaming::DataStreamSemantic::ChangelogKV || analysis_result.force_internal_changelog_emit;
 }
 /// proton: ends
 }

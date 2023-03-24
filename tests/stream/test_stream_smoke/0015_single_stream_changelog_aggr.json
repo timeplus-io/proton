@@ -6,7 +6,9 @@
     "setup": {
       "statements": [
         {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_stream_aggr"},
-        {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists changelog_stream_aggr(i int, s string) settings mode='changelog'"}
+        {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists changelog_stream_aggr(i int, s string) settings mode='changelog'"},
+        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_kv_stream_aggr"},
+        {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists changelog_kv_stream_aggr(i int, s string) primary key s settings mode='changelog_kv'"}
       ]
     },
     "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
@@ -31,6 +33,30 @@
       "expected_results": [
         {
           "query_id":"1600",
+          "expected_results":[
+            [3, 2, 6, 1, 3, "s1", "s3"], [2, 2.5, 5, 2, 3, "s2", "s3"], [1, 2, 2, 2, 2, "s2", "s2"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "tags": ["changelog_stream_aggr"],
+      "name": "single shard changelog kv stream aggr",
+      "description": "single shard changelog kv stream aggr query",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1601", "depends_on_stream":"changelog_kv_stream_aggr","query_end_timer":6, "query_type": "stream", "query":"select count(), avg(i), sum(i), min(i), max(i), min(s), max(s) from changelog_kv_stream_aggr emit periodic 1s"},
+            {"client":"python", "query_type": "table","depends_on":1601,"depends_on_stream":"changelog_kv_stream_aggr", "query": "insert into changelog_kv_stream_aggr(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
+            {"client":"python", "query_type": "table","depends_on":1601,"depends_on_stream":"changelog_kv_stream_aggr", "wait":1, "query": "insert into changelog_kv_stream_aggr(i, s, _tp_delta) values (1, 's1', -1)"},
+            {"client":"python", "query_type": "table","depends_on":1601,"depends_on_stream":"changelog_kv_stream_aggr", "wait":1, "query": "insert into changelog_kv_stream_aggr(i, s, _tp_delta) values (3, 's3', -1)"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1601",
           "expected_results":[
             [3, 2, 6, 1, 3, "s1", "s3"], [2, 2.5, 5, 2, 3, "s2", "s3"], [1, 2, 2, 2, 2, "s2", "s2"]
           ]

@@ -1997,7 +1997,7 @@ void HashJoin::checkJoinSemantic() const
               {{JoinStrictness::All, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
                {JoinStrictness::Asof, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
                {JoinStrictness::Any,
-                {{DataStreamSemantic::Append, false}, {DataStreamSemantic::ChangeLogKV, false}, {DataStreamSemantic::VersionedKV, false}}}},
+                {{DataStreamSemantic::Append, false}, {DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, false}}}},
           },
           {
               /// Append
@@ -2020,33 +2020,33 @@ void HashJoin::checkJoinSemantic() const
                {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
                {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
           }}},
-        {DataStreamSemantic::ChangeLogKV,
+        {DataStreamSemantic::ChangelogKV,
          {{
               JoinKind::Left,
-              {{JoinStrictness::All, {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::ChangeLogKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}}}},
           },
           {
               /// ChangelogKV
               JoinKind::Inner,
-              {{JoinStrictness::All, {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::ChangeLogKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}}}},
           },
           {
               /// ChangelogKV
               JoinKind::Right,
-              {{JoinStrictness::All, {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::ChangeLogKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}}}},
           },
           {
               /// ChangelogKV
               JoinKind::Full,
-              {{JoinStrictness::All, {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::ChangeLogKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::ChangeLogKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}}}},
           }}},
         {DataStreamSemantic::VersionedKV,
          {{

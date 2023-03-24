@@ -10,7 +10,7 @@ namespace Streaming
 enum class DataStreamSemantic
 {
     Append = 0,
-    ChangeLogKV = 1,
+    ChangelogKV = 1,
     VersionedKV = 2,
     Changelog = 3,
 };

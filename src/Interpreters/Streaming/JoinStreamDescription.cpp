@@ -12,7 +12,7 @@ DataStreamSemantic getDataStreamSemantic(StoragePtr storage)
     if (storage->isVersionedKvMode())
         return Streaming::DataStreamSemantic::VersionedKV;
     else if (storage->isChangelogKvMode())
-        return Streaming::DataStreamSemantic::ChangeLogKV;
+        return Streaming::DataStreamSemantic::ChangelogKV;
     else
         return Streaming::DataStreamSemantic::Append;
 
