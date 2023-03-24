@@ -8,8 +8,10 @@
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Parsers/ASTColumnDeclaration.h>
+#include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTIndexDeclaration.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ExpressionListParsers.h>
@@ -207,6 +209,7 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
     event_time_default.tryGet<String>(event_time_default_expr);
 
     bool has_event_time = false;
+    bool has_event_time_index = false;
     [[maybe_unused]] bool has_index_time = false;
     [[maybe_unused]] bool has_sequence_id = false;
     bool has_delta_flag = false;
@@ -291,6 +294,17 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
         }
     }
 
+    if (create.columns_list->indices)
+    {
+        for (const ASTPtr & column_index : create.columns_list->indices->children)
+        {
+            const auto & index = column_index->as<ASTIndexDeclaration &>();
+
+            if (ProtonConsts::RESERVED_EVENT_TIME_INDEX == index.name)
+                has_event_time_index = true;
+        }
+    }
+
     if (!has_event_time)
     {
         auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
@@ -316,6 +330,22 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
         func_lz4->name = "LZ4";
         col_tp_time->codec = makeASTFunction("CODEC", std::move(func_double_delta), std::move(func_lz4));
         column_asts.emplace_back(std::move(col_tp_time));
+    }
+
+    if (!has_event_time_index)
+    {
+        auto expr = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME);
+        auto type = std::make_shared<ASTFunction>();
+        type->name = "minmax";
+        type->no_empty_args = true;
+        auto index = std::make_shared<ASTIndexDeclaration>();
+        index->name = ProtonConsts::RESERVED_EVENT_TIME_INDEX;
+        index->granularity = 2;
+        index->set(index->expr, expr);
+        index->set(index->type, type);
+        if (create.columns_list->indices == nullptr)
+            create.columns_list->set(create.columns_list->indices, std::make_shared<DB::ASTExpressionList>());
+        create.columns_list->indices->children.emplace_back(std::move(index));
     }
 
 #if 0
