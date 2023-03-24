@@ -687,6 +687,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/column"
+        mode:
+          type: string
+          description: "Storage mode of stream"
+          default: "append"
+          enum:
+            - "append"
+            - "changelog"
+            - "changelog_kv"
+            - "versioned_kv"
+        primary_key:
+          type: string
+          description: "Expression of primary key, required in changelog_kv and versioned_kv mode"
         shards:
           type: integer
           default: 1
