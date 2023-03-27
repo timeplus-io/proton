@@ -12,13 +12,4 @@ fun:tolower
 fun:roseRunProgram
 
 # v8
-src:*contrib/v8-cmake/v8/src/objects/string-table.cc
-src:*contrib/v8-cmake/v8/src/heap/factory.cc
-src:*contrib/v8-cmake/v8/src/objects/map.cc
-src:*contrib/v8-cmake/v8/src/objects/hash-table-inl.h
-src:*contrib/v8-cmake/v8/src/objects/objects-inl.h
-src:*contrib/v8-cmake/v8/src/objects/objects.h
-src:*contrib/v8-cmake/v8/src/objects/tagged-impl.h
-src:*contrib/v8-cmake/v8/src/objects/tagged-field-inl.h
-src:*contrib/v8-cmake/v8/src/heap/spaces-inl.h
-src:*contrib/v8-cmake/torque-generated/src/objects/api-callbacks-tq-inl.inc
+src:*contrib/v8-cmake/v8/*

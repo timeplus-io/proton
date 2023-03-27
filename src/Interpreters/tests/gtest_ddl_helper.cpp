@@ -283,7 +283,8 @@ SETTINGS event_time_column = 'to_start_of_hour(timestamp)'
 CREATE STREAM default.tests (
   `timestamp` datetime64(3) DEFAULT now64(3),
   `ttl` datetime DEFAULT now(),
-  `_tp_time` datetime64(3,'UTC') DEFAULT to_start_of_hour(timestamp) CODEC(DoubleDelta(), LZ4())
+  `_tp_time` datetime64(3,'UTC') DEFAULT to_start_of_hour(timestamp) CODEC(DoubleDelta(), LZ4()),
+  INDEX _tp_time_index _tp_time TYPE minmax GRANULARITY 2
 ) ENGINE = Stream(1, 1, rand())
 PARTITION BY to_YYYYMMDD(_tp_time)
 ORDER BY to_start_of_hour(_tp_time) SETTINGS event_time_column='to_start_of_hour(timestamp)')###"));
