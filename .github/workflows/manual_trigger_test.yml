@@ -38,6 +38,7 @@ jobs:
         # make virtualenv
         ln -s /usr/bin/python3 /usr/bin/python
         apt-get update
+        systemctl stop unattended-upgrades
         apt install python3-venv -y
         python -m venv env
         source env/bin/activate
@@ -111,10 +112,10 @@ jobs:
         # make virtualenv
         ln -s /usr/bin/python3 /usr/bin/python
         apt-get update
+        systemctl stop unattended-upgrades
         apt install python3-venv -y
         python -m venv env
         source env/bin/activate
-
         pip install -r requirements.txt
         export PROTON_VERSION=$TAG
         python unit_tests_check.py
