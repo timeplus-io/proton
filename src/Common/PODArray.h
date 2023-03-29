@@ -396,7 +396,7 @@ public:
     }
 
     T & front()             { return t_start()[0]; }
-    T & back()              { return t_end()[-1]; }
+    T & NO_SANITIZE_UNDEFINED back() { return t_end()[-1]; }
     const T & front() const { return t_start()[0]; }
     const T & back() const  { return t_end()[-1]; }
 
