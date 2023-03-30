@@ -1,22 +1,21 @@
-SET query_mode='table';
 DROP STREAM IF EXISTS appointment_events;
-create stream appointment_events
+CREATE STREAM appointment_events
 (
-    _appointment_id UInt32,
-    _id String,
-    _status String,
-    _set_by_id String,
-    _company_id String,
-    _client_id String,
-    _type String,
-    _at String,
-    _vacancy_id String,
-    _set_at UInt32,
-    _job_requisition_id String
+    _appointment_id uint32,
+    _id string,
+    _status string,
+    _set_by_id string,
+    _company_id string,
+    _client_id string,
+    _type string,
+    _at string,
+    _vacancy_id string,
+    _set_at uint32,
+    _job_requisition_id string
 ) ENGINE = Memory;
 
 INSERT INTO appointment_events (_appointment_id, _set_at, _status) values (1, 1, 'Created'), (2, 2, 'Created');
-SELECT sleep(3);
+
 SELECT A._appointment_id,
        A._id,
        A._status,
@@ -37,4 +36,4 @@ LEFT JOIN
    GROUP BY _appointment_id ) B USING _appointment_id
 WHERE A._set_at = B.max_set_at;
 
-DROP TABLE appointment_events;
+DROP STREAM appointment_events;

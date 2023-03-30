@@ -6,16 +6,16 @@ select neighbor(1); -- { serverError 42 }
 select neighbor(1,2,3,4); -- { serverError 42 }
 -- bad default value
 select neighbor(dummy, 1, 'hello'); -- { serverError 386 }
--- types without common supertype (UInt64 and Int8)
+-- types without common supertype (uint64 and int8)
 select number, neighbor(number, 1, -10) from numbers(3); -- { serverError 386 }
 -- nullable offset is not allowed
 select number, if(number > 1, number, null) as offset, neighbor(number, offset) from numbers(3); -- { serverError 43 }
 select 'Zero offset';
 select number, neighbor(number, 0) from numbers(3);
-select 'Nullable values';
+select 'nullable values';
 select  if(number > 1, number, null) as value, number as offset, neighbor(value, offset) as neighbor from numbers(3);
 select 'Result with different type';
-select toInt32(number) as n, neighbor(n, 1, -10) from numbers(3);
+select to_int32(number) as n, neighbor(n, 1, -10) from numbers(3);
 select 'Offset > block';
 select number, neighbor(number, 10) from numbers(3);
 select 'Abs(Offset) > block';

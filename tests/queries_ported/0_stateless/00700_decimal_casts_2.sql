@@ -88,19 +88,19 @@ SELECT to_uint64('2147483649') AS x, to_decimal32(x, 0); -- { serverError 407 }
 SELECT to_uint64('9223372036854775807') AS x, to_decimal64(x, 0);
 SELECT to_uint64('9223372036854775809') AS x, to_decimal64(x, 0); -- { serverError 407 }
 
-SELECT to_decimal32(0, row_number_in_block()); -- { serverError 46 }
-SELECT to_decimal64(0, row_number_in_block()); -- { serverError 46 }
-SELECT to_decimal128(0, row_number_in_block()); -- { serverError 46 }
+SELECT to_decimal32(0, row_number_in_block()); -- { serverError 44 }
+SELECT to_decimal64(0, row_number_in_block()); -- { serverError 44 }
+SELECT to_decimal128(0, row_number_in_block()); -- { serverError 44 }
 
 SELECT to_decimal32(1/0, 0); -- { serverError 407 }
 SELECT to_decimal64(1/0, 1); -- { serverError 407 }
 SELECT to_decimal128(0/0, 2); -- { serverError 407 }
-SELECT CAST(1/0, 'Decimal(9, 0)'); -- { serverError 407 }
-SELECT CAST(1/0, 'Decimal(18, 1)'); -- { serverError 407 }
-SELECT CAST(1/0, 'Decimal(38, 2)'); -- { serverError 407 }
-SELECT CAST(0/0, 'Decimal(9, 3)'); -- { serverError 407 }
-SELECT CAST(0/0, 'Decimal(18, 4)'); -- { serverError 407 }
-SELECT CAST(0/0, 'Decimal(38, 5)'); -- { serverError 407 }
+SELECT CAST(1/0, 'decimal(9, 0)'); -- { serverError 407 }
+SELECT CAST(1/0, 'decimal(18, 1)'); -- { serverError 407 }
+SELECT CAST(1/0, 'decimal(38, 2)'); -- { serverError 407 }
+SELECT CAST(0/0, 'decimal(9, 3)'); -- { serverError 407 }
+SELECT CAST(0/0, 'decimal(18, 4)'); -- { serverError 407 }
+SELECT CAST(0/0, 'decimal(38, 5)'); -- { serverError 407 }
 
 select to_decimal32(10000.1, 6); -- { serverError 407 }
 select to_decimal64(10000.1, 18); -- { serverError 407 }

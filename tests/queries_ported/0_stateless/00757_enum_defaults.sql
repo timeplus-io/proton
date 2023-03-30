@@ -1,26 +1,26 @@
-select os_name, count() from (SELECT CAST('iphone' AS Enum8('iphone' = 1, 'android' = 2)) AS os_name) group by os_name WITH TOTALS;
-select toNullable(os_name) AS os_name, count() from (SELECT CAST('iphone' AS Enum8('iphone' = 1, 'android' = 2)) AS os_name) group by os_name WITH TOTALS;
+select os_name, count() from (SELECT CAST('iphone' AS enum8('iphone' = 1, 'android' = 2)) AS os_name) group by os_name WITH TOTALS;
+select to_nullable(os_name) AS os_name, count() from (SELECT CAST('iphone' AS enum8('iphone' = 1, 'android' = 2)) AS os_name) group by os_name WITH TOTALS;
 
-DROP TABLE IF EXISTS auto_assign_enum;
-DROP TABLE IF EXISTS auto_assign_enum1;
-DROP TABLE IF EXISTS auto_assign_enum2;
-DROP TABLE IF EXISTS auto_assign_enum3;
+DROP STREAM IF EXISTS auto_assign_enum;
+DROP STREAM IF EXISTS auto_assign_enum1;
+DROP STREAM IF EXISTS auto_assign_enum2;
+DROP STREAM IF EXISTS auto_assign_enum3;
 
-CREATE TABLE auto_assign_enum (x enum('a', 'b')) ENGINE=MergeTree() order by x;
+CREATE STREAM auto_assign_enum (x enum('a', 'b')) ENGINE=MergeTree() order by x;
 INSERT INTO auto_assign_enum VALUES('a'), ('b');
 select * from auto_assign_enum;
-select CAST(x, 'Int8') from auto_assign_enum;
+select CAST(x, 'int8') from auto_assign_enum;
 select * from auto_assign_enum where x = 1;
 
-CREATE TABLE auto_assign_enum1 (x enum('a' = -1000, 'b')) ENGINE=MergeTree() order by x;
+CREATE STREAM auto_assign_enum1 (x enum('a' = -1000, 'b')) ENGINE=MergeTree() order by x;
 INSERT INTO auto_assign_enum1 VALUES('a'), ('b');
 select * from auto_assign_enum1;
-select CAST(x, 'Int16') from auto_assign_enum1;
+select CAST(x, 'int16') from auto_assign_enum1;
 select * from auto_assign_enum1 where x = -999;
 
-CREATE TABLE auto_assign_enum2 (x enum('a' = -1000, 'b', 'c' = -99)) ENGINE=MergeTree() order by x; -- { serverError 223 }
+CREATE STREAM auto_assign_enum2 (x enum('a' = -1000, 'b', 'c' = -99)) ENGINE=MergeTree() order by x; -- { serverError 223 }
 
-CREATE TABLE auto_assign_enum2 (x Enum8(
+CREATE STREAM auto_assign_enum2 (x enum8(
                      '00' = -128 ,'01','02','03','04','05','06','07','08','09','0A','0B','0C','0D','0E','0F',
                      '10','11','12','13','14','15','16','17','18','19','1A','1B','1C','1D','1E','1F',
                      '20','21','22','23','24','25','26','27','28','29','2A','2B','2C','2D','2E','2F',
@@ -32,10 +32,10 @@ CREATE TABLE auto_assign_enum2 (x Enum8(
                      )) ENGINE=MergeTree() order by x;
 
 INSERT INTO auto_assign_enum2 VALUES('7F');
-select CAST(x, 'Int8') from auto_assign_enum2;
+select CAST(x, 'int8') from auto_assign_enum2;
 
-CREATE TABLE auto_assign_enum3 (x enum('a', 'b', NULL)) ENGINE=MergeTree() order by x; -- { serverError 223 }
+CREATE STREAM auto_assign_enum3 (x enum('a', 'b', NULL)) ENGINE=MergeTree() order by x; -- { serverError 223 }
 
-DROP TABLE auto_assign_enum;
-DROP TABLE auto_assign_enum1;
-DROP TABLE auto_assign_enum2;
+DROP STREAM auto_assign_enum;
+DROP STREAM auto_assign_enum1;
+DROP STREAM auto_assign_enum2;

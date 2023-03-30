@@ -1,4 +1,4 @@
-SELECT
+SELECT 
   a.a, a.b
-FROM
- a
+FROM 
+  a

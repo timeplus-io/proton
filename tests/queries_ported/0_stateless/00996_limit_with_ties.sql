@@ -1,11 +1,7 @@
-set query_mode='table';
-set asterisk_include_reserved_columns=false;
-
 DROP STREAM IF EXISTS ties;
-create stream ties (a int) ;
+CREATE STREAM ties (a int) ENGINE = Memory;
 
-INSERT INTO ties(a) VALUES (1), (1), (2), (2), (2), (2) (3), (3);
-select sleep(3);
+INSERT INTO ties VALUES (1), (1), (2), (2), (2), (2) (3), (3);
 
 SELECT a FROM ties order by a limit 1 with ties;
 SELECT '*';
@@ -39,4 +35,4 @@ select count() from (select number, number < 100 from numbers(2000) order by num
 SET max_block_size = 5;
 select count() from (select number < 100, number from numbers(2000) order by number < 100 desc limit 10 with ties);
 
-DROP TABLE ties;
+DROP STREAM ties;

@@ -1,6 +1,6 @@
-drop table if exists test_join;
+drop stream if exists test_join;
 
-create table test_join (date Date, id Int32, name Nullable(String)) engine = MergeTree partition by date order by id;
+create stream test_join (date Date, id int32, name nullable(string)) engine = MergeTree partition by date order by id;
 
 insert into test_join values ('2019-01-01', 1, 'a');
 insert into test_join values ('2019-01-01', 2, 'b');
@@ -12,4 +12,4 @@ FULL OUTER JOIN (SELECT id, date, name FROM test_join GROUP BY id, name, date) j
 USING (id, name, date)
 ORDER BY id, name;
 
-drop table test_join;
+drop stream test_join;

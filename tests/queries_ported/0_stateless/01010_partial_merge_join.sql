@@ -1,10 +1,10 @@
-DROP TABLE IF EXISTS t0;
-DROP TABLE IF EXISTS t1;
-DROP TABLE IF EXISTS t2;
+DROP STREAM IF EXISTS t0;
+DROP STREAM IF EXISTS t1;
+DROP STREAM IF EXISTS t2;
 
-CREATE TABLE t0 (x UInt32, y UInt64) engine = MergeTree ORDER BY (x,y);
-CREATE TABLE t1 (x UInt32, y UInt64) engine = MergeTree ORDER BY (x,y);
-CREATE TABLE t2 (x UInt32, y UInt64) engine = MergeTree ORDER BY (x,y);
+CREATE STREAM t0 (x uint32, y uint64) engine = MergeTree ORDER BY (x,y);
+CREATE STREAM t1 (x uint32, y uint64) engine = MergeTree ORDER BY (x,y);
+CREATE STREAM t2 (x uint32, y uint64) engine = MergeTree ORDER BY (x,y);
 
 INSERT INTO t1 (x, y) VALUES (0, 0);
 
@@ -93,9 +93,9 @@ SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON t1.y = t2.y ORDER BY x;
 SELECT '-';
 SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON t1.x = t2.x AND t1.y = t2.y ORDER BY x;
 SELECT '-';
-SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON t1.x = t2.x AND toUInt32(intDiv(t1.y,10)) = t2.x ORDER BY x, t2.y;
+SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON t1.x = t2.x AND to_uint32(int_div(t1.y,10)) = t2.x ORDER BY x, t2.y;
 SELECT '-';
-SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON t1.x = t2.x AND toUInt64(t1.x) = intDiv(t2.y,10) ORDER BY x, t2.y;
+SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON t1.x = t2.x AND to_uint64(t1.x) = int_div(t2.y,10) ORDER BY x, t2.y;
 
 SELECT 'any inner';
 SELECT t1.*, t2.x FROM t1 ANY INNER JOIN t2 USING (x) ORDER BY x;
@@ -113,9 +113,9 @@ SELECT t1.*, t2.* FROM t1 INNER JOIN t2 ON t1.y = t2.y ORDER BY x;
 SELECT '-';
 SELECT t1.*, t2.* FROM t1 INNER JOIN t2 ON t1.x = t2.x AND t1.y = t2.y ORDER BY x;
 SELECT '-';
-SELECT t1.*, t2.* FROM t1 INNER JOIN t2 ON t1.x = t2.x AND toUInt32(intDiv(t1.y,10)) = t2.x ORDER BY x, t2.y;
+SELECT t1.*, t2.* FROM t1 INNER JOIN t2 ON t1.x = t2.x AND to_uint32(int_div(t1.y,10)) = t2.x ORDER BY x, t2.y;
 SELECT '-';
-SELECT t1.*, t2.* FROM t1 INNER JOIN t2 ON t1.x = t2.x AND toUInt64(t1.x) = intDiv(t2.y,10) ORDER BY x, t2.y;
+SELECT t1.*, t2.* FROM t1 INNER JOIN t2 ON t1.x = t2.x AND to_uint64(t1.x) = int_div(t2.y,10) ORDER BY x, t2.y;
 
 SET join_use_nulls = 1;
 
@@ -135,9 +135,9 @@ SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON t1.y = t2.y ORDER BY x;
 SELECT '-';
 SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON t1.x = t2.x AND t1.y = t2.y ORDER BY x;
 SELECT '-';
-SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON t1.x = t2.x AND toUInt32(intDiv(t1.y,10)) = t2.x ORDER BY x, t2.y;
+SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON t1.x = t2.x AND to_uint32(int_div(t1.y,10)) = t2.x ORDER BY x, t2.y;
 SELECT '-';
-SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON t1.x = t2.x AND toUInt64(t1.x) = intDiv(t2.y,10) ORDER BY x, t2.y;
+SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON t1.x = t2.x AND to_uint64(t1.x) = int_div(t2.y,10) ORDER BY x, t2.y;
 
 SELECT 'any inner';
 SELECT t1.*, t2.x FROM t1 ANY INNER JOIN t2 USING (x) ORDER BY x;
@@ -155,10 +155,10 @@ SELECT t1.*, t2.* FROM t1 INNER JOIN t2 ON t1.y = t2.y ORDER BY x;
 SELECT '-';
 SELECT t1.*, t2.* FROM t1 INNER JOIN t2 ON t1.x = t2.x AND t1.y = t2.y ORDER BY x;
 SELECT '-';
-SELECT t1.*, t2.* FROM t1 INNER JOIN t2 ON t1.x = t2.x AND toUInt32(intDiv(t1.y,10)) = t2.x ORDER BY x, t2.y;
+SELECT t1.*, t2.* FROM t1 INNER JOIN t2 ON t1.x = t2.x AND to_uint32(int_div(t1.y,10)) = t2.x ORDER BY x, t2.y;
 SELECT '-';
-SELECT t1.*, t2.* FROM t1 INNER JOIN t2 ON t1.x = t2.x AND toUInt64(t1.x) = intDiv(t2.y,10) ORDER BY x, t2.y;
+SELECT t1.*, t2.* FROM t1 INNER JOIN t2 ON t1.x = t2.x AND to_uint64(t1.x) = int_div(t2.y,10) ORDER BY x, t2.y;
 
-DROP TABLE t0;
-DROP TABLE t1;
-DROP TABLE t2;
+DROP STREAM t0;
+DROP STREAM t1;
+DROP STREAM t2;

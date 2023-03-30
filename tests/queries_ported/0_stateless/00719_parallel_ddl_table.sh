@@ -10,7 +10,7 @@ ${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS parallel_ddl"
 function query()
 {
     for _ in {1..100}; do
-        ${CLICKHOUSE_CLIENT} --query "create stream IF NOT EXISTS parallel_ddl(a int) "
+        ${CLICKHOUSE_CLIENT} --query "CREATE STREAM IF NOT EXISTS parallel_ddl(a int) ENGINE = Memory"
         ${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS parallel_ddl"
     done
 }

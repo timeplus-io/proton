@@ -1,155 +1,155 @@
-SELECT DISTINCT
+SELECT DISTINCT 
   number
-FROM
- numbers(1)
-SELECT
+FROM 
+  numbers(1)
+SELECT 
   number
-FROM
- (
-  SELECT DISTINCT
+FROM 
+  (
+  SELECT DISTINCT 
     number
-  FROM
- numbers(1)
+  FROM 
+    numbers(1)
 )
-SELECT DISTINCT
+SELECT DISTINCT 
   number * 2
-FROM
- (
-  SELECT DISTINCT
+FROM 
+  (
+  SELECT DISTINCT 
     number * 2, number
-  FROM
- numbers(1)
+  FROM 
+    numbers(1)
 )
-SELECT
+SELECT 
   number
-FROM
- (
-  SELECT DISTINCT
+FROM 
+  (
+  SELECT DISTINCT 
     number * 2 AS number
-  FROM
- numbers(1)
+  FROM 
+    numbers(1)
 )
-SELECT
+SELECT 
   b, a
-FROM
- (
-  SELECT DISTINCT
+FROM 
+  (
+  SELECT DISTINCT 
     number % 2 AS a, number % 3 AS b
-  FROM
- numbers(100)
+  FROM 
+    numbers(100)
 )
-SELECT DISTINCT
+SELECT DISTINCT 
   a
-FROM
- (
-  SELECT DISTINCT
+FROM 
+  (
+  SELECT DISTINCT 
     number % 2 AS a, number % 3 AS b
-  FROM
- numbers(100)
+  FROM 
+    numbers(100)
 )
-SELECT
+SELECT 
   a
-FROM
- (
-  SELECT DISTINCT
+FROM 
+  (
+  SELECT DISTINCT 
     a
-  FROM
- (
-    SELECT DISTINCT
+  FROM 
+    (
+    SELECT DISTINCT 
       number % 2 AS a, number % 3 AS b
-    FROM
- numbers(100)
+    FROM 
+      numbers(100)
   )
 )
-SELECT DISTINCT
+SELECT DISTINCT 
   a
-FROM
- (
-  SELECT
+FROM 
+  (
+  SELECT 
     a, b
-  FROM
- (
-    SELECT DISTINCT
+  FROM 
+    (
+    SELECT DISTINCT 
       number % 2 AS a, number % 3 AS b
-    FROM
- numbers(100)
+    FROM 
+      numbers(100)
   )
 )
-SELECT
+SELECT 
   a, b
-FROM
- (
-  SELECT
+FROM 
+  (
+  SELECT 
     b, a
-  FROM
- (
-    SELECT DISTINCT
+  FROM 
+    (
+    SELECT DISTINCT 
       number AS a, number AS b
-    FROM
- numbers(1)
+    FROM 
+      numbers(1)
   )
 )
-SELECT
+SELECT 
   a, b
-FROM
- (
-  SELECT
+FROM 
+  (
+  SELECT 
     b, a, a + b
-  FROM
- (
-    SELECT DISTINCT
+  FROM 
+    (
+    SELECT DISTINCT 
       number % 2 AS a, number % 3 AS b
-    FROM
- numbers(100)
+    FROM 
+      numbers(100)
   )
 )
-SELECT DISTINCT
+SELECT DISTINCT 
   a
-FROM
- (
-  SELECT
+FROM 
+  (
+  SELECT 
     a
-  FROM
- (
-    SELECT DISTINCT
+  FROM 
+    (
+    SELECT DISTINCT 
       number % 2 AS a, number % 3 AS b
-    FROM
- numbers(100)
+    FROM 
+      numbers(100)
   )
 )
-SELECT DISTINCT
+SELECT DISTINCT 
   number
-FROM
- (
-  SELECT DISTINCT
+FROM 
+  (
+  SELECT DISTINCT 
     number
-  FROM
- numbers(1)
+  FROM 
+    numbers(1)
 ) AS t1
 CROSS JOIN numbers(2) AS t2
-SELECT
+SELECT 
   number
-FROM
- (
-  SELECT DISTINCT
+FROM 
+  (
+  SELECT DISTINCT 
     number
-  FROM
- numbers(1) AS t1
+  FROM 
+    numbers(1) AS t1
   CROSS JOIN numbers(2) AS t2
 )
-SELECT DISTINCT
+SELECT DISTINCT 
   number
-FROM
- (
-  SELECT DISTINCT
+FROM 
+  (
+  SELECT DISTINCT 
     number
-  FROM
- numbers(1)
+  FROM 
+    numbers(1)
   UNION ALL
-  SELECT DISTINCT
+  SELECT DISTINCT 
     number
-  FROM
- numbers(2)
+  FROM 
+    numbers(2)
 )
 0
 1

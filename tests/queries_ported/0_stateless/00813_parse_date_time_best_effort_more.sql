@@ -1,10 +1,10 @@
 SELECT
     s,
-    parseDateTimeBestEffortOrNull(s, 'UTC') AS a,
-    parseDateTimeBestEffortOrZero(s, 'UTC') AS b
+    parse_datetime_best_effort_or_null(s, 'UTC') AS a,
+    parse_datetime_best_effort_or_zero(s, 'UTC') AS b
 FROM
 (
-    SELECT arrayJoin([
+    SELECT array_join([
 '24.12.2018',
 '24-12-2018',
 '24.12.18',

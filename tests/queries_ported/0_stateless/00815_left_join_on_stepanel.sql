@@ -1,17 +1,17 @@
 -- Tags: no-parallel
-set query_mode='table';
+
 CREATE DATABASE IF NOT EXISTS test_00815;
 USE test_00815;
 
-DROP TABLE IF EXISTS fact_cpc_clicks;
-DROP TABLE IF EXISTS dim_model;
+DROP STREAM IF EXISTS fact_cpc_clicks;
+DROP STREAM IF EXISTS dim_model;
 
-CREATE TABLE fact_cpc_clicks (model_id UInt8) ENGINE = Memory;
-CREATE TABLE dim_model (model_id UInt8) ENGINE = Memory;
+CREATE STREAM fact_cpc_clicks (model_id uint8) ENGINE = Memory;
+CREATE STREAM dim_model (model_id uint8) ENGINE = Memory;
 
-INSERT INTO fact_cpc_clicks(model_id) VALUES (1);
-INSERT INTO dim_model(model_id) VALUES (1);
-select sleep(3);
+INSERT INTO fact_cpc_clicks VALUES (1);
+INSERT INTO dim_model VALUES (1);
+
 select f.model_id from fact_cpc_clicks as f left join dim_model as d on f.model_id=d.model_id limit 10;
 
 USE default;

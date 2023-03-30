@@ -1,9 +1,9 @@
-INSERT INTO test FROM INFILE data.file SELECT
+INSERT INTO test FROM INFILE data.file SELECT 
   x
-FROM
- input(\'x uint32\')
+FROM 
+  input(\'x uint32\')
 INSERT INTO test FROM INFILE data.file WITH number AS x
-SELECT
+SELECT 
   number
-FROM
- input(\'number uint32\')
+FROM 
+  input(\'number uint32\')

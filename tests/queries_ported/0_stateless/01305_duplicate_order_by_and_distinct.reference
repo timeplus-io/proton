@@ -1,82 +1,82 @@
-SELECT
+SELECT 
   number
-FROM
- (
-  SELECT
+FROM 
+  (
+  SELECT 
     number
-  FROM
- (
-    SELECT DISTINCT
+  FROM 
+    (
+    SELECT DISTINCT 
       number
-    FROM
- numbers(3)
+    FROM 
+      numbers(3)
   )
 )
-ORDER BY
+ORDER BY 
   number ASC
 0
 1
 2
-SELECT DISTINCT
+SELECT DISTINCT 
   number
-FROM
- (
-  SELECT DISTINCT
+FROM 
+  (
+  SELECT DISTINCT 
     number
-  FROM
- (
-    SELECT DISTINCT
+  FROM 
+    (
+    SELECT DISTINCT 
       number
-    FROM
- numbers(3)
-    ORDER BY
+    FROM 
+      numbers(3)
+    ORDER BY 
       number ASC
   )
-  ORDER BY
+  ORDER BY 
     number ASC
 )
-ORDER BY
+ORDER BY 
   number ASC
 0
 1
 2
-SELECT
+SELECT 
   number
-FROM
- (
-  SELECT
+FROM 
+  (
+  SELECT 
     number
-  FROM
- (
-    SELECT DISTINCT
+  FROM 
+    (
+    SELECT DISTINCT 
       number % 2 AS number
-    FROM
- numbers(3)
+    FROM 
+      numbers(3)
   )
 )
-ORDER BY
+ORDER BY 
   number ASC
 0
 1
-SELECT DISTINCT
+SELECT DISTINCT 
   number
-FROM
- (
-  SELECT DISTINCT
+FROM 
+  (
+  SELECT DISTINCT 
     number
-  FROM
- (
-    SELECT DISTINCT
+  FROM 
+    (
+    SELECT DISTINCT 
       number % 2 AS number
-    FROM
- numbers(3)
-    ORDER BY
+    FROM 
+      numbers(3)
+    ORDER BY 
       number ASC
   )
-  ORDER BY
+  ORDER BY 
     number ASC
 )
-ORDER BY
+ORDER BY 
   number ASC
 0
 1

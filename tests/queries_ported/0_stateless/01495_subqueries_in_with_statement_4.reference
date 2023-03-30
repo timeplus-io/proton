@@ -1,12 +1,12 @@
 0	0
 WITH it AS
   (
-    SELECT
+    SELECT 
       *
-    FROM
- numbers(1)
+    FROM 
+      numbers(1)
   )
-SELECT
+SELECT 
   it.number, i.number
-FROM
- it AS i
+FROM 
+  it AS i

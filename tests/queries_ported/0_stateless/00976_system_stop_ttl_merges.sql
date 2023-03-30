@@ -1,11 +1,11 @@
-drop table if exists ttl;
+drop stream if exists ttl;
 
-create table ttl (d Date, a Int) engine = MergeTree order by a partition by toDayOfMonth(d) ttl d + interval 1 day;
+create stream ttl (d Date, a int) engine = MergeTree order by a partition by to_day_of_month(d) ttl d + interval 1 day;
 
 system stop ttl merges ttl;
 
-insert into ttl values (toDateTime('2000-10-10 00:00:00'), 1), (toDateTime('2000-10-10 00:00:00'), 2)
-insert into ttl values (toDateTime('2100-10-10 00:00:00'), 3), (toDateTime('2100-10-10 00:00:00'), 4);
+insert into ttl values (to_datetime('2000-10-10 00:00:00'), 1), (to_datetime('2000-10-10 00:00:00'), 2)
+insert into ttl values (to_datetime('2100-10-10 00:00:00'), 3), (to_datetime('2100-10-10 00:00:00'), 4);
 
 select sleep(1) format Null; -- wait if very fast merge happen
 optimize table ttl partition 10 final;
@@ -15,4 +15,4 @@ system start ttl merges ttl;
 optimize table ttl partition 10 final;
 select * from ttl order by d, a;
 
-drop table if exists ttl;
+drop stream if exists ttl;

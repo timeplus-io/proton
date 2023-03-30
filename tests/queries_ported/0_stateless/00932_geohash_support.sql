@@ -1,9 +1,9 @@
-drop table if exists geohash_test_data;
+drop stream if exists geohash_test_data;
 
-create table geohash_test_data (
-	latitude  Float64,
-	longitude Float64,
-	encoded   String
+create stream geohash_test_data (
+	latitude  float64,
+	longitude float64,
+	encoded   string
 ) engine = MergeTree order by (latitude, longitude, encoded);
 
 -- data obtained from geohash.com
@@ -27,7 +27,7 @@ select geohash_encode(materialize(-5.60302734375), materialize(42.593994140625),
 select geohash_encode(materialize(-5.60302734375), materialize(42.593994140625), materialize(0)); -- { serverError 44 }
 
 
-select 'from table (with const precision):';
+select 'from stream (with const precision):';
 
 -- here results are strings, so reference may contain values to match for equality.
 select 1 as p, geohash_encode(longitude, latitude, p) as actual, if(actual = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = p;
@@ -64,4 +64,4 @@ where
 	or
 	abs(lon_error) > longitude_max_error;
 
-drop table if exists geohash_test_data;
+drop stream if exists geohash_test_data;

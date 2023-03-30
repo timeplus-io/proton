@@ -20,8 +20,8 @@ SELECT word_shingle_min_hash_case_insensitive('what a cute cat.');
 SELECT word_shingle_min_hash_utf8('what a cute cat.');
 SELECT word_shingle_min_hash_case_insensitive_utf8('what a cute cat.');
 
-DROP TABLE IF EXISTS defaults;
-CREATE TABLE defaults
+DROP STREAM IF EXISTS defaults;
+CREATE STREAM defaults
 (
    s string
 );
@@ -117,4 +117,4 @@ SELECT word_shingle_sim_hash('foobar', 9223372036854775807); -- { serverError 69
 SELECT word_shingle_sim_hash('foobar', 1001); -- { serverError 69 }
 SELECT word_shingle_sim_hash('foobar', 0); -- { serverError 69 }
 
-DROP TABLE defaults;
+DROP STREAM defaults;

@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS min_max_with_nullable_string;
+DROP STREAM IF EXISTS min_max_with_nullable_string;
 
-CREATE TABLE min_max_with_nullable_string (
+CREATE STREAM min_max_with_nullable_string (
   t DateTime,
-  nullable_str Nullable(String),
+  nullable_str nullable(string),
   INDEX nullable_str_min_max nullable_str TYPE minmax GRANULARITY 1
 ) ENGINE = MergeTree ORDER BY (t);
 
@@ -20,4 +20,4 @@ SELECT count() FROM min_max_with_nullable_string WHERE nullable_str = '.';
 
 SELECT count() FROM min_max_with_nullable_string WHERE nullable_str = '';
 
-DROP TABLE min_max_with_nullable_string;
+DROP STREAM min_max_with_nullable_string;

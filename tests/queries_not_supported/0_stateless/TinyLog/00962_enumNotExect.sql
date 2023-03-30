@@ -1,0 +1,14 @@
+DROP STREAM IF EXISTS t_enum8;
+CREATE STREAM t_enum8( x enum('hello' = 1, 'world' = 2) ) ENGINE = TinyLog;
+INSERT INTO t_enum8 Values('hello'),('world'),('hello');
+SELECT * FROM t_enum8;
+SELECT CAST(x, 'int8') FROM t_enum8;
+DROP STREAM t_enum8;
+DROP STREAM IF EXISTS t_enum16;
+CREATE STREAM t_enum16( x enum('hello' = 1, 'world' = 128) ) ENGINE = TinyLog;
+INSERT INTO t_enum16 Values('hello'),('world'),('hello');
+SELECT * FROM t_enum16;
+SELECT CAST(x, 'int16') FROM t_enum16;
+DROP STREAM t_enum16;
+SELECT to_type_name(CAST('a', 'enum(\'a\' = 2, \'b\' = 128)'));
+SELECT to_type_name(CAST('a', 'enum(\'a\' = 2, \'b\' = 127)'));

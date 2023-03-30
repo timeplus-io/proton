@@ -29,10 +29,10 @@ select round(1000 * ngram_search_utf8('абвгдеёжз', 'абвгдеёжз'
 select round(1000 * ngram_search_utf8('абвгдеёжз', 'абвгдеёж'));
 select round(1000 * ngram_search_utf8('абвгдеёжз', 'гдеёзд'));
 select round(1000 * ngram_search_utf8('абвгдеёжз', 'ёёёёёёёё'));
-SET query_mode = 'table';
+
 drop stream if exists test_entry_distance;
 create stream test_entry_distance (Title string) engine = Memory;
-insert into test_entry_distance values ('привет как дела?... Херсон'), ('привет как дела клип - Яндекс.Видео'), ('привет'), ('пап привет как дела - Яндекс.Видео'), ('привет братан как дела - Яндекс.Видео'), ('http://metric.ru/'), ('http://autometric.ru/'), ('http://metrica.yandex.com/'), ('http://metris.ru/'), ('http://metrika.ru/'), ('');
+insert into test_entry_distance values ('привет как дела?... Херсон'), ('привет как дела клип - TUT.BY'), ('привет'), ('пап привет как дела - TUT.BY'), ('привет братан как дела - TUT.BY'), ('http://metric.ru/'), ('http://autometric.ru/'), ('http://top.bigmir.net/'), ('http://metris.ru/'), ('http://metrika.ru/'), ('');
 
 SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_utf8(Title, Title) as distance, Title;
 SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_utf8(Title, extract(Title, 'как дела')) as distance, Title;
@@ -44,7 +44,7 @@ SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_sea
 SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_utf8(Title, 'metrica') as distance, Title;
 SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_utf8(Title, 'metriks') as distance, Title;
 SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_utf8(Title, 'metrics') as distance, Title;
-SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_utf8(Title, 'yandex') as distance, Title;
+SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_utf8(Title, 'bigmir') as distance, Title;
 
 
 select round(1000 * ngram_search_case_insensitive_utf8(materialize(''), '')) from system.numbers limit 5;
@@ -91,8 +91,8 @@ SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_sea
 SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_case_insensitive_utf8(Title, 'mEtrica') as distance, Title;
 SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_case_insensitive_utf8(Title, 'metriKS') as distance, Title;
 SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_case_insensitive_utf8(Title, 'metrics') as distance, Title;
-SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_case_insensitive_utf8(Title, 'YanDEX') as distance, Title;
-SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_case_insensitive_utf8(Title, 'приВЕТ КАк ДеЛа КлИп - яндеКс.видео') as distance, Title;
+SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_case_insensitive_utf8(Title, 'BigMIR') as distance, Title;
+SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_case_insensitive_utf8(Title, 'приВЕТ КАк ДеЛа КлИп - bigMir.Net') as distance, Title;
 
 
 select round(1000 * ngram_search(materialize(''), '')) from system.numbers limit 5;
@@ -134,7 +134,7 @@ SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_sea
 SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search(Title, 'metrica') as distance, Title;
 SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search(Title, 'metriks') as distance, Title;
 SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search(Title, 'metrics') as distance, Title;
-SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search(Title, 'yandex') as distance, Title;
+SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search(Title, 'bigmir') as distance, Title;
 
 select round(1000 * ngram_search_case_insensitive(materialize(''), '')) from system.numbers limit 5;
 select round(1000 * ngram_search_case_insensitive(materialize('abc'), '')) from system.numbers limit 5;
@@ -175,6 +175,6 @@ SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_sea
 SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_case_insensitive(Title, 'mEtrica') as distance, Title;
 SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_case_insensitive(Title, 'metriKS') as distance, Title;
 SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_case_insensitive(Title, 'metrics') as distance, Title;
-SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_case_insensitive(Title, 'YanDEX') as distance, Title;
+SELECT Title, round(1000 * distance) FROM test_entry_distance ORDER BY ngram_search_case_insensitive(Title, 'BigMIR') as distance, Title;
 
 drop stream if exists test_entry_distance;

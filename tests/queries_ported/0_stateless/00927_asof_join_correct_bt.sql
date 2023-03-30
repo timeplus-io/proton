@@ -1,23 +1,23 @@
-DROP TABLE IF EXISTS A;
-DROP TABLE IF EXISTS B;
+DROP STREAM IF EXISTS A;
+DROP STREAM IF EXISTS B;
 
-CREATE TABLE A(k UInt32, t UInt32, a UInt64) ENGINE = MergeTree() ORDER BY (k, t);
+CREATE STREAM A(k uint32, t uint32, a uint64) ENGINE = MergeTree() ORDER BY (k, t);
 INSERT INTO A(k,t,a) VALUES (1,101,1),(1,102,2),(1,103,3),(1,104,4),(1,105,5);
 
-CREATE TABLE B(k UInt32, t UInt32, b UInt64) ENGINE = MergeTree() ORDER BY (k, t);
+CREATE STREAM B(k uint32, t uint32, b uint64) ENGINE = MergeTree() ORDER BY (k, t);
 INSERT INTO B(k,t,b) VALUES (1,102,2), (1,104,4);
 SELECT A.k, A.t, A.a, B.b, B.t, B.k FROM A ASOF LEFT JOIN B USING(k,t) ORDER BY (A.k, A.t);
-DROP TABLE B;
+DROP STREAM B;
 
 
-CREATE TABLE B(t UInt32, k UInt32, b UInt64) ENGINE = MergeTree() ORDER BY (k, t);
+CREATE STREAM B(t uint32, k uint32, b uint64) ENGINE = MergeTree() ORDER BY (k, t);
 INSERT INTO B(k,t,b) VALUES (1,102,2), (1,104,4);
 SELECT A.k, A.t, A.a, B.b, B.t, B.k FROM A ASOF LEFT JOIN B USING(k,t) ORDER BY (A.k, A.t);
-DROP TABLE B;
+DROP STREAM B;
 
-CREATE TABLE B(k UInt32, b UInt64, t UInt32) ENGINE = MergeTree() ORDER BY (k, t);
+CREATE STREAM B(k uint32, b uint64, t uint32) ENGINE = MergeTree() ORDER BY (k, t);
 INSERT INTO B(k,t,b) VALUES (1,102,2), (1,104,4);
 SELECT A.k, A.t, A.a, B.b, B.t, B.k FROM A ASOF LEFT JOIN B USING(k,t) ORDER BY (A.k, A.t);
-DROP TABLE B;
+DROP STREAM B;
 
-DROP TABLE A;
+DROP STREAM A;

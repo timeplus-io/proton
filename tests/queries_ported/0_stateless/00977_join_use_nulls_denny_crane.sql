@@ -1,8 +1,8 @@
-drop table if exists t;
-drop table if exists s;
+drop stream if exists t;
+drop stream if exists s;
 
-create table t(a Int64, b Int64, c String) engine = Memory;
-create table s(a Int64, b Int64, c String) engine = Memory;
+create stream t(a int64, b int64, c string) engine = Memory;
+create stream s(a int64, b int64, c string) engine = Memory;
 
 insert into t values(1,1,'a');
 insert into s values(2,2,'a');
@@ -12,11 +12,11 @@ select t.*, s.a, s.b, s.c from t right join s on (s.a = t.a and s.b = t.b);
 select t.*, s.a, s.b, s.c from t left join s on (s.a = t.a and s.b = t.b) SETTINGS join_use_nulls = 1;
 select t.*, s.a, s.b, s.c from t right join s on (s.a = t.a and s.b = t.b) SETTINGS join_use_nulls = 1;
 
-drop table t;
-drop table s;
+drop stream t;
+drop stream s;
 
-create table t(a Int64, b Int64, c Nullable(String)) engine = Memory;
-create table s(a Int64, b Int64, c Nullable(String)) engine = Memory;
+create stream t(a int64, b int64, c nullable(string)) engine = Memory;
+create stream s(a int64, b int64, c nullable(string)) engine = Memory;
 
 insert into t values(1,1,'a');
 insert into s values(2,2,'a');
@@ -26,11 +26,11 @@ select * from t right join s on (s.a = t.a and s.b = t.b);
 select t.*, s.* from t left join s on (s.a = t.a and s.b = t.b) SETTINGS join_use_nulls = 1;
 select t.*, s.* from t right join s on (s.a = t.a and s.b = t.b) SETTINGS join_use_nulls = 1;
 
-drop table t;
-drop table s;
+drop stream t;
+drop stream s;
 
-create table t(a Int64, b Nullable(Int64), c String) engine = Memory;
-create table s(a Int64, b Nullable(Int64), c String) engine = Memory;
+create stream t(a int64, b nullable(int64), c string) engine = Memory;
+create stream s(a int64, b nullable(int64), c string) engine = Memory;
 
 insert into t values(1,1,'a');
 insert into s values(2,2,'a');
@@ -40,11 +40,11 @@ select t.*, s.* from t right join s on (s.a = t.a and s.b = t.b);
 select * from t left join s on (s.a = t.a and s.b = t.b) SETTINGS join_use_nulls = 1;
 select * from t right join s on (s.a = t.a and s.b = t.b) SETTINGS join_use_nulls = 1;
 
-drop table t;
-drop table s;
+drop stream t;
+drop stream s;
 
-create table t(a Int64, b Nullable(Int64), c Nullable(String)) engine = Memory;
-create table s(a Int64, b Nullable(Int64), c Nullable(String)) engine = Memory;
+create stream t(a int64, b nullable(int64), c nullable(string)) engine = Memory;
+create stream s(a int64, b nullable(int64), c nullable(string)) engine = Memory;
 
 insert into t values(1,1,'a');
 insert into s values(2,2,'a');
@@ -54,11 +54,11 @@ select t.*, s.a, s.b, s.c from t right join s on (s.a = t.a and s.b = t.b);
 select * from t left join s on (s.a = t.a and s.b = t.b) SETTINGS join_use_nulls = 1;
 select * from t right join s on (s.a = t.a and s.b = t.b) SETTINGS join_use_nulls = 1;
 
-drop table t;
-drop table s;
+drop stream t;
+drop stream s;
 
-create table t(a Nullable(Int64), b Nullable(Int64), c Nullable(String)) engine = Memory;
-create table s(a Nullable(Int64), b Nullable(Int64), c Nullable(String)) engine = Memory;
+create stream t(a nullable(int64), b nullable(int64), c nullable(string)) engine = Memory;
+create stream s(a nullable(int64), b nullable(int64), c nullable(string)) engine = Memory;
 
 insert into t values(1,1,'a');
 insert into s values(2,2,'a');
@@ -68,5 +68,5 @@ select * from t right join s on (s.a = t.a and s.b = t.b);
 select t.*, s.a, s.b, s.c from t left join s on (s.a = t.a and s.b = t.b) SETTINGS join_use_nulls = 1;
 select t.*, s.a, s.b, s.c from t right join s on (s.a = t.a and s.b = t.b) SETTINGS join_use_nulls = 1;
 
-drop table t;
-drop table s;
+drop stream t;
+drop stream s;

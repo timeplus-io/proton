@@ -1,16 +1,16 @@
-SELECT
+SELECT 
   count()
-FROM
- (
-  SELECT
+FROM 
+  (
+  SELECT 
     number
-  FROM
- (
-    SELECT
+  FROM 
+    (
+    SELECT 
       number
-    FROM
- numbers(1000000)
+    FROM 
+      numbers(1000000)
   )
-  WHERE
+  WHERE 
     rand64() < (0.01 * 18446744073709552000.)
 )
