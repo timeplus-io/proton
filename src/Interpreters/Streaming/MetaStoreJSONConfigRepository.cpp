@@ -51,7 +51,7 @@ uint32_t MetaStoreJSONConfigRepository::getVersion(const std::string & definitio
 Poco::Timestamp MetaStoreJSONConfigRepository::getUpdateTime(const std::string & definition_entity_name)
 {
     Poco::JSON::Object::Ptr status = readConfigKey(fmt::format("{}/{}", STATUS_PREFIX, definition_entity_name));
-    return Poco::Timestamp::fromEpochTime(status->getValue<Int64>("update_time"));
+    return Poco::Timestamp(Poco::Timestamp::TimeVal(status->getValue<Int64>("update_time")));
 }
 
 std::set<std::string> MetaStoreJSONConfigRepository::getAllLoadablesDefinitionNames()
