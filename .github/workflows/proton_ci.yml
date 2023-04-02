@@ -81,6 +81,7 @@ jobs:
         # make virtualenv
         ln -s /usr/bin/python3 /usr/bin/python
         apt-get update
+        systemctl stop unattended-upgrades
         apt install python3-venv -y
         python -m venv env
         source env/bin/activate
@@ -117,6 +118,7 @@ jobs:
         # make virtualenv
         ln -s /usr/bin/python3 /usr/bin/python
         apt-get update
+        systemctl stop unattended-upgrades
         apt install python3-venv -y
         python -m venv env
         source env/bin/activate
