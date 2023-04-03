@@ -18,7 +18,7 @@ on: # yamllint disable-line rule:truthy
         default: 'sanitizer'
       has_unit_test:
         description: 'Run unit test'
-        required: false
+        required: true
         type: boolean
         default: false
 
@@ -105,6 +105,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   prepare_unit_test:
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.has_unit_test == true }}
     outputs:
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -126,7 +127,7 @@ jobs:
   unit_test_on_x64:
     needs: prepare_unit_test
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    if: github.event.inputs.arch == 'x64' && github.event.inputs.has_unit_test
+    if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -151,7 +152,7 @@ jobs:
   unit_test_on_arm:
     needs: prepare_unit_test
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    if: github.event.inputs.arch == 'arm' && github.event.inputs.has_unit_test
+    if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
