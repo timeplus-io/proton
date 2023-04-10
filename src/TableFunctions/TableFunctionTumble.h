@@ -18,6 +18,7 @@ private:
     ASTs checkAndExtractArguments(ASTFunction * node) const override;
     void postArgs(ASTs & args) const override;
     String functionNamePrefix() const override;
+    void validateWindow(FunctionDescriptionPtr desc) const override;
 };
 }
 }

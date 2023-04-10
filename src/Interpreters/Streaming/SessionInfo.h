@@ -17,7 +17,7 @@ struct SessionInfo
     Int64 ignore_ts = 0; /// ignore event if event time < @nigore_ts
     Int64 timeout_ts = 0; /// close session if event time > @timeout_ts
     Int64 max_session_ts = 0; /// close session if global max event time > @max_session_ts
-    Int64 scale = 0;
+    UInt32 scale = 0;
     Int64 interval = 0;
 
     /// When some event meet the start condition, session window is active.

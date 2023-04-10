@@ -46,24 +46,24 @@ void checkIntervalAST(const ASTPtr & ast, const String & msg = "Invalid interval
 void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Kind & kind);
 std::pair<Int64, IntervalKind> extractInterval(const ASTFunction * ast);
 
-Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone);
-Int64 addTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone, Int64 time_scale);
+UInt32 addTime(UInt32 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone);
+Int64 addTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone, UInt32 time_scale);
 
 WindowType toWindowType(const String & func_name);
 
 /// BaseScaleInterval util class converts interval in different scale to a common base scale.
-/// BaseScale-1: Second    Range: Second, Minute, Hour, Day, Week
-/// BaseScale-2: Month     Range: Month, Quarter, Year
-/// example: '1h' -> '3600s'   '1y' -> '12M'
+/// BaseScale-1: Nanosecond     Range: Nanosecond, Microsecond, Millisecond, Second, Minute, Hour, Day, Week
+/// BaseScale-2: Month          Range: Month, Quarter, Year
+/// example: '1m' -> '60000000000ns'   '1y' -> '12M'
 class BaseScaleInterval
 {
 public:
-    static constexpr IntervalKind::Kind SCALE_SECOND = IntervalKind::Second;
+    static constexpr IntervalKind::Kind SCALE_NANOSECOND = IntervalKind::Nanosecond;
     static constexpr IntervalKind::Kind SCALE_MONTH = IntervalKind::Month;
 
     Int64 num_units = 0;
-    IntervalKind::Kind scale = SCALE_SECOND;
-    IntervalKind::Kind src_kind = SCALE_SECOND;
+    IntervalKind::Kind scale = SCALE_NANOSECOND;
+    IntervalKind::Kind src_kind = SCALE_NANOSECOND;
 
     BaseScaleInterval() = default;
 
@@ -71,22 +71,24 @@ public:
     {
         switch (kind)
         {
-            /// FIXME, TIME
+            /// FIXME: check overflow ?
+            /// Based on SCALE_NANOSECOND
             case IntervalKind::Nanosecond:
+                return BaseScaleInterval{num_units, SCALE_NANOSECOND, kind};
             case IntervalKind::Microsecond:
+                return BaseScaleInterval{num_units * 1'000, SCALE_NANOSECOND, kind};
             case IntervalKind::Millisecond:
-                return BaseScaleInterval{static_cast<Int64>(std::ceil(num_units * IntervalKind(kind).toSeconds())), SCALE_SECOND, kind};
-            /// Based on SCALE_SECOND
+                return BaseScaleInterval{num_units * 1'000000, SCALE_NANOSECOND, kind};
             case IntervalKind::Second:
-                return BaseScaleInterval{num_units, SCALE_SECOND, kind};
+                return BaseScaleInterval{num_units * 1'000000000, SCALE_NANOSECOND, kind};
             case IntervalKind::Minute:
-                return BaseScaleInterval{num_units * 60, SCALE_SECOND, kind};
+                return BaseScaleInterval{num_units * 60'000000000, SCALE_NANOSECOND, kind};
             case IntervalKind::Hour:
-                return BaseScaleInterval{num_units * 3600, SCALE_SECOND, kind};
+                return BaseScaleInterval{num_units * 3600'000000000, SCALE_NANOSECOND, kind};
             case IntervalKind::Day:
-                return BaseScaleInterval{num_units * 86400, SCALE_SECOND, kind};
+                return BaseScaleInterval{num_units * 86400'000000000, SCALE_NANOSECOND, kind};
             case IntervalKind::Week:
-                return BaseScaleInterval{num_units * 604800, SCALE_SECOND, kind};
+                return BaseScaleInterval{num_units * 604800'000000000, SCALE_NANOSECOND, kind};
             /// Based on SCALE_MONTH
             case IntervalKind::Month:
                 return BaseScaleInterval{num_units, SCALE_MONTH, kind};
@@ -146,5 +148,7 @@ ASTPtr makeASTInterval(Int64 num_units, IntervalKind kind);
 ASTPtr makeASTInterval(const std::pair<Int64, IntervalKind> & interval);
 
 void convertToSameKindIntervalAST(const BaseScaleInterval & bs1, const BaseScaleInterval & bs2, ASTPtr & ast1, ASTPtr & ast2);
+
+UInt32 getAutoScaleByInterval(Int64 num_units, IntervalKind kind);
 }
 }

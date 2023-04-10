@@ -75,6 +75,11 @@ void TableFunctionSession::handleResultType(const ColumnWithTypeAndName & type_a
     }
 }
 
+void TableFunctionSession::validateWindow(FunctionDescriptionPtr desc) const
+{
+    assert(desc && desc->type == WindowType::SESSION);
+}
+
 void registerTableFunctionSession(TableFunctionFactory & factory)
 {
     factory.registerFunction("session", []() -> TableFunctionPtr { return std::make_shared<TableFunctionSession>("session"); });

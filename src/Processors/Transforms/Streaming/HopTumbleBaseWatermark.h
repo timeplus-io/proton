@@ -39,15 +39,7 @@ private:
     std::pair<Int64, Int64> initFirstWindowWithAutoScale(Chunk & chunk, bool delay = false) const;
     std::pair<Int64, Int64> doInitFirstWindow(Chunk & chunk, bool delay = false) const;
 
-    std::pair<Int64, Int64> getWindow(Int64 time_sec) const;
-
-    Int64 addTimeWithAutoScale(Int64 datetime64, IntervalKind::Kind kind, Int64 interval);
-
-    void processWatermarkWithAutoScale(Chunk & chunk);
-    void doProcessWatermark(Chunk & chunk);
-
-    void processWatermarkWithDelayAndWithAutoScale(Chunk & chunk);
-    void doProcessWatermarkWithDelay(Chunk & chunk);
+    std::pair<Int64, Int64> getWindow(Int64 timestamp) const;
 
 protected:
     Int64 window_interval = 0;

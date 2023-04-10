@@ -12,6 +12,8 @@ namespace DB
 /// 1) "1s" parsed as "to_interval_second(1)"
 ///
 /// The unit of time supports [Case Sensitive]:
+/// 'nanoseconds' - 'ns'
+/// 'microseconds' - 'us'
 /// 'milliseconds' - 'ms'
 /// 'seconds' - 's'
 /// 'minutes' - 'm'

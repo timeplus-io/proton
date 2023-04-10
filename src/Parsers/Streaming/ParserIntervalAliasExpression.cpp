@@ -40,7 +40,11 @@ bool ParserIntervalAliasExpression::parseImpl(Pos & pos, ASTPtr & node, Expected
         /// pos->size() = 3(token size)
         /// in.count() = 2(number size)
         String kind_str(pos->begin + in.count(), pos->size() - in.count());
-        if ("ms" == kind_str)
+        if ("ns" == kind_str)
+            interval_kind = IntervalKind::Nanosecond;
+        else if ("us" == kind_str)
+            interval_kind = IntervalKind::Microsecond;
+        else if ("ms" == kind_str)
             interval_kind = IntervalKind::Millisecond;
         else if ("s" == kind_str)
             interval_kind = IntervalKind::Second;

@@ -652,7 +652,7 @@ public:
         ssize_t session_start_pos;
         ssize_t session_end_pos;
         ssize_t delta_col_pos;
-        size_t time_scale = 0;
+        UInt32 time_scale = 0;
         bool time_col_is_datetime64 = false;
         Int64 window_interval = 0;
         Int64 max_emit_timeout = 0;

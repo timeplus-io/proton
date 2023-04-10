@@ -254,6 +254,8 @@ void TableFunctionWindow::init(ContextPtr context, ASTPtr streaming_func_ast, co
     const auto & streaming_win_block = streaming_func_desc->expr->getSampleBlock();
     assert(streaming_win_block.columns() >= 1);
 
+    validateWindow(streaming_func_desc);
+
     const auto & result_type_and_name = streaming_win_block.getByPosition(streaming_win_block.columns() - 1);
     handleResultType(result_type_and_name);
 }
