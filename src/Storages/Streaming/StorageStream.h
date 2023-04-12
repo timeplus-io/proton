@@ -248,6 +248,8 @@ public:
     /// @native_log or @kafka_log become not nullptr only if StorageStream::startup completes.
     bool isReady() const override { return native_log || kafka_log; }
 
+    bool isInmemory() const { return getSettings()->storage_type.value == "memory"; }
+
     friend class StreamSink;
     friend class MergeTreeData;
 

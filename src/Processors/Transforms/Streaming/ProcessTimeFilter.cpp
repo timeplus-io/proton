@@ -92,14 +92,14 @@ void ProcessTimeFilter::transform(Chunk & chunk)
         /// Call now64(scale, timezone)
         auto now_column = timestamp_col_data_type->createColumnConst(1, nowSubsecond(scale));
         auto time = now_column->get64(0);
-        Int64 interval_ago = addTime(time / multiplier, interval_bs.scale, -interval_bs.num_units, DateLUT::instance()) * multiplier + time % multiplier;
+        Int64 interval_ago = addTime(static_cast<UInt32>(time / multiplier), interval_bs.scale, -interval_bs.num_units, DateLUT::instance()) * multiplier + time % multiplier;
         filtered_rows = filter<ColumnDateTime64>(source_columns, source_column, interval_ago);
     }
     else
     {
         /// Call now(timezone)
         auto now_column = timestamp_col_data_type->createColumnConst(1, static_cast<UInt64>(time(nullptr)));
-        Int64 interval_ago = addTime(now_column->get64(0), interval_bs.scale, -interval_bs.num_units, DateLUT::instance());
+        Int64 interval_ago = addTime(static_cast<UInt32>(now_column->get64(0)), interval_bs.scale, -interval_bs.num_units, DateLUT::instance());
         filtered_rows = filter<ColumnDateTime64>(source_columns, source_column, interval_ago);
     }
 

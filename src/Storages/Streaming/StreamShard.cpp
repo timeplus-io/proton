@@ -1075,6 +1075,6 @@ void StreamShard::updateNativeLog()
 
 bool StreamShard::isInmemory() const
 {
-    return storage_stream->getSettings()->storage_type.value == "memory";
+    return storage_stream->isInmemory();
 }
 }
