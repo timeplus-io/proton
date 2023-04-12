@@ -29,6 +29,8 @@
 #include <Common/ProtonCommon.h>
 #include <Common/checkStackSize.h>
 
+#include <ranges>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -190,6 +192,50 @@ void StorageMaterializedView::shutdown()
     DatabaseCatalog::instance().removeDependency(target_table_id, storage_id);
 }
 
+void StorageMaterializedView::waitForDependencies() const
+{
+    std::list<StoragePtr> waiting_storages;
+
+    /// Check target stream
+    if (auto target = getTargetTable(); !target->isReady())
+        waiting_storages.emplace_back(target);
+
+    /// Check source storages
+    auto context = getContext();
+    const auto & select_query = getInMemoryMetadataPtr()->getSelectQuery();
+    for (const auto & select_table_id : select_query.select_table_ids)
+    {
+        auto source_storage = DatabaseCatalog::instance().getTable(select_table_id, context);
+        if (!source_storage->isReady())
+            waiting_storages.emplace_back(source_storage);
+    }
+
+    /// Wait to ready
+    auto check_ready = [&waiting_storages]() {
+        for (auto iter = waiting_storages.begin(); iter != waiting_storages.end();)
+        {
+            if ((*iter)->isReady())
+                iter = waiting_storages.erase(iter);
+            else
+                ++iter;
+        }
+        return waiting_storages.empty();
+    };
+
+    auto waiting_storages_names_v
+        = waiting_storages | std::views::transform([](const auto & storage) { return storage->getStorageID().getNameForLogs(); });
+
+    auto times = 100; /// Timeout 10s
+    while (!check_ready())
+    {
+        if (times-- == 0)
+            throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Timeout, wait for '{}' started", fmt::join(waiting_storages_names_v, ", "));
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        LOG_INFO(log, "Wait for '{}' started", fmt::join(waiting_storages_names_v, ", "));
+    }
+}
+
 void StorageMaterializedView::executeSelectPipeline()
 {
     if (is_virtual)
@@ -198,20 +244,8 @@ void StorageMaterializedView::executeSelectPipeline()
     try
     {
         /// During server bootstrap, we shall startup all tables in parallel, so here
-        /// needs validity check before ingest into target stream.
-        const auto & target = getTargetTable()->as<StorageStream &>();
-        auto times = 100; /// Timeout 10s
-        while (!target.isReady())
-        {
-            if (times-- == 0)
-                throw Exception(
-                    ErrorCodes::RESOURCE_NOT_INITED,
-                    "Timeout, wait for target stream '{}' started",
-                    target.getStorageID().getNameForLogs());
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            LOG_INFO(log, "Wait for target stream '{}' started", target.getStorageID().getNameForLogs());
-        }
+        /// needs validity check underlying tables.
+        waitForDependencies();
 
         /// Build inner background query pipeline and keep it alive during the lifetime of Proton
         buildBackgroundPipeline();
@@ -370,6 +404,18 @@ void StorageMaterializedView::checkValid() const
 
     if (!background_thread.joinable())
         throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Background resources are initializing");
+}
+
+bool StorageMaterializedView::isReady() const
+{
+    if (!background_thread.joinable())
+    {
+        if (background_status.has_exception)
+            return true; /// it's ready but has exception.
+
+        return false;
+    }
+    return true;
 }
 
 NamesAndTypesList StorageMaterializedView::getVirtuals() const

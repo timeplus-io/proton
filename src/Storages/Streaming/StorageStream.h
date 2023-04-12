@@ -246,7 +246,7 @@ public:
 
     /// Used for validity check before background ingestion of materialized view
     /// @native_log or @kafka_log become not nullptr only if StorageStream::startup completes.
-    bool isReady() const { return native_log || kafka_log; }
+    bool isReady() const override { return native_log || kafka_log; }
 
     friend class StreamSink;
     friend class MergeTreeData;

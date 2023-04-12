@@ -246,6 +246,10 @@ public:
     /// Initially reserved virtual column name may be shadowed by real column.
     bool isVirtualColumn(const String & column_name, const StorageMetadataPtr & metadata_snapshot) const;
 
+    /// proton: starts.
+    virtual bool isReady() const { return true; }
+    /// proton: ends.
+
 private:
 
     StorageID storage_id;

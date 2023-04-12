@@ -64,6 +64,8 @@ public:
     /// Get constant pointer to storage settings.
     MergeTreeSettingsPtr getSettings() const;
 
+    bool isReady() const override;
+
 private:
     /// Return true on success, false on failure
     void createInnerTable();
@@ -77,6 +79,8 @@ private:
     void updateStorageSettings();
 
     void validateInnerQuery(const StorageInMemoryMetadata & storage_metadata, const ContextPtr & local_context) const;
+
+    void waitForDependencies() const;
 
 private:
     Poco::Logger * log;
