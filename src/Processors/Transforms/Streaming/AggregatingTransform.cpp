@@ -218,6 +218,22 @@ IProcessor::Status AggregatingTransform::preparePushToOutput()
     return Status::PortFull;
 }
 
+void AggregatingTransform::onCancel()
+{
+    // Wake up all aggregation threads to avoid deadlock
+    {
+        std::unique_lock<std::mutex> lk(many_data->finalizing_mutex);
+        many_data->finalizations.store(0);
+        many_data->finalized.notify_all();
+    }
+
+    {
+        std::unique_lock<std::mutex> lk(many_data->ckpt_mutex);
+        many_data->ckpt_requested.store(0);
+        many_data->ckpted.notify_all();
+    }
+}
+
 void AggregatingTransform::checkpointAlignment(Chunk & chunk)
 {
     auto ckpt_ctx = chunk.getCheckpointContext();
@@ -226,6 +242,9 @@ void AggregatingTransform::checkpointAlignment(Chunk & chunk)
 
     if (many_data->ckpt_requested.fetch_add(1) + 1 == many_data->variants.size())
     {
+        if (isCancelled())
+            return;
+
         /// Validate all ckpt epochs are the same
         auto same_epochs
             = std::all_of(many_data->ckpt_epochs.begin(), many_data->ckpt_epochs.end(), [this](auto epoch) { return epoch == ckpt_epoch; });
@@ -247,7 +266,8 @@ void AggregatingTransform::checkpointAlignment(Chunk & chunk)
         auto start = MonotonicMilliseconds::now();
 
         std::unique_lock<std::mutex> lk(many_data->ckpt_mutex);
-        many_data->ckpted.wait(lk);
+        if (!isCancelled())
+            many_data->ckpted.wait(lk);
 
         auto end = MonotonicMilliseconds::now();
         LOG_INFO(log, "Took {} milliseconds to wait for checkpointing {} shard aggregation", end - start, many_data->variants.size());

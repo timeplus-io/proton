@@ -41,6 +41,9 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 
     if (many_data->finalizations.fetch_add(1) + 1 == many_data->variants.size())
     {
+        if (isCancelled())
+            return;
+
         auto start = MonotonicMilliseconds::now();
         doFinalize(chunk_ctx);
         auto end = MonotonicMilliseconds::now();
@@ -59,7 +62,8 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
         auto start = MonotonicMilliseconds::now();
 
         std::unique_lock<std::mutex> lk(many_data->finalizing_mutex);
-        many_data->finalized.wait(lk);
+        if (!isCancelled())
+            many_data->finalized.wait(lk);
 
         auto end = MonotonicMilliseconds::now();
         LOG_INFO(log, "Took {} milliseconds to wait for finalizing {} shard aggregation", end - start, many_data->variants.size());

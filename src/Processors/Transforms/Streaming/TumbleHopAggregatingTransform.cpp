@@ -43,6 +43,9 @@ void TumbleHopAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
     assert(watermark_bound.id == INVALID_SUBSTREAM_ID);
     if (many_data->finalizations.fetch_add(1) + 1 == many_data->variants.size())
     {
+        if (isCancelled())
+            return;
+
         /// The current transform is the last one in this round of
         /// finalization. Do watermark alignment for all of the variants
         /// pick the smallest watermark
@@ -90,7 +93,8 @@ void TumbleHopAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
         auto start = MonotonicMilliseconds::now();
 
         std::unique_lock<std::mutex> lk(many_data->finalizing_mutex);
-        many_data->finalized.wait(lk);
+        if (!isCancelled())
+            many_data->finalized.wait(lk);
 
         auto end = MonotonicMilliseconds::now();
         LOG_INFO(

@@ -124,6 +124,8 @@ private:
     void checkpointAlignment(Chunk & chunk);
 
 protected:
+    void onCancel() override;
+
     void emitVersion(Block & block);
     /// return {should_abort, need_finalization} pair
     std::pair<bool, bool> executeOrMergeColumns(Columns columns, size_t num_rows);
