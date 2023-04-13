@@ -87,7 +87,11 @@ Pipe Kafka::read(
 
     LOG_INFO(log, "Starting reading {} streams by seeking to {} in dedicated resource group", pipes.size(), query_info.seek_to_info->getSeekTo());
 
-    return Pipe::unitePipes(std::move(pipes));
+    auto pipe = Pipe::unitePipes(std::move(pipes));
+    auto min_threads = context->getSettingsRef().min_threads.value;
+    if (min_threads > static_cast<UInt64>(shards))
+        pipe.resize(min_threads);
+    return pipe;
 }
 
 NamesAndTypesList Kafka::getVirtuals() const

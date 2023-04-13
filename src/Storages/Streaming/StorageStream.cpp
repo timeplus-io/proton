@@ -616,9 +616,17 @@ void StorageStream::readStreaming(
         share_resource_group ? "shared" : "dedicated");
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
+
+    auto min_threads = settings_ref.min_threads.value;
+    if (min_threads > shards_to_read.size())
+        pipe.resize(min_threads);
+    else
+        min_threads = shards_to_read.size();
+
     auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), description, query_info.storage_limits);
     query_plan.addStep(std::move(read_step));
-    query_plan.setMaxThreads(shards_to_read.size());
+    /// We like to override the maximum concurrency there
+    query_plan.setMaxThreads(min_threads);
 }
 
 void StorageStream::read(
