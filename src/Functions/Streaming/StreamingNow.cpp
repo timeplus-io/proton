@@ -27,11 +27,12 @@ class ExecutableFunctionNow : public IExecutableFunction
 public:
     String getName() const override { return "now"; }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName &, const DataTypePtr &, size_t input_rows_count) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName &, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
-        return DataTypeDateTime().createColumnConst(
-                input_rows_count,
-                static_cast<UInt64>(time(nullptr)));
+        if (unlikely(input_rows_count == 0))
+            return result_type->createColumn();
+
+        return result_type->createColumnConst(input_rows_count, static_cast<UInt64>(time(nullptr)));
     }
 };
 

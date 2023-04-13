@@ -57,6 +57,9 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName &, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
+        if (unlikely(input_rows_count == 0))
+            return result_type->createColumn();
+
         return result_type->createColumnConst(input_rows_count, nowSubsecond(scale));
     }
 
