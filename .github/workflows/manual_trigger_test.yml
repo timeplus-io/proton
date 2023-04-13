@@ -174,3 +174,145 @@ jobs:
       TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
       TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  prepare_stateless_test:
+    runs-on: ubuntu-latest
+    outputs:
+      command: |
+        cd $GITHUB_WORKSPACE/tests/proton_ci
+
+        # make virtualenv
+        ln -s /usr/bin/python3 /usr/bin/python
+        apt-get update
+        systemctl stop unattended-upgrades
+        apt install python3-venv -y
+        python -m venv env
+        source env/bin/activate
+
+        pip install -r requirements.txt
+        export PROTON_VERSION=$TAG
+        python functional_tests_check.py stateless
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  stateless_test_on_x64:
+    needs: prepare_stateless_test
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: github.event.inputs.arch == 'x64'
+    with:
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      submodules: false
+      sanitizer: ''
+      arch: ${{ vars.X64_ARCH }}
+      tag: ${{ github.event.inputs.tag }}
+      command: |
+        ${{ needs.prepare_stateless_test.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  stateless_test_on_arm:
+    needs: prepare_stateless_test
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: github.event.inputs.arch == 'arm'
+    with:
+      ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.ARM_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      submodules: false
+      arch: ${{ vars.ARM_ARCH }}
+      sanitizer: ''
+      tag: ${{ github.event.inputs.tag }}
+      command: |
+        ${{ needs.prepare_stateless_test.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  prepare_stateful_test:
+    runs-on: ubuntu-latest
+    outputs:
+      command: |
+        cd $GITHUB_WORKSPACE/tests/proton_ci
+
+        # make virtualenv
+        ln -s /usr/bin/python3 /usr/bin/python
+        apt-get update
+        systemctl stop unattended-upgrades
+        apt install python3-venv -y
+        python -m venv env
+        source env/bin/activate
+
+        pip install -r requirements.txt
+        export PROTON_VERSION=$TAG
+        python functional_tests_check.py stateful
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  stateful_test_on_x64:
+    needs: prepare_stateful_test
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: github.event.inputs.arch == 'x64'
+    with:
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      submodules: false
+      sanitizer: ''
+      arch: ${{ vars.X64_ARCH }}
+      tag: ${{ github.event.inputs.tag }}
+      command: |
+        ${{ needs.prepare_stateful_test.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  stateful_test_on_arm:
+    needs: prepare_stateful_test
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: github.event.inputs.arch == 'arm'
+    with:
+      ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.ARM_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      submodules: false
+      arch: ${{ vars.ARM_ARCH }}
+      sanitizer: ''
+      tag: ${{ github.event.inputs.tag }}
+      command: |
+        ${{ needs.prepare_stateful_test.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}

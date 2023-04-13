@@ -107,10 +107,18 @@ def clickhouse_execute_http(base_args, query, timeout=30, settings=None, default
         params['default_format'] = default_format
     request_body = '/?' + base_args.client_options_query_str + urllib.parse.urlencode(params)
     #print(f"clickhouse_execute_http request_body = {request_body}")
-    client.request('POST', request_body)
-    res = client.getresponse()
-    
-    data = res.read()
+    for i in range(MAX_RETRIES):
+        try:
+            client.request('POST', request_body)
+            res = client.getresponse()
+            data = res.read()
+            break
+        except Exception as ex:
+            if i == MAX_RETRIES - 1:
+                raise
+
+            sleep(i+1)
+
     #print(f"clickhouse_execute_http data = {data}")    
     if res.status != 200:
         raise HTTPError(data.decode(), res.status)
@@ -411,7 +419,6 @@ class TestCase:
             })
 
             os.environ["CLICKHOUSE_DATABASE"] = database
-            print(f"configure_test_case_args, CLICKHOUSE_DATABASE={database}")
             # Set temporary directory to match the randomly generated database,
             # because .sh tests also use it for temporary files and we want to avoid
             # collisions.
@@ -622,7 +629,7 @@ class TestCase:
             # proton: ends.
         #print(f"run_single_test, pattern = {pattern}")
         command = pattern.format(**params)
-        print(f"test.run_single_test, command = {command}, ")
+        # print(f"test.run_single_test, command = {command}, ")
         clickhouse_database_env = os.getenv("CLICKHOUSE_DATABASE")
         #print(f"run_single_test, CLICKHOUSE_DATABASE = {clickhouse_database_env}")
 

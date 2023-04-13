@@ -2,7 +2,7 @@ import os
 import logging
 import ast
 
-from env_helper import GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_RUN_ID
+from env_helper import GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_RUN_ID, SANITIZER, ARCH
 from report import create_test_html_report
 
 
@@ -40,7 +40,7 @@ def process_logs(s3_client, additional_logs, s3_path_prefix, test_results, with_
 
 
 def upload_results(s3_client, pr_number, commit_sha, test_results, additional_files, check_name, with_raw_logs=True):
-    s3_path_prefix = f"reports/proton/tests/CI/{pr_number}/{commit_sha}/" + check_name.lower().replace(' ', '_').replace('(', '_').replace(')', '_').replace(',', '_')
+    s3_path_prefix = f"reports/proton/tests/CI/{pr_number}/{commit_sha}/" + check_name.lower().replace(' ', '_').replace('(', '_').replace(')', '_').replace(',', '_') + '_' + ARCH + "_" + SANITIZER
     additional_urls = process_logs(s3_client, additional_files, s3_path_prefix, test_results, with_raw_logs)
 
     branch_url = f"{GITHUB_SERVER_URL}/{GITHUB_REPOSITORY}/commits/master"

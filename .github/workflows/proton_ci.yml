@@ -140,6 +140,74 @@ jobs:
       TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
       TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  stateless_test_address_x64:
+    needs: build_address_x64
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: github.event.pull_request.draft == false
+    with:
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      submodules: false
+      sanitizer: "address"
+      arch: ${{ vars.X64_ARCH }}
+      command: |
+        cd $GITHUB_WORKSPACE/tests/proton_ci
+        # make virtualenv
+        ln -s /usr/bin/python3 /usr/bin/python
+        apt-get update
+        systemctl stop unattended-upgrades
+        apt install python3-venv -y
+        python -m venv env
+        source env/bin/activate
+        pip install -r requirements.txt
+        export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
+        python functional_tests_check.py stateless
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  stateful_test_address_x64:
+    needs: build_address_x64
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: github.event.pull_request.draft == false
+    with:
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      submodules: false
+      sanitizer: "address"
+      arch: ${{ vars.X64_ARCH }}
+      command: |
+        cd $GITHUB_WORKSPACE/tests/proton_ci
+        # make virtualenv
+        ln -s /usr/bin/python3 /usr/bin/python
+        apt-get update
+        systemctl stop unattended-upgrades
+        apt install python3-venv -y
+        python -m venv env
+        source env/bin/activate
+        pip install -r requirements.txt
+        export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
+        python functional_tests_check.py stateful
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   SkipDraft:
     if: github.event.pull_request.draft == true
     runs-on: ubuntu-latest

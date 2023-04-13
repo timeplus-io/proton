@@ -21,6 +21,7 @@ class TeePopen:
         log_file: str,
         env: Optional[dict] = None,
         timeout: Optional[int] = None,
+        cwd: Optional[int] = os.path.dirname(__file__)
     ):
         self.command = command
         self._log_file_name = log_file
@@ -28,6 +29,7 @@ class TeePopen:
         self.env = env or os.environ.copy()
         self._process = None  # type: Optional[Popen]
         self.timeout = timeout
+        self.cwd = cwd
 
     def _check_timeout(self) -> None:
         if self.timeout is None:
@@ -52,6 +54,7 @@ class TeePopen:
             stderr=STDOUT,
             stdout=PIPE,
             bufsize=1,
+            cwd=self.cwd,
         )
         if self.timeout is not None and self.timeout > 0:
             t = Thread(target=self._check_timeout)

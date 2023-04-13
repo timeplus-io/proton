@@ -19,9 +19,9 @@ profiles:
     readonly:
         readonly: 1
 
-    # Disable query profiler. When debugging, it's better to disable them
-    query_profiler_real_time_period_ns: 0
-    query_profiler_cpu_time_period_ns: 0
+    # 10 times per second
+    query_profiler_real_time_period_ns: 100000000
+    query_profiler_cpu_time_period_ns: 100000000
 
 # Users and ACL.
 users:

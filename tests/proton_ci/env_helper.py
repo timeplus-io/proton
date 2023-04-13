@@ -18,3 +18,6 @@ REPO_COPY = os.getenv("REPO_COPY", os.path.abspath("../../"))
 RUNNER_TEMP = os.getenv("RUNNER_TEMP", os.path.abspath("./tmp"))
 S3_BUILDS_BUCKET = os.getenv("S3_BUILDS_BUCKET", "tp-internal")
 S3_TEST_REPORTS_BUCKET = os.getenv("S3_TEST_REPORTS_BUCKET", "tp-internal")
+SANITIZER = os.getenv("SANITIZER", "release")
+SANITIZER = "release" if len(SANITIZER) == 0 else SANITIZER
+ARCH = os.getenv("ARCH", "x64")
