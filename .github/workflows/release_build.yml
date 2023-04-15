@@ -4,8 +4,8 @@ name: release_build
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
   schedule:
-    # build at 00:30(UTC) on every Tuesday and Saturday
-    - cron:  '30 0 * * 2,6'
+    # build at 15:30UTC,8:30PST, 23:30CST, on every Tuesday and Friday
+    - cron:  '30 15 * * 2,5'
 
 jobs:
   Build:
