@@ -5,7 +5,11 @@ import os
 import sys
 import subprocess
 # import atexit
+import json,traceback
 from typing import List, Tuple
+#from timeplus import Stream, Environment
+from proton_helper import ProtonHelper,prepare_event,prepare_event_tag
+from unit_test_record import UnitTestRecord
 
 from github import Github
 
@@ -113,7 +117,7 @@ if __name__ == "__main__":
     repo_path = REPO_COPY
     reports_path = REPORTS_PATH
 
-    check_name = "UnitTest" + PROTON_VERSION
+    test_type = "UnitTest" + PROTON_VERSION
 
     if not os.path.exists(temp_path):
         os.makedirs(temp_path)
@@ -145,8 +149,6 @@ if __name__ == "__main__":
 
     state, description, test_results, additional_logs = process_results(test_output)
 
-    # ch_helper = ClickHouseHelper()
-    # mark_flaky_tests(ch_helper, check_name, test_results)
     if CI:
         s3_helper = S3Helper("https://s3.amazonaws.com")
         report_url = upload_results(
@@ -155,25 +157,31 @@ if __name__ == "__main__":
             pr_info.sha,
             test_results,
             [run_log_path] + additional_logs,
-            check_name,
+            test_type,
         )
         print(f"::notice ::Report url: {report_url}")
 
-        post_commit_status(gh, pr_info.sha, check_name, description, state, report_url)
+        post_commit_status(gh, pr_info.sha, test_type, description, state, report_url)
+
+    #initialize test event fields
+    repo_name = "proton"
+    test_name = "unit_test"
+    test_type = "ci_unit_test"
+    test_id = None
+    event_type = "unit_test_event"
+    event_id = None
+    timestamp = stopwatch.start_time_str
+    timeplus_event_version = None
+
+    #write status start test_event to timeplus 
+    proton_helper = ProtonHelper()
+    event = prepare_event(test_results,event_type)
+    event_tag = prepare_event_tag(timeplus_event_version,repo_name,test_id,test_name,test_type,pr_info)
+    record = UnitTestRecord(event_id,event,event_tag,timestamp)
+    proton_helper.write(record)
 
     logging.info(state)
     logging.info(description)
-    # prepared_events = prepare_tests_results_for_clickhouse(
-    #     pr_info,
-    #     test_results,
-    #     state,
-    #     stopwatch.duration_seconds,
-    #     stopwatch.start_time_str,
-    #     report_url,
-    #     check_name,
-    # )
-
-    # ch_helper.insert_events_into(db="default", table="checks", events=prepared_events)
-
+    
     if state == "failure" or state == "error":
         sys.exit(1)
