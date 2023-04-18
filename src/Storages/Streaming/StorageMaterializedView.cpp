@@ -147,9 +147,13 @@ void StorageMaterializedView::validateInnerQuery(const StorageInMemoryMetadata &
     select_context->makeQueryContext();
     select_context->setCurrentQueryId(""); /// generate random query_id
 
-    InterpreterSelectWithUnionQuery select_interpreter(storage_metadata.getSelectQuery().inner_query, select_context, SelectQueryOptions());
+    auto description = storage_metadata.getSelectQuery();
+    InterpreterSelectWithUnionQuery select_interpreter(description.inner_query, select_context, SelectQueryOptions().analyze());
     if (!select_interpreter.isStreaming())
         throw Exception(ErrorCodes::INCORRECT_QUERY, "Materialized view doesn't support historical select query");
+
+    if (std::ranges::find(description.select_table_ids, getStorageID()) != description.select_table_ids.end())
+        throw Exception(ErrorCodes::INCORRECT_QUERY, "{} {} cannot select from itself", getName(), getStorageID().getFullTableName());
 }
 
 StorageMaterializedView::~StorageMaterializedView()
@@ -225,65 +229,48 @@ void StorageMaterializedView::waitForDependencies() const
     auto waiting_storages_names_v
         = waiting_storages | std::views::transform([](const auto & storage) { return storage->getStorageID().getNameForLogs(); });
 
-    auto times = 100; /// Timeout 10s
+    auto times = 100; /// Timeout 20s
     while (!check_ready())
     {
+        if (shutdown_called.test())
+            return;
+
         if (times-- == 0)
             throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Timeout, wait for '{}' started", fmt::join(waiting_storages_names_v, ", "));
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
         LOG_INFO(log, "Wait for '{}' started", fmt::join(waiting_storages_names_v, ", "));
     }
 }
 
 void StorageMaterializedView::executeSelectPipeline()
 {
-    if (is_virtual)
-        return;
+    buildBackgroundPipeline();
 
-    try
+    /// NOTE: If it's an Create request, we should wait for success to build background pipeline,
+    /// so that, we can report the error if has exception (e.g. bad query)
+    if (!is_attach)
     {
-        /// During server bootstrap, we shall startup all tables in parallel, so here
-        /// needs validity check underlying tables.
-        waitForDependencies();
+        if (build_pipeline_thread.joinable())
+            build_pipeline_thread.join();
 
-        /// Build inner background query pipeline and keep it alive during the lifetime of Proton
-        buildBackgroundPipeline();
-
-        /// Run background pipeline
-        executeBackgroundPipeline();
-        LOG_INFO(log, "Started background select query pipeline", getStorageID().getFullTableName());
+        if (background_status.has_exception)
+            throw background_status.exception;
     }
-    catch (...)
-    {
-        background_status.exception = std::current_exception();
-        background_status.has_exception = true;
 
-        LOG_ERROR(log, "Failed to start: {}", getExceptionMessage(background_status.exception, false));
-
-        /// Exception safety: failed "startup" does not require a call to "shutdown" from the caller.
-        /// And it should be able to safely destroy table after exception in "startup" method.
-        /// It means that failed "startup" must not create any background tasks that we will have to wait.
-        cancelBackgroundPipeline();
-
-        /// Note: after failed "startup", the stream will be in a state that only allows to destroy the object.
-        /// If is an Attach request, we didn't throw exception to avoid the system fail to setup.
-        if (!is_attach)
-            throw;
-    }
+    executeBackgroundPipeline();
 }
 
 void StorageMaterializedView::cancelBackgroundPipeline()
 {
-    if (background_executor)
-    {
-        background_executor->cancel();
-        if (background_thread.joinable())
-            background_thread.join();
+    if (build_pipeline_thread.joinable())
+        build_pipeline_thread.join();
 
-        background_executor.reset();
-        background_pipeline.reset();
-    }
+    if (background_executor)
+        background_executor->cancel();
+
+    if (background_thread.joinable())
+        background_thread.join();
 }
 
 void StorageMaterializedView::read(
@@ -402,20 +389,13 @@ void StorageMaterializedView::checkValid() const
             "Bad MaterializedView, please drop it or try recovery by restart server. background exception: {}",
             getExceptionMessage(background_status.exception, false));
 
-    if (!background_thread.joinable())
+    if (!isReady())
         throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Background resources are initializing");
 }
 
 bool StorageMaterializedView::isReady() const
 {
-    if (!background_thread.joinable())
-    {
-        if (background_status.has_exception)
-            return true; /// it's ready but has exception.
-
-        return false;
-    }
-    return true;
+    return background_status.resource_initialized;
 }
 
 NamesAndTypesList StorageMaterializedView::getVirtuals() const
@@ -500,6 +480,31 @@ void StorageMaterializedView::updateStorageSettings()
 
 void StorageMaterializedView::buildBackgroundPipeline()
 {
+    build_pipeline_thread = ThreadFromGlobalPool{[this]() {
+        try
+        {
+            /// During server bootstrap, we shall startup all tables in parallel, so here
+            /// needs validity check underlying tables.
+            if (is_attach)
+                waitForDependencies();
+
+            background_status.resource_initialized = true;
+
+            /// Build inner background query pipeline and keep it alive during the lifetime of Proton
+            doBuildBackgroundPipeline();
+        }
+        catch (...)
+        {
+            background_status.exception = std::current_exception();
+            background_status.has_exception = true;
+
+            LOG_ERROR(log, "Failed to build backgroud pipeline: {}", getExceptionMessage(background_status.exception, false));
+        }
+    }};
+}
+
+void StorageMaterializedView::doBuildBackgroundPipeline()
+{
     auto target_table = getTargetTable();
     auto target_metadata_snapshot = target_table->getInMemoryMetadataPtr();
     auto metadata_snapshot = getInMemoryMetadataPtr();
@@ -581,15 +586,29 @@ void StorageMaterializedView::buildBackgroundPipeline()
 
     local_context->setInsertionTable(target_table->getStorageID());
     local_context->setupQueryStatusPollId(target_table->as<StorageStream &>().nextBlockId()); /// Async insert requried
+
+    background_executor = background_pipeline.execute();
 }
 
 void StorageMaterializedView::executeBackgroundPipeline()
 {
-    background_executor = background_pipeline.execute();
     background_thread = ThreadFromGlobalPool{[this]() {
         try
         {
-            LOG_INFO(log, "Background pipeline started for materialized view {}", getStorageID().getFullTableName());
+            /// NOTE: If it's an Attach request, we should wait for success to build background pipeline
+            if (is_attach)
+            {
+                if (build_pipeline_thread.joinable())
+                    build_pipeline_thread.join();
+            
+                if (unlikely(background_status.has_exception))
+                {
+                    LOG_ERROR(log, "Skip to execute background pipeline for materialized view {}", getStorageID().getFullTableName());
+                    return;
+                }
+            }
+
+            LOG_INFO(log, "Executing background pipeline for materialized view {}", getStorageID().getFullTableName());
             assert(background_executor);
             background_executor->execute(background_pipeline.getNumThreads());
         }

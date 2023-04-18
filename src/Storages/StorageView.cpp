@@ -104,6 +104,8 @@ StorageView::StorageView(
 
     /// proton: start.
     auto description = SelectQueryDescription::getSelectQueryFromASTForView(query.select->clone(), local_context);
+    if (std::ranges::find(description.select_table_ids, getStorageID()) != description.select_table_ids.end())
+        throw Exception(ErrorCodes::INCORRECT_QUERY, "{} {} cannot select from itself", getName(), getStorageID().getFullTableName());
     /// proton; ends.
 
     storage_metadata.setSelectQuery(description);

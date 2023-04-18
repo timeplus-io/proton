@@ -11,6 +11,7 @@
 #include <Interpreters/ApplyWithAliasVisitor.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
 #include <Interpreters/Streaming/WindowCommon.h>
+#include <Parsers/ASTWithElement.h>
 #include <TableFunctions/TableFunctionFactory.h>
 /// proton: ends.
 
@@ -64,55 +65,65 @@ ASTSelectWithUnionQuery * tryGetSubquery(const ASTPtr ast)
 }
 
 /// proton: starts. For streaming materialized view, we don't need to limit the number of selects anymore
-void extractFromTableFunction(const ASTFunction & ast_func, std::vector<StorageID> & storage_ids, ContextPtr context);
-
-void extractDependentTableFromSelectQuery(
-    std::vector<StorageID> & storage_ids, ASTSelectWithUnionQuery & select_query, ContextPtr context, bool add_default_db = true)
+struct ExtractDependentTableMatcher
 {
-    if (add_default_db)
+    struct Data
     {
-        AddDefaultDatabaseVisitor visitor(context, context->getCurrentDatabase());
-        visitor.visit(select_query);
+        std::vector<StorageID> & storage_ids;
+        ContextPtr context;
+    };
+
+    static bool needChildVisit(const ASTPtr & node, const ASTPtr & child)
+    {
+        if (auto select = node->as<ASTSelectQuery>())
+            return child.get() != select->with().get();
+
+        return true;
     }
 
-    for (auto & query : select_query.list_of_selects->children)
+    static void visit(const ASTPtr & ast, Data & data)
     {
-        for (const ASTTableExpression * table_expression : getTableExpressions(query->as<ASTSelectQuery &>()))
+        if (const auto * table = ast->as<ASTTableExpression>())
+            visit(*table, data);
+        else if (const auto * func = ast->as<ASTFunction>())
+            visit(*func, data);
+    }
+
+private:
+    static void visit(const ASTTableExpression & table_expression, Data & data)
+    {
+        /// stream name
+        if (auto storage_id_opt = tryGetStorageID(table_expression.database_and_table_name))
+            data.storage_ids.emplace_back(*storage_id_opt);
+    }
+
+    static void visit(const ASTFunction & ast_func, Data & data)
+    {
+        if (TableFunctionFactory::instance().isTableFunctionName(ast_func.name))
         {
-            /// stream name
-            if (auto storage_id_opt = tryGetStorageID(table_expression->database_and_table_name))
-                storage_ids.emplace_back(*storage_id_opt);
-            /// <window_func>(<stream_name>|<cte_subquery>, ...)
-            else if (table_expression->table_function)
-                extractFromTableFunction(table_expression->table_function->as<ASTFunction &>(), storage_ids, context);
-            /// (subquery)
-            else if (auto * subquery = tryGetSubquery(table_expression->subquery))
-                extractDependentTableFromSelectQuery(storage_ids, *subquery, context, false);
-            else
-                throw Exception(
-                    "Logical error while creating VIEW or MATERIALIZED VIEW. Could not retrieve stream name from select query",
-                    DB::ErrorCodes::LOGICAL_ERROR);
+            assert(ast_func.arguments);
+            const auto & table_arg = ast_func.arguments->children.at(0);
+            if (auto storage_id_opt = tryGetStorageID(table_arg))
+                data.storage_ids.emplace_back(*storage_id_opt);
+        }
+        else if (functionIsInOrGlobalInOperator(ast_func.name))
+        {
+            assert(ast_func.arguments);
+            const auto & table_arg = ast_func.arguments->children.at(1);
+            if (auto storage_id_opt = tryGetStorageID(table_arg))
+                data.storage_ids.emplace_back(*storage_id_opt);
+        }
+        else if (functionIsDictGet(ast_func.name))
+        {
+            assert(ast_func.arguments);
+            const auto & table_arg = ast_func.arguments->children.at(0);
+            if (auto storage_id_opt = tryGetStorageID(table_arg))
+                data.storage_ids.emplace_back(*storage_id_opt);
         }
     }
-}
+};
 
-void extractFromTableFunction(const ASTFunction & ast_func, std::vector<StorageID> & storage_ids, ContextPtr context)
-{
-    assert(ast_func.arguments);
-    const auto & table_arg = ast_func.arguments->children.at(0);
-    if (auto storage_id_opt = tryGetStorageID(table_arg))
-        storage_ids.emplace_back(*storage_id_opt); /// <stream_name>
-    else if (auto * subquery = tryGetSubquery(table_arg))
-        extractDependentTableFromSelectQuery(storage_ids, *subquery, context, false); /// <cte_subquery>
-    else if (auto * nested_func = table_arg->as<ASTFunction>();
-             nested_func && TableFunctionFactory::instance().isTableFunctionName(nested_func->name))
-        extractFromTableFunction(*nested_func, storage_ids, context); /// <nested_table_function>
-    else
-        throw Exception(
-            ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW,
-            "'{}' is not supported while creating VIEW or MATERIALIZED VIEW",
-            ast_func.getAliasOrColumnName());
-}
+using ExtractDependentTableVisitor = ConstInDepthNodeVisitor<ExtractDependentTableMatcher, true>;
 
 void checkAllowedQueries(const ASTSelectWithUnionQuery & select_query)
 {
@@ -145,7 +156,11 @@ SelectQueryDescription SelectQueryDescription::getSelectQueryFromASTForView(cons
 
     auto & select_query = result.inner_query->as<ASTSelectWithUnionQuery &>();
     checkAllowedQueries(select_query);
-    extractDependentTableFromSelectQuery(result.select_table_ids, select_query, context);
+
+    AddDefaultDatabaseVisitor(context, context->getCurrentDatabase()).visit(select_query);
+
+    ExtractDependentTableVisitor::Data data{result.select_table_ids, context};
+    ExtractDependentTableVisitor(data).visit(select_query.ptr());
     return result;
 }
 /// proton: ends.

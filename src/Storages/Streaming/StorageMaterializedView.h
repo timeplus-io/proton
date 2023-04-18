@@ -71,9 +71,13 @@ private:
     void createInnerTable();
     void doCreateInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
 
-    void buildBackgroundPipeline();
     void executeSelectPipeline();
+
+    void buildBackgroundPipeline();
+    void doBuildBackgroundPipeline();
+    
     void executeBackgroundPipeline();
+
     void cancelBackgroundPipeline();
 
     void updateStorageSettings();
@@ -96,12 +100,14 @@ private:
     /// Background update pipeline
     struct
     {
-        std::atomic<bool> has_exception = false;
+        std::atomic_bool resource_initialized = false;
+        std::atomic_bool has_exception = false;
         std::exception_ptr exception;
     } background_status;
 
     PipelineExecutorPtr background_executor;
     QueryPipelineBuilder background_pipeline;
+    ThreadFromGlobalPool build_pipeline_thread;
     ThreadFromGlobalPool background_thread;
 
 protected:
