@@ -22,7 +22,9 @@ if PROTON_VERSION is None:
     sys.exit(1)
 
 IMAGE_NAME = "timeplus/proton:" + PROTON_VERSION
-TIMEOUT = 60 * 60   # 60 minutes
+TIMEOUT = 90 * 60   # 90 minutes 
+# aarch64 with asan running stateless need more time than 60 mins
+# https://github.com/timeplus-io/proton/actions/runs/4726682507/jobs/8387999573#step:6:4081
 
 
 def get_build_image_command():

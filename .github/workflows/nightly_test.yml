@@ -1024,7 +1024,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   build_memory_arm:
-    # temporarily disable tsan on arm due to ASLR stall
+    # temporarily disable msan on arm due to ASLR stall
     if: false
     needs: prepare_sanitizer_build
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
