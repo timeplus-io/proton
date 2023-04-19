@@ -83,6 +83,8 @@
     M(BackgroundSchedulePoolNativeLogTask, "Number of active threads in the NativeLog schedule pool.") \
     M(IOUringPendingEvents, "Number of io_uring SQEs waiting to be submitted") \
     M(IOUringInFlightEvents, "Number of io_uring SQEs in flight") \
+    M(MemoryAmount, "The size of physical memory (RAM) in bytes") \
+    M(NumOfPhysicalCPUCores, "Number of physical CPU cores (vCPU)") \
 
 namespace CurrentMetrics
 {

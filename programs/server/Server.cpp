@@ -137,6 +137,8 @@ namespace CurrentMetrics
     extern const Metric MemoryTracking;
     extern const Metric MaxDDLEntryID;
     extern const Metric MaxPushedDDLEntryID;
+    extern const Metric MemoryAmount;
+    extern const Metric NumOfPhysicalCPUCores;
 }
 
 namespace ProfileEvents
@@ -670,6 +672,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     CurrentMetrics::set(CurrentMetrics::Revision, ProtonRevision::getVersionRevision());
     CurrentMetrics::set(CurrentMetrics::VersionInteger, ProtonRevision::getVersionInteger());
+    CurrentMetrics::set(CurrentMetrics::MemoryAmount, getMemoryAmount());
+    CurrentMetrics::set(CurrentMetrics::NumOfPhysicalCPUCores, getNumberOfPhysicalCPUCores());
 
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases, ...

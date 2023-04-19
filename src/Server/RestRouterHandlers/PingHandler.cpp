@@ -1,5 +1,7 @@
 #include "PingHandler.h"
 
+#include <base/getMemoryAmount.h>
+#include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Core/Block.h>
 #include <NativeLog/Server/NativeLog.h>
 #include <DistributedMetadata/CatalogService.h>
@@ -80,6 +82,12 @@ void PingHandler::buildResponse(const Block & block, String & resp) const
 
     Poco::JSON::Object json_resp;
     json_resp.set("build", build_info);
+
+    Poco::JSON::Object server_info;
+
+    server_info.set("num_of_physical_cpu_cores", getNumberOfPhysicalCPUCores());
+    server_info.set("memory_amount", getMemoryAmount());
+    json_resp.set("server", server_info);
 
     std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     json_resp.stringify(resp_str_stream, 0);
