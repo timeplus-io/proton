@@ -1,12 +1,34 @@
 #pragma once
 
 #include <optional>
+#include <Core/BaseSettings.h>
+#include <Core/Settings.h>
 #include <Storages/IStorage.h>
 #include <base/shared_ptr_helper.h>
 
 
 namespace DB
 {
+
+class ASTStorage;
+
+#define STORAGE_RANDOM_RELATED_SETTINGS(M) \
+    M(UInt64, random_storages_rate_limitor, 0, "Limits how many rows of data can be generated per window by random storages per stream (each query will generate $num_streams source by default). 0 means no maximum value", 0)
+
+#define LIST_OF_STORAGE_RANDOM_SETTINGS(M) \
+    STORAGE_RANDOM_RELATED_SETTINGS(M) \
+    FORMAT_FACTORY_SETTINGS(M)
+
+DECLARE_SETTINGS_TRAITS(StorageRandomSettingsTraits, LIST_OF_STORAGE_RANDOM_SETTINGS)
+
+/** Settings for the StorageRandom engine.
+  * Could be loaded from a CREATE RANDOM STREAM query (SETTINGS clause).
+  */
+struct StorageRandomSettings : public BaseSettings<StorageRandomSettingsTraits>
+{
+    void loadFromQuery(ASTStorage & storage_def);
+};
+
 /* Generates random data for given schema.
  */
 class StorageRandom final : public shared_ptr_helper<StorageRandom>, public IStorage
@@ -37,13 +59,15 @@ public:
 
 private:
     UInt64 random_seed = 0;
+    UInt64 rate_limitor;
 
 protected:
     StorageRandom(
         const StorageID & table_id_,
         const ColumnsDescription & columns_,
         const String & comment,
-        std::optional<UInt64> random_seed);
+        std::optional<UInt64> random_seed,
+        UInt64 rate_limitor);
 };
 
 }

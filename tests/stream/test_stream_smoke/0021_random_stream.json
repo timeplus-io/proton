@@ -42,7 +42,30 @@
                 ["1000"]
               ]}
             ]
+          },
+          {
+            "id": 1,
+            "tags": ["create random"],
+            "name": "#1410",
+            "description": "create random stream with default generating function, limit the amount of data produced per window;",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int default rand()%4) engine Random() settings random_storages_rate_limitor=1000"},
+                  {"client":"python", "query_type": "table", "query_id":"2205", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from create_random limit 2 emit periodic 1s) offset 1 settings max_threads=1"},
+                  {"client":"python", "query_type": "table", "query_id":"2206", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from create_random limit 2 emit periodic 100ms) offset 1 settings max_threads=1"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"2205", "expected_results":[
+                ["10000"]
+              ]},
+              {"query_id":"2206", "expected_results":[
+                ["1000"]
+              ]}
+            ]
           }
-    
     ]
   }

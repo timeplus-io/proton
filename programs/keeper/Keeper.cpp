@@ -15,6 +15,7 @@
 #include <Common/logger_useful.h>
 #include <Common/ErrorHandlers.h>
 #include <base/scope_guard.h>
+#include <base/safeExit.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/Net/TCPServer.h>
 #include <Poco/Util/HelpFormatter.h>
@@ -473,7 +474,7 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
 void Keeper::logRevision() const
 {
     Poco::Logger::root().information("Starting proton Keeper " + std::string{VERSION_STRING}
-        + "(revision : " + std::to_string(ClickHouseRevision::getVersionRevision())
+        + "(revision : " + std::to_string(ProtonRevision::getVersionRevision())
         + ", git hash: " + (git_hash.empty() ? "<unknown>" : git_hash)
         + ", build id: " + (build_id.empty() ? "<unknown>" : build_id) + ")"
         + ", PID " + std::to_string(getpid()));

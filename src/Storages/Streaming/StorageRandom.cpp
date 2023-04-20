@@ -1,5 +1,4 @@
 #include <Storages/Streaming/StorageRandom.h>
-
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
@@ -17,7 +16,10 @@
 #include <DataTypes/NestedUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/inplaceBlockConversions.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSetQuery.h>
 #include <Processors/ISource.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
@@ -27,12 +29,12 @@
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageFactory.h>
+#include <base/ClockUtils.h>
 #include <base/unaligned.h>
 #include <Common/ProtonCommon.h>
 #include <Common/SipHash.h>
 #include <Common/randomSeed.h>
 
-#include <pcg_random.hpp>
 
 namespace DB
 {
@@ -43,6 +45,7 @@ extern const int NOT_IMPLEMENTED;
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 extern const int TOO_LARGE_ARRAY_SIZE;
 extern const int TOO_LARGE_STRING_SIZE;
+extern const int UNKNOWN_SETTING;
 }
 
 
@@ -353,14 +356,26 @@ class GenerateRandomSource final : public ISource
 {
 public:
     GenerateRandomSource(
-        UInt64 block_size_, UInt64 random_seed_, Block block_header_, const ColumnsDescription our_columns_, ContextPtr context_)
+        UInt64 block_size_,
+        UInt64 random_seed_,
+        Block block_header_,
+        const ColumnsDescription our_columns_,
+        ContextPtr context_,
+        UInt64 rate_limitor_)
         : ISource(Nested::flatten(prepareBlockToFill(block_header_)), true, ProcessorID::GenerateRandomSourceID)
         , block_size(block_size_)
         , block_full(std::move(block_header_))
         , our_columns(our_columns_)
         , rng(random_seed_)
         , context(context_)
+        , rate_limitor(rate_limitor_)
+        , header_chunk(Nested::flatten(block_full.cloneEmpty()).getColumns(), 0)
     {
+        rate_limitor_timer = MonotonicMilliseconds::now() + rate_limitor_interval;
+        block_idx_in_window = 0;
+        max_full_block_count = rate_limitor / block_size;
+        partial_size = rate_limitor % block_size;
+
         for (const auto & elem : block_full)
         {
             bool is_reserved_column
@@ -377,6 +392,36 @@ public:
 protected:
     Chunk generate() override
     {
+        if (rate_limitor != 0)
+        {
+            auto now_time = MonotonicMilliseconds::now();
+
+            if (now_time >= rate_limitor_timer)
+            {
+                rate_limitor_timer += rate_limitor_interval;
+                block_idx_in_window = 0;
+            }
+
+            UInt64 batch_size = 0;
+
+            if (block_idx_in_window == 0) // The size of the first generated chunk is partial_size (rate_limitor % block_size).
+                batch_size = partial_size;
+            else if (block_idx_in_window <= max_full_block_count) // The remaining chunk size is block size.
+                batch_size = block_size;
+
+            block_idx_in_window++;
+
+            return doGenerate(batch_size);
+        }
+        else
+            return doGenerate(block_size);
+    }
+    
+    Chunk doGenerate(UInt64 block_size)
+    {
+        if (block_size == 0) 
+            return header_chunk.clone();
+
         Columns columns;
         columns.reserve(block_full.columns());
 
@@ -420,6 +465,13 @@ private:
     const ColumnsDescription our_columns;
     pcg64 rng;
     ContextPtr context;
+    UInt64 rate_limitor_timer;
+    UInt64 block_idx_in_window;
+    UInt64 rate_limitor;
+    UInt64 max_full_block_count;
+    UInt64 partial_size;
+    Chunk header_chunk;
+    static constexpr UInt64 rate_limitor_interval = 100; // Set the size of a window for random storages to generate data, measured in milliseconds.
 
     static Block & prepareBlockToFill(Block & block)
     {
@@ -435,10 +487,39 @@ private:
 
 }
 
+IMPLEMENT_SETTINGS_TRAITS(StorageRandomSettingsTraits, LIST_OF_STORAGE_RANDOM_SETTINGS)
+
+void StorageRandomSettings::loadFromQuery(ASTStorage & storage_def)
+{
+    if (storage_def.settings)
+    {
+        try
+        {
+            applyChanges(storage_def.settings->changes);
+        }
+        catch (Exception & e)
+        {
+            if (e.code() == ErrorCodes::UNKNOWN_SETTING)
+                e.addMessage("for storage " + storage_def.engine->name);
+            throw;
+        }
+    }
+    else
+    {
+        auto settings_ast = std::make_shared<ASTSetQuery>();
+        settings_ast->is_standalone = false;
+        storage_def.set(storage_def.settings, settings_ast);
+    }
+}
+
 
 StorageRandom::StorageRandom(
-    const StorageID & table_id_, const ColumnsDescription & columns_, const String & comment, std::optional<UInt64> random_seed_)
-    : IStorage(table_id_)
+    const StorageID & table_id_,
+    const ColumnsDescription & columns_,
+    const String & comment,
+    std::optional<UInt64> random_seed_,
+    UInt64 rate_limitor_)
+    : IStorage(table_id_), rate_limitor(rate_limitor_)
 {
     random_seed = random_seed_ ? sipHash64(*random_seed_) : randomSeed();
     StorageInMemoryMetadata storage_metadata;
@@ -450,7 +531,7 @@ StorageRandom::StorageRandom(
 
 void registerStorageRandom(StorageFactory & factory)
 {
-    factory.registerStorage("Random", [](const StorageFactory::Arguments & args) {
+    auto creator_fn = [](const StorageFactory::Arguments & args) {
         ASTs & engine_args = args.engine_args;
 
         if (engine_args.size() > 3)
@@ -466,8 +547,23 @@ void registerStorageRandom(StorageFactory & factory)
             if (!value.isNull())
                 random_seed = value.safeGet<UInt64>();
         }
-        return StorageRandom::create(args.table_id, args.columns, args.comment, random_seed);
-    });
+
+        auto storage_random_settings = std::make_unique<StorageRandomSettings>();
+        if (args.storage_def->settings)
+        {
+            storage_random_settings->loadFromQuery(*args.storage_def);
+        }
+
+        return StorageRandom::create(
+            args.table_id, args.columns, args.comment, random_seed, storage_random_settings->random_storages_rate_limitor.value);
+    };
+
+    factory.registerStorage(
+        "Random",
+        creator_fn,
+        StorageFactory::StorageFeatures{
+            .supports_settings = true,
+        });
 }
 
 void StorageRandom::read(
@@ -512,7 +608,8 @@ Pipe StorageRandom::read(
     pcg64 generate(random_seed);
 
     for (UInt64 i = 0; i < num_streams; ++i)
-        pipes.emplace_back(std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context));
+        pipes.emplace_back(
+            std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, rate_limitor));
 
     return Pipe::unitePipes(std::move(pipes));
 }
