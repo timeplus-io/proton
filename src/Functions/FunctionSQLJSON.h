@@ -42,8 +42,6 @@ extern const int BAD_ARGUMENTS;
 }
 
 /// proton: starts.
-constexpr size_t JSON_VALUES_MAX_ARGUMENTS_NUM = 100;
-
 struct NameJSONValues
 {
     static constexpr auto name{"json_values"};
@@ -192,7 +190,8 @@ public:
     {
         if constexpr (std::is_same_v<Name, NameJSONValues>)
             return collections::map<ColumnNumbers>(
-                collections::range(1, JSON_VALUES_MAX_ARGUMENTS_NUM), [](const auto & idx) { return idx; });
+                collections::range(1, getContext()->getSettingsRef().max_number_of_parameters_for_json_values.value),
+                [](const auto & idx) { return idx; });
         else
             return {1};
     }
@@ -202,6 +201,19 @@ public:
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
+        /// proton: starts.
+        if constexpr (std::is_same_v<Name, NameJSONValues>)
+        {
+            const auto & max_args_num = getContext()->getSettingsRef().max_number_of_parameters_for_json_values.value;
+            if (arguments.size() > max_args_num)
+                throw Exception(
+                    ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION,
+                    "Too many arguments for function json_values, expected at most {}, actual is {}",
+                    max_args_num,
+                    arguments.size());
+        }
+        /// proton: ends.
+
         return Impl<DummyJSONParser>::getReturnType(Name::name, arguments);
     }
 
@@ -351,13 +363,6 @@ public:
 
     static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName & arguments)
     {
-        if (arguments.size() > JSON_VALUES_MAX_ARGUMENTS_NUM)
-            throw Exception(
-                ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION,
-                "Too many arguments for function json_values, expected at most {}, actual is {}",
-                JSON_VALUES_MAX_ARGUMENTS_NUM,
-                arguments.size());
-
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>());
     }
 
