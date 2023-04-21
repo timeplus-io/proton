@@ -10,8 +10,9 @@
 #include <Processors/Chunk.h>
 #include <Storages/SelectQueryInfo.h>
 #include <base/ClockUtils.h>
-#include <Common/logger_useful.h>
+#include <Common/ProtonCommon.h>
 #include <Common/VersionRevision.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {
@@ -118,8 +119,8 @@ void WatermarkSettings::initWatermarkForGlobalAggr()
     {
         /// If `PERIODIC INTERVAL ...` is missing in `EMIT STREAM` query
         mode = EmitMode::PERIODIC;
-        emit_query_interval = 2000;
-        emit_query_interval_kind = IntervalKind::Millisecond;
+        emit_query_interval = ProtonConsts::DEFAULT_PERIODIC_INTERVAL.first;
+        emit_query_interval_kind = ProtonConsts::DEFAULT_PERIODIC_INTERVAL.second;
     }
 }
 

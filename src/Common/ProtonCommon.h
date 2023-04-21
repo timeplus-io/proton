@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/IntervalKind.h>
 #include <base/types.h>
 
 #include <vector>
@@ -48,6 +49,9 @@ const UInt64 DEFAULT_DDL_TIMEOUT_MS = 25000;
 
 /// Default settings for session window
 const Int64 SESSION_SIZE_MULTIPLIER = 5; /// multiplier of session_size to timeout_interval of session window
+
+/// Default periodic interval
+const std::pair<Int64, IntervalKind> DEFAULT_PERIODIC_INTERVAL = {2, IntervalKind::Second};
 
 /// Metastore namespace for UDF configuration
 const String UDF_METASTORE_NAMESPACE = "udf";

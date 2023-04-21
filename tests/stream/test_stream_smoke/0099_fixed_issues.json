@@ -173,15 +173,17 @@
           "statements": [
             {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test_stream_2105"},
             {"client":"python", "query_type": "table", "wait":2, "query": "create stream test_stream_2105(value int)"},
-            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9900", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1ms"},
-            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9901", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1s"},
-            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9902", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1m"},
-            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9903", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1h"},
-            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9904", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1d"},
-            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9905", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1w"},
-            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9906", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1M"},
-            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9907", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1q"},
-            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9908", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1y"}
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9900", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1ns"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9901", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1us"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9902", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1ms"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9903", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1s"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9904", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1m"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9905", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1h"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9906", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1d"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9907", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1w"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9908", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1M"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9909", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1q"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2105", "wait":3, "query_id":"9910", "query_end_timer":3, "query":"select count() from test_stream_2105 emit periodic 1y"}
           ]
         }
       ],
@@ -191,10 +193,12 @@
         {"query_id":"9902", "expected_results":[]},
         {"query_id":"9903", "expected_results":[]},
         {"query_id":"9904", "expected_results":[]},
-        {"query_id":"9905", "expected_results":"error_code:43"},
-        {"query_id":"9906", "expected_results":"error_code:43"},
+        {"query_id":"9905", "expected_results":[]},
+        {"query_id":"9906", "expected_results":[]},
         {"query_id":"9907", "expected_results":"error_code:43"},
-        {"query_id":"9908", "expected_results":"error_code:43"}
+        {"query_id":"9908", "expected_results":"error_code:43"},
+        {"query_id":"9909", "expected_results":"error_code:43"},
+        {"query_id":"9910", "expected_results":"error_code:43"}
       ]
     },
     {
@@ -214,6 +218,28 @@
       ],
       "expected_results": [
         {"query_id":"9900", "expected_results":[[1],[2],[3],[1],[2],[3]]}
+      ]
+    },
+    {
+      "id": 8,
+      "tags": ["last x"],
+      "name": "#2556",
+      "description": "stremaing hop query with last x",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test_stream_2556"},
+            {"client":"python", "query_type": "table", "wait":2, "query": "create stream test_stream_2556(i int)"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2556", "wait":3, "query_id":"9900", "query_end_timer":3, "query":"select count() from test_stream_2556 emit last 6m"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2556", "wait":3, "query_id":"9901", "query_end_timer":3, "query": "select count() from test_stream_2556 emit last 2000s"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2556", "wait":3, "query_id":"9902", "query_end_timer":3, "query": "select count() from test_stream_2556 emit last 1h"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":[]},
+        {"query_id":"9901", "expected_results":[]},
+        {"query_id":"9902", "expected_results":"error_code:62"}
       ]
     }
   ]
