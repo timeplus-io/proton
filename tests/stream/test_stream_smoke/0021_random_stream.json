@@ -66,6 +66,146 @@
                 ["1000"]
               ]}
             ]
+          },
+          {
+            "id": 2,
+            "tags": ["unique_random"],
+            "name": "#2248",
+            "description": "create random stream with unique_random function",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int8 default unique_random('int8'))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from create_random limit 5"}
+                  ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"2200", "expected_results":[
+                ["0"], ["1"], ["2"], ["3"], ["4"]
+              ]}
+            ]
+          },
+          {
+            "id": 3,
+            "tags": ["unique_random"],
+            "name": "#2248",
+            "description": "create random stream with unique_random function",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id string default unique_random('string'))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from create_random limit 5"}
+                  ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"2200", "expected_results":[
+                ["0"], ["1"], ["2"], ["3"], ["4"]
+              ]}
+            ]
+          },
+          {
+            "id": 4,
+            "tags": ["unique_random"],
+            "name": "#2248",
+            "description": "create random stream with unique_random function",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id decimal(9,4) default unique_random('decimal(9,4)'))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from create_random limit 5"}
+                  ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"2200", "expected_results":[
+                ["0"], ["0.0001"], ["0.0002"], ["0.0003"], ["0.0004"]
+              ]}
+            ]
+          },
+          {
+            "id": 5,
+            "tags": ["unique_random"],
+            "name": "#2248",
+            "description": "create random stream with unique_random function",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int8 default unique_random('int8',x->to_int8(x+10)))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from create_random limit 5"}
+                  ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"2200", "expected_results":[
+                ["10"], ["11"], ["12"], ["13"], ["14"]
+              ]}
+            ]
+          },
+          {
+            "id": 6,
+            "tags": ["unique_random"],
+            "name": "#2248",
+            "description": "create random stream with unique_random function",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int8 default unique_random('int8',5))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from create_random limit 10"}
+                  ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"2200", "expected_results":[
+                ["0"], ["1"], ["2"], ["3"], ["4"], ["0"], ["1"], ["2"], ["3"], ["4"]
+              ]}
+            ]
+          },
+          {
+            "id": 7,
+            "tags": ["unique_random"],
+            "name": "#2248",
+            "description": "create random stream with unique_random function",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int8 default unique_random('int8',x->to_int8(x+10),5))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from create_random limit 10"}
+                  ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"2200", "expected_results":[
+                ["10"], ["11"], ["12"], ["13"], ["14"], ["10"], ["11"], ["12"], ["13"], ["14"]
+              ]}
+            ]
+          },
+          {
+            "id": 8,
+            "tags": ["unique_random"],
+            "name": "#2248",
+            "description": "create random stream with unique_random function",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int8 default unique_random('int8',5,x->to_int8(x+10)))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from create_random limit 10"}
+                  ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"2200", "expected_results":[
+                ["10"], ["11"], ["12"], ["13"], ["14"], ["10"], ["11"], ["12"], ["13"], ["14"]
+              ]}
+            ]
           }
     ]
   }
