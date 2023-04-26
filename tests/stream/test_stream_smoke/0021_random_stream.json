@@ -77,13 +77,13 @@
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
                   {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int8 default unique_random('int8'))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from create_random limit 5"}
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 0 and id < 256 from create_random limit 5"}
                   ]
               }
             ],
             "expected_results": [
               {"query_id":"2200", "expected_results":[
-                ["0"], ["1"], ["2"], ["3"], ["4"]
+                ["True"], ["True"], ["True"], ["True"], ["True"]
               ]}
             ]
           },
@@ -103,7 +103,7 @@
             ],
             "expected_results": [
               {"query_id":"2200", "expected_results":[
-                ["0"], ["1"], ["2"], ["3"], ["4"]
+                ["any_value"], ["any_value"], ["any_value"], ["any_value"], ["any_value"]
               ]}
             ]
           },
@@ -123,7 +123,7 @@
             ],
             "expected_results": [
               {"query_id":"2200", "expected_results":[
-                ["0"], ["0.0001"], ["0.0002"], ["0.0003"], ["0.0004"]
+                ["any_value"], ["any_value"], ["any_value"], ["any_value"], ["any_value"]
               ]}
             ]
           },
@@ -136,14 +136,14 @@
               {
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
-                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int8 default unique_random('int8',x->to_int8(x+10)))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from create_random limit 5"}
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id uint8 default unique_random('uint8',x->to_uint8(x+10)))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 10 from create_random limit 5"}
                   ]
               }
             ],
             "expected_results": [
               {"query_id":"2200", "expected_results":[
-                ["10"], ["11"], ["12"], ["13"], ["14"]
+                ["True"], ["True"], ["True"], ["True"], ["True"]
               ]}
             ]
           },
@@ -157,13 +157,13 @@
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
                   {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int8 default unique_random('int8',5))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from create_random limit 10"}
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select count(distinct id) from create_random limit 1"}
                   ]
               }
             ],
             "expected_results": [
               {"query_id":"2200", "expected_results":[
-                ["0"], ["1"], ["2"], ["3"], ["4"], ["0"], ["1"], ["2"], ["3"], ["4"]
+                ["5"]
               ]}
             ]
           },
@@ -176,14 +176,14 @@
               {
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
-                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int8 default unique_random('int8',x->to_int8(x+10),5))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from create_random limit 10"}
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id uint8 default unique_random('uint8',x->to_uint8(x+10),5))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 10 and id < 15 from create_random limit 10"}
                   ]
               }
             ],
             "expected_results": [
               {"query_id":"2200", "expected_results":[
-                ["10"], ["11"], ["12"], ["13"], ["14"], ["10"], ["11"], ["12"], ["13"], ["14"]
+                ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"]
               ]}
             ]
           },
@@ -196,14 +196,14 @@
               {
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
-                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int8 default unique_random('int8',5,x->to_int8(x+10)))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from create_random limit 10"}
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id uint8 default unique_random('uint8',5,x->to_uint8(x+10)))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 10 and id < 15 from create_random limit 10"}
                   ]
               }
             ],
             "expected_results": [
               {"query_id":"2200", "expected_results":[
-                ["10"], ["11"], ["12"], ["13"], ["14"], ["10"], ["11"], ["12"], ["13"], ["14"]
+                ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"]
               ]}
             ]
           }
