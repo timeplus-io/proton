@@ -1,1 +1,0 @@
-create stream x( id uint64, t  aggregate_function(arg_max, enum8('<Empty>' = -1, 'Male' = 1, 'Female' = 2), uint64) DEFAULT array_reduce('arg_max_state', ['cast(-1, \'enum8(\'<Empty>\' = -1, \'Male\' = 1, \'Female\' = 2)'], [to_uint64(0)]) ) Engine=MergeTree ORDER BY id; -- { serverError 70 }
