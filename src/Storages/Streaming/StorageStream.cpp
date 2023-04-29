@@ -1714,6 +1714,7 @@ void StorageStream::updateLogStoreCodec(const String & settings_codec)
 void StorageStream::checkReady() const
 {
     if (!isReady())
-        throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Background resources are initializing");
+        throw Exception(
+            ErrorCodes::RESOURCE_NOT_INITED, "Background resources of '{}' are initializing", getStorageID().getFullTableName());
 }
 }

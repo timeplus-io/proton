@@ -390,7 +390,8 @@ void StorageMaterializedView::checkValid() const
             getExceptionMessage(background_status.exception, false));
 
     if (!isReady())
-        throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Background resources are initializing");
+        throw Exception(
+            ErrorCodes::RESOURCE_NOT_INITED, "Background resources of '{}' are initializing", getStorageID().getFullTableName());
 }
 
 bool StorageMaterializedView::isReady() const

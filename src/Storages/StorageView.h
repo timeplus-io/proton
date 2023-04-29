@@ -47,6 +47,8 @@ public:
     void startup() override;
     void shutdown() override;
 
+    bool isReady() const override;
+
 private:
     ContextMutablePtr local_context;
     /// proton: ends.

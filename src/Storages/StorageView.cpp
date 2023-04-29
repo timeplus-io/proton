@@ -256,6 +256,18 @@ void StorageView::shutdown()
     for (const auto & select_table_id : select_query.select_table_ids)
         DatabaseCatalog::instance().removeDependency(select_table_id, storage_id);
 }
+
+bool StorageView::isReady() const
+{
+    const auto & select_query = getInMemoryMetadataPtr()->getSelectQuery();
+    for (const auto & select_table_id : select_query.select_table_ids)
+    {
+        auto source_storage = DatabaseCatalog::instance().getTable(select_table_id, local_context);
+        if (!source_storage->isReady())
+            return false;
+    }
+    return true;
+}
 /// proton: ends.
 
 void registerStorageView(StorageFactory & factory)
