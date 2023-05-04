@@ -63,7 +63,7 @@ endif()
 
 if (NOT ENABLE_MISC_FUNCS)
     list(REMOVE_ITEM clickhouse_functions_sources
-            currentDatabase.cpp
+            # currentDatabase.cpp
             currentProfiles.cpp
             currentRoles.cpp
             FunctionFQDN.cpp
