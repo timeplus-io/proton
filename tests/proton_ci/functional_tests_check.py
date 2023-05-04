@@ -14,6 +14,8 @@ from s3_helper import S3Helper
 from pr_info import PRInfo
 from upload_result_helper import upload_results
 from docker_pull_helper import get_image_with_version
+from proton_helper import ProtonHelper,prepare_event,prepare_event_tag
+from functional_test_record import FunctionTestRecord
 from stopwatch import Stopwatch
 from tee_popen import TeePopen
 
@@ -168,7 +170,22 @@ if __name__ == "__main__":
     logging.info(state)
     logging.info(description)
 
-    # TODO: ProtonHelper, upload test result to timeplus cloud
+    #initialize test event fields
+    repo_name = "proton"
+    test_name = "functional test"
+    test_type = "ci_functional_test"
+    test_id = None
+    event_type = "functional_test_event"
+    event_id = None
+    timestamp = stopwatch.start_time_str
+    timeplus_event_version = None
+
+    #write status start test_event to timeplus 
+    proton_helper = ProtonHelper()
+    event = prepare_event(test_results,event_type,check_name=check_name)
+    event_tag = prepare_event_tag(timeplus_event_version,repo_name,test_id,test_name,test_type,pr_info)
+    record = FunctionTestRecord(event_id,event,event_tag,timestamp)
+    proton_helper.write(record)
 
     if state != "success":
         sys.exit(1)

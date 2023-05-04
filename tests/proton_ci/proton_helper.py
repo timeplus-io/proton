@@ -1,25 +1,30 @@
-import os, traceback,logging,uuid
+import os
+import traceback
+import logging
+import uuid
 from timeplus import Stream, Environment
 from functools import wraps, lru_cache
 
-TIMEPLUS_CONNECTION_RETRY = 3 #when T+ workspace connection error, retry how many times.
+# when T+ workspace connection error, retry how many times.
+TIMEPLUS_CONNECTION_RETRY = 3
+
 
 class ProtonHelper:
-    def __init__(self, api_address=None,work_space=None,api_key=None):
+    def __init__(self, api_address=None, work_space=None, api_key=None):
         if api_address is None:
             api_address = os.environ.get("TIMEPLUS_ADDRESS")
         if work_space is None:
             work_space = os.environ.get("TIMEPLUS_WORKSPACE")
         if api_key is None:
             api_key = os.environ.get("TIMEPLUS_API_KEY")
-        
+
         if api_address is None or api_key is None:
-            logging.error(f"one of TIMEPLUS_API_KEY,TIMEPLUS_ADDRESS,TIMEPLUS_WORKSPACE is not found in ENV")
+            logging.error(
+                f"one of TIMEPLUS_API_KEY,TIMEPLUS_ADDRESS,TIMEPLUS_WORKSPACE is not found in ENV")
         self.env = Environment().address(api_address).workspace(work_space).apikey(api_key)
-        
 
     def write(
-        self, 
+        self,
         record,
     ):
         retry = 0
@@ -33,65 +38,72 @@ class ProtonHelper:
                 )
                 field_names = record.fields
                 row_data = record.data
-                logging.debug(f"field_names = {field_names} \n row_data = {row_data}")
+                logging.debug(
+                    f"field_names = {field_names} \n row_data = {row_data}")
                 stream.ingest(field_names, row_data)
                 retry_flag = False
-            
+
             except Exception as e:
                 print(e)
                 traceback.print_exc()
                 retry_flag = True
-                retry += 1        
+                retry += 1
         return None
-             
-def prepare_event(test_results,event_type,**optional_event_msg):
-        try:
-            event = {"event_type": event_type}
-            test_result_flag = True
-            detailed_summary = []
-            for test_result in test_results:
-                test_name = test_result[0]
-                test_status = test_result[1]
-                current_row = {}
-                current_row['test_name'] = test_name
-                current_row['test_status'] = test_status
-                if "OK" != test_status:
-                    test_result_flag = test_result_flag * 0
-                detailed_summary.append(current_row)
-            event['test_result'] = "seccess" if test_result_flag else "failed"
-            if optional_event_msg is not None:
-                event.update(optional_event_msg)
-            event['payload'] = detailed_summary
-        except(BaseException) as error:
-            logging.error(f"prepare event Exception = error")
-            return None  
-        return event
+
+
+def prepare_event(test_results, event_type, **optional_event_msg):
+    try:
+        event = {"event_type": event_type}
+        test_result_flag = True
+        detailed_summary = []
+        for test_result in test_results:
+            test_name = test_result[0]
+            test_status = test_result[1]
+            current_row = {}
+            current_row['test_name'] = test_name
+            current_row['test_status'] = test_status
+            if "OK" != test_status:
+                test_result_flag = test_result_flag * 0
+            detailed_summary.append(current_row)
+        event['test_result'] = "seccess" if test_result_flag else "failed"
+        if optional_event_msg is not None:
+            event.update(optional_event_msg)
+        event['payload'] = detailed_summary
+    except (BaseException) as error:
+        logging.error(f"prepare event Exception = error")
+        return None
+    return event
+
 
 def prepare_event_tag(
-        version,
-        repo_name,
-        test_id,
-        test_name,
-        test_type,
-        pr_info,
-        **optional_tags,
-    ):
-        try:
-            if test_id is None:
-                test_id = str(uuid.uuid1())
-            test_tag = {"version":version,"repo_name":repo_name}
-            test_info = {"test_id":test_id,"test_name":test_name,"test_type":test_type}
-            build_info = {"build_type": os.environ.get("SANITIZER","release_build"),"pr_number": pr_info.number,"commit_sha": pr_info.sha}
-            run_time_info = {"os": os.getenv("RUNNER_OS", "Linux"),"platform":os.getenv("RUNNER_ARCH", "x86_64")} 
-            test_tag['test_info'] = test_info
-            test_tag['build_info'] = build_info
-            test_tag['run_time_info'] = run_time_info
-            if optional_tags is not None: 
-                test_tag.update(optional_tags)
-        except(BaseException) as error:
-            logging.error(f"prepare event tag Exception = error")
-            return None  
-        return test_tag
+    version,
+    repo_name,
+    test_id,
+    test_name,
+    test_type,
+    pr_info,
+    **optional_tags,
+):
+    try:
+        if test_id is None:
+            test_id = str(uuid.uuid1())
+        test_tag = {"version": version, "repo_name": repo_name}
+        test_info = {"test_id": test_id,
+                     "test_name": test_name, "test_type": test_type}
+        build_info = {"build_type": os.environ.get(
+            "SANITIZER", "release_build"), "pr_number": pr_info.number, "commit_sha": pr_info.sha}
+        run_time_info = {"os": os.getenv(
+            "RUNNER_OS", "Linux"), "platform": os.getenv("RUNNER_ARCH", "x86_64")}
+        test_tag['test_info'] = test_info
+        test_tag['build_info'] = build_info
+        test_tag['run_time_info'] = run_time_info
+        if optional_tags is not None:
+            test_tag.update(optional_tags)
+    except (BaseException) as error:
+        logging.error(f"prepare event tag Exception = error")
+        return None
+    return test_tag
+
 
 class column:
 

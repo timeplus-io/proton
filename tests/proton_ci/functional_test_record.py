@@ -3,8 +3,8 @@ import json
 from proton_helper import stream, column
 
 
-@stream(name="test_unit_result")
-class UnitTestRecord():
+@stream(name="function_test_result")
+class FunctionTestRecord():
     def __init__(
         self,
         event_id,
