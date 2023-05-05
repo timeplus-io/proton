@@ -1,0 +1,9 @@
+SELECT bit_and(0, inf); -- { serverError 43 }
+SELECT bit_xor(0, inf); -- { serverError 43 }
+SELECT bit_or(0, inf); -- { serverError 43 }
+SELECT bit_test(inf, 0); -- { serverError 43 }
+SELECT bit_test(0, inf); -- { serverError 43 }
+SELECT bit_rotate_left(inf, 0); -- { serverError 43 }
+SELECT bit_rotate_right(inf, 0); -- { serverError 43 }
+SELECT bit_shift_left(inf, 0); -- { serverError 43 }
+SELECT bit_shift_right(inf, 0); -- { serverError 43 }
