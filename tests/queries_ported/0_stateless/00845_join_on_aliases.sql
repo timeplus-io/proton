@@ -3,8 +3,8 @@ SET asterisk_include_reserved_columns=false;
 DROP STREAM IF EXISTS table1;
 DROP STREAM IF EXISTS table2;
 
-CREATE TABLE table1 (a UInt32, b UInt32) ENGINE = Memory;
-CREATE TABLE table2 (a UInt32, b UInt32) ENGINE = Memory;
+CREATE STREAM table1 (a uint32, b uint32) ENGINE = Memory;
+CREATE STREAM table2 (a uint32, b uint32) ENGINE = Memory;
 
 INSERT INTO table1(a,b) SELECT number, number FROM numbers(10);
 INSERT INTO table2(a,b) SELECT number * 2, number * 20 FROM numbers(6);
@@ -41,5 +41,5 @@ from table1 as t1
 join table2 as t2 on t1_a = t2_a
 where (t1.a as t1_a) > 2 and (t2.a as t2_a) > 4;
 
-DROP TABLE table1;
-DROP TABLE table2;
+DROP STREAM table1;
+DROP STREAM table2;
