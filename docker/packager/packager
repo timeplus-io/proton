@@ -197,6 +197,7 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_PROTON_ALL=OFF')
         cmake_flags.append('-DENABLE_PROTON_SERVER=ON')
         cmake_flags.append('-DENABLE_PROTON_CLIENT=ON')
+        cmake_flags.append('-DENABLE_PROTON_FORMAT=ON')
         cmake_flags.append('-DENABLE_PROTON_DWAL_BENCHMARK=ON')
         cmake_flags.append('-DENABLE_PROTON_INSTALL=ON')
         cmake_flags.append('-DENABLE_PROTON_METASTORE=ON')

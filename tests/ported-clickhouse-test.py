@@ -1226,6 +1226,8 @@ def main(args):
 
     # Keep same default values as in queries/shell_config.sh
     os.environ.setdefault("CLICKHOUSE_BINARY", args.binary)
+    os.environ.setdefault("CLICKHOUSE_FORMAT", args.binary + " format")
+
     # os.environ.setdefault("CLICKHOUSE_CLIENT", args.client)
     os.environ.setdefault("CLICKHOUSE_CONFIG", args.configserver)
 
