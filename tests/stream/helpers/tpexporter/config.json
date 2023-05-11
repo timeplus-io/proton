@@ -1,0 +1,115 @@
+{
+    "name":"tp_exporter_1",
+    "mode": "batch",
+    "workspaces": [
+        {"name":"tp-duckbill","type":"address", "address": "https://cloud.timeplus.com.cn/duckbill", "api_key_env_var": "TP_DUCKBILL_API_KEY"},
+        {"name":"tp-eng","type":"address", "address": "https://dev.timeplus.cloud/tp-eng",  "api_key_env_var": "TP_ENG_API_KEY"},
+        {"name":"local1", "type":"file", "address": "./local1"},
+        {"name":"local2","type":"address", "address": "http://localhost:8000", "api_key_env_var": "TP_LOCAL_API_KEY"},
+        {"name":"tp-demo","type":"address", "address": "https://dev.timeplus.cloud/tp-demo", "api_key_env_var": "TP_DEMO_API_KEY"}
+    ],
+
+    "operates":[
+                {
+                    "name": "tp-duckbill-replica-2views",
+                    "mode": "snapshot",
+                    "source_workspace": "tp-duckbill",
+                    "status": "disabled",
+                    "source_data_objs":[
+                        {"name": "mv_fatigue_24h_alert", "type":"view", "dependency_discovery":"auto", "depends_stream_data_volume": 1000}
+                    ],
+                    "data_exporting_policy": {
+                        "streams":[
+                            {"name":"any", "rule":{"volumn": 100, "confilict":"skip"}},
+                            {"name":"ttp_truck_track", "rule":{"volumn": 100}},
+                            {"name": "ttp_truck_factory_track_ouman", "rule": {"volumn": -1}}
+                        ]
+                    }, 
+                    "target_workspaces":["local1", "tp-eng"]
+                },
+                {
+                    "name": "tp-demo-replica-slack",
+                    "source_workspace": "tp-demo",
+                    "status": "enabled",
+                    "mode": "live_mirror",
+                    "source_data_objs": [
+                        {"name": "slack", "type":"view", "dependency_discovery":"auto", "depends_stream_data_volume": 1000}
+                    ],
+                    "data_exporting_policy": {
+                        "streams":[
+                            {"name":"any", "rule":{"snap_shot_volumn": 100, "live_seek_to": "2022-01-01"}}
+                        ]
+                    }, 
+                    "target_workspaces":["local2"]
+                },
+                {
+                    "name": "tp-demo-replica-",
+                    "source_workspace": "tp-demo",
+                    "status": "disabled",
+                    "mode": "live_mirror",
+                    "source_data_objs": "All",
+                    "data_exporting_policy": {
+                        "streams":[
+                            {"name":"any", "rule":{"snap_shot_volumn": 100, "live_seek_to": "2022-01-01"}}
+                        ]
+                    }, 
+                    "target_workspaces":["local2"]
+                },                                        
+                {
+                    "name": "tp-duckbill-replica-all",
+                    "source_workspace": "tp-duckbill",
+                    "status": "disabled",
+                    "mode": "live_mirror",
+                    "source_data_objs": "All",
+                    "data_exporting_policy": {
+                        "streams":[
+                            {"name":"any", "rule":{"volumn": 100}},
+                            {"name":"ttp_truck_track", "rule":{"volumn": 100}},
+                            {"name": "ttp_truck_factory_track_ouman", "rule": {"volumn": -1}}
+                        ]
+                    }, 
+                    "target_workspaces":["local2"]
+                }, 
+                {
+                    "name": "tp-eng-all",
+                    "source_workspace": "tp-eng",
+                    "status": "disabled",
+                    "mode": "backfill",
+                    "source_data_objs": "All",
+                    "data_exporting_policy": {
+                        "streams":[
+                            {"name":"any", "rule":{"volumn": 100}},
+                            {"name": "test_event", "rule": {"volumn": -1}}
+                        ]
+                    }, 
+                    "target_workspaces":["local1", "tp-eng"]
+                },                               
+                {
+                    "name": "tp-duckbill-view-replica",
+                    "source_workspace": "tp-duckbill",
+                    "status": "disabled",
+                    "data_exporting_policy": {
+                        "streams":[
+                            {"name":"any", "rule":{"volumn": 100}}
+                        ]
+                        },                     
+                    "source_data_objs":[
+                        {"name": "v_ttp_truck_track", "type":"view", "dependency_discovery":"auto", "depends_stream_data_volume": 1000},
+                        {"name": "v_truck_track_with_lon_lat","type":"view", "dependency_discovery":"no"}
+                    ],
+                    "target_workspaces":["local1", "tp-eng"]
+                },
+                {
+                    "name": "tp-duckbill-view-local-import",
+                    "source_workspace": "local1",
+                    "status": "disabled",
+                    "source_data_objs":[
+                        {"name": "v_ttp_truck_track", "type":"view", "dependency_discovery":"auto", "depends_stream_data_volume": 100},
+                        {"name": "v_truck_track_with_lon_lat", "type":"view", "dependency_discovery":"no"}
+                    ],
+                    "target_workspaces":["tp-eng"]
+                }                
+
+    ]
+
+}

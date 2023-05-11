@@ -1694,7 +1694,7 @@ def get_proton_client_config(config):
     proton_setting = config.get("proton_setting")
     proton_cluster_query_node = config.get("proton_cluster_query_node")
     proton_server = None
-    if "cluster" not in proton_setting:
+    if proton_setting is None or "cluster" not in proton_setting:
         proton_server = config.get("proton_server")
         proton_server_native_ports = config.get("proton_server_native_port")
         proton_server_native_ports = proton_server_native_ports.split(",")
@@ -2511,7 +2511,7 @@ def input_batch_rest(config, test_suite_name, test_id, input_batch, table_schema
                         depends_on_exists = False
                     time.sleep(0.2)
                     retry -= 1
-            time.sleep(1) #wait 0.5 seconds for dpends_on stream ready, if no wait sometimes data will be missed in the query
+            time.sleep(1) #wait 1 seconds for dpends_on query ready, if no wait sometimes data will be missed in the query
             if not depends_on_exists:
                 logger.debug(
                     f"INPUT_DEPENDS_ON_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, depends_on = {depends_on}, query_states_dict = {query_states_dict} for input not found, raise exception."

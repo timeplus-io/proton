@@ -1,5 +1,5 @@
 from ast import Pass
-import os, sys, getopt, json, random, copy
+import os, sys, getopt, json, random, copy, traceback
 from re import sub
 import logging, logging.config
 from clickhouse_driver import Client
@@ -1777,6 +1777,7 @@ def test_suite_run(test_context, proc_target_func=query_execute):
         test_sets = result_collect()
     except (BaseException) as error:
         logger.info("exception:", error)
+        traceback.print_exc()
     finally:
         TESTS_QUERY_RESULTS = test_sets
         query_conn.send("tear_down")
