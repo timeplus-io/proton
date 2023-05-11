@@ -255,8 +255,12 @@ std::pair<String, Int32> TableRestRouterHandler::executePatch(const Poco::JSON::
     /// TTL
     if (payload->has("ttl_expression"))
     {
-        const String & query
-            = fmt::format("ALTER STREAM {}.`{}` MODIFY TTL {}", database, table, payload->get("ttl_expression").toString());
+        String query;
+        const auto & ttl_expression = payload->get("ttl_expression").toString();
+        if (ttl_expression.empty())
+            query = fmt::format("ALTER STREAM {}.`{}` REMOVE TTL", database, table);
+        else
+            query = fmt::format("ALTER STREAM {}.`{}` MODIFY TTL {}", database, table, ttl_expression);
         resp = processQuery(query);
     }
 
