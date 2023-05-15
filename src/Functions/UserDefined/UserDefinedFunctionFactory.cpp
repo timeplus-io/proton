@@ -116,8 +116,8 @@ public:
             configuration.url,
             Poco::Net::HTTPRequest::HTTP_POST,
             context->getCurrentQueryId(),
-            context->getUserName(),
-            context->getPasswordByUserName(context->getUserName()),
+            "",
+            "",
             out,
             {{configuration.auth_context.key_name, configuration.auth_context.key_value}, {"", context->getCurrentQueryId()}},
             &Poco::Logger::get("UserDefinedFunction"));

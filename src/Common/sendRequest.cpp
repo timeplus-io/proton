@@ -48,7 +48,8 @@ std::pair<String, Int32> sendRequest(
         request.setContentType("application/json");
         /// FIXME : query ID chain. Change the query ID to avoid same query ID issue
         request.add("x-proton-query-id", "from-" + query_id);
-        request.add("x-proton-user", user);
+        if (!user.empty())
+            request.add("x-proton-user", user);
 
         /// add other headers
         if (!headers.empty())
