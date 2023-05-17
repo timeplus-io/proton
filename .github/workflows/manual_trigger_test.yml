@@ -21,6 +21,16 @@ on: # yamllint disable-line rule:truthy
         required: true
         type: boolean
         default: false
+      has_stateless_test:
+        description: 'Run stateless test'
+        required: true
+        type: boolean
+        default: false
+      has_stateful_test:
+        description: 'Run statefull test'
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   prepare_smoke_test:
@@ -176,6 +186,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   prepare_stateless_test:
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.has_stateless_test == true }}
     outputs:
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -247,6 +258,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   prepare_stateful_test:
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.has_stateful_test == true }}
     outputs:
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
