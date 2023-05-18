@@ -95,6 +95,7 @@ struct ReadSettings
     size_t http_max_tries = 1;
     size_t http_retry_initial_backoff_ms = 100;
     size_t http_retry_max_backoff_ms = 1600;
+    bool http_skip_not_found_url_for_globs = true;
 
     ReadSettings adjustBufferSize(size_t file_size) const
     {
