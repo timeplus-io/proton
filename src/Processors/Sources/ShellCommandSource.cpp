@@ -16,8 +16,6 @@
 /// proton: starts
 #include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
 #include <Processors/Formats/IRowInputFormat.h>
-#include <V8/ConvertDataTypes.h>
-#include <V8/Utils.h>
 /// proton: ends
 
 
@@ -465,7 +463,6 @@ ShellCommandSourceCoordinator::ShellCommandSourceCoordinator(const Configuration
     constexpr size_t max_pool_size = 100;
     process_pool = std::make_shared<ProcessPool>(configuration.pool_size ? configuration.pool_size : max_pool_size);
     udf_ctx_pool = std::make_shared<UDFExecutionContextPool>(configuration.pool_size ? configuration.pool_size : max_pool_size);
-    js_ctx_pool = std::make_shared<JavaScriptExecutionContextPool>(configuration.pool_size ? configuration.pool_size : max_pool_size);
     /// proton: ends.
 }
 
@@ -605,28 +602,6 @@ UDFExecutionContext::~UDFExecutionContext()
     process = nullptr;
 }
 
-JavaScriptExecutionContext::JavaScriptExecutionContext(const UserDefinedFunctionConfiguration & config, ContextPtr ctx)
-{
-    v8::Isolate::CreateParams isolate_params;
-    isolate_params.array_buffer_allocator_shared
-        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
-    isolate = std::unique_ptr<v8::Isolate, IsolateDeleter>(v8::Isolate::New(isolate_params), IsolateDeleter());
-
-    /// check heap limit
-    V8::checkHeapLimit(isolate.get(), ctx->getSettingsRef().javascript_max_memory_bytes);
-
-    auto init_functions = [&](v8::Isolate * isolate_, v8::Local<v8::Context> & ctx, v8::TryCatch & try_catch, v8::Local<v8::Value> &) {
-        v8::Local<v8::Value> function_val;
-        if (!ctx->Global()->Get(ctx, V8::to_v8(isolate_, config.name)).ToLocal(&function_val) || !function_val->IsFunction())
-            throw Exception(ErrorCodes::UDF_COMPILE_ERROR, "the JavaScript UDF {} is invalid", config.name);
-
-        func.Reset(isolate_, function_val.As<v8::Function>());
-
-        context.Reset(isolate_, ctx);
-    };
-
-    V8::compileSource(isolate.get(), config.name, config.source, init_functions);
-}
 
 UDFExecutionContextPtr ShellCommandSourceCoordinator::getUDFContext(
     const std::string & command, const std::vector<std::string> & arguments, Block input_header, Block result_header, ContextPtr context)
@@ -728,29 +703,6 @@ void ShellCommandSourceCoordinator::release(UDFExecutionContextPtr && ctx)
     }
 }
 
-JavaScriptExecutionContextPtr
-ShellCommandSourceCoordinator::getJavaScriptContext(const UserDefinedFunctionConfiguration & config, ContextPtr context)
-{
-    JavaScriptExecutionContextPtr ctx;
-
-    auto create_context = [&config, &context]() { return std::make_unique<JavaScriptExecutionContext>(config, context); };
-    bool result = js_ctx_pool->tryBorrowObject(ctx, create_context, configuration.max_command_execution_time_seconds * 1000);
-
-    if (!result)
-        throw Exception(
-            ErrorCodes::TIMEOUT_EXCEEDED,
-            "Could not get Javascript UDF '{}' from pool, it exceeded {} seconds and get timeout",
-            config.name,
-            configuration.max_command_execution_time_seconds);
-
-    return ctx;
-}
-
-void ShellCommandSourceCoordinator::release(JavaScriptExecutionContextPtr && ctx)
-{
-    js_ctx_pool->returnObject(std::move(ctx));
-}
-
 void ShellCommandSourceCoordinator::sendData(UDFExecutionContextPtr & ctx, const Block & block)
 {
     if (ctx)
@@ -760,9 +712,9 @@ void ShellCommandSourceCoordinator::sendData(UDFExecutionContextPtr & ctx, const
     }
 }
 
-ColumnPtr ShellCommandSourceCoordinator::pull(UDFExecutionContextPtr & ctx, const DataTypePtr & result_type, size_t result_rows_count)
+ColumnPtr ShellCommandSourceCoordinator::pull(UDFExecutionContextPtr & ctx, const DataTypePtr & result_type, size_t result_rows_count) const
 {
-    auto result_column = pull(ctx->in_format, result_type, result_rows_count);
+    auto result_column = ::DB::pull(ctx->in_format, result_type, result_rows_count, configuration.command_read_timeout_milliseconds);
     if (result_column->size() != result_rows_count)
     {
         bool old_val = false;
@@ -771,24 +723,10 @@ ColumnPtr ShellCommandSourceCoordinator::pull(UDFExecutionContextPtr & ctx, cons
     return result_column;
 }
 
-ColumnPtr ShellCommandSourceCoordinator::pull(InputFormatPtr & in_format, const DataTypePtr & result_type, size_t result_rows_count)
-{
-    auto result_column = result_type->createColumn();
-    result_column->reserve(result_rows_count);
-
-    if (auto * row_fmt = static_cast<IRowInputFormat *>(in_format.get()))
-        row_fmt->setMaxSize(result_rows_count);
-
-    Block block = in_format->read(result_rows_count, configuration.command_read_timeout_milliseconds);
-    return block.safeGetByPosition(0).column;
-}
-
 void ShellCommandSourceCoordinator::stopProcessPool()
 {
     if (udf_ctx_pool->borrowedObjectsSize() == 0 && udf_ctx_pool->allocatedObjectsSize() > 0)
         udf_ctx_pool->clearUp();
-
-    js_ctx_pool->clearUp();
 }
 /// proton: ends
 

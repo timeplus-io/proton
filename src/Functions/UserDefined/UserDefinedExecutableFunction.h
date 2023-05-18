@@ -18,8 +18,7 @@ class UserDefinedExecutableFunction final : public IExternalLoadable
 public:
 
     UserDefinedExecutableFunction(
-        const UserDefinedFunctionConfiguration & configuration_,
-        std::shared_ptr<ShellCommandSourceCoordinator> coordinator_,
+        UserDefinedFunctionConfigurationPtr configuration_,
         const ExternalLoadableLifetime & lifetime_);
 
     const ExternalLoadableLifetime & getLifetime() const override
@@ -29,7 +28,7 @@ public:
 
     std::string getLoadableName() const override
     {
-        return configuration.name;
+        return configuration->name;
     }
 
     bool supportUpdates() const override
@@ -44,32 +43,16 @@ public:
 
     std::shared_ptr<const IExternalLoadable> clone() const override
     {
-        return std::make_shared<UserDefinedExecutableFunction>(configuration, coordinator, lifetime);
+        return std::make_shared<UserDefinedExecutableFunction>(configuration, lifetime);
     }
 
-    const UserDefinedFunctionConfiguration & getConfiguration() const
+    const UserDefinedFunctionConfigurationPtr & getConfiguration() const
     {
         return configuration;
     }
 
-    std::shared_ptr<ShellCommandSourceCoordinator> getCoordinator() const
-    {
-        return coordinator;
-    }
-
-    std::shared_ptr<UserDefinedExecutableFunction> shared_from_this()
-    {
-        return std::static_pointer_cast<UserDefinedExecutableFunction>(IExternalLoadable::shared_from_this());
-    }
-
-    std::shared_ptr<const UserDefinedExecutableFunction> shared_from_this() const
-    {
-        return std::static_pointer_cast<const UserDefinedExecutableFunction>(IExternalLoadable::shared_from_this());
-    }
-
 private:
-    UserDefinedFunctionConfiguration configuration;
-    std::shared_ptr<ShellCommandSourceCoordinator> coordinator;
+    UserDefinedFunctionConfigurationPtr configuration;
     ExternalLoadableLifetime lifetime;
 };
 }

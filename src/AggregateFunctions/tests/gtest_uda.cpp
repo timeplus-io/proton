@@ -117,7 +117,7 @@ public:
     static void TearDownTestSuite() { disposeV8(); }
 };
 
-UserDefinedFunctionConfiguration
+JavaScriptUserDefinedFunctionConfiguration
 createUDFConfig(const String & name, const String & arg_str, const String & return_type, const String & source)
 {
     DataTypePtr result_type = DataTypeFactory::instance().get(return_type);
@@ -144,14 +144,13 @@ createUDFConfig(const String & name, const String & arg_str, const String & retu
         }
     }
 
-    UserDefinedFunctionConfiguration function_configuration{
-        .type = UserDefinedFunctionConfiguration::FuncType::JAVASCRIPT, //-V1030
-        .arguments = std::move(arguments),
-        .source = source,
-        .is_aggregation = true,
-        .name = name, //-V1030
-        .result_type = std::move(result_type), //-V1030
-    };
+    JavaScriptUserDefinedFunctionConfiguration function_configuration;
+    function_configuration.source = source;
+    function_configuration.is_aggregation = true;
+    function_configuration.name = name;
+    function_configuration.result_type = std::move(result_type);
+    function_configuration.type = UserDefinedFunctionConfiguration::FuncType::JAVASCRIPT;
+    function_configuration.arguments = std::move(arguments);
 
     return function_configuration;
 };

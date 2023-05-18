@@ -129,10 +129,6 @@ ExternalLoader::LoadablePtr ExternalUserDefinedFunctionsLoader::create(const std
         command_arguments.erase(command_arguments.begin());
     }
 
-    /// proton: starts
-    String format = config.getString(key_in_config + ".format", "ArrowStream");
-    bool is_aggr_function = config.getBool(key_in_config + ".is_aggregation", false);
-    /// proton: ends
     DataTypePtr result_type = DataTypeFactory::instance().get(config.getString(key_in_config + ".return_type"));
     bool send_chunk_header = config.getBool(key_in_config + ".send_chunk_header", false);
     size_t command_termination_timeout_seconds = config.getUInt64(key_in_config + ".command_termination_timeout", 0);
@@ -142,9 +138,6 @@ ExternalLoader::LoadablePtr ExternalUserDefinedFunctionsLoader::create(const std
     size_t pool_size = 0;
     size_t max_command_execution_time = 0;
 
-    /// proton: starts
-    pool_size = config.getUInt64(key_in_config + ".pool_size", 1);
-    /// proton: ends
     max_command_execution_time = config.getUInt64(key_in_config + ".max_command_execution_time", 10);
 
     size_t max_execution_time_seconds = static_cast<size_t>(getContext()->getSettings().max_execution_time.totalSeconds());
@@ -157,6 +150,10 @@ ExternalLoader::LoadablePtr ExternalUserDefinedFunctionsLoader::create(const std
         lifetime = ExternalLoadableLifetime(config, key_in_config + ".lifetime");
 
     /// proton: starts
+    String format = config.getString(key_in_config + ".format", "ArrowStream");
+    bool is_aggr_function = config.getBool(key_in_config + ".is_aggregation", false);
+    pool_size = config.getUInt64(key_in_config + ".pool_size", 1);
+
     /// Below implementation only available for JSON configuration, because Poco::Util::AbstractConfiguration cannot work well with Array
     std::vector<UserDefinedFunctionConfiguration::Argument> arguments;
     String arg_str = config.getRawString(key_in_config + ".arguments", "");
@@ -181,12 +178,12 @@ ExternalLoader::LoadablePtr ExternalUserDefinedFunctionsLoader::create(const std
     }
 
     /// handler auth_method
-    UserDefinedFunctionConfiguration::AuthMethod auth_method = UserDefinedFunctionConfiguration::AuthMethod::NONE;
-    UserDefinedFunctionConfiguration::AuthContext auth_ctx;
+    RemoteUserDefinedFunctionConfiguration::AuthMethod auth_method = RemoteUserDefinedFunctionConfiguration::AuthMethod::NONE;
+    RemoteUserDefinedFunctionConfiguration::AuthContext auth_ctx;
     String method = config.getString(key_in_config + ".auth_method", "none");
     if (method == "none")
     {
-        auth_method = UserDefinedFunctionConfiguration::AuthMethod::NONE;
+        auth_method = RemoteUserDefinedFunctionConfiguration::AuthMethod::NONE;
     }
     else if (method == "auth_header")
     {
@@ -197,40 +194,55 @@ ExternalLoader::LoadablePtr ExternalUserDefinedFunctionsLoader::create(const std
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
                         "Wrong 'auth_method' expected 'none' or 'auth_header' actual {}",
                         method);
+
+    auto init_config = [&](UserDefinedFunctionConfigurationPtr cfg) {
+        cfg->type = std::move(func_type);
+        cfg->arguments = std::move(arguments);
+        cfg->is_aggregation = is_aggr_function;
+        cfg->name = name;
+        cfg->result_type = std::move(result_type);
+        cfg->max_command_execution_time_seconds = max_command_execution_time;
+    };
+
+    switch (func_type)
+    {
+        case UserDefinedFunctionConfiguration::FuncType::EXECUTABLE: {
+            auto udf_config = std::make_shared<ExecutableUserDefinedFunctionConfiguration>();
+            init_config(udf_config);
+            udf_config->command = std::move(command);
+            udf_config->command_arguments = std::move(command_arguments);
+            udf_config->format = std::move(format);
+            udf_config->command_termination_timeout_seconds = command_termination_timeout_seconds;
+            udf_config->command_read_timeout_milliseconds = command_read_timeout_milliseconds;
+            udf_config->command_write_timeout_milliseconds = command_write_timeout_milliseconds;
+            udf_config->pool_size = pool_size;
+            udf_config->is_executable_pool = true;
+            udf_config->send_chunk_header = send_chunk_header;
+            udf_config->execute_direct = execute_direct;
+            return std::make_shared<UserDefinedExecutableFunction>(std::move(udf_config), lifetime);
+        }
+        case UserDefinedFunctionConfiguration::FuncType::REMOTE: {
+            auto udf_config = std::make_shared<RemoteUserDefinedFunctionConfiguration>();
+            init_config(udf_config);
+            udf_config->command_read_timeout_milliseconds = command_read_timeout_milliseconds;
+            udf_config->url = url;
+            udf_config->auth_method = std::move(auth_method);
+            udf_config->auth_context = std::move(auth_ctx);
+            return std::make_shared<UserDefinedExecutableFunction>(std::move(udf_config), lifetime);
+        }
+        case UserDefinedFunctionConfiguration::FuncType::JAVASCRIPT: {
+            auto udf_config = std::make_shared<JavaScriptUserDefinedFunctionConfiguration>();
+            init_config(udf_config);
+            udf_config->source = std::move(source);
+            return std::make_shared<UserDefinedExecutableFunction>(std::move(udf_config), lifetime);
+        }
+        case UserDefinedFunctionConfiguration::FuncType::UNKNOWN:
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS,
+                "Wrong user defined function type expected 'executable', 'remote' or 'javascript' actual {}",
+                type);
+    }
     /// proton: ends
-
-    UserDefinedFunctionConfiguration function_configuration
-    {
-        /// proton: starts.
-        .type = std::move(func_type), //-V1030
-        .url = url,
-        .auth_method = std::move(auth_method),
-        .auth_context = std::move(auth_ctx),
-        .arguments = std::move(arguments),
-        .source = std::move(source),
-        .is_aggregation = std::move(is_aggr_function),
-        .name = std::move(name), //-V1030
-        .command = std::move(command), //-V1030
-        /// proton: ends
-        .command_arguments = std::move(command_arguments), //-V1030
-        .result_type = std::move(result_type), //-V1030
-    };
-
-    ShellCommandSourceCoordinator::Configuration shell_command_coordinator_configration
-    {
-        .format = std::move(format), //-V1030
-        .command_termination_timeout_seconds = command_termination_timeout_seconds,
-        .command_read_timeout_milliseconds = command_read_timeout_milliseconds,
-        .command_write_timeout_milliseconds = command_write_timeout_milliseconds,
-        .pool_size = pool_size,
-        .max_command_execution_time_seconds = max_command_execution_time,
-        .is_executable_pool = true,
-        .send_chunk_header = send_chunk_header,
-        .execute_direct = execute_direct
-    };
-
-    auto coordinator = std::make_shared<ShellCommandSourceCoordinator>(shell_command_coordinator_configration);
-    return std::make_shared<UserDefinedExecutableFunction>(function_configuration, std::move(coordinator), lifetime);
 }
 
 }

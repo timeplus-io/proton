@@ -34,6 +34,11 @@ struct RowInputFormatParams
 bool isParseError(int code);
 bool checkTimeLimit(const RowInputFormatParams & params, const Stopwatch & stopwatch);
 
+/// proton: starts
+ColumnPtr
+pull(InputFormatPtr & in_format, const DataTypePtr & result_type, size_t result_rows_count, size_t command_read_timeout_milliseconds);
+/// proton: ends
+
 /// Row oriented input format: reads data row by row.
 class IRowInputFormat : public IInputFormat
 {

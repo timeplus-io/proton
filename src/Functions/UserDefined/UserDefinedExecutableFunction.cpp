@@ -1,22 +1,12 @@
 #include "UserDefinedExecutableFunction.h"
 
-#include <Functions/IFunction.h>
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionHelpers.h>
-
-#include <Processors/Sources/ShellCommandSource.h>
-#include <Formats/formatBlock.h>
-
-
 namespace DB
 {
 
 UserDefinedExecutableFunction::UserDefinedExecutableFunction(
-    const UserDefinedFunctionConfiguration & configuration_,
-    std::shared_ptr<ShellCommandSourceCoordinator> coordinator_,
+    UserDefinedFunctionConfigurationPtr configuration_,
     const ExternalLoadableLifetime & lifetime_)
-    : configuration(configuration_)
-    , coordinator(std::move(coordinator_))
+    : configuration(std::move(configuration_))
     , lifetime(lifetime_)
 {
 }

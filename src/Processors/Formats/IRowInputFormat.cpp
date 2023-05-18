@@ -42,6 +42,21 @@ bool isParseError(int code)
         || code == ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING;
 }
 
+/// proton: starts
+ColumnPtr
+pull(InputFormatPtr & in_format, const DataTypePtr & result_type, size_t result_rows_count, size_t command_read_timeout_milliseconds)
+{
+    auto result_column = result_type->createColumn();
+    result_column->reserve(result_rows_count);
+
+    if (auto * row_fmt = static_cast<IRowInputFormat *>(in_format.get()))
+        row_fmt->setMaxSize(result_rows_count);
+
+    Block block = in_format->read(result_rows_count, command_read_timeout_milliseconds);
+    return block.safeGetByPosition(0).column;
+}
+/// proton: ends
+
 IRowInputFormat::IRowInputFormat(Block header, ReadBuffer & in_, Params params_, ProcessorID pid_)
     : IInputFormat(std::move(header), in_, pid_), serializations(getPort().getHeader().getSerializations()), params(params_)
 {

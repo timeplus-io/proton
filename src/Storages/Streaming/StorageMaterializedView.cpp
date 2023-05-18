@@ -512,6 +512,7 @@ void StorageMaterializedView::doBuildBackgroundPipeline()
 
     auto local_context = Context::createCopy(getContext());
     local_context->makeQueryContext();
+    CurrentThread::QueryScope query_scope(local_context->getQueryContext());
     local_context->setCurrentQueryId(""); /// generate random query_id
     local_context->setInternalQuery(false); /// We like to log materialized query like a regular one
 
