@@ -294,7 +294,7 @@ std::pair<String, Int32> SQLAnalyzerRestRouterHandler::executePost(const Poco::J
     {
         LOG_ERROR(log, "Query analyzer, query_id={} error_msg={}", query_context->getCurrentQueryId(), error_msg);
 
-        return {jsonErrorResponse("Invalid query", ErrorCodes::INCORRECT_QUERY), HTTPResponse::HTTP_BAD_REQUEST};
+        return {jsonErrorResponse(error_msg, ErrorCodes::INCORRECT_QUERY), HTTPResponse::HTTP_BAD_REQUEST};
     }
 }
 
