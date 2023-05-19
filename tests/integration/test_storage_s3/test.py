@@ -818,8 +818,9 @@ def test_seekable_formats(started_cluster):
 
     instance.query("SYSTEM FLUSH LOGS")
     result = instance.query(f"SELECT formatReadableSize(memory_usage) FROM system.query_log WHERE startsWith(query, 'SELECT count() FROM s3') AND memory_usage > 0 ORDER BY event_time desc")
-    print(result[:3])
-    assert(int(result[:3]) < 200)
+
+    result = result[:result.index('.')]
+    assert(int(result) < 200)
 
 
 def test_seekable_formats_url(started_cluster):
@@ -842,8 +843,9 @@ def test_seekable_formats_url(started_cluster):
 
     instance.query("SYSTEM FLUSH LOGS")
     result = instance.query(f"SELECT formatReadableSize(memory_usage) FROM system.query_log WHERE startsWith(query, 'SELECT count() FROM url') AND memory_usage > 0 ORDER BY event_time desc")
-    print(result[:3])
-    assert(int(result[:3]) < 200)
+
+    result = result[:result.index('.')]
+    assert(int(result) < 200)
 
 
 def test_empty_file(started_cluster):
@@ -1024,4 +1026,39 @@ def test_signatures(started_cluster):
     assert(int(result) == 1)
 
     result = instance.query(f"select * from s3('http://{started_cluster.minio_host}:{started_cluster.minio_port}/{bucket}/test.arrow', 'minio', 'minio123', 'Arrow')")
+    assert(int(result) == 1)
+
+
+def test_select_columns(started_cluster):
+    bucket = started_cluster.minio_bucket
+    instance = started_cluster.instances["dummy"]
+    name = "test_table2"
+    structure = "id UInt32, value1 Int32, value2 Int32"
+
+    instance.query(f"drop table if exists {name}")
+    instance.query(f"CREATE TABLE {name} ({structure}) ENGINE = S3(s3_conf1, format='Parquet')")
+
+    limit = 10000000
+    instance.query(f"INSERT INTO {name} SELECT * FROM generateRandom('{structure}') LIMIT {limit} SETTINGS s3_truncate_on_insert=1")
+    instance.query(f"SELECT value2 FROM {name}")
+
+    instance.query("SYSTEM FLUSH LOGS")
+    result1 = instance.query(f"SELECT read_bytes FROM system.query_log WHERE type='QueryFinish' and query LIKE 'SELECT value2 FROM {name}'")
+
+    instance.query(f"SELECT * FROM {name}")
+    instance.query("SYSTEM FLUSH LOGS")
+    result2 = instance.query(f"SELECT read_bytes FROM system.query_log WHERE type='QueryFinish' and query LIKE 'SELECT * FROM {name}'")
+
+    assert(int(result1) * 3 <= int(result2))
+
+
+def test_insert_select_schema_inference(started_cluster):
+    bucket = started_cluster.minio_bucket
+    instance = started_cluster.instances["dummy"]
+
+    instance.query(f"insert into function s3('http://{started_cluster.minio_host}:{started_cluster.minio_port}/{bucket}/test.arrow') select toUInt64(1) as x settings s3_truncate_on_insert=1")
+    result = instance.query(f"desc s3('http://{started_cluster.minio_host}:{started_cluster.minio_port}/{bucket}/test.arrow')")
+    assert(result.strip() == 'x\tUInt64')
+
+    result = instance.query(f"select * from s3('http://{started_cluster.minio_host}:{started_cluster.minio_port}/{bucket}/test.arrow')")
     assert(int(result) == 1)

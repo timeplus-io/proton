@@ -622,6 +622,11 @@ std::shared_ptr<StorageS3Source::IteratorWrapper> StorageS3::createFileIterator(
     }
 }
 
+bool StorageS3::isColumnOriented() const
+{
+    return FormatFactory::instance().checkIfFormatIsColumnOriented(format_name);
+}
+
 Pipe StorageS3::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
@@ -646,6 +651,21 @@ Pipe StorageS3::read(
 
     std::shared_ptr<StorageS3Source::IteratorWrapper> iterator_wrapper = createFileIterator(client_auth, keys, is_key_with_globs, distributed_processing, local_context);
     auto metadata_snapshot = storage_snapshot->getMetadataForQuery();
+
+    ColumnsDescription columns_description;
+    Block block_for_format;
+    if (isColumnOriented())
+    {
+        columns_description = ColumnsDescription{
+            metadata_snapshot->getSampleBlockForColumns(column_names).getNamesAndTypesList()};
+        block_for_format = metadata_snapshot->getSampleBlockForColumns(columns_description.getNamesOfPhysical());
+    }
+    else
+    {
+        columns_description = metadata_snapshot->getColumns();
+        block_for_format = metadata_snapshot->getSampleBlock();
+    }
+
     for (size_t i = 0; i < num_streams; ++i)
     {
         pipes.emplace_back(std::make_shared<StorageS3Source>(
@@ -653,10 +673,10 @@ Pipe StorageS3::read(
             need_file_column,
             format_name,
             getName(),
-            metadata_snapshot->getSampleBlock(),
+            block_for_format,
             local_context,
             format_settings,
-            metadata_snapshot->getColumns(),
+            columns_description,
             max_block_size,
             max_single_read_retries,
             compression_method,

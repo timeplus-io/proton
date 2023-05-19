@@ -404,7 +404,7 @@ std::vector<std::pair<std::string, std::string>> IStorageURLBase::getReadURIPara
 
 std::function<void(std::ostream &)> IStorageURLBase::getReadPOSTDataCallback(
     const Names & /*column_names*/,
-    const StorageMetadataPtr & /*metadata_snapshot*/,
+    const ColumnsDescription & /* columns_description */,
     const SelectQueryInfo & /*query_info*/,
     ContextPtr /*context*/,
     QueryProcessingStage::Enum & /*processed_stage*/,
@@ -482,6 +482,11 @@ ColumnsDescription IStorageURLBase::getTableStructureFromData(
     throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "All attempts to extract table structure from urls failed. Errors:\n{}", exception_messages);
 }
 
+bool IStorageURLBase::isColumnOriented() const
+{
+    return FormatFactory::instance().checkIfFormatIsColumnOriented(format_name);
+}
+
 Pipe IStorageURLBase::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
@@ -492,7 +497,20 @@ Pipe IStorageURLBase::read(
     size_t num_streams)
 {
     auto params = getReadURIParams(column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size);
-    auto metadata_snapshot = storage_snapshot->getMetadataForQuery();
+
+    ColumnsDescription columns_description;
+    Block block_for_format;
+    if (isColumnOriented())
+    {
+        columns_description = ColumnsDescription{
+            storage_snapshot->getSampleBlockForColumns(column_names).getNamesAndTypesList()};
+        block_for_format = storage_snapshot->getSampleBlockForColumns(columns_description.getNamesOfPhysical());
+    }
+    else
+    {
+        columns_description = storage_snapshot->metadata->getColumns();
+        block_for_format = storage_snapshot->metadata->getSampleBlock();
+    }
 
     if (urlWithGlobs(uri))
     {
@@ -516,14 +534,14 @@ Pipe IStorageURLBase::read(
                 uri_info,
                 getReadMethod(),
                 getReadPOSTDataCallback(
-                    column_names, metadata_snapshot, query_info,
+                    column_names, columns_description, query_info,
                     local_context, processed_stage, max_block_size),
                 format_name,
                 format_settings,
                 getName(),
-                getHeaderBlock(column_names, storage_snapshot),
+                block_for_format,
                 local_context,
-                metadata_snapshot->getColumns(),
+                columns_description,
                 max_block_size,
                 ConnectionTimeouts::getHTTPTimeouts(local_context),
                 compression_method, headers, params, /* glob_url */true));
@@ -538,14 +556,14 @@ Pipe IStorageURLBase::read(
             uri_info,
             getReadMethod(),
             getReadPOSTDataCallback(
-                column_names, metadata_snapshot, query_info,
+                column_names, columns_description, query_info,
                 local_context, processed_stage, max_block_size),
             format_name,
             format_settings,
             getName(),
-            getHeaderBlock(column_names, storage_snapshot),
+            block_for_format,
             local_context,
-            metadata_snapshot->getColumns(),
+            columns_description,
             max_block_size,
             ConnectionTimeouts::getHTTPTimeouts(local_context),
             compression_method, headers, params));
@@ -562,8 +580,21 @@ Pipe StorageURLWithFailover::read(
     size_t max_block_size,
     size_t /*num_streams*/)
 {
+    ColumnsDescription columns_description;
+    Block block_for_format;
+    if (isColumnOriented())
+    {
+        columns_description = ColumnsDescription{
+            storage_snapshot->getSampleBlockForColumns(column_names).getNamesAndTypesList()};
+        block_for_format = storage_snapshot->getSampleBlockForColumns(columns_description.getNamesOfPhysical());
+    }
+    else
+    {
+        columns_description = storage_snapshot->metadata->getColumns();
+        block_for_format = storage_snapshot->metadata->getSampleBlock();
+    }
+
     auto params = getReadURIParams(column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size);
-    auto metadata_snapshot = storage_snapshot->getMetadataForQuery();
 
     auto uri_info = std::make_shared<StorageURLSource::URIInfo>();
     uri_info->uri_list_to_read.emplace_back(uri_options);
@@ -571,14 +602,14 @@ Pipe StorageURLWithFailover::read(
         uri_info,
         getReadMethod(),
         getReadPOSTDataCallback(
-            column_names, metadata_snapshot, query_info,
+            column_names, columns_description, query_info,
             local_context, processed_stage, max_block_size),
         format_name,
         format_settings,
         getName(),
-        getHeaderBlock(column_names, storage_snapshot),
+        block_for_format,
         local_context,
-        metadata_snapshot->getColumns(),
+        columns_description,
         max_block_size,
         ConnectionTimeouts::getHTTPTimeouts(local_context),
         compression_method, headers, params));
