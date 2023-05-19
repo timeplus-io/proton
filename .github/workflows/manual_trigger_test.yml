@@ -16,6 +16,11 @@ on: # yamllint disable-line rule:truthy
         required: true
         type: string
         default: 'sanitizer'
+      has_smoke_test:
+        description: 'Run smoke test'
+        required: true
+        type: boolean
+        default: true
       has_unit_test:
         description: 'Run unit test'
         required: true
@@ -27,7 +32,7 @@ on: # yamllint disable-line rule:truthy
         type: boolean
         default: false
       has_stateful_test:
-        description: 'Run statefull test'
+        description: 'Run stateful test'
         required: true
         type: boolean
         default: false
@@ -35,6 +40,7 @@ on: # yamllint disable-line rule:truthy
 jobs:
   prepare_smoke_test:
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.has_smoke_test == 'true' }}
     outputs:
       command: |
         # pull docker image
@@ -115,7 +121,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   prepare_unit_test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.has_unit_test == true }}
+    if: ${{ github.event.inputs.has_unit_test == 'true' }}
     outputs:
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -186,7 +192,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   prepare_stateless_test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.has_stateless_test == true }}
+    if: ${{ github.event.inputs.has_stateless_test == 'true' }}
     outputs:
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -258,7 +264,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   prepare_stateful_test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.has_stateful_test == true }}
+    if: ${{ github.event.inputs.has_stateful_test == 'true' }}
     outputs:
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
