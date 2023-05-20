@@ -1,4 +1,4 @@
-set(LIBCXXABI_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/libcxxabi")
+set(LIBCXXABI_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/llvm-project/libcxxabi")
 
 set(SRCS
 "${LIBCXXABI_SOURCE_DIR}/src/abort_message.cpp"
