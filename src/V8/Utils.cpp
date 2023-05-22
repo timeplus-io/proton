@@ -143,12 +143,12 @@ std::vector<v8::Local<v8::Value>> prepareArguments(
     return argv;
 }
 
-void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & result_type, bool is_array, v8::Local<v8::Value> & result)
+void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & result_type, v8::Local<v8::Value> & result, bool is_result_array)
 {
     v8::HandleScope scope(isolate);
     v8::Local<v8::Context> context = isolate->GetCurrentContext();
 
-    if (!is_array)
+    if (!is_result_array)
     {
         switch (result_type->getTypeId())
         {
@@ -214,9 +214,22 @@ void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & resul
                         || val->IsUndefined())
                         throw Exception(ErrorCodes::TYPE_MISMATCH, "invalid result, the UDF does not return object with {} property", name);
 
-                    insertResult(isolate, column_tuple.getColumn(i), tuple_type_ptr->getElement(i), is_array, val);
+                    insertResult(isolate, column_tuple.getColumn(i), tuple_type_ptr->getElement(i), val, is_result_array);
                     i++;
                 }
+                break;
+            }
+            case TypeIndex::Array: {
+                const auto * array_type_ptr = reinterpret_cast<const DataTypeArray *>(result_type.get());
+                if (result.IsEmpty() || !result->IsArray())
+                    throw Exception(
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "UDF expect return Array but got {}",
+                        from_v8<std::string>(isolate, result->TypeOf(isolate)));
+
+                auto & column_array = assert_cast<ColumnArray &>(to);
+                insertResult(isolate, column_array.getData(), array_type_ptr->getNestedType(), result, true);
+                column_array.getOffsets().push_back(column_array.getOffsets().back() + result.As<v8::Array>()->Length());
                 break;
             }
             default:
@@ -232,13 +245,11 @@ void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & resul
                 from_v8<std::string>(isolate, result->TypeOf(isolate)));
 
         v8::Local<v8::Array> array = result.As<v8::Array>();
-        if (array->Length() == 0)
-            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "UDF return empty Array");
-
-        for (int idx = 0; idx < array->Length(); idx++)
+        uint32_t len = array->Length();
+        for (uint32_t idx = 0; idx < len; idx++)
         {
             v8::Local<v8::Value> val = array->Get(context, idx).ToLocalChecked();
-            insertResult(isolate, to, result_type, false, val);
+            insertResult(isolate, to, result_type, val, false);
         }
     }
 }

@@ -69,7 +69,7 @@ ColumnPtr JavaScriptUserDefinedFunction::userDefinedExecuteImpl(
             V8::throwException(isolate_, try_catch, ErrorCodes::UDF_INTERNAL_ERROR, "call JavaScript UDF '{}' failed", config->name);
 
         /// Forth, insert the result to result_column
-        V8::insertResult(isolate_, *result_column, result_type, true, res);
+        V8::insertResult(isolate_, *result_column, result_type, res, true);
     };
 
     V8::run(js_ctx->isolate.get(), js_ctx->context, execute);

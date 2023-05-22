@@ -21,7 +21,8 @@ std::vector<v8::Local<v8::Value>> prepareArguments(
     v8::Isolate * isolate, const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments, const MutableColumns & columns);
 
 /// convert the v8 variant to corresponding DataType and insert into to column
-void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & type, bool is_array, v8::Local<v8::Value> & result);
+/// - is_result_array: the result is multiple values or single value, normally for UDF and UDA with own emit strategy, it is true
+void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & type, v8::Local<v8::Value> & result, bool is_result_array);
 
 template <typename... Args>
 void throwException(v8::Isolate * isolate, v8::TryCatch & try_catch, int code, const std::string & fmt, Args &&... args)

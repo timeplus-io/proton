@@ -3,6 +3,8 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Streaming/BlockUtils.h>
+#include <V8/ConvertDataTypes.h>
+#include <V8/Utils.h>
 
 #include <DataTypes/DataTypeFactory.h>
 #include <IO/ReadBufferFromString.h>
@@ -107,7 +109,7 @@ void initV8()
 void disposeV8()
 {
     v8::V8::Dispose();
-    v8::V8::ShutdownPlatform();
+    v8::V8::DisposePlatform();
 }
 
 class UDATestCase : public ::testing::Test
@@ -116,6 +118,31 @@ public:
     static void SetUpTestSuite() { initV8(); }
     static void TearDownTestSuite() { disposeV8(); }
 };
+
+v8::Local<v8::Value> createV8Array(v8::Isolate * isolate, bool is_empty_array)
+{
+    v8::EscapableHandleScope scope(isolate);
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();
+    v8::Local<v8::Value> result = v8::Array::New(isolate, 1);
+    v8::Local<v8::Array> elem1;
+    if (is_empty_array)
+    {
+        elem1 = v8::Array::New(isolate, 0);
+    }
+    else
+    {
+        elem1 = v8::Array::New(isolate, 2);
+        elem1->Set(context, 0, V8::to_v8(isolate, 1)).FromJust();
+        elem1->Set(context, 1, V8::to_v8(isolate, 2)).FromJust();
+    }
+    v8::Local<v8::Array> elem2 = v8::Array::New(isolate, 3);
+    elem2->Set(context, 0, V8::to_v8(isolate, 3)).FromJust();
+    elem2->Set(context, 1, V8::to_v8(isolate, 4)).FromJust();
+    elem2->Set(context, 2, V8::to_v8(isolate, 5)).FromJust();
+    result.As<v8::Array>()->Set(context, 0, elem1).FromJust();
+    result.As<v8::Array>()->Set(context, 1, elem2).FromJust();
+    return scope.Escape(result);
+}
 
 JavaScriptUserDefinedFunctionConfiguration
 createUDFConfig(const String & name, const String & arg_str, const String & return_type, const String & source)
@@ -288,4 +315,143 @@ TEST_F(UDATestCase, Merge)
     WriteBufferFromOwnString out;
     aggr_function.serialize(data_ptr, out, 0);
     ASSERT_EQ(out.str(), "\x11{\"max\":8,\"sec\":5}");
+}
+
+TEST_F(UDATestCase, IntArray)
+{
+    v8::Isolate::CreateParams isolate_params;
+    isolate_params.array_buffer_allocator_shared
+        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
+    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
+    SCOPE_EXIT({
+        isolate->Dispose();
+    });
+
+    v8::Locker locker(isolate);
+    v8::Isolate::Scope isolate_scope(isolate);
+    v8::HandleScope handle_scope(isolate);
+    v8::TryCatch try_catch(isolate);
+    /// try_catch.SetVerbose(true);
+    try_catch.SetCaptureMessage(true);
+
+    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
+    v8::Context::Scope context_scope(local_ctx);
+
+    auto array_type_ptr = DataTypeFactory::instance().get("array(int64)");
+    auto col_ptr = array_type_ptr->createColumn();
+
+    /// prepare v8 data
+    v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
+    result.As<v8::Array>()->Set(local_ctx, 0, V8::to_v8(isolate, 3)).FromJust();
+    result.As<v8::Array>()->Set(local_ctx, 1, V8::to_v8(isolate, 4)).FromJust();
+    result.As<v8::Array>()->Set(local_ctx, 2, V8::to_v8(isolate, 5)).FromJust();
+
+    V8::insertResult(isolate, *col_ptr, array_type_ptr, result, false);
+
+    ASSERT_EQ(col_ptr->size(), 1);
+    Field result_elem1;
+    col_ptr->get(0, result_elem1);
+    ASSERT_EQ(result_elem1.get<Array &>().size(), 3);
+}
+
+TEST_F(UDATestCase, ArrayInArray)
+{
+    v8::Isolate::CreateParams isolate_params;
+    isolate_params.array_buffer_allocator_shared
+        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
+    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
+    SCOPE_EXIT({
+        isolate->Dispose();
+    });
+    v8::Locker locker(isolate);
+    v8::Isolate::Scope isolate_scope(isolate);
+    v8::HandleScope handle_scope(isolate);
+    v8::TryCatch try_catch(isolate);
+    /// try_catch.SetVerbose(true);
+    try_catch.SetCaptureMessage(true);
+
+    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
+    v8::Context::Scope context_scope(local_ctx);
+
+    auto array_type_ptr = DataTypeFactory::instance().get("array(int64)");
+    auto col_ptr = array_type_ptr->createColumn();
+
+    /// prepare v8 data
+    auto result = createV8Array(isolate, false);
+    V8::insertResult(isolate, *col_ptr, array_type_ptr, result, true);
+
+    ASSERT_EQ(col_ptr->size(), 2);
+    Field result_elem1;
+    Field result_elem2;
+    col_ptr->get(0, result_elem1);
+    col_ptr->get(1, result_elem2);
+    ASSERT_EQ(result_elem1.get<Array &>().size(), 2);
+    ASSERT_EQ(result_elem2.get<Array &>().size(), 3);
+}
+
+TEST_F(UDATestCase, EmptyArray)
+{
+    v8::Isolate::CreateParams isolate_params;
+    isolate_params.array_buffer_allocator_shared
+        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
+    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
+    SCOPE_EXIT({
+        isolate->Dispose();
+    });
+    v8::Locker locker(isolate);
+    v8::Isolate::Scope isolate_scope(isolate);
+    v8::HandleScope handle_scope(isolate);
+    v8::TryCatch try_catch(isolate);
+    /// try_catch.SetVerbose(true);
+    try_catch.SetCaptureMessage(true);
+
+    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
+    v8::Context::Scope context_scope(local_ctx);
+
+    auto array_type_ptr = DataTypeFactory::instance().get("array(int64)");
+    auto col_ptr = array_type_ptr->createColumn();
+
+    /// prepare v8 data
+    auto result = createV8Array(isolate, true);
+    V8::insertResult(isolate, *col_ptr, array_type_ptr, result, true);
+
+    ASSERT_EQ(col_ptr->size(), 2);
+    Field result_elem1;
+    Field result_elem2;
+    col_ptr->get(0, result_elem1);
+    col_ptr->get(1, result_elem2);
+    ASSERT_EQ(result_elem1.get<Array &>().size(), 0);
+    ASSERT_EQ(result_elem2.get<Array &>().size(), 3);
+}
+
+TEST_F(UDATestCase, NestedArray)
+{
+    v8::Isolate::CreateParams isolate_params;
+    isolate_params.array_buffer_allocator_shared
+        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
+    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
+    SCOPE_EXIT({
+        isolate->Dispose();
+    });
+    v8::Locker locker(isolate);
+    v8::Isolate::Scope isolate_scope(isolate);
+    v8::HandleScope handle_scope(isolate);
+    v8::TryCatch try_catch(isolate);
+    /// try_catch.SetVerbose(true);
+    try_catch.SetCaptureMessage(true);
+
+    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
+    v8::Context::Scope context_scope(local_ctx);
+
+    auto array_type_ptr = DataTypeFactory::instance().get("array(array(int64))");
+    auto col_ptr = array_type_ptr->createColumn();
+
+    /// prepare v8 data
+    auto result = createV8Array(isolate, true);
+    V8::insertResult(isolate, *col_ptr, array_type_ptr, result, false);
+
+    ASSERT_EQ(col_ptr->size(), 1);
+    Field result_elem1;
+    col_ptr->get(0, result_elem1);
+    ASSERT_EQ(result_elem1.get<Array &>().size(), 2);
 }

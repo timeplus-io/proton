@@ -497,7 +497,7 @@ void AggregateFunctionJavaScriptAdapter::insertResultInto(AggregateDataPtr __res
                     num_of_results);
         }
 
-        V8::insertResult(isolate_, to, config.result_type, hasUserDefinedEmit(), res);
+        V8::insertResult(isolate_, to, config.result_type, res, hasUserDefinedEmit());
     };
 
     V8::run(blueprint.isolate.get(), blueprint.global_context, std::move(finalize_func));
