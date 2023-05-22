@@ -37,6 +37,7 @@
 #include <Common/TLDListsHolder.h>
 #include <Core/ServerUUID.h>
 #include <IO/ReadHelpers.h>
+#include <IO/IOThreadPool.h>
 #include <IO/UseSSL.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DNSCacheUpdater.h>
@@ -708,6 +709,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         config().getUInt("thread_pool_queue_size", 10000)
     );
 
+    IOThreadPool::initialize(
+        config().getUInt("max_io_thread_pool_size", 100),
+        config().getUInt("max_io_thread_pool_free_size", 0),
+        config().getUInt("io_thread_pool_queue_size", 10000));
 
     /// Initialize global local cache for remote filesystem.
     if (config().has("local_cache_for_remote_fs"))
@@ -1219,6 +1224,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             /// proton: starts
             global_context->loadOrReloadUserDefinedExecutableFunctions();
             /// proton: ends
+
+            global_context->setRemoteHostFilter(*config);
 
             /// Setup protection to avoid accidental DROP for big tables (that are greater than 50 GB by default)
             if (config->has("max_stream_size_to_drop"))

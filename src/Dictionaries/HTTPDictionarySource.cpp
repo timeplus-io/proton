@@ -104,7 +104,7 @@ QueryPipeline HTTPDictionarySource::loadAll()
         context->getReadSettings(),
         configuration.header_entries,
         ReadWriteBufferFromHTTP::Range{},
-        RemoteHostFilter{}, false);
+        nullptr, false);
 
     return createWrappedBuffer(std::move(in_ptr));
 }
@@ -125,7 +125,7 @@ QueryPipeline HTTPDictionarySource::loadUpdatedAll()
         context->getReadSettings(),
         configuration.header_entries,
         ReadWriteBufferFromHTTP::Range{},
-        RemoteHostFilter{}, false);
+        nullptr, false);
 
     return createWrappedBuffer(std::move(in_ptr));
 }
@@ -155,7 +155,7 @@ QueryPipeline HTTPDictionarySource::loadIds(const std::vector<UInt64> & ids)
         context->getReadSettings(),
         configuration.header_entries,
         ReadWriteBufferFromHTTP::Range{},
-        RemoteHostFilter{}, false);
+        nullptr, false);
 
     return createWrappedBuffer(std::move(in_ptr));
 }
@@ -185,7 +185,7 @@ QueryPipeline HTTPDictionarySource::loadKeys(const Columns & key_columns, const 
         context->getReadSettings(),
         configuration.header_entries,
         ReadWriteBufferFromHTTP::Range{},
-        RemoteHostFilter{}, false);
+        nullptr, false);
 
     return createWrappedBuffer(std::move(in_ptr));
 }
