@@ -101,6 +101,11 @@ struct StorageS3Configuration : URLBasedDataSourceConfiguration
     String secret_access_key;
 };
 
+struct StorageS3ClusterConfiguration : StorageS3Configuration
+{
+    String cluster_name;
+};
+
 struct URLBasedDataSourceConfig
 {
     URLBasedDataSourceConfiguration configuration;

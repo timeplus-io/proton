@@ -1,4 +1,5 @@
 #include "config.h"
+#include "IO/S3Common.h"
 
 #if USE_AWS_S3
 
@@ -212,13 +213,14 @@ std::optional<size_t> ReadBufferFromS3::getTotalSize()
     if (file_size)
         return file_size;
 
-    Aws::S3::Model::HeadObjectRequest request;
-    request.SetBucket(bucket);
-    request.SetKey(key);
+    auto object_size = S3::getObjectSize(client_ptr, bucket, key, false);
 
-    auto outcome = client_ptr->HeadObject(request);
-    auto head_result = outcome.GetResultWithOwnership();
-    file_size = head_result.GetContentLength();
+    if (!object_size)
+    {
+        return std::nullopt;
+    }
+
+    file_size = object_size;
     return file_size;
 }
 
@@ -279,6 +281,36 @@ std::unique_ptr<ReadBuffer> ReadBufferFromS3::initialize()
         throw Exception(outcome.GetError().GetMessage(), ErrorCodes::S3_ERROR);
 }
 
+SeekableReadBufferPtr ReadBufferS3Factory::getReader()
+{
+    const auto next_range = range_generator.nextRange();
+    if (!next_range)
+    {
+        return nullptr;
+    }
+
+    auto reader = std::make_shared<ReadBufferFromS3>(
+        client_ptr,
+        bucket,
+        key,
+        s3_max_single_read_retries,
+        read_settings,
+        false /*use_external_buffer*/,
+        next_range->first,
+        next_range->second);
+    return reader;
+}
+
+off_t ReadBufferS3Factory::seek(off_t off, [[maybe_unused]] int whence)
+{
+    range_generator = RangeGenerator{object_size, range_step, static_cast<size_t>(off)};
+    return off;
+}
+
+std::optional<size_t> ReadBufferS3Factory::getTotalSize()
+{
+    return object_size;
+}
 }
 
 #endif
