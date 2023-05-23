@@ -13,7 +13,7 @@ void queryStreams(ContextMutablePtr query_context, const std::function<void(Bloc
     /// We include "system.tables" and / or "system.tasks" tables in the resulting block on purpose .
     /// It is to avoid an empty block if there are no production tables in the system, which will cause
     /// consistency problem in CatalogService (like the last deleted table does not get deleted from CatalogService)
-    String cols = "database, name, engine, uuid, dependencies_table, create_table_query, engine_full, partition_key, sorting_key, "
+    String cols = "database, name, engine, mode, uuid, dependencies_table, create_table_query, engine_full, partition_key, sorting_key, "
                   "primary_key, sampling_key, storage_policy";
     String query = fmt::format(
         "SELECT {} FROM system.tables WHERE NOT is_temporary AND ((database != 'system' AND database != 'INFORMATION_SCHEMA' AND database "
@@ -26,7 +26,7 @@ void queryStreams(ContextMutablePtr query_context, const std::function<void(Bloc
 
 void queryOneStream(ContextMutablePtr query_context, const String &database_name, const String &name, const std::function<void(Block &&)> & callback)
 {
-    String cols = "database, name, engine, uuid, dependencies_table, create_table_query, engine_full, partition_key, sorting_key, "
+    String cols = "database, name, engine, mode, uuid, dependencies_table, create_table_query, engine_full, partition_key, sorting_key, "
                   "primary_key, sampling_key, storage_policy";
     String query = fmt::format(
         "SELECT {} FROM system.tables WHERE database = '{}' AND name = '{}' settings "
@@ -39,7 +39,7 @@ void queryOneStream(ContextMutablePtr query_context, const String &database_name
 
 void queryStreamsByDatabasse(ContextMutablePtr query_context, const String &database_name, const std::function<void(Block &&)> & callback)
 {
-    String cols = "database, name, engine, uuid, dependencies_table, create_table_query, engine_full, partition_key, sorting_key, "
+    String cols = "database, name, engine, mode, uuid, dependencies_table, create_table_query, engine_full, partition_key, sorting_key, "
                   "primary_key, sampling_key, storage_policy";
     String query = fmt::format(
         "SELECT {} FROM system.tables WHERE database = '{}' settings "

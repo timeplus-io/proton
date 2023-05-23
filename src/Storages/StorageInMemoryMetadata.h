@@ -248,17 +248,20 @@ struct StorageInMemoryCreateQuery
     String query;  /// if show_table_uuid_in_table_create_query_if_not_nil = 0
     String query_uuid;  /// if show_table_uuid_in_table_create_query_if_not_nil = 1
     String engine_full;
+    String mode;
 
-    StorageInMemoryCreateQuery(String query_, String query_uuid_, String engine_full_)
-        : query(std::move(query_)), query_uuid(std::move(query_uuid_)), engine_full(std::move(engine_full_)) {}
+    StorageInMemoryCreateQuery(String query_, String query_uuid_, String engine_full_, String mode_)
+        : query(std::move(query_)), query_uuid(std::move(query_uuid_)), engine_full(std::move(engine_full_)), mode(std::move(mode_)) {}
 
     void setQuery(const String & query_) { query = query_; }
     void setQueryUUID(const String & query_uuid_) { query_uuid = query_uuid_; }
     void setEngineFull(const String & engine_full_) { engine_full = engine_full_; }
+    void setMode(const String & mode_) { mode = mode_; }
 
     const String & getQuery() const { return query; }
     const String & getQueryUUID() const { return query_uuid; }
     const String & getEngineFull() const { return engine_full; }
+    const String & getMode() const { return mode; }
 };
 
 using StorageInMemoryCreateQueryPtr = std::shared_ptr<const StorageInMemoryCreateQuery>;

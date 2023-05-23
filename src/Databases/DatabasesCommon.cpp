@@ -323,7 +323,7 @@ StorageInMemoryCreateQueryPtr parseCreateQueryFromAST(const IAST * query, const 
 {
     /// if AST is nullptr, return empty create query string.
     if (!query)
-        return std::make_shared<StorageInMemoryCreateQuery>("", "", "");
+        return std::make_shared<StorageInMemoryCreateQuery>("", "", "", "");
 
     ASTPtr query_clone = query->clone();
     auto * create = query_clone->as<ASTCreateQuery>();
@@ -364,14 +364,21 @@ StorageInMemoryCreateQueryPtr parseCreateQueryFromAST(const IAST * query, const 
 
     /// parse 'engine_full'
     String engine_full_str;
+    String mode_str;
     if (create->storage)
     {
         engine_full_str = queryToString(*(create->storage));
         const char * const extra_head = " ENGINE = ";
         if (startsWith(engine_full_str, extra_head))
             engine_full_str = engine_full_str.substr(strlen(extra_head));
+
+        Field mode("");
+        if (create->storage && create->storage->settings)
+            create->storage->settings->changes.tryGet("mode", mode);
+        mode_str = mode.get<String>();
     }
-    return std::make_shared<StorageInMemoryCreateQuery>(query_str, query_uuid_str, engine_full_str);
+
+    return std::make_shared<StorageInMemoryCreateQuery>(query_str, query_uuid_str, engine_full_str, mode_str);
 }
 /// proton: ends.
 }

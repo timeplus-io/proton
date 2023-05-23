@@ -13,6 +13,7 @@
 #include <Parsers/queryToString.h>
 #include <Common/typeid_cast.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/ProtonCommon.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeArray.h>
 #include <Disks/IStoragePolicy.h>
@@ -47,6 +48,7 @@ StorageSystemTables::StorageSystemTables(const StorageID & table_id_)
         {"dependencies_table", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"create_table_query", std::make_shared<DataTypeString>()},
         {"engine_full", std::make_shared<DataTypeString>()},
+        {"mode", std::make_shared<DataTypeString>()},
         {"as_select", std::make_shared<DataTypeString>()},
         {"partition_key", std::make_shared<DataTypeString>()},
         {"sorting_key", std::make_shared<DataTypeString>()},
@@ -244,6 +246,10 @@ protected:
                         if (columns_mask[src_index++])
                             res_columns[res_index++]->insert(table.second->getName());
 
+                        // mode
+                        if (columns_mask[src_index++])
+                            res_columns[res_index++]->insertDefault();
+
                         /// Fill the rest columns with defaults
                         while (src_index < columns_mask.size())
                             if (columns_mask[src_index++])
@@ -358,7 +364,7 @@ protected:
                         res_columns[res_index++]->insert(dependencies_table_name_array);
                 }
 
-                if (columns_mask[src_index] || columns_mask[src_index + 1] || columns_mask[src_index + 2])
+                if (columns_mask[src_index] || columns_mask[src_index + 1] || columns_mask[src_index + 2] || columns_mask[src_index + 3])
                 {
                     /// proton: starts.
                     StorageInMemoryCreateQueryPtr create_query_snapshot;
@@ -382,6 +388,21 @@ protected:
                     {
                         if (create_query_snapshot)
                             res_columns[res_index++]->insert(create_query_snapshot->getEngineFull());
+                        else
+                            res_columns[res_index++]->insert("");
+                    }
+
+                    // mode
+                    if (columns_mask[src_index++])
+                    {
+                        if (create_query_snapshot)
+                        {
+                            String mode = create_query_snapshot->getMode();
+                            if (mode.empty() && table->getName() == "Stream")
+                                mode = ProtonConsts::APPEND_MODE;
+
+                            res_columns[res_index++]->insert(mode);
+                        }
                         else
                             res_columns[res_index++]->insert("");
                     }

@@ -808,6 +808,7 @@ CatalogService::Table::Table(const String & node_identity_, const String & host_
         {"database", &database},
         {"name", &name},
         {"engine", &engine},
+        {"mode", &mode},
         {"uuid", &uuid},
         {"dependencies_table", &dependencies_table},
         {"create_table_query", &create_table_query},

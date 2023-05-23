@@ -29,6 +29,7 @@ public:
         String name;
         UUID uuid = UUIDHelpers::Nil;
         String engine;
+        String mode;
         String metadata_path;
         String data_paths;
         String dependencies_database;
@@ -49,7 +50,7 @@ public:
             bool host_shards_equals = std::equal(lhs.host_shards.begin(), lhs.host_shards.end(), rhs.host_shards.begin(), rhs.host_shards.end());
 
             return host_shards_equals && (lhs.node_identity == rhs.node_identity) && (lhs.host == rhs.host) && (lhs.database == rhs.database)
-                && (lhs.name == rhs.name) && (lhs.uuid == rhs.uuid) && (lhs.engine == rhs.engine)
+                && (lhs.name == rhs.name) && (lhs.uuid == rhs.uuid) && (lhs.engine == rhs.engine) && (lhs.mode == rhs.mode)
                 && (lhs.metadata_path == rhs.metadata_path) && (lhs.data_paths == rhs.data_paths)
                 && (lhs.dependencies_database == rhs.dependencies_database) && (lhs.dependencies_table == rhs.dependencies_table)
                 && (lhs.create_table_query == rhs.create_table_query) && (lhs.engine_full == rhs.engine_full)

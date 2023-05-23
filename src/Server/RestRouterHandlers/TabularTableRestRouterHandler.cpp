@@ -71,6 +71,8 @@ void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, c
         table_mapping_json.set("engine", table->engine);
         table_mapping_json.set("order_by_expression", table->sorting_key);
         table_mapping_json.set("partition_by_expression", table->partition_key);
+        table_mapping_json.set("mode", table->mode);
+        table_mapping_json.set("primary_key", table->primary_key);
 
         if (table->engine == "Stream" || table->engine == "MaterializedView")
             buildRetentionSettings(table_mapping_json, table->database.empty() ? database : table->database, table->name);
