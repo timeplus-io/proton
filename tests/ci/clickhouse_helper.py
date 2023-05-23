@@ -22,7 +22,7 @@ class ClickHouseHelper:
         self.url = url
         self.auth = {
             'X-ClickHouse-User': user if user is not None else get_parameter_from_ssm("clickhouse-test-stat-login"),
-            'X-ClickHouse-Key': password if password is not None else get_parameter_from_ssm("clickhouse-test-stat-password")
+            'X-ClickHouse-Key': password if password is not None else get_parameter_from_ssm("clickhouse-test-stat-password"),
         }
 
     @staticmethod

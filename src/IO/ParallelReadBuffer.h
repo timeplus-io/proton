@@ -3,6 +3,7 @@
 #include <IO/BufferWithOwnMemory.h>
 #include <IO/ReadBuffer.h>
 #include <IO/SeekableReadBuffer.h>
+#include <Interpreters/threadPoolCallbackRunner.h>
 #include <Common/ArenaWithFreeLists.h>
 #include <Common/ThreadPool.h>
 
@@ -70,20 +71,14 @@ public:
     class ReadBufferFactory
     {
     public:
-        virtual SeekableReadBufferPtr getReader() = 0;
         virtual ~ReadBufferFactory() = default;
+
+        virtual SeekableReadBufferPtr getReader() = 0;
         virtual off_t seek(off_t off, int whence) = 0;
         virtual std::optional<size_t> getTotalSize() = 0;
     };
 
-    using WorkerSetup = std::function<void(ThreadStatus &)>;
-    using WorkerCleanup = std::function<void(ThreadStatus &)>;
-    explicit ParallelReadBuffer(
-        std::unique_ptr<ReadBufferFactory> reader_factory_,
-        ThreadPool * pool,
-        size_t max_working_readers,
-        WorkerSetup worker_setup = [](ThreadStatus &){},
-        WorkerCleanup worker_cleanup = [](ThreadStatus &){});
+    ParallelReadBuffer(std::unique_ptr<ReadBufferFactory> reader_factory_, ThreadPoolCallbackRunner<void> schedule_, size_t max_working_readers);
 
     ~ParallelReadBuffer() override { finishAndWait(); }
 
@@ -140,16 +135,14 @@ private:
 
     Segment current_segment;
 
-    ThreadPool * pool;
     size_t max_working_readers;
     size_t active_working_reader{0};
     // Triggered when all reader workers are done
     std::condition_variable readers_done;
 
-    std::unique_ptr<ReadBufferFactory> reader_factory;
+    ThreadPoolCallbackRunner<void> schedule;
 
-    WorkerSetup worker_setup;
-    WorkerCleanup worker_cleanup;
+    std::unique_ptr<ReadBufferFactory> reader_factory;
 
     /**
      * FIFO queue of readers.
