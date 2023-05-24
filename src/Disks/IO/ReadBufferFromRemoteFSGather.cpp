@@ -71,7 +71,7 @@ SeekableReadBufferPtr ReadBufferFromWebServerGather::createImplementationBuffer(
     return std::make_unique<ReadBufferFromWebServer>(fs::path(uri) / path, context, settings, /* use_external_buffer */true, read_until_position);
 }
 
-ReadBufferFromRemoteFSGather::ReadBufferFromRemoteFSGather(BlobsPathWithSize blobs_to_read_, const ReadSettings & settings_, const String & path_)
+ReadBufferFromRemoteFSGather::ReadBufferFromRemoteFSGather(BlobsPathToSize blobs_to_read_, const ReadSettings & settings_, const String & path_)
     : ReadBuffer(nullptr, 0)
     , blobs_to_read(std::move(blobs_to_read_))
     , settings(settings_)
@@ -241,7 +241,8 @@ size_t ReadBufferFromRemoteFSGather::getFileSize() const
 {
     size_t size = 0;
     for (const auto & object : blobs_to_read)
-        size += object.second;
+        //size += object.second;
+        size += object.bytes_size;
     return size;
 }
 

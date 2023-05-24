@@ -13,7 +13,6 @@
 #include <Common/ThreadPool.h>
 #include <filesystem>
 
-
 namespace CurrentMetrics
 {
     extern const Metric DiskSpaceReservedForMerge;
@@ -22,6 +21,23 @@ namespace CurrentMetrics
 namespace DB
 {
 
+/// Path to blob with it's size
+struct BlobPathWithSize
+{
+    std::string relative_path;
+    uint64_t bytes_size;
+
+    BlobPathWithSize() = default;
+    BlobPathWithSize(const BlobPathWithSize & other) = default;
+
+    BlobPathWithSize(const std::string & relative_path_, uint64_t bytes_size_)
+        : relative_path(relative_path_)
+        , bytes_size(bytes_size_)
+    {}
+};
+
+/// List of blobs with their sizes
+using BlobsPathToSize = std::vector<BlobPathWithSize>;
 
 class IAsynchronousReader;
 using AsynchronousReaderPtr = std::shared_ptr<IAsynchronousReader>;
@@ -175,8 +191,8 @@ using RemoteDiskPtr = std::shared_ptr<IDiskRemote>;
 /// FS objects, their number and total size of all FS objects.
 /// Each FS object represents a file path in remote FS and its size.
 
-using BlobPathWithSize = std::pair<String, size_t>;
-using BlobsPathWithSize = std::vector<std::pair<String, size_t>>;
+//using BlobPathWithSize = std::pair<String, size_t>;
+//using BlobsPathWithSize = std::vector<std::pair<String, size_t>>;
 
 struct IDiskRemote::Metadata
 {
@@ -187,8 +203,8 @@ struct IDiskRemote::Metadata
     static constexpr UInt32 VERSION_READ_ONLY_FLAG = 3;
 
     /// Remote FS objects paths and their sizes.
-    BlobsPathWithSize remote_fs_objects;
-
+//    BlobsPathWithSize remote_fs_objects;
+    BlobsPathToSize remote_fs_objects;
     /// URI
     const String & remote_fs_root_path;
 
