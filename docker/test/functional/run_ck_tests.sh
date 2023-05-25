@@ -34,7 +34,7 @@ echo "Loading data ${hits_tsv}"
 proton-client -u $CLICKHOUSE_USER --password $CLICKHOUSE_PASSWORD --query="insert into test.hits format TSV" < "${hits_tsv}"
 
 echo "Run test cases"
-$PROTON_SRC/tests/ported-clickhouse-test.py $TEST_TYPE --jobs 4 -q $PROTON_SRC/tests/queries_ported 2>&1 \
+$PROTON_SRC/tests/ported-clickhouse-test.py $TEST_TYPE --jobs 16 -q $PROTON_SRC/tests/queries_ported 2>&1 \
     | ts '%Y-%m-%d %H:%M:%S' \
     | tee -a /test_output/test_result.txt
 
