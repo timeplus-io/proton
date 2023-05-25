@@ -13,7 +13,7 @@ rm -f CMakeCache.txt
 read -ra CMAKE_FLAGS <<< "${CMAKE_FLAGS:-}"
 # Hope, that the most part of files will be in cache, so we just link new executables
 # Please, add or change flags directly in cmake
-cmake --debug-trycompile --verbose=1 -DCMAKE_VERBOSE_MAKEFILE=1 -LA -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" \
+cmake --debug-trycompile --log-level=VERBOSE -DCMAKE_VERBOSE_MAKEFILE=1 -LA -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" \
     -DSANITIZE="$SANITIZER" -DENABLE_FUZZING=1 -DFUZZER='libfuzzer' -DENABLE_PROTOBUF=1 "${CMAKE_FLAGS[@]}" ..
 
 FUZZER_TARGETS=$(find ../src -name '*_fuzzer.cpp' -execdir basename {} .cpp ';' | tr '\n' ' ')
