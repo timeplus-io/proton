@@ -130,7 +130,7 @@ void AggregatingTransform::consume(Chunk chunk)
         /// There indeed has cases where num_rows of a chunk is greater than 0, but
         /// the columns are empty : select count() from stream where a != 0.
         /// So `executeOrMergeColumns` accepts num_rows as parameter
-        if (std::tie(should_abort, need_finalization) = executeOrMergeColumns(chunk.detachColumns(), num_rows); should_abort)
+        if (std::tie(should_abort, need_finalization) = executeOrMergeColumns(chunk, num_rows); should_abort)
             is_consume_finished = true;
     }
 
@@ -147,8 +147,9 @@ void AggregatingTransform::consume(Chunk chunk)
         checkpointAlignment(chunk);
 }
 
-std::pair<bool, bool> AggregatingTransform::executeOrMergeColumns(Columns columns, size_t num_rows)
+std::pair<bool, bool> AggregatingTransform::executeOrMergeColumns(Chunk & chunk, size_t num_rows)
 {
+    auto columns = chunk.detachColumns();
     if (params->only_merge)
     {
         auto block = getInputs().front().getHeader().cloneWithColumns(columns);

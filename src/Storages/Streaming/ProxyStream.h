@@ -47,15 +47,10 @@ public:
 
     NamesAndTypesList getVirtuals() const override;
 
-    Names getAdditionalRequiredColumns() const;
-
     FunctionDescriptionPtr getStreamingFunctionDescription() const { return streaming_func_desc; }
 
     /// Whether it reads data from streaming store or historical store
     bool isStreaming() const { return streaming; }
-
-    /// Whether has streaming func itself, i.e. tumble(...) or hop(...) or session(...)
-    bool hasStreamingWindowFunc() const { return streaming_func_desc != nullptr && streaming_func_desc->type != WindowType::NONE; }
 
     /// Return WindowType::NONE, if it has no window func
     WindowType windowType() const { return streaming_func_desc != nullptr ? streaming_func_desc->type : WindowType::NONE; }
@@ -76,27 +71,40 @@ public:
 
     StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const override;
 
-    void buildStreamingProcessingQueryPlan(
-        QueryPlan & query_plan,
-        const Names & required_columns_after_streaming_window,
-        const SelectQueryInfo & select_info,
-        const StorageSnapshotPtr & storage_snapshot,
-        const ContextPtr & context_,
-        bool need_watermark,
-        size_t curr_proxy_depth = 1) const;
-
 private:
     void validateProxyChain() const;
 
-    bool
-    processTimestampStep(QueryPlan & query_plan, const Names & required_columns_after_streaming_window, const ContextPtr & context_) const;
+    Names getRequiredColumnsForProxyStorage(const Names & column_names) const;
 
-    void processWatermarkStep(QueryPlan & query_plan, const SelectQueryInfo & query_info, bool proc_time) const;
+    void doRead(
+        QueryPlan & query_plan,
+        const Names & column_names,
+        const StorageSnapshotPtr & storage_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr context_,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        size_t num_streams);
 
-    void processSessionStep(QueryPlan & query_plan, const SelectQueryInfo & query_info) const;
+    void buildStreamingFunctionQueryPlan(
+        QueryPlan & query_plan,
+        const Names & required_columns_after_streaming_window,
+        const SelectQueryInfo & query_info,
+        const StorageSnapshotPtr & storage_snapshot) const;
+
+    void processDedupStep(QueryPlan & query_plan, const Names & required_columns_after_streaming_window) const;
+
+    void processTimestampStep(QueryPlan & query_plan, const SelectQueryInfo & query_info) const;
 
     void processWindowAssignmentStep(
-        QueryPlan & query_plan, const Names & required_columns_after_streaming_window, const StorageSnapshotPtr & storage_snapshot) const;
+        QueryPlan & query_plan,
+        const SelectQueryInfo & query_info,
+        const Names & required_columns_after_streaming_window,
+        const StorageSnapshotPtr & storage_snapshot) const;
+
+    /// If @param after_func_name is specified, we only get additional required columns of others funcions after the func
+    /// For example: we can use `mergeAdditionalRequiredColumnsAfterFunc("dedup")` to get required columns after `dedup`
+    Names mergeAdditionalRequiredColumnsAfterFunc(Names required, const String & after_func_name = "") const;
 
 private:
     ProxyStream(

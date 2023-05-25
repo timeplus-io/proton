@@ -1938,21 +1938,6 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             chain.addStep();
 
             /// proton : starts
-            /// We will need propagate session start/end columns to the required output column even though users doesn't explicitly SELECT them
-            /// because we will need access them for down stream processing like aggregation
-            if (storage)
-            {
-                if (const auto * proxy = storage->as<Streaming::ProxyStream>())
-                {
-                    if (proxy->windowType() == Streaming::WindowType::SESSION)
-                    {
-                        auto & step = chain.getLastStep();
-                        step.addRequiredOutput(ProtonConsts::STREAMING_SESSION_START);
-                        step.addRequiredOutput(ProtonConsts::STREAMING_SESSION_END);
-                    }
-                }
-            }
-
             /// We will need propagate `_tp_delta` to downstream for changelog query processing
             if (data_stream_semantic == Streaming::DataStreamSemantic::Changelog)
             {
@@ -1979,6 +1964,22 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             query_analyzer.appendAggregateFunctionsArguments(chain, only_types || !first_stage);
 
             /// proton: starts.
+            /// We will need propagate session start/end columns to the required output column even though users doesn't explicitly SELECT them
+            /// because we will need access them for down stream processing like aggregation
+            if (storage)
+            {
+                if (const auto * proxy = storage->as<Streaming::ProxyStream>())
+                {
+                    if (proxy->windowType() == Streaming::WindowType::SESSION)
+                    {
+                        auto & step = chain.getLastStep();
+                        step.addRequiredOutput(proxy->getStreamingFunctionDescription()->argument_names[0]);
+                        step.addRequiredOutput(ProtonConsts::STREAMING_SESSION_START);
+                        step.addRequiredOutput(ProtonConsts::STREAMING_SESSION_END);
+                    }
+                }
+            }
+
             /// Before finalize the chain, we will need add _tp_delta as required output
             /// otherwise chain finalization will get rid of it.
             /// For versioned_kv join versioned_kv case, we have patched up stream `JoinStep` to emit `_tp_delta`

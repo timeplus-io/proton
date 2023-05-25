@@ -120,7 +120,6 @@ public:
     std::set<String> getGroupByColumns() const override;
     bool hasStreamingWindowFunc() const override;
     Streaming::WindowType windowType() const;
-    Streaming::FunctionDescriptionPtr getStreamingFunctionDescription() const;
     bool hasGlobalAggregation() const override;
     /// proton: ends
 
@@ -195,7 +194,6 @@ private:
     bool shouldApplyWatermark() const;
     bool shouldKeepState() const;
     void buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const;
-    void buildStreamingProcessingQueryPlanForSessionWindow(QueryPlan & query_plan) const;
     void checkEmitVersion();
     void handleSeekToSetting();
     void analyzeEventPredicateAsSeekTo();
@@ -241,7 +239,6 @@ private:
 
     /// proton: starts
     /// A copy of required_columns before adding the additional ones for streaming processing
-    Names required_columns_after_streaming_window;
     bool emit_version = false;
     bool has_user_defined_emit_strategy = false;
     mutable std::optional<bool> is_streaming;

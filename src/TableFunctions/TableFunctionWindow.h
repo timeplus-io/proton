@@ -18,15 +18,12 @@ protected:
 
     virtual void postArgs(ASTs &) const { }
 
-    virtual String functionNamePrefix() const = 0;
-
     virtual ASTs checkAndExtractArguments(ASTFunction *) const = 0;
 
 protected:
     virtual void init(ContextPtr context, ASTPtr streaming_func_ast, const String & func_name_prefix, ASTPtr timestamp_expr_ast);
     virtual void handleResultType(const ColumnWithTypeAndName & type_and_name);
-    virtual DataTypePtr getElementType(const DataTypeTuple *) const = 0;
-    virtual void validateWindow(FunctionDescriptionPtr desc) const = 0;
+    virtual DataTypePtr getElementType(size_t i, const DataTypeTuple *) const = 0;
 };
 }
 }

@@ -1,6 +1,8 @@
 #include "TableFunctionProxyBase.h"
 
+#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSubquery.h>
@@ -126,6 +128,59 @@ StoragePtr TableFunctionProxyBase::executeImpl(
 ColumnsDescription TableFunctionProxyBase::getActualTableStructure(ContextPtr /* context */) const
 {
     return columns;
+}
+
+FunctionDescriptionPtr TableFunctionProxyBase::createStreamingFunctionDescription(
+    ASTPtr ast, TreeRewriterResultPtr syntax_analyzer_result, ContextPtr context, const String & func_name_prefix) const
+{
+    ExpressionAnalyzer func_expr_analyzer(ast, syntax_analyzer_result, context);
+    auto streaming_func_expr = func_expr_analyzer.getActions(true);
+
+    WindowType type = toWindowType(ast->as<ASTFunction>()->name);
+
+    const auto & actions = streaming_func_expr->getActions();
+
+    /// Loop actions to figure out input argument types
+    for (const auto & action : actions)
+    {
+        if (action.node->type == ActionsDAG::ActionType::FUNCTION && action.node->result_name.starts_with(func_name_prefix))
+        {
+            Names argument_names;
+            argument_names.reserve(action.node->children.size());
+
+            DataTypes argument_types;
+            argument_types.reserve(action.node->children.size());
+
+            for (const auto * node : action.node->children)
+            {
+                argument_names.push_back(node->result_name);
+                argument_types.push_back(node->result_type);
+            }
+            return std::make_shared<FunctionDescription>(
+                std::move(ast),
+                type,
+                argument_names,
+                argument_types,
+                std::move(streaming_func_expr),
+                syntax_analyzer_result->requiredSourceColumns());
+        }
+    }
+
+    /// The timestamp function ends up with const column, like toDateTime('2020-01-01 00:00:00') or now('UTC') or now64(3, 'UTC')
+    /// Check the function name is now or now64 since these are the only const function we support
+    const auto & func_name = ast->as<ASTFunction>()->name;
+    if (func_name != "now" && func_name != "now64")
+        throw Exception("Unsupported const timestamp func for timestamp column", ErrorCodes::BAD_ARGUMENTS);
+
+    /// Parse the argument names
+    return std::make_shared<FunctionDescription>(
+        std::move(ast),
+        type,
+        Names{},
+        DataTypes{},
+        std::move(streaming_func_expr),
+        syntax_analyzer_result->requiredSourceColumns(),
+        true);
 }
 }
 }

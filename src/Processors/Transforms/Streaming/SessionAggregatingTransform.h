@@ -1,13 +1,12 @@
 #pragma once
 
-#include "AggregatingTransform.h"
-#include "SessionHelper.h"
+#include <Processors/Transforms/Streaming/WindowAggregatingTransform.h>
 
 namespace DB
 {
 namespace Streaming
 {
-class SessionAggregatingTransform final : public AggregatingTransform
+class SessionAggregatingTransform final : public WindowAggregatingTransform
 {
 public:
     SessionAggregatingTransform(Block header, AggregatingTransformParamsPtr params_);
@@ -17,12 +16,21 @@ public:
     String getName() const override { return "SessionAggregatingTransform"; }
 
 private:
-    void consume(Chunk chunk) override;
-
-    void finalizeSession(const SessionInfo & info, Block & merged_block);
+    std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, size_t num_rows) override;
+    WindowsWithBucket getFinalizedWindowsWithBucket(Int64 watermark) const override;
+    void removeBucketsImpl(Int64 watermark) override;
+    bool needReassignWindow() const override { return true; }
 
 private:
-    SessionInfo session_info;
+    SessionWindowParams & window_params;
+
+    SessionInfoQueue sessions;
+
+    ssize_t wstart_col_pos = -1;
+    ssize_t wend_col_pos = -1;
+    size_t time_col_pos;
+    size_t session_start_col_pos;
+    size_t session_end_col_pos;
 };
 }
 }

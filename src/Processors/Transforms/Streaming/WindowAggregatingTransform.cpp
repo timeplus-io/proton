@@ -1,4 +1,4 @@
-#include "TumbleHopAggregatingTransform.h"
+#include <Processors/Transforms/Streaming/WindowAggregatingTransform.h>
 
 #include <Processors/Transforms/convertToChunk.h>
 
@@ -6,18 +6,15 @@ namespace DB
 {
 namespace Streaming
 {
-TumbleHopAggregatingTransform::TumbleHopAggregatingTransform(Block header, AggregatingTransformParamsPtr params_)
-    : TumbleHopAggregatingTransform(std::move(header), std::move(params_), std::make_unique<ManyAggregatedData>(1), 0, 1, 1)
-{
-}
-
-TumbleHopAggregatingTransform::TumbleHopAggregatingTransform(
+WindowAggregatingTransform::WindowAggregatingTransform(
     Block header,
     AggregatingTransformParamsPtr params_,
     ManyAggregatedDataPtr many_data_,
     size_t current_variant_,
     size_t max_threads_,
-    size_t temporary_data_merge_threads_)
+    size_t temporary_data_merge_threads_,
+    const String & log_name,
+    ProcessorID pid_)
     : AggregatingTransform(
         std::move(header),
         std::move(params_),
@@ -25,22 +22,21 @@ TumbleHopAggregatingTransform::TumbleHopAggregatingTransform(
         current_variant_,
         max_threads_,
         temporary_data_merge_threads_,
-        "TumbleHopAggregatingTransform",
-        ProcessorID::TumbleHopAggregatingTransformID)
+        log_name,
+        pid_)
 {
+    assert(params->params.window_params);
     assert(
-        (params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START)
-        || (params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END));
+        params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
+        || params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END);
 }
 
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
-void TumbleHopAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
+void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 {
     assert(chunk_ctx);
-
     watermark_bound = chunk_ctx->getWatermark();
-    assert(watermark_bound.id == INVALID_SUBSTREAM_ID);
     if (many_data->finalizations.fetch_add(1) + 1 == many_data->variants.size())
     {
         if (isCancelled())
@@ -59,21 +55,21 @@ void TumbleHopAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 
             if (bound.watermark > max_watermark.watermark)
                 max_watermark = bound;
-
-            /// Reset watermarks
-            assert(bound.id == INVALID_SUBSTREAM_ID);
-            bound.watermark = 0;
-            bound.watermark_lower_bound = 0;
         }
 
         if (min_watermark.watermark != max_watermark.watermark)
             LOG_INFO(log, "Found watermark skew. min_watermark={}, max_watermark={}", min_watermark.watermark, max_watermark.watermark);
 
+        chunk_ctx->setWatermark(min_watermark);
+
         auto start = MonotonicMilliseconds::now();
-        doFinalize(min_watermark, chunk_ctx);
+        doFinalize(min_watermark.watermark, chunk_ctx);
         auto end = MonotonicMilliseconds::now();
 
         LOG_INFO(log, "Took {} milliseconds to finalize {} shard aggregation", end - start, many_data->variants.size());
+
+        /// Tell other variants to clean up memory arena
+        many_data->arena_watermark = min_watermark.watermark;
 
         // Clear the finalization count
         many_data->finalizations.store(0);
@@ -85,7 +81,7 @@ void TumbleHopAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
         /// and then remove the project window buckets and their memory arena for the current variant.
         /// This save a bit time and a bit more efficiency because all variants can do memory arena
         /// recycling in parallel.
-        removeBuckets();
+        removeBucketsImpl(many_data->arena_watermark);
     }
     else
     {
@@ -103,11 +99,11 @@ void TumbleHopAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
             end - start,
             many_data->variants.size());
 
-        removeBuckets();
+        removeBucketsImpl(many_data->arena_watermark);
     }
 }
 
-void TumbleHopAggregatingTransform::doFinalize(const WatermarkBound & watermark, const ChunkContextPtr & chunk_ctx)
+void WindowAggregatingTransform::doFinalize(Int64 watermark, const ChunkContextPtr & chunk_ctx)
 {
     /// FIXME spill to disk, overflow_row etc cases
     auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(many_data->variants);
@@ -122,7 +118,7 @@ void TumbleHopAggregatingTransform::doFinalize(const WatermarkBound & watermark,
     convertTwoLevel(prepared_data_ptr, watermark, chunk_ctx);
 }
 
-void TumbleHopAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & data)
+void WindowAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & data)
 {
     AggregatedDataVariantsPtr & first = data->at(0);
 
@@ -134,8 +130,7 @@ void TumbleHopAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & d
         first_pool.emplace_back(std::make_shared<Arena>());
 }
 
-void TumbleHopAggregatingTransform::convertTwoLevel(
-    ManyAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, const ChunkContextPtr & chunk_ctx)
+void WindowAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr & data, Int64 watermark, const ChunkContextPtr & chunk_ctx)
 {
     /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
     /// one project window for streaming processing
@@ -144,54 +139,39 @@ void TumbleHopAggregatingTransform::convertTwoLevel(
     std::atomic<bool> is_cancelled{false};
 
     Block merged_block;
+    Block block;
 
-    for (size_t index = data->size() == 1 ? 0 : 1; index < first->aggregates_pools.size(); ++index)
+    for (const auto & window_with_bucket : getFinalizedWindowsWithBucket(watermark))
     {
-        Arena * arena = first->aggregates_pools.at(index).get();
+        block = params->aggregator.mergeAndConvertOneBucketToBlock(
+            *data, first->aggregates_pool, params->final, ConvertAction::STREAMING_EMIT, window_with_bucket.bucket, &is_cancelled);
 
-        /// Figure out which buckets need get merged
-        auto & data_variant = data->at(index);
-        std::vector<size_t> buckets = data_variant->aggregator->bucketsBefore(*data_variant, watermark);
+        if (is_cancelled)
+            return;
 
-        for (auto bucket : buckets)
+        if (needReassignWindow())
+            reassignWindow(block, window_with_bucket);
+
+        if (params->emit_version && params->final)
+            emitVersion(block);
+
+        if (merged_block)
         {
-            Block block = params->aggregator.mergeAndConvertOneBucketToBlock(*data, arena, params->final, ConvertAction::STREAMING_EMIT, bucket, &is_cancelled);
-            if (is_cancelled)
-                return;
-
-            if (params->emit_version && params->final)
-                emitVersion(block);
-
-            if (merged_block)
+            assertBlocksHaveEqualStructure(merged_block, block, "merging buckets for streaming two level hashtable");
+            for (size_t i = 0, size = merged_block.columns(); i < size; ++i)
             {
-                assertBlocksHaveEqualStructure(merged_block, block, "merging buckets for streaming two level hashtable");
-                for (size_t i = 0, size = merged_block.columns(); i < size; ++i)
-                {
-                    const auto source_column = block.getByPosition(i).column;
-                    auto mutable_column = IColumn::mutate(std::move(merged_block.getByPosition(i).column));
-                    mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
-                    merged_block.getByPosition(i).column = std::move(mutable_column);
-                }
+                const auto source_column = block.getByPosition(i).column;
+                auto mutable_column = IColumn::mutate(std::move(merged_block.getByPosition(i).column));
+                mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
+                merged_block.getByPosition(i).column = std::move(mutable_column);
             }
-            else
-                merged_block = std::move(block);
         }
+        else
+            merged_block = std::move(block);
     }
 
     if (merged_block)
-    {
-        chunk_ctx->setWatermark(watermark);
         setCurrentChunk(convertToChunk(merged_block), chunk_ctx);
-    }
-
-    /// Tell other variants to clean up memory arena
-    many_data->arena_watermark = watermark;
-}
-
-/// Cleanup memory arena for the projected window buckets
-void TumbleHopAggregatingTransform::removeBuckets()
-{
-    params->aggregator.removeBucketsBefore(variants, many_data->arena_watermark);
 }
 
 }

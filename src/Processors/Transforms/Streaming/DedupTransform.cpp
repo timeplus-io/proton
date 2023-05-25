@@ -13,7 +13,7 @@ DedupTransform::DedupTransform(const Block & input_header, const Block & output_
 {
     assert(dedup_func_desc);
 
-    calculateColumns(input_header, dedup_func_desc->input_columns);
+    calculateColumns(input_header, output_header, dedup_func_desc->input_columns);
 }
 
 void DedupTransform::transform(Chunk & chunk)
@@ -44,20 +44,25 @@ void DedupTransform::transform(Chunk & chunk)
     auto rows = block.rows();
     const auto & filter = filter_column->getData();
 
-    for (auto & col_with_name_type : block)
-        col_with_name_type.column = col_with_name_type.column->filter(filter, rows);
-
-    /// FIXME, drop the unneeded columns here
-    chunk.setColumns(block.getColumns(), block.rows());
+    for (auto output_pos : output_column_positions)
+    {
+        auto & col_with_name_type = block.getByPosition(output_pos);
+        chunk.addColumn(col_with_name_type.column->filter(filter, rows));
+    }
 }
 
-void DedupTransform::calculateColumns(const Block & input_header, const Names & input_columns)
+void DedupTransform::calculateColumns(const Block & input_header, const Block & output_header, const Names & input_columns)
 {
     expr_column_positions.reserve(input_columns.size());
 
     /// Calculate the positions of dependent columns in input chunk
     for (const auto & col_name : input_columns)
         expr_column_positions.push_back(input_header.getPositionByName(col_name));
+
+    /// Calculate the positions of output columns in input chunk
+    output_column_positions.reserve(output_header.columns());
+    for (const auto & col_with_name_type : output_header)
+        output_column_positions.push_back(input_header.getPositionByName(col_with_name_type.name));
 }
 }
 }

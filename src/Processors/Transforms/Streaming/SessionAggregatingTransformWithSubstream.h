@@ -1,32 +1,35 @@
 #pragma once
 
-#include "AggregatingTransformWithSubstream.h"
-#include "SessionHelper.h"
+#include <Processors/Transforms/Streaming/WindowAggregatingTransformWithSubstream.h>
 
 namespace DB
 {
 namespace Streaming
 {
-class SessionAggregatingTransformWithSubstream : public AggregatingTransformWithSubstream
+class SessionAggregatingTransformWithSubstream final : public WindowAggregatingTransformWithSubstream
 {
 public:
-    SessionAggregatingTransformWithSubstream(Block header, AggregatingTransformParamsPtr params_);
+    SessionAggregatingTransformWithSubstream(Block header, AggregatingTransformParamsPtr params_, size_t current_index);
+
     ~SessionAggregatingTransformWithSubstream() override = default;
 
     String getName() const override { return "SessionAggregatingTransformWithSubstream"; }
 
-protected:
+private:
     SubstreamContextPtr getOrCreateSubstreamContext(const SubstreamID & id) override;
+    std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, const SubstreamContextPtr & substream_ctx) override;
+    WindowsWithBucket getFinalizedWindowsWithBucket(Int64 watermark, const SubstreamContextPtr & substream_ctx) const override;
+    void removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx) override;
+    bool needReassignWindow() const override { return true; }
 
 private:
-    void consume(Chunk chunk, const SubstreamContextPtr & substream_ctx) override;
+    SessionWindowParams & window_params;
 
-    void finalizeSession(const SubstreamContextPtr & substream_ctx, const SessionInfo & info, Block & merged_block);
-
-    void emitGlobalOversizeSessionsIfPossible(const Chunk & chunk, Block & merged_block);
-
-private:
-    Int64 max_event_ts = 0;
+    ssize_t wstart_col_pos = -1;
+    ssize_t wend_col_pos = -1;
+    size_t time_col_pos;
+    size_t session_start_col_pos;
+    size_t session_end_col_pos;
 };
 }
 }

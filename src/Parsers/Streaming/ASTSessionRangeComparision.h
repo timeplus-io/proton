@@ -7,8 +7,8 @@ namespace DB
 struct ASTSessionRangeComparision : public ASTWithAlias
 {
 public:
-    bool start_with_boundary = true;
-    bool end_with_boundary = true;
+    bool start_with_inclusion = true;
+    bool end_with_inclusion = true;
 
     String getID(char) const override { return "SessionRangeComparision"; }
 

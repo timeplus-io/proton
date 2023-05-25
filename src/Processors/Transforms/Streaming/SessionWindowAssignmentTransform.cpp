@@ -1,0 +1,36 @@
+#include <Processors/Transforms/Streaming/SessionWindowAssignmentTransform.h>
+
+#include <Columns/ColumnArray.h>
+#include <Columns/ColumnTuple.h>
+#include <Functions/FunctionHelpers.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Processors/Transforms/Streaming/SessionHelper.h>
+
+namespace DB
+{
+namespace Streaming
+{
+SessionWindowAssignmentTransform::SessionWindowAssignmentTransform(
+    const Block & input_header, const Block & output_header, WindowParamsPtr window_params_)
+    : WindowAssignmentTransform(input_header, output_header, std::move(window_params_), ProcessorID::SessionWindowAssignmentTransformID)
+    , params(window_params->as<SessionWindowParams &>())
+{
+}
+
+void SessionWindowAssignmentTransform::assignWindow(Chunk & chunk, Columns && columns, ColumnTuple && column_tuple) const
+{
+    Columns res;
+    res.reserve(output_column_positions.size());
+    for (auto pos : output_column_positions)
+    {
+        if (pos < 0)
+            res.push_back(std::move(column_tuple.getColumnPtr(-1 - pos)));
+        else
+            res.push_back(std::move(columns[pos]));
+    }
+    auto num_rows = res.at(0)->size();
+    chunk.setColumns(std::move(res), num_rows);
+}
+
+}
+}

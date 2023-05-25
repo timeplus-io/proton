@@ -1,9 +1,7 @@
 #pragma once
 
-#include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
-#include <Interpreters/Streaming/FunctionDescription.h>
-#include <Parsers/IAST_fwd.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 #include <Processors/ISimpleTransform.h>
 
 namespace DB
@@ -18,37 +16,29 @@ class ColumnTuple;
 
 namespace Streaming
 {
-class WindowAssignmentTransform final : public ISimpleTransform
+class WindowAssignmentTransform : public ISimpleTransform
 {
 public:
-    WindowAssignmentTransform(const Block & input_header, const Block & output_header, FunctionDescriptionPtr desc);
+    WindowAssignmentTransform(const Block & input_header, const Block & output_header, WindowParamsPtr window_params_, ProcessorID pid_);
 
     ~WindowAssignmentTransform() override = default;
 
-    String getName() const override { return "StreamingWindowAssignmentTransform"; }
-
     void transform(Chunk & chunk) override;
 
+    using WindowAssignmentFunc = std::function<void(Chunk &, const Columns &, ColumnTuple &)>;
+
 private:
-    void assignWindow(Chunk & chunk);
-    void assignTumbleWindow(Block & result, const ColumnTuple * col_tuple) const;
-    void assignHopWindow(Block & result, const ColumnTuple * col_tuple) const;
-    void assignSessionWindow(Block & result) const;
     /// Calculate the positions of columns required by window expr
     void calculateColumns(const Block & input_header, const Block & output_header);
+    virtual void assignWindow(Chunk & chunk, Columns && columns, ColumnTuple && column_tuple) const = 0;
 
-private:
-    ContextPtr context;
-    FunctionDescriptionPtr func_desc;
-
+protected:
     Chunk chunk_header;
 
-    std::vector<size_t> input_column_positions;
-    std::vector<size_t> expr_column_positions;
+    WindowParamsPtr window_params;
 
-    Int32 wstart_pos = -1;
-    Int32 wend_pos = -1;
-    String func_name;
+    std::vector<size_t> expr_column_positions;
+    std::vector<ssize_t> output_column_positions;
 };
 }
 }

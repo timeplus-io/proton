@@ -1,6 +1,8 @@
 #include "WindowAssignmentStep.h"
 
-#include <Processors/Transforms/Streaming/WindowAssignmentTransform.h>
+#include <Processors/Transforms/Streaming/HopWindowAssignmentTransform.h>
+#include <Processors/Transforms/Streaming/SessionWindowAssignmentTransform.h>
+#include <Processors/Transforms/Streaming/TumbleWindowAssignmentTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
 namespace DB
@@ -24,21 +26,25 @@ DB::ITransformingStep::Traits getTraits()
 }
 }
 
-WindowAssignmentStep::WindowAssignmentStep(
-    const DataStream & input_stream_,
-    Block output_header,
-    FunctionDescriptionPtr desc_)
-    : ITransformingStep(input_stream_, std::move(output_header), getTraits())
-    , desc(std::move(desc_))
+WindowAssignmentStep::WindowAssignmentStep(const DataStream & input_stream_, Block output_header, WindowParamsPtr window_params_)
+    : ITransformingStep(input_stream_, std::move(output_header), getTraits()), window_params(std::move(window_params_))
 {
 }
 
 void WindowAssignmentStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & /* settings */)
 {
-    pipeline.addSimpleTransform([&](const Block & header) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        return std::make_shared<WindowAssignmentTransform>(header, getOutputStream().header, desc);
+    assert(window_params);
+
+    pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+        if (window_params->type == WindowType::TUMBLE)
+            return std::make_shared<TumbleWindowAssignmentTransform>(header, getOutputStream().header, window_params);
+        else if (window_params->type == WindowType::HOP)
+            return std::make_shared<HopWindowAssignmentTransform>(header, getOutputStream().header, window_params);
+        else if (window_params->type == WindowType::SESSION)
+            return std::make_shared<SessionWindowAssignmentTransform>(header, getOutputStream().header, window_params);
+        else
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "No support window type: {}", magic_enum::enum_name(window_params->type));
     });
 }
 }
 }
-

@@ -21,9 +21,9 @@ bool ParserSessionRangeComparisonExpressionIfPossible::parseImpl(Pos & pos, ASTP
         auto range_comp = std::make_shared<ASTSessionRangeComparision>();
         /// Opening
         if (pos->type == TokenType::OpeningSquareBracket)
-            range_comp->start_with_boundary = true;
+            range_comp->start_with_inclusion = true;
         else if (pos->type == TokenType::OpeningRoundBracket)
-            range_comp->start_with_boundary = false;
+            range_comp->start_with_inclusion = false;
         else
             break;
 
@@ -43,9 +43,9 @@ bool ParserSessionRangeComparisonExpressionIfPossible::parseImpl(Pos & pos, ASTP
 
         /// Closing
         if (pos->type == TokenType::ClosingSquareBracket)
-            range_comp->end_with_boundary = true;
+            range_comp->end_with_inclusion = true;
         else if (pos->type == TokenType::ClosingRoundBracket)
-            range_comp->end_with_boundary = false;
+            range_comp->end_with_inclusion = false;
         else
             break;
 

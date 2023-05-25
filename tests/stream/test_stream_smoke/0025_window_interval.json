@@ -630,8 +630,8 @@
     {
       "id": 9,
       "tags": ["window_interval"],
-      "name": "window_interval_years",
-      "description": "window interval years",
+      "name": "window_interval_quarters",
+      "description": "window interval quarters",
       "steps":[
         {
           "statements": [
@@ -699,8 +699,8 @@
     {
       "id": 10,
       "tags": ["window_interval"],
-      "name": "window_interval_quarters",
-      "description": "window interval quarters",
+      "name": "window_interval_years",
+      "description": "window interval years",
       "steps":[
         {
           "statements": [

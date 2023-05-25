@@ -110,9 +110,9 @@ void AggregatedDataVariants::convertToTwoLevel()
     }
 }
 
-Block Aggregator::getHeader(bool final, bool ignore_session_columns, bool emit_version) const
+Block Aggregator::getHeader(bool final) const
 {
-    return params.getHeader(final, ignore_session_columns ? false : params.group_by == Params::GroupBy::SESSION, params.time_col_is_datetime64, emit_version);
+    return params.getHeader(final);
 }
 
 Block Aggregator::Params::getHeader(
@@ -120,10 +120,7 @@ Block Aggregator::Params::getHeader(
     const Block & intermediate_header,
     const ColumnNumbers & keys,
     const AggregateDescriptions & aggregates,
-    bool final,
-    bool is_session_window,
-    bool is_datetime64,
-    bool emit_version)
+    bool final)
 {
     Block res;
 
@@ -162,34 +159,6 @@ Block Aggregator::Params::getHeader(
 
             res.insert({ type, aggregate.column_name });
         }
-    }
-
-    if (final)
-    {
-        /// insert 'window_start', 'window_end' columns for session window
-        if (is_session_window)
-        {
-            if (is_datetime64)
-            {
-                auto data_type_end = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, String{"UTC"});
-                res.insert(0, {data_type_end, ProtonConsts::STREAMING_WINDOW_END});
-
-                auto data_type_start = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, String{"UTC"});
-                res.insert(0, {data_type_start, ProtonConsts::STREAMING_WINDOW_START});
-            }
-            else
-            {
-                auto data_type_end = std::make_shared<DataTypeDateTime>(String{"UTC"});
-                res.insert(0, {data_type_end, ProtonConsts::STREAMING_WINDOW_END});
-
-                auto data_type_start = std::make_shared<DataTypeDateTime>(String{"UTC"});
-                res.insert(0, {data_type_start, ProtonConsts::STREAMING_WINDOW_START});
-            }
-        }
-
-        /// Insert version
-        if (emit_version)
-            res.insert({DataTypeFactory::instance().get("int64"), ProtonConsts::RESERVED_EMIT_VERSION});
     }
 
     return materializeBlock(res);
@@ -1854,8 +1823,7 @@ Block Aggregator::prepareBlockAndFill(
     MutableColumns final_aggregate_columns(params.aggregates_size);
     AggregateColumnsData aggregate_columns_data(params.aggregates_size);
 
-    /// ignore session window related columns, which will be added in later in StreamingAggregatingTransform
-    Block header = getHeader(final, true);
+    Block header = getHeader(final);
 
     for (size_t i = 0; i < params.keys_size; ++i)
     {
@@ -3283,13 +3251,9 @@ void Aggregator::setupAggregatesPoolTimestamps(size_t row_begin, size_t row_end,
     LOG_DEBUG(log, "Set current pool timestamp watermark={}, window_lower_bound={}", window_upper_bound, window_lower_bound);
 }
 
-void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const
+void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, UInt64 max_bucket) const
 {
     if (result.empty())
-        return;
-
-    auto watermark = watermark_bound.watermark;
-    if (watermark <= 0)
         return;
 
     auto destroy = [&](AggregateDataPtr & data)
@@ -3303,21 +3267,15 @@ void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, const Wate
         data = nullptr;
     };
 
-    auto interval = watermark - watermark_bound.watermark_lower_bound;
-    assert(interval > 0);
-
-    if (params.group_by == Params::GroupBy::WINDOW_START)
-        watermark = watermark_bound.watermark_lower_bound;
-
     size_t removed = 0;
-    UInt64 last_removed_watermark = 0;
+    UInt64 last_removed_time_bukect = 0;
     size_t remaining = 0;
 
     switch (result.type)
     {
 #define M(NAME) \
             case AggregatedDataVariants::Type::NAME: \
-                std::tie(removed, last_removed_watermark, remaining) = result.NAME->data.removeBucketsBeforeButKeep(watermark, interval, params.streaming_window_count, destroy); break;
+                std::tie(removed, last_removed_time_bukect, remaining) = result.NAME->data.removeBucketsBefore(max_bucket, destroy); break;
         APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
 #undef M
 
@@ -3328,15 +3286,16 @@ void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, const Wate
     Arena::Stats stats;
 
     if (removed)
-        stats = result.aggregates_pool->free(last_removed_watermark);
+        stats = result.aggregates_pool->free(last_removed_time_bukect);
 
     LOG_INFO(
         log,
-        "Removed {} windows less or equal to watermark={}, keeping window_count={}, remaining_windows={}. "
+        "Removed {} windows less or equal to {}={}, keeping window_count={}, remaining_windows={}. "
         "Arena: arena_chunks={}, arena_size={}, chunks_removed={}, bytes_removed={}. chunks_reused={}, bytes_reused={}, head_chunk_size={}, "
         "free_list_hits={}, free_list_missed={}",
         removed,
-        last_removed_watermark,
+        params.group_by == Params::GroupBy::WINDOW_END ? "window_end" : "window_start",
+        last_removed_time_bukect,
         params.streaming_window_count,
         remaining,
         stats.chunks,
@@ -3350,30 +3309,12 @@ void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, const Wate
         stats.free_list_misses);
 }
 
-std::vector<size_t> Aggregator::bucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const
+std::vector<size_t> Aggregator::bucketsBefore(const AggregatedDataVariants & result, UInt64 max_bucket) const
 {
-    auto watermark = watermark_bound.watermark;
-    auto get_defaults = []()
-    {
-        /// By default, we are using 256 buckets for 2 level hash table
-        /// and ConvertingAggregatedToChunksSource is using this default value / convention
-        /// This is a fallback to normal 2 level hashtable
-
-        std::vector<size_t> defaults(256);
-        std::iota(defaults.begin(), defaults.end(), 0);
-        return defaults;
-    };
-
-    if (watermark <= 0)
-        return get_defaults();
-
-    if (params.group_by == Params::GroupBy::WINDOW_START)
-        watermark = watermark_bound.watermark_lower_bound;
-
     switch (result.type)
     {
 #define M(NAME) \
-            case AggregatedDataVariants::Type::NAME: return result.NAME->data.bucketsBefore(watermark);
+            case AggregatedDataVariants::Type::NAME: return result.NAME->data.bucketsBefore(max_bucket);
         APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
 #undef M
 
@@ -3381,7 +3322,7 @@ std::vector<size_t> Aggregator::bucketsBefore(AggregatedDataVariants & result, c
             break;
     }
 
-    return get_defaults();
+    return {};
 }
 
 /// The complexity of checkpoint the state of Aggregator is a combination of the following 2 cases

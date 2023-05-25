@@ -649,7 +649,7 @@ struct ExecutorImpl
         {
 #define M(NAME) \
     case Type::NAME: \
-        std::tie(removed, last_removed_watermark, remaining) = (NAME)->data.removeBucketsBeforeButKeep(watermark, 0, 0, destroy_wrapper); \
+        std::tie(removed, last_removed_watermark, remaining) = (NAME)->data.removeBucketsBefore(watermark, destroy_wrapper); \
         break;
             APPLY_FOR_TABLE_VARIANTS_TWO_LEVEL(M)
 #undef M

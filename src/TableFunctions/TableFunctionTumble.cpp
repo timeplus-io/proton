@@ -47,33 +47,9 @@ String TableFunctionTumble::functionNamePrefix() const
     return ProtonConsts::TUMBLE_FUNC_NAME + "(";
 }
 
-DataTypePtr TableFunctionTumble::getElementType(const DataTypeTuple * tuple) const
+DataTypePtr TableFunctionTumble::getElementType(size_t i, const DataTypeTuple * tuple) const
 {
-    return tuple->getElements()[0];
-}
-
-void TableFunctionTumble::validateWindow(FunctionDescriptionPtr desc) const
-{
-    assert(desc && desc->type == WindowType::TUMBLE);
-    UInt32 time_scale = 0;
-    if (auto * datetime64 = checkAndGetDataType<DataTypeDateTime64>(desc->argument_types[0].get()))
-        time_scale = datetime64->getScale();
-
-    auto & args = desc->func_ast->as<ASTFunction &>().arguments->children;
-    auto [window_interval, window_interval_kind] = extractInterval(args[1]->as<ASTFunction>());
-    auto window_scale = getAutoScaleByInterval(window_interval, window_interval_kind);
-    if (window_scale > time_scale)
-        throw Exception(
-            ErrorCodes::BAD_ARGUMENTS,
-            "Invalid window interval, the window scale '{}' cannot exceed the event time scale '{}' in tumble function",
-            window_scale,
-            time_scale);
-
-    if ((window_interval_kind == IntervalKind::Millisecond && (3600 * common::exp10_i64(3)) % window_interval != 0)
-        || (window_interval_kind == IntervalKind::Microsecond && (3600 * common::exp10_i64(6)) % window_interval != 0)
-        || (window_interval_kind == IntervalKind::Nanosecond && (3600 * common::exp10_i64(9)) % window_interval != 0))
-        throw Exception(
-            ErrorCodes::BAD_ARGUMENTS, "Invalid window interval, one hour must have an integer number of windows in tumble function");
+    return tuple->getElements()[i];
 }
 
 void registerTableFunctionTumble(TableFunctionFactory & factory)

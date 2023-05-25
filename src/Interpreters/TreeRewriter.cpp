@@ -978,25 +978,6 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
 
     NameSet required = columns_context.requiredColumns();
 
-    /// proton : starts
-    if (storage)
-    {
-        if (const auto * proxy = storage->as<Streaming::ProxyStream>())
-        {
-            /// We will need add session start/end columns to the required output column even though users doesn't explicitly SELECT them
-            /// because we will need access them for down stream processing like aggregation / filtering etc.
-            if (proxy->windowType() == Streaming::WindowType::SESSION)
-            {
-                if (std::find(required.begin(), required.end(), ProtonConsts::STREAMING_SESSION_START) == required.end())
-                    required.insert(ProtonConsts::STREAMING_SESSION_START);
-
-                if (std::find(required.begin(), required.end(), ProtonConsts::STREAMING_SESSION_END) == required.end())
-                    required.insert(ProtonConsts::STREAMING_SESSION_END);
-            }
-        }
-    }
-    /// proton : end
-
     if (columns_context.has_table_join)
     {
         NameSet available_columns;
@@ -1032,6 +1013,27 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
             if (array_join_sources.contains(column_name_type.name))
                 required.insert(column_name_type.name);
     }
+
+    /// proton: starts.
+    if (storage)
+    {
+        if (const auto * proxy = storage->as<Streaming::ProxyStream>())
+        {
+            if (proxy->windowType() != Streaming::WindowType::NONE)
+            {
+                required.insert(proxy->getStreamingFunctionDescription()->argument_names[0]);
+
+                /// We will need propagate session start/end columns to the required output column even though users doesn't explicitly SELECT them
+                /// because we will need access them for down stream processing like aggregation
+                if (proxy->windowType() == Streaming::WindowType::SESSION)
+                {
+                    required.insert(ProtonConsts::STREAMING_SESSION_START);
+                    required.insert(ProtonConsts::STREAMING_SESSION_END);
+                }
+            }
+        }
+    }
+    /// proton: ends.
 
     /// Figure out if we're able to use the trivial count optimization.
     has_explicit_columns = !required.empty();

@@ -10,6 +10,8 @@
 
 namespace DB
 {
+using TreeRewriterResultPtr = std::shared_ptr<const TreeRewriterResult>;
+
 namespace Streaming
 {
 class TableFunctionProxyBase : public ITableFunction
@@ -27,6 +29,11 @@ protected:
 
     StoragePtr
     executeImpl(const ASTPtr & func_ast, ContextPtr context, const String & table_name, ColumnsDescription cached_columns) const override;
+
+    virtual String functionNamePrefix() const = 0;
+
+    FunctionDescriptionPtr createStreamingFunctionDescription(
+    ASTPtr ast, TreeRewriterResultPtr syntax_analyzer_result, ContextPtr context, const String & func_name_prefix) const;
 
 private:
     void validateProxyChain() const;

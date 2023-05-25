@@ -14,11 +14,9 @@ public:
 private:
     const char * getStorageTypeName() const override { return "session"; }
     void parseArguments(const ASTPtr & func_ast, ContextPtr context) override;
-    DataTypePtr getElementType(const DataTypeTuple * tuple) const override;
-    void handleResultType(const ColumnWithTypeAndName & type_and_name) override;
+    DataTypePtr getElementType(size_t i, const DataTypeTuple * tuple) const override;
     ASTs checkAndExtractArguments(ASTFunction * node) const override;
     String functionNamePrefix() const override;
-    void validateWindow(FunctionDescriptionPtr desc) const override;
 };
 }
 }

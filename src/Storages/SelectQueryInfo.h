@@ -47,6 +47,14 @@ using ClusterPtr = std::shared_ptr<Cluster>;
 struct MergeTreeDataSelectAnalysisResult;
 using MergeTreeDataSelectAnalysisResultPtr = std::shared_ptr<MergeTreeDataSelectAnalysisResult>;
 
+/// proton: starts.
+namespace Streaming
+{
+struct WindowParams;
+using WindowParamsPtr = std::shared_ptr<WindowParams>;
+}
+/// proton: ends.
+
 struct PrewhereInfo
 {
     /// Actions for row level security filter. Applied separately before prewhere_actions.
@@ -174,6 +182,8 @@ struct SelectQueryInfo
 
     /// proton: starts.
     SeekToInfoPtr seek_to_info;  /// Rewind info for streaming store in streaming query
+
+    Streaming::WindowParamsPtr streaming_window_params;
 
     bool has_aggregate_over = false;
     bool has_non_aggregate_over = false;

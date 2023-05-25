@@ -379,18 +379,16 @@ public:
     /// Keep the latest X windows. If there is a gap in between, we still need clean the old window if they are X * interval
     /// after the current watermark
     /// Return {removed, last_removed_watermark, remaining_size}
-    /// FIXME, interval is Year / Month / Quarter / Week etc
     template <typename MappedDestroyFunc>
     std::tuple<size_t, size_t, size_t>
-    removeBucketsBeforeButKeep(UInt64 watermark, Int64 interval, size_t num_bucket_to_keep, MappedDestroyFunc && mapped_destroy)
+    removeBucketsBefore(UInt64 max_bucket, MappedDestroyFunc && mapped_destroy)
     {
         UInt64 last_removed_watermark = 0;
         size_t removed = 0;
 
-        /// Step 1, remove very old windows
         for (auto it = impls.begin(), it_end = impls.end(); it != it_end;)
         {
-            if (it->first + interval * num_bucket_to_keep <= watermark)
+            if (it->first <= max_bucket)
             {
                 it->second.forEachMapped(mapped_destroy);
                 it->second.clearAndShrink();
@@ -405,45 +403,17 @@ public:
         }
 
         auto new_size = impls.size();
-        if (new_size <= num_bucket_to_keep)
-            return {removed, last_removed_watermark, new_size};
-
-        /// Step 2: after removing the old windows, still there are too many of them
-        /// Calculate number of outstanding windows
-        size_t outstanding = 0;
-        for (auto it = impls.rbegin(), it_end = impls.rend(); it != it_end; ++it)
-            if (it->first > watermark)
-                ++outstanding;
-
-        if (new_size - outstanding <= num_bucket_to_keep)
-            return {removed, last_removed_watermark, new_size};
-
-        /// Step 3: if after filtering outstanding windows, there are still too many of them
-        size_t removed2 = 0;
-        for (auto it = impls.begin(); removed2 < new_size - outstanding - num_bucket_to_keep;)
-        {
-            assert(it->first <= watermark);
-
-            it->second.forEachMapped(mapped_destroy);
-            it->second.clearAndShrink();
-
-            last_removed_watermark = it->first;
-            ++removed2;
-
-            it = impls.erase(it);
-        }
-
-        return {removed + removed2, last_removed_watermark, new_size - removed2};
+        return {removed, last_removed_watermark, new_size};
     }
 
-    std::vector<size_t> bucketsBefore(UInt64 watermark) const
+    std::vector<size_t> bucketsBefore(UInt64 max_bucket) const
     {
         std::vector<size_t> buckets;
         buckets.reserve(10);
 
         for (const auto & time_map : impls)
         {
-            if (time_map.first <= watermark)
+            if (time_map.first <= max_bucket)
                 buckets.push_back(time_map.first);
             else
                 break;
@@ -461,36 +431,5 @@ public:
             buckets.push_back(time_map.first);
 
         return buckets;
-    }
-
-    std::vector<size_t> bucketsOfSession(size_t session_id)
-    {
-        if (impls.contains(session_id))
-            return {session_id};
-
-        return {};
-    }
-
-    template <typename MappedDestroyFunc>
-    std::tuple<size_t, size_t, size_t> removeBucketsOfSession(size_t session_id, MappedDestroyFunc && mapped_destroy)
-    {
-        UInt64 last_removed_watermark = 0;
-        size_t removed = 0;
-
-        /// Step 1, remove very old windows
-        auto it = impls.find(session_id);
-        if (it != impls.end())
-        {
-            it->second.forEachMapped(mapped_destroy);
-            it->second.clearAndShrink();
-
-            last_removed_watermark = it->first;
-            ++removed;
-
-            it = impls.erase(it);
-        }
-
-        auto new_size = impls.size();
-        return {removed, last_removed_watermark, new_size};
     }
 };

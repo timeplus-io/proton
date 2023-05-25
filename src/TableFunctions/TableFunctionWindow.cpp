@@ -20,137 +20,6 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 
 namespace Streaming
 {
-namespace
-{
-FunctionDescriptionPtr createStreamingFunctionDescriptionForSession(
-    ASTPtr ast,
-    ExpressionActionsPtr streaming_func_expr,
-    Names required_columns,
-    WindowType type,
-    const String & func_name_prefix,
-    ExpressionActionsPtr streaming_start_expr,
-    ExpressionActionsPtr streaming_end_expr,
-    bool start_with_boundary,
-    bool end_with_boundary)
-{
-    const auto & actions = streaming_func_expr->getActions();
-
-    for (const auto & action : actions)
-    {
-        if (action.node->type == ActionsDAG::ActionType::FUNCTION && action.node->result_name.starts_with(func_name_prefix))
-        {
-            Names argument_names;
-            argument_names.reserve(action.node->children.size());
-
-            DataTypes argument_types;
-            argument_types.reserve(action.node->children.size());
-
-            for (const auto * node : action.node->children)
-            {
-                argument_names.push_back(node->result_name);
-                argument_types.push_back(node->result_type);
-            }
-            return std::make_shared<FunctionDescription>(
-                std::move(ast),
-                type,
-                std::move(argument_names),
-                std::move(argument_types),
-                std::move(streaming_func_expr),
-                std::move(streaming_start_expr),
-                std::move(streaming_end_expr),
-                start_with_boundary,
-                end_with_boundary,
-                std::move(required_columns));
-        }
-    }
-    __builtin_unreachable();
-}
-
-FunctionDescriptionPtr createStreamingFunctionDescriptionForOther(
-    ASTPtr ast, ExpressionActionsPtr streaming_func_expr, Names required_columns, WindowType type, const String & func_name_prefix)
-{
-    const auto & actions = streaming_func_expr->getActions();
-
-    /// Loop actions to figure out input argument types
-    for (const auto & action : actions)
-    {
-        if (action.node->type == ActionsDAG::ActionType::FUNCTION && action.node->result_name.starts_with(func_name_prefix))
-        {
-            Names argument_names;
-            argument_names.reserve(action.node->children.size());
-
-            DataTypes argument_types;
-            argument_types.reserve(action.node->children.size());
-
-            for (const auto * node : action.node->children)
-            {
-                argument_names.push_back(node->result_name);
-                argument_types.push_back(node->result_type);
-            }
-            return std::make_shared<FunctionDescription>(
-                ast, type, argument_names, argument_types, streaming_func_expr, nullptr, nullptr, true, true, std::move(required_columns));
-        }
-    }
-
-    /// The timestamp function ends up with const column, like toDateTime('2020-01-01 00:00:00') or now('UTC') or now64(3, 'UTC')
-    /// Check the function name is now or now64 since these are the only const function we support
-    const auto & func_name = ast->as<ASTFunction>()->name;
-    if (func_name != "now" && func_name != "now64")
-        throw Exception("Unsupported const timestamp func for timestamp column", ErrorCodes::BAD_ARGUMENTS);
-
-    /// Parse the argument names
-    return std::make_shared<FunctionDescription>(
-        std::move(ast),
-        type,
-        Names{},
-        DataTypes{},
-        streaming_func_expr,
-        nullptr,
-        nullptr,
-        true,
-        true,
-        std::move(required_columns),
-        true);
-}
-
-FunctionDescriptionPtr createStreamingFunctionDescription(
-    ASTPtr ast, TreeRewriterResultPtr syntax_analyzer_result, ContextPtr context, const String & func_name_prefix)
-{
-    ExpressionAnalyzer func_expr_analyzer(ast, syntax_analyzer_result, context);
-    auto streaming_func_expr = func_expr_analyzer.getActions(true);
-
-    WindowType type = toWindowType(ast->as<ASTFunction>()->name);
-
-    if (type == WindowType::SESSION)
-    {
-        /// __session([timestamp_expr], timeout_interval, [max_emit_interval], [range_comparision])
-        auto * node = ast->as<ASTFunction>();
-        const auto & args = node->arguments->children;
-
-        auto & range_predication = args[3]->as<ASTSessionRangeComparision&>();
-        assert(range_predication.children.size() == 2);
-        ExpressionAnalyzer streaming_start_analyzer(range_predication.children[0], syntax_analyzer_result, context);
-        auto streaming_start_expr = streaming_start_analyzer.getActions(true, true);
-        ExpressionAnalyzer streaming_end_analyzer(range_predication.children[1], syntax_analyzer_result, context);
-        auto streaming_end_expr = streaming_end_analyzer.getActions(true, true);
-
-        return createStreamingFunctionDescriptionForSession(
-            std::move(ast),
-            std::move(streaming_func_expr),
-            syntax_analyzer_result->requiredSourceColumns(),
-            type,
-            func_name_prefix,
-            std::move(streaming_start_expr),
-            std::move(streaming_end_expr),
-            range_predication.start_with_boundary,
-            range_predication.end_with_boundary);
-    }
-    else
-        return createStreamingFunctionDescriptionForOther(
-            std::move(ast), std::move(streaming_func_expr), syntax_analyzer_result->requiredSourceColumns(), type, func_name_prefix);
-}
-}
-
 void TableFunctionWindow::doParseArguments(const ASTPtr & func_ast, ContextPtr context, const String & help_msg)
 {
     /// Please note logic here is actually tightly tailed for tumble/hop table function.
@@ -254,8 +123,6 @@ void TableFunctionWindow::init(ContextPtr context, ASTPtr streaming_func_ast, co
     const auto & streaming_win_block = streaming_func_desc->expr->getSampleBlock();
     assert(streaming_win_block.columns() >= 1);
 
-    validateWindow(streaming_func_desc);
-
     const auto & result_type_and_name = streaming_win_block.getByPosition(streaming_win_block.columns() - 1);
     handleResultType(result_type_and_name);
 }
@@ -264,16 +131,13 @@ void TableFunctionWindow::handleResultType(const ColumnWithTypeAndName & type_an
 {
     const auto * tuple_result_type = checkAndGetDataType<DataTypeTuple>(type_and_name.type.get());
     assert(tuple_result_type);
-    assert(tuple_result_type->getElements().size() == 2);
+    assert(tuple_result_type->haveExplicitNames());
+    size_t elem_size = tuple_result_type->getElements().size();
+    assert(elem_size >= 2);
 
-    /// If streaming table function is used, we will need project `wstart, wend` columns to metadata
-    DataTypePtr element_type = getElementType(tuple_result_type);
-
-    ColumnDescription wstart(ProtonConsts::STREAMING_WINDOW_START, element_type);
-    columns.add(wstart);
-
-    ColumnDescription wend(ProtonConsts::STREAMING_WINDOW_END, element_type);
-    columns.add(wend);
+    /// If streaming table function is used, we will need project `wstart, wend ...` columns to metadata
+    for (size_t i = 0; i < elem_size; ++i)
+        columns.add(ColumnDescription(tuple_result_type->getNameByPosition(i + 1), getElementType(i, tuple_result_type)));
 }
 }
 }

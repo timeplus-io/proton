@@ -15,6 +15,7 @@ private:
     const char * getStorageTypeName() const override { return "table"; }
     void parseArguments(const ASTPtr & func_ast, ContextPtr context) override;
     StoragePtr calculateColumnDescriptions(ContextPtr context) override;
+    String functionNamePrefix() const override { return "__table("; }
 
 private:
     String help_message;

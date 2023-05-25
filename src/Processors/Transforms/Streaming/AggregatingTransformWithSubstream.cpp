@@ -114,7 +114,7 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
     if (chunk.hasRows())
     {
         assert(substream_ctx);
-        if (std::tie(done, need_finalization) = executeOrMergeColumns(chunk.detachColumns(), substream_ctx); done)
+        if (std::tie(done, need_finalization) = executeOrMergeColumns(chunk, substream_ctx); done)
             is_consume_finished = true;
     }
 
@@ -181,18 +181,18 @@ void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, const Chunk
     }
 }
 
-std::pair<bool, bool> AggregatingTransformWithSubstream::executeOrMergeColumns(Columns columns, const SubstreamContextPtr & substream_ctx)
+std::pair<bool, bool> AggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, const SubstreamContextPtr & substream_ctx)
 {
     assert(substream_ctx);
 
     /// When the workflow reaches here, the upstream (WatermarkTransformWithSubstream) already splits data
     /// according to partition keys
-    auto num_rows = columns[0]->size();
+    auto num_rows = chunk.getNumRows();
 
     assert(!params->only_merge);
 
     return params->aggregator.executeOnBlock(
-        std::move(columns), 0, num_rows, substream_ctx->variants, key_columns, aggregate_columns, no_more_keys);
+        chunk.detachColumns(), 0, num_rows, substream_ctx->variants, key_columns, aggregate_columns, no_more_keys);
 }
 
 SubstreamContextPtr AggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
@@ -201,7 +201,7 @@ SubstreamContextPtr AggregatingTransformWithSubstream::getOrCreateSubstreamConte
 
     auto iter = substream_contexts.find(id);
     if (iter == substream_contexts.end())
-        return substream_contexts.emplace(id, std::make_shared<SubstreamContext>()).first->second;
+        return substream_contexts.emplace(id, std::make_shared<SubstreamContext>(id)).first->second;
 
     return iter->second;
 }

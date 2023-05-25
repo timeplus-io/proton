@@ -1,14 +1,19 @@
 #pragma once
 
+#include <Columns/ColumnsDateTime.h>
 #include <Parsers/IAST_fwd.h>
 #include <base/types.h>
 #include <Common/DateLUTImpl.h>
 #include <Common/IntervalKind.h>
+#include <Common/TypePromotion.h>
+#include <Interpreters/Streaming/SessionInfo.h>
 
 namespace DB
 {
 
 class ASTFunction;
+class ExpressionActions;
+using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
 namespace Streaming
 {
@@ -25,7 +30,7 @@ const String TUMBLE_HELP_MESSAGE = "Function 'tumble' requires from 2 to 4 param
 const String HOP_HELP_MESSAGE = "Function 'hop' requires from 3 to 5 parameters: "
                                 "<name of the table>, [timestamp column], <hop interval size>, <hop window size>, [time zone]";
 const String SESSION_HELP_MESSAGE = "Function 'session' requires at least 2 parameters: "
-                                    "<name of the stream>, [timestamp column], <timeout interval>, [max emit interval], [session range comparision] | [start_prediction, end_prediction]";
+                                    "<name of the stream>, [timestamp column], <timeout interval>, [max session time], [session range comparision] | [start_prediction, end_prediction]";
 
 
 bool isTableFunctionTumble(const ASTFunction * ast);
@@ -45,6 +50,9 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast);
 void checkIntervalAST(const ASTPtr & ast, const String & msg = "Invalid interval");
 void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Kind & kind);
 std::pair<Int64, IntervalKind> extractInterval(const ASTFunction * ast);
+
+UInt32 toStartTime(UInt32 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone);
+Int64 toStartTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone, UInt32 time_scale);
 
 UInt32 addTime(UInt32 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone);
 Int64 addTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone, UInt32 time_scale);
@@ -150,5 +158,69 @@ ASTPtr makeASTInterval(const std::pair<Int64, IntervalKind> & interval);
 void convertToSameKindIntervalAST(const BaseScaleInterval & bs1, const BaseScaleInterval & bs2, ASTPtr & ast1, ASTPtr & ast2);
 
 UInt32 getAutoScaleByInterval(Int64 num_units, IntervalKind kind);
+
+/// Window Params
+struct FunctionDescription;
+using FunctionDescriptionPtr = std::shared_ptr<FunctionDescription>;
+struct WindowParams;
+using WindowParamsPtr = std::shared_ptr<WindowParams>;
+struct WindowParams : public TypePromotion<WindowParams>
+{
+    WindowType type;
+    FunctionDescriptionPtr desc;
+
+    String time_col_name;
+    bool time_col_is_datetime64; /// DateTime64 or DateTime
+    UInt32 time_scale;
+    const DateLUTImpl * time_zone;
+
+    static WindowParamsPtr create(const FunctionDescriptionPtr & desc);
+
+protected:
+    WindowParams(FunctionDescriptionPtr window_desc);
+    virtual ~WindowParams() = default;
+};
+
+/// __tumble(time_expr, win_interval, [timezone])
+struct TumbleWindowParams : WindowParams
+{
+    Int64 window_interval = 0;
+    IntervalKind::Kind interval_kind = IntervalKind::Second;
+
+    TumbleWindowParams(FunctionDescriptionPtr window_desc);
+};
+
+/// __hop(time_expr, hop_interval, win_interval, [timezone])
+struct HopWindowParams : WindowParams
+{
+    Int64 window_interval = 0;
+    Int64 slide_interval = 0;
+    IntervalKind::Kind interval_kind = IntervalKind::Second;
+
+    HopWindowParams(FunctionDescriptionPtr window_desc);
+};
+
+/// __session(timestamp_expr, timeout_interval, max_emit_interval, start_cond, start_with_inclusion, end_cond, end_with_inclusion)
+struct SessionWindowParams : WindowParams
+{
+    Int64 session_timeout;
+    Int64 max_session_size;
+    IntervalKind::Kind interval_kind;
+    bool start_with_inclusion;
+    bool end_with_inclusion;
+
+    SessionWindowParams(FunctionDescriptionPtr window_desc);
+};
+
+struct WindowWithBucket
+{
+    Int64 window_start;
+    Int64 window_end;
+    size_t bucket;
+};
+using WindowsWithBucket = std::vector<WindowWithBucket>;
+
+void reassignWindow(Block & block, const WindowWithBucket & window_with_bucket);
+
 }
 }

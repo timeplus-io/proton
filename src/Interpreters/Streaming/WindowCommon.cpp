@@ -1,6 +1,7 @@
 #include "WindowCommon.h"
 
 #include <Functions/Streaming/FunctionsStreamingWindow.h>
+#include <Interpreters/Streaming/FunctionDescription.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -275,9 +276,12 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
     ASTs asts;
     ASTPtr table;
     ASTPtr time_expr;
-    ASTPtr session_interval;
-    ASTPtr max_emit_interval;
-    ASTPtr range_predication;
+    ASTPtr timeout_interval;
+    ASTPtr max_session_size;
+    ASTPtr start_condition;
+    ASTPtr start_with_inclusion;
+    ASTPtr end_condition;
+    ASTPtr end_with_inclusion;
 
     do
     {
@@ -299,55 +303,64 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
         if (isIntervalAST(args[i]))
         {
             /// Case: session(stream, INTERVAL 5 SECOND...)
-            session_interval = args[i++];
+            timeout_interval = args[i++];
         }
         else
         {
-            /// Must contains `session_interval`
+            /// Must contains `timeout_interval`
             throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
         }
 
-        /// Handle optional max_emit_interval
+        /// Handle optional max_session_size
         if (i < args.size() && isIntervalAST(args[i]))
         {
             /// Case: session(stream, INTERVAL 5 SECOND, INTERVAL 4 HOUR)
-            /// When the timestamp of the latest event is larger than session window_start + max_emit_interval,
+            /// When the timestamp of the latest event is larger than session window_start + max_session_size,
             /// session will emit.
-            max_emit_interval = args[i++];
+            max_session_size = args[i++];
         }
         else
         {
-            /// nullptr will cause TreeRewriter crash, use INTERVAL 0 second to represent the parameter is not exist.
-            max_emit_interval = makeASTFunction("to_interval_second", std::make_shared<ASTLiteral>(static_cast<UInt64>(0)));
+            /// Set default max session size.
+            auto [unit_nums, unit] = extractInterval(timeout_interval->as<ASTFunction>());
+            max_session_size = makeASTInterval(unit_nums * ProtonConsts::SESSION_SIZE_MULTIPLIER, unit);
         }
 
-        /// Handle optional start_prediction/end_prediction, start_prediction do not accept a Bool column which will be considered as a key.
+        /// Handle optional start_condition/end_condition
         if (i < args.size())
         {
-            /// Handle range comparision
-            if (args[i]->as<ASTSessionRangeComparision>())
+            /// OPT-1: Handle range comparision
+            if (auto * range_comparision = args[i]->as<ASTSessionRangeComparision>())
             {
-                range_predication = args[i++];
+                assert(range_comparision->children.size() == 2);
+                start_condition = range_comparision->children[0];
+                end_condition = range_comparision->children[1];
+                start_with_inclusion = std::make_shared<ASTLiteral>(range_comparision->start_with_inclusion);
+                end_with_inclusion = std::make_shared<ASTLiteral>(range_comparision->end_with_inclusion);
+                ++i;
             }
-            /// Or handle start/end prediction
+            /// OPT-2: handle start/end prediction
             else if (args[i]->as<ASTFunction>())
             {
-                range_predication = std::make_shared<ASTSessionRangeComparision>();
-                range_predication->children.emplace_back(args[i++]);  /// start_predication
+                start_condition = args[i++]; /// start_predication
                 if (i < args.size() && args[i]->as<ASTFunction>())
-                    range_predication->children.emplace_back(args[i++]);  /// end_predication
+                    end_condition = args[i++]; /// end_predication
                 else
                     throw Exception(
                         "session window requires both start and end predictions or none, but only start or end prediction is specified",
                         ErrorCodes::MISSING_SESSION_KEY);
+
+                start_with_inclusion = std::make_shared<ASTLiteral>(true);
+                end_with_inclusion = std::make_shared<ASTLiteral>(true);
             }
         }
         else
         {
-            /// If range_predication is not assigned, any incoming event should be able to start a session window.
-            range_predication = std::make_shared<ASTSessionRangeComparision>();
-            range_predication->children.emplace_back(makeASTFunction("to_bool", std::make_shared<ASTLiteral>(true)));  /// start_predication
-            range_predication->children.emplace_back(makeASTFunction("to_bool", std::make_shared<ASTLiteral>(false)));  /// end_predication
+            /// OPT-3: If range predication is not assigned, any incoming event should be able to start a session window.
+            start_condition = std::make_shared<ASTLiteral>(true);
+            start_with_inclusion = std::make_shared<ASTLiteral>(true);
+            end_condition = std::make_shared<ASTLiteral>(false);
+            end_with_inclusion = std::make_shared<ASTLiteral>(true);
         }
 
         if (i != args.size())
@@ -355,9 +368,12 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
 
         asts.emplace_back(std::move(table));
         asts.emplace_back(std::move(time_expr));
-        asts.emplace_back(std::move(session_interval));
-        asts.emplace_back(std::move(max_emit_interval));
-        asts.emplace_back(std::move(range_predication));
+        asts.emplace_back(std::move(timeout_interval));
+        asts.emplace_back(std::move(max_session_size));
+        asts.emplace_back(std::move(start_condition));
+        asts.emplace_back(std::move(start_with_inclusion));
+        asts.emplace_back(std::move(end_condition));
+        asts.emplace_back(std::move(end_with_inclusion));
         return asts;
 
     } while (false);
@@ -418,6 +434,57 @@ std::pair<Int64, IntervalKind> extractInterval(const ASTFunction * ast)
     IntervalKind interval_kind;
     extractInterval(ast, interval, interval_kind.kind);
     return {interval, interval_kind};
+}
+
+UInt32 toStartTime(UInt32 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone)
+{
+    switch (kind)
+    {
+#define CASE_WINDOW_KIND(KIND) \
+    case IntervalKind::KIND: { \
+        return ToStartOfTransform<IntervalKind::KIND>::execute(time_sec, num_units, time_zone); \
+    }
+        CASE_WINDOW_KIND(Nanosecond)
+        CASE_WINDOW_KIND(Microsecond)
+        CASE_WINDOW_KIND(Millisecond)
+        CASE_WINDOW_KIND(Second)
+        CASE_WINDOW_KIND(Minute)
+        CASE_WINDOW_KIND(Hour)
+        CASE_WINDOW_KIND(Day)
+        CASE_WINDOW_KIND(Week)
+        CASE_WINDOW_KIND(Month)
+        CASE_WINDOW_KIND(Quarter)
+        CASE_WINDOW_KIND(Year)
+#undef CASE_WINDOW_KIND
+    }
+    __builtin_unreachable();
+}
+
+Int64 toStartTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone, UInt32 time_scale)
+{
+    if (time_scale == 0)
+        return toStartTime(static_cast<UInt32>(dt), kind, num_units, time_zone);
+
+    switch (kind)
+    {
+#define CASE_WINDOW_KIND(KIND) \
+    case IntervalKind::KIND: { \
+        return ToStartOfTransform<IntervalKind::KIND>::execute(dt, num_units, time_zone, time_scale); \
+    }
+        CASE_WINDOW_KIND(Nanosecond)
+        CASE_WINDOW_KIND(Microsecond)
+        CASE_WINDOW_KIND(Millisecond)
+        CASE_WINDOW_KIND(Second)
+        CASE_WINDOW_KIND(Minute)
+        CASE_WINDOW_KIND(Hour)
+        CASE_WINDOW_KIND(Day)
+        CASE_WINDOW_KIND(Week)
+        CASE_WINDOW_KIND(Month)
+        CASE_WINDOW_KIND(Quarter)
+        CASE_WINDOW_KIND(Year)
+#undef CASE_WINDOW_KIND
+    }
+    __builtin_unreachable();
 }
 
 ALWAYS_INLINE UInt32 addTime(UInt32 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone)
@@ -532,6 +599,165 @@ UInt32 getAutoScaleByInterval(Int64 num_units, IntervalKind kind)
     }
 
     return scale;
+}
+
+WindowParams::WindowParams(FunctionDescriptionPtr window_desc) : desc(std::move(window_desc))
+{
+    assert(desc->type != WindowType::NONE);
+    type = desc->type;
+    time_col_name = desc->argument_names[0];
+    time_col_is_datetime64 = isDateTime64(desc->argument_types[0]);
+    if (time_col_is_datetime64)
+    {
+        const auto & type = assert_cast<const DataTypeDateTime64 &>(*desc->argument_types[0].get());
+        time_scale = type.getScale();
+        time_zone = &type.getTimeZone();
+    }
+    else
+    {
+        const auto & type = assert_cast<const DataTypeDateTime &>(*desc->argument_types[0].get());
+        time_scale = 0;
+        time_zone = &type.getTimeZone();
+    }
+}
+
+TumbleWindowParams::TumbleWindowParams(FunctionDescriptionPtr window_desc) : WindowParams(std::move(window_desc))
+{
+    assert(desc->type == WindowType::TUMBLE);
+
+    /// __tumble(time_expr, win_interval, [timezone])
+    auto & args = desc->func_ast->as<ASTFunction &>().arguments->children;
+    assert(args.size() >= 2);
+    extractInterval(args[1]->as<ASTFunction>(), window_interval, interval_kind);
+
+    /// Use specified timezone
+    if (args.size() == 3)
+    {
+        if (auto * literal = args[2]->as<ASTLiteral>())
+            time_zone = &DateLUT::instance(literal->value.safeGet<String>());
+        else
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Only support literal timezone argument for tumble");
+    }
+
+    /// Validate window
+    auto window_scale = getAutoScaleByInterval(window_interval, interval_kind);
+    if (window_scale > time_scale)
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "Invalid window interval, the window scale '{}' cannot exceed the event time scale '{}' in tumble function",
+            window_scale,
+            time_scale);
+
+    if ((interval_kind == IntervalKind::Millisecond && (3600 * common::exp10_i64(3)) % window_interval != 0)
+        || (interval_kind == IntervalKind::Microsecond && (3600 * common::exp10_i64(6)) % window_interval != 0)
+        || (interval_kind == IntervalKind::Nanosecond && (3600 * common::exp10_i64(9)) % window_interval != 0))
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS, "Invalid window interval, one hour must have an integer number of windows in tumble function");
+}
+
+HopWindowParams::HopWindowParams(FunctionDescriptionPtr window_desc) : WindowParams(std::move(window_desc))
+{
+    assert(desc->type == WindowType::HOP);
+
+    /// __hop(time_expr, hop_interval, win_interval, [timezone])
+    auto & args = desc->func_ast->as<ASTFunction &>().arguments->children;
+    assert(args.size() >= 3);
+
+    IntervalKind::Kind slide_interval_kind, window_interval_kind;
+    extractInterval(args[1]->as<ASTFunction>(), slide_interval, slide_interval_kind);
+    extractInterval(args[2]->as<ASTFunction>(), window_interval, window_interval_kind);
+
+    /// Use specified timezone
+    if (args.size() == 4)
+    {
+        if (auto * literal = args[3]->as<ASTLiteral>())
+            time_zone = &DateLUT::instance(literal->value.safeGet<String>());
+        else
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Only support literal timezone argument for hop");
+    }
+
+    /// Validate window
+    if (slide_interval_kind != window_interval_kind)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Illegal type of window and hop column of function hop must be same");
+
+    interval_kind = slide_interval_kind;
+
+    if (slide_interval > window_interval)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Slide size shall be less than or equal to window size in hop function");
+
+    auto hop_window_scale = getAutoScaleByInterval(slide_interval, interval_kind);
+    if (hop_window_scale > time_scale)
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "Invalid slide interval, the slide scale '{}' cannot exceed the event time scale '{}' in hop function",
+            hop_window_scale,
+            time_scale);
+
+    if ((interval_kind == IntervalKind::Millisecond && (3600 * common::exp10_i64(3)) % slide_interval != 0)
+        || (interval_kind == IntervalKind::Microsecond && (3600 * common::exp10_i64(6)) % slide_interval != 0)
+        || (interval_kind == IntervalKind::Nanosecond && (3600 * common::exp10_i64(9)) % slide_interval != 0))
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS, "Invalid slide interval, one hour must have an integer number of slides in hop function");
+}
+
+SessionWindowParams::SessionWindowParams(FunctionDescriptionPtr window_desc) : WindowParams(std::move(window_desc))
+{
+    assert(desc->type == WindowType::SESSION);
+
+    /// __session(timestamp_expr, timeout_interval, max_emit_interval, start_cond, start_with_inclusion, end_cond, end_with_inclusion)
+    auto & args = desc->func_ast->as<ASTFunction &>().arguments->children;
+    IntervalKind::Kind session_timeout_kind, session_size_kind;
+    extractInterval(args[1]->as<ASTFunction>(), session_timeout, session_timeout_kind);
+    extractInterval(args[2]->as<ASTFunction>(), max_session_size, session_size_kind);
+    start_with_inclusion = args[4]->as<ASTLiteral &>().value.get<bool>();
+    end_with_inclusion = args[6]->as<ASTLiteral &>().value.get<bool>();
+
+    /// Validate window
+    if (session_timeout_kind != session_size_kind)
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "Illegal type of timeout interval kind and session size interval kind of function session, must be same");
+
+    interval_kind = session_timeout_kind;
+
+    if (session_timeout > max_session_size)
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS, "Session timeout size shall be less than or equal to max session size in session function");
+}
+
+WindowParamsPtr WindowParams::create(const FunctionDescriptionPtr & desc)
+{
+    assert(desc);
+    switch (desc->type)
+    {
+        case WindowType::TUMBLE:
+            return std::make_shared<TumbleWindowParams>(desc);
+        case WindowType::HOP:
+            return std::make_shared<HopWindowParams>(desc);
+        case WindowType::SESSION:
+            return std::make_shared<SessionWindowParams>(desc);
+        default:
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "No support window type: {}", magic_enum::enum_name(desc->type));
+    }
+    __builtin_unreachable();
+}
+
+void reassignWindow(Block & block, const WindowWithBucket & window_with_bucket)
+{
+    auto fill_time = [](ColumnWithTypeAndName & column_with_type, Int64 ts) {
+        auto column = IColumn::mutate(std::move(column_with_type.column));
+        if (isDateTime64(column_with_type.type))
+            std::ranges::fill(assert_cast<ColumnDateTime64 &>(*column).getData(), ts);
+        else
+            std::ranges::fill(assert_cast<ColumnDateTime &>(*column).getData(), static_cast<UInt32>(ts));
+        column_with_type.column = std::move(column);
+    };
+
+    if (auto * column_with_type = block.findByName(ProtonConsts::STREAMING_WINDOW_START))
+        fill_time(*column_with_type, window_with_bucket.window_start);
+
+    if (auto * column_with_type = block.findByName(ProtonConsts::STREAMING_WINDOW_END))
+        fill_time(*column_with_type, window_with_bucket.window_end);
 }
 
 }

@@ -20,13 +20,25 @@ struct AggregatingTransformParams
     DataTypePtr version_type;
 
     AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool emit_version_)
-        : aggregator(params_), params(aggregator.getParams()), final(final_), emit_version(emit_version_)
+        : aggregator(params_)
+        , params(aggregator.getParams())
+        , final(final_)
+        , emit_version(emit_version_)
     {
         if (emit_version)
             version_type = DataTypeFactory::instance().get("int64");
     }
 
-    Block getHeader() const { return aggregator.getHeader(final, false, emit_version); }
+    static Block getHeader(const Aggregator::Params & params, bool final, bool emit_version)
+    {
+        auto res = params.getHeader(final);
+        if (final && emit_version)
+            res.insert({DataTypeFactory::instance().get("int64"), ProtonConsts::RESERVED_EMIT_VERSION});
+
+        return res;
+    }
+
+    Block getHeader() const { return getHeader(params, final, emit_version); }
 };
 
 class AggregatingTransform;
@@ -46,7 +58,11 @@ struct ManyAggregatedData
 
     std::condition_variable finalized;
     std::mutex finalizing_mutex;
-    WatermarkBound arena_watermark;
+
+    /// `arena_watermark` is capturing the max watermark we have progressed and 
+    /// it is used to garbage collect time bucketed memory : time buckets which 
+    /// are below this watermark can be safely GCed.
+    Int64 arena_watermark;
 
     std::condition_variable ckpted;
     std::mutex ckpt_mutex;
@@ -128,7 +144,7 @@ protected:
 
     void emitVersion(Block & block);
     /// return {should_abort, need_finalization} pair
-    std::pair<bool, bool> executeOrMergeColumns(Columns columns, size_t num_rows);
+    virtual std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, size_t num_rows);
     void setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx);
 
 protected:

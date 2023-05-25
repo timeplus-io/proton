@@ -1,0 +1,90 @@
+#include <Processors/Transforms/Streaming/WindowAggregatingTransformWithSubstream.h>
+
+#include <Processors/Transforms/convertToChunk.h>
+
+namespace DB
+{
+namespace Streaming
+{
+WindowAggregatingTransformWithSubstream::WindowAggregatingTransformWithSubstream(
+    Block header, AggregatingTransformParamsPtr params_, const String & log_name, ProcessorID pid_)
+    : AggregatingTransformWithSubstream(std::move(header), std::move(params_), log_name, pid_)
+{
+    assert(params->params.window_params);
+    assert(
+        params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
+        || params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END);
+}
+
+/// Finalize what we have in memory and produce a finalized Block
+/// and push the block to downstream pipe
+void WindowAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx)
+{
+    assert(substream_ctx);
+
+    SCOPE_EXIT({ substream_ctx->resetRowCounts(); });
+
+    /// Finalize current watermark
+    auto watermark = chunk_ctx->getWatermark().watermark;
+    auto start = MonotonicMilliseconds::now();
+    doFinalize(watermark, substream_ctx, chunk_ctx);
+    auto end = MonotonicMilliseconds::now();
+
+    LOG_DEBUG(
+        log, "Took {} milliseconds to finalize aggregation in substream id={}. watermark={}", end - start, substream_ctx->id, watermark);
+
+    /// Do memory arena recycling by last finalized watermark
+    removeBucketsImpl(watermark, substream_ctx);
+}
+
+void WindowAggregatingTransformWithSubstream::doFinalize(
+    Int64 watermark, const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx)
+{
+    assert(substream_ctx);
+
+    auto & data_variant = substream_ctx->variants;
+
+    if (data_variant.empty())
+        return;
+
+    assert(data_variant.isTwoLevel());
+
+    Block merged_block;
+
+    Block block;
+
+    for (const auto & window_with_bucket : getFinalizedWindowsWithBucket(watermark, substream_ctx))
+    {
+        if (params->final)
+            block = params->aggregator.convertOneBucketToBlockFinal(data_variant, ConvertAction::STREAMING_EMIT, window_with_bucket.bucket);
+        else
+            block = params->aggregator.convertOneBucketToBlockIntermediate(
+                data_variant, ConvertAction::STREAMING_EMIT, window_with_bucket.bucket);
+
+        if (needReassignWindow())
+            reassignWindow(block, window_with_bucket);
+
+        if (params->emit_version && params->final)
+            emitVersion(block, substream_ctx);
+
+        if (merged_block)
+        {
+            assertBlocksHaveEqualStructure(merged_block, block, "merging buckets for streaming two level hashtable");
+            for (size_t i = 0, size = merged_block.columns(); i < size; ++i)
+            {
+                const auto source_column = block.getByPosition(i).column;
+                auto mutable_column = IColumn::mutate(std::move(merged_block.getByPosition(i).column));
+                mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
+                merged_block.getByPosition(i).column = std::move(mutable_column);
+            }
+        }
+        else
+            merged_block = std::move(block);
+    }
+
+    if (merged_block)
+        setCurrentChunk(convertToChunk(merged_block), chunk_ctx);
+}
+
+}
+}

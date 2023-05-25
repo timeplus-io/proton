@@ -138,7 +138,8 @@ struct WindowImpl<TUMBLE>
         }
 
         DataTypePtr data_type = getReturnDataType(arguments, 2);
-        return std::make_shared<DataTypeTuple>(DataTypes{data_type, data_type});
+        return std::make_shared<DataTypeTuple>(
+            DataTypes{data_type, data_type}, Names{ProtonConsts::STREAMING_WINDOW_START, ProtonConsts::STREAMING_WINDOW_END});
     }
 
     static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
@@ -324,7 +325,8 @@ struct WindowImpl<HOP>
 
         size_t time_zone_arg_num_check = arguments.size() == 4 ? 3 : 0;
         DataTypePtr data_type = std::make_shared<DataTypeArray>(getReturnDataType(arguments, time_zone_arg_num_check));
-        return std::make_shared<DataTypeTuple>(DataTypes{data_type, data_type});
+        return std::make_shared<DataTypeTuple>(
+            DataTypes{data_type, data_type}, Names{ProtonConsts::STREAMING_WINDOW_START, ProtonConsts::STREAMING_WINDOW_END});
     }
 
     static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
@@ -559,30 +561,38 @@ struct WindowImpl<SESSION>
 
     [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
-        IntervalKind window_kind;
-        Int64 window_size = 0;
-
-        if (arguments.size() >= 2)
+        /// __session(timestamp_expr, timeout_interval, max_session_size, start_cond, start_with_inclusion, end_cond, end_with_inclusion)
+        if (arguments.size() == 7)
         {
-            checkFirstArgument(arguments[0], function_name);
-            checkIntervalArgument(arguments[1], function_name, window_kind, window_size);
+            checkFirstArgument(arguments[0], external_name);
+            checkIntervalArgument(arguments[1], external_name);
+            checkIntervalArgument(arguments[2], external_name);
         }
         else
-        {
             throw Exception(
-                "Number of arguments for function " + function_name + " doesn't match: passed " + toString(arguments.size())
-                    + ", should be at least 2",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-        }
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                "Number of arguments for function session doesn't match: passed {}, should be 7",
+                arguments.size());
 
-        size_t time_zone_arg_num_check = 0;
-        DataTypePtr data_type = getReturnDataType(arguments, time_zone_arg_num_check);
-        return std::make_shared<DataTypeTuple>(DataTypes{data_type, data_type});
+        return std::make_shared<DataTypeTuple>(
+            DataTypes{arguments[0].type, arguments[0].type, arguments[3].type, arguments[5].type},
+            Names{
+                ProtonConsts::STREAMING_WINDOW_START,
+                ProtonConsts::STREAMING_WINDOW_END,
+                ProtonConsts::STREAMING_SESSION_START,
+                ProtonConsts::STREAMING_SESSION_END});
     }
 
-    static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & /*arguments*/, const String & /*function_name*/)
+    static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & /*function_name*/)
     {
+        /// return tuple(window_start, window_end, __tp_session_start, __tp_session_end)
+        assert(arguments.size() == 7);
         MutableColumns result;
+        auto time_column = IColumn::mutate(arguments[0].column->convertToFullColumnIfConst());
+        result.emplace_back(time_column->cloneResized(time_column->size())); /// No calculate window start here
+        result.emplace_back(std::move(time_column)); /// No calculate window end here
+        result.emplace_back(IColumn::mutate(arguments[3].column->convertToFullColumnIfConst()));
+        result.emplace_back(IColumn::mutate(arguments[5].column->convertToFullColumnIfConst()));
         return ColumnTuple::create(std::move(result));
     }
 };

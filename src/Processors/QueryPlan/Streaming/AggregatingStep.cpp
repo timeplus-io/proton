@@ -1,8 +1,9 @@
 #include "AggregatingStep.h"
 
 #include <Processors/Transforms/Streaming/GlobalAggregatingTransform.h>
+#include <Processors/Transforms/Streaming/HopAggregatingTransform.h>
 #include <Processors/Transforms/Streaming/SessionAggregatingTransform.h>
-#include <Processors/Transforms/Streaming/TumbleHopAggregatingTransform.h>
+#include <Processors/Transforms/Streaming/TumbleAggregatingTransform.h>
 #include <Processors/Transforms/Streaming/UserDefinedEmitStrategyAggregatingTransform.h>
 
 #include <QueryPipeline/QueryPipelineBuilder.h>
@@ -37,11 +38,7 @@ AggregatingStep::AggregatingStep(
     size_t temporary_data_merge_threads_,
     bool storage_has_evenly_distributed_read_,
     bool emit_version_)
-    : ITransformingStep(
-        input_stream_,
-        params_.getHeader(final_, params_.group_by == Aggregator::Params::GroupBy::SESSION, params_.time_col_is_datetime64, emit_version_),
-        getTraits(),
-        false)
+    : ITransformingStep(input_stream_, AggregatingTransformParams::getHeader(params_, final_, emit_version_), getTraits(), false)
     , params(std::move(params_))
     , final(std::move(final_))
     , merge_threads(merge_threads_)
@@ -74,9 +71,6 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.getNumStreams() > 1)
     {
-        if (transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION)
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Parallel processing session window is not supported");
-
         /// Add resize transform to uniformly distribute data between aggregating streams.
         if (!storage_has_evenly_distributed_read)
             pipeline.resize(pipeline.getNumStreams(), true, true);
@@ -87,8 +81,23 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
         pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
             if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
                 || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
-                return std::make_shared<TumbleHopAggregatingTransform>(
-                    header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
+            {
+                assert(transform_params->params.window_params);
+                switch (transform_params->params.window_params->type)
+                {
+                    case WindowType::TUMBLE:
+                        return std::make_shared<TumbleAggregatingTransform>(header, transform_params);
+                    case WindowType::HOP:
+                        return std::make_shared<HopAggregatingTransform>(header, transform_params);
+                    case WindowType::SESSION:
+                        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Parallel processing session window is not supported");
+                    default:
+                        throw Exception(
+                            ErrorCodes::NOT_IMPLEMENTED,
+                            "No support window type: {}",
+                            magic_enum::enum_name(transform_params->params.window_params->type));
+                }
+            }
             else if (transform_params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
                 return std::make_shared<UserDefinedEmitStrategyAggregatingTransform>(
                     header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
@@ -106,9 +115,23 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
         pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
             if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
                 || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
-                return std::make_shared<TumbleHopAggregatingTransform>(header, transform_params);
-            else if (transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION)
-                return std::make_shared<SessionAggregatingTransform>(header, transform_params);
+            {
+                assert(transform_params->params.window_params);
+                switch (transform_params->params.window_params->type)
+                {
+                    case WindowType::TUMBLE:
+                        return std::make_shared<TumbleAggregatingTransform>(header, transform_params);
+                    case WindowType::HOP:
+                        return std::make_shared<HopAggregatingTransform>(header, transform_params);
+                    case WindowType::SESSION:
+                        return std::make_shared<SessionAggregatingTransform>(header, transform_params);
+                    default:
+                        throw Exception(
+                            ErrorCodes::NOT_IMPLEMENTED,
+                            "No support window type: {}",
+                            magic_enum::enum_name(transform_params->params.window_params->type));
+                }
+            }
             else if (transform_params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
                 return std::make_shared<UserDefinedEmitStrategyAggregatingTransform>(header, transform_params);
             else

@@ -1,8 +1,9 @@
 #include "AggregatingStepWithSubstream.h"
 
 #include <Processors/Transforms/Streaming/GlobalAggregatingTransformWithSubstream.h>
+#include <Processors/Transforms/Streaming/HopAggregatingTransformWithSubstream.h>
 #include <Processors/Transforms/Streaming/SessionAggregatingTransformWithSubstream.h>
-#include <Processors/Transforms/Streaming/TumbleHopAggregatingTransformWithSubstream.h>
+#include <Processors/Transforms/Streaming/TumbleAggregatingTransformWithSubstream.h>
 #include <Processors/Transforms/Streaming/UserDefinedEmitStrategyAggregatingTransformWithSubstream.h>
 
 #include <QueryPipeline/QueryPipelineBuilder.h>
@@ -35,15 +36,8 @@ ITransformingStep::Traits getTraits()
 }
 
 AggregatingStepWithSubstream::AggregatingStepWithSubstream(
-    const DataStream & input_stream_,
-    Aggregator::Params params_,
-    bool final_,
-    bool emit_version_)
-    : ITransformingStep(
-        input_stream_,
-        params_.getHeader(final_, params_.group_by == Aggregator::Params::GroupBy::SESSION, params_.time_col_is_datetime64, emit_version_),
-        getTraits(),
-        false)
+    const DataStream & input_stream_, Aggregator::Params params_, bool final_, bool emit_version_)
+    : ITransformingStep(input_stream_, AggregatingTransformParams::getHeader(params_, final_, emit_version_), getTraits(), false)
     , params(std::move(params_))
     , final(std::move(final_))
     , emit_version(emit_version_)
@@ -60,12 +54,27 @@ void AggregatingStepWithSubstream::transformPipeline(QueryPipelineBuilder & pipe
     auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version);
 
     /// If there are several sources, we perform aggregation separately (Assume it's shuffled data by substream keys)
+    size_t counter = 0;
     pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
         if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
             || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
-            return std::make_shared<TumbleHopAggregatingTransformWithSubstream>(header, transform_params);
-        else if (transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION)
-            return std::make_shared<SessionAggregatingTransformWithSubstream>(header, transform_params);
+        {
+            assert(transform_params->params.window_params);
+            switch (transform_params->params.window_params->type)
+            {
+                case WindowType::TUMBLE:
+                    return std::make_shared<TumbleAggregatingTransformWithSubstream>(header, transform_params);
+                case WindowType::HOP:
+                    return std::make_shared<HopAggregatingTransformWithSubstream>(header, transform_params);
+                case WindowType::SESSION:
+                    return std::make_shared<SessionAggregatingTransformWithSubstream>(header, transform_params, counter++);
+                default:
+                    throw Exception(
+                        ErrorCodes::NOT_IMPLEMENTED,
+                        "No support window type: {}",
+                        magic_enum::enum_name(transform_params->params.window_params->type));
+            }
+        }
         else if (transform_params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
             return std::make_shared<UserDefinedEmitStrategyAggregatingTransformWithSubstream>(header, transform_params);
         else

@@ -14,11 +14,10 @@ public:
 private:
     const char * getStorageTypeName() const override { return "tumble"; }
     void parseArguments(const ASTPtr & func_ast, ContextPtr context) override;
-    DataTypePtr getElementType(const DataTypeTuple * tuple) const override;
+    DataTypePtr getElementType(size_t i, const DataTypeTuple * tuple) const override;
     ASTs checkAndExtractArguments(ASTFunction * node) const override;
     void postArgs(ASTs & args) const override;
     String functionNamePrefix() const override;
-    void validateWindow(FunctionDescriptionPtr desc) const override;
 };
 }
 }

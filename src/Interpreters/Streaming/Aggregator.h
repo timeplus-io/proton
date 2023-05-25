@@ -640,27 +640,14 @@ public:
         {
             WINDOW_START,
             WINDOW_END,
-            SESSION,
             USER_DEFINED,
             OTHER,
         };
         GroupBy group_by = GroupBy::OTHER;
 
-        /// Params for session window
-        ssize_t session_id_col_pos;
-        ssize_t time_col_pos;
-        ssize_t session_start_pos;
-        ssize_t session_end_pos;
         ssize_t delta_col_pos;
-        UInt32 time_scale = 0;
-        bool time_col_is_datetime64 = false;
-        Int64 window_interval = 0;
-        Int64 max_emit_timeout = 0;
-        UInt64 session_size = 0;
 
-        FunctionDescriptionPtr window_desc;
-        IntervalKind::Kind interval_kind = IntervalKind::Second;
-        IntervalKind::Kind timeout_kind = IntervalKind::Second;
+        WindowParamsPtr window_params;
         /// proton: ends
 
         /// proton: starts
@@ -679,11 +666,8 @@ public:
             bool keep_state_ = true,
             size_t streaming_window_count_ = 0,
             GroupBy streaming_group_by_ = GroupBy::OTHER,
-            ssize_t time_col_pos_ = -1,
-            ssize_t session_start_pos_ = -1,
-            ssize_t session_end_pos_ = -1,
             ssize_t delta_col_pos_ = -1,
-            FunctionDescriptionPtr window_desc_ = nullptr)
+            WindowParamsPtr window_params_ = nullptr)
         : src_header(src_header_),
             intermediate_header(intermediate_header_),
             keys(keys_), aggregates(aggregates_), keys_size(keys.size()), aggregates_size(aggregates.size()),
@@ -698,25 +682,9 @@ public:
             keep_state(keep_state_),
             streaming_window_count(streaming_window_count_),
             group_by(streaming_group_by_),
-            time_col_pos(time_col_pos_),
-            session_start_pos(session_start_pos_),
-            session_end_pos(session_end_pos_),
             delta_col_pos(delta_col_pos_),
-            window_desc(window_desc_)
+            window_params(window_params_)
         {
-            if (window_desc && window_desc->type != WindowType::NONE)
-            {
-                time_col_is_datetime64 = isDateTime64(window_desc->argument_types[0]);
-                auto * func_ast = window_desc->func_ast->as<ASTFunction>();
-                extractInterval(func_ast->arguments->children[1]->as<ASTFunction>(), window_interval, interval_kind);
-                if (func_ast->name == ProtonConsts::SESSION_FUNC_NAME)
-                    extractInterval(func_ast->arguments->children[2]->as<ASTFunction>(), max_emit_timeout, timeout_kind);
-                else
-                    timeout_kind = interval_kind;
-                session_size = max_emit_timeout == 0 ? window_interval * ProtonConsts::SESSION_SIZE_MULTIPLIER : max_emit_timeout;
-                if (time_col_is_datetime64)
-                    time_scale = checkAndGetDataType<DataTypeDateTime64>(window_desc->argument_types[0].get())->getScale();
-            }
         }
         /// proton: ends
 
@@ -728,23 +696,17 @@ public:
             intermediate_header = intermediate_header_;
         }
 
-        /// proton: starts
         static Block getHeader(
             const Block & src_header,
             const Block & intermediate_header,
             const ColumnNumbers & keys,
             const AggregateDescriptions & aggregates,
-            bool final,
-            bool is_session_window = false,
-            bool is_datetime64 = false,
-            bool emit_version = false);
+            bool final);
 
-
-        Block getHeader(bool final, bool is_session_window, bool is_datetime64 = false, bool emit_version = false) const
+        Block getHeader(bool final) const
         {
-            return getHeader(src_header, intermediate_header, keys, aggregates, final, is_session_window, is_datetime64, emit_version);
+            return getHeader(src_header, intermediate_header, keys, aggregates, final);
         }
-        /// proton: ends
 
         /// Returns keys and aggregated for EXPLAIN query
         void explain(WriteBuffer & out, size_t indent) const;
@@ -855,9 +817,9 @@ public:
     const TemporaryFiles & getTemporaryFiles() const { return temporary_files; }
 
     /// Get data structure of the result.
-    /// proton: starts
-    Block getHeader(bool final, bool ignore_session_columns = false, bool emit_version = false) const;
+    Block getHeader(bool final) const;
 
+    /// proton: starts
     Params & getParams() { return params; }
     /// proton: ends
 
@@ -872,10 +834,15 @@ private:
     friend class StreamingConvertingAggregatedToChunksTransform;
     friend class StreamingConvertingAggregatedToChunksSource;
     friend class AggregatingTransform;
-    friend class SessionAggregatingTransform;
     friend class GlobalAggregatingTransform;
-    friend class TumbleHopAggregatingTransform;
-    friend class TumbleHopAggregatingTransformWithSubstream;
+    friend class WindowAggregatingTransform;
+    friend class WindowAggregatingTransformWithSubstream;
+    friend class TumbleAggregatingTransform;
+    friend class TumbleAggregatingTransformWithSubstream;
+    friend class HopAggregatingTransform;
+    friend class HopAggregatingTransformWithSubstream;
+    friend class SessionAggregatingTransform;
+    friend class SessionAggregatingTransformWithSubstream;
     friend class UserDefinedEmitStrategyAggregatingTransform;
 
     mutable std::optional<VersionType> version;
@@ -1192,8 +1159,8 @@ private:
 
     /// proton: starts
     void setupAggregatesPoolTimestamps(size_t row_begin, size_t row_end, const ColumnRawPtrs & key_columns, Arena * aggregates_pool) const;
-    void removeBucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const;
-    std::vector<size_t> bucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const;
+    void removeBucketsBefore(AggregatedDataVariants & result, UInt64 max_bucket) const;
+    std::vector<size_t> bucketsBefore(const AggregatedDataVariants & result, UInt64 max_bucket) const;
 
     inline bool shouldClearStates(ConvertAction action, bool final_) const;
 

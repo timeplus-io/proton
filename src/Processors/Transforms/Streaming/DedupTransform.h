@@ -28,7 +28,7 @@ public:
 
 private:
     /// Calculate the positions of columns required by timestamp expr
-    void calculateColumns(const Block & input_header, const Names & input_columns_);
+    void calculateColumns(const Block & input_header, const Block & output_header, const Names & input_columns_);
 
 private:
     ContextPtr context;
@@ -38,6 +38,7 @@ private:
     Chunk chunk_header;
 
     std::vector<size_t> expr_column_positions;
+    std::vector<size_t> output_column_positions;
 };
 }
 }

@@ -96,12 +96,8 @@
 #include <Processors/QueryPlan/Streaming/AggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStepWithSubstream.h>
 #include <Processors/QueryPlan/Streaming/JoinStep.h>
-#include <Processors/QueryPlan/Streaming/ProcessTimeFilterStep.h>
-#include <Processors/QueryPlan/Streaming/SessionStep.h>
-#include <Processors/QueryPlan/Streaming/SessionStepWithSubstream.h>
 #include <Processors/QueryPlan/Streaming/ShufflingStep.h>
 #include <Processors/QueryPlan/Streaming/SortingStep.h>
-#include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStepWithSubstream.h>
 #include <Processors/QueryPlan/Streaming/WindowStep.h>
@@ -826,17 +822,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         if (storage)
         {
             /// proton: starts
-            if (auto * stream = storage->as<Streaming::ProxyStream>())
-            {
-                /// We save the required columns to project (after streaming window)
-                required_columns_after_streaming_window = required_columns;
-
-                /// Streaming window may depends on extra columns of the storage to calculate the windows
-                for (const auto & name : stream->getAdditionalRequiredColumns())
-                    if (std::find(required_columns.begin(), required_columns.end(), name) == required_columns.end())
-                        required_columns.push_back(name);
-            }
-
             if (isChangelog() && !analysis_result.force_internal_changelog_emit)
             {
                 if (std::find(required_columns.begin(), required_columns.end(), ProtonConsts::RESERVED_DELTA_FLAG) == required_columns.end())
@@ -887,22 +872,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         /// proton: ends.
     };
 
-    /// proton: starts. Add timestamp column to group by
-    if (windowType() == Streaming::WindowType::SESSION)
-    {
-        if (!query.groupBy())
-            query.setExpression(ASTSelectQuery::Expression::GROUP_BY, std::make_shared<ASTExpressionList>());
-
-        auto & group_exprs = query_ptr->as<ASTSelectQuery>()->groupBy()->children;
-        auto desc = getStreamingFunctionDescription();
-
-        if (desc)
-        {
-            const auto time_col_name = desc->argument_names[0];
-            group_exprs.emplace_back(std::make_shared<ASTIdentifier>(time_col_name));
-        }
-    }
-
+    /// proton: starts.
     /// Try to do some preparation for functions in streaming queries
     checkAndPrepareStreamingFunctions();
     /// proto: ends
@@ -952,11 +922,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     /// If there is no WHERE, filter blocks as usual
     if (query.prewhere() && !query.where())
         analysis_result.prewhere_info->need_filter = true;
-
-    /// proton: starts
-    if (windowType() == Streaming::WindowType::SESSION && !query.groupBy())
-        throw Exception("Missing GROUP BY clause for session window", ErrorCodes::MISSING_GROUP_BY);
-    /// proton: ends
 
     if (table_id && got_storage_from_query && !joined_tables.isLeftTableFunction())
     {
@@ -2354,12 +2319,6 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
 
         interpreter_subquery->buildQueryPlan(query_plan);
         query_plan.addInterpreterContext(context);
-
-        /// proton : starts. If we only fetch columns, don't need add streaming processing step, e.g. `WatermarkStep` etc.
-        if (options.to_stage != QueryProcessingStage::Enum::FetchColumns && !storage && isStreaming())
-            /// Global aggregation over subquery case
-            buildStreamingProcessingQueryPlan(query_plan);
-        /// proton: ends
     }
     else if (storage)
     {
@@ -2445,40 +2404,6 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             auto header = storage_snapshot->getSampleBlockForColumns(required_columns);
             addEmptySourceToQueryPlan(query_plan, header, query_info, context);
         }
-
-        /// proton: starts.
-        /// TODO: Support more shuffling rules
-        /// 1) Group by keys
-        /// 2) Sharding expr keys
-        if (query_info.hasPartitionByKeys())
-        {
-            /// We like to limit the shuffling concurrency here
-            /// 1) No more than number of inputs concurrency
-            /// 2) If there is JavaScript UDA, limit the concurrency further
-            size_t shuffle_output_streams = context->getSettingsRef().max_threads.value;
-            size_t controlled_concurrency = context->getSettingsRef().javascript_uda_max_concurrency.value;
-            if (query_info.has_javascript_uda)
-            {
-                shuffle_output_streams = std::min(shuffle_output_streams, controlled_concurrency);
-                LOG_INFO(log, "Limit shuffling output stream to {} for JavaScript UDA", shuffle_output_streams);
-            }
-            shuffle_output_streams = shuffle_output_streams == 0 ? 1 : shuffle_output_streams;
-
-            auto substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
-            query_plan.addStep(std::make_unique<Streaming::ShufflingStep>(
-                query_plan.getCurrentDataStream(), std::move(substream_key_positions), shuffle_output_streams));
-        }
-
-        /// If we only fetch columns, don't need add streaming processing step, e.g. `WatermarkStep` etc.
-        if (options.to_stage != QueryProcessingStage::Enum::FetchColumns)
-        {
-            if (auto * proxy_stream = storage->as<Streaming::ProxyStream>())
-                proxy_stream->buildStreamingProcessingQueryPlan(
-                    query_plan, required_columns_after_streaming_window, query_info, storage_snapshot, context, shouldApplyWatermark());
-            else
-                buildStreamingProcessingQueryPlan(query_plan);
-        }
-        /// proton: ends
     }
     else
         throw Exception("Logical error in InterpreterSelectQuery: nowhere to read", ErrorCodes::LOGICAL_ERROR);
@@ -2491,6 +2416,11 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
     /// query will not update it.
     if (!query_plan.getMaxThreads() || is_remote)
         query_plan.setMaxThreads(max_threads_execute_query);
+
+    /// proton : starts. If we only fetch columns, don't need add streaming processing step, e.g. `WatermarkStep` etc.
+    if (options.to_stage != QueryProcessingStage::Enum::FetchColumns)
+        buildStreamingProcessingQueryPlan(query_plan);
+    /// proton: ends
 
     /// Aliases in table declaration.
     if (processing_stage == QueryProcessingStage::FetchColumns && alias_actions)
@@ -3178,45 +3108,15 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     if (options.is_projection_query)
         return;
 
-    auto streaming_group_by = has_user_defined_emit_strategy ? Streaming::Aggregator::Params::GroupBy::USER_DEFINED
-                                                             : Streaming::Aggregator::Params::GroupBy::OTHER;
+    auto streaming_group_by = Streaming::Aggregator::Params::GroupBy::OTHER;
 
     const auto & header_before_aggregation = query_plan.getCurrentDataStream().header;
     ColumnNumbers keys;
 
-    /// If `window_start/end` are in aggregation columns, move them to the beginning
-    /// of the aggregation columns for later window extraction
-    ssize_t time_col_pos = -1;
-    String time_col_name;
-
-    ssize_t session_start_pos = -1;
-    ssize_t session_end_pos = -1;
     ssize_t delta_col_pos = isChangelog() ? header_before_aggregation.getPositionByName(ProtonConsts::RESERVED_DELTA_FLAG) : -1;
-
-    auto window_type = windowType();
-    if (window_type == Streaming::WindowType::SESSION)
-    {
-        streaming_group_by = Streaming::Aggregator::Params::GroupBy::SESSION;
-        auto desc = getStreamingFunctionDescription();
-
-        if (!desc)
-            throw Exception(
-                "FunctionDescription should not be nullptr for session window", ErrorCodes::INVALID_STREAMING_FUNC_DESC);
-
-        time_col_name = desc->argument_names[0];
-        time_col_pos = header_before_aggregation.getPositionByName(desc->argument_names[0]);
-
-        session_start_pos = header_before_aggregation.getPositionByName(ProtonConsts::STREAMING_SESSION_START);
-        session_end_pos = header_before_aggregation.getPositionByName(ProtonConsts::STREAMING_SESSION_END);
-    }
 
     for (const auto & key : query_analyzer->aggregationKeys())
     {
-        /// Remove STREAMING_WINDOW_START, STREAMING_WINDOW_END for session window, because Aggregator automatically add three session related columns.
-        if (window_type == Streaming::WindowType::SESSION
-            && (key.name == ProtonConsts::STREAMING_WINDOW_START || key.name == ProtonConsts::STREAMING_WINDOW_END || key.name == time_col_name))
-            continue;
-
         if ((key.name == ProtonConsts::STREAMING_WINDOW_END) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type)))
         {
             keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
@@ -3262,10 +3162,21 @@ void InterpreterSelectQuery::executeStreamingAggregation(
             for (const auto & name : descr.argument_names)
                 descr.arguments.push_back(header_before_aggregation.getPositionByName(name));
 
-    if (aggregates.size() > 1 && has_user_defined_emit_strategy)
-        throw Exception(
-            ErrorCodes::NOT_IMPLEMENTED,
-            "User defined aggregation function with emit strategy shall be used together with other aggregation function");
+    if (has_user_defined_emit_strategy)
+    {
+        if (aggregates.size() > 1)
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                "User defined aggregation function with emit strategy shouldn't be used together with other aggregation function");
+
+        if (windowType() != Streaming::WindowType::NONE)
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                "User defined aggregation function with emit strategy shouldn't be used together with streaming window");
+
+        assert(streaming_group_by == Streaming::Aggregator::Params::GroupBy::OTHER);
+        streaming_group_by = Streaming::Aggregator::Params::GroupBy::USER_DEFINED;
+    }
 
     const Settings & settings = context->getSettingsRef();
 
@@ -3291,11 +3202,8 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         shouldKeepState(),
         settings.keep_windows,
         streaming_group_by,
-        time_col_pos,
-        session_start_pos,
-        session_end_pos,
         delta_col_pos,
-        getStreamingFunctionDescription());
+        query_info.streaming_window_params);
 
     auto merge_threads = max_streams;
     auto temporary_data_merge_threads = settings.aggregation_memory_efficient_merge_threads
@@ -3393,30 +3301,7 @@ std::set<String> InterpreterSelectQuery::getGroupByColumns() const
 
 bool InterpreterSelectQuery::hasStreamingWindowFunc() const
 {
-    if (!isStreaming())
-        return false;
-
-    if (storage)
-    {
-        if (auto * proxy = storage->as<Streaming::ProxyStream>())
-        {
-            if (proxy->hasStreamingWindowFunc())
-                return true;
-        }
-    }
-
-    return false;
-}
-
-Streaming::FunctionDescriptionPtr InterpreterSelectQuery::getStreamingFunctionDescription() const
-{
-    if (storage)
-    {
-        if (auto * proxy = storage->as<Streaming::ProxyStream>())
-            return proxy->getStreamingFunctionDescription();
-    }
-
-    return nullptr;
+    return query_info.streaming_window_params != nullptr;
 }
 
 Streaming::WindowType InterpreterSelectQuery::windowType() const
@@ -3505,52 +3390,63 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
         }
     }
 
-    if (storage)
+    if (hasStreamingWindowFunc())
     {
-        if (auto * proxy = storage->as<Streaming::ProxyStream>())
+        bool has_win_col = false;
+        for (const auto & window_col : ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES)
         {
-            if (proxy->windowType() == Streaming::WindowType::TUMBLE ||
-                proxy->windowType() == Streaming::WindowType::HOP)
+            if (std::find(required_columns.begin(), required_columns.end(), window_col) != required_columns.end())
             {
-                bool has_win_col = false;
-                for (const auto & window_col : ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES)
-                {
-                    if (std::find(required_columns.begin(), required_columns.end(), window_col) != required_columns.end())
-                    {
-                        has_win_col = true;
-                        break;
-                    }
-                }
-
-                if (!has_win_col)
-                    throw Exception(
-                        "Neither window_start nor window_end is referenced in the query, but streaming window function is used",
-                        ErrorCodes::WINDOW_COLUMN_NOT_REFERENCED);
+                has_win_col = true;
+                break;
             }
         }
+
+        if (!has_win_col)
+            throw Exception(
+                "Neither window_start nor window_end is referenced in the query, but streaming window function is used",
+                ErrorCodes::WINDOW_COLUMN_NOT_REFERENCED);
     }
 }
 
 void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const
 {
-    if (!shouldApplyWatermark())
-        return;
-
-    if (windowType() == Streaming::WindowType::SESSION)
+    /// TODO: Support more shuffling rules
+    /// 1) Group by keys
+    /// 2) Sharding expr keys
+    if (query_info.hasPartitionByKeys())
     {
-        buildStreamingProcessingQueryPlanForSessionWindow(query_plan);
+        /// We like to limit the shuffling concurrency here
+        /// 1) No more than number of inputs concurrency
+        /// 2) If there is JavaScript UDA, limit the concurrency further
+        size_t shuffle_output_streams = context->getSettingsRef().max_threads.value;
+        size_t controlled_concurrency = context->getSettingsRef().javascript_uda_max_concurrency.value;
+        if (query_info.has_javascript_uda)
+        {
+            shuffle_output_streams = std::min(shuffle_output_streams, controlled_concurrency);
+            LOG_INFO(log, "Limit shuffling output stream to {} for JavaScript UDA", shuffle_output_streams);
+        }
+        shuffle_output_streams = shuffle_output_streams == 0 ? 1 : shuffle_output_streams;
+
+        auto substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
+        query_plan.addStep(std::make_unique<Streaming::ShufflingStep>(
+            query_plan.getCurrentDataStream(), std::move(substream_key_positions), shuffle_output_streams));
     }
-    else
+
+    /// Build `WatermarkStep`
+    if (shouldApplyWatermark())
     {
         Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
+        Streaming::ProxyStream * proxy_stream = storage ? storage->as<Streaming::ProxyStream>() : nullptr;
+        auto func_desc = proxy_stream ? proxy_stream->getStreamingFunctionDescription() : nullptr;
         if (query_info.hasPartitionByKeys())
             query_plan.addStep(std::make_unique<Streaming::WatermarkStepWithSubstream>(
                 query_plan.getCurrentDataStream(),
                 std::move(output_header),
                 query_info.query,
                 query_info.syntax_analyzer_result,
-                getStreamingFunctionDescription(),
-                false,
+                func_desc,
+                func_desc ? func_desc->is_now_func : false,
                 log));
         else
             query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(
@@ -3558,34 +3454,10 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
                 std::move(output_header),
                 query_info.query,
                 query_info.syntax_analyzer_result,
-                getStreamingFunctionDescription(),
-                false,
+                func_desc,
+                func_desc ? func_desc->is_now_func : false,
                 log));
     }
-}
-
-void InterpreterSelectQuery::buildStreamingProcessingQueryPlanForSessionWindow(QueryPlan & query_plan) const
-{
-    assert(windowType() == Streaming::WindowType::SESSION);
-
-    /// FIXME, 1) it is a bad idea to insert the internal columns at the beginning of the output block
-    /// 2) For session window without start / end exprs, we can skip this step
-
-    Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
-
-    size_t insert_pos = 0;
-    auto session_start_type = std::make_shared<DataTypeUInt8>();
-    output_header.insert(insert_pos++, {session_start_type, ProtonConsts::STREAMING_SESSION_START});
-
-    auto session_end_type = std::make_shared<DataTypeUInt8>();
-    output_header.insert(insert_pos++, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
-
-    if (query_info.hasPartitionByKeys())
-        query_plan.addStep(std::make_unique<Streaming::SessionStepWithSubstream>(
-            query_plan.getCurrentDataStream(), std::move(output_header), getStreamingFunctionDescription()));
-    else
-        query_plan.addStep(std::make_unique<Streaming::SessionStep>(
-            query_plan.getCurrentDataStream(), std::move(output_header), getStreamingFunctionDescription()));
 }
 
 void InterpreterSelectQuery::checkEmitVersion()
@@ -3717,6 +3589,16 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
     StreamingFunctionVisitor::Data func_data(streaming, isChangelog());
     StreamingFunctionVisitor(func_data).visit(query_ptr);
     emit_version = func_data.emit_version;
+
+    /// Prepare streaming window params
+    if (storage)
+    {
+        if (auto * proxy = storage->as<Streaming::ProxyStream>())
+        {
+            if (auto desc = proxy->getStreamingFunctionDescription(); desc && desc->type != Streaming::WindowType::NONE)
+                query_info.streaming_window_params = Streaming::WindowParams::create(desc);
+        }
+    }
 
     if (!streaming)
         return;

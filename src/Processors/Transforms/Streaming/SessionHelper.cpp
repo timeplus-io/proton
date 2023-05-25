@@ -1,124 +1,189 @@
-#include "SessionHelper.h"
+#include <Processors/Transforms/Streaming/SessionHelper.h>
 
-#include "AggregatingTransform.h"
+#include <Columns/ColumnArray.h>
+#include <Columns/ColumnTuple.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/Streaming/FunctionsStreamingWindow.h>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+}
+
 namespace Streaming
 {
 namespace SessionHelper
 {
-template <typename T>
-std::pair<std::vector<IColumn::Filter>, SessionInfos> prepareSessionImpl(
-    SessionInfo & info,
-    const PaddedPODArray<T> & time_vec,
-    ColumnPtr & session_start_column,
-    ColumnPtr & session_end_column,
-    size_t num_rows,
-    AggregatingTransformParamsPtr params)
+namespace
 {
-    Block block;
+#define DISPATCH_FOR_WINDOW_INTERVAL(interval_kind, M) \
+    do \
+    { \
+        switch (interval_kind) \
+        { \
+            case IntervalKind::Nanosecond: \
+                M(IntervalKind::Nanosecond); \
+                break; \
+            case IntervalKind::Microsecond: \
+                M(IntervalKind::Microsecond); \
+                break; \
+            case IntervalKind::Millisecond: \
+                M(IntervalKind::Millisecond); \
+                break; \
+            case IntervalKind::Second: \
+                M(IntervalKind::Second); \
+                break; \
+            case IntervalKind::Minute: \
+                M(IntervalKind::Minute); \
+                break; \
+            case IntervalKind::Hour: \
+                M(IntervalKind::Hour); \
+                break; \
+            case IntervalKind::Day: \
+                M(IntervalKind::Day); \
+                break; \
+            case IntervalKind::Week: \
+                M(IntervalKind::Week); \
+                break; \
+            case IntervalKind::Month: \
+                M(IntervalKind::Month); \
+                break; \
+            case IntervalKind::Quarter: \
+                M(IntervalKind::Quarter); \
+                break; \
+            case IntervalKind::Year: \
+                M(IntervalKind::Year); \
+                break; \
+        } \
+    } while (0);
 
-    /// session_start_column could be a ColumnConst object
-    const auto & session_start_vec = checkAndGetColumn<ColumnUInt8>(session_start_column.get())->getData();
-    const auto & session_end_vec = checkAndGetColumn<ColumnUInt8>(session_end_column.get())->getData();
+template <typename TimeColumnType, IntervalKind::Kind unit>
+MutableColumnPtr calculateSessionIdColumnImpl(
+    SessionInfoQueue & sessions,
+    SessionWindowParams & params,
+    const TimeColumnType & time_column,
+    const ColumnVector<UInt8> & session_start_column,
+    const ColumnVector<UInt8> & session_end_column,
+    size_t num_rows)
+{
+    MutableColumnPtr session_id_col = ColumnArray::create(time_column.cloneEmpty());
+    if (unlikely(num_rows == 0))
+        return session_id_col;
 
-    IColumn::Filter filter(num_rows, 0);
-    SessionInfos sessions_info_to_emit;
-    std::vector<IColumn::Filter> session_filters;
-    size_t offset = 0;
-    Int64 ts_secs = time_vec[0];
-    UInt8 session_start = session_start_vec[0];
-    UInt8 session_end = session_end_vec[0];
+    auto info = !sessions.empty() ? sessions.back() : nullptr;
 
-    const DateLUTImpl & time_zone = DateLUT::instance("UTC");
+    session_id_col->reserve(num_rows);
 
-    auto ignore_row = [&]() { filter[offset] = 0; };
+    const auto & time_data = time_column.getData();
+    const auto & session_start_data = session_start_column.getData();
+    const auto & session_end_data = session_end_column.getData();
+
+    auto & session_id_array = assert_cast<ColumnArray &>(*session_id_col);
+    auto & session_id_data = assert_cast<TimeColumnType &>(session_id_array.getData()).getData();
+    auto & session_id_offsets = session_id_array.getOffsets();
+
+    auto event_ts = time_data[0];
+    auto session_start = session_start_data[0];
+    auto session_end = session_end_data[0];
 
     auto keep_row = [&]() {
-        filter[offset] = 1;
+        /// Keep first row in current window
+        if (info->win_start == 0)
+            info->win_start = event_ts;
+
         /// Extend session window end and timeout timestamp
-        if (ts_secs > info.win_end)
+        if (event_ts >= info->win_end)
         {
-            info.win_end = ts_secs;
-            info.timeout_ts = addTime(info.win_end, params->params.interval_kind, params->params.window_interval, time_zone, info.scale);
+            info->win_end = event_ts + 1;
+            if constexpr (std::is_same_v<TimeColumnType, ColumnDateTime64>)
+                info->timeout_ts = AddTime<unit>::execute(event_ts, params.session_timeout, *params.time_zone, params.time_scale);
+            else
+                info->timeout_ts = AddTime<unit>::execute(event_ts, params.session_timeout, *params.time_zone);
         }
-    };
 
-    /// Keep/ignore the start session row
-    auto keep_row_if_include_start = [&]() {
-        if (params->params.window_desc->start_with_boundary)
-            keep_row();
-        else
-            ignore_row();
-    };
-
-    /// Keep/ignore the close session row
-    auto keep_row_if_include_end = [&]() {
-        if (params->params.window_desc->end_with_boundary)
-            keep_row();
-        else
-        {
-            ignore_row();
-            /// Not keep but still need to extend the window end
-            if (ts_secs > info.win_end)
-                info.win_end = ts_secs;
-        }
+        session_id_data.emplace_back(static_cast<typename TimeColumnType::ValueType>(info->id));
     };
 
     auto open_session = [&]() {
-        info.win_start = ts_secs;
-        info.win_end = ts_secs + 1;
-        info.timeout_ts = addTime(info.win_end, params->params.interval_kind, params->params.window_interval, time_zone, info.scale);
-        info.ignore_ts = addTime(info.win_start, params->params.timeout_kind, -1 * params->params.session_size, time_zone, info.scale);
-        info.max_session_ts = addTime(info.win_start, params->params.timeout_kind, params->params.session_size, time_zone, info.scale);
-        info.active = true;
-    };
-
-    auto close_session = [&]() {
-        info.active = false;
-        sessions_info_to_emit.emplace_back(info);
-        session_filters.emplace_back(num_rows, 0);
-        session_filters.back().swap(filter);
-    };
-
-    for (; offset < num_rows; ++offset)
-    {
-        ts_secs = time_vec[offset];
-        session_start = session_start_vec[offset];
-        session_end = session_end_vec[offset];
-
-        if (info.active)
+        /// If last session window is empty (i.e. `info && info->win_start == 0`), we can reuse this info
+        if (!info || info->win_start != 0)
         {
-            /// Special handlings:
-            /// 1) if event_time < @ingore_ts, ingore event
-            /// 2) if event_time > @timeout_ts, close session
-            /// 3) if event_time > @max_session_ts, close session
-            /// 4) if session end condition is true, close session
-            assert(info.win_start <= info.win_end);
-            if (ts_secs < info.ignore_ts)
-                ignore_row();
-            else if (ts_secs > info.timeout_ts || ts_secs > info.max_session_ts)
-            {
-                /// Timeout not keep current row.
-                close_session();
+            SessionID new_id = sessions.empty() ? 1 : sessions.back()->id + 1;
+            info = sessions.emplace_back(std::make_shared<SessionInfo>());
+            info->id = new_id;
+        }
 
-                if (session_start)
-                {
-                    open_session();
-                    keep_row_if_include_start();
-                }
+        info->active = true;
+        if constexpr (std::is_same_v<TimeColumnType, ColumnDateTime64>)
+        {
+            info->timeout_ts = AddTime<unit>::execute(event_ts, params.session_timeout, *params.time_zone, params.time_scale);
+            info->max_session_ts = AddTime<unit>::execute(event_ts, params.max_session_size, *params.time_zone, params.time_scale);
+        }
+        else
+        {
+            info->timeout_ts = AddTime<unit>::execute(event_ts, params.session_timeout, *params.time_zone);
+            info->max_session_ts = AddTime<unit>::execute(event_ts, params.max_session_size, *params.time_zone);
+        }
+
+        if (params.start_with_inclusion)
+            keep_row();
+    };
+
+    auto try_close_session_for_timeout = [&]() -> bool {
+        if (event_ts >= info->timeout_ts)
+        {
+            info->win_end = info->timeout_ts;
+            info->active = false;
+            return true;
+        }
+        return false;
+    };
+
+    auto try_close_session_for_oversize = [&]() -> bool {
+        if (event_ts >= info->max_session_ts)
+        {
+            info->win_end = info->max_session_ts;
+            info->active = false;
+            return true;
+        }
+        return false;
+    };
+
+    auto try_close_session_for_predication = [&]() -> bool {
+        if (session_end)
+        {
+            if (params.end_with_inclusion)
+                keep_row();
+            else
+            {
+                /// Not keep but still need to extend the window end
+                if (event_ts > info->win_end)
+                    info->win_end = event_ts;
             }
-            else if (session_end)
-            {
-                keep_row_if_include_end();
-                close_session();
 
+            info->active = false;
+            return true;
+        }
+        return false;
+    };
+
+    for (size_t offset = 0; offset < num_rows; ++offset)
+    {
+        event_ts = time_data[offset];
+        session_start = session_start_data[offset];
+        session_end = session_end_data[offset];
+
+        if (info && info->active)
+        {
+            /// 1) if event_time >= @max_session_ts, close session
+            /// 2) if event_time >= @timeout_ts, close session
+            /// 3) if session end condition is true, close session
+            if (try_close_session_for_oversize() || try_close_session_for_timeout() || try_close_session_for_predication())
+            {
                 if (session_start)
-                {
                     open_session();
-                    keep_row_if_include_start();
-                }
             }
             else
                 keep_row();
@@ -127,111 +192,87 @@ std::pair<std::vector<IColumn::Filter>, SessionInfos> prepareSessionImpl(
         {
             /// Active session window
             if (session_start)
-            {
                 open_session();
-                keep_row_if_include_start();
-            }
-            else
-                ignore_row();
         }
+
+        session_id_offsets.push_back(session_id_data.size());
     }
 
-    if (info.active)
-        session_filters.emplace_back(std::move(filter));
-
-    return {std::move(session_filters), std::move(sessions_info_to_emit)};
+    return session_id_col;
+}
 }
 
-std::pair<std::vector<IColumn::Filter>, SessionInfos> prepareSession(
-    SessionInfo & info,
-    ColumnPtr & time_column,
-    ColumnPtr & session_start_column,
-    ColumnPtr & session_end_column,
-    size_t num_rows,
-    AggregatingTransformParamsPtr params)
+void assignWindow(
+    SessionInfoQueue & sessions,
+    SessionWindowParams & params,
+    Columns & columns,
+    ssize_t wstart_col_pos,
+    ssize_t wend_col_pos,
+    size_t time_col_pos,
+    size_t session_start_col_pos,
+    size_t session_end_col_pos)
 {
-    if (params->params.time_col_is_datetime64)
-        return prepareSessionImpl(
-            info,
-            checkAndGetColumn<ColumnDecimal<DateTime64>>(time_column.get())->getData(),
-            session_start_column,
-            session_end_column,
-            num_rows,
-            params);
-    else
-        return prepareSessionImpl(
-            info,
-            checkAndGetColumn<ColumnVector<UInt32>>(time_column.get())->getData(),
-            session_start_column,
-            session_end_column,
-            num_rows,
-            params);
-}
+    auto num_rows = columns.at(0)->size();
+    if (unlikely(num_rows == 0))
+        return;
 
-void finalizeSession(AggregatedDataVariants & variants, const SessionInfo & info, Block & final_block, AggregatingTransformParamsPtr params)
-{
-    /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
-    /// one project window for streaming processing
-    Block header = params->aggregator.getHeader(true, false).cloneEmpty();
-    auto window_start_col = header.getByName(ProtonConsts::STREAMING_WINDOW_START);
-    auto window_start_col_ptr = IColumn::mutate(window_start_col.column);
-    auto window_end_col = header.getByName(ProtonConsts::STREAMING_WINDOW_END);
-    auto window_end_col_ptr = IColumn::mutate(window_end_col.column);
+    /// FIXME: Better to handle ColumnConst.
+    auto time_column = columns[time_col_pos]->convertToFullColumnIfConst();
+    auto session_start_column = columns[session_start_col_pos]->convertToFullColumnIfConst();
+    auto session_end_column = columns[session_end_col_pos]->convertToFullColumnIfConst();
 
-    BlocksList merged_blocks;
-    if (params->final)
-        merged_blocks = params->aggregator.convertToBlocksFinal(variants, ConvertAction::STREAMING_EMIT, 1);
-    else
-        merged_blocks = params->aggregator.convertToBlocksIntermediate(variants, ConvertAction::STREAMING_EMIT, 1);
+    MutableColumnPtr session_id_col;
 
-    assert(merged_blocks.size() == 1);
-    Block & merged_block = merged_blocks.back();
-
-    /// NOTE: In case no aggregate key and no aggregate function, the merged_block shall be empty.
-    /// e.g. `select window_start, window_end, date_diff('second', window_start, window_end) from session(test_session, 5s, [location='ca', location='sh')) group by window_start, window_end`
-    size_t session_rows = merged_block ? merged_block.rows() : 1;
-    assert(session_rows > 0);
-    for (size_t i = 0; i < session_rows; i++)
+    if (params.time_col_is_datetime64)
     {
-        if (params->params.time_col_is_datetime64)
-        {
-            window_start_col_ptr->insert(DecimalUtils::decimalFromComponents<DateTime64>(
-                info.win_start / common::exp10_i64(static_cast<int>(info.scale)), info.win_start % common::exp10_i64(static_cast<int>(info.scale)), info.scale));
-            window_end_col_ptr->insert(DecimalUtils::decimalFromComponents<DateTime64>(
-                info.win_end / common::exp10_i64(static_cast<int>(info.scale)), info.win_end % common::exp10_i64(static_cast<int>(info.scale)), info.scale));
-        }
+#define M(INTERVAL_KIND) \
+    session_id_col = calculateSessionIdColumnImpl<ColumnDateTime64, INTERVAL_KIND>( \
+        sessions, \
+        params, \
+        assert_cast<const ColumnDateTime64 &>(*time_column), \
+        assert_cast<const ColumnVector<UInt8> &>(*session_start_column), \
+        assert_cast<const ColumnVector<UInt8> &>(*session_end_column), \
+        num_rows);
+
+        DISPATCH_FOR_WINDOW_INTERVAL(params.interval_kind, M)
+#undef M
+    }
+    else
+    {
+#define M(INTERVAL_KIND) \
+    session_id_col = calculateSessionIdColumnImpl<ColumnDateTime, INTERVAL_KIND>( \
+        sessions, \
+        params, \
+        assert_cast<const ColumnDateTime &>(*time_column), \
+        assert_cast<const ColumnVector<UInt8> &>(*session_start_column), \
+        assert_cast<const ColumnVector<UInt8> &>(*session_end_column), \
+        num_rows);
+
+        DISPATCH_FOR_WINDOW_INTERVAL(params.interval_kind, M)
+#undef M
+    }
+
+    /// For each row, there are three cases:
+    /// 1) [] - skip
+    /// 2) [<session_id>] - belongs to <session_id>
+    /// 3) [<session_id_1>, <session_id_2>] - both belongs to <session_id_1> and <session_id_2>
+    auto & session_id_array = assert_cast<ColumnArray &>(*session_id_col);
+    auto & session_id_offsets = session_id_array.getOffsets();
+
+    /// NOTE: Assign window start/end as session_id
+    /// Then the window start/end will be rewrited by session_id later
+    for (size_t pos = 0; auto & column : columns)
+    {
+        if (pos == wstart_col_pos)
+            column = IColumn::mutate(session_id_array.getDataPtr());
+        else if (pos == wend_col_pos)
+            column = IColumn::mutate(session_id_array.getDataPtr());
         else
-        {
-            window_start_col_ptr->insert(info.win_start);
-            window_end_col_ptr->insert(info.win_end);
-        }
+            column = column->replicate(session_id_offsets);
+        ++pos;
     }
-
-    /// fill session info columns, i.e. 'window_start', 'window_end'
-    /// FIXME, this looks pretty hacky as we need align the column positions / header here with Aggregator::Params::getHeader(...)
-    merged_block.insert(0, {std::move(window_end_col_ptr), window_end_col.type, window_end_col.name});
-    merged_block.insert(0, {std::move(window_start_col_ptr), window_start_col.type, window_start_col.name});
-
-    if (final_block.rows() > 0)
-    {
-        assertBlocksHaveEqualStructure(merged_block, final_block, "merging buckets for streaming two level hashtable");
-        for (size_t i = 0, size = final_block.columns(); i < size; ++i)
-        {
-            const auto source_column = merged_block.getByPosition(i).column;
-            auto mutable_column = IColumn::mutate(std::move(final_block.getByPosition(i).column));
-            mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
-            final_block.getByPosition(i).column = std::move(mutable_column);
-        }
-    }
-    else
-        final_block = std::move(merged_block);
-
-    /// Clear and reuse current session variants
-    variants.init(variants.type);
-    variants.aggregates_pools = Arenas(1, std::make_shared<Arena>());
-    variants.aggregates_pool = variants.aggregates_pools.back().get();
-    variants.aggregator->initStatesForWithoutKeyOrOverflow(variants);
 }
+
 }
 }
 }
