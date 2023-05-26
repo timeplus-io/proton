@@ -36,6 +36,7 @@ cmake .. \
     -DENABLE_JEMALLOC=${enable_jemalloc} \
     -DENABLE_SSL=ON \
     -DENABLE_BZIP2=ON \
+    -DENABLE_BROTLI=ON \
     -DENABLE_PROTOBUF=ON \
     -DENABLE_LIBURING=ON \
     -DENABLE_UTILS=ON \

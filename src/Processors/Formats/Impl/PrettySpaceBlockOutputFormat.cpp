@@ -45,7 +45,7 @@ void PrettySpaceBlockOutputFormat::write(Chunk chunk, PortKind port_kind)
 
         if (col.type->shouldAlignRightInPrettyFormats())
         {
-            for (ssize_t k = 0; k < std::max(static_cast<ssize_t>(0), static_cast<ssize_t>(max_widths[i] - name_widths[i])); ++k)
+            for (ssize_t k = 0; k < std::max(0z, static_cast<ssize_t>(max_widths[i] - name_widths[i])); ++k)
                 writeChar(' ', out);
 
             if (format_settings.pretty.color)
@@ -62,7 +62,7 @@ void PrettySpaceBlockOutputFormat::write(Chunk chunk, PortKind port_kind)
             if (format_settings.pretty.color)
                 writeCString("\033[0m", out);
 
-            for (ssize_t k = 0; k < std::max(static_cast<ssize_t>(0), static_cast<ssize_t>(max_widths[i] - name_widths[i])); ++k)
+            for (ssize_t k = 0; k < std::max(0z, static_cast<ssize_t>(max_widths[i] - name_widths[i])); ++k)
                 writeChar(' ', out);
         }
     }

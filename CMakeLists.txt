@@ -1,32 +1,6 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.20)
 
-foreach(policy
-        CMP0023
-        CMP0048 # CMake 3.0
-        CMP0074 # CMake 3.12
-        CMP0077
-        CMP0079
-    )
-    if(POLICY ${policy})
-        cmake_policy(SET ${policy} NEW)
-    endif()
-endforeach()
-
-# set default policy
-foreach(default_policy_var_name
-        # make option() honor normal variables for BUILD_SHARED_LIBS:
-        # - re2
-        # - snappy
-        CMAKE_POLICY_DEFAULT_CMP0077
-        # Google Test from sources uses too old cmake, 2.6.x, and CMP0022 should
-        # set, to avoid using deprecated LINK_INTERFACE_LIBRARIES(_<CONFIG>)? over
-        # INTERFACE_LINK_LIBRARIES.
-        CMAKE_POLICY_DEFAULT_CMP0022
-    )
-    set(${default_policy_var_name} NEW)
-endforeach()
-
-project(proton)
+project(proton LANGUAGES C CXX ASM)
 
 # If turned off: e.g. when ENABLE_FOO is ON, but FOO tool was not found, the CMake will continue.
 option(FAIL_ON_UNSUPPORTED_OPTIONS_COMBINATION
@@ -39,13 +13,11 @@ else()
     set(RECONFIGURE_MESSAGE_LEVEL WARNING)
 endif()
 
-enable_language(C CXX ASM)
-
 include (cmake/arch.cmake)
 include (cmake/target.cmake)
 include (cmake/tools.cmake)
-include (cmake/clang_tidy.cmake)
 include (cmake/ccache.cmake)
+include (cmake/clang_tidy.cmake)
 include (cmake/git.cmake)
 
 # Ignore export() since we don't use it,
@@ -314,7 +286,7 @@ if (${CMAKE_VERSION} VERSION_LESS "3.12.4")
 
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${_CXX_STANDARD}")
 else ()
-    set (CMAKE_CXX_STANDARD 20)
+    set (CMAKE_CXX_STANDARD 23)
     set (CMAKE_CXX_EXTENSIONS ON) # Same as gnu++2a (ON) vs c++2a (OFF): https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html
     set (CMAKE_CXX_STANDARD_REQUIRED ON)
 endif ()
