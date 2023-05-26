@@ -9,7 +9,7 @@ namespace Streaming
 class SessionAggregatingTransformWithSubstream final : public WindowAggregatingTransformWithSubstream
 {
 public:
-    SessionAggregatingTransformWithSubstream(Block header, AggregatingTransformParamsPtr params_, size_t current_index);
+    SessionAggregatingTransformWithSubstream(Block header, AggregatingTransformParamsPtr params_);
 
     ~SessionAggregatingTransformWithSubstream() override = default;
 
@@ -18,7 +18,7 @@ public:
 private:
     SubstreamContextPtr getOrCreateSubstreamContext(const SubstreamID & id) override;
     std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, const SubstreamContextPtr & substream_ctx) override;
-    WindowsWithBucket getFinalizedWindowsWithBucket(Int64 watermark, const SubstreamContextPtr & substream_ctx) const override;
+    WindowsWithBuckets getFinalizedWindowsWithBuckets(Int64 watermark, const SubstreamContextPtr & substream_ctx) const override;
     void removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx) override;
     bool needReassignWindow() const override { return true; }
 

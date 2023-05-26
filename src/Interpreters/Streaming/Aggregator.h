@@ -83,6 +83,7 @@ enum class ConvertAction : uint8_t
     WRITE_TO_TEMP_FS = 2,
     CHECKPOINT = 3,
     STREAMING_EMIT = 4,
+    INTERNAL_MERGE = 5
 };
 
 /// using TimeBucketAggregatedDataWithUInt16Key = TimeBucketHashMap<FixedImplicitZeroHashMap<UInt16, AggregateDataPtr>>;
@@ -647,6 +648,8 @@ public:
 
         ssize_t delta_col_pos;
 
+        size_t window_keys_num;
+
         WindowParamsPtr window_params;
         /// proton: ends
 
@@ -667,6 +670,7 @@ public:
             size_t streaming_window_count_ = 0,
             GroupBy streaming_group_by_ = GroupBy::OTHER,
             ssize_t delta_col_pos_ = -1,
+            size_t window_keys_num_ = 0,
             WindowParamsPtr window_params_ = nullptr)
         : src_header(src_header_),
             intermediate_header(intermediate_header_),
@@ -683,6 +687,7 @@ public:
             streaming_window_count(streaming_window_count_),
             group_by(streaming_group_by_),
             delta_col_pos(delta_col_pos_),
+            window_keys_num(window_keys_num_),
             window_params(window_params_)
         {
         }
@@ -988,12 +993,14 @@ private:
             bool clear_states) const;
 
     /// Merge data from hash table `src` into `dst`.
-    template <typename Method, bool use_compiled_functions, typename Table>
+    using EmptyKeyHandler = void *;
+    template <typename Method, bool use_compiled_functions, typename Table, typename KeyHandler = EmptyKeyHandler>
     void mergeDataImpl(
         Table & table_dst,
         Table & table_src,
         Arena * arena,
-        bool clear_states) const;
+        bool clear_states,
+        KeyHandler && key_handler = nullptr) const;
 
     /// Merge data from hash table `src` into `dst`, but only for keys that already exist in dst. In other cases, merge the data into `overflows`.
     template <typename Method, typename Table>
@@ -1076,6 +1083,28 @@ private:
         ConvertAction action,
         size_t bucket,
         std::atomic<bool> * is_cancelled = nullptr) const;
+
+    /// proton: starts.
+    template <typename Method>
+    void spliceBucketsImpl(
+        AggregatedDataVariants & data_dest,
+        AggregatedDataVariants & data_src,
+        bool final,
+        ConvertAction action,
+        const std::vector<size_t> & gcd_buckets,
+        Arena * arena) const;
+
+    /// Used for hop window function, merge multiple gcd windows (buckets) to a hop window
+    /// For examples:
+    ///   gcd_bucket1 - [00:00, 00:02)
+    ///                            =>  result block - [00:00, 00:04)
+    ///   gcd_bucket2 - [00:02, 00:04)
+    Block spliceAndConvertBucketsToBlock(
+        AggregatedDataVariants & variants, bool final, ConvertAction action, const std::vector<size_t> & gcd_buckets) const;
+
+    void mergeBuckets(
+        ManyAggregatedDataVariants & variants, Arena * arena, bool final, ConvertAction action, const std::vector<size_t> & buckets) const;
+    /// proton: ends.
 
     Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows, ConvertAction action) const;
     Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final, ConvertAction action) const;

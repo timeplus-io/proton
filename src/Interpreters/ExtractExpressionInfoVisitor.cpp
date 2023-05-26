@@ -11,7 +11,7 @@
 /// proton: starts.
 namespace
 {
-    bool hasSessionWindowColumn(const DB::ASTPtr & ast)
+    bool hasWindowStartOrEndColumn(const DB::ASTPtr & ast)
     {
         if (const auto * function = ast->as<DB::ASTFunction>())
         {
@@ -21,7 +21,7 @@ namespace
                     return false;
 
                 for (const auto & arg : args->children)
-                    if (hasSessionWindowColumn(arg))
+                    if (hasWindowStartOrEndColumn(arg))
                         return true;
                 return false;
             }
@@ -95,10 +95,8 @@ void ExpressionInfoMatcher::visit(const ASTFunction & ast_function, const ASTPtr
         }
 
         /// proton: starts.
-        /// For session window, window_start/window_end are not generated before aggregation step.
-        /// The predication statement which contains window_start/window_end could not be moved to where clause.
-        if (hasSessionWindowColumn(ast))
-            data.is_aggregate_function = true;
+        if (hasWindowStartOrEndColumn(ast))
+            data.is_window_start_or_end_function = true;
         /// proton: ends.
     }
 }

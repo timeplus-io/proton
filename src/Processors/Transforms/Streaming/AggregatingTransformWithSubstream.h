@@ -19,6 +19,7 @@ struct SubstreamContext
     AggregatedDataVariants variants;
     Int64 version = 0;
     UInt64 rows_since_last_finalization = 0;
+    Int64 watermark;
 
     std::any field;  /// Stuff additional data context to it if needed
 

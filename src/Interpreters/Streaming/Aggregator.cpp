@@ -2247,17 +2247,18 @@ void NO_INLINE Aggregator::mergeDataNullKey(
 }
 
 
-template <typename Method, bool use_compiled_functions, typename Table>
+template <typename Method, bool use_compiled_functions, typename Table, typename KeyHandler>
 void NO_INLINE Aggregator::mergeDataImpl(
     Table & table_dst,
     Table & table_src,
     Arena * arena,
-    bool clear_states) const
+    bool clear_states,
+    KeyHandler && key_handler) const
 {
     if constexpr (Method::low_cardinality_optimization)
         mergeDataNullKey<Method, Table>(table_dst, table_src, arena, clear_states);
 
-    table_src.mergeToViaEmplace(table_dst, [&](AggregateDataPtr & __restrict dst, AggregateDataPtr & __restrict src, bool inserted)
+    auto func = [&](AggregateDataPtr & __restrict dst, AggregateDataPtr & __restrict src, bool inserted)
     {
         /// proton: starts
         if (inserted)
@@ -2338,7 +2339,12 @@ void NO_INLINE Aggregator::mergeDataImpl(
 
         if (clear_states)
             src = nullptr;
-    });
+    };
+
+    if constexpr (std::is_same_v<KeyHandler, EmptyKeyHandler>)
+        table_src.mergeToViaEmplace(table_dst, func);
+    else
+        table_src.mergeToViaEmplace(table_dst, func, std::move(key_handler));
 
     if (clear_states)
         table_src.clearAndShrink();
@@ -3613,8 +3619,10 @@ bool Aggregator::shouldClearStates(ConvertAction action, bool final_) const
         case ConvertAction::CHECKPOINT:
             /// Checkpoint is snapshot of in-memory states, we shall not clear the states
             return false;
+        case ConvertAction::INTERNAL_MERGE:
+            return false;
         case ConvertAction::STREAMING_EMIT:
-            /// fallthrough
+            [[fallthrough]];
         default:
             /// By default, streaming processing needs hold on to the states
             return !params.keep_state;
@@ -3637,6 +3645,119 @@ VersionType Aggregator::getVersion() const
         version = ver;
 
     return ver;
+}
+
+template <typename Method>
+void NO_INLINE Aggregator::spliceBucketsImpl(
+    AggregatedDataVariants & data_dest,
+    AggregatedDataVariants & data_src,
+    bool final,
+    ConvertAction action,
+    const std::vector<size_t> & gcd_buckets,
+    Arena * arena) const
+{
+    /// In order to merge state with same other keys of different gcd buckets, reset the window group keys to zero
+    /// create a new key, where the window key part is 0, and the other key parts are the same as the original value.
+    /// For example:
+    /// Key :           <window_start> +  <window_end> +  <other_keys...>
+    /// New key :                0     +        0      +  <other_keys...>
+    auto zero_out_window_keys_func = [&](const auto & key) {
+        if constexpr (std::is_same_v<std::decay_t<decltype(key)>, StringRef>)
+        {
+            /// Case-1: Serialized key, the window time keys always are always lower bits
+            auto * data = const_cast<char *>(arena->insert(key.data, key.size));
+            assert(data != nullptr);
+            auto window_keys_size = params.window_keys_num == 2 ? key_sizes[0] + key_sizes[1] : key_sizes[0];
+            std::memset(data, 0, window_keys_size);
+
+            return SerializedKeyHolder{StringRef(data, key.size), *arena};
+        }
+        else
+        {
+            /// Case-2: Only one window time key
+            if (key_sizes.size() == 1)
+                return static_cast<std::decay_t<decltype(key)>>(0);
+
+            /// Case-3: Fixed key, the fixed window time keys always are always lower bits
+            auto window_keys_size = params.window_keys_num == 2 ? key_sizes[0] + key_sizes[1] : key_sizes[0];
+            auto bit_nums = window_keys_size << 3;
+            return (key >> bit_nums) << bit_nums;  /// reset lower bits to zero
+        }
+    };
+
+    auto clear_states = shouldClearStates(action, final);
+    auto & table_dest = getDataVariant<Method>(data_dest).data.impls;
+    auto & table_src = getDataVariant<Method>(data_src).data.impls;
+
+#if USE_EMBEDDED_COMPILER
+    if (compiled_aggregate_functions_holder)
+    {
+        for (auto bucket : gcd_buckets)
+            mergeDataImpl<Method, true>(
+                table_dest[0],
+                table_src[bucket],
+                arena,
+                clear_states,
+                zero_out_window_keys_func);
+    }
+    else
+#endif
+    {
+        for (auto bucket : gcd_buckets)
+            mergeDataImpl<Method, false>(
+                table_dest[0],
+                table_src[bucket],
+                arena,
+                clear_states,
+                zero_out_window_keys_func);
+    }
+}
+
+Block Aggregator::spliceAndConvertBucketsToBlock(
+    AggregatedDataVariants & variants, bool final, ConvertAction action, const std::vector<size_t> & gcd_buckets) const
+{
+    AggregatedDataVariants result_variants;
+    result_variants.keys_size = params.keys_size;
+    result_variants.key_sizes = key_sizes;
+    result_variants.init(method_chosen);
+    initStatesForWithoutKeyOrOverflow(result_variants);
+
+    auto method = result_variants.type;
+    Arena * arena = result_variants.aggregates_pool;
+
+    if (false) {} // NOLINT
+#define M(NAME) \
+    else if (method == AggregatedDataVariants::Type::NAME) \
+    { \
+        spliceBucketsImpl<decltype(result_variants.NAME)::element_type>(result_variants, variants, final, action, gcd_buckets, arena); \
+        return convertOneBucketToBlock(result_variants, *result_variants.NAME, arena, final, action, 0); \
+    }
+
+    APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
+#undef M
+    else
+        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+
+    UNREACHABLE();
+}
+
+void Aggregator::mergeBuckets(
+    ManyAggregatedDataVariants & variants, Arena * arena, bool final, ConvertAction action, const std::vector<size_t> & buckets) const
+{
+    auto & merge_data = *variants[0];
+
+    if (false) {} // NOLINT
+#define M(NAME) \
+    else if (merge_data.type == AggregatedDataVariants::Type::NAME) \
+    { \
+        for (auto bucket : buckets) \
+            mergeBucketImpl<decltype(merge_data.NAME)::element_type>(variants, final, action, bucket, arena); \
+    }
+
+    APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
+    else
+        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+#undef M
 }
 /// proton: ends
 }

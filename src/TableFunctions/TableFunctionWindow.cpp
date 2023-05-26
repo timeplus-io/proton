@@ -136,8 +136,8 @@ void TableFunctionWindow::handleResultType(const ColumnWithTypeAndName & type_an
     assert(elem_size >= 2);
 
     /// If streaming table function is used, we will need project `wstart, wend ...` columns to metadata
-    for (size_t i = 0; i < elem_size; ++i)
-        columns.add(ColumnDescription(tuple_result_type->getNameByPosition(i + 1), getElementType(i, tuple_result_type)));
+    for (size_t i = 1; const auto & type : tuple_result_type->getElements())
+        columns.add(ColumnDescription(tuple_result_type->getNameByPosition(i++), type));
 }
 }
 }

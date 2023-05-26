@@ -141,16 +141,26 @@ void WindowAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr &
     Block merged_block;
     Block block;
 
-    for (const auto & window_with_bucket : getFinalizedWindowsWithBucket(watermark))
+    for (const auto & window_with_buckets : getFinalizedWindowsWithBuckets(watermark))
     {
-        block = params->aggregator.mergeAndConvertOneBucketToBlock(
-            *data, first->aggregates_pool, params->final, ConvertAction::STREAMING_EMIT, window_with_bucket.bucket, &is_cancelled);
+        if (window_with_buckets.buckets.size() == 1)
+        {
+            block = params->aggregator.mergeAndConvertOneBucketToBlock(
+                *data, first->aggregates_pool, params->final, ConvertAction::STREAMING_EMIT, window_with_buckets.buckets[0], &is_cancelled);
+        }
+        else
+        {
+            params->aggregator.mergeBuckets(
+                *data, first->aggregates_pool, params->final, ConvertAction::INTERNAL_MERGE, window_with_buckets.buckets);
+            block = params->aggregator.spliceAndConvertBucketsToBlock(
+                *first, params->final, ConvertAction::INTERNAL_MERGE, window_with_buckets.buckets);
+        }
 
         if (is_cancelled)
             return;
 
         if (needReassignWindow())
-            reassignWindow(block, window_with_bucket);
+            reassignWindow(block, window_with_buckets.window);
 
         if (params->emit_version && params->final)
             emitVersion(block);

@@ -10,6 +10,9 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/IAST.h>
 
+/// proton: starts.
+#include <Interpreters/Streaming/WindowCommon.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -33,6 +36,11 @@ bool PredicateExpressionsOptimizer::optimize(ASTSelectQuery & select_query)
 {
     if (!enable_optimize_predicate_expression)
         return false;
+
+    /// proton: starts.
+    if (select_query.where())
+        tryMovePredicatesFromWhereToHaving(select_query);
+    /// proton: ends.
 
     if (select_query.having() && (!select_query.group_by_with_cube && !select_query.group_by_with_rollup && !select_query.group_by_with_totals))
         tryMovePredicatesFromHavingToWhere(select_query);
@@ -202,6 +210,20 @@ bool PredicateExpressionsOptimizer::tryMovePredicatesFromHavingToWhere(ASTSelect
             return false;
         }
 
+        /// proton: starts.
+        /// For hop/session window, window_start/window_end are not generated before aggregation step for performance reasons.
+        /// The having statement which contains window_start/window_end could not be moved to where clause.
+        if (expression_info.is_window_start_or_end_function)
+        {
+            if (auto * table_expression = getTableExpression(select_query, 0); table_expression && table_expression->table_function)
+            {
+                const auto * func = table_expression->table_function->as<ASTFunction>();
+                if (Streaming::isTableFunctionHop(func) || Streaming::isTableFunctionSession(func))
+                    return false;
+            }
+        }
+        /// proton: ends.
+
         if (expression_info.is_aggregate_function)
             having_predicates.emplace_back(moving_predicate);
         else
@@ -225,5 +247,63 @@ bool PredicateExpressionsOptimizer::tryMovePredicatesFromHavingToWhere(ASTSelect
 
     return true;
 }
+
+/// proton: starts.
+/// For hop/session window, window_start/window_end are not generated before aggregation step for performance reasons
+/// The predication statement which contains window_start/window_end need to be moved to having clause.
+bool PredicateExpressionsOptimizer::tryMovePredicatesFromWhereToHaving(ASTSelectQuery & select_query)
+{
+    ASTs where_predicates;
+    ASTs having_predicates;
+
+    const auto & reduce_predicates = [&](const ASTs & predicates) {
+        ASTPtr res = predicates[0];
+        for (size_t index = 1; index < predicates.size(); ++index)
+            res = makeASTFunction("and", res, predicates[index]);
+
+        return res;
+    };
+
+    for (const auto & moving_predicate : splitConjunctionPredicate({select_query.where()}))
+    {
+        TablesWithColumns tables;
+        ExpressionInfoVisitor::Data expression_info{WithContext{getContext()}, tables};
+        ExpressionInfoVisitor(expression_info).visit(moving_predicate);
+
+        if (expression_info.is_window_start_or_end_function)
+        {
+            if (auto * table_expression = getTableExpression(select_query, 0); table_expression && table_expression->table_function)
+            {
+                const auto * func = table_expression->table_function->as<ASTFunction>();
+                if (Streaming::isTableFunctionHop(func) || Streaming::isTableFunctionSession(func))
+                {
+                    having_predicates.emplace_back(moving_predicate);
+                    continue;
+                }
+            }
+        }
+
+        where_predicates.emplace_back(moving_predicate);
+    }
+
+    if (!having_predicates.empty())
+    {
+        auto moved_predicate = reduce_predicates(having_predicates);
+        moved_predicate = select_query.having() ? makeASTFunction("and", select_query.having(), moved_predicate) : moved_predicate;
+        select_query.setExpression(ASTSelectQuery::Expression::HAVING, std::move(moved_predicate));
+
+        if (where_predicates.empty())
+            select_query.setExpression(ASTSelectQuery::Expression::WHERE, {});
+        else
+        {
+            auto where_predicate = reduce_predicates(where_predicates);
+            select_query.setExpression(ASTSelectQuery::Expression::WHERE, std::move(where_predicate));
+        }
+        return true;
+    }
+
+    return false;
+}
+/// proton: ends.
 
 }

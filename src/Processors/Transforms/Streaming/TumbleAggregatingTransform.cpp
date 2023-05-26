@@ -29,9 +29,9 @@ TumbleAggregatingTransform::TumbleAggregatingTransform(
 {
 }
 
-WindowsWithBucket TumbleAggregatingTransform::getFinalizedWindowsWithBucket(Int64 watermark) const
+WindowsWithBuckets TumbleAggregatingTransform::getFinalizedWindowsWithBuckets(Int64 watermark) const
 {
-    WindowsWithBucket windows_with_bucket;
+    WindowsWithBuckets windows_with_buckets;
 
     /// When watermark reached to the current window, there may still be some events within the current window will arrive in future
     /// So we can project some windows before the current window.
@@ -54,15 +54,15 @@ WindowsWithBucket TumbleAggregatingTransform::getFinalizedWindowsWithBucket(Int6
                 final_buckets.emplace(bucket);
 
         for (auto time_bucket : final_buckets)
-            windows_with_bucket.emplace_back(WindowWithBucket{
-                static_cast<Int64>(time_bucket),
-                addTime(
-                    static_cast<Int64>(time_bucket),
-                    window_params.interval_kind,
-                    window_params.window_interval,
-                    *window_params.time_zone,
-                    window_params.time_scale),
-                time_bucket});
+            windows_with_buckets.emplace_back(WindowWithBuckets{
+                {static_cast<Int64>(time_bucket),
+                 addTime(
+                     static_cast<Int64>(time_bucket),
+                     window_params.interval_kind,
+                     window_params.window_interval,
+                     *window_params.time_zone,
+                     window_params.time_scale)},
+                {time_bucket}});
     }
     else
     {
@@ -73,18 +73,18 @@ WindowsWithBucket TumbleAggregatingTransform::getFinalizedWindowsWithBucket(Int6
                 final_buckets.emplace(bucket);
 
         for (auto time_bucket : final_buckets)
-            windows_with_bucket.emplace_back(WindowWithBucket{
-                addTime(
-                    static_cast<Int64>(time_bucket),
-                    window_params.interval_kind,
-                    -window_params.window_interval,
-                    *window_params.time_zone,
-                    window_params.time_scale),
-                static_cast<Int64>(time_bucket),
-                time_bucket});
+            windows_with_buckets.emplace_back(WindowWithBuckets{
+                {addTime(
+                     static_cast<Int64>(time_bucket),
+                     window_params.interval_kind,
+                     -window_params.window_interval,
+                     *window_params.time_zone,
+                     window_params.time_scale),
+                 static_cast<Int64>(time_bucket)},
+                {time_bucket}});
     }
 
-    return windows_with_bucket;
+    return windows_with_buckets;
 }
 
 void TumbleAggregatingTransform::removeBucketsImpl(Int64 watermark)

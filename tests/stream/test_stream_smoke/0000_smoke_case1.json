@@ -234,7 +234,7 @@
 
         {
             "id": 39,
-            "tags": ["subquery","cluster_table_bug"],
+            "tags": ["subquery","cluster_table_bug", "bug"],
             "name": "hop count based on table subquery",
             "description": "hop count based on table subquery",
             "steps":[

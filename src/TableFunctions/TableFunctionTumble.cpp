@@ -47,11 +47,6 @@ String TableFunctionTumble::functionNamePrefix() const
     return ProtonConsts::TUMBLE_FUNC_NAME + "(";
 }
 
-DataTypePtr TableFunctionTumble::getElementType(size_t i, const DataTypeTuple * tuple) const
-{
-    return tuple->getElements()[i];
-}
-
 void registerTableFunctionTumble(TableFunctionFactory & factory)
 {
     factory.registerFunction("tumble", []() -> TableFunctionPtr { return std::make_shared<TableFunctionTumble>("tumble"); });

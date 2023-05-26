@@ -149,7 +149,7 @@ bool EmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & select_query)
     if (new_emit_query->periodic_interval)
         periodic_interval = std::move(new_emit_query->periodic_interval);
     else
-        periodic_interval = makeASTInterval(ProtonConsts::DEFAULT_PERIODIC_INTERVAL);
+        periodic_interval = makeASTInterval(ProtonConsts::DEFAULT_PERIODIC_INTERVAL.first, ProtonConsts::DEFAULT_PERIODIC_INTERVAL.second);
 
     /// check periodic_interval is appropriate value by settings.max_windows
     auto last_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(last_interval->as<ASTFunction>()));

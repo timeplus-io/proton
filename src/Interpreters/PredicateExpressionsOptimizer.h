@@ -36,6 +36,10 @@ private:
         ASTPtr & table_element, const ASTs & table_predicates, const TableWithColumnNamesAndTypes & table_columns) const;
 
     bool tryMovePredicatesFromHavingToWhere(ASTSelectQuery & select_query);
+
+    /// proton: starts.
+    bool tryMovePredicatesFromWhereToHaving(ASTSelectQuery & select_query);
+    /// proton: ends.
 };
 
 }

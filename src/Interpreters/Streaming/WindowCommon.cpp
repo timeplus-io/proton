@@ -1,5 +1,6 @@
-#include "WindowCommon.h"
+#include <Interpreters/Streaming/WindowCommon.h>
 
+#include <Functions/FunctionHelpers.h>
 #include <Functions/Streaming/FunctionsStreamingWindow.h>
 #include <Interpreters/Streaming/FunctionDescription.h>
 #include <Parsers/ASTFunction.h>
@@ -428,12 +429,20 @@ void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Ki
         throw Exception("Invalid interval argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
-std::pair<Int64, IntervalKind> extractInterval(const ASTFunction * ast)
+WindowInterval extractInterval(const ASTFunction * ast)
 {
-    Int64 interval;
-    IntervalKind interval_kind;
-    extractInterval(ast, interval, interval_kind.kind);
-    return {interval, interval_kind};
+    WindowInterval window_interval;
+    extractInterval(ast, window_interval.interval, window_interval.unit);
+    return window_interval;
+}
+
+WindowInterval extractInterval(const ColumnWithTypeAndName & interval_column)
+{
+    const auto * interval_type = checkAndGetDataType<DataTypeInterval>(interval_column.type.get());
+    assert(interval_type);
+    const auto * interval_column_const_int64 = checkAndGetColumnConst<ColumnInt64>(interval_column.column.get());
+    assert(interval_column_const_int64);
+    return {interval_column_const_int64->getValue<Int64>(), interval_type->getKind()};
 }
 
 UInt32 toStartTime(UInt32 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone)
@@ -544,9 +553,9 @@ ASTPtr makeASTInterval(Int64 num_units, IntervalKind kind)
         kind.toNameOfFunctionToIntervalDataType(), std::make_shared<ASTLiteral>(num_units < 0 ? Int64(num_units) : UInt64(num_units)));
 }
 
-ASTPtr makeASTInterval(const std::pair<Int64, IntervalKind> & interval)
+ASTPtr makeASTInterval(const WindowInterval & interval)
 {
-    return makeASTInterval(interval.first, interval.second);
+    return makeASTInterval(interval.interval, interval.unit);
 }
 
 void convertToSameKindIntervalAST(const BaseScaleInterval & bs1, const BaseScaleInterval & bs2, ASTPtr & ast1, ASTPtr & ast2)
@@ -557,7 +566,7 @@ void convertToSameKindIntervalAST(const BaseScaleInterval & bs1, const BaseScale
         ast1 = makeASTInterval(bs1.toIntervalKind(bs2.src_kind));
 }
 
-std::pair<Int64, IntervalKind> BaseScaleInterval::toIntervalKind(IntervalKind::Kind to_kind) const
+WindowInterval BaseScaleInterval::toIntervalKind(IntervalKind::Kind to_kind) const
 {
     if (scale == to_kind)
         return {num_units, to_kind};
@@ -698,6 +707,8 @@ HopWindowParams::HopWindowParams(FunctionDescriptionPtr window_desc) : WindowPar
         || (interval_kind == IntervalKind::Nanosecond && (3600 * common::exp10_i64(9)) % slide_interval != 0))
         throw Exception(
             ErrorCodes::BAD_ARGUMENTS, "Invalid slide interval, one hour must have an integer number of slides in hop function");
+
+    gcd_interval = std::gcd(slide_interval, window_interval);
 }
 
 SessionWindowParams::SessionWindowParams(FunctionDescriptionPtr window_desc) : WindowParams(std::move(window_desc))
@@ -742,7 +753,7 @@ WindowParamsPtr WindowParams::create(const FunctionDescriptionPtr & desc)
     __builtin_unreachable();
 }
 
-void reassignWindow(Block & block, const WindowWithBucket & window_with_bucket)
+void reassignWindow(Block & block, const Window & window)
 {
     auto fill_time = [](ColumnWithTypeAndName & column_with_type, Int64 ts) {
         auto column = IColumn::mutate(std::move(column_with_type.column));
@@ -754,10 +765,10 @@ void reassignWindow(Block & block, const WindowWithBucket & window_with_bucket)
     };
 
     if (auto * column_with_type = block.findByName(ProtonConsts::STREAMING_WINDOW_START))
-        fill_time(*column_with_type, window_with_bucket.window_start);
+        fill_time(*column_with_type, window.start);
 
     if (auto * column_with_type = block.findByName(ProtonConsts::STREAMING_WINDOW_END))
-        fill_time(*column_with_type, window_with_bucket.window_end);
+        fill_time(*column_with_type, window.end);
 }
 
 }

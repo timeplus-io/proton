@@ -23,6 +23,9 @@ struct ExpressionInfoMatcher
         bool is_aggregate_function = false;
         bool is_window_function = false;
         bool is_deterministic_function = true;
+        /// proton: starts
+        bool is_window_start_or_end_function = false;
+        /// proton: ends.
         std::unordered_set<size_t> unique_reference_tables_pos = {};
     };
 

@@ -30,7 +30,7 @@ private:
 
     void convertTwoLevel(ManyAggregatedDataVariantsPtr & data, Int64 watermark, const ChunkContextPtr & chunk_ctx);
 
-    virtual WindowsWithBucket getFinalizedWindowsWithBucket(Int64 watermark) const = 0;
+    virtual WindowsWithBuckets getFinalizedWindowsWithBuckets(Int64 watermark) const = 0;
     virtual void removeBucketsImpl(Int64 watermark) = 0;
     virtual bool needReassignWindow() const = 0;
 };

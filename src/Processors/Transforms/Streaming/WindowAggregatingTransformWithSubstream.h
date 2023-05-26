@@ -18,7 +18,7 @@ private:
 
     inline void doFinalize(Int64 watermark, const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx);
 
-    virtual WindowsWithBucket getFinalizedWindowsWithBucket(Int64 watermark, const SubstreamContextPtr & substream_ctx) const = 0;
+    virtual WindowsWithBuckets getFinalizedWindowsWithBuckets(Int64 watermark, const SubstreamContextPtr & substream_ctx) const = 0;
     virtual void removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx) = 0;
     virtual bool needReassignWindow() const = 0;
 };

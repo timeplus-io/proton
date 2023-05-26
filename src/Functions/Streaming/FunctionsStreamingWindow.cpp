@@ -3,6 +3,7 @@
 #include <Common/ProtonCommon.h>
 
 #include <Columns/ColumnTuple.h>
+#include <Columns/ColumnsDateTime.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
@@ -11,6 +12,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
+#include <Processors/Transforms/Streaming/HopHelper.h>
 
 #include <numeric>
 
@@ -28,15 +30,6 @@ namespace
 {
     using ColumnDateTime64 = ColumnDecimal<DateTime64>;
     using ColumnDateTime32 = ColumnVector<UInt32>;
-
-    std::tuple<IntervalKind::Kind, Int64> intervalKindAndUnits(const ColumnWithTypeAndName & interval_column)
-    {
-        const auto * interval_type = checkAndGetDataType<DataTypeInterval>(interval_column.type.get());
-        assert(interval_type);
-        const auto * interval_column_const_int64 = checkAndGetColumnConst<ColumnInt64>(interval_column.column.get());
-        assert(interval_column_const_int64);
-        return {interval_type->getKind(), interval_column_const_int64->getValue<Int64>()};
-    }
 
     void checkFirstArgument(const ColumnWithTypeAndName & argument, const String & function_name)
     {
@@ -107,6 +100,82 @@ namespace
             return std::make_shared<DataTypeDateTime64>(datetime64_type->getScale(), timezone);
         }
     }
+
+    /// Calculate window start / end for time column in num_units
+    /// @return (window_start, window_end) tuple
+    template <IntervalKind::Kind unit, typename TimeColumnType>
+    ColumnPtr getWindowStartAndEndFor(const TimeColumnType & time_column, UInt64 num_units, const DateLUTImpl & time_zone)
+    {
+        constexpr bool time_col_is_datetime64 = std::is_same_v<TimeColumnType, ColumnDateTime64>;
+    
+        const auto & time_data = time_column.getData();
+        size_t size = time_column.size();
+        typename TimeColumnType::MutablePtr start, end;
+        if constexpr (time_col_is_datetime64)
+        {
+            start = TimeColumnType::create(size, time_column.getScale());
+            end = TimeColumnType::create(size, time_column.getScale());
+        }
+        else
+        {
+            start = TimeColumnType::create(size);
+            end = TimeColumnType::create(size);
+        }
+
+        auto & start_data = start->getData();
+        auto & end_data = end->getData();
+
+        for (size_t i = 0; i != size; ++i)
+        {
+            if constexpr (time_col_is_datetime64)
+            {
+                start_data[i] = ToStartOfTransform<unit>::execute(time_data[i], num_units, time_zone, time_column.getScale());
+                end_data[i] = AddTime<unit>::execute(start_data[i], num_units, time_zone, time_column.getScale());
+            }
+            else
+            {
+                start_data[i] = ToStartOfTransform<unit>::execute(time_data[i], num_units, time_zone);
+                end_data[i] = AddTime<unit>::execute(start_data[i], num_units, time_zone);
+            }
+        }
+
+        MutableColumns result;
+        result.emplace_back(std::move(start));
+        result.emplace_back(std::move(end));
+        return ColumnTuple::create(std::move(result));
+    }
+
+    template <typename TimeColumnType>
+    ColumnPtr dispatchForColumnsDateTime(
+        const TimeColumnType & time_column, const Streaming::WindowInterval & interval, const DateLUTImpl & time_zone)
+    {
+        switch (interval.unit)
+        {
+            case IntervalKind::Nanosecond:
+                return getWindowStartAndEndFor<IntervalKind::Nanosecond>(time_column, interval.interval, time_zone);
+            case IntervalKind::Microsecond:
+                return getWindowStartAndEndFor<IntervalKind::Microsecond>(time_column, interval.interval, time_zone);
+            case IntervalKind::Millisecond:
+                return getWindowStartAndEndFor<IntervalKind::Millisecond>(time_column, interval.interval, time_zone);
+            case IntervalKind::Second:
+                return getWindowStartAndEndFor<IntervalKind::Second>(time_column, interval.interval, time_zone);
+            case IntervalKind::Minute:
+                return getWindowStartAndEndFor<IntervalKind::Minute>(time_column, interval.interval, time_zone);
+            case IntervalKind::Hour:
+                return getWindowStartAndEndFor<IntervalKind::Hour>(time_column, interval.interval, time_zone);
+            case IntervalKind::Day:
+                return getWindowStartAndEndFor<IntervalKind::Day>(time_column, interval.interval, time_zone);
+            case IntervalKind::Week:
+                return getWindowStartAndEndFor<IntervalKind::Week>(time_column, interval.interval, time_zone);
+            case IntervalKind::Month:
+                return getWindowStartAndEndFor<IntervalKind::Month>(time_column, interval.interval, time_zone);
+            case IntervalKind::Quarter:
+                return getWindowStartAndEndFor<IntervalKind::Quarter>(time_column, interval.interval, time_zone);
+            case IntervalKind::Year:
+                return getWindowStartAndEndFor<IntervalKind::Year>(time_column, interval.interval, time_zone);
+        }
+        __builtin_unreachable();
+    }
 }
 
 template <>
@@ -145,14 +214,18 @@ struct WindowImpl<TUMBLE>
     static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
         const auto & time_column = arguments[0];
-        const auto & from_datatype = *time_column.type.get();
-        if (isDateTime64(from_datatype))
+        auto interval = Streaming::extractInterval(arguments[1]);
+        const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, 2, 0);
+        auto time_col_type = WhichDataType(*time_column.type.get());
+        if (time_col_type.isDateTime64())
         {
-            return dispatchForColumnsDateTime64(arguments);
+            const auto & time_column_vec = assert_cast<const ColumnDateTime64 &>(*time_column.column.get());
+            return dispatchForColumnsDateTime(time_column_vec, interval, time_zone);
         }
-        else if (isDateTime(from_datatype))
+        else if (time_col_type.isDateTime())
         {
-            return dispatchForColumnsDateTime32(arguments);
+            const auto & time_column_vec = assert_cast<const ColumnDateTime32 &>(*time_column.column.get());
+            return dispatchForColumnsDateTime(time_column_vec, interval, time_zone);
         }
         else
         {
@@ -160,125 +233,6 @@ struct WindowImpl<TUMBLE>
                 "Illegal column " + time_column.name + " argument of function " + function_name + ". Must contain dates or dates with time",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
-    }
-
-    static ColumnPtr dispatchForColumnsDateTime64(const ColumnsWithTypeAndName & arguments)
-    {
-        const auto & time_column = arguments[0];
-        const auto & interval_column = arguments[1];
-        const auto * time_column_vec = checkAndGetColumn<ColumnDateTime64>(time_column.column.get());
-        const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, 2, 0);
-
-        auto interval = intervalKindAndUnits(interval_column);
-
-        switch (std::get<0>(interval))
-        {
-            case IntervalKind::Nanosecond:
-                return executeTumbleDateTime64<IntervalKind::Nanosecond>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Microsecond:
-                return executeTumbleDateTime64<IntervalKind::Microsecond>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Millisecond:
-                return executeTumbleDateTime64<IntervalKind::Millisecond>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Second:
-                return executeTumbleDateTime64<IntervalKind::Second>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Minute:
-                return executeTumbleDateTime64<IntervalKind::Minute>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Hour:
-                return executeTumbleDateTime64<IntervalKind::Hour>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Day:
-                return executeTumbleDateTime64<IntervalKind::Day>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Week:
-                return executeTumbleDateTime64<IntervalKind::Week>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Month:
-                return executeTumbleDateTime64<IntervalKind::Month>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Quarter:
-                return executeTumbleDateTime64<IntervalKind::Quarter>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Year:
-                return executeTumbleDateTime64<IntervalKind::Year>(*time_column_vec, std::get<1>(interval), time_zone);
-        }
-        __builtin_unreachable();
-    }
-
-    template <IntervalKind::Kind unit>
-    static ColumnPtr executeTumbleDateTime64(const ColumnDateTime64 & time_column, UInt64 num_units, const DateLUTImpl & time_zone)
-    {
-        const auto & time_data = time_column.getData();
-        size_t size = time_column.size();
-
-        auto scale = time_column.getScale();
-        auto start = ColumnDateTime64::create(size, scale);
-        auto end = ColumnDateTime64::create(size, scale);
-
-        auto & start_data = start->getData();
-        auto & end_data = end->getData();
-
-        for (size_t i = 0; i != size; ++i)
-        {
-            start_data[i] = ToStartOfTransform<unit>::execute(time_data[i], num_units, time_zone, scale);
-            end_data[i] = AddTime<unit>::execute(start_data[i], num_units, time_zone, scale);
-        }
-        MutableColumns result;
-        result.emplace_back(std::move(start));
-        result.emplace_back(std::move(end));
-        return ColumnTuple::create(std::move(result));
-    }
-
-    static ColumnPtr dispatchForColumnsDateTime32(const ColumnsWithTypeAndName & arguments)
-    {
-        const auto & time_column = arguments[0];
-        const auto & interval_column = arguments[1];
-        const auto * time_column_vec = checkAndGetColumn<ColumnDateTime32>(time_column.column.get());
-        const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, 2, 0);
-
-        auto interval = intervalKindAndUnits(interval_column);
-
-        switch (std::get<0>(interval))
-        {
-            case IntervalKind::Nanosecond:
-                return executeTumbleDateTime<IntervalKind::Nanosecond>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Microsecond:
-                return executeTumbleDateTime<IntervalKind::Microsecond>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Millisecond:
-                return executeTumbleDateTime<IntervalKind::Millisecond>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Second:
-                return executeTumbleDateTime<IntervalKind::Second>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Minute:
-                return executeTumbleDateTime<IntervalKind::Minute>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Hour:
-                return executeTumbleDateTime<IntervalKind::Hour>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Day:
-                return executeTumbleDateTime<IntervalKind::Day>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Week:
-                return executeTumbleDateTime<IntervalKind::Week>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Month:
-                return executeTumbleDateTime<IntervalKind::Month>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Quarter:
-                return executeTumbleDateTime<IntervalKind::Quarter>(*time_column_vec, std::get<1>(interval), time_zone);
-            case IntervalKind::Year:
-                return executeTumbleDateTime<IntervalKind::Year>(*time_column_vec, std::get<1>(interval), time_zone);
-        }
-        __builtin_unreachable();
-    }
-
-    template <IntervalKind::Kind unit>
-    static ColumnPtr executeTumbleDateTime(const ColumnDateTime32 & time_column, UInt64 num_units, const DateLUTImpl & time_zone)
-    {
-        const auto & time_data = time_column.getData();
-        size_t size = time_column.size();
-        auto start = ColumnDateTime32::create(size);
-        auto end = ColumnDateTime32::create(size);
-        auto & start_data = start->getData();
-        auto & end_data = end->getData();
-
-        for (size_t i = 0; i != size; ++i)
-        {
-            start_data[i] = ToStartOfTransform<unit>::execute(time_data[i], num_units, time_zone);
-            end_data[i] = AddTime<unit>::execute(start_data[i], num_units, time_zone);
-        }
-        MutableColumns result;
-        result.emplace_back(std::move(start));
-        result.emplace_back(std::move(end));
-        return ColumnTuple::create(std::move(result));
     }
 };
 
@@ -324,7 +278,7 @@ struct WindowImpl<HOP>
             throw Exception("Slide size shall be less than or equal to window size in hop function", ErrorCodes::BAD_ARGUMENTS);
 
         size_t time_zone_arg_num_check = arguments.size() == 4 ? 3 : 0;
-        DataTypePtr data_type = std::make_shared<DataTypeArray>(getReturnDataType(arguments, time_zone_arg_num_check));
+        DataTypePtr data_type = getReturnDataType(arguments, time_zone_arg_num_check);
         return std::make_shared<DataTypeTuple>(
             DataTypes{data_type, data_type}, Names{ProtonConsts::STREAMING_WINDOW_START, ProtonConsts::STREAMING_WINDOW_END});
     }
@@ -332,15 +286,18 @@ struct WindowImpl<HOP>
     static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
         const auto & time_column = arguments[0];
-        const auto & from_datatype = *time_column.type.get();
-        auto time_col_type = WhichDataType(from_datatype);
+        auto gcd_interval = Streaming::HopHelper::gcdWindowInterval(arguments[1], arguments[2]);
+        const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, 3, 0);
+        auto time_col_type = WhichDataType(*time_column.type.get());
         if (time_col_type.isDateTime64())
         {
-            return dispatchForColumnsDateTime64(arguments);
+            const auto & time_column_vec = assert_cast<const ColumnDateTime64 &>(*time_column.column.get());
+            return dispatchForColumnsDateTime(time_column_vec, gcd_interval, time_zone);
         }
         else if (time_col_type.isDateTime())
         {
-            return dispatchForColumnsDateTime32(arguments);
+            const auto & time_column_vec = assert_cast<const ColumnDateTime32 &>(*time_column.column.get());
+            return dispatchForColumnsDateTime(time_column_vec, gcd_interval, time_zone);
         }
         else
         {
@@ -348,208 +305,6 @@ struct WindowImpl<HOP>
                 "Illegal column " + time_column.name + " argument of function " + function_name + ". Must contain dates or dates with time",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
-    }
-
-    static ColumnPtr dispatchForColumnsDateTime64(const ColumnsWithTypeAndName & arguments)
-    {
-        const auto & time_column = arguments[0];
-        const auto & hop_interval_column = arguments[1];
-        const auto & window_interval_column = arguments[2];
-        const auto * time_column_vec = checkAndGetColumn<ColumnDateTime64>(time_column.column.get());
-        const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, 3, 0);
-
-        auto hop_interval = intervalKindAndUnits(hop_interval_column);
-        auto window_interval = intervalKindAndUnits(window_interval_column);
-
-        switch (std::get<0>(window_interval))
-        {
-            case IntervalKind::Nanosecond:
-                return executeHopDateTime64<IntervalKind::Nanosecond>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Microsecond:
-                return executeHopDateTime64<IntervalKind::Microsecond>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Millisecond:
-                return executeHopDateTime64<IntervalKind::Second>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Second:
-                return executeHopDateTime64<IntervalKind::Second>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Minute:
-                return executeHopDateTime64<IntervalKind::Minute>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Hour:
-                return executeHopDateTime64<IntervalKind::Hour>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Day:
-                return executeHopDateTime64<IntervalKind::Day>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Week:
-                return executeHopDateTime64<IntervalKind::Week>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Month:
-                return executeHopDateTime64<IntervalKind::Month>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Quarter:
-                return executeHopDateTime64<IntervalKind::Quarter>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Year:
-                return executeHopDateTime64<IntervalKind::Year>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-        }
-        __builtin_unreachable();
-    }
-
-    template <IntervalKind::Kind unit>
-    static ColumnPtr executeHopDateTime64(
-        const ColumnDateTime64 & time_column, UInt64 hop_num_units, UInt64 window_num_units, const DateLUTImpl & time_zone)
-    {
-        const auto & time_data = time_column.getData();
-        size_t size = time_column.size();
-
-        auto scale = time_column.getScale();
-
-        auto final_size = size * (window_num_units / hop_num_units);
-        auto start = ColumnArray::create(ColumnDateTime64::create(0, scale));
-        start->reserve(final_size);
-        auto end = ColumnArray::create(ColumnDateTime64::create(0, scale));
-        end->reserve(final_size);
-
-        /// In order to avoid memory copy, we manipulate array and offsets by ourselves
-        auto & start_data = start->getData();
-        auto & start_offsets = start->getOffsets();
-
-        auto & end_data = end->getData();
-        auto & end_offsets = end->getOffsets();
-
-        UInt64 offset = 0;
-
-        for (size_t i = 0; i < size; ++i)
-        {
-            auto event_ts = time_data[i];
-            /// Note: hop_num_units as the starting of the `last` window of the hopping
-            auto wstart = ToStartOfTransform<unit>::execute(time_data[i], hop_num_units, time_zone, scale);
-            auto wend = AddTime<unit>::execute(wstart, window_num_units, time_zone, scale);
-
-            do
-            {
-                start_data.insert(wstart);
-                end_data.insert(wend);
-                ++offset;
-
-                /// Slide to left until the right of the window passes (<) `component.whole`
-                wstart = AddTime<unit>::execute(wstart, -1 * hop_num_units, time_zone, scale);
-                wend = AddTime<unit>::execute(wend, -1 * hop_num_units, time_zone, scale);
-            } while (wend > event_ts);
-
-            start_offsets.push_back(offset);
-            end_offsets.push_back(offset);
-        }
-
-        MutableColumns result;
-        result.emplace_back(std::move(start));
-        result.emplace_back(std::move(end));
-        return ColumnTuple::create(std::move(result));
-    }
-
-    static ColumnPtr dispatchForColumnsDateTime32(const ColumnsWithTypeAndName & arguments)
-    {
-        const auto & time_column = arguments[0];
-        const auto & hop_interval_column = arguments[1];
-        const auto & window_interval_column = arguments[2];
-        const auto * time_column_vec = checkAndGetColumn<ColumnUInt32>(time_column.column.get());
-        const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, 3, 0);
-
-        auto hop_interval = intervalKindAndUnits(hop_interval_column);
-        auto window_interval = intervalKindAndUnits(window_interval_column);
-
-        switch (std::get<0>(window_interval))
-        {
-            case IntervalKind::Nanosecond:
-                return executeHopDateTime<IntervalKind::Nanosecond>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Microsecond:
-                return executeHopDateTime<IntervalKind::Microsecond>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Millisecond:
-                return executeHopDateTime<IntervalKind::Millisecond>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Second:
-                return executeHopDateTime<IntervalKind::Second>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Minute:
-                return executeHopDateTime<IntervalKind::Minute>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Hour:
-                return executeHopDateTime<IntervalKind::Hour>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Day:
-                return executeHopDateTime<IntervalKind::Day>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Week:
-                return executeHopDateTime<IntervalKind::Week>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Month:
-                return executeHopDateTime<IntervalKind::Month>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Quarter:
-                return executeHopDateTime<IntervalKind::Quarter>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Year:
-                return executeHopDateTime<IntervalKind::Year>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-        }
-        __builtin_unreachable();
-    }
-
-    template <IntervalKind::Kind unit>
-    static ColumnPtr
-    executeHopDateTime(const ColumnDateTime32 & time_column, UInt64 hop_num_units, UInt64 window_num_units, const DateLUTImpl & time_zone)
-    {
-        const auto & time_data = time_column.getData();
-        size_t size = time_column.size();
-
-        auto final_size = size * (window_num_units / hop_num_units);
-        auto start = ColumnArray::create(ColumnDateTime32::create(0));
-        start->reserve(final_size);
-        auto end = ColumnArray::create(ColumnDateTime32::create(0));
-        end->reserve(final_size);
-
-        /// In order to avoid memory copy, we manipulate array and offsets by ourselves
-        auto & start_data = start->getData();
-        auto & start_offsets = start->getOffsets();
-
-        auto & end_data = end->getData();
-        auto & end_offsets = end->getOffsets();
-
-        UInt64 offset = 0;
-
-        for (size_t i = 0; i < size; ++i)
-        {
-            /// event_ts is a round down to the latest unit which will be its
-            /// current second, minute, hour, day, week, month, quarter, year etc
-            auto event_ts = time_data[i];
-            auto wstart = ToStartOfTransform<unit>::execute(event_ts, hop_num_units, time_zone);
-            auto wend = AddTime<unit>::execute(wstart, window_num_units, time_zone);
-
-            do
-            {
-                start_data.insert(Field(wstart));
-                end_data.insert(Field(wend));
-                ++offset;
-
-                /// Slide to left until the right of the window passes (<) `event_ts`
-                wstart = AddTime<unit>::execute(wstart, -1 * hop_num_units, time_zone);
-                wend = AddTime<unit>::execute(wend, -1 * hop_num_units, time_zone);
-            } while (wend > event_ts);
-
-            start_offsets.push_back(offset);
-            end_offsets.push_back(offset);
-        }
-        MutableColumns result;
-        result.emplace_back(std::move(start));
-        result.emplace_back(std::move(end));
-        return ColumnTuple::create(std::move(result));
     }
 };
 

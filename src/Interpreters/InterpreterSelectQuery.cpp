@@ -3115,19 +3115,21 @@ void InterpreterSelectQuery::executeStreamingAggregation(
 
     ssize_t delta_col_pos = isChangelog() ? header_before_aggregation.getPositionByName(ProtonConsts::RESERVED_DELTA_FLAG) : -1;
 
+    size_t window_keys_num = 0;
+
     for (const auto & key : query_analyzer->aggregationKeys())
     {
         if ((key.name == ProtonConsts::STREAMING_WINDOW_END) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type)))
         {
             keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
             streaming_group_by = Streaming::Aggregator::Params::GroupBy::WINDOW_END;
+            ++window_keys_num;
         }
-        else if (
-            (key.name == ProtonConsts::STREAMING_WINDOW_START) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type))
-            && (streaming_group_by != Streaming::Aggregator::Params::GroupBy::WINDOW_END))
+        else if ((key.name == ProtonConsts::STREAMING_WINDOW_START) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type)))
         {
             keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
             streaming_group_by = Streaming::Aggregator::Params::GroupBy::WINDOW_START;
+            ++window_keys_num;
         }
         else
             keys.push_back(header_before_aggregation.getPositionByName(key.name));
@@ -3203,6 +3205,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         settings.keep_windows,
         streaming_group_by,
         delta_col_pos,
+        window_keys_num,
         query_info.streaming_window_params);
 
     auto merge_threads = max_streams;

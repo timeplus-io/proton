@@ -30,11 +30,13 @@ void WindowAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     doFinalize(watermark, substream_ctx, chunk_ctx);
     auto end = MonotonicMilliseconds::now();
 
+    substream_ctx->watermark = watermark;
+
     LOG_DEBUG(
         log, "Took {} milliseconds to finalize aggregation in substream id={}. watermark={}", end - start, substream_ctx->id, watermark);
 
     /// Do memory arena recycling by last finalized watermark
-    removeBucketsImpl(watermark, substream_ctx);
+    removeBucketsImpl(substream_ctx->watermark, substream_ctx);
 }
 
 void WindowAggregatingTransformWithSubstream::doFinalize(
@@ -53,16 +55,25 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
 
     Block block;
 
-    for (const auto & window_with_bucket : getFinalizedWindowsWithBucket(watermark, substream_ctx))
+    for (const auto & window_with_buckets : getFinalizedWindowsWithBuckets(watermark, substream_ctx))
     {
-        if (params->final)
-            block = params->aggregator.convertOneBucketToBlockFinal(data_variant, ConvertAction::STREAMING_EMIT, window_with_bucket.bucket);
+        if (window_with_buckets.buckets.size() == 1)
+        {
+            if (params->final)
+                block = params->aggregator.convertOneBucketToBlockFinal(
+                    data_variant, ConvertAction::STREAMING_EMIT, window_with_buckets.buckets[0]);
+            else
+                block = params->aggregator.convertOneBucketToBlockIntermediate(
+                    data_variant, ConvertAction::STREAMING_EMIT, window_with_buckets.buckets[0]);
+        }
         else
-            block = params->aggregator.convertOneBucketToBlockIntermediate(
-                data_variant, ConvertAction::STREAMING_EMIT, window_with_bucket.bucket);
+        {
+            block = params->aggregator.spliceAndConvertBucketsToBlock(
+                data_variant, params->final, ConvertAction::INTERNAL_MERGE, window_with_buckets.buckets);
+        }
 
         if (needReassignWindow())
-            reassignWindow(block, window_with_bucket);
+            reassignWindow(block, window_with_buckets.window);
 
         if (params->emit_version && params->final)
             emitVersion(block, substream_ctx);

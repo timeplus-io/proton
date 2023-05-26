@@ -86,9 +86,11 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
                 switch (transform_params->params.window_params->type)
                 {
                     case WindowType::TUMBLE:
-                        return std::make_shared<TumbleAggregatingTransform>(header, transform_params);
+                        return std::make_shared<TumbleAggregatingTransform>(
+                            header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
                     case WindowType::HOP:
-                        return std::make_shared<HopAggregatingTransform>(header, transform_params);
+                        return std::make_shared<HopAggregatingTransform>(
+                            header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
                     case WindowType::SESSION:
                         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Parallel processing session window is not supported");
                     default:

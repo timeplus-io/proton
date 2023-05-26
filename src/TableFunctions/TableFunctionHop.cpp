@@ -55,16 +55,6 @@ String TableFunctionHop::functionNamePrefix() const
     return ProtonConsts::HOP_FUNC_NAME + "(";
 }
 
-DataTypePtr TableFunctionHop::getElementType(size_t i, const DataTypeTuple * tuple) const
-{
-    DataTypePtr element_type = tuple->getElements()[i];
-
-    assert(isArray(element_type));
-
-    auto array_type = checkAndGetDataType<DataTypeArray>(element_type.get());
-    return array_type->getNestedType();
-}
-
 void registerTableFunctionHop(TableFunctionFactory & factory)
 {
     factory.registerFunction("hop", []() -> TableFunctionPtr { return std::make_shared<TableFunctionHop>("hop"); });

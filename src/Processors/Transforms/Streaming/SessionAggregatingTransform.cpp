@@ -52,19 +52,19 @@ std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk &
     return result;
 }
 
-WindowsWithBucket SessionAggregatingTransform::getFinalizedWindowsWithBucket(Int64 watermark) const
+WindowsWithBuckets SessionAggregatingTransform::getFinalizedWindowsWithBuckets(Int64 watermark) const
 {
-    WindowsWithBucket windows_with_bucket;
+    WindowsWithBuckets windows_with_buckets;
     for (const auto & session : sessions)
     {
         if (session->id <= watermark)
         {
             assert(!session->active);
-            windows_with_bucket.emplace_back(WindowWithBucket{session->win_start, session->win_end, session->id});
+            windows_with_buckets.emplace_back(WindowWithBuckets{{session->win_start, session->win_end}, {session->id}});
         }
     }
 
-    return windows_with_bucket;
+    return windows_with_buckets;
 }
 
 void SessionAggregatingTransform::removeBucketsImpl(Int64 watermark)

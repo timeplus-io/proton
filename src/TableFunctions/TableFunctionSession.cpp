@@ -42,11 +42,6 @@ String TableFunctionSession::functionNamePrefix() const
     return ProtonConsts::SESSION_FUNC_NAME + "(";
 }
 
-DataTypePtr TableFunctionSession::getElementType(size_t i, const DataTypeTuple * tuple) const
-{
-    return tuple->getElements()[i];
-}
-
 void registerTableFunctionSession(TableFunctionFactory & factory)
 {
     factory.registerFunction("session", []() -> TableFunctionPtr { return std::make_shared<TableFunctionSession>("session"); });

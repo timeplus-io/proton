@@ -54,7 +54,6 @@ void AggregatingStepWithSubstream::transformPipeline(QueryPipelineBuilder & pipe
     auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version);
 
     /// If there are several sources, we perform aggregation separately (Assume it's shuffled data by substream keys)
-    size_t counter = 0;
     pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
         if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
             || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
@@ -67,7 +66,7 @@ void AggregatingStepWithSubstream::transformPipeline(QueryPipelineBuilder & pipe
                 case WindowType::HOP:
                     return std::make_shared<HopAggregatingTransformWithSubstream>(header, transform_params);
                 case WindowType::SESSION:
-                    return std::make_shared<SessionAggregatingTransformWithSubstream>(header, transform_params, counter++);
+                    return std::make_shared<SessionAggregatingTransformWithSubstream>(header, transform_params);
                 default:
                     throw Exception(
                         ErrorCodes::NOT_IMPLEMENTED,

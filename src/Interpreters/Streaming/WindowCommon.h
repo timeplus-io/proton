@@ -1,12 +1,12 @@
 #pragma once
 
 #include <Columns/ColumnsDateTime.h>
+#include <Interpreters/Streaming/SessionInfo.h>
 #include <Parsers/IAST_fwd.h>
 #include <base/types.h>
 #include <Common/DateLUTImpl.h>
 #include <Common/IntervalKind.h>
 #include <Common/TypePromotion.h>
-#include <Interpreters/Streaming/SessionInfo.h>
 
 namespace DB
 {
@@ -47,9 +47,16 @@ ASTs checkAndExtractTumbleArguments(const ASTFunction * func_ast);
 ASTs checkAndExtractHopArguments(const ASTFunction * func_ast);
 ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast);
 
+struct WindowInterval
+{
+    Int64 interval;
+    IntervalKind::Kind unit;
+};
+
 void checkIntervalAST(const ASTPtr & ast, const String & msg = "Invalid interval");
 void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Kind & kind);
-std::pair<Int64, IntervalKind> extractInterval(const ASTFunction * ast);
+WindowInterval extractInterval(const ASTFunction * ast);
+WindowInterval extractInterval(const ColumnWithTypeAndName & interval_column);
 
 UInt32 toStartTime(UInt32 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone);
 Int64 toStartTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone, UInt32 time_scale);
@@ -108,12 +115,12 @@ public:
         UNREACHABLE();
     }
 
-    static BaseScaleInterval toBaseScale(const std::pair<Int64, IntervalKind> & interval)
+    static BaseScaleInterval toBaseScale(const WindowInterval & interval)
     {
-        return toBaseScale(interval.first, interval.second);
+        return toBaseScale(interval.interval, interval.unit);
     }
 
-    std::pair<Int64, IntervalKind> toIntervalKind(IntervalKind::Kind to_kind) const;
+    WindowInterval toIntervalKind(IntervalKind::Kind to_kind) const;
 
     BaseScaleInterval & operator+(const BaseScaleInterval & bs)
     {
@@ -153,7 +160,7 @@ protected:
 using BasedScaleIntervalPtr = std::shared_ptr<BaseScaleInterval>;
 
 ASTPtr makeASTInterval(Int64 num_units, IntervalKind kind);
-ASTPtr makeASTInterval(const std::pair<Int64, IntervalKind> & interval);
+ASTPtr makeASTInterval(const WindowInterval & interval);
 
 void convertToSameKindIntervalAST(const BaseScaleInterval & bs1, const BaseScaleInterval & bs2, ASTPtr & ast1, ASTPtr & ast2);
 
@@ -195,6 +202,9 @@ struct HopWindowParams : WindowParams
 {
     Int64 window_interval = 0;
     Int64 slide_interval = 0;
+    /// Base interval is the greatest common divisor of window_interval and slide_interval
+    /// By splitting a window into multiple base-windows, a base-window can be shared by multiple windows
+    Int64 gcd_interval = 0;
     IntervalKind::Kind interval_kind = IntervalKind::Second;
 
     HopWindowParams(FunctionDescriptionPtr window_desc);
@@ -212,15 +222,22 @@ struct SessionWindowParams : WindowParams
     SessionWindowParams(FunctionDescriptionPtr window_desc);
 };
 
-struct WindowWithBucket
+struct Window
 {
-    Int64 window_start;
-    Int64 window_end;
-    size_t bucket;
+    Int64 start;
+    Int64 end;
 };
-using WindowsWithBucket = std::vector<WindowWithBucket>;
 
-void reassignWindow(Block & block, const WindowWithBucket & window_with_bucket);
+struct WindowWithBuckets
+{
+    Window window;
+    /// The time buckets where the current window data is located in window aggregation
+    /// For hop window, there are multiple base time buckets
+    std::vector<size_t> buckets;
+};
+using WindowsWithBuckets = std::vector<WindowWithBuckets>;
+
+void reassignWindow(Block & block, const Window & window);
 
 }
 }

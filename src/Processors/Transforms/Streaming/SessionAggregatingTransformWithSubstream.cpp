@@ -7,7 +7,7 @@ namespace DB
 namespace Streaming
 {
 SessionAggregatingTransformWithSubstream::SessionAggregatingTransformWithSubstream(
-    Block header, AggregatingTransformParamsPtr params_, size_t current_index)
+    Block header, AggregatingTransformParamsPtr params_)
     : WindowAggregatingTransformWithSubstream(
         std::move(header),
         std::move(params_),
@@ -61,10 +61,10 @@ SessionAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, c
     return result;
 }
 
-WindowsWithBucket SessionAggregatingTransformWithSubstream::getFinalizedWindowsWithBucket(
+WindowsWithBuckets SessionAggregatingTransformWithSubstream::getFinalizedWindowsWithBuckets(
     Int64 watermark, const SubstreamContextPtr & substream_ctx) const
 {
-    WindowsWithBucket windows_with_bucket;
+    WindowsWithBuckets windows_with_buckets;
 
     auto & sessions = substream_ctx->getField<SessionInfoQueue>();
     for (const auto & session : sessions)
@@ -72,11 +72,11 @@ WindowsWithBucket SessionAggregatingTransformWithSubstream::getFinalizedWindowsW
         if (session->id <= watermark)
         {
             assert(!session->active);
-            windows_with_bucket.emplace_back(WindowWithBucket{session->win_start, session->win_end, session->id});
+            windows_with_buckets.emplace_back(WindowWithBuckets{{session->win_start, session->win_end}, {session->id}});
         }
     }
 
-    return windows_with_bucket;
+    return windows_with_buckets;
 }
 
 void SessionAggregatingTransformWithSubstream::removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx)
