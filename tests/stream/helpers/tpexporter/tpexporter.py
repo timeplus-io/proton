@@ -1,10 +1,11 @@
 import os, sys, logging, datetime, time, uuid, traceback, json, requests
 import multiprocessing as mp
 from enum import Enum, unique
-import swagger_client
-from swagger_client.rest import ApiException
+#import swagger_client
+#from swagger_client.rest import ApiException
 from clickhouse_driver import Client
-from tpclient import TPViewRest, TPUdfRest, TPStreamRest, TPSourceRest, TPSinkRest, TPTopoRest, TPSSEQueryRest, TPRestSession, DataObjType, TPProtocol, TPNative, TPNativeSession, ProtocolType, NativeProtocol, TPNativeResponse
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from .tpclient import TPViewRest, TPUdfRest, TPStreamRest, TPSourceRest, TPSinkRest, TPTopoRest, TPSSEQueryRest, TPRestSession, DataObjType, TPProtocol, TPNative, TPNativeSession, ProtocolType, NativeProtocol, TPNativeResponse
 
 import timeplus
 #from timeplus import Environment, Stream
@@ -149,6 +150,36 @@ class TPWorkSpace(object):
     def append_import_dependencies(self, data_obj):
         self._import_dependencies.append(data_obj)
     
+    def clean_import_dependencies(self):
+        #todo: for each item in self._import_dependencies, call delete() method and if the return of delete() is True, remove the item from self._import_dependencies
+        logger.info(f"cleaning import dependencies for workspace {self.name} starts...")
+        cleaned_data_objs = []
+        none_streams = []
+        streams = []
+        for dependency in self._import_dependencies:
+            if dependency.type == DataObjType.STREAM:
+                streams.append(dependency)
+            else:
+                none_streams.append(dependency)
+
+        for dependency in none_streams:
+            delete_res = dependency.delete(self)
+            time.sleep(1)
+            logger.info(f"workspace.name = {self.name}, data_obj.name = {dependency.name}, data_obj.type = {dependency.type}, delete_res = {delete_res}")
+            if not isinstance(delete_res, BaseException) and delete_res is True:
+                cleaned_data_objs.append(dependency)
+        
+
+        for dependency in streams:
+            delete_res = dependency.delete(self)
+            time.sleep(1)
+            logger.info(f"workspace.name = {self.name}, data_obj.name = {dependency.name}, data_obj.type = {dependency.type}, delete_res = {delete_res}")
+            if not isinstance(delete_res, BaseException) and delete_res is True:
+                cleaned_data_objs.append(dependency)
+        for item in cleaned_data_objs:
+            self._import_dependencies.remove(item)
+
+
 
     @classmethod
     def create_from_spec(cls, spec):
@@ -287,7 +318,7 @@ class TPWorkSpace(object):
 
 
     def __str__(self): 
-        return f"name = {self.name}, type = {self.type}, address = {self.address}, api_key_env_var = {self.api_key_env_var}"
+        return f"name = {self.name}, type = {self.type}, address = {self.address}, api_key_env_var = {self.api_key_env_var}, status = {self.status}, access_privilege = {self.access_privilege}"
 
 
 class TPExportStreamRule(object):
@@ -368,6 +399,9 @@ class TPDataObj(object):
         self.schema_export_tracking = {}
         self.data_export_tracking = {}
     
+
+
+  
     @classmethod
     def create_from_spec(cls, data_obj_spec, workspace, data_exporting_policy): #data_obj_sepc is what defined in config.json,
         # logger.debug(f"data_obj_spec = {data_obj_spec}, workspace.name = {workspace.name}, workspace.status = {workspace.status}")
@@ -385,7 +419,7 @@ class TPDataObj(object):
                 dependency_discovery = data_obj_spec.get("dependency_discovery")
                 dependency_stream_data_volume = data_obj_spec.get("depends_stream_data_volume")
                 tp_data_obj = cls(id, name, type, data_obj_properties, state, workspace, dependency_discovery,data_exporting_policy,dependency_stream_data_volume)
-                logger.debug(f"tp_data_obj.name = {tp_data_obj.name}, tp_data_obj.type = {tp_data_obj.type}, tp_data_obj.properties = {tp_data_obj.properties}")
+                logger.info(f"tp_data_obj = {tp_data_obj}, created")
                 return tp_data_obj
             else: # todo: data_obj creating based on file based workspace logic
                 pass
@@ -460,6 +494,7 @@ class TPDataObj(object):
                 
                 dependency_discovery = "auto"
                 source_data_obj = TPDataObj(data_obj_id, data_obj_name, data_obj_type, data_obj_properties, state, workspace, dependency_discovery, data_exporting_policy, depends_stream_data_volume = None)
+                logger.info(f"source_data_obj: {source_data_obj}, created")
         except(BaseException) as error:
             logger.debug(f"error = {error}")
             traceback.print_exc()
@@ -484,29 +519,96 @@ class TPDataObj(object):
     def set_dependency(self, dependencies_list):
         self.dependencies = dependencies_list
 
-    def read_lineage(self): #read linage from workspace via rest API
-        print()
+    # def read_lineage(self): #read linage from workspace via rest API
+    #     print()
     
-    def dependency(self, data_obj):
-        print()
-        depend_graph = []
-        return depend_graph
+    # def dependency(self, data_obj):
+    #     print()
+    #     depend_graph = []
+    #     return depend_graph
 
-    def _dependency_export(self):
-        print()
+    # def _dependency_export(self):
+    #     print()
     
 
     def _get_data(self, source_workspace, target_workspace):
-        logger.debug(f"getting data of data_obj.name = {self.name}, source_workspace_.address = {source_workspace.address}, target_workspace.address = {target_workspace.address}")
+        logger.debug(f"getting data of data_obj.name = {self.name}, source_workspace_.address = {source_workspace.address}, target_workspace.address = {target_workspace.address}, target_workspace.access_privilege = {target_workspace.access_privilege}")
+
+
+
+    def delete(self, target_workspace = None):
+        #if workspace is None, delete data_obj from data_obj's workspace, if workspace is not None delete data_obj from workspace
+        logger.debug(f"deleting data_obj.name = {self.name}, data_obj.type = {self.type}, data_obj.workspace.name = {self.workspace.name}, target_workspace = {target_workspace}")
+        if target_workspace is None:
+            target_workspace = self.workspace
+
+        # if self.dependencies is not None:
+        #     for dependency in reversed(self.dependencies):
+        #         if isinstance(dependency,TPDataObj): #dependency is a TPDataObj
+        #             logger.debug(f"data_obj.name = {self.name}, dependency = {dependency.name}, dependency_type = {dependency.type}, dependency delete starts")
+        #             dependency.delete(target_workspace)        
+    
+        try: 
+            access_privilege = target_workspace.access_privilege
+            logger.debug(f"target_workspace.name = {target_workspace.name}, access_privilege = {access_privilege}")
+            if access_privilege == WorkspacePrivilege.READ_WRITE or access_privilege == WorkspacePrivilege.WRITE_ONLY:
+                res = ''
+                if target_workspace.type in (WorkspaceType.ADDRESS, WorkspaceType.NATIVE): #only handling exporting to workspace with type of address and native
+                    target_workspace_host = target_workspace.properties[NativeProtocol.HOST.value]
+                    target_workspace_port = target_workspace.properties[NativeProtocol.PORT.value]
+                    target_workspace_rest_port = target_workspace.properties[NativeProtocol.REST_PORT.value]                
+                    if self.type == DataObjType.VIEW or self.type == DataObjType.STREAM or self.type == DataObjType.UDF:
+                        logger.debug(f"data_obj_name = {self.name}, target_workspace.name = {target_workspace.name}, target_workspace.type = {target_workspace.type}, target_workspace.address = {target_workspace.address}, target_workspace_host = {target_workspace_host}, target_workspace_port = {target_workspace_port}, target_workspace_rest_port = {target_workspace_rest_port}")
+                        # target_api_key_env_var = target_workspace.api_key_env_var
+                        # target_api_key = os.environ.get(target_api_key_env_var)
+                        # tp_obj_rest = TPRestClass[self.type.value](target_workspace.address,target_api_key,self.properties)
+                        if target_workspace.properties[ProtocolType.WRITE.value] == TPProtocol.TPRest: #based on the write_protocol property to decide TPRestSession or TPNativeSession is used for exporting
+                            with TPRestSession(self.type, target_workspace.address, target_workspace.api_key_env_var,self.properties).session() as tp_rest_session:
+                                res = tp_rest_session.delete()
+                                print(f"res of tp_rest_session.delete() = {res}")
+                        elif target_workspace.properties[ProtocolType.WRITE.value] == TPProtocol.TPNative:         
+                            with TPNativeSession(self.type, target_workspace_host, target_workspace_port, target_workspace_rest_port, **self.properties).session() as tp_native_session:
+                                res = tp_native_session.delete()                        
+                                logger.debug(f"res of tp_native_session.delete() = {res}")
+                        if isinstance(res, requests.Response) or isinstance(res, TPNativeResponse):
+                            if isinstance(res, requests.Response):
+                                logger.debug(f"data_obj_name = {self.name}, data_obj_type = {self.type}, properties = {self.properties}, data_obj delete res = {res}, res.message = {res.json()}")
+                                if  res.status_code == 200 or  res.status_code == 201:
+                                    return True
+                                else:
+                                    logger.debug(f"data_obj_name = {self.name}, data_obj_type = {self.type}, properties = {self.properties}, data_obj delete res = {res}, res.message = {res.text}")
+                                    return False
+                            else:
+                                logger.debug(f"data_obj_name = {self.name}, data_obj_type = {self.type}, properties = {self.properties}, data_obj delete res.result = {res.result}") 
+                                return True                                                                
+                        else: #if res is not a requests.Response, it's a error caught
+                            logger.debug(f"data_obj_name = {self.name}, data_obj_type = {self.type}, properties = {self.properties}, data_obj delete res = {res}")
+                            return False
+                    else:
+                        logger.info(f"data_obj_name = {self.name}, data_obj_type = {self.type}, not deleteable skipped")
+                        raise Exception(f"data_obj_name = {self.name}, data_obj_type = {self.type}, not deleteable skipped")
+                else:
+                    logger.info(f"data_obj_name = {self.name}, data_obj_type = {self.type}, target_workspace.type = {target_workspace.type}, skipped")              
+                    pass #todo: export to file based workspace logic
+                    raise Exception(f"data_obj_name = {self.name}, data_obj_type = {self.type},target_workspace.type = {target_workspace.type}, not support file protocol based exporting now, skipped") 
+            else:
+                logger.info(f"target_workspace.name = {target_workspace.name}, workspace.type = {target_workspace.type}, workspace.address = {target_workspace.address}, workspace.access_privilege = {target_workspace.access_privilege}, schema write is not allowed, skip") 
+                raise Exception(f"target_workspace.name = {target_workspace.name}, workspace.type = {target_workspace.type}, workspace.address = {target_workspace.address}, workspace.access_privilege = {target_workspace.access_privilege}, schema write is not allowed, skip")                   
+        except(BaseException) as error:
+            logger.debug(f"Exception, error = {error}")
+            traceback.print_exc() 
+            return error       
+        
+        logger.debug(f"deleting data_obj.name = {self.name}, data_obj.type = {self.type}, data_obj.workspace.name = {self.workspace.name}")
 
     def exports_data(self, target_workspaces): #todo: logging
                 
-        print(f"getting data of data_obj.name = {self.name}, source_workspace.address = {self.workspace.address}, target_workspaces = {target_workspaces}, data exporting.")
+        print(f"data_obj.name = {self.name}, source_workspace.address = {self.workspace.address}, target_workspaces = {target_workspaces}, data exporting....")
         #get data from source_work_space
         data_volume = 0
         source_api_key_env_var = self.workspace.api_key_env_var
         source_api_key = os.environ.get(source_api_key_env_var)
-        snap_shot_volumn = 1000 #hardcode 1000 rows for now, todo: get snap_shot_volumn from config
+        snap_shot_volumn = 100 #hardcode 100 rows for now, todo: get snap_shot_volumn from config
         engine = self.properties.get("engine")
         try:
             if self.state == DataObjState.SCHEMA_EXPORTED:
@@ -518,12 +620,12 @@ class TPDataObj(object):
                     tp_sse_rest.query()
                     query_res = tp_sse_rest.query_result()
                     data = query_res["data"]
-                    print(f"data_obj_name = {self.name}, data_obj_type = {self.type}, engine = {engine}")
+                    #print(f"data_obj_name = {self.name}, data_obj_type = {self.type}, engine = {engine}")
                     data_volume = len(data)
                     #print(f"getting data of data_obj.name = {self.name}, source_workspace.address = {self.workspace.address}, data_volume = {data_volume}, retreived.")
                     ingest_payload = query_res
                     #print(f"ingest_payload = {ingest_payload}")
-                
+                    logger.info(f"data_obj_name = {self.name}, data_obj_type = {self.type}, engine = {engine}, data_volume = {data_volume}, retreived.")
                     if data_volume > 0:
                         for target_workspace in target_workspaces: #going through all target_workspaces with exception cathcing
                             try: 
@@ -557,13 +659,15 @@ class TPDataObj(object):
                                     else:
                                         print() #todo: export data to file based workspace logic here
                                         raise Exception(f"File protocol based exporting now supported.")
-                                print(f"data_obj_name = {self.name}, data_obj_type = {self.type}, target_workspace.name = {target_workspace.name}, target_workspace.access_privilege ={target_workspace.access_privilege}, data write is now allowed and skipped.")
+                                else:
+                                    print(f"data_obj_name = {self.name}, data_obj_type = {self.type}, target_workspace.name = {target_workspace.name}, target_workspace.access_privilege ={target_workspace.access_privilege}, data write is not allowed and skipped.")
                             except(BaseException) as error:
                                 logger.debug(f"Exception, error = {error}")
                                 traceback.print_exc()
                     else:
-                        print(f"data_obj_name = {self.name}, data_obj_type = {self.type}, ingestion skipped.")
+                        print(f"data_obj_name = {self.name}, data_obj_type = {self.type}, retrieved data_volume = {data_volume}, ingestion skipped.")
             else:
+                print(f"data_obj_name = {self.name}, data_obj_type = {self.type}, data_obj_state = {self.state}, schema not exported, ingestion skipped.")
                 raise Exception(f"data_obj_name = {self.name}, data_obj_type = {self.type}, data_obj_state = {self.state}, schema not exported, ingestion skipped.")
             return
         except(BaseException) as error:
@@ -595,6 +699,7 @@ class TPDataObj(object):
     def _export_schema_2_site(self, target_workspace): #only view, stream, udfs so far
         try:
             if target_workspace.type in (WorkspaceType.ADDRESS, WorkspaceType.NATIVE): #only handling exporting to workspace with type of address and native
+                engine = self.properties.get("engine")
                 target_workspace_host = target_workspace.properties[NativeProtocol.HOST.value]
                 target_workspace_port = target_workspace.properties[NativeProtocol.PORT.value]
                 target_workspace_rest_port = target_workspace.properties[NativeProtocol.REST_PORT.value]                
@@ -603,37 +708,43 @@ class TPDataObj(object):
                     # target_api_key_env_var = target_workspace.api_key_env_var
                     # target_api_key = os.environ.get(target_api_key_env_var)
                     # tp_obj_rest = TPRestClass[self.type.value](target_workspace.address,target_api_key,self.properties)
-                    res = ''
-                    if target_workspace.properties[ProtocolType.WRITE.value] == TPProtocol.TPRest: #based on the write_protocol property to decide TPRestSession or TPNativeSession is used for exporting
-                        with TPRestSession(self.type, target_workspace.address, target_workspace.api_key_env_var,self.properties).session() as tp_rest_session:
-                            res = tp_rest_session.create()
-                            logger.debug(f"res of tp_rest_session.create() = {res}")
-                    elif target_workspace.properties[ProtocolType.WRITE.value] == TPProtocol.TPNative:         
-                        with TPNativeSession(self.type, target_workspace_host, target_workspace_port, target_workspace_rest_port, **self.properties).session() as tp_native_session:
-                            res = tp_native_session.create()                        
-                            logger.debug(f"res of tp_native_session.create() = {res}")
-                    if isinstance(res, requests.Response) or isinstance(res, TPNativeResponse):
-                        if isinstance(res, requests.Response):
-                            logger.debug(f"data_obj_name = {self.name}, data_obj_type = {self.type}, properties = {self.properties}, data_obj schema export res = {res}, res.message = {res.json()}")
-                            if  res.status_code == 200 or  res.status_code == 201:
-                                self.schema_export_tracking[target_workspace.name]["state"] = DataObjState.SCHEMA_EXPORTED.value #use value here for JSON serializable
-                                self.schema_export_tracking[target_workspace.name]["response"] = res.json()
-                                target_workspace.append_import_dependencies(self)                           
+                    if engine is not None and engine == "ExternalStream": #external stream won't be exported
+                        logger.debug(f"data_obj_name = {self.name}, data_obj_type = {self.type}, engine = {engine}, external stream schema exporting skipped.")
+                        self.schema_export_tracking[target_workspace.name]["state"] = DataObjState.SCHEMA_EXPORT_SKIPPED.value
+                        raise Exception(f"data_obj_name = {self.name}, data_obj_type = {self.type}, engine = {engine}, external stream schema exporting skipped.")
+                    else:                                         
+                        res = ''
+                        if target_workspace.properties[ProtocolType.WRITE.value] == TPProtocol.TPRest: #based on the write_protocol property to decide TPRestSession or TPNativeSession is used for exporting
+                            with TPRestSession(self.type, target_workspace.address, target_workspace.api_key_env_var,self.properties).session() as tp_rest_session:
+                                res = tp_rest_session.create()
+                                logger.debug(f"res of tp_rest_session.create() = {res}")
+                        elif target_workspace.properties[ProtocolType.WRITE.value] == TPProtocol.TPNative:                              
+                            with TPNativeSession(self.type, target_workspace_host, target_workspace_port, target_workspace_rest_port, **self.properties).session() as tp_native_session:
+                                res = tp_native_session.create()                        
+                                logger.debug(f"res of tp_native_session.create() = {res}")
+                        if isinstance(res, requests.Response) or isinstance(res, TPNativeResponse):
+                            if isinstance(res, requests.Response):
+                                logger.debug(f"data_obj_name = {self.name}, data_obj_type = {self.type}, properties = {self.properties}, data_obj schema export res = {res}, res.message = {res.json()}")
+                                if  res.status_code == 200 or  res.status_code == 201:
+                                    self.schema_export_tracking[target_workspace.name]["state"] = DataObjState.SCHEMA_EXPORTED.value #use value here for JSON serializable
+                                    self.schema_export_tracking[target_workspace.name]["response"] = res.json()
+                                    target_workspace.append_import_dependencies(self)                           
+                                else:
+                                    self.schema_export_tracking[target_workspace.name]["state"] = DataObjState.SCHEMA_EXPORT_FAILED.value #use value here for JSON serializable
+                                    self.schema_export_tracking[target_workspace.name]["response"] = res.json()
+                                logger.debug(f'self.schema_export_tracking[{target_workspace.name}]["state"] = {self.schema_export_tracking[target_workspace.name]["state"]}')
                             else:
-                                self.schema_export_tracking[target_workspace.name]["state"] = DataObjState.SCHEMA_EXPORT_FAILED.value #use value here for JSON serializable
-                                self.schema_export_tracking[target_workspace.name]["response"] = res.json()
+                                logger.debug(f"data_obj_name = {self.name}, data_obj_type = {self.type}, properties = {self.properties}, data_obj schema export res.result = {res.result}") 
+                                self.schema_export_tracking[target_workspace.name]["state"] = DataObjState.SCHEMA_EXPORTED.value #use value here for JSON serializable
+                                self.schema_export_tracking[target_workspace.name]["response"] = res.result
+                                target_workspace.append_import_dependencies(self)                                                                 
+                        else: #if res is not a requests.Response, it's a error caught
+                            logger.debug(f"data_obj_name = {self.name}, data_obj_type = {self.type}, properties = {self.properties}, data_obj schema export res = {res}")
+                            self.schema_export_tracking[target_workspace.name]["state"] = DataObjState.SCHEMA_EXPORT_FAILED.value #use value here for JSON serializable
+                            self.schema_export_tracking[target_workspace.name]["response"] = f"{res}"
                             logger.debug(f'self.schema_export_tracking[{target_workspace.name}]["state"] = {self.schema_export_tracking[target_workspace.name]["state"]}')
-                        else:
-                            logger.debug(f"data_obj_name = {self.name}, data_obj_type = {self.type}, properties = {self.properties}, data_obj schema export res.result = {res.result}") 
-                            self.schema_export_tracking[target_workspace.name]["state"] = DataObjState.SCHEMA_EXPORTED.value #use value here for JSON serializable
-                            self.schema_export_tracking[target_workspace.name]["response"] = res.result
-                            target_workspace.append_import_dependencies(self)                                                                 
-                    else: #if res is not a requests.Response, it's a error caught
-                        logger.debug(f"data_obj_name = {self.name}, data_obj_type = {self.type}, properties = {self.properties}, data_obj schema export res = {res}")
-                        self.schema_export_tracking[target_workspace.name]["state"] = DataObjState.SCHEMA_EXPORT_FAILED.value #use value here for JSON serializable
-                        self.schema_export_tracking[target_workspace.name]["response"] = f"{res}"
-                        logger.debug(f'self.schema_export_tracking[{target_workspace.name}]["state"] = {self.schema_export_tracking[target_workspace.name]["state"]}')
-                    return res
+                        logger.info(f'source_data_obj: {self} exported to target_workspace: {target_workspace.name}, target_workspace.type = {target_workspace.type}, export_state = {self.schema_export_tracking[target_workspace.name]["state"]}, export_res = {res}')
+                        return res
                 else:
                     logger.info(f"data_obj_name = {self.name}, data_obj_type = {self.type}, skipped")
                     self.schema_export_tracking[target_workspace.name]["state"] = DataObjState.SCHEMA_EXPORT_SKIPPED.value
@@ -711,7 +822,7 @@ class TPDataObj(object):
                         self._export_schema_2_site(workspace)
 
             self.state = DataObjState.SCHEMA_EXPORTED #self.state of the DataObj, SCHEMA_EXPROTED means the exporting action is done, for the detailed success or fail of schema exporting, check self.schema_export_tracking
-            logger.info(f"self.name = {self.name}, self.state = {self.state} exports done.")
+            logger.info(f"source_data_obj.name = {self.name}, state = {self.state} exports done.")
             
         except(BaseException) as error:
             logger.debug(f"Exception, error = {error}")
@@ -731,7 +842,7 @@ class TPDataObj(object):
         print()
 
     def __str__(self): 
-        return f"id = {self.id}, name = {self.name}, type = {self.type}, workspace = {self.workspace.name}, dependency_discovery = {self.dependency_discovery},data_exporting_policy = {self.data_exporting_policy},dependency_stream_data_volume = {self.dependency_stream_data_volume}"
+        return f"id = {self.id}, name = {self.name}, type = {self.type}, source_workspace = {self.workspace.name}, state = {self.state}"
 
 
 
@@ -748,8 +859,6 @@ class TPExportOperate(object):
         self.target_workspaces = target_workspaces
         self.spec = spec
         self.tracking = {}      
-
-
     
     @classmethod
     def create_defined_source_data_objs(cls, spec, source_workspace, data_exporting_policy):
@@ -781,6 +890,7 @@ class TPExportOperate(object):
                 for udf in udfs:
                     #udf_data_obj = TPDataObj.create_data_obj_from_udf(udf, source_workspace, data_exporting_policy)
                     udf_data_obj = TPDataObj.create_from_properties(udf, source_workspace, data_exporting_policy, DataObjType.UDF) #udf properties is a spec too, but due to type in UDF properties is not DataType, so set the data_obj_typ seperatly
+                    logger.info(f"source_data_obj: {udf_data_obj} created")
                     udf_objs.append(udf_data_obj)
             return udf_objs
         except(BaseException) as error:
@@ -818,11 +928,13 @@ class TPExportOperate(object):
         if source_workspace.properties[ProtocolType.READ.value] == TPProtocol.TPRest: #only suppports create source_data_objs from workspace with TPRest read protocol
             if not isinstance(source_data_objs_spec,list) and source_data_objs_spec == 'All' and status == "enabled": #compose the data_obj spec by going through the lineage and create data_obj objects and put into soruce_data_objs when the source_data_objs = 'All' but not a list
                 source_data_objs_discoverd = cls.create_source_data_objs_from_workspace(source_workspace, data_exporting_policy)
+                #logger.info(f"data_objs discovered from source_work_space = {source_workspace.name},  {[x.name for x in source_data_objs_discoverd]} created.")
                 source_data_objs.extend(source_data_objs_discoverd)
             elif isinstance(source_data_objs_spec,list):
-                logger.debug(f"specifed source_data_objs_spec = {source_data_objs_spec}")
+                logger.debug(f"specifed source_data_objs_spec = {source_data_objs_spec}, creating source_data_objs from spec...")
                 #due to udf_objs are not in lineage, so udfs data_objs are created seperately. 
                 udf_objs = cls.create_udf_source_data_objs(source_workspace, data_exporting_policy) #create udf data_objs by going through udfs gotten from source_workspace via REST and add into source_data_objs list
+                #logger.info(f"udf_data_obj = {[x.name for x in udf_objs]} created.")
                 source_data_objs.extend(udf_objs)                                    
                 for source_data_obj_spec in source_data_objs_spec: # process the source_data_objs is a list 
                     #source_data_obj_spec[data_exporting_policy] = data_exporting_policy # transer the data_exporting_policy of the operate to the data_obj
@@ -834,7 +946,7 @@ class TPExportOperate(object):
             source_data_objs.extend(defined_objs)
             #todo: if none of above conditions meet, errors
             source_data_objs_stats = cls._data_objs_stats(source_data_objs)
-            logger.debug(f"operate_name = {operate_name}, source_data_objs created stats = {source_data_objs_stats}")
+            logger.info(f"operate_name = {operate_name}, source_data_objs created stats = {source_data_objs_stats}")
         else: # for read_protocol other than TPRest, support later
             logger.debug(f"source_workspace.properties[{ProtocolType.READ.value}] = {source_workspace.properties[ProtocolType.READ.value]}, source_workspace read protocol is not supported yet")
             pass
@@ -844,7 +956,7 @@ class TPExportOperate(object):
     
     @classmethod
     def create_source_data_objs_from_workspace(cls, workspace, data_exporting_policy):
-        logger.debug(f"workspace.name = {workspace.name}, workspace.type = {workspace.type}, workspace.status = {workspace.status}, workspace.api_key_env_var = {workspace.api_key_env_var}, len(workspace.properties) = {len(workspace.properties)}, creating source_data_objs from workspace")
+        logger.info(f"workspace.name = {workspace.name}, workspace.type = {workspace.type}, workspace.status = {workspace.status}, workspace.api_key_env_var = {workspace.api_key_env_var}, len(workspace.properties) = {len(workspace.properties)}, creating source_data_objs from workspace")
         source_data_objs = []
         DataObjType_values = [e.value for e in DataObjType]
         try:
@@ -865,6 +977,7 @@ class TPExportOperate(object):
                                 data_obj_properties = property
                                 logger.debug(f"data_obj_name = {data_obj_name}, data_obj_type = {data_obj_type} ")
                                 source_data_obj = TPDataObj(data_obj_id, data_obj_name, data_obj_type, data_obj_properties, data_obj_state, workspace, data_obj_dependency_discovery, data_exporting_policy, depends_stream_data_volume = None)
+                                logger.info(f"source_data_obj: {source_data_obj} created")
                                 source_data_objs.append(source_data_obj)
         except(BaseException) as error:
             logger.debug(f"error = {error}")
@@ -874,7 +987,7 @@ class TPExportOperate(object):
 
     @classmethod
     def create_from_spec(cls, spec, workspaces): #workspaces is a list of workspace obj, and then find the soruce_workspace and target_workspaces from tp_exporter
-        logger.debug(f"spec = {spec}, workspaces = {workspaces}")
+        logger.debug(f"TPOperate creating, spec = {spec}, workspaces = {workspaces} ...")
         name = spec.get("name")
         mode = spec.get("mode")
         source_workspace_in_spec = spec.get("source_workspace")
@@ -895,7 +1008,7 @@ class TPExportOperate(object):
                     if workspace.name == target_workspace_spec:
                         target_workspace = workspace
                         target_workspaces.append(target_workspace)
-        logger.debug(f"source_workspace = {source_workspace}, target_workspaces = {target_workspaces}")
+        #logger.debug(f"source_workspace = {source_workspace}, target_workspaces = {target_workspaces}")
         if source_workspace is None:
             #raise Exception(f"Error: no workspace setting found for the source workspace = {source_workspace} set in operate = {name}")
             logger.info(f"no source_workspace is found for the TPExporterOperate.name = {name}, skip create_from_spec")
@@ -912,7 +1025,9 @@ class TPExportOperate(object):
         data_exporting_policy = TPExportPolicy.create_from_spec(data_exporting_policy_spec)        
         
         #create and set source_data_objs for TPExportOp
+        logger.info(f"tp_operate.name = {name}, creating source_data_objs ...")
         source_data_objs = cls.create_source_data_objs(spec, source_workspace, data_exporting_policy)
+        logger.info(f"tp_operate.name = {name}, {len(source_data_objs)} source_data_objs created")
         tp_export_operate_obj = cls(name,mode,source_workspace, state, source_data_objs, data_exporting_policy, target_workspaces, spec)
         return tp_export_operate_obj
 
@@ -1076,12 +1191,12 @@ class TPExportOperate(object):
             traceback.print_exc()
             return None
             
-    def run(self):
+    def run(self):       
         state = self.state
         if state != "enabled":
             logger.info(f"operate.name = {self.name}, disabled, skip")
             return
-        
+        logger.info(f"operate.name = {self.name}, start running...")
         if self.source_data_objs is not None:
             logger.debug(f"opeate_name = {self.name}, source_data_objs = {self.source_data_objs}, exporting starts...")
             self.state = OperateState.INIT
@@ -1108,6 +1223,7 @@ class TPExportOperate(object):
 
             # source_data_objs_in_spec = self.spec.get("source_data_objs")
             source_workspace_lineage = self.source_workspace.properties.get("lineage")
+            logger.info(f"source_data_objs dependency_discovery based on lineage starts...")
             try:
                 for source_data_obj in self.source_data_objs: #check the dependency streams of views and put into stream_objs and dedup
                     self.state = OperateState.DEPENDENCY_DISCOVERING                    
@@ -1115,6 +1231,7 @@ class TPExportOperate(object):
                     dependency_streams = []
                     if source_data_obj.type != DataObjType.UDF and source_data_obj.state != DataObjState.DEPENDENCY_DISCOVERED: #udf is not covered by lineage, no depenency discovery
                         self.dependency_discover(source_data_obj,source_workspace_lineage, dependencies, dependency_streams)
+                        logger.info(f"source_data_obj.name = {source_data_obj.name}, dependencies = {dependencies} discovered")
                         #source_data_obj.set_dependency(dependencies)
                     for dependency in dependencies: #list dependencies for debug, todo: remove
                         if isinstance(dependency, TPDataObj):
@@ -1135,6 +1252,8 @@ class TPExportOperate(object):
                 logger.debug(f"Exception, error = {error}")
                 traceback.print_exc()
                 self.state = OperateState.DEPENDENCY_DISCOVER_FAILED               
+            
+            logger.info(f"Stream source_data_objs schema exporting starts...")
             #export streams in multi processes
             self.state = OperateState.STREAM_SCHEMA_EXPORTING
             
@@ -1143,8 +1262,10 @@ class TPExportOperate(object):
                 self.state = OperateState.STREAM_SCHEMA_EXPORTING
                 for item in stream_objs: 
                     item.exports_schema(self.target_workspaces)
+                    logger.info(f"Stream source_data_obj: {item} schema exported")
                 
                 self.state = OperateState.STREAM_SCHEMA_EXPORTED
+                
                 
                 #start stream data exporting in multiple process mode
             except(BaseException) as error:
@@ -1153,6 +1274,7 @@ class TPExportOperate(object):
                 self.state = OperateState.STREAM_SCHEMA_EXPORT_FAILED
             
             #start multiple process to export stream data
+            logger.info(f"Stream source_data_objs data sample exporting starts...")
             try:
                 self.state = OperateState.STREAM_DATA_EXPORTING
             
@@ -1172,10 +1294,13 @@ class TPExportOperate(object):
                 self.state = OperateState.STREAM_DATA_EXPORT_FAILED 
 
             #start udf schema porting
+            logger.info(f"UDF source_data_objs schema exporting starts...")
             try:
                 self.state = OperateState.UDF_SCHEMA_EXPORTING
                 for item in udf_objs: #export UDFs before exporting views due to query may use udfs
                     item.exports_schema(self.target_workspaces)
+                    time.sleep(5) #wait for proton to load UDF
+                    logger.info(f"UDF source_data_obj: {item} schema exported")
                 self.state = OperateState.UDF_SCHEMA_EXPORTED
             except(BaseException) as error:
                 logger.debug(f"Exception, error = {error}")
@@ -1183,10 +1308,12 @@ class TPExportOperate(object):
                 self.state = OperateState.STREAM_DATA_EXPORT_FAILED             
 
             #start view schema porting
+            logger.info(f"View source_data_objs schema exporting starts...")
             try:
                 self.state = OperateState.VIEW_SCHEMA_EXPORTING                
                 for item in view_objs: #exports views schema
                     item.exports_schema(self.target_workspaces)
+                    logger.info(f"View source_data_obj: {item} schema exported")
             except(BaseException) as error:
                 logger.debug(f"Exception, error = {error}")
                 traceback.print_exc()
@@ -1208,7 +1335,7 @@ class TPExportOperate(object):
             logger.info(f"operate.name = {self.name}, source_data_objs is None, skip")
             pass
         for workspace in self.target_workspaces:
-            logger.info(f"opeate_name = {self.name}, target_workspace = {workspace.name}, import_dependencies = {workspace.import_dependencies}")
+            logger.info(f"opeate_name = {self.name}, target_workspace = {workspace.name}, len(import_dependencies) = {len(workspace.import_dependencies)}")
         self.state = OperateState.DONE
             
     def __str__(self): 
@@ -1216,7 +1343,7 @@ class TPExportOperate(object):
         if self.source_data_objs is not None:
             _tp_source_data_objs_str = "source_data_objs = [ \n"
             for source_data_obj in self.source_data_objs:
-               _tp_source_data_objs_str += f"source_data_obj = {source_data_obj} \n"
+               _tp_source_data_objs_str += f"source_data_obj: {source_data_obj} \n"
             _tp_source_data_objs_str = _tp_source_data_objs_str + "]\n"
             _tp_export_operate_str += _tp_source_data_objs_str
         else:
@@ -1271,24 +1398,29 @@ class TPExporter(object):
         #print(f"tp_export_config = {tp_export_config}")
         spec = tp_export_config.dict #todo: config legimate check
         tp_exporter_obj = cls.create_from_spec(spec)
+        logger.info(f"TPExporter = {tp_exporter_obj} created")
         return tp_exporter_obj
     
     @classmethod
     def create_from_spec(cls,spec):
+        logger.info(f"Creating TPExporter from spec...")
         name = spec.get('name')
         mode = spec.get("mode")
         workspaces_spec = spec.get("workspaces")
         workspaces = []
         for workspace_spec in workspaces_spec:
-            logger.debug(f"workspace creating, workspace.name = {workspace_spec['name']}")
+            logger.info(f"workspace creating, workspace.name = {workspace_spec['name']}")
             workspace = TPWorkSpace.create_from_spec(workspace_spec)
+            logger.info(f"workspace created, {workspace}")
             if workspace is not None:
                 workspaces.append(workspace)
         logger.debug(f"workspaces = {workspaces}")
         operates = []
         operates_spec = spec.get("operates")
         for operate_spec in operates_spec:
+            logger.info(f"operate creating, operate.name = {operate_spec['name']}")
             operate = TPExportOperate.create_from_spec(operate_spec,workspaces)
+            logger.info(f"operate created, {operate}")
             operates.append(operate)
         tp_export_obj = cls(name, mode, workspaces, operates, spec)
         return tp_export_obj
@@ -1302,12 +1434,13 @@ class TPExporter(object):
                 break
         return operate
     
-    def run_operate(self, operate_name):
+    def run_operate(self, operate_name):#todo: timeout guardian for operate
         operate = self.get_operate(operate_name)
         if operate is not None:
             operate.run()
         else:
             logger.info(f"operate_name = {operate_name} not found, skip")
+        return operate
     
     def run(self):
         for item in self.operates:

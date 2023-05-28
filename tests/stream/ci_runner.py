@@ -215,6 +215,7 @@ def ci_runner(
             "--log-cli-date-format=%Y-%m-%d %H:%M:%S",
             f"--html={report_file_path}",
             "--self-contained-html",
+            "test_stream_smoke"
         ]
     )
     

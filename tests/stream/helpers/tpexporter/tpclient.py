@@ -1,7 +1,7 @@
 import os, sys, logging, datetime, time, uuid, traceback, json, requests
-import swagger_client
+#import swagger_client
 from enum import Enum, unique
-from swagger_client.rest import ApiException
+#from swagger_client.rest import ApiException
 import timeplus
 from timeplus import Environment, Stream
 import sseclient
@@ -71,14 +71,15 @@ class TPRestBase(object):
         self._uri = uri
         self._headers = headers
         self._properties_dict = properties_dict
-        name = self._properties_dict.get("name")
-        if name is not None:
-            self._ingest_uri = self._uri + '/' + name + '/ingest'
-        else:
-            self._ingest_url = None
+        # name = self._properties_dict.get("name")
+        # if name is not None:
+        #     self._ingest_uri = self._uri + '/' + name + '/ingest'
+        # else:
+        #     self._ingest_url = None
 
 
     def create(self, uri = None):
+        res = ''
         if self._properties_dict is None or not self._properties_dict:
             logger.debug(f"self._uri = {self._uri}, specified uri = {uri}, properties of Timeplus data obj are not specified, obj could not be created.")
             return None
@@ -96,25 +97,42 @@ class TPRestBase(object):
 
     def ingest(self, payload, uri = None): #ingest is only valid for stream
         res = ''
-        try:
+        if uri is None and self._uri is None:
+            raise Exception(f"no ingest uri, ingestion failed.")        
+        try:  
             if uri is not None:
                 res = self.post(payload, uri)
             else:
                 res = self.post(payload)
-            if uri is None and self._ingest_uri is None:
-                raise Exception(f"no ingest uri, ingestion failed.")
+            return res
         except(BaseException) as error:
             logger.debug(f"Exception, error = {error}")
             traceback.print_exc()
             return error
-        return res  
+         
 
-    def delete(self):
-        pass
+    def delete(self, uri = None):
+        logger.debug(f"uri = {uri}, self._uri = {self._uri}, deleting...")
+        if uri is None and self._uri is None:
+            raise Exception(f"no delete uri, delete failed.")        
+        self._response = None
+        try:
+            if uri is not None:
+                delete_uri = uri
+            else:
+                delete_uri = self._uri
+            logger.debug(f"delete uri = {delete_uri}, self._headers = {self._headers}")
+            with requests.Session() as session:
+                self._response = session.delete(delete_uri, headers=self._headers)
+            return self._response            
+        except(BaseException) as error:
+            logger.debug(f"Exception, error = {error}")
+            traceback.print_exc()
+            return error        
 
 
     def get(self, **kwargs):
-        logger.debug(f"kwargs = {kwargs}")
+        #logger.debug(f"kwargs = {kwargs}")
         path_params = "?"
         timeout = self._properties_dict.get('rest_get_timeout', DEFAULT_REST_GET_TIMEOUT)
         max_retry_times = self._properties_dict.get('rest_timeout_retry', DEFAULT_REST_TIMEOUT_RETRY)
@@ -147,27 +165,28 @@ class TPRestBase(object):
         logger.debug(f"uri = {uri}, self._uri = {self._uri}")
         #session = requests.Session()
         self._response = None
+        payload = None
         try:
             payload = json.dumps(payload_dict)
-            # logger.debug(f"uri = {uri}, self._uri = {self._uri}, len(payload) = {len(payload)}")
             headers = self._headers
             headers['Content-Type'] = 'application/json'        
             with requests.Session() as session:
 
                 if uri is None:
-                    self._response = session.post(self._uri, data=payload, headers=headers)
-                else:
-                    self._response = session.post(uri, data=payload, headers=headers)
+                    uri = self._uri
+                self._response = session.post(uri, data=payload, headers=headers)
+                if self._response.status_code != 200:
+                    print(f"TPRest post failed, response status code = {self._response.status_code}, \n post_uri = {uri}, post_body = {payload}, \nresponse content = {self._response.content}")
             return self._response
         except(Exception) as error:
-            logger.debug(BaseException, error = {error})
+            print(BaseException, error = {error})
             traceback.print_exc()
             return error
           
     
     def patch(self, body):
         pass
-
+    
 # class TPRest(TPRestBase):
 #     def __init__(self, address, api_key, resource_path, version = TPRestVersion.V1BETA1, **properties):
 #         self.address = address
@@ -221,7 +240,7 @@ class TPRestBase(object):
     #                 self._response = session.post(uri, data=payload, headers=headers)
     #         return self._response
     #     except(Exception) as error:
-    #         logger.debug(Exception, error = {error})
+    #         logger.debug(f"Exception, error = {error}")
     #         traceback.print_exc()
     #         return error
 
@@ -287,6 +306,20 @@ class TPDataObjRest(TPRestBase):
             logger.debug(f"Exception, error = {error}")
             traceback.print_exc()
             return error    
+
+    def delete(self): 
+        try:
+            res = ''
+            name = self._properties_dict.get("name")
+            self._delete_uri= self._uri + f"/{name}"
+            logger.debug(f"self._delete_uri = {self._delete_uri}, delete starts...")
+            res = super().delete(self._ingest_uri)
+            return res
+        except(BaseException) as error:
+            logger.debug(f"Exception, error = {error}")
+            traceback.print_exc()
+            return error 
+
 
     # def create(self):
     #     if self.properties_dict is None or not self.properties_dict:
@@ -490,7 +523,7 @@ class TPRestSession(object):
         self._properties_dict = properties_dict
         self._tp_rest_session = None
         
-        logger.debug(f"self._data_obj_type = {self._data_obj_type}, self._address = {self._address},self._api_key_env_var = {self._api_key_env_var}, self._api_key={self._api_key}, self._properties_dict = {self._properties_dict}, self._tp_rest_session = {self._tp_rest_session}")
+        logger.debug(f"self._data_obj_type = {self._data_obj_type}, self._address = {self._address},self._api_key_env_var = {self._api_key_env_var}, self._properties_dict = {self._properties_dict}, self._tp_rest_session = {self._tp_rest_session}")
     
     def __enter__(self):
         logger.debug(f"self._data_obj_type = {self._data_obj_type}, self._address = {self._address}")
@@ -516,11 +549,16 @@ class TPRestSession(object):
     def ingest(self, payload):
 
         res = self._tp_rest_session.ingest(payload)
-        return res    
+        return res  
+
+    def delete(self):
+
+        res = self._tp_rest_session.delete()
+        return res       
 
     
     def session(self):
-        logger.debug(f"creating _tp_rest_session, self._data_obj_type = {self._data_obj_type}, self._address = {self._address}, self._api_key={self._api_key}, self._properties_dict = {self._properties_dict}, self._tp_rest_session = {self._tp_rest_session}")
+        logger.debug(f"creating _tp_rest_session, self._data_obj_type = {self._data_obj_type}, self._address = {self._address}, self._properties_dict = {self._properties_dict}, self._tp_rest_session = {self._tp_rest_session}")
         self._tp_rest_session = TPRestClass[self._data_obj_type.value](self._address, self._api_key, self._properties_dict)
         return self
 
@@ -578,12 +616,17 @@ class TPNative(TPRestBase): #inherite form TPRestBase but customize get method t
                 if "ttl" in self._properties_dict and self._properties_dict["ttl"] != "":
                     self._properties_dict["ttl_expression"] = self._properties_dict["ttl"]
                     del self._properties_dict["ttl"]
+                
+                if "mode" in self._properties_dict and self._properties_dict["mode"] == "":
+                    del self._properties_dict["mode"]
+                
                 # in neutron API, rest body has columns filed, in columns each item has a default field, which should be removed if it's ""
                 if "columns" in self._properties_dict:
                     columns = self._properties_dict["columns"]
                     for column in columns:
                         if "default" in column and column["default"] == "":
                             del column["default"]
+
                 self._response = super().create()
             elif self._data_obj_type == DataObjType.UDF:
                 self._udf_uri = self._home_uri + ResourcePath[self._data_obj_type.value]  
@@ -593,19 +636,39 @@ class TPNative(TPRestBase): #inherite form TPRestBase but customize get method t
                 materialized = self._properties_dict.get("materialized")
                 view_name = self._properties_dict.get("name")
                 if materialized == True:
-                    create_view_sql =  "create materialized view if not exists " + view_name + " as " + query
+                    create_view_sql =  "create materialized view " + view_name + " as " + query
                 else:
-                    create_view_sql =  "create view if not exists " + view_name + " as " + query
+                    create_view_sql =  "create view " + view_name + " as " + query
                 native_res = self._client.execute(create_view_sql)
                 self._response = TPNativeResponse(native_res, None)
             return self._response
         except(Exception) as error:
-            logger.debug(Exception, error = {error})
+            logger.debug(f"Exception, error = {error}")
             traceback.print_exc()
             return error
 
     def delete(self): #drop stream/view
-        pass
+        self._response = None
+        try:
+            name = self._properties_dict.get("name")
+            if self._data_obj_type  == DataObjType.UDF: #for UDF use native REST protocol
+                
+                self._delete_uri= self._home_uri + ResourcePath[self._data_obj_type.value] + f"/{name}"
+                logger.debug(f"self._delete_uri = {self._delete_uri}, delete starts...")
+                self._response = super().delete(self._delete_uri)
+                return self._response
+            else: #for stream/view, use native protocol
+                if self._data_obj_type == DataObjType.STREAM:
+                    drop_sql = f"drop stream if exists {name} "
+                elif self._data_obj_type == DataObjType.VIEW:
+                    drop_sql = f"drop view if exists {name} settings enable_dependency_check = false" 
+                native_res = self._client.execute(drop_sql)
+                self._response = TPNativeResponse(native_res, None)
+            return self._response
+        except(Exception) as error:
+            logger.debug(f"Exception, error = {error}")
+            traceback.print_exc()
+            return error       
 
     def list(self):
         res = self.get()
@@ -641,10 +704,10 @@ class TPNativeSession(object):
         self._properties_dict = properties_dict
         self._tp_native_session = None
         
-        print(f"self._data_obj_type = {self._data_obj_type}, self._host = {self._host},self._port = {self._port}, self._rest_port = {self._rest_port}, self._properties_dict = {self._properties_dict}")
+        logger.debug(f"self._data_obj_type = {self._data_obj_type}, self._host = {self._host},self._port = {self._port}, self._rest_port = {self._rest_port}, self._properties_dict = {self._properties_dict}")
     
     def __enter__(self):
-        logger.debug(f"enter(): self._data_obj_type = {self._data_obj_type}, self._host = {self._host}, self._port = {self._port}")
+        logger.debug(f"enter(): self._data_obj_type = {self._data_obj_type}, self._host = {self._host}, self._port = {self._port}, self._rest_port = {self._rest_port}")
         return self
     
 
@@ -670,6 +733,10 @@ class TPNativeSession(object):
 
     def ingest(self, payload):
         res = self._tp_native_session.ingest(payload)
+        return res
+    
+    def delete(self):
+        res = self._tp_native_session.delete()
         return res
 
     

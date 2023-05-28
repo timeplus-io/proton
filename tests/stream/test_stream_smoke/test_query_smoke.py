@@ -68,6 +68,5 @@ def case_result_check(test_set, logging_level="INFO"):
     assert test_set["test_result"] == True, f"expected_result = {expected_results} \n, statements_results_designed = {statements_results_designed}"    
 
 
-
 def test_run(test_set, caplog):
     case_result_check(test_set)
