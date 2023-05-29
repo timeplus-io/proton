@@ -2,7 +2,7 @@
 
 #include "AggregatingTransform.h"
 
-#include <Core/Streaming/WatermarkInfo.h>
+#include <Core/Streaming/SubstreamID.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/Streaming/Aggregator.h>
 #include <Processors/IProcessor.h>
@@ -20,6 +20,11 @@ struct SubstreamContext
     Int64 version = 0;
     UInt64 rows_since_last_finalization = 0;
     Int64 watermark;
+
+    /// `finalized_watermark` is capturing the max watermark we have progressed and 
+    /// it is used to garbage collect time bucketed memory : time buckets which 
+    /// are below this watermark can be safely GCed.
+    Int64 finalized_watermark = INVALID_WATERMARK;
 
     std::any field;  /// Stuff additional data context to it if needed
 

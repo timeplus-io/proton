@@ -44,21 +44,21 @@ public:
     size_t hash(const Key & x) const { return Hash::operator()(x); }
 
     template <typename T>
-    ALWAYS_INLINE size_t windowKey(T key)
+    ALWAYS_INLINE Int64 windowKey(T key)
     {
-        /// window time key is always: 2, 4 or 8 bytes
+        /// window time key is always: 4 or 8 bytes
         /// window time key are always lower bits of integral type of T
         /// key & 0xFFFF or 0xFFFFFFFF or 0xFFFFFFFFFFFFFFFF
         return key & ((0xFFull << ((win_key_size - 1) << 3)) + ((1ull << ((win_key_size - 1) << 3)) - 1));
     }
 
-    ALWAYS_INLINE size_t windowKey(StringRef key)
+    ALWAYS_INLINE Int64 windowKey(StringRef key)
     {
         /// deserialize the first win_key_size bytes
         if (win_key_size == 8)
         {
             assert(key.size > 8);
-            return unalignedLoad<UInt64>(key.data);
+            return unalignedLoad<Int64>(key.data);
         }
         else if (win_key_size == 4)
         {
@@ -67,16 +67,14 @@ public:
         }
         else
         {
-            assert(key.size > 2);
-            assert(win_key_size == 2);
-            return unalignedLoad<UInt16>(key.data);
+            assert(false);
         }
     }
 
-    ALWAYS_INLINE size_t windowKey(const DB::SerializedKeyHolder & key_holder) { return windowKey(key_holder.key); }
+    ALWAYS_INLINE Int64 windowKey(const DB::SerializedKeyHolder & key_holder) { return windowKey(key_holder.key); }
 
 protected:
-    typename Impl::iterator beginOfNextNonEmptyBucket(size_t & bucket)
+    typename Impl::iterator beginOfNextNonEmptyBucket(Int64 & bucket)
     {
         auto it = impls.upper_bound(bucket);
         if (it != impls.end())
@@ -89,7 +87,7 @@ protected:
         return sentinel.end();
     }
 
-    typename Impl::const_iterator beginOfNextNonEmptyBucket(size_t & bucket) const
+    typename Impl::const_iterator beginOfNextNonEmptyBucket(Int64 & bucket) const
     {
         auto it = impls.upper_bound(bucket);
         if (it != impls.end())
@@ -112,14 +110,14 @@ public:
     using ConstLookupResult = typename Impl::ConstLookupResult;
 
     /// FIXME, choose a better perf data structure
-    std::map<size_t, Impl> impls;
+    std::map<Int64, Impl> impls;
     Impl sentinel;
 
     TimeBucketHashTable() { }
 
     void setWinKeySize(size_t win_key_size_)
     {
-        assert(win_key_size_ == 2 || win_key_size_ == 4 || win_key_size_ == 8);
+        assert(win_key_size_ == 4 || win_key_size_ == 8);
         win_key_size = win_key_size_;
     }
 
@@ -138,12 +136,12 @@ public:
     class iterator
     {
         Self * container{};
-        size_t bucket{};
+        Int64 bucket{};
         typename Impl::iterator current_it{};
 
         friend class StreamingTwoLevelHashTable;
 
-        iterator(Self * container_, size_t bucket_, typename Impl::iterator current_it_)
+        iterator(Self * container_, Int64 bucket_, typename Impl::iterator current_it_)
             : container(container_), bucket(bucket_), current_it(current_it_)
         {
         }
@@ -175,10 +173,10 @@ public:
     class const_iterator
     {
         Self * container{};
-        size_t bucket{};
+        Int64 bucket{};
         typename Impl::const_iterator current_it{};
 
-        const_iterator(Self * container_, size_t bucket_, typename Impl::const_iterator current_it_)
+        const_iterator(Self * container_, Int64 bucket_, typename Impl::const_iterator current_it_)
             : container(container_), bucket(bucket_), current_it(current_it_)
         {
         }
@@ -210,14 +208,14 @@ public:
 
     const_iterator begin() const
     {
-        size_t buck = 0;
+        Int64 buck = 0;
         typename Impl::const_iterator impl_it = beginOfNextNonEmptyBucket(buck);
         return {this, buck, impl_it};
     }
 
     iterator begin()
     {
-        size_t buck = 0;
+        Int64 buck = 0;
         typename Impl::iterator impl_it = beginOfNextNonEmptyBucket(buck);
         return {this, buck, impl_it};
     }
@@ -380,10 +378,10 @@ public:
     /// after the current watermark
     /// Return {removed, last_removed_watermark, remaining_size}
     template <typename MappedDestroyFunc>
-    std::tuple<size_t, size_t, size_t>
-    removeBucketsBefore(UInt64 max_bucket, MappedDestroyFunc && mapped_destroy)
+    std::tuple<size_t, Int64, size_t>
+    removeBucketsBefore(Int64 max_bucket, MappedDestroyFunc && mapped_destroy)
     {
-        UInt64 last_removed_watermark = 0;
+        Int64 last_removed_watermark = 0;
         size_t removed = 0;
 
         for (auto it = impls.begin(), it_end = impls.end(); it != it_end;)
@@ -406,9 +404,9 @@ public:
         return {removed, last_removed_watermark, new_size};
     }
 
-    std::vector<size_t> bucketsBefore(UInt64 max_bucket) const
+    std::vector<Int64> bucketsBefore(Int64 max_bucket) const
     {
-        std::vector<size_t> buckets;
+        std::vector<Int64> buckets;
         buckets.reserve(10);
 
         for (const auto & time_map : impls)
@@ -422,9 +420,9 @@ public:
         return buckets;
     }
 
-    std::vector<size_t> buckets() const
+    std::vector<Int64> buckets() const
     {
-        std::vector<size_t> buckets;
+        std::vector<Int64> buckets;
         buckets.reserve(impls.size());
 
         for (const auto & time_map : impls)

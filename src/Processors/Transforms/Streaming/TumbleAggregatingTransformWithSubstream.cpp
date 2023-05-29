@@ -14,9 +14,12 @@ TumbleAggregatingTransformWithSubstream::TumbleAggregatingTransformWithSubstream
 {
 }
 
-WindowsWithBuckets TumbleAggregatingTransformWithSubstream::getFinalizedWindowsWithBuckets(
-    Int64 watermark, const SubstreamContextPtr & substream_ctx) const
+WindowsWithBuckets
+TumbleAggregatingTransformWithSubstream::getFinalizedWindowsWithBuckets(Int64 watermark, const SubstreamContextPtr & substream_ctx) const
 {
+    if (unlikely(watermark == INVALID_WATERMARK))
+        return {}; /// No window
+
     WindowsWithBuckets windows_with_buckets;
 
     /// When watermark reached to the current window, there may still be some events within the current window will arrive in future
@@ -37,9 +40,9 @@ WindowsWithBuckets TumbleAggregatingTransformWithSubstream::getFinalizedWindowsW
         const auto & final_buckets = params->aggregator.bucketsBefore(substream_ctx->variants, max_finalized_bucket);
         for (auto time_bucket : final_buckets)
             windows_with_buckets.emplace_back(WindowWithBuckets{
-                {static_cast<Int64>(time_bucket),
+                {time_bucket,
                  addTime(
-                     static_cast<Int64>(time_bucket),
+                     time_bucket,
                      window_params.interval_kind,
                      window_params.window_interval,
                      *window_params.time_zone,
@@ -53,12 +56,12 @@ WindowsWithBuckets TumbleAggregatingTransformWithSubstream::getFinalizedWindowsW
         for (auto time_bucket : final_buckets)
             windows_with_buckets.emplace_back(WindowWithBuckets{
                 {addTime(
-                     static_cast<Int64>(time_bucket),
+                     time_bucket,
                      window_params.interval_kind,
                      -window_params.window_interval,
                      *window_params.time_zone,
                      window_params.time_scale),
-                 static_cast<Int64>(time_bucket)},
+                 time_bucket},
                 {time_bucket}});
     }
 

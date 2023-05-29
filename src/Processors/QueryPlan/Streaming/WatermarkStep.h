@@ -1,8 +1,7 @@
 #pragma once
 
-#include <Interpreters/Streaming/FunctionDescription.h>
-#include <Interpreters/TreeRewriter.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
+#include <Processors/Transforms/Streaming/WatermarkStamper.h>
 
 namespace DB
 {
@@ -12,14 +11,7 @@ namespace Streaming
 class WatermarkStep final : public ITransformingStep
 {
 public:
-    WatermarkStep(
-        const DataStream & input_stream_,
-        Block output_header,
-        ASTPtr query_,
-        TreeRewriterResultPtr syntax_analyzer_result_,
-        FunctionDescriptionPtr desc_,
-        bool proc_time,
-        Poco::Logger * log);
+    WatermarkStep(const DataStream & input_stream_, WatermarkStamperParams params_, Poco::Logger * log);
 
     ~WatermarkStep() override = default;
 
@@ -27,10 +19,7 @@ public:
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
 
 private:
-    ASTPtr query;
-    TreeRewriterResultPtr syntax_analyzer_result;
-    FunctionDescriptionPtr desc;
-    bool proc_time;
+    WatermarkStamperParams params;
     Poco::Logger * log;
 };
 }

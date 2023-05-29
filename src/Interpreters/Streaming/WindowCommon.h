@@ -120,7 +120,7 @@ public:
         return toBaseScale(interval.interval, interval.unit);
     }
 
-    WindowInterval toIntervalKind(IntervalKind::Kind to_kind) const;
+    Int64 toIntervalKind(IntervalKind::Kind to_kind) const;
 
     BaseScaleInterval & operator+(const BaseScaleInterval & bs)
     {
@@ -233,7 +233,7 @@ struct WindowWithBuckets
     Window window;
     /// The time buckets where the current window data is located in window aggregation
     /// For hop window, there are multiple base time buckets
-    std::vector<size_t> buckets;
+    std::vector<Int64> buckets;
 };
 using WindowsWithBuckets = std::vector<WindowWithBuckets>;
 

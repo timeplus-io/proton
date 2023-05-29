@@ -101,6 +101,7 @@
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStepWithSubstream.h>
 #include <Processors/QueryPlan/Streaming/WindowStep.h>
+#include <Processors/Transforms/Streaming/WatermarkStamper.h>
 #include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Storages/Streaming/ProxyStream.h>
 #include <Storages/Streaming/StorageMaterializedView.h>
@@ -3439,27 +3440,12 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
     /// Build `WatermarkStep`
     if (shouldApplyWatermark())
     {
-        Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
-        Streaming::ProxyStream * proxy_stream = storage ? storage->as<Streaming::ProxyStream>() : nullptr;
-        auto func_desc = proxy_stream ? proxy_stream->getStreamingFunctionDescription() : nullptr;
+        Streaming::WatermarkStamperParams params(query_info.query, query_info.syntax_analyzer_result, query_info.streaming_window_params);
         if (query_info.hasPartitionByKeys())
-            query_plan.addStep(std::make_unique<Streaming::WatermarkStepWithSubstream>(
-                query_plan.getCurrentDataStream(),
-                std::move(output_header),
-                query_info.query,
-                query_info.syntax_analyzer_result,
-                func_desc,
-                func_desc ? func_desc->is_now_func : false,
-                log));
+            query_plan.addStep(
+                std::make_unique<Streaming::WatermarkStepWithSubstream>(query_plan.getCurrentDataStream(), std::move(params), log));
         else
-            query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(
-                query_plan.getCurrentDataStream(),
-                std::move(output_header),
-                query_info.query,
-                query_info.syntax_analyzer_result,
-                func_desc,
-                func_desc ? func_desc->is_now_func : false,
-                log));
+            query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(query_plan.getCurrentDataStream(), std::move(params), log));
     }
 }
 

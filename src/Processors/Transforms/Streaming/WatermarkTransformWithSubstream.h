@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Watermark.h"
+#include <Processors/Transforms/Streaming/WatermarkStamper.h>
 
 #include <Processors/IProcessor.h>
 
@@ -16,18 +16,11 @@ namespace Streaming
 class WatermarkTransformWithSubstream final : public IProcessor
 {
 public:
-    WatermarkTransformWithSubstream(
-        ASTPtr query,
-        TreeRewriterResultPtr syntax_analyzer_result,
-        FunctionDescriptionPtr desc,
-        bool proc_time,
-        const Block & input_header,
-        const Block & output_header,
-        Poco::Logger * log);
+    WatermarkTransformWithSubstream(const Block & header, WatermarkStamperParams params, Poco::Logger * log);
 
     ~WatermarkTransformWithSubstream() override = default;
 
-    String getName() const override { return watermark_name + "TransformWithSubstream"; }
+    String getName() const override { return watermark_template->getName() + "TransformWithSubstream"; }
     Status prepare() override;
     void work() override;
     void checkpoint(CheckpointContextPtr) override;
@@ -35,23 +28,14 @@ public:
 
 
 private:
-    void initWatermark(
-        const Block & input_header,
-        ASTPtr query,
-        TreeRewriterResultPtr syntax_analyzer_result,
-        FunctionDescriptionPtr desc,
-        bool proc_time);
+    inline WatermarkStamper & getOrCreateSubstreamWatermark(const SubstreamID & id);
 
-    inline Watermark & getOrCreateSubstreamWatermark(const SubstreamID & id);
-
-    Block header;
     Chunk input_chunk;
     Chunks output_chunks;
     typename Chunks::iterator output_iter{output_chunks.begin()};
 
-    String watermark_name;
-    WatermarkPtr watermark_template;
-    SubstreamHashMap<WatermarkPtr> substream_watermarks;
+    WatermarkStamperPtr watermark_template;
+    SubstreamHashMap<WatermarkStamperPtr> substream_watermarks;
 
     Poco::Logger * log;
 };

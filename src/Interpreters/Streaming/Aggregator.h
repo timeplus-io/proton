@@ -34,7 +34,7 @@
 
 /// proton: starts
 #include <Checkpoint/CheckpointContext.h>
-#include <Core/Streaming/WatermarkInfo.h>
+#include <Core/Streaming/SubstreamID.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/Streaming/FunctionDescription.h>
@@ -1091,7 +1091,7 @@ private:
         AggregatedDataVariants & data_src,
         bool final,
         ConvertAction action,
-        const std::vector<size_t> & gcd_buckets,
+        const std::vector<Int64> & gcd_buckets,
         Arena * arena) const;
 
     /// Used for hop window function, merge multiple gcd windows (buckets) to a hop window
@@ -1100,10 +1100,10 @@ private:
     ///                            =>  result block - [00:00, 00:04)
     ///   gcd_bucket2 - [00:02, 00:04)
     Block spliceAndConvertBucketsToBlock(
-        AggregatedDataVariants & variants, bool final, ConvertAction action, const std::vector<size_t> & gcd_buckets) const;
+        AggregatedDataVariants & variants, bool final, ConvertAction action, const std::vector<Int64> & gcd_buckets) const;
 
     void mergeBuckets(
-        ManyAggregatedDataVariants & variants, Arena * arena, bool final, ConvertAction action, const std::vector<size_t> & buckets) const;
+        ManyAggregatedDataVariants & variants, Arena * arena, bool final, ConvertAction action, const std::vector<Int64> & buckets) const;
     /// proton: ends.
 
     Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows, ConvertAction action) const;
@@ -1188,8 +1188,8 @@ private:
 
     /// proton: starts
     void setupAggregatesPoolTimestamps(size_t row_begin, size_t row_end, const ColumnRawPtrs & key_columns, Arena * aggregates_pool) const;
-    void removeBucketsBefore(AggregatedDataVariants & result, UInt64 max_bucket) const;
-    std::vector<size_t> bucketsBefore(const AggregatedDataVariants & result, UInt64 max_bucket) const;
+    void removeBucketsBefore(AggregatedDataVariants & result, Int64 max_bucket) const;
+    std::vector<Int64> bucketsBefore(const AggregatedDataVariants & result, Int64 max_bucket) const;
 
     inline bool shouldClearStates(ConvertAction action, bool final_) const;
 

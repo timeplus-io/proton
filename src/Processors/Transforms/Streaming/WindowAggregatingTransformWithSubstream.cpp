@@ -25,7 +25,7 @@ void WindowAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     SCOPE_EXIT({ substream_ctx->resetRowCounts(); });
 
     /// Finalize current watermark
-    auto watermark = chunk_ctx->getWatermark().watermark;
+    auto watermark = chunk_ctx->getWatermark();
     auto start = MonotonicMilliseconds::now();
     doFinalize(watermark, substream_ctx, chunk_ctx);
     auto end = MonotonicMilliseconds::now();
@@ -36,7 +36,7 @@ void WindowAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
         log, "Took {} milliseconds to finalize aggregation in substream id={}. watermark={}", end - start, substream_ctx->id, watermark);
 
     /// Do memory arena recycling by last finalized watermark
-    removeBucketsImpl(substream_ctx->watermark, substream_ctx);
+    removeBucketsImpl(substream_ctx->finalized_watermark, substream_ctx);
 }
 
 void WindowAggregatingTransformWithSubstream::doFinalize(
@@ -55,8 +55,15 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
 
     Block block;
 
-    for (const auto & window_with_buckets : getFinalizedWindowsWithBuckets(watermark, substream_ctx))
+    const auto & last_finalized_windows_with_buckets = getFinalizedWindowsWithBuckets(substream_ctx->finalized_watermark, substream_ctx);
+    const auto & windows_with_buckets = getFinalizedWindowsWithBuckets(watermark, substream_ctx);
+    for (const auto & window_with_buckets : windows_with_buckets)
     {
+        /// In case when some lagged events arrived after timeout, we skip the finalized windows
+        if (!last_finalized_windows_with_buckets.empty()
+            && window_with_buckets.window.end <= last_finalized_windows_with_buckets.back().window.end)
+            continue;
+
         if (window_with_buckets.buckets.size() == 1)
         {
             if (params->final)
@@ -93,8 +100,17 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
             merged_block = std::move(block);
     }
 
+    if (watermark != TIMEOUT_WATERMARK)
+        substream_ctx->finalized_watermark = watermark;
+    /// If is timeout, we set watermark after actual finalized last window
+    else if (!windows_with_buckets.empty())
+        substream_ctx->finalized_watermark = windows_with_buckets.back().window.end;
+
     if (merged_block)
+    {
+        chunk_ctx->setWatermark(substream_ctx->finalized_watermark);
         setCurrentChunk(convertToChunk(merged_block), chunk_ctx);
+    }
 }
 
 }

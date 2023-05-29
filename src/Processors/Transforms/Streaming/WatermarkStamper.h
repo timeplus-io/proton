@@ -1,0 +1,111 @@
+#pragma once
+
+#include <Core/Types.h>
+#include <Interpreters/Streaming/FunctionDescription.h>
+#include <Interpreters/Streaming/WindowCommon.h>
+#include <Interpreters/TreeRewriter.h>
+#include <Parsers/ASTFunction.h>
+#include <Common/IntervalKind.h>
+
+class DateLUTImpl;
+
+namespace Poco
+{
+class Logger;
+}
+
+namespace DB
+{
+struct SelectQueryInfo;
+class Chunk;
+
+namespace Streaming
+{
+struct WatermarkStamperParams
+{
+public:
+    WatermarkStamperParams(ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, WindowParamsPtr window_params_);
+
+    enum class EmitMode
+    {
+        NONE,
+        TAIL,
+        PERIODIC,
+        WATERMARK, /// Allow time skew in same window
+        WATERMARK_PER_ROW /// No allow time skew
+    };
+
+    WindowParamsPtr window_params;
+
+    EmitMode mode = EmitMode::NONE;
+
+    Int64 periodic_interval = 0;
+    IntervalKind::Kind periodic_interval_kind = IntervalKind::Second;
+
+    /// With timeout
+    Int64 timeout_interval = 0;
+    IntervalKind::Kind timeout_interval_kind = IntervalKind::Second;
+
+    /// With delay
+    Int64 delay_interval = 0;
+    IntervalKind::Kind delay_interval_kind = IntervalKind::Second;
+};
+
+class WatermarkStamper
+{
+public:
+    WatermarkStamper(WatermarkStamperParams && params_, Poco::Logger * log_) : params(std::move(params_)), log(log_) { }
+    WatermarkStamper(const WatermarkStamper &) = default;
+    virtual ~WatermarkStamper() { }
+
+    virtual std::unique_ptr<WatermarkStamper> clone() const { return std::make_unique<WatermarkStamper>(*this); }
+
+    virtual String getName() const { return "WatermarkStamper"; }
+
+    void preProcess(const Block & header);
+    void process(Chunk & chunk);
+
+    VersionType getVersion() const;
+
+    virtual void serialize(WriteBuffer & wb) const;
+    virtual void deserialize(ReadBuffer & rb);
+
+protected:
+    virtual VersionType getVersionFromRevision(UInt64 revision) const;
+
+private:
+    template <typename TimeColumnType, bool apply_watermark_per_row>
+    void processWatermark(Chunk & chunk);
+
+    void processTimeout(Chunk & chunk);
+
+    void logLateEvents();
+
+    virtual Int64 calculateWatermark(Int64 event_ts) const;
+
+protected:
+    WatermarkStamperParams params;
+    Poco::Logger * log;
+
+    ssize_t time_col_pos = -1;
+    Int64 next_emit_timeout_ts = 0;
+
+    /// (State)
+    mutable std::optional<VersionType> version;
+
+    /// max event time observed so far
+    Int64 max_event_ts = 0;
+
+    /// max watermark projected so far
+    Int64 watermark_ts = 0;
+
+    /// Event count which is late than current watermark
+    static constexpr Int64 LOG_LATE_EVENTS_INTERVAL_SECONDS = 5; /// 5s, TODO: add settings ?
+    UInt64 late_events = 0;
+    UInt64 last_logged_late_events = 0;
+    Int64 last_logged_late_events_ts = 0;
+};
+
+using WatermarkStamperPtr = std::unique_ptr<WatermarkStamper>;
+}
+}

@@ -36,8 +36,8 @@ public:
 
 private:
     using Chunks = std::array<Chunk, 2>;
-    void propagateWatermark(int64_t local_watermark_lower_bound, int64_t local_watermark_upper_bound);
-    bool setupWatermark(Chunk & chunk, int64_t local_watermark_lower_bound, int64_t local_watermark_upper_bound);
+    void propagateWatermark(int64_t local_watermark);
+    bool setupWatermark(Chunk & chunk, int64_t local_watermark);
 
     void doJoin(Chunks chunks);
     void joinBidirectionally(Chunks chunks);
@@ -71,8 +71,7 @@ private:
     std::array<InputPortWithData, 2> input_ports_with_data;
     std::list<Chunk> output_chunks;
 
-    int64_t watermark_lower_bound = std::numeric_limits<int64_t>::min();
-    int64_t watermark_upper_bound = std::numeric_limits<int64_t>::min();
+    int64_t watermark = INVALID_WATERMARK;
 };
 }
 }

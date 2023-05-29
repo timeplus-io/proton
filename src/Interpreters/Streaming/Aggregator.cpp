@@ -3240,24 +3240,20 @@ void Aggregator::setupAggregatesPoolTimestamps(size_t row_begin, size_t row_end,
     if (params.group_by != Params::GroupBy::WINDOW_START && params.group_by != Params::GroupBy::WINDOW_END)
         return;
 
-    UInt64 window_lower_bound = std::numeric_limits<UInt64>::max();
-    UInt64 window_upper_bound = 0;
+    Int64 max_timestamp = std::numeric_limits<Int64>::min();
 
     /// FIXME, can we avoid this loop ?
     for (size_t i = row_begin; i < row_end; ++i)
     {
         auto window = key_columns[0]->get64(i);
-        if (window > window_upper_bound)
-            window_upper_bound = window;
-
-        if (window < window_lower_bound)
-            window_lower_bound = window;
+        if (window > max_timestamp)
+            max_timestamp = window;
     }
-    aggregates_pool->setCurrentTimestamps(window_lower_bound, window_upper_bound);
-    LOG_DEBUG(log, "Set current pool timestamp watermark={}, window_lower_bound={}", window_upper_bound, window_lower_bound);
+    aggregates_pool->setCurrentTimestamp(max_timestamp);
+    LOG_DEBUG(log, "Set current pool timestamp watermark={}", max_timestamp);
 }
 
-void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, UInt64 max_bucket) const
+void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, Int64 max_bucket) const
 {
     if (result.empty())
         return;
@@ -3274,7 +3270,7 @@ void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, UInt64 max
     };
 
     size_t removed = 0;
-    UInt64 last_removed_time_bukect = 0;
+    Int64 last_removed_time_bukect = 0;
     size_t remaining = 0;
 
     switch (result.type)
@@ -3315,7 +3311,7 @@ void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, UInt64 max
         stats.free_list_misses);
 }
 
-std::vector<size_t> Aggregator::bucketsBefore(const AggregatedDataVariants & result, UInt64 max_bucket) const
+std::vector<Int64> Aggregator::bucketsBefore(const AggregatedDataVariants & result, Int64 max_bucket) const
 {
     switch (result.type)
     {
@@ -3653,7 +3649,7 @@ void NO_INLINE Aggregator::spliceBucketsImpl(
     AggregatedDataVariants & data_src,
     bool final,
     ConvertAction action,
-    const std::vector<size_t> & gcd_buckets,
+    const std::vector<Int64> & gcd_buckets,
     Arena * arena) const
 {
     /// In order to merge state with same other keys of different gcd buckets, reset the window group keys to zero
@@ -3681,7 +3677,7 @@ void NO_INLINE Aggregator::spliceBucketsImpl(
             /// Case-3: Fixed key, the fixed window time keys always are always lower bits
             auto window_keys_size = params.window_keys_num == 2 ? key_sizes[0] + key_sizes[1] : key_sizes[0];
             auto bit_nums = window_keys_size << 3;
-            return (key >> bit_nums) << bit_nums;  /// reset lower bits to zero
+            return (key >> bit_nums) << bit_nums; /// reset lower bits to zero
         }
     };
 
@@ -3693,28 +3689,18 @@ void NO_INLINE Aggregator::spliceBucketsImpl(
     if (compiled_aggregate_functions_holder)
     {
         for (auto bucket : gcd_buckets)
-            mergeDataImpl<Method, true>(
-                table_dest[0],
-                table_src[bucket],
-                arena,
-                clear_states,
-                zero_out_window_keys_func);
+            mergeDataImpl<Method, true>(table_dest[0], table_src[bucket], arena, clear_states, zero_out_window_keys_func);
     }
     else
 #endif
     {
         for (auto bucket : gcd_buckets)
-            mergeDataImpl<Method, false>(
-                table_dest[0],
-                table_src[bucket],
-                arena,
-                clear_states,
-                zero_out_window_keys_func);
+            mergeDataImpl<Method, false>(table_dest[0], table_src[bucket], arena, clear_states, zero_out_window_keys_func);
     }
 }
 
 Block Aggregator::spliceAndConvertBucketsToBlock(
-    AggregatedDataVariants & variants, bool final, ConvertAction action, const std::vector<size_t> & gcd_buckets) const
+    AggregatedDataVariants & variants, bool final, ConvertAction action, const std::vector<Int64> & gcd_buckets) const
 {
     AggregatedDataVariants result_variants;
     result_variants.keys_size = params.keys_size;
@@ -3742,7 +3728,7 @@ Block Aggregator::spliceAndConvertBucketsToBlock(
 }
 
 void Aggregator::mergeBuckets(
-    ManyAggregatedDataVariants & variants, Arena * arena, bool final, ConvertAction action, const std::vector<size_t> & buckets) const
+    ManyAggregatedDataVariants & variants, Arena * arena, bool final, ConvertAction action, const std::vector<Int64> & buckets) const
 {
     auto & merge_data = *variants[0];
 

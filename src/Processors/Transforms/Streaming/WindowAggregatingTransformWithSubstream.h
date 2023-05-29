@@ -13,9 +13,10 @@ public:
 
     ~WindowAggregatingTransformWithSubstream() override = default;
 
-private:
+protected:
     void finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx) override;
 
+private:
     inline void doFinalize(Int64 watermark, const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx);
 
     virtual WindowsWithBuckets getFinalizedWindowsWithBuckets(Int64 watermark, const SubstreamContextPtr & substream_ctx) const = 0;

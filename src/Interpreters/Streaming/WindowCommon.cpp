@@ -561,15 +561,15 @@ ASTPtr makeASTInterval(const WindowInterval & interval)
 void convertToSameKindIntervalAST(const BaseScaleInterval & bs1, const BaseScaleInterval & bs2, ASTPtr & ast1, ASTPtr & ast2)
 {
     if (bs1.src_kind < bs2.src_kind)
-        ast2 = makeASTInterval(bs2.toIntervalKind(bs1.src_kind));
+        ast2 = makeASTInterval(bs2.toIntervalKind(bs1.src_kind), bs1.src_kind);
     else if (bs1.src_kind > bs2.src_kind)
-        ast1 = makeASTInterval(bs1.toIntervalKind(bs2.src_kind));
+        ast1 = makeASTInterval(bs1.toIntervalKind(bs2.src_kind), bs2.src_kind);
 }
 
-WindowInterval BaseScaleInterval::toIntervalKind(IntervalKind::Kind to_kind) const
+Int64 BaseScaleInterval::toIntervalKind(IntervalKind::Kind to_kind) const
 {
     if (scale == to_kind)
-        return {num_units, to_kind};
+        return num_units;
 
     const auto & bs = toBaseScale(1, to_kind);
     if (scale != bs.scale)
@@ -579,7 +579,10 @@ WindowInterval BaseScaleInterval::toIntervalKind(IntervalKind::Kind to_kind) con
             IntervalKind(src_kind).toString(),
             IntervalKind(to_kind).toString());
 
-    return {num_units / bs.num_units, to_kind};
+    if (num_units < bs.num_units)
+        return 1;
+
+    return num_units / bs.num_units;
 }
 
 String BaseScaleInterval::toString() const

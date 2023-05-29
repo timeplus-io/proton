@@ -21,9 +21,10 @@ public:
 
     ~WindowAggregatingTransform() override = default;
 
-private:
+protected:
     void finalize(const ChunkContextPtr & chunk_ctx) override;
 
+private:
     inline void doFinalize(Int64 watermark, const ChunkContextPtr & chunk_ctx);
 
     inline void initialize(ManyAggregatedDataVariantsPtr & data);

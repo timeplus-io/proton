@@ -128,7 +128,7 @@ struct JoinBlockList
 
 private:
     Int64 min_ts = std::numeric_limits<Int64>::max();
-    Int64 max_ts = -1;
+    Int64 max_ts = std::numeric_limits<Int64>::min();
     size_t total_bytes = 0;
 
     std::list<RefCountBlock> blocks;

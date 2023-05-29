@@ -1,9 +1,10 @@
-#include "WatermarkTransform.h"
-#include "HopWatermark.h"
-#include "TumbleWatermark.h"
+#include <Processors/Transforms/Streaming/WatermarkTransform.h>
 
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
+#include <Processors/Transforms/Streaming/HopWatermarkStamper.h>
+#include <Processors/Transforms/Streaming/SessionWatermarkStamper.h>
+#include <Processors/Transforms/Streaming/TumbleWatermarkStamper.h>
 #include <Common/ProtonCommon.h>
 
 namespace DB
@@ -15,19 +16,35 @@ extern const int INVALID_EMIT_MODE;
 
 namespace Streaming
 {
-WatermarkTransform::WatermarkTransform(
-    ASTPtr query,
-    TreeRewriterResultPtr syntax_analyzer_result,
-    FunctionDescriptionPtr desc,
-    bool proc_time,
-    const Block & input_header,
-    const Block & output_header,
-    Poco::Logger * log)
-    : ISimpleTransform(input_header, output_header, false, ProcessorID::WatermarkTransformID)
+namespace
 {
-    initWatermark(input_header, query, syntax_analyzer_result, desc, proc_time, log);
+WatermarkStamperPtr initWatermark(WatermarkStamperParams params, Poco::Logger * log)
+{
+    assert(params.mode != WatermarkStamperParams::EmitMode::NONE);
+    if (params.window_params)
+    {
+        switch (params.window_params->type)
+        {
+            case WindowType::TUMBLE:
+                return std::make_unique<TumbleWatermarkStamper>(std::move(params), log);
+            case WindowType::HOP:
+                return std::make_unique<HopWatermarkStamper>(std::move(params), log);
+            case WindowType::SESSION:
+                return std::make_unique<SessionWatermarkStamper>(std::move(params), log);
+            default:
+                break;
+        }
+    }
+    return std::make_unique<WatermarkStamper>(std::move(params), log);
+}
+}
+
+WatermarkTransform::WatermarkTransform(const Block & header, WatermarkStamperParams params, Poco::Logger * log)
+    : ISimpleTransform(header, header, false, ProcessorID::WatermarkTransformID)
+{
+    watermark = initWatermark(std::move(params), log);
     assert(watermark);
-    watermark->preProcess();
+    watermark->preProcess(header);
 }
 
 void WatermarkTransform::transform(Chunk & chunk)
@@ -44,29 +61,6 @@ void WatermarkTransform::transform(Chunk & chunk)
         watermark->process(chunk);
 }
 
-void WatermarkTransform::initWatermark(
-    const Block & input_header, ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, FunctionDescriptionPtr desc, bool proc_time, Poco::Logger * log)
-{
-    WatermarkSettings watermark_settings(query, syntax_analyzer_result, desc);
-    if (watermark_settings.isTumbleWindowAggr())
-    {
-        assert(watermark_settings.mode == WatermarkSettings::EmitMode::WATERMARK || watermark_settings.mode == WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY);
-        auto time_col_position = input_header.getPositionByName(desc->argument_names[0]);
-        watermark = std::make_unique<TumbleWatermark>(std::move(watermark_settings), time_col_position, proc_time, log);
-    }
-    else if (watermark_settings.isHopWindowAggr())
-    {
-        assert(watermark_settings.mode == WatermarkSettings::EmitMode::WATERMARK || watermark_settings.mode == WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY);
-
-        auto time_col_position = input_header.getPositionByName(desc->argument_names[0]);
-        watermark = std::make_unique<HopWatermark>(std::move(watermark_settings), time_col_position, proc_time, log);
-    }
-    else
-    {
-        watermark = std::make_unique<Watermark>(std::move(watermark_settings), proc_time, log);
-    }
-}
-
 void WatermarkTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->checkpoint(getVersion(), logic_pid, ckpt_ctx, [this](WriteBuffer & wb) { watermark->serialize(wb); });
@@ -76,6 +70,5 @@ void WatermarkTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->recover(logic_pid, ckpt_ctx, [this](VersionType, ReadBuffer & rb) { watermark->deserialize(rb); });
 }
-
 }
 }

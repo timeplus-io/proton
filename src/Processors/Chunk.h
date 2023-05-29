@@ -3,7 +3,8 @@
 #include <Columns/IColumn.h>
 
 /// proton : starts
-#include <Core/Streaming/WatermarkInfo.h>
+#include <Core/Streaming/SubstreamID.h>
+#include <Core/Streaming/Watermark.h>
 #include <Checkpoint/CheckpointContextFwd.h>
 /// proton : ends
 
@@ -24,7 +25,6 @@ struct ChunkContext
     /// A pair of Int64, flags represent what they mean
     Streaming::SubstreamID id = Streaming::INVALID_SUBSTREAM_ID;
     Int64 ts_1 = 0;
-    Int64 ts_2 = 0;
     UInt64 flags = 0;
     CheckpointContextPtr ckpt_ctx;
 
@@ -36,40 +36,23 @@ struct ChunkContext
     ALWAYS_INLINE operator bool () const { return flags != 0 || id != Streaming::INVALID_SUBSTREAM_ID || ckpt_ctx != nullptr; }
 
     ALWAYS_INLINE bool hasWatermark() const { return flags & WATERMARK_FLAG; }
-    ALWAYS_INLINE void setWatermark(const Streaming::WatermarkBound & wb)
-    {
-        /// Whether there is a watermark or not, we need id to mark which substream the chunk belongs to.
-        id = wb.id;
-        if (wb.watermark != 0)
-        {
-            flags |= WATERMARK_FLAG;
-            ts_1 = wb.watermark;
-            ts_2 = wb.watermark_lower_bound;
-        }
-    }
+
+    ALWAYS_INLINE bool hasTimeoutWatermark() const { return hasWatermark() && getWatermark() == Streaming::TIMEOUT_WATERMARK; }
 
     ALWAYS_INLINE void setSubstreamID(Streaming::SubstreamID id_) { id = std::move(id_); }
 
-    ALWAYS_INLINE void setWatermark(Int64 watermark, Int64 watermark_lower_bound)
+    ALWAYS_INLINE void setWatermark(Int64 watermark)
     {
         assert(watermark);
         flags |= WATERMARK_FLAG;
         ts_1 = watermark;
-        ts_2 = watermark_lower_bound;
     }
 
-    ALWAYS_INLINE Streaming::WatermarkBound getWatermark() const
+    ALWAYS_INLINE Int64 getWatermark() const
     {
         assert(hasWatermark());
 
-        return Streaming::WatermarkBound{id, ts_1, ts_2};
-    }
-
-    ALWAYS_INLINE std::pair<Int64, Int64> getWatermarkWithoutSubstreamID() const
-    {
-        assert(hasWatermark());
-
-        return {ts_1, ts_2};
+        return ts_1;
     }
 
     ALWAYS_INLINE void clearWatermark()
@@ -78,7 +61,6 @@ struct ChunkContext
         {
             flags &= ~WATERMARK_FLAG;
             ts_1 = 0;
-            ts_2 = 0;
         }
     }
 
@@ -211,6 +193,8 @@ public:
     /// proton : starts
     bool hasWatermark() const { return chunk_ctx && chunk_ctx->hasWatermark(); }
 
+    bool hasTimeoutWatermark() const { return chunk_ctx && chunk_ctx->hasTimeoutWatermark(); }
+
     bool hasChunkContext() const { return chunk_ctx && chunk_ctx->operator bool(); }
 
     bool requestCheckpoint() const { return chunk_ctx && chunk_ctx->getCheckpointContext(); }
@@ -245,7 +229,7 @@ public:
         return Streaming::INVALID_SUBSTREAM_ID;
     }
 
-    Streaming::WatermarkBound getWatermark() const
+    Int64 getWatermark() const
     {
         assert(chunk_ctx);
         return chunk_ctx->getWatermark();
@@ -259,6 +243,12 @@ public:
     bool avoidWatermark() const
     {
         return chunk_ctx && chunk_ctx->avoidWatermark();
+    }
+
+    void clearWatermark() const
+    {
+        if (chunk_ctx)
+            chunk_ctx->clearWatermark();
     }
     /// proton : ends
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Core/Streaming/WatermarkInfo.h>
+#include <Core/Streaming/SubstreamID.h>
 
 #include <deque>
 
@@ -8,7 +8,7 @@ namespace DB
 {
 namespace Streaming
 {
-using SessionID = UInt64;
+using SessionID = Int64;
 
 struct SessionInfo
 {

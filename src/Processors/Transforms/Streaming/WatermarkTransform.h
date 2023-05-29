@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Watermark.h"
+#include <Processors/Transforms/Streaming/WatermarkStamper.h>
 
 #include <Processors/ISimpleTransform.h>
 
@@ -16,14 +16,7 @@ namespace Streaming
 class WatermarkTransform final : public ISimpleTransform
 {
 public:
-    WatermarkTransform(
-        ASTPtr query,
-        TreeRewriterResultPtr syntax_analyzer_result,
-        FunctionDescriptionPtr desc,
-        bool proc_time,
-        const Block & input_header,
-        const Block & output_header,
-        Poco::Logger * log);
+    WatermarkTransform(const Block & header, WatermarkStamperParams params, Poco::Logger * log);
 
     ~WatermarkTransform() override = default;
 
@@ -36,15 +29,7 @@ private:
     void transform(Chunk & chunk) override;
 
 private:
-    void initWatermark(
-        const Block & input_header,
-        ASTPtr query,
-        TreeRewriterResultPtr syntax_analyzer_result,
-        FunctionDescriptionPtr desc,
-        bool proc_time,
-        Poco::Logger * log);
-
-    WatermarkPtr watermark;
+    WatermarkStamperPtr watermark;
 };
 }
 }

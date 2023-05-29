@@ -20,7 +20,7 @@ void ASTEmitQuery::formatImpl(const FormatSettings & format, FormatState &, Form
 
     if (after_watermark)
     {
-        format.ostr << (format.hilite ? hilite_keyword : "") << (elems ? " AND " : "") << "AFTER WATERMARK " << (format.hilite ? hilite_none : "");
+        format.ostr << (format.hilite ? hilite_keyword : "") << (elems ? " AND " : "") << "AFTER WATERMARK" << (format.hilite ? hilite_none : "");
         ++elems;
     }
 

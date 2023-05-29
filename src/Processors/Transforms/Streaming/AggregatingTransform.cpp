@@ -34,7 +34,7 @@ AggregatingTransform::AggregatingTransform(
     , aggregate_columns(params->params.aggregates_size)
     , many_data(std::move(many_data_))
     , variants(*many_data->variants[current_variant_])
-    , watermark_bound(many_data->watermarks[current_variant_])
+    , watermark(many_data->watermarks[current_variant_])
     , ckpt_epoch(many_data->ckpt_epochs[current_variant_])
     , current_variant(current_variant_)
     , max_threads(std::min(many_data->variants.size(), max_threads_))

@@ -26,7 +26,6 @@ namespace ProfileEvents
 namespace DB
 {
 
-
 /** Memory pool to append something. For example, short strings.
   * Usage scenario:
   * - put lot of strings inside pool, keep their addresses;
@@ -52,11 +51,10 @@ private:
 
         /// proton: starts. Make arena time-aware for streaming processing to allow
         /// free MemoryChunk according to timestamp
-        uint64_t min_timestamp = 0;
-        uint64_t max_timestamp = 0;
+        Int64 timestamp = std::numeric_limits<Int64>::min();
         /// proton: ends
 
-        MemoryChunk(size_t size_, MemoryChunk * prev_, uint64_t min_timestamp_, uint64_t max_timestamp_)
+        MemoryChunk(size_t size_, MemoryChunk * prev_, Int64 timestamp_)
         {
             ProfileEvents::increment(ProfileEvents::ArenaAllocChunks);
             ProfileEvents::increment(ProfileEvents::ArenaAllocBytes, size_);
@@ -67,8 +65,7 @@ private:
             prev = prev_;
 
             /// proton: starts
-            min_timestamp = min_timestamp_;
-            max_timestamp = max_timestamp_;
+            timestamp = timestamp_;
             /// proton: ends
 
             ASAN_POISON_MEMORY_REGION(begin, size_);
@@ -104,14 +101,13 @@ private:
     /// free MemoryChunk according to timestamp
     /// How to enable memory recycling :
     /// 1) Just right after ctor Arena and before any memory allocation from it, call arena.enableRecycle()
-    /// 2) For every memory allocation from arena, first call arena.setCurrentTimestamps(lower_bound, upper_bound),
-    ///    then the current Chunk which is used to allocate the memory will be tagged with the min_lower_bound, max_upper_bound timestamps.
-    ///    It is basically saying the `Chunk` contains data which spans [min_lower_bound, max_upper_bound]
+    /// 2) For every memory allocation from arena, first call arena.setCurrentTimestamp(timestamp),
+    ///    then the current Chunk which is used to allocate the memory will be tagged with a timestamp.
+    ///    It is basically saying the `Chunk` contains data before the timestamp
     /// 3) As timestamp progress, if clients don't need any data before `t`, call `arena.free(t)` which will walk through the chunk list
     ///    and recycle these which have upper bound timestamp less than `t`.
     /// 4) Depending on size etc, some of the recycled chunks will be added to `free_lists` for future memory allocation
-    uint64_t current_max_timestamp = 0;
-    uint64_t current_min_timestamp = 0;
+    Int64 current_timestamp = std::numeric_limits<Int64>::min();
 
     size_t chunks = 0;
     size_t size_in_bytes_in_free_lists = 0;
@@ -173,7 +169,7 @@ private:
                 return;
         }
 
-        head = new MemoryChunk(nextSize(min_size + pad_right), head, current_min_timestamp,  current_max_timestamp);
+        head = new MemoryChunk(nextSize(min_size + pad_right), head, current_timestamp);
         size_in_bytes += head->size();
 
         /// proton: starts
@@ -198,8 +194,7 @@ private:
             auto * chunk = free_lists[index].chunk;
             if (chunk)
             {
-                chunk->min_timestamp = current_min_timestamp;
-                chunk->max_timestamp = current_max_timestamp;
+                chunk->timestamp = current_timestamp;
 
                 free_lists[index].chunk = chunk->prev;
                 /// Since we have only one chunk in each free list slot
@@ -232,7 +227,7 @@ private:
 public:
     explicit Arena(size_t initial_size_ = 4096, size_t growth_factor_ = 2, size_t linear_growth_threshold_ = 128 * 1024 * 1024)
         : growth_factor(growth_factor_), linear_growth_threshold(linear_growth_threshold_),
-        head(new MemoryChunk(initial_size_, nullptr, 0, 0)), size_in_bytes(head->size()),
+        head(new MemoryChunk(initial_size_, nullptr, std::numeric_limits<Int64>::min())), size_in_bytes(head->size()),
         page_size(static_cast<size_t>(::getPageSize())), chunks(1)
     {
     }
@@ -256,8 +251,7 @@ public:
         head->pos += size;
 
         /// proton: starts
-        head->min_timestamp = current_min_timestamp;
-        head->max_timestamp = current_max_timestamp;
+        head->timestamp = current_timestamp;
         /// proton: ends
 
         ASAN_UNPOISON_MEMORY_REGION(res, size + pad_right);
@@ -279,8 +273,7 @@ public:
                 head->pos += size;
 
                 /// proton: starts
-                head->min_timestamp = current_min_timestamp;
-                head->max_timestamp = current_max_timestamp;
+                head->timestamp = current_timestamp;
                 /// proton: ends
 
                 ASAN_UNPOISON_MEMORY_REGION(res, size + pad_right);
@@ -444,18 +437,10 @@ public:
         recycle_enabled = enable_recycle;
     }
 
-    void setCurrentTimestamps(uint64_t timestamp)
+    void setCurrentTimestamp(Int64 timestamp)
     {
-        setCurrentTimestamps(timestamp, timestamp);
-    }
-
-    void setCurrentTimestamps(uint64_t min_timestamp, uint64_t max_timestamp)
-    {
-        if (max_timestamp > current_max_timestamp)
-            current_max_timestamp = max_timestamp;
-
-        if (min_timestamp < current_min_timestamp)
-            current_min_timestamp = min_timestamp;
+        if (timestamp > current_timestamp)
+            current_timestamp = timestamp;
     }
 
     /// If a Chunk's max timestamp < timestamp, it is good to recycle it
@@ -472,7 +457,7 @@ public:
         size_t free_list_misses = 0;
     };
 
-    Stats free(uint64_t timestamp)
+    Stats free(Int64 timestamp)
     {
         assert(head);
         assert(recycle_enabled);
@@ -485,7 +470,7 @@ public:
         auto * p = head;
         while (p)
         {
-            if (p->max_timestamp >= timestamp)
+            if (p->timestamp >= timestamp)
             {
                 prev_p = p;
                 p = p->prev;
@@ -509,7 +494,7 @@ public:
             prev_p->prev = nullptr; /// NOLINT(clang-analyzer-cplusplus.NewDelete)
 
             if (p == head)
-                head = new MemoryChunk(page_size, nullptr, 0, 0);
+                head = new MemoryChunk(page_size, nullptr, std::numeric_limits<Int64>::min());
         }
 
         assert(head);

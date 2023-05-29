@@ -40,15 +40,21 @@ std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk &
     auto result = AggregatingTransform::executeOrMergeColumns(chunk, num_rows);
     if (!sessions.empty())
     {
+        if (chunk.hasTimeoutWatermark())
+            sessions.back()->active = false;  /// force to finalize current session
+
         for (auto riter = sessions.rbegin(); riter != sessions.rend(); ++riter)
         {
             if (!(*riter)->active)
             {
-                chunk.getOrCreateChunkContext()->setWatermark((*riter)->id, (*riter)->id);
-                break;
+                chunk.getOrCreateChunkContext()->setWatermark((*riter)->id);
+                return result;
             }
         }
     }
+
+    chunk.clearWatermark();
+
     return result;
 }
 

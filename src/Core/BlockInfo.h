@@ -5,6 +5,9 @@
 #include <unordered_map>
 #include <vector>
 
+/// proton: starts.
+#include <Core/Streaming/Watermark.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -44,13 +47,10 @@ struct BlockInfo
     /// proton: starts
     Int32 bucketNum() const { return bucket_num; }
 
-    /// watermark = 0 => no watermark setup
-    /// watermark = -1 => force flush
-    /// watermark > 0 => timestamp watermark
-    Int64 watermark = 0;
-
-    /// watermark_start is `watermark - window_size`
-    Int64 watermark_lower_bound = 0;
+    /// watermark = INVALID_WATERMARK => no watermark setup
+    /// watermark != INVALID_WATERMARK => timestamp watermark
+    Int64 watermark = Streaming::INVALID_WATERMARK;
+    Int64 watermark_lower_bound = Streaming::INVALID_WATERMARK;
 
     /// any_field is reused for different non-conflicting / non-overlapped purposes / scenarios
     /// 1. act as append_time
@@ -69,7 +69,7 @@ struct BlockInfo
 
     Int64 blockID() const { return any_field; }
 
-    bool hasWatermark() const { return watermark != 0 || watermark_lower_bound != 0; }
+    bool hasWatermark() const { return watermark != Streaming::INVALID_WATERMARK || watermark_lower_bound != Streaming::INVALID_WATERMARK; }
     /// proton: ends
 
     /// Write the values in binary form. NOTE: You could use protobuf, but it would be overkill for this case.

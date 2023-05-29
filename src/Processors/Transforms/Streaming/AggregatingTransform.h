@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Interpreters/Streaming/Aggregator.h>
-#include <Core/Streaming/WatermarkInfo.h>
+#include <Core/Streaming/SubstreamID.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Processors/IProcessor.h>
 #include <Common/Stopwatch.h>
@@ -51,7 +51,7 @@ struct ManyAggregatedData
     std::vector<AggregatingTransform *> aggregating_transforms;
 
     /// Watermarks for all variants
-    std::vector<WatermarkBound> watermarks;
+    std::vector<Int64> watermarks;
     std::atomic<UInt32> num_finished = 0;
     std::atomic<UInt32> finalizations = 0;
     std::atomic<Int64> version = 0;
@@ -59,10 +59,10 @@ struct ManyAggregatedData
     std::condition_variable finalized;
     std::mutex finalizing_mutex;
 
-    /// `arena_watermark` is capturing the max watermark we have progressed and 
+    /// `finalized_watermark` is capturing the max watermark we have progressed and 
     /// it is used to garbage collect time bucketed memory : time buckets which 
     /// are below this watermark can be safely GCed.
-    Int64 arena_watermark;
+    Int64 finalized_watermark = INVALID_WATERMARK;
 
     std::condition_variable ckpted;
     std::mutex ckpt_mutex;
@@ -166,7 +166,7 @@ protected:
 
     ManyAggregatedDataPtr many_data;
     AggregatedDataVariants & variants;
-    WatermarkBound & watermark_bound;
+    Int64 & watermark;
     Int64 & ckpt_epoch;
     size_t current_variant;
 

@@ -3,7 +3,7 @@
 #include "ExecutorImpl.h"
 
 #include <Core/Block.h>
-#include <Core/Streaming/WatermarkInfo.h>
+#include <Core/Streaming/SubstreamID.h>
 
 namespace DB::Streaming::Substream
 {

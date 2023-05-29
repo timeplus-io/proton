@@ -26,17 +26,10 @@ DB::ITransformingStep::Traits getTraits()
 
 WatermarkStepWithSubstream::WatermarkStepWithSubstream(
     const DataStream & input_stream_,
-    Block output_header_,
-    ASTPtr query_,
-    TreeRewriterResultPtr syntax_analyzer_result_,
-    FunctionDescriptionPtr desc_,
-    bool proc_time_,
+    WatermarkStamperParams params_,
     Poco::Logger * log_)
-    : ITransformingStep(input_stream_, std::move(output_header_), getTraits())
-    , query(std::move(query_))
-    , syntax_analyzer_result(std::move(syntax_analyzer_result_))
-    , desc(std::move(desc_))
-    , proc_time(proc_time_)
+    : ITransformingStep(input_stream_, input_stream_.header, getTraits())
+    , params(std::move(params_))
     , log(log_)
 {
 }
@@ -44,7 +37,7 @@ WatermarkStepWithSubstream::WatermarkStepWithSubstream(
 void WatermarkStepWithSubstream::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & /* settings */)
 {
     pipeline.addSimpleTransform([&](const Block & header) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        return std::make_shared<WatermarkTransformWithSubstream>(query, syntax_analyzer_result, desc, proc_time, header, output_stream->header, log);
+        return std::make_shared<WatermarkTransformWithSubstream>(header, std::move(params), log);
     });
 }
 }

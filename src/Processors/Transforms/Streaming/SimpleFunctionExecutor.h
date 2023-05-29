@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Core/Streaming/WatermarkInfo.h>
+#include <Core/Streaming/SubstreamID.h>
 #include <Functions/IFunction.h>
 #include <Common/Streaming/Substream/Executor.h>
 

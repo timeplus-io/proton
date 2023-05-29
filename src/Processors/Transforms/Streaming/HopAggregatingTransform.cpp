@@ -32,20 +32,23 @@ HopAggregatingTransform::HopAggregatingTransform(
 
 WindowsWithBuckets HopAggregatingTransform::getFinalizedWindowsWithBuckets(Int64 watermark) const
 {
+    if (unlikely(watermark == INVALID_WATERMARK))
+        return {}; /// No window
+
     Window window;
-    size_t min_bucket_of_window, max_bucket_of_window;
+    Int64 min_bucket_of_window, max_bucket_of_window;
     auto calc_window_min_max_buckets = [&]() {
         if (params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START)
         {
-            min_bucket_of_window = static_cast<size_t>(window.start);
-            max_bucket_of_window = static_cast<size_t>(addTime(
-                window.end, window_params.interval_kind, -window_params.gcd_interval, *window_params.time_zone, window_params.time_scale));
+            min_bucket_of_window = window.start;
+            max_bucket_of_window = addTime(
+                window.end, window_params.interval_kind, -window_params.gcd_interval, *window_params.time_zone, window_params.time_scale);
         }
         else
         {
-            min_bucket_of_window = static_cast<size_t>(addTime(
-                window.start, window_params.interval_kind, window_params.gcd_interval, *window_params.time_zone, window_params.time_scale));
-            max_bucket_of_window = static_cast<size_t>(window.end);
+            min_bucket_of_window = addTime(
+                window.start, window_params.interval_kind, window_params.gcd_interval, *window_params.time_zone, window_params.time_scale);
+            max_bucket_of_window = window.end;
         }
     };
 
@@ -54,7 +57,7 @@ WindowsWithBuckets HopAggregatingTransform::getFinalizedWindowsWithBuckets(Int64
     calc_window_min_max_buckets();
 
     /// Get final buckets
-    std::set<size_t> final_buckets;
+    std::set<Int64> final_buckets;
     for (const auto & data_variant : many_data->variants)
         for (auto bucket : params->aggregator.bucketsBefore(*data_variant, max_bucket_of_window))
             final_buckets.emplace(bucket);
@@ -63,9 +66,8 @@ WindowsWithBuckets HopAggregatingTransform::getFinalizedWindowsWithBuckets(Int64
         return {};
 
     /// Collect finalized windows
-    auto [_, last_finalized_window_end] = HopHelper::getLastFinalizedWindow(many_data->arena_watermark, window_params);
     WindowsWithBuckets windows_with_buckets;
-    while (window.end > last_finalized_window_end && *final_buckets.begin() <= max_bucket_of_window)
+    while (*final_buckets.begin() <= max_bucket_of_window)
     {
         auto window_with_buckets = windows_with_buckets.emplace(windows_with_buckets.begin(), WindowWithBuckets{window, {}});
         for (auto time_bucket : final_buckets)

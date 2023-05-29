@@ -105,8 +105,7 @@ IProcessor::Status JoinTransform::prepare()
 
 void JoinTransform::work()
 {
-    int64_t local_watermark_lower_bound = std::numeric_limits<int64_t>::max();
-    int64_t local_watermark_upper_bound = std::numeric_limits<int64_t>::max();
+    int64_t local_watermark = std::numeric_limits<int64_t>::max();
 
     bool has_watermark = false;
     bool has_data = false;
@@ -125,10 +124,9 @@ void JoinTransform::work()
             {
                 if (input_chunk.hasWatermark())
                 {
-                    auto watermark_bound = input_chunk.getChunkContext()->getWatermarkWithoutSubstreamID();
+                    auto watermark = input_chunk.getChunkContext()->getWatermark();
 
-                    local_watermark_lower_bound = std::min(local_watermark_lower_bound, watermark_bound.second);
-                    local_watermark_upper_bound = std::min(local_watermark_upper_bound, watermark_bound.first);
+                    local_watermark = std::min(local_watermark, watermark);
                     has_watermark = true;
                 }
 
@@ -144,8 +142,6 @@ void JoinTransform::work()
             output_chunks.emplace_back(output_header_chunk.clone());
     }
 
-    assert(local_watermark_lower_bound <= local_watermark_upper_bound);
-
     if (has_data)
         doJoin(std::move(chunks));
 
@@ -155,30 +151,29 @@ void JoinTransform::work()
     {
         std::scoped_lock lock(mutex);
         if (!output_chunks.empty())
-            setupWatermark(output_chunks.back(), local_watermark_lower_bound, local_watermark_upper_bound);
+            setupWatermark(output_chunks.back(), local_watermark);
         else
             /// If there is no join result or chunks don't have data but have watermark, we still need propagate the watermark
-            propagateWatermark(local_watermark_lower_bound, local_watermark_upper_bound);
+            propagateWatermark(local_watermark);
     }
 }
 
-inline void JoinTransform::propagateWatermark(int64_t local_watermark_lower_bound, int64_t local_watermark_upper_bound)
+inline void JoinTransform::propagateWatermark(int64_t local_watermark)
 {
     auto chunk = output_header_chunk.clone();
-    if (setupWatermark(chunk, local_watermark_lower_bound, local_watermark_upper_bound))
+    if (setupWatermark(chunk, local_watermark))
         output_chunks.emplace_back(std::move(chunk));
 }
 
-inline bool JoinTransform::setupWatermark(Chunk & chunk, int64_t local_watermark_lower_bound, int64_t local_watermark_upper_bound)
+inline bool JoinTransform::setupWatermark(Chunk & chunk, int64_t local_watermark)
 {
     /// Watermark shall never regress
-    if (local_watermark_upper_bound > watermark_upper_bound && local_watermark_lower_bound > watermark_lower_bound)
+    if (local_watermark > watermark)
     {
-        watermark_upper_bound = local_watermark_upper_bound;
-        watermark_lower_bound = local_watermark_lower_bound;
+        watermark = local_watermark;
 
         /// Propagate it
-        chunk.getOrCreateChunkContext()->setWatermark(watermark_upper_bound, watermark_lower_bound);
+        chunk.getOrCreateChunkContext()->setWatermark(local_watermark);
         return true;
     }
     return false;

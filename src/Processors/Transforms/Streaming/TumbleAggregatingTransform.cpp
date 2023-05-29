@@ -31,6 +31,9 @@ TumbleAggregatingTransform::TumbleAggregatingTransform(
 
 WindowsWithBuckets TumbleAggregatingTransform::getFinalizedWindowsWithBuckets(Int64 watermark) const
 {
+    if (unlikely(watermark == INVALID_WATERMARK))
+        return {}; /// No window
+
     WindowsWithBuckets windows_with_buckets;
 
     /// When watermark reached to the current window, there may still be some events within the current window will arrive in future
@@ -48,7 +51,7 @@ WindowsWithBuckets TumbleAggregatingTransform::getFinalizedWindowsWithBuckets(In
             *window_params.time_zone,
             window_params.time_scale);
 
-        std::set<size_t> final_buckets;
+        std::set<Int64> final_buckets;
         for (const auto & data_variant : many_data->variants)
             for (auto bucket : params->aggregator.bucketsBefore(*data_variant, max_finalized_bucket))
                 final_buckets.emplace(bucket);
@@ -67,7 +70,7 @@ WindowsWithBuckets TumbleAggregatingTransform::getFinalizedWindowsWithBuckets(In
     else
     {
         auto max_finalized_bucket = current_window_start;
-        std::set<size_t> final_buckets;
+        std::set<Int64> final_buckets;
         for (const auto & data_variant : many_data->variants)
             for (auto bucket : params->aggregator.bucketsBefore(*data_variant, max_finalized_bucket))
                 final_buckets.emplace(bucket);

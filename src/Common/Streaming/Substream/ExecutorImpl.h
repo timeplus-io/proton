@@ -1169,31 +1169,27 @@ private:
 
     void recyclePoolByTimestamps(UInt64 num_rows, const ColumnRawPtrs & key_columns)
     {
-        UInt64 window_lower_bound = std::numeric_limits<UInt64>::max();
-        UInt64 window_upper_bound = 0;
+        Int64 max_timestamp = std::numeric_limits<Int64>::min();
 
         /// FIXME, can we avoid this loop ?
         for (size_t i = 0; i < num_rows; ++i)
         {
             auto window = key_columns[0]->get64(i);
-            if (window > window_upper_bound)
-                window_upper_bound = window;
-
-            if (window < window_lower_bound)
-                window_lower_bound = window;
+            if (window > max_timestamp)
+                max_timestamp = window;
         }
 
-        pool->setCurrentTimestamps(window_lower_bound, window_upper_bound);
+        pool->setCurrentTimestamp(max_timestamp);
 
-        LOG_DEBUG(log, "Setup pool timestamp, watermark_lower_bound={}, watermark={}", window_lower_bound, window_upper_bound);
+        LOG_DEBUG(log, "Setup pool timestamp watermark={}", max_timestamp);
 
         /// When new watermark come in, we shall recycle pool by last watermark
-        if (last_watermark < window_upper_bound)
+        if (last_watermark < max_timestamp)
         {
             if (last_watermark != 0)
                 removeBucketsBefore(last_watermark);
 
-            last_watermark = window_upper_bound;
+            last_watermark = max_timestamp;
         }
     }
 };

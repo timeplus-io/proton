@@ -4,8 +4,6 @@
 
 namespace DB
 {
-struct WatermarkBound;
-
 namespace Streaming::HopHelper
 {
 WindowInterval gcdWindowInterval(const ColumnWithTypeAndName & interval_col1, const ColumnWithTypeAndName & interval_col2);

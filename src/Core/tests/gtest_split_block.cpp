@@ -65,12 +65,12 @@ DB::Block baseBlock()
 struct BucketInfo
 {
     std::vector<UInt64> rows;
-    UInt64 min = std::numeric_limits<UInt64>::max();
-    UInt64 max = 0;
+    Int64 min = std::numeric_limits<Int64>::max();
+    Int64 max = std::numeric_limits<Int64>::min();
 };
 
 template <typename DataType, typename ColumnType, UInt32 scale, typename V>
-std::unordered_map<UInt64, BucketInfo> addSplitColumn(DB::Block & block, std::vector<V> values, UInt64 range)
+std::unordered_map<Int64, BucketInfo> addSplitColumn(DB::Block & block, std::vector<V> values, UInt64 range)
 {
     assert(block.rows() == values.size());
 
@@ -91,14 +91,14 @@ std::unordered_map<UInt64, BucketInfo> addSplitColumn(DB::Block & block, std::ve
     block.insert(time_col_with_type);
 
     /// bucket -> row positions
-    std::unordered_map<UInt64, BucketInfo> bucket_to_rows;
+    std::unordered_map<Int64, BucketInfo> bucket_to_rows;
 
     for (size_t row = 0; auto v : values)
     {
         auto & bucket_info = bucket_to_rows[v / range * range];
         bucket_info.rows.push_back(row);
-        bucket_info.min = std::min<UInt64>(bucket_info.min, v);
-        bucket_info.max = std::max<UInt64>(bucket_info.max, v);
+        bucket_info.min = std::min<Int64>(bucket_info.min, v);
+        bucket_info.max = std::max<Int64>(bucket_info.max, v);
 
         ++row;
     }
