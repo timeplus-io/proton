@@ -1,0 +1,1751 @@
+{
+    "test_suite_name": "query_state2",
+    "tag": "smoke",
+    "test_suite_config":{
+        "setup": {
+            "statements": [
+                {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream2"},
+                {"client":"python", "query_type": "table", "wait":1, "query":"create stream state_stream2 (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
+                {"client":"python", "query_type": "table", "query":"drop stream if exists test_join"},
+                {"client":"python", "query_type": "table", "wait":1, "query":"create stream test_join (id string, type string)"},
+                {"client":"python", "query_type": "table", "depends_on_stream":"test_join", "wait":1, "query": "insert into test_join(id, type) values ('dev1', 'roof')"},
+                {"client":"python", "query_type": "table", "depends_on_stream":"test_join", "wait":1, "query": "insert into test_join(id, type) values ('dev2', 'field')"},
+                {"client":"python", "query_type": "table", "depends_on_stream":"test_join", "wait":1, "query": "insert into test_join(id, type) values ('dev3', 'window')"},
+                {"client":"python", "query_type": "table", "depends_on_stream":"test_join", "wait":1, "query": "insert into test_join(id, type) values ('dev4', 'wall')"},
+                {"client":"python", "query_type": "table", "depends_on_stream":"test_join", "wait":1, "query": "insert into test_join(id, type) values ('dev5', 'roof')"},
+                {"client":"python", "query_type": "table", "depends_on_stream":"test_join", "wait":1, "query": "insert into test_join(id, type) values ('dev6', 'window')"},
+                {"client":"python", "query_type": "table", "depends_on_stream":"test_join", "wait":1, "query": "insert into test_join(id, type) values ('dev7', 'wall')"},
+                {"client":"python", "query_type": "table", "depends_on_stream":"test_join", "wait":1, "query": "insert into test_join(id, type) values ('dev8', 'floor')"}
+            ]
+        },
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "native_not_support"],"cluster": ["view", "cluster_table_bug"]}}
+    }, 
+    "comments": "Tests covering query state checkpointing smoke test cases",
+    "tests": [
+        {
+            "id": 50,
+            "tags": ["query_state"],
+            "name": "tail",
+            "description": "tail state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1950", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select id, value from state_stream2 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on": "1950", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1950' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1950'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1950",
+                    "expected_results":[
+                        ["dev1", "57.3"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 51,
+            "tags": ["tail"],
+            "name": "recover-from",
+            "description": "recover tail query from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1951", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select id, value from state_stream2 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on": "1951", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1951' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1951-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1951'"},
+                        {"client":"python", "query_type": "table", "depends_on":"1951", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1951' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1951'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1951",
+                    "expected_results":[
+                        ["dev1", "57.3"]
+                    ]
+                },
+                {
+                    "query_id":"1951-1",
+                    "expected_results":[
+                        ["dev2", "58.3"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 52,
+            "tags": ["tail"],
+            "name": "recover-from-unsubscribed",
+            "description": "recover from an unsubscribed query shall fail",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1952", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select id, value from state_stream2 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on": "1952", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1952' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1952'"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python","query_id":"1952-1", "depends_on_stream":"state_stream2","query_end_timer":2, "query_type": "stream", "query":"recover from '1952'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1952",
+                    "expected_results":[
+                        ["dev1", "57.3"]
+                    ]
+                },
+                {
+                    "query_id":"1952-1",
+                    "expected_results": []
+                }
+            ]
+        },
+        {
+            "id": 53,
+            "tags": ["tail"],
+            "name": "recover-from-non-exists",
+            "description": "recover from a non-exists query shall fail",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python","query_id":"1953", "query_type": "table", "depends_on_stream":"state_stream2", "query":"recover from '19000'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1953",
+                    "expected_results": "error_code:2003"
+                }
+            ]
+        },
+        {
+            "id": 54,
+            "tags": ["tail"],
+            "name": "recover_from_tail_query",
+            "description": "recover tail query from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1954", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select id, value from state_stream2 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on": "1954", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1954' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "stream", "query_id":"1954-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":2, "query":"recover from '1954'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1954' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1954'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1954",
+                    "expected_results":[
+                        ["dev1", "57.3"]
+                    ]
+                },
+                {
+                    "query_id":"1954-1",
+                    "expected_results":[
+                        ["dev2", "58.3"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 55,
+            "tags": ["tail"],
+            "name": "multiple_times_recover_from_tail_query_with_stateless_function",
+            "description": "multiple times recover tail query with stateless functions from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1955", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select id, to_int(value) from state_stream2 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on": "1955", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1955' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "stream", "query_id":"1955-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1955'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1955' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev6', 'ca', 66, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "stream", "query_id":"1955-2", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1955'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1955' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1955'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1955",
+                    "expected_results":[
+                        ["dev1", "57"]
+                    ]
+                },
+                {
+                    "query_id":"1955-1",
+                    "expected_results":[
+                        ["dev2", "58"]
+                    ]
+                },
+                {
+                    "query_id":"1955-2",
+                    "expected_results":[
+                        ["dev6", "66"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 56,
+            "tags": ["tail", "bug"],
+            "name": "recover_from_tail_query_with_stateful_function",
+            "description": "recover tail query with stateful functions from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1956", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select min(value), max(value) from state_stream2 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on": "1956", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1956' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "stream", "query_id":"1956-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1956'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1956' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1956'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1956",
+                    "expected_results":[
+                        ["57.3", "57.3"]
+                    ]
+                },
+                {
+                    "query_id":"1956-1",
+                    "expected_results":[
+                        ["57.3", "58.3"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 57,
+            "tags": ["tail", "bug"],
+            "name": "multiple_times_recover_from_tail_query_with_stateful_function",
+            "description": "multiple times recover tail query with stateful functions from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1957", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select min(value), max(value) from state_stream2 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on": "1957", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1957' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "stream", "query_id":"1957-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1957'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1957' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev6', 'ca', 66, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "stream", "query_id":"1957-2", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1957'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1957' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1957'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1957",
+                    "expected_results":[
+                        ["57.3", "57.3"]
+                    ]
+                },
+                {
+                    "query_id":"1957-1",
+                    "expected_results":[
+                        ["57.3", "58.3"]
+                    ]
+                },
+                {
+                    "query_id":"1957-2",
+                    "expected_results":[
+                        ["57.3", "66"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 1958,
+            "tags": ["query_state"],
+            "name": "global_aggr_without_group_by",
+            "description": "global aggregation state checkpoint without group by",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1958", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select count(), sum(value), avg(value), min(value), max(value) from state_stream2 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1958", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:05')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1958' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1958'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1958",
+                    "expected_results":[
+                        ["3", "181.6", "60.5", "57.3", "66"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 59,
+            "tags": ["query_state"],
+            "name": "recover_global_aggr_without_group_by",
+            "description": "recover global aggregation without group by from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1959", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select count(), sum(value), avg(value), min(value), max(value) from state_stream2 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1959", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:05')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1959' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:02'), ('dev8', 'ca', 67, '2020-02-02 20:00:02'), ('dev8', 'ca', 77, '2020-02-02 20:00:08')"},
+                        {"client":"python", "query_type": "stream","query_id":"1959-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1959'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1959' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1959'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1959",
+                    "expected_results":[
+                        ["3", "181.6", "60.5", "57.3", "66"]
+                    ]
+                },
+                {
+                    "query_id":"1959-1",
+                    "expected_results":[
+                        ["6", "405.6", "67.5", "57.3", "80"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 60,
+            "tags": ["query_state"],
+            "name": "multiple_times_recover_global_aggr_without_group_by",
+            "description": "multiple times recover global aggregation without group by from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1960", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select count(), sum(value), avg(value), min(value), max(value) from state_stream2 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1960", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:05')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1960' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:02'), ('dev8', 'ca', 67, '2020-02-02 20:00:02'), ('dev8', 'ca', 77, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "stream","query_id":"1960-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1960'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1960' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev3', 'ca', 57.3, '2020-02-02 20:00:07'), ('dev3', 'ca', 66, '2020-02-02 20:00:08'), ('dev4', 'ca', 76, '2020-02-02 20:00:09')"},
+                        {"client":"python", "query_type": "stream","query_id":"1960-2", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1960'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1960' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1960'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1960",
+                    "expected_results":[
+                        ["3", "181.6", "60.5", "57.3", "66"]
+                    ]
+                },
+                {
+                    "query_id":"1960-1",
+                    "expected_results":[
+                        ["6", "405.6", "67.5", "57.3", "80"]
+                    ]
+                },
+                {
+                    "query_id":"1960-2",
+                    "expected_results":[
+                        ["9", "604.9", "67.2", "57.3", "80.0"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 61,
+            "tags": ["query_state"],
+            "name": "global_aggr_with_group_by",
+            "description": "global aggregation state checkpoint with group by",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1961", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*), sum(value), avg(value), min(value), max(value) from state_stream2 group by id emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1961", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:05')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1961' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1961'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1961",
+                    "expected_results":[
+                        ["dev1", "2", "123.3", "61.7", "57.3", "66"],
+                        ["dev2", "1", "58.3", "58.3", "58.3", "58.3"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 62,
+            "tags": ["query_state"],
+            "name": "recover_global_aggr_with_group_by",
+            "description": "recover global aggregation with group by from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1962", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*), sum(value), avg(value), min(value), max(value) from state_stream2 group by id emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1962", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:05')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1962' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:02'), ('dev8', 'ca', 67, '2020-02-02 20:00:02'), ('dev8', 'ca', 77, '2020-02-02 20:00:08')"},
+                        {"client":"python", "query_type": "stream","query_id":"1962-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1962'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1962' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1962'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1962",
+                    "expected_results":[
+                        ["dev1", "2", "123.3", "61.7", "57.3", "66"],
+                        ["dev2", "1", "58.3", "58.3", "58.3", "58.3"]
+                    ]
+                },
+                {
+                    "query_id":"1962-1",
+                    "expected_results":[
+                        ["dev1", "2", "123.3", "61.7", "57.3", "66"],
+                        ["dev2", "2", "138.3", "69.1", "58.3", "80"],
+                        ["dev8", "2", "144", "72", "67", "77"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 63,
+            "tags": ["query_state"],
+            "name": "multiple_times_recover_global_aggr_with_group_by",
+            "description": "multiple times recover global aggregation with group by from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1963", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*), sum(value), avg(value), min(value), max(value) from state_stream2 group by id emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1963", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:05')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1963' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:02'), ('dev8', 'ca', 67, '2020-02-02 20:00:02'), ('dev8', 'ca', 77, '2020-02-02 20:00:08')"},
+                        {"client":"python", "query_type": "stream","query_id":"1963-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1963'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1963' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev3', 'ca', 57.3, '2020-02-02 20:00:07'), ('dev3', 'ca', 66, '2020-02-02 20:00:08'), ('dev4', 'ca', 76, '2020-02-02 20:00:09')"},
+                        {"client":"python", "query_type": "stream","query_id":"1963-2", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1963'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1963' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1963'"}
+                    ]
+                    }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1963",
+                    "expected_results":[
+                        ["dev1", "2", "123.3", "61.7", "57.3", "66"],
+                        ["dev2", "1", "58.3", "58.3", "58.3", "58.3"]
+                    ]
+                },
+                {
+                    "query_id":"1963-1",
+                    "expected_results":[
+                        ["dev1", "2", "123.3", "61.7", "57.3", "66"],
+                        ["dev2", "2", "138.3", "69.1", "58.3", "80"],
+                        ["dev8", "2", "144", "72", "67", "77"]
+                    ]
+                },
+                {
+                    "query_id":"1963-2",
+                    "expected_results":[
+                        ["dev1", "2", "123.3", "61.7", "57.3", "66"],
+                        ["dev2", "2", "138.3", "69.1", "58.3", "80"],
+                        ["dev8", "2", "144", "72", "67", "77"],
+                        ["dev3", "2", "123.3", "61.7", "57.3", "66"],
+                        ["dev4", "1", "76", "76", "76", "76"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 64,
+            "tags": ["query_state"],
+            "name": "tumble_window_aggr",
+            "description": "tumble window aggregation state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1964", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select id, sum(value), window_start, window_end from tumble(state_stream2, timestamp, interval 5 second) group by id, window_start, window_end emit stream settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1964", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 66, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:04')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:08')"},                      
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "select sleep(1)"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1964' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1964'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1964",
+                    "expected_results":[
+                        ["dev1", "123.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["dev2", "58.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 65,
+            "tags": ["query_state"],
+            "name": "recover_tumble_window_aggr",
+            "description": "recover tumble window aggregation from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1965", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select id, sum(value), window_start, window_end from tumble(state_stream2, timestamp, interval 5 second) group by id, window_start, window_end emit stream settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1965", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 66, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:04')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05')"},                       
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1965' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 77, '2020-02-02 20:00:07')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev6', 'ca', 66, '2020-02-02 20:00:11')"},                      
+                        {"client":"python", "query_type": "stream","query_id":"1965-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1965'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1965' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1965'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1965",
+                    "expected_results":[
+                        ["dev1", "123.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["dev2", "58.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                    ]
+                },
+                {
+                    "query_id":"1965-1",
+                    "expected_results":[
+                        ["dev2", "80", "2020-02-02 20:00:05", "2020-02-02 20:00:10"],
+                        ["dev8", "144", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 66,
+            "tags": ["query_state"],
+            "name": "multiple_times_recover_tumble_window_aggr",
+            "description": "multiple times recover tumble window aggregation from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1966", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select id, sum(value), window_start, window_end from tumble(state_stream2, timestamp, interval 5 second) group by id, window_start, window_end emit stream settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1966", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 66, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:04')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05')"},                       
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1966' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 77, '2020-02-02 20:00:07')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev3', 'ca', 57.3, '2020-02-02 20:00:11')"},                      
+                        {"client":"python", "query_type": "stream","query_id":"1966-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1966'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1966' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev3', 'ca', 66, '2020-02-02 20:00:12')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev4', 'ca', 76, '2020-02-02 20:00:14')"},     
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev6', 'ca', 66, '2020-02-02 20:00:15')"},                      
+                        {"client":"python", "query_type": "stream","query_id":"1966-2", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1966'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1966' sync"}
+                    ]
+                },
+                {
+                "statements": [
+                    {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1966'"}
+                ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1966",
+                    "expected_results":[
+                        ["dev1", "123.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["dev2", "58.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                    ]
+                },
+                {
+                    "query_id":"1966-1",
+                    "expected_results":[
+                        ["dev2", "80", "2020-02-02 20:00:05", "2020-02-02 20:00:10"],
+                        ["dev8", "144", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
+                    ]
+                },
+                {
+                    "query_id":"1966-2",
+                    "expected_results":[
+                        ["dev3", "123.3", "2020-02-02 20:00:10", "2020-02-02 20:00:15"],
+                        ["dev4", "76", "2020-02-02 20:00:10", "2020-02-02 20:00:15"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 67,
+            "tags": ["query_state"],
+            "name": "tumble_window_aggr_with_delay_interval",
+            "description": "tumble window aggregation with delay interval state checkpoint ",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1967", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select emit_version() as emit_version, id, count(*), window_start, window_end from tumble(state_stream2, timestamp, interval 5 second) group by id, window_start, window_end emit stream after watermark and delay interval 2 second settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1967", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 66, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:04')"},    
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:08')"},                  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "select sleep(1)"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1967' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1967'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1967",
+                    "expected_results":[
+                        ["0", "dev1", "2", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["0", "dev2", "2", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 68,
+            "tags": ["query_state"],
+            "name": "recover_tumble_window_aggr_with_delay_interval",
+            "description": "recover tumble window aggregation with delay interval from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1968", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select emit_version() as emit_version, id, count(*), window_start, window_end from tumble(state_stream2, timestamp, interval 5 second) group by id, window_start, window_end emit stream after watermark and delay interval 2 second settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1968", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 66, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:11')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1968' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 77, '2020-02-02 20:00:07')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev3', 'ca', 57.3, '2020-02-02 20:00:14')"},                      
+                        {"client":"python", "query_type": "stream","query_id":"1968-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1968'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1968' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1968'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1968",
+                    "expected_results":[
+                        ["0", "dev1", "2", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["0", "dev2", "1", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                    ]
+                },
+                {
+                    "query_id":"1968-1",
+                    "expected_results":[
+                        ["1", "dev2", "1", "2020-02-02 20:00:05", "2020-02-02 20:00:10"],
+                        ["1", "dev8", "1", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 69,
+            "tags": ["query_state"],
+            "name": "multiple_times_recover_tumble_window_aggr_with_delay_interval",
+            "description": "multiple times recover tumble window aggregation with delay interval from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1969", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select emit_version() as emit_version, id, count(*), window_start, window_end from tumble(state_stream2, timestamp, interval 5 second) group by id, window_start, window_end emit stream after watermark and delay interval 2 second settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1969", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 66, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:11')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1969' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 77, '2020-02-02 20:00:07')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev3', 'ca', 57.3, '2020-02-02 20:00:14')"},                      
+                        {"client":"python", "query_type": "stream","query_id":"1969-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1969'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1969' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:12')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 77, '2020-02-02 20:00:13')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev3', 'ca', 57.3, '2020-02-02 20:00:19')"},                      
+                        {"client":"python", "query_type": "stream","query_id":"1969-2", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1969'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1969' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1969'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1969",
+                    "expected_results":[
+                        ["0", "dev1", "2", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["0", "dev2", "1", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                    ]
+                },
+                {
+                    "query_id":"1969-1",
+                    "expected_results":[
+                        ["1", "dev2", "1", "2020-02-02 20:00:05", "2020-02-02 20:00:10"],
+                        ["1", "dev8", "1", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
+                    ]
+                },
+                {
+                    "query_id":"1969-2",
+                    "expected_results":[
+                        ["2", "dev2", "1", "2020-02-02 20:00:10", "2020-02-02 20:00:15"],
+                        ["2", "dev3", "1", "2020-02-02 20:00:10", "2020-02-02 20:00:15"],
+                        ["2", "dev8", "2", "2020-02-02 20:00:10", "2020-02-02 20:00:15"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 70,
+            "tags": ["query_state", "bug"],
+            "name": "hopping_window_aggr",
+            "description": "hopping window aggregation state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1970", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select emit_version(), id, max(value), window_start, window_end from hop(state_stream2, timestamp, interval 3 second, interval 5 second) group by id, window_start, window_end emit stream settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1970", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev6', 'ca', 66, '2020-02-02 20:00:04')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev6', 'ca', 69, '2020-02-02 20:00:06')"},                      
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 68, '2020-02-02 20:00:07')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:10')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1970' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1970'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1970",
+                    "expected_results":[
+                        ["0", "dev1", "57.3", "2020-02-02 19:59:57", "2020-02-02 20:00:02"],
+                        ["1", "dev1", "57.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["1", "dev2", "58.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["1", "dev6", "66", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["2", "dev2", "58.3", "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                        ["2", "dev6", "69", "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                        ["2", "dev8", "68", "2020-02-02 20:00:03", "2020-02-02 20:00:08"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 71,
+            "tags": ["query_state", "bug"],
+            "name": "recover_hopping_window_aggr",
+            "description": "recover hopping window aggregation from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1971", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select emit_version(), id, max(value), window_start, window_end from hop(state_stream2, timestamp, interval 3 second, interval 5 second) group by id, window_start, window_end emit stream settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1971", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev6', 'ca', 66, '2020-02-02 20:00:04')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev6', 'ca', 69, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1971' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 68, '2020-02-02 20:00:07')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:10')"},
+                        {"client":"python", "query_type": "stream","query_id":"1971-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1971'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1971' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1971'"}
+                    ]
+                    }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1971",
+                    "expected_results":[
+                        ["0", "dev1", "57.3", "2020-02-02 19:59:57", "2020-02-02 20:00:02"],
+                        ["1", "dev1", "57.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["1", "dev2", "58.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["1", "dev6", "66", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                    ]
+                },
+                {
+                    "query_id":"1971-1",
+                    "expected_results":[
+                        ["2", "dev2", "58.3", "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                        ["2", "dev6", "69", "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                        ["2", "dev8", "68", "2020-02-02 20:00:03", "2020-02-02 20:00:08"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 72,
+            "tags": ["query_state", "bug"],
+            "name": "multiple_times_recover_hopping_window_aggr",
+            "description": "multiple times recover hopping window aggregation from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1972", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select emit_version(), id, count(*), window_start, window_end from hop(state_stream2, timestamp, interval 3 second, interval 5 second) group by id, window_start, window_end emit stream settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1972", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev6', 'ca', 66, '2020-02-02 20:00:04')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev6', 'ca', 69, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1972' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 68, '2020-02-02 20:00:07')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev4', 'ca', 68, '2020-02-02 20:00:09')"},
+                        {"client":"python", "query_type": "stream","query_id":"1972-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1972'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1972' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:10')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev3', 'ca', 33, '2020-02-02 20:00:12')"},
+                        {"client":"python", "query_type": "stream","query_id":"1972-2", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1922'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1972' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1972'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1972",
+                    "expected_results":[
+                        ["0", "dev1", "1", "2020-02-02 19:59:57", "2020-02-02 20:00:02"],
+                        ["1", "dev1", "1", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["1", "dev2", "1", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["1", "dev6", "1", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                    ]
+                },
+                {
+                    "query_id":"1972-1",
+                    "expected_results":[
+                        ["2", "dev2", "1", "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                        ["2", "dev6", "2", "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                        ["2", "dev8", "1", "2020-02-02 20:00:03", "2020-02-02 20:00:08"]
+                    ]
+                },
+                {
+                "query_id":"1972-2",
+                    "expected_results":[
+                        ["3", "dev6", "1", "2020-02-02 20:00:06", "2020-02-02 20:00:11"],
+                        ["3", "dev8", "2", "2020-02-02 20:00:06", "2020-02-02 20:00:11"],
+                        ["3", "dev4", "1", "2020-02-02 20:00:06", "2020-02-02 20:00:11"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 73,
+            "tags": ["query_state", "bug"],
+            "name": "hopping_window_aggr_with_delay_interval",
+            "description": "hopping window aggregation with delay interval state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1973", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select emit_version(), id, count(*), window_start, window_end from hop(state_stream2, timestamp, interval 3 second, interval 5 second) group by id, window_start, window_end emit stream after watermark and delay interval 2 second settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1973", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 51, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 52, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 53, '2020-02-02 20:00:05')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 54, '2020-02-02 20:00:03')"},                      
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:08')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:04')"}, 
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:06')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:11')"}, 
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1973' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1973'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "statements": [
+                      {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream2"},
+                      {"client":"python", "query_type": "table", "wait":1, "query":"create stream state_stream2 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}
+                    ]
+                },
+                {
+                    "query_id":"1973",
+                    "expected_results":[
+                        ["0", "dev1", "1", "2020-02-02 19:59:57", "2020-02-02 20:00:02"],
+                        ["1", "dev1", "2", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["1", "dev2", "1", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["2", "dev1", "2", "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                        ["2", "dev2", "1", "2020-02-02 20:00:03", "2020-02-02 20:00:08"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 74,
+            "tags": ["query_state", "bug"],
+            "name": "recover_hopping_window_aggr_with_delay_interval",
+            "description": "recover hopping window aggregation with delay interval from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1974", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select emit_version(), id, count(*), window_start, window_end from hop(state_stream2, timestamp, interval 3 second, interval 5 second) group by id, window_start, window_end emit stream after watermark and delay interval 2 second settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1974", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 51, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 52, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 53, '2020-02-02 20:00:05')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 54, '2020-02-02 20:00:03')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1974' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:08')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:04')"}, 
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:06')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:11')"}, 
+                        {"client":"python", "query_type": "stream","query_id":"1974-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1974'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1974' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1974'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1974",
+                    "expected_results":[
+                        ["0", "dev1", "1", "2020-02-02 19:59:57", "2020-02-02 20:00:02"]
+                        
+                    ]
+                },
+                {
+                    "query_id":"1974-1",
+                    "expected_results":[
+                        ["1", "dev1", "2", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["1", "dev2", "1", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["2", "dev1", "2", "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                        ["2", "dev2", "1", "2020-02-02 20:00:03", "2020-02-02 20:00:08"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 75,
+            "tags": ["query_state", "bug"],
+            "name": "multiple_times_recover_hopping_window_aggr_with_delay_interval",
+            "description": "multiple times recover hopping window aggregation with delay interval from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1975", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select emit_version(), id, count(*), window_start, window_end from hop(state_stream2, timestamp, interval 3 second, interval 5 second) group by id, window_start, window_end emit stream after watermark and delay interval 2 second settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1975", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 51, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 52, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 53, '2020-02-02 20:00:05')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 54, '2020-02-02 20:00:03')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1975' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:08')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:04')"}, 
+                        {"client":"python", "query_type": "stream","query_id":"1975-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1975'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1975' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:06')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:11')"}, 
+                        {"client":"python", "query_type": "stream","query_id":"1975-2", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1975'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1975' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1975'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1975",
+                    "expected_results":[
+                        ["0", "dev1", "1", "2020-02-02 19:59:57", "2020-02-02 20:00:02"]
+                        
+                    ]
+                },
+                {
+                    "query_id":"1975-1",
+                    "expected_results":[
+                        ["1", "dev1", "2", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["1", "dev2", "1", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                    ]
+                },
+                {
+                    "query_id":"1975-2",
+                    "expected_results":[
+                        ["2", "dev1", "2", "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                        ["2", "dev2", "1", "2020-02-02 20:00:03", "2020-02-02 20:00:08"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 76,
+            "tags": ["query_state", "bug"],
+            "name": "session_window_aggr",
+            "description": "session window aggregation state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1976", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select emit_version(), id, count(), window_start, window_end from session(state_stream2, timestamp, 1s) partition by id group by window_start, window_end settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1976", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00+00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:00+00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:01+00:00')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:01+00:00')"}, 
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:02+00:00')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02+00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:03+00:00')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:03+00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:04+00:00')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:04+00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:05+00:00')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:05+00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:06+00:00')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:06+00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:07+00:00')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:07+00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:08+00:00')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:08+00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1976' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1976'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1976",
+                    "expected_results":[
+                        ["0", "dev1", "6", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:05+00:00"],
+                        ["0", "dev2", "6", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:05+00:00"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 77,
+            "tags": ["query_state", "bug"],
+            "name": "recover_session_window_aggr",
+            "description": "recover session window aggregation from a state checkpoint",
+            "steps":[
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1977",
+                    "expected_results":[
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 78,
+            "tags": ["query_state", "bug"],
+            "name": "multiple_times_recover_session_window_aggr",
+            "description": "multiple times recover session window aggregation from a state checkpoint",
+            "steps":[
+                
+            ],
+            "expected_results": [
+            ]
+        },
+        {
+            "id": 79,
+            "tags": ["query_state", "bug"],
+            "name": "stream_tail_join_table",
+            "description": "stream tail join table state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1979", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select a.id, b.type, a.value from state_stream2 as a join table(test_join) as b on a.id = b.id settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1979", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev4', 'ca', 59, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1979' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":5, "query":"unsubscribe to '1979'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1979",
+                    "expected_results":[
+                        ["dev1", "roof", 57.3],
+                        ["dev4", "wall", 59],
+                        ["dev8", "floor", 67]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 80,
+            "tags": ["query_state", "bug"],
+            "name": "recover_stream_tail_join_table",
+            "description": "recover stream tail join table from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1980", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to  select a.id, b.type, a.value from state_stream2 as a join table(test_join) as b on a.id = b.id settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1980", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev4', 'ca', 59, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":2, "query": "kill query where query_id='1980' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "stream","query_id":"1980-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1980'"},            
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1980' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1980'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1980",
+                    "expected_results":[
+                        ["dev1", "roof", 57.3],
+                        ["dev4", "wall", 59]
+                    ]
+                },
+                {
+                    "query_id":"1980-1",
+                    "expected_results":[
+                        ["dev8", "floor", 67]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 81,
+            "tags": ["query_state", "bug"],
+            "name": "multiple_times_recover_stream_tail_join_table",
+            "description": "multiple times recover stream tail join table from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1981", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to  select a.id, b.type, a.value from state_stream2 as a join table(test_join) as b on a.id = b.id settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1981", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "kill query where query_id='1981' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev4', 'ca', 59, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "stream","query_id":"1981-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1981'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1981' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "stream","query_id":"1981-2", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1981'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1981' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1981'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1981",
+                    "expected_results":[
+                        ["dev1", "roof", 57.3]
+                    ]
+                },
+                {
+                    "query_id":"1981-1",
+                    "expected_results":[
+                        ["dev4", "wall", 59]
+                    ]
+                },
+                {
+                    "query_id":"1981-2",
+                    "expected_results":[
+                        ["dev8", "floor", 67]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 82,
+            "tags": ["query_state", "bug"],
+            "name": "stream_tail_join_table_with_agg",
+            "description": "stream tail join table state checkpoint with aggregation",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1982", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select a.id, b.type, max(value) from state_stream2 as a join table(test_join) as b on a.id = b.id group by a.id, b.type settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1982", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1982' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1982'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1982",
+                    "expected_results":[
+                        ["dev1", "roof", 66],
+                        ["dev2", "field", 58.3]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 83,
+            "tags": ["query_state", "bug"],
+            "name": "recover_stream_tail_join_table_with_agg",
+            "description": "recover stream tail join table state checkpoint with aggregation from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1983", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select a.id, b.type, max(value) from state_stream2 as a join table(test_join) as b on a.id = b.id group by a.id, b.type settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1983", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1983' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev4', 'ca', 59, '2020-02-02 20:00:02'), ('dev8', 'ca', 67, '2020-02-02 20:00:08'), ('dev8', 'ca', 77, '2020-02-02 20:00:08')"}, 
+                            {"client":"python", "query_type": "stream","query_id":"1983-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1983'"},
+                            {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1983' sync"}
+                        ]
+                },
+                {
+                    "statements": [
+                            {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1983'"}
+                        ]
+                    }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1983",
+                    "expected_results":[
+                            ["dev1", "roof", 66],
+                            ["dev2", "field", 58.3]
+                    ]
+                },
+                {
+                    "query_id":"1983-1",
+                    "expected_results":[
+                        ["dev1", "roof", 66],
+                        ["dev2", "field", 58.3],
+                        ["dev4", "wall", 59],
+                        ["dev8", "floor", 77]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 84,
+            "tags": ["query_state", "bug"],
+            "name": "stream_tumble_aggr_join_table",
+            "description": "stream tumble aggregation join table state checkpoint ",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1984", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select a.id, b.type, max(a.value), window_start, window_end from tumble(state_stream2, timestamp, interval 5 second) as a join table(test_join) as b on a.id = b.id group by a.id, b.type, window_start, window_end settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1984", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 66, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:04')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05')"},                       
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev4', 'ca', 59, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:07')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 77, '2020-02-02 20:00:08')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev6', 'ca', 66, '2020-02-02 20:00:11')"},    
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1984' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1984'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1984",
+                    "expected_results":[
+                        ["dev1", "roof", "66", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["dev2", "field", "58.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["dev2", "field", "80", "2020-02-02 20:00:05", "2020-02-02 20:00:10"],
+                        ["dev4", "wall", "59", "2020-02-02 20:00:05", "2020-02-02 20:00:10"],
+                        ["dev8", "floor", "77", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 85,
+            "tags": ["query_state", "bug"],
+            "name": "recover_stream_tumble_aggr_join_table",
+            "description": "recover stream tumble aggregation join table state checkpoint from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1985", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select a.id, b.type, max(a.value), window_start, window_end from tumble(state_stream2, timestamp, interval 5 second) as a join table(test_join) as b on a.id = b.id group by a.id, b.type, window_start, window_end settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1985", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 66, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:04')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05')"},                          
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1985' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev4', 'ca', 59, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:07')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 77, '2020-02-02 20:00:08')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev6', 'ca', 66, '2020-02-02 20:00:11')"}, 
+                        {"client":"python", "query_type": "stream","query_id":"1985-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":1, "query":"recover from '1985'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1985' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                            {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1985'"}
+                        ]
+                    }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1985",
+                    "expected_results":[
+                        ["dev1", "roof", "66", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["dev2", "field", "58.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                    ]
+                },
+                {
+                    "query_id":"1985-1",
+                    "expected_results":[
+                        ["dev2", "field", "80", "2020-02-02 20:00:05", "2020-02-02 20:00:10"],
+                        ["dev4", "wall", "59", "2020-02-02 20:00:05", "2020-02-02 20:00:10"],
+                        ["dev8", "floor", "77", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 86,
+            "tags": ["query_state", "bug"],
+            "name": "hopping_window_aggr",
+            "description": "hopping window aggregation state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1986", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select id, b.type, window_start, window_end from hop(state_stream2, timestamp, interval 3 second, interval 5 second) as a join table(test_join) as b on a.id = b.id group by a.id, b.type, window_start, window_end emit stream settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1986", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev6', 'ca', 66, '2020-02-02 20:00:04')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev6', 'ca', 69, '2020-02-02 20:00:05')"},                      
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 68, '2020-02-02 20:00:08')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:10')"},  
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1986' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1986'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1986",
+                    "expected_results":[
+                        ["dev1", "roof", "57.3", "2020-02-02 19:59:57", "2020-02-02 20:00:02"],
+                        ["dev1", "roof", "57.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["dev2", "field", "58.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["dev6", "window", "66", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["dev2", "field", "58.3", "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                        ["dev6", "window", "69", "2020-02-02 20:00:03", "2020-02-02 20:00:08"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 87,
+            "tags": ["query_state"],
+            "name": "global_aggr_with_fun_count_distinct",
+            "description": "global aggregation with function count_distinct state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1987", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select count_distinct(id) from state_stream2 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1987", "depends_on_stream":"state_stream2", "wait":1, 
+                            "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1987' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1987'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1987",
+                    "expected_results":[
+                        ["2"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 88,
+            "tags": ["query_state"],
+            "name": "recover_global_aggr_with_fun_count_distinct",
+            "description": "recover global aggregation with function count_distinct from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1988", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select count_distinct(id) from state_stream2 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1988", "depends_on_stream":"state_stream2", "wait":1, 
+                            "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1988' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 67, '2020-02-02 20:00:07'), ('dev8', 'ca', 77, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "stream","query_id":"1988-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":2, "query":"recover from '1988'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":4, "query": "kill query where query_id='1988' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1988'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1988",
+                    "expected_results":[
+                        ["2"]
+                    ]
+                },
+                {
+                    "query_id":"1988-1",
+                    "expected_results":[
+                        ["3"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 89,
+            "tags": ["query_state"],
+            "name": "global_aggr_with_fun_count_if",
+            "description": "global aggregation with function count_if state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1989", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select count_if(value > 58) from state_stream2 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1989", "depends_on_stream":"state_stream2", "wait":1, 
+                            "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1989' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1989'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1989",
+                    "expected_results":[
+                        ["2"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 90,
+            "tags": ["query_state"],
+            "name": "recover_global_aggr_with_fun_count_if",
+            "description": "recover global aggregation with function count_if from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"1990", "depends_on_stream":"state_stream2", "wait":1, "terminate":"manuel", "query":"subscribe to select count_if(value > 58) from state_stream2 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1990", "depends_on_stream":"state_stream2", "wait":1, 
+                            "query": "insert into state_stream2(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":3, "query": "kill query where query_id='1990' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 77, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "stream","query_id":"1990-1", "depends_on_stream":"state_stream2", "terminate": "manual","wait":2, "query":"recover from '1990'"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"state_stream2", "wait":5, "query": "kill query where query_id='1990' sync"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1990'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1990",
+                    "expected_results":[
+                        ["2"]
+                    ]
+                },
+                {
+                    "query_id":"1990-1",
+                    "expected_results":[
+                        ["4"]
+                    ]
+                }
+            ]
+        }
+    ]
+}
