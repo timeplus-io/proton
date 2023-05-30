@@ -67,9 +67,9 @@ on:
       TIMEPLUS_WORKSPACE:
         required: false
       TP_DEMO_API_KEY:
-        required: true
+        required: false
       TP_DEMO_SITE_API_KEY: 
-        required: true
+        required: false
 
 
 jobs:
