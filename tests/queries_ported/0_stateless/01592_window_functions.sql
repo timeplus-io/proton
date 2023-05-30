@@ -98,7 +98,7 @@ SELECT
 	avg(price) OVER (PARTITION BY group_name ORDER BY price) as avg0,
 	avg(price) OVER (PARTITION BY group_name ORDER BY
 			price RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) as avg1
-FROM products INNER JOIN  product_groups USING (group_id)) t
+FROM products INNER JOIN  product_groups USING (group_id)) as t
 order by group_name, product_name, price;
 
 drop stream product_groups;

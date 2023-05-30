@@ -18,10 +18,12 @@ bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 {
     auto res = std::make_shared<ASTTableExpression>();
 
-    if (!ParserWithOptionalAlias(std::make_unique<ParserSubquery>(), true).parse(pos, res->subquery, expected)
-        && !ParserWithOptionalAlias(std::make_unique<ParserFunction>(true), false).parse(pos, res->table_function, expected) /// proton: updated
-        && !ParserWithOptionalAlias(std::make_unique<ParserCompoundIdentifier>(true, true), true)
+    /// proton: starts. don't allows aliases without AS keyword.
+    if (!ParserWithOptionalAlias(std::make_unique<ParserSubquery>(), false).parse(pos, res->subquery, expected)
+        && !ParserWithOptionalAlias(std::make_unique<ParserFunction>(true), false).parse(pos, res->table_function, expected)
+        && !ParserWithOptionalAlias(std::make_unique<ParserCompoundIdentifier>(true, true), false)
                 .parse(pos, res->database_and_table_name, expected))
+    /// proton: ends.
         return false;
 
     /// FINAL

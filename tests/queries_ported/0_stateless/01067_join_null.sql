@@ -6,7 +6,7 @@ FROM
     SELECT NULL
     UNION ALL
     SELECT NULL
-) js1
+) as js1
 ALL FULL OUTER JOIN 
 (
     SELECT 1 AS id
@@ -14,7 +14,7 @@ ALL FULL OUTER JOIN
     SELECT NULL
     UNION ALL
     SELECT NULL
-) js2 USING (id)
+) as js2 USING (id)
 ORDER BY id;
 
 SELECT '---';
@@ -23,11 +23,11 @@ SELECT *
 FROM
 (
     SELECT NULL AS x
-) js1
+) as js1
 INNER JOIN 
 (
     SELECT NULL AS x
-) js2 USING (x);
+) as js2 USING (x);
 
 SELECT '---';
 
@@ -35,8 +35,8 @@ SELECT *
 FROM
 (
     SELECT NULL AS x
-) js1
+) as js1
 FULL OUTER JOIN 
 (
     SELECT NULL AS x
-) js2 USING (x);
+) as js2 USING (x);

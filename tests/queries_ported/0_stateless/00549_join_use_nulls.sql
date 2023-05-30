@@ -18,7 +18,7 @@ FROM
         to_string(number) AS a
     FROM system.numbers
     LIMIT 2
-) js1
+) as js1
 ANY LEFT JOIN
 (
     SELECT
@@ -26,7 +26,7 @@ ANY LEFT JOIN
         to_string(number) AS b
     FROM system.numbers
     LIMIT 1, 2
-) js2 USING (k)
+) as js2 USING (k)
 ORDER BY k ASC;
 SELECT sleep(3);
 SELECT * FROM null_00549 ORDER BY k, a, b;

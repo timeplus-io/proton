@@ -13,8 +13,8 @@ INSERT INTO a2 VALUES (1, 2);
 INSERT INTO a2 VALUES (1, 3);
 INSERT INTO a2 VALUES (1, 4);
 
-SELECT a, b FROM a1 LEFT JOIN (SELECT a, b FROM a2) js2 USING a ORDER BY b SETTINGS join_default_strictness='ANY';
-SELECT a, b FROM a1 LEFT JOIN (SELECT a, b FROM a2) js2 USING a ORDER BY b; -- default SETTINGS join_default_strictness='ALL';
+SELECT a, b FROM a1 LEFT JOIN (SELECT a, b FROM a2) as js2 USING a ORDER BY b SETTINGS join_default_strictness='ANY';
+SELECT a, b FROM a1 LEFT JOIN (SELECT a, b FROM a2) as js2 USING a ORDER BY b; -- default SETTINGS join_default_strictness='ALL';
 
 DROP STREAM IF EXISTS a1;
 DROP STREAM IF EXISTS a2;

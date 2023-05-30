@@ -71,8 +71,8 @@ SELECT t.database, t.name
     FORMAT PrettyCompactNoEscapes;
 
 SELECT t.database, t.name
-    FROM system.tables t
-    ANY LEFT JOIN (SELECT 'system' AS base, 'one' AS name) db USING name
+    FROM system.tables as t
+    ANY LEFT JOIN (SELECT 'system' AS base, 'one' AS name) as db USING name
     WHERE t.database = db.base
     FORMAT PrettyCompactNoEscapes;
 

@@ -14,6 +14,6 @@ DROP STREAM a;
 DROP STREAM j;
 
 CREATE STREAM j (id uint8, val uint8) Engine = Join(ALL, INNER, id);
-SELECT * FROM (SELECT 0 as id, 1 as val) _ JOIN j USING id;
+SELECT * FROM (SELECT 0 as id, 1 as val) as _ JOIN j USING id;
 
 DROP STREAM j;

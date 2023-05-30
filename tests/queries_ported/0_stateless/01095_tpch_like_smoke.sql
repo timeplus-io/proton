@@ -286,8 +286,8 @@ from
             lineitem,
             orders,
             customer,
-            nation n1,
-            nation n2
+            nation as n1,
+            nation as n2
         where
             s_suppkey = l_suppkey
             and o_orderkey = l_orderkey
@@ -328,8 +328,8 @@ from
             lineitem,
             orders,
             customer,
-            nation n1,
-            nation n2,
+            nation as n1,
+            nation as n2,
             region
         where
             p_partkey = l_partkey

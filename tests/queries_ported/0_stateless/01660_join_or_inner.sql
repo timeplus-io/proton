@@ -29,7 +29,7 @@ select tab2.*, tab3.* from tab2 any join tab3 on a2 = a3 or b2 = b3;
 select '==';
 select tab2.*, tab3.* from tab2 any join tab3 on b2 = b3 or a2 = a3;
 
-SELECT 1 FROM (select 1 as a, 1 as aa, 1 as aaa, 1 as aaaa) A JOIN (select 1 as b, 1 as bb, 1 as bbb, 1 as bbbb, 1 as bbbbb) B ON a = b OR a = bb OR a = bbb OR a = bbbb OR aa = b OR aa = bb OR aa = bbb OR aa = bbbb OR aaa = b OR aaa = bb OR aaa = bbb OR aaa = bbbb OR aaaa = b OR aaaa = bb OR aaaa = bbb OR aaaa = bbbb OR a = bbbbb OR aa = bbbbb;
+SELECT 1 FROM (select 1 as a, 1 as aa, 1 as aaa, 1 as aaaa) as A JOIN (select 1 as b, 1 as bb, 1 as bbb, 1 as bbbb, 1 as bbbbb) as B ON a = b OR a = bb OR a = bbb OR a = bbbb OR aa = b OR aa = bb OR aa = bbb OR aa = bbbb OR aaa = b OR aaa = bb OR aaa = bbb OR aaa = bbbb OR aaaa = b OR aaaa = bb OR aaaa = bbb OR aaaa = bbbb OR a = bbbbb OR aa = bbbbb;
 
 drop stream tab2;
 drop stream tab3;

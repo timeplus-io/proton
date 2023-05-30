@@ -33,7 +33,7 @@ from joinbug;
 select * from joinbug;
 
 select id, id2, val, val2, created
-from ( SELECT to_uint64(array_join(range(50))) AS id2 ) js1
+from ( SELECT to_uint64(array_join(range(50))) AS id2 ) as js1
 SEMI LEFT JOIN joinbug_join using id2;
 
 -- type conversion

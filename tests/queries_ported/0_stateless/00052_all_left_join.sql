@@ -1,9 +1,9 @@
 SELECT * FROM
 (
     SELECT number AS k FROM system.numbers LIMIT 10
-) js1
+) as js1
 ALL LEFT JOIN
 (
     SELECT int_div(number, 2) AS k, number AS joined FROM system.numbers LIMIT 10
-) js2
+) as js2
 USING k;

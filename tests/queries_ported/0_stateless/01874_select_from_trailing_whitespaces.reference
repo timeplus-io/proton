@@ -1,11 +1,11 @@
-# select * from system.one a
+# select * from system.one as a
 SELECT 
   *
 FROM 
   system.one AS a
-# /* oneline */ select * from system.one a
+# /* oneline */ select * from system.one as a
 SELECT * FROM system.one AS a
-# select * from (select * from system.one) b, system.one a
+# select * from (select * from system.one) as b, system.one as a
 SELECT 
   *
 FROM 
@@ -15,9 +15,9 @@ FROM
   FROM 
     system.one
 ) AS b,system.one AS a
-# /* oneline */ select * from (select * from system.one) b, system.one a
+# /* oneline */ select * from (select * from system.one) as b, system.one as a
 SELECT * FROM (SELECT * FROM system.one) AS b,system.one AS a
-# select * from system.one a, (select * from system.one) b, system.one c
+# select * from system.one as a, (select * from system.one) as b, system.one as c
 SELECT 
   *
 FROM 
@@ -27,9 +27,9 @@ FROM
   FROM 
     system.one
 ) AS b,system.one AS c
-# /* oneline */ select * from system.one a, (select * from system.one) b, system.one c
+# /* oneline */ select * from system.one as a, (select * from system.one) as b, system.one as c
 SELECT * FROM system.one AS a,(SELECT * FROM system.one) AS b,system.one AS c
-# select * from system.one a, (select * from system.one) b, system.one c, (select * from system.one) d
+# select * from system.one as a, (select * from system.one) as b, system.one as c, (select * from system.one) as d
 SELECT 
   *
 FROM 
@@ -44,7 +44,7 @@ FROM
   FROM 
     system.one
 ) AS d
-# /* oneline */ select * from system.one a, (select * from system.one) b, system.one c, (select * from system.one) d
+# /* oneline */ select * from system.one as a, (select * from system.one) as b, system.one as c, (select * from system.one) as d
 SELECT * FROM system.one AS a,(SELECT * FROM system.one) AS b,system.one AS c,(SELECT * FROM system.one) AS d
 # select * from system.one union all select * from system.one
 SELECT 

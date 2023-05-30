@@ -47,7 +47,7 @@ SELECT
     l2_distance(v1.v, v2.v),
     l2_squared_distance(v1.v, v2.v),
     cosine_distance(v1.v, v2.v)
-FROM vec2 v1, vec2 v2
+FROM vec2 as v1, vec2 as v2
 WHERE length(v1.v) == length(v2.v);
 
 INSERT INTO vec2f VALUES (1, [100, 200, 0]), (2, [888, 777, 666]), (3, range(1, 35, 1)), (4, range(3, 37, 1)), (5, range(1, 135, 1)), (6, range(3, 137, 1));
@@ -60,7 +60,7 @@ SELECT
     l2_distance(v1.v, v2.v),
     l2_squared_distance(v1.v, v2.v),
     cosine_distance(v1.v, v2.v)
-FROM vec2f v1, vec2f v2
+FROM vec2f as v1, vec2f as v2
 WHERE length(v1.v) == length(v2.v);
 
 INSERT INTO vec2d VALUES (1, [100, 200, 0]), (2, [888, 777, 666]), (3, range(1, 35, 1)), (4, range(3, 37, 1)), (5, range(1, 135, 1)), (6, range(3, 137, 1));
@@ -73,7 +73,7 @@ SELECT
     l2_distance(v1.v, v2.v),
     l2_squared_distance(v1.v, v2.v),
     cosine_distance(v1.v, v2.v)
-FROM vec2d v1, vec2d v2
+FROM vec2d as v1, vec2d as v2
 WHERE length(v1.v) == length(v2.v);
 
 SELECT
@@ -85,7 +85,7 @@ SELECT
     l2_distance(v1.v, v2.v),
     l2_squared_distance(v1.v, v2.v),
     cosine_distance(v1.v, v2.v)
-FROM vec2f v1, vec2d v2
+FROM vec2f as v1, vec2d as v2
 WHERE length(v1.v) == length(v2.v);
 
 SELECT l1_distance([0, 0], [1]); -- { serverError 190 }

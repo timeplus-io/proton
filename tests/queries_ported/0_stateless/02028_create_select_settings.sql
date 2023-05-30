@@ -1,1 +1,1 @@
-create stream test_table engine MergeTree order by a as select a_table.a, b_table.b_arr from (select array_join(range(10000)) as a) a_table cross join (select range(10000) as b_arr) b_table settings max_memory_usage = 1; -- { serverError MEMORY_LIMIT_EXCEEDED }
+create stream test_table engine MergeTree order by a as select a_table.a, b_table.b_arr from (select array_join(range(10000)) as a) as a_table cross join (select range(10000) as b_arr) as b_table settings max_memory_usage = 1; -- { serverError MEMORY_LIMIT_EXCEEDED }

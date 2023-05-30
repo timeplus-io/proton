@@ -4,7 +4,7 @@ SELECT number as n, j FROM numbers(4) as nums
 ANY LEFT JOIN (
     SELECT number * 2 AS n, number + 10 AS j
     FROM numbers(4000)
-) js2
+) as js2
 USING n
 ORDER BY n;
 
@@ -14,7 +14,7 @@ SELECT number as n, j FROM numbers(4) as nums
 ANY LEFT JOIN (
     SELECT number * 2 AS n, number + 10 AS j
     FROM numbers(4000)
-) js2
+) as js2
 USING n
 ORDER BY n; -- { serverError 191 }
 
@@ -24,7 +24,7 @@ SELECT number as n, j FROM numbers(4) as nums
 ANY LEFT JOIN (
     SELECT number * 2 AS n, number + 10 AS j
     FROM numbers(4000)
-) js2
+) as js2
 USING n
 ORDER BY n;
 
@@ -34,7 +34,7 @@ SELECT number as n, j FROM numbers(4) as nums
 ANY LEFT JOIN (
     SELECT number * 2 AS n, number + 10 AS j
     FROM numbers(4000)
-) js2
+) as js2
 USING n
 ORDER BY n;
 
@@ -44,7 +44,7 @@ SELECT number as n, j FROM numbers(4) as nums
 ANY LEFT JOIN (
     SELECT number * 2 AS n, number + 10 AS j
     FROM numbers(4000)
-) js2
+) as js2
 USING n
 ORDER BY n;
 
@@ -54,6 +54,6 @@ SELECT number as n, j FROM numbers(4) as nums
 ANY LEFT JOIN (
     SELECT number * 2 AS n, number + 10 AS j
     FROM numbers(4000)
-) js2
+) as js2
 USING n
 ORDER BY n;

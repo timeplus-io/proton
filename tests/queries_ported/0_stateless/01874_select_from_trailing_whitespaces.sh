@@ -7,10 +7,10 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 set -e
 
 queries=(
-    "select * from system.one a"
-    "select * from (select * from system.one) b, system.one a"
-    "select * from system.one a, (select * from system.one) b, system.one c"
-    "select * from system.one a, (select * from system.one) b, system.one c, (select * from system.one) d"
+    "select * from system.one as a"
+    "select * from (select * from system.one) as b, system.one as a"
+    "select * from system.one as a, (select * from system.one) as b, system.one as c"
+    "select * from system.one as a, (select * from system.one) as b, system.one as c, (select * from system.one) as d"
     "select * from system.one union all select * from system.one"
     "select * from system.one union all (select * from system.one)"
     "select 1 union all (select 1 union distinct select 1)"

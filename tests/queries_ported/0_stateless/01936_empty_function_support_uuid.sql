@@ -26,9 +26,9 @@ SELECT
 FROM
 (
     SELECT * FROM users
-) t1 ALL LEFT JOIN (
+) as t1 ALL LEFT JOIN (
     SELECT * FROM orders
-) t2 USING (user_id);
+) as t2 USING (user_id);
 
 DROP STREAM users;
 DROP STREAM orders;

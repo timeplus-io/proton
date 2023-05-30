@@ -8,7 +8,7 @@ OPTIMIZE TABLE test FINAL;
 SET limit = 5;
 SELECT * FROM test; -- 5 rows
 SELECT * FROM test OFFSET 20; -- 5 rows
-SELECT * FROM (SELECT i FROM test LIMIT 10 OFFSET 50) TMP; -- 5 rows
+SELECT * FROM (SELECT i FROM test LIMIT 10 OFFSET 50) as TMP; -- 5 rows
 SELECT * FROM test LIMIT 4 OFFSET 192; -- 4 rows
 SELECT * FROM test LIMIT 10 OFFSET 195; -- 5 rows
 

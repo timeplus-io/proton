@@ -8,7 +8,7 @@ create stream using2(a uint8, b uint8) ENGINE=Memory;
 INSERT INTO using1 VALUES (1, 1) (2, 2) (3, 3);
 INSERT INTO using2 VALUES (4, 4) (2, 2) (3, 3);
 
-SELECT * FROM using1 ALL LEFT JOIN (SELECT * FROM using2) js2 USING (a, a, a, b, b, b, a, a) ORDER BY a;
+SELECT * FROM using1 ALL LEFT JOIN (SELECT * FROM using2) as js2 USING (a, a, a, b, b, b, a, a) ORDER BY a;
 
 DROP STREAM using1;
 DROP STREAM using2;

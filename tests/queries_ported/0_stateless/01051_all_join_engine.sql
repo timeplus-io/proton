@@ -22,27 +22,27 @@ INSERT INTO full_join (x, s) VALUES (2, 'b1'), (2, 'b2'), (4, 'b3'), (4, 'b4'), 
 SET join_use_nulls = 0;
 
 SELECT 'left';
-SELECT * FROM t1 LEFT JOIN left_join j USING(x) ORDER BY x, str, s;
+SELECT * FROM t1 LEFT JOIN left_join as j USING(x) ORDER BY x, str, s;
 
 SELECT 'inner';
-SELECT * FROM t1 INNER JOIN inner_join j USING(x) ORDER BY x, str, s;
+SELECT * FROM t1 INNER JOIN inner_join as j USING(x) ORDER BY x, str, s;
 
 SELECT 'right';
-SELECT * FROM t1 RIGHT JOIN right_join j USING(x) ORDER BY x, str, s;
+SELECT * FROM t1 RIGHT JOIN right_join as j USING(x) ORDER BY x, str, s;
 
 SELECT 'full';
-SELECT * FROM t1 FULL JOIN full_join j USING(x) ORDER BY x, str, s;
+SELECT * FROM t1 FULL JOIN full_join as j USING(x) ORDER BY x, str, s;
 
 SET join_use_nulls = 1;
 
-SELECT * FROM t1 LEFT JOIN left_join j USING(x) ORDER BY x, str, s; -- { serverError 264 }
-SELECT * FROM t1 FULL JOIN full_join j USING(x) ORDER BY x, str, s; -- { serverError 264 }
+SELECT * FROM t1 LEFT JOIN left_join as j USING(x) ORDER BY x, str, s; -- { serverError 264 }
+SELECT * FROM t1 FULL JOIN full_join as j USING(x) ORDER BY x, str, s; -- { serverError 264 }
 
 SELECT 'inner (join_use_nulls mix)';
-SELECT * FROM t1 INNER JOIN inner_join j USING(x) ORDER BY x, str, s;
+SELECT * FROM t1 INNER JOIN inner_join as j USING(x) ORDER BY x, str, s;
 
 SELECT 'right (join_use_nulls mix)';
-SELECT * FROM t1 RIGHT JOIN right_join j USING(x) ORDER BY x, str, s;
+SELECT * FROM t1 RIGHT JOIN right_join as j USING(x) ORDER BY x, str, s;
 
 DROP STREAM left_join;
 DROP STREAM inner_join;
@@ -60,27 +60,27 @@ INSERT INTO right_join (x, s) VALUES (2, 'b1'), (2, 'b2'), (4, 'b3'), (4, 'b4'),
 INSERT INTO full_join (x, s) VALUES (2, 'b1'), (2, 'b2'), (4, 'b3'), (4, 'b4'), (4, 'b5'), (5, 'b6');
 
 SELECT 'left (join_use_nulls)';
-SELECT * FROM t1 LEFT JOIN left_join j USING(x) ORDER BY x, str, s;
+SELECT * FROM t1 LEFT JOIN left_join as j USING(x) ORDER BY x, str, s;
 
 SELECT 'inner (join_use_nulls)';
-SELECT * FROM t1 INNER JOIN inner_join j USING(x) ORDER BY x, str, s;
+SELECT * FROM t1 INNER JOIN inner_join as j USING(x) ORDER BY x, str, s;
 
 SELECT 'right (join_use_nulls)';
-SELECT * FROM t1 RIGHT JOIN right_join j USING(x) ORDER BY x, str, s;
+SELECT * FROM t1 RIGHT JOIN right_join as j USING(x) ORDER BY x, str, s;
 
 SELECT 'full (join_use_nulls)';
-SELECT * FROM t1 FULL JOIN full_join j USING(x) ORDER BY x, str, s;
+SELECT * FROM t1 FULL JOIN full_join as j USING(x) ORDER BY x, str, s;
 
 SET join_use_nulls = 0;
 
-SELECT * FROM t1 LEFT JOIN left_join j USING(x) ORDER BY x, str, s; -- { serverError 264 }
-SELECT * FROM t1 FULL JOIN full_join j USING(x) ORDER BY x, str, s; -- { serverError 264 }
+SELECT * FROM t1 LEFT JOIN left_join as j USING(x) ORDER BY x, str, s; -- { serverError 264 }
+SELECT * FROM t1 FULL JOIN full_join as j USING(x) ORDER BY x, str, s; -- { serverError 264 }
 
 SELECT 'inner (join_use_nulls mix2)';
-SELECT * FROM t1 INNER JOIN inner_join j USING(x) ORDER BY x, str, s;
+SELECT * FROM t1 INNER JOIN inner_join as j USING(x) ORDER BY x, str, s;
 
 SELECT 'right (join_use_nulls mix2)';
-SELECT * FROM t1 RIGHT JOIN right_join j USING(x) ORDER BY x, str, s;
+SELECT * FROM t1 RIGHT JOIN right_join as j USING(x) ORDER BY x, str, s;
 
 DROP STREAM t1;
 

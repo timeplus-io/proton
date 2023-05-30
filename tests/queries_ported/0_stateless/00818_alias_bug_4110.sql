@@ -1,14 +1,14 @@
-select s.a as a, s.a + 1 as b from (select 10 as a) s;
-select s.a + 1 as a, s.a as b from (select 10 as a) s;
-select s.a + 1 as a, s.a + 1 as b from (select 10 as a) s;
-select s.a + 1 as b, s.a + 2 as a from (select 10 as a) s;
-select s.a + 2 as b, s.a + 1 as a from (select 10 as a) s;
+select s.a as a, s.a + 1 as b from (select 10 as a) as s;
+select s.a + 1 as a, s.a as b from (select 10 as a) as s;
+select s.a + 1 as a, s.a + 1 as b from (select 10 as a) as s;
+select s.a + 1 as b, s.a + 2 as a from (select 10 as a) as s;
+select s.a + 2 as b, s.a + 1 as a from (select 10 as a) as s;
 
 select a, a as a from (select 10 as a);
 select s.a, a, a + 1 as a from (select 10 as a) as s; -- { serverError 352 }
-select s.a + 2 as b, b - 1 as a from (select 10 as a) s;
-select s.a as a, s.a + 2 as b from (select 10 as a) s;
-select s.a + 1 as a, s.a + 2 as b from (select 10 as a) s;
+select s.a + 2 as b, b - 1 as a from (select 10 as a) as s;
+select s.a as a, s.a + 2 as b from (select 10 as a) as s;
+select s.a + 1 as a, s.a + 2 as b from (select 10 as a) as s;
 select a + 1 as a, a + 1 as b from (select 10 as a);
 select a + 1 as b, b + 1 as a from (select 10 as a); -- { serverError 174 }
 select 10 as a, a + 1 as a; -- { serverError 179 }

@@ -24,10 +24,10 @@ order by c1, c2;
 select key, s1.value, s2.value
 from (
     select 'key1' as key, 'value1' as value
-) s1
+) as s1
 all left join (
     select 'key1' as key, '' as value
     union all
     select 'key2' as key, to_nullable('') as value
-) s2
+) as s2
 using key;
