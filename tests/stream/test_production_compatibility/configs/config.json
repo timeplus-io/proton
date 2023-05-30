@@ -5,7 +5,7 @@
         {"name":"tp-duckbill","type":"address", "address": "https://cloud.timeplus.com.cn/duckbill", "api_key_env_var": "TP_DUCKBILL_API_KEY", "access_privilege":"read_only"},
         {"name":"local4","type":"native", "tp_native_host":"localhost","tp_native_port": "8463", "tp_native_rest_port": "3218", "read_protocol":"tp_native","write_protocol":"tp_native", "api_key_env_var": "TP_LOCAL_API_KEY", "access_privilege":"read_write"},
         {"name":"tp-demo","type":"address", "address": "https://dev.timeplus.cloud/tp-demo", "api_key_env_var": "TP_DEMO_API_KEY", "access_privilege":"read_only"},
-        {"name":"demo-site","type":"address", "address": "https://demo.timeplus.cloud/default", "api_key_env_var": "DEMO_SITE_API_KEY", "access_privilege":"read_only"}
+        {"name":"demo-site","type":"address", "address": "https://demo.timeplus.cloud/default", "api_key_env_var": "TP_DEMO_SITE_API_KEY", "access_privilege":"read_only"}
 
     ],
 

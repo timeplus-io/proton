@@ -26,6 +26,7 @@ config_file_path = f"{cur_dir}/test_stream_smoke/configs/config.json"
 
 docker_compose_file_path = f"{cur_dir}/test_stream_smoke/configs/docker-compose.yaml"
 DEFAULT_TEST_SUITE_TIMEOUT = 900 #seconds
+DEFAULT_TEST_FOLDER = "test_stream_smoke"
 
 
 def compress_logs(self, dir, relpaths, result_path):
@@ -143,6 +144,7 @@ def ci_runner(
     local_all_results_folder_path,
     setting_config,
     test_result_shared_list,
+    test_folders_list,
     run_mode="local",
     pr_number="0",
     commit_sha="0",
@@ -205,9 +207,8 @@ def ci_runner(
             f"{proton_server_container_name}://var/log/proton-server/proton-server.err.log"
         )
         proton_logs_in_container.append((proton_server_container_name, proton_err_log_in_container))
-   
-    retcode = pytest.main(
-        [
+    
+    pytest_args =         [
             "-s",
             "-v",
             pytest_logging_level_set,
@@ -215,8 +216,13 @@ def ci_runner(
             "--log-cli-date-format=%Y-%m-%d %H:%M:%S",
             f"--html={report_file_path}",
             "--self-contained-html",
-            "test_stream_smoke"
         ]
+    
+    for test_folder in test_folders_list:
+        pytest_args.append(test_folder)
+   
+    retcode = pytest.main(
+        pytest_args
     )
     
     if test_result_shared_list != None:
@@ -333,6 +339,13 @@ if __name__ == "__main__":
         help="Run tests in debug mode to print debug log, otherwiese info log ouput")
 
     parser.add_argument(
+        "-d",
+        "--test_folders",
+        default=DEFAULT_TEST_FOLDER,
+        help="test folders ci_runner will run tests in",
+    ) 
+
+    parser.add_argument(
         "-q", 
         "--test_suites", 
         default = None, 
@@ -383,7 +396,9 @@ if __name__ == "__main__":
         default=DEFAULT_TEST_SUITE_TIMEOUT,
         type=int,
         help="Test suite running time out timer, in seconds, 1200 seconds by default",
-    )    
+    )
+
+   
     
     parser.add_argument("--tmp", help="Path to tmp dir")
     args = parser.parse_args()
@@ -396,10 +411,17 @@ if __name__ == "__main__":
         logging_level = "DEBUG"
 
     settings = args.settings.split(",")
+    test_folders =args.test_folders
+    test_folders_list = args.test_folders.split(",")
+    
+    
 
     if args.test_suites:
         os.environ["PROTON_TEST_SUITES"] = args.test_suites
     
+    # if args.test_folders:
+    #     os.environ["PROTON_TEST_FOLDERS"] = args.test_folders
+
     if args.loop:
         loop = args.loop
     
@@ -440,7 +462,7 @@ if __name__ == "__main__":
         logger.setLevel(logging.DEBUG)
 
     logger.info(
-        f"ci_runner starting: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}, test_retry = {test_retry}, test_suite_timeout = {test_suite_timeout} starts"
+        f"ci_runner starting: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}, test_retry = {test_retry}, test_suite_timeout = {test_suite_timeout}, test_folders = {test_folders} starts"
     )
 
     if run_mode == "github":
@@ -515,6 +537,10 @@ if __name__ == "__main__":
     logger.info(f"Check proton_python_driver and install...")
     proton_python_driver_install()
 
+    if "test_production_compatibility" in test_folders_list: #todo: hardcode now, refactor later to have a system_test_runner to run all pytests folders like test_production_compatibility
+        settings = ["default"]
+        docker_compose_file_path = f"{cur_dir}/test_production_compatibility/configs/docker-compose.yaml"
+
     if run_mode == "local":
         env_docker_compose_res = True
         logger.info(f"Bypass docker compose up.")
@@ -538,7 +564,7 @@ if __name__ == "__main__":
         if setting_config is None:
             raise Exception(f"no config for setting = {setting} found in {config_file_path}")  
         logger.debug(f"ci_runner: setting_config for setting = {setting} = {setting_config}")
-        args = (cur_dir, setting_config,test_result_shared_list, run_mode, "0", "0", setting, logging_level)
+        args = (cur_dir, setting_config,test_result_shared_list, test_folders_list, run_mode, "0", "0", setting, logging_level)
         proc = mp.Process(target=ci_runner, args=args)
         proc.start()
         #logger.debug(f"args = {args}, ci_runner proc starts...")
