@@ -92,8 +92,7 @@ CompressionMethod chooseCompressionMethod(const std::string & path, const std::s
         ErrorCodes::NOT_IMPLEMENTED);
 }
 
-
-std::unique_ptr<ReadBuffer> wrapReadBufferWithCompressionMethod(
+static std::unique_ptr<CompressedReadBufferWrapper> createCompressedWrapper(
     std::unique_ptr<ReadBuffer> nested, CompressionMethod method, size_t buf_size, char * existing_memory, size_t alignment)
 {
     if (method == CompressionMethod::Gzip || method == CompressionMethod::Zlib)
@@ -117,10 +116,15 @@ std::unique_ptr<ReadBuffer> wrapReadBufferWithCompressionMethod(
         return std::make_unique<HadoopSnappyReadBuffer>(std::move(nested), buf_size, existing_memory, alignment);
 #endif
 
+    throw Exception("Unsupported compression method", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+std::unique_ptr<ReadBuffer> wrapReadBufferWithCompressionMethod(
+    std::unique_ptr<ReadBuffer> nested, CompressionMethod method, size_t buf_size, char * existing_memory, size_t alignment)
+{
     if (method == CompressionMethod::None)
         return nested;
-
-    throw Exception("Unsupported compression method", ErrorCodes::NOT_IMPLEMENTED);
+    return createCompressedWrapper(std::move(nested), method, buf_size, existing_memory, alignment);
 }
 
 

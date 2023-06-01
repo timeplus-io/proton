@@ -20,7 +20,7 @@
 
 namespace ProfileEvents
 {
-    extern const Event S3WriteBytes;
+    extern const Event WriteBufferFromS3Bytes;
     extern const Event RemoteFSCacheDownloadBytes;
 }
 
@@ -101,6 +101,7 @@ void WriteBufferFromS3::nextImpl()
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Empty blob name");
 
         auto cache_key = cache->hash(blob_name);
+
         file_segments_holder.emplace(cache->setDownloading(cache_key, current_download_offset, size));
         current_download_offset += size;
 
@@ -124,7 +125,7 @@ void WriteBufferFromS3::nextImpl()
         }
     }
 
-    ProfileEvents::increment(ProfileEvents::S3WriteBytes, offset());
+    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3Bytes, offset());
 
     last_part_size += offset();
 
@@ -137,6 +138,7 @@ void WriteBufferFromS3::nextImpl()
         writePart();
 
         allocateBuffer();
+        file_segments_holder.reset();
     }
 
     waitForReadyBackGroundTasks();

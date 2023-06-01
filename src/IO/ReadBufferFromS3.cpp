@@ -19,9 +19,9 @@
 
 namespace ProfileEvents
 {
-    extern const Event S3ReadMicroseconds;
-    extern const Event S3ReadBytes;
-    extern const Event S3ReadRequestsErrors;
+    extern const Event ReadBufferFromS3Microseconds;
+    extern const Event ReadBufferFromS3Bytes;
+    extern const Event ReadBufferFromS3RequestsErrors;
     extern const Event ReadBufferSeekCancelConnection;
 }
 
@@ -46,7 +46,7 @@ ReadBufferFromS3::ReadBufferFromS3(
     size_t offset_,
     size_t read_until_position_,
     bool restricted_seek_)
-    : SeekableReadBufferWithSize(nullptr, 0)
+    : SeekableReadBuffer(nullptr, 0)
     , client_ptr(std::move(client_ptr_))
     , bucket(bucket_)
     , key(key_)
@@ -119,14 +119,14 @@ bool ReadBufferFromS3::nextImpl()
             /// Try to read a next portion of data.
             next_result = impl->next();
             watch.stop();
-            ProfileEvents::increment(ProfileEvents::S3ReadMicroseconds, watch.elapsedMicroseconds());
+            ProfileEvents::increment(ProfileEvents::ReadBufferFromS3Microseconds, watch.elapsedMicroseconds());
             break;
         }
         catch (const Exception & e)
         {
             watch.stop();
-            ProfileEvents::increment(ProfileEvents::S3ReadMicroseconds, watch.elapsedMicroseconds());
-            ProfileEvents::increment(ProfileEvents::S3ReadRequestsErrors, 1);
+            ProfileEvents::increment(ProfileEvents::ReadBufferFromS3Microseconds, watch.elapsedMicroseconds());
+            ProfileEvents::increment(ProfileEvents::ReadBufferFromS3RequestsErrors, 1);
 
             LOG_DEBUG(log, "Caught exception while reading S3 object. Bucket: {}, Key: {}, Offset: {}, Attempt: {}, Message: {}",
                     bucket, key, getPosition(), attempt, e.message());
@@ -148,7 +148,7 @@ bool ReadBufferFromS3::nextImpl()
 
     BufferBase::set(impl->buffer().begin(), impl->buffer().size(), impl->offset()); /// use the buffer returned by `impl`
 
-    ProfileEvents::increment(ProfileEvents::S3ReadBytes, working_buffer.size());
+    ProfileEvents::increment(ProfileEvents::ReadBufferFromS3Bytes, working_buffer.size());
     offset += working_buffer.size();
 
     return true;
@@ -208,7 +208,7 @@ off_t ReadBufferFromS3::seek(off_t offset_, int whence)
     return offset;
 }
 
-std::optional<size_t> ReadBufferFromS3::getTotalSize()
+std::optional<size_t> ReadBufferFromS3::getFileSize()
 {
     if (file_size)
         return file_size;
@@ -307,7 +307,7 @@ off_t ReadBufferS3Factory::seek(off_t off, [[maybe_unused]] int whence)
     return off;
 }
 
-std::optional<size_t> ReadBufferS3Factory::getTotalSize()
+std::optional<size_t> ReadBufferS3Factory::getFileSize()
 {
     return object_size;
 }

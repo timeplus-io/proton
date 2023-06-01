@@ -7,21 +7,53 @@
 #include <Formats/ReadSchemaUtils.h>
 #include <Processors/Formats/ISchemaReader.h>
 #include <Common/assert_cast.h>
+#include <Interpreters/Context.h>
+#include <Storages/IStorage.h>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
-    extern const int CANNOT_EXTRACT_STREAM_STRUCTURE;
+    extern const int EMPTY_DATA_PASSED;
     extern const int BAD_ARGUMENTS;
+    extern const int ONLY_NULLS_WHILE_READING_SCHEMA;
+    extern const int CANNOT_EXTRACT_STREAM_STRUCTURE;
+}
+
+static std::optional<NamesAndTypesList> getOrderedColumnsList(
+    const NamesAndTypesList & columns_list, const Names & columns_order_hint)
+{
+    if (columns_list.size() != columns_order_hint.size())
+        return {};
+
+    std::unordered_map<String, DataTypePtr> available_columns;
+    for (const auto & [name, type] : columns_list)
+        available_columns.emplace(name, type);
+
+    NamesAndTypesList res;
+    for (const auto & name : columns_order_hint)
+    {
+        auto it = available_columns.find(name);
+        if (it == available_columns.end())
+            return {};
+
+        res.emplace_back(name, it->second);
+    }
+    return res;
+}
+
+bool isRetryableSchemaInferenceError(int code)
+{
+    return code == ErrorCodes::EMPTY_DATA_PASSED || code == ErrorCodes::ONLY_NULLS_WHILE_READING_SCHEMA;
 }
 
 ColumnsDescription readSchemaFromFormat(
     const String & format_name,
     const std::optional<FormatSettings> & format_settings,
-    ReadBufferCreator read_buffer_creator,
-    ContextPtr context,
+    ReadBufferIterator & read_buffer_iterator,
+    bool retry,
+    ContextPtr & context,
     std::unique_ptr<ReadBuffer> & buf_out)
 {
     NamesAndTypesList names_and_types;
@@ -41,22 +73,57 @@ ColumnsDescription readSchemaFromFormat(
     }
     else if (FormatFactory::instance().checkIfFormatHasSchemaReader(format_name))
     {
-        buf_out = read_buffer_creator();
-        if (buf_out->eof())
-            /// proton: starts
-            throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "Cannot extract stream structure from {} format file, file is empty", format_name);
-            /// proton: ends
+        std::string exception_messages;
+        SchemaReaderPtr schema_reader;
+        std::unique_ptr<ReadBuffer> buf;
+        while ((buf = read_buffer_iterator()))
+        {
+            if (buf->eof())
+            {
+                auto exception_message = fmt::format("Cannot extract table structure from {} format file, file is emptyg", format_name);
 
-        auto schema_reader = FormatFactory::instance().getSchemaReader(format_name, *buf_out, context, format_settings);
-        try
-        {
-            names_and_types = schema_reader->readSchema();
+                if (!retry)
+                    throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, exception_message);
+
+                exception_messages += "\n" + exception_message;
+                continue;
+            }
+
+            try
+            {
+                schema_reader = FormatFactory::instance().getSchemaReader(format_name, *buf, context, format_settings);
+                names_and_types = schema_reader->readSchema();
+                buf_out = std::move(buf);
+                break;
+            }
+            catch (...)
+            {
+                auto exception_message = getCurrentExceptionMessage(false);
+
+                if (!retry || !isRetryableSchemaInferenceError(getCurrentExceptionCode()))
+                    throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "Cannot extract table structure from {} format file. Error: {}", format_name, exception_message);
+
+                exception_messages += "\n" + exception_message;
+            }
         }
-        catch (const DB::Exception & e)
+
+        if (names_and_types.empty())
+            throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "All attempts to extract table structure from files failed. Errors:{}", exception_messages);
+
+        /// If we have "INSERT SELECT" query then try to order
+        /// columns as they are ordered in table schema for formats
+        /// without strict column order (like JSON and TSKV).
+        /// It will allow to execute simple data loading with query
+        /// "INSERT INTO table SELECT * FROM ..."
+        const auto & insertion_table = context->getInsertionTable();
+        if (!schema_reader->hasStrictOrderOfColumns() && !insertion_table.empty())
         {
-            /// proton: starts
-            throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "Cannot extract stream structure from {} format file. Error: {}", format_name, e.message());
-            /// proton: ends
+            auto storage = DatabaseCatalog::instance().getTable(insertion_table, context);
+            auto metadata = storage->getInMemoryMetadataPtr();
+            auto names_in_storage = metadata->getColumns().getNamesOfPhysical();
+            auto ordered_list = getOrderedColumnsList(names_and_types, names_in_storage);
+            if (ordered_list)
+                names_and_types = *ordered_list;
         }
     }
     else
@@ -65,10 +132,10 @@ ColumnsDescription readSchemaFromFormat(
     return ColumnsDescription(names_and_types);
 }
 
-ColumnsDescription readSchemaFromFormat(const String & format_name, const std::optional<FormatSettings> & format_settings, ReadBufferCreator read_buffer_creator, ContextPtr context)
+ColumnsDescription readSchemaFromFormat(const String & format_name, const std::optional<FormatSettings> & format_settings, ReadBufferIterator & read_buffer_iterator, bool retry, ContextPtr & context)
 {
     std::unique_ptr<ReadBuffer> buf_out;
-    return readSchemaFromFormat(format_name, format_settings, read_buffer_creator, context, buf_out);
+    return readSchemaFromFormat(format_name, format_settings, read_buffer_iterator, retry, context, buf_out);
 }
 
 DataTypePtr generalizeDataType(DataTypePtr type)

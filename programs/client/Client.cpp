@@ -136,7 +136,7 @@ bool Client::executeMultiQuery(const String & all_queries_text)
     String full_query; // full_query is the query + inline INSERT data + trailing comments (the latter is our best guess for now).
     String query_to_execute;
     ASTPtr parsed_query;
-    std::optional<Exception> current_exception;
+    std::unique_ptr<Exception> current_exception;
 
     while (true)
     {

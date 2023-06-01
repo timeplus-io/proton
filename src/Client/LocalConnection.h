@@ -30,7 +30,7 @@ struct LocalQueryState
     std::unique_ptr<PushingPipelineExecutor> pushing_executor;
     std::unique_ptr<PushingAsyncPipelineExecutor> pushing_async_executor;
 
-    std::optional<Exception> exception;
+    std::unique_ptr<Exception> exception;
 
     /// Current block to be sent next.
     std::optional<Block> block;

@@ -15,7 +15,7 @@ extern const int SEEK_POSITION_OUT_OF_BOUND;
 
 ParallelReadBuffer::ParallelReadBuffer(
     std::unique_ptr<ReadBufferFactory> reader_factory_, ThreadPoolCallbackRunner<void> schedule_, size_t max_working_readers_)
-    : SeekableReadBufferWithSize(nullptr, 0)
+    : SeekableReadBuffer(nullptr, 0)
     , max_working_readers(max_working_readers_)
     , schedule(std::move(schedule_))
     , reader_factory(std::move(reader_factory_))
@@ -117,10 +117,10 @@ off_t ParallelReadBuffer::seek(off_t offset, int whence)
     return offset;
 }
 
-std::optional<size_t> ParallelReadBuffer::getTotalSize()
+std::optional<size_t> ParallelReadBuffer::getFileSize()
 {
     std::lock_guard lock{mutex};
-    return reader_factory->getTotalSize();
+    return reader_factory->getFileSize();
 }
 
 off_t ParallelReadBuffer::getPosition()

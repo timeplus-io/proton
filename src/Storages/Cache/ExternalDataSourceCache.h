@@ -40,7 +40,7 @@ public:
     std::unique_ptr<ReadBufferFromFileBase> file_buffer;
 };
 
-class RemoteReadBuffer : public BufferWithOwnMemory<SeekableReadBufferWithSize>
+class RemoteReadBuffer : public BufferWithOwnMemory<SeekableReadBuffer>, public WithFileSize
 {
 public:
     explicit RemoteReadBuffer(size_t buff_size);
@@ -50,7 +50,7 @@ public:
     bool nextImpl() override;
     off_t seek(off_t off, int whence) override;
     off_t getPosition() override;
-    std::optional<size_t> getTotalSize() override { return remote_file_size; }
+    std::optional<size_t> getFileSize() override { return remote_file_size; }
 
 private:
     std::unique_ptr<LocalFileHolder> local_file_holder;

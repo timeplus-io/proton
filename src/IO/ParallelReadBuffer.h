@@ -22,7 +22,7 @@ namespace DB
  *
  * Number of working readers limited by max_working_readers.
  */
-class ParallelReadBuffer : public SeekableReadBufferWithSize
+class ParallelReadBuffer : public SeekableReadBuffer
 {
 private:
     /// Blocks until data occurred in the first reader or this reader indicate finishing
@@ -68,14 +68,13 @@ private:
     };
 
 public:
-    class ReadBufferFactory
+    class ReadBufferFactory : public WithFileSize
     {
     public:
-        virtual ~ReadBufferFactory() = default;
+        virtual ~ReadBufferFactory() override = default;
 
         virtual SeekableReadBufferPtr getReader() = 0;
         virtual off_t seek(off_t off, int whence) = 0;
-        virtual std::optional<size_t> getTotalSize() = 0;
     };
 
     ParallelReadBuffer(std::unique_ptr<ReadBufferFactory> reader_factory_, ThreadPoolCallbackRunner<void> schedule_, size_t max_working_readers);
@@ -83,8 +82,10 @@ public:
     ~ParallelReadBuffer() override { finishAndWait(); }
 
     off_t seek(off_t off, int whence) override;
-    std::optional<size_t> getTotalSize() override;
+    std::optional<size_t> getFileSize();
     off_t getPosition() override;
+
+    const ReadBufferFactory & getReadBufferFactory() const { return *reader_factory; }
 
 private:
     /// Reader in progress with a list of read segments
