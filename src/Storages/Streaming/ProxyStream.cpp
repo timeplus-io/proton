@@ -70,6 +70,7 @@ ProxyStream::ProxyStream(
     FunctionDescriptionPtr timestamp_func_desc_,
     StoragePtr nested_proxy_storage_,
     String internal_name_,
+    StoragePtr storage_,
     ASTPtr subquery_,
     bool streaming_)
     : IStorage(id_)
@@ -78,6 +79,7 @@ ProxyStream::ProxyStream(
     , timestamp_func_desc(std::move(timestamp_func_desc_))
     , nested_proxy_storage(nested_proxy_storage_)
     , internal_name(std::move(internal_name_))
+    , storage(storage_)
     , subquery(subquery_)
     , streaming(streaming_)
     , log(&Poco::Logger::get(id_.getNameForLogs()))
@@ -93,11 +95,10 @@ ProxyStream::ProxyStream(
     if (windowType() == WindowType::SESSION && !isStreaming())
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "session window can only work with streaming query.");
 
-    if (!subquery)
-    {
-        storage = DatabaseCatalog::instance().getTable(id_, context_);
-    }
-    else
+    assert(storage || subquery);
+    assert(!(storage && subquery));
+
+    if (subquery)
     {
         /// Whether has GlobalAggregation in subquery
         SelectQueryOptions options;
@@ -379,60 +380,57 @@ void ProxyStream::processWindowAssignmentStep(
 
 StorageSnapshotPtr ProxyStream::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const
 {
-    if (auto nested = getNestedStorage())
-        return nested->getStorageSnapshot(metadata_snapshot, std::move(query_context));
+    if (storage)
+        return storage->getStorageSnapshot(metadata_snapshot, std::move(query_context));
 
     return IStorage::getStorageSnapshot(metadata_snapshot, std::move(query_context));
 }
 
 bool ProxyStream::isRemote() const
 {
-    if (auto nested = getNestedStorage())
-        return nested->isRemote();
+    if (storage)
+        return storage->isRemote();
 
     return IStorage::isRemote();
 }
 
 bool ProxyStream::supportsParallelInsert() const
 {
-    if (auto nested = getNestedStorage())
-        return nested->supportsParallelInsert();
+    if (storage)
+        return storage->supportsParallelInsert();
 
     return IStorage::supportsParallelInsert();
 }
 
 bool ProxyStream::supportsIndexForIn() const
 {
-    if (auto nested = getNestedStorage())
-        return nested->supportsIndexForIn();
+    if (storage)
+        return storage->supportsIndexForIn();
 
     return IStorage::supportsIndexForIn();
 }
 
 bool ProxyStream::supportsSubcolumns() const
 {
-    if (auto nested = getNestedStorage())
-        return nested->supportsSubcolumns();
+    if (storage)
+        return storage->supportsSubcolumns();
 
     return IStorage::supportsSubcolumns();
 }
 
-StoragePtr ProxyStream::getNestedStorage() const
+std::variant<StoragePtr, ASTPtr> ProxyStream::getProxyStorageOrSubquery() const
 {
-    if (nested_proxy_storage)
-        return nested_proxy_storage;
-
     if (storage)
         return storage;
 
-    return nullptr; /// subquery
+    if (subquery)
+        return subquery;
+
+    UNREACHABLE();
 }
 
 bool ProxyStream::isProxyingSubqueryOrView() const
 {
-    if (nested_proxy_storage)
-        return nested_proxy_storage->as<ProxyStream &>().isProxyingSubqueryOrView();
-
     if (subquery)
         return true;
 

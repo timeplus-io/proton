@@ -40,6 +40,12 @@ void TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPtr con
         {
             streaming = stream_storage->isStreaming();
             nested_proxy_storage = function_storage;
+
+            auto proxy = stream_storage->getProxyStorageOrSubquery();
+            if (const auto * nested_storage = std::get_if<StoragePtr>(&proxy))
+                storage = *nested_storage;
+            else if (const auto * nested_subquery = std::get_if<ASTPtr>(&proxy))
+                subquery = *nested_subquery;
         }
         storage_id = function_storage->getStorageID();
     }
@@ -50,7 +56,8 @@ void TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPtr con
             storage_id.database_name = context->getCurrentDatabase();
 
         /// return the storage ID with UUID
-        storage_id.uuid = DatabaseCatalog::instance().getTable(storage_id, context)->getStorageID().uuid;
+        storage = DatabaseCatalog::instance().getTable(storage_id, context);
+        storage_id.uuid = storage->getStorageID().uuid;
     }
     else
     {
@@ -60,24 +67,19 @@ void TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPtr con
 
 StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr context)
 {
-    StoragePtr storage;
-
     if (subquery)
     {
-        SelectQueryOptions options;
-        auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(subquery->children[0], context, options.subquery());
-        if (interpreter_subquery)
-        {
-            auto source_header = interpreter_subquery->getSampleBlock();
-            columns = ColumnsDescription(source_header.getNamesAndTypesList());
+        auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(
+            subquery->children[0], context, SelectQueryOptions().subquery().analyze());
+        auto source_header = interpreter_subquery->getSampleBlock();
+        columns = ColumnsDescription(source_header.getNamesAndTypesList());
 
-            /// determine whether it is a streaming query
-            streaming = interpreter_subquery->isStreaming();
-        }
+        /// determine whether it is a streaming query
+        streaming = interpreter_subquery->isStreaming();
     }
     else
     {
-        storage = DatabaseCatalog::instance().getTable(storage_id, context);
+        assert(storage);
         if (!supportStreamingQuery(storage))
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Doesn't support apply {} to storage '{}'", getName(), storage->getName());
 
@@ -121,6 +123,7 @@ StoragePtr TableFunctionProxyBase::executeImpl(
         timestamp_func_desc,
         nested_proxy_storage,
         getName(),
+        storage,
         subquery,
         streaming);
 }

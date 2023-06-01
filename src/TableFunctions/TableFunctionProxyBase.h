@@ -48,6 +48,7 @@ protected:
     /// Names timestamp_expr_required_columns;
     /// ExpressionActionsPtr timestamp_expr;
 
+    StoragePtr storage;
     ASTPtr subquery;
     StorageID storage_id = StorageID::createEmpty();
     StorageSnapshotPtr underlying_storage_snapshot;

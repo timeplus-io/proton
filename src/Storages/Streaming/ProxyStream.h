@@ -67,7 +67,7 @@ public:
     bool supportsIndexForIn() const override;
     bool supportsSubcolumns() const override;
 
-    StoragePtr getNestedStorage() const;
+    std::variant<StoragePtr, ASTPtr> getProxyStorageOrSubquery() const;
 
     StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const override;
 
@@ -115,7 +115,8 @@ private:
         FunctionDescriptionPtr timestamp_func_desc_,
         StoragePtr nested_proxy_storage_,
         String internal_name_,
-        ASTPtr subquery_ = nullptr,
+        StoragePtr storage_,
+        ASTPtr subquery_,
         bool streaming_ = false);
 
     FunctionDescriptionPtr streaming_func_desc;

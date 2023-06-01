@@ -241,6 +241,26 @@
         {"query_id":"9901", "expected_results":[]},
         {"query_id":"9902", "expected_results":"error_code:62"}
       ]
+    },
+    {
+      "id": 9,
+      "tags": ["tumble window over table function query"],
+      "name": "#2513",
+      "description": "stremaing hop query with last x",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test_stream_2513"},
+            {"client":"python", "query_type": "table", "wait":2, "query": "create stream test_stream_2513(i int, s string)"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2513", "wait":3, "query_id":"9900", "query_end_timer":3, "query":"with cte as (select i, s, _tp_time as event_time from test_stream_2513) select window_start, window_end from tumble(table(cte), _tp_time, 2s)"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_stream_2513", "wait":3, "query_id":"9901", "query_end_timer":3, "query":"with cte as (select i, s, _tp_time from test_stream_2513) select window_start, window_end from tumble(table(cte), _tp_time, 2s)"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":"error_code:47"},
+        {"query_id":"9901", "expected_results":[]}
+      ]
     }
   ]
 }

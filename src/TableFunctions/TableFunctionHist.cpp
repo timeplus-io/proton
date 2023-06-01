@@ -59,7 +59,7 @@ StoragePtr TableFunctionHist::calculateColumnDescriptions(ContextPtr context)
     }
     else
     {
-        auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
+        assert(storage);
         if (auto * view = storage->as<StorageView>())
         {
             InterpreterSelectWithUnionQuery interpreter(
