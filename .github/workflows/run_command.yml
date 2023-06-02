@@ -45,6 +45,10 @@ on:
         required: false
         type: string
         default: 'sanitizer'
+      timeout:
+        required: false
+        type: number
+        default: 0
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -137,6 +141,7 @@ jobs:
       - name: Prepare directory
         run: mkdir /test_output /artifacts
       - name: execute
+        timeout-minutes: ${{ inputs.timeout }}
         run: |
           ${{ inputs.command }}
   stop-runner:

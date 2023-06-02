@@ -13,10 +13,254 @@ on: # yamllint disable-line rule:truthy
     # │     └──────────────────── hour (0 - 23)
     # └───────────────────────── minute (0 - 59)
     # build at 00:30(UTC) on every day
-    - cron:  '00 23 * * 5'
+    - cron:  '00 23 * * *'
 
 jobs:
   prepare_sanitizer_build:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    outputs:
+      command: |
+            cd $GITHUB_WORKSPACE
+
+            git config user.name "proton-robot"
+            git config user.email "proton_robot@timeplus.io"
+
+            mkdir $GITHUB_WORKSPACE/ccache
+            echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
+
+            ./docker/packager/packager --package-type binary --docker-image-version cmake.3.26.4 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+
+            if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
+              echo "Compiling proton Failed"
+              exit 127
+            fi
+
+            # Don't need to upload ccache to S3 at the moment
+            # tar -zcf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
+            # aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://tp-internal/proton/ci_cache/
+
+            # clean ccache and build footprint
+            rm -rf $GITHUB_WORKSPACE/ccache
+            rm ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz
+            rm -rf build_docker
+
+            # build unit test docker image
+            cp $GITHUB_WORKSPACE/output/unit_tests_dbms $GITHUB_WORKSPACE/docker/test/proton_unit_test/
+            cd $GITHUB_WORKSPACE/docker/test/proton_unit_test/
+            docker build . -t timeplus/proton-unit-test:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            docker push timeplus/proton-unit-test:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+
+            docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
+            cd $GITHUB_WORKSPACE/docker/server
+
+            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            docker push timeplus/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_sanitizer_unit_test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    outputs:
+      command: |
+            cd $GITHUB_WORKSPACE/tests/proton_ci
+            export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
+
+            # make virtualenv
+            ln -s /usr/bin/python3 /usr/bin/python
+            apt-get update
+            systemctl stop unattended-upgrades
+            apt install python3-venv -y
+            python -m venv env
+            source env/bin/activate
+
+            pip install -r requirements.txt
+            python unit_tests_check.py
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_sanitizer_smoke_test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    outputs:
+      command: |
+            cd $GITHUB_WORKSPACE/tests/stream
+            export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
+
+            # make virtualenv
+            ln -s /usr/bin/python3 /usr/bin/python
+            apt-get update
+            systemctl stop unattended-upgrades
+            apt install python3-venv -y
+            python -m venv env
+            source env/bin/activate
+
+            pip install --upgrade pip
+            pip install -r helpers/requirements.txt
+            python ci_runner.py --debug --settings=redp,nativelog
+
+            cat $GITHUB_WORKSPACE/tests/stream/.status
+            cat $GITHUB_WORKSPACE/tests/stream/.status | grep nativelog:ExitCode.OK | grep redp:ExitCode.OK
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_sanitizer_stateless_test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    outputs:
+      command: |
+            cd $GITHUB_WORKSPACE/tests/proton_ci
+
+            # make virtualenv
+            ln -s /usr/bin/python3 /usr/bin/python
+            apt-get update
+            systemctl stop unattended-upgrades
+            apt install python3-venv -y
+            python -m venv env
+            source env/bin/activate
+
+            pip install -r requirements.txt
+            export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            python functional_tests_check.py stateless
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_sanitizer_stateful_test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    outputs:
+      command: |
+            cd $GITHUB_WORKSPACE/tests/proton_ci
+
+            # make virtualenv
+            ln -s /usr/bin/python3 /usr/bin/python
+            apt-get update
+            systemctl stop unattended-upgrades
+            apt install python3-venv -y
+            python -m venv env
+            source env/bin/activate
+
+            pip install -r requirements.txt
+            export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            python functional_tests_check.py stateful
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_release_build:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    outputs:
+      command: |
+            cd $GITHUB_WORKSPACE
+
+            git config user.name "proton-robot"
+            git config user.email "proton_robot@timeplus.io"
+
+            mkdir $GITHUB_WORKSPACE/ccache
+            echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
+
+            ./docker/packager/packager --package-type binary --docker-image-version cmake.3.26.4 --build-type release --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+
+            if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
+              echo "Compiling proton Failed"
+              exit 127
+            fi
+
+            # Don't need to upload ccache to S3 at the moment
+            # tar -zcf ./cache${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
+            # aws s3 cp --no-progress ./cache${ARCH:+_}$ARCH.tar.gz s3://tp-internal/proton/ci_cache/
+
+            # clean ccache and build footprint
+            rm -rf $GITHUB_WORKSPACE/ccache
+            rm ./cache${ARCH:+_}$ARCH.tar.gz
+            rm -rf build_docker
+
+            docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
+            cd $GITHUB_WORKSPACE/docker/server
+
+            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:testing-$ARCH-$GITHUB_SHA
+            docker push timeplus/proton:testing-$ARCH-$GITHUB_SHA
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_release_smoke_test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    outputs:
+      command: |
+            cd $GITHUB_WORKSPACE/tests/stream
+            export PROTON_VERSION=testing-$ARCH-$GITHUB_SHA
+
+            # make virtualenv
+            ln -s /usr/bin/python3 /usr/bin/python
+            apt-get update
+            systemctl stop unattended-upgrades
+            apt install python3-venv -y
+            python -m venv env
+            source env/bin/activate
+
+            pip install --upgrade pip
+            pip install -r helpers/requirements.txt
+            python ci_runner.py --debug --settings=redp,nativelog
+
+            cat $GITHUB_WORKSPACE/tests/stream/.status
+            cat $GITHUB_WORKSPACE/tests/stream/.status | grep nativelog:ExitCode.OK | grep redp:ExitCode.OK
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_release_stateless_test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    outputs:
+      command: |
+            cd $GITHUB_WORKSPACE/tests/proton_ci
+
+            # make virtualenv
+            ln -s /usr/bin/python3 /usr/bin/python
+            apt-get update
+            systemctl stop unattended-upgrades
+            apt install python3-venv -y
+            python -m venv env
+            source env/bin/activate
+
+            pip install -r requirements.txt
+            export PROTON_VERSION=testing-$ARCH-$GITHUB_SHA
+            python functional_tests_check.py stateless
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_release_stateful_test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    outputs:
+      command: |
+            cd $GITHUB_WORKSPACE/tests/proton_ci
+
+            # make virtualenv
+            ln -s /usr/bin/python3 /usr/bin/python
+            apt-get update
+            systemctl stop unattended-upgrades
+            apt install python3-venv -y
+            python -m venv env
+            source env/bin/activate
+
+            pip install -r requirements.txt
+            export PROTON_VERSION=testing-$ARCH-$GITHUB_SHA
+            python functional_tests_check.py stateful
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_address_build:
     runs-on: ubuntu-latest
     outputs:
       command: |
@@ -58,199 +302,8 @@ jobs:
       - name: display command
         run: |
           echo 'command: ${{ steps.set_command.outputs.command }}'
-  prepare_sanitizer_unit_test:
-    runs-on: ubuntu-latest
-    outputs:
-      command: |
-            cd $GITHUB_WORKSPACE/tests/proton_ci
-            export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
-
-            # make virtualenv
-            ln -s /usr/bin/python3 /usr/bin/python
-            apt-get update
-            systemctl stop unattended-upgrades
-            apt install python3-venv -y
-            python -m venv env
-            source env/bin/activate
-
-            pip install -r requirements.txt
-            python unit_tests_check.py
-    steps:
-      - name: display command
-        run: |
-          echo 'command: ${{ steps.set_command.outputs.command }}'
-  prepare_sanitizer_smoke_test:
-    runs-on: ubuntu-latest
-    outputs:
-      command: |
-            cd $GITHUB_WORKSPACE/tests/stream
-            export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
-
-            # make virtualenv
-            ln -s /usr/bin/python3 /usr/bin/python
-            apt-get update
-            systemctl stop unattended-upgrades
-            apt install python3-venv -y
-            python -m venv env
-            source env/bin/activate
-
-            pip install --upgrade pip
-            pip install -r helpers/requirements.txt
-            python ci_runner.py --debug --settings=redp,nativelog
-
-            cat $GITHUB_WORKSPACE/tests/stream/.status
-            cat $GITHUB_WORKSPACE/tests/stream/.status | grep nativelog:ExitCode.OK | grep redp:ExitCode.OK
-    steps:
-      - name: display command
-        run: |
-          echo 'command: ${{ steps.set_command.outputs.command }}'
-  prepare_sanitizer_stateless_test:
-    runs-on: ubuntu-latest
-    outputs:
-      command: |
-            cd $GITHUB_WORKSPACE/tests/proton_ci
-
-            # make virtualenv
-            ln -s /usr/bin/python3 /usr/bin/python
-            apt-get update
-            systemctl stop unattended-upgrades
-            apt install python3-venv -y
-            python -m venv env
-            source env/bin/activate
-
-            pip install -r requirements.txt
-            export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
-            python functional_tests_check.py stateless
-    steps:
-      - name: display command
-        run: |
-          echo 'command: ${{ steps.set_command.outputs.command }}'
-  prepare_sanitizer_stateful_test:
-    runs-on: ubuntu-latest
-    outputs:
-      command: |
-            cd $GITHUB_WORKSPACE/tests/proton_ci
-
-            # make virtualenv
-            ln -s /usr/bin/python3 /usr/bin/python
-            apt-get update
-            systemctl stop unattended-upgrades
-            apt install python3-venv -y
-            python -m venv env
-            source env/bin/activate
-
-            pip install -r requirements.txt
-            export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
-            python functional_tests_check.py stateful
-    steps:
-      - name: display command
-        run: |
-          echo 'command: ${{ steps.set_command.outputs.command }}'
-  prepare_release_build:
-    runs-on: ubuntu-latest
-    outputs:
-      command: |
-            cd $GITHUB_WORKSPACE
-
-            git config user.name "proton-robot"
-            git config user.email "proton_robot@timeplus.io"
-
-            mkdir $GITHUB_WORKSPACE/ccache
-            echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
-
-            ./docker/packager/packager --package-type binary --docker-image-version cmake.3.26.4 --build-type release --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
-
-            if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
-              echo "Compiling proton Failed"
-              exit 127
-            fi
-
-            tar -zcf ./cache${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
-            aws s3 cp --no-progress ./cache${ARCH:+_}$ARCH.tar.gz s3://tp-internal/proton/ci_cache/
-
-            # clean ccache and build footprint
-            rm -rf $GITHUB_WORKSPACE/ccache
-            rm ./cache${ARCH:+_}$ARCH.tar.gz
-            rm -rf build_docker
-
-            docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
-            cd $GITHUB_WORKSPACE/docker/server
-
-            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:testing-$ARCH-$GITHUB_SHA
-            docker push timeplus/proton:testing-$ARCH-$GITHUB_SHA
-    steps:
-      - name: display command
-        run: |
-          echo 'command: ${{ steps.set_command.outputs.command }}'
-  prepare_release_smoke_test:
-    runs-on: ubuntu-latest
-    outputs:
-      command: |
-            cd $GITHUB_WORKSPACE/tests/stream
-            export PROTON_VERSION=testing-$ARCH-$GITHUB_SHA
-
-            # make virtualenv
-            ln -s /usr/bin/python3 /usr/bin/python
-            apt-get update
-            systemctl stop unattended-upgrades
-            apt install python3-venv -y
-            python -m venv env
-            source env/bin/activate
-
-            pip install --upgrade pip
-            pip install -r helpers/requirements.txt
-            python ci_runner.py --debug --settings=redp,nativelog
-
-            cat $GITHUB_WORKSPACE/tests/stream/.status
-            cat $GITHUB_WORKSPACE/tests/stream/.status | grep nativelog:ExitCode.OK | grep redp:ExitCode.OK
-    steps:
-      - name: display command
-        run: |
-          echo 'command: ${{ steps.set_command.outputs.command }}'
-  prepare_release_stateless_test:
-    runs-on: ubuntu-latest
-    outputs:
-      command: |
-            cd $GITHUB_WORKSPACE/tests/proton_ci
-
-            # make virtualenv
-            ln -s /usr/bin/python3 /usr/bin/python
-            apt-get update
-            systemctl stop unattended-upgrades
-            apt install python3-venv -y
-            python -m venv env
-            source env/bin/activate
-
-            pip install -r requirements.txt
-            export PROTON_VERSION=testing-$ARCH-$GITHUB_SHA
-            python functional_tests_check.py stateless
-    steps:
-      - name: display command
-        run: |
-          echo 'command: ${{ steps.set_command.outputs.command }}'
-  prepare_release_stateful_test:
-    runs-on: ubuntu-latest
-    outputs:
-      command: |
-            cd $GITHUB_WORKSPACE/tests/proton_ci
-
-            # make virtualenv
-            ln -s /usr/bin/python3 /usr/bin/python
-            apt-get update
-            systemctl stop unattended-upgrades
-            apt install python3-venv -y
-            python -m venv env
-            source env/bin/activate
-
-            pip install -r requirements.txt
-            export PROTON_VERSION=testing-$ARCH-$GITHUB_SHA
-            python functional_tests_check.py stateful
-    steps:
-      - name: display command
-        run: |
-          echo 'command: ${{ steps.set_command.outputs.command }}'
   build_address_x64:
-    needs: prepare_sanitizer_build
+    needs: prepare_address_build
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -261,7 +314,7 @@ jobs:
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
       command: |
-        ${{ needs.prepare_sanitizer_build.outputs.command }}
+        ${{ needs.prepare_address_build.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -278,12 +331,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
@@ -302,12 +356,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
@@ -326,12 +381,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
@@ -350,12 +406,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
@@ -398,12 +455,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
@@ -422,12 +480,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
@@ -446,12 +505,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
@@ -470,12 +530,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
@@ -518,12 +579,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
@@ -542,12 +604,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
@@ -566,12 +629,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
@@ -590,12 +654,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
@@ -638,12 +703,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
@@ -662,12 +728,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
@@ -686,12 +753,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
@@ -710,12 +778,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
@@ -758,12 +827,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: ""
       arch: ${{ vars.X64_ARCH }}
       tag: 'release'
+      timeout: 30
       command: |
         ${{ needs.prepare_release_smoke_test.outputs.command }}
     secrets:
@@ -782,12 +852,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: ""
       arch: ${{ vars.X64_ARCH }}
       tag: 'release'
+      timeout: 30
       command: |
         ${{ needs.prepare_release_stateless_test.outputs.command }}
     secrets:
@@ -806,12 +877,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: ""
       arch: ${{ vars.X64_ARCH }}
       tag: 'release'
+      timeout: 30
       command: |
         ${{ needs.prepare_release_stateful_test.outputs.command }}
     secrets:
@@ -854,12 +926,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
@@ -878,12 +951,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
@@ -902,12 +976,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
@@ -926,12 +1001,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
@@ -976,12 +1052,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
@@ -1000,12 +1077,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
@@ -1024,12 +1102,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
@@ -1048,12 +1127,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
@@ -1098,12 +1178,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
@@ -1122,12 +1203,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
@@ -1146,12 +1228,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
@@ -1170,12 +1253,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
@@ -1218,12 +1302,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
@@ -1242,12 +1327,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
@@ -1266,12 +1352,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
@@ -1290,12 +1377,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      timeout: 30
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
@@ -1338,12 +1426,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: ""
       arch: ${{ vars.ARM_ARCH }}
       tag: 'release'
+      timeout: 30
       command: |
         ${{ needs.prepare_release_smoke_test.outputs.command }}
     secrets:
@@ -1362,12 +1451,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: ""
       arch: ${{ vars.ARM_ARCH }}
       tag: 'release'
+      timeout: 30
       command: |
         ${{ needs.prepare_release_stateless_test.outputs.command }}
     secrets:
@@ -1386,12 +1476,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: ""
       arch: ${{ vars.ARM_ARCH }}
       tag: 'release'
+      timeout: 30
       command: |
         ${{ needs.prepare_release_stateful_test.outputs.command }}
     secrets:

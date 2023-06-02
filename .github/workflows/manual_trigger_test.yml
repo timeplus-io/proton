@@ -81,8 +81,8 @@ jobs:
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: ''
       arch: ${{ vars.X64_ARCH }}
@@ -106,8 +106,8 @@ jobs:
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       arch: ${{ vars.ARM_ARCH }}
       sanitizer: ''
@@ -163,8 +163,8 @@ jobs:
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: ${{ vars.X64_TEST_ONLY_INSTANCE_TYPE_SMALL }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.TEST_ONLY_VOLUME_SIZE_SMALL }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: ''
       arch: ${{ vars.X64_ARCH }}
@@ -190,8 +190,8 @@ jobs:
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_TEST_ONLY_INSTANCE_TYPE_SMALL }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.TEST_ONLY_VOLUME_SIZE_SMALL }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       arch: ${{ vars.ARM_ARCH }}
       sanitizer: ''
@@ -238,8 +238,8 @@ jobs:
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: ''
       arch: ${{ vars.X64_ARCH }}
@@ -263,8 +263,8 @@ jobs:
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       arch: ${{ vars.ARM_ARCH }}
       sanitizer: ''
@@ -310,8 +310,8 @@ jobs:
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: ''
       arch: ${{ vars.X64_ARCH }}
@@ -335,8 +335,8 @@ jobs:
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       arch: ${{ vars.ARM_ARCH }}
       sanitizer: ''
@@ -382,8 +382,8 @@ jobs:
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: ''
       arch: ${{ vars.X64_ARCH }}
@@ -407,8 +407,8 @@ jobs:
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.ARM_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       arch: ${{ vars.ARM_ARCH }}
       sanitizer: ''
