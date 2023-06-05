@@ -29,7 +29,7 @@ private:
     void transform(Chunk & chunk) override;
 
 private:
-    WatermarkStamperPtr watermark;
+    SERDE WatermarkStamperPtr watermark;
 };
 }
 }

@@ -3331,7 +3331,7 @@ std::vector<Int64> Aggregator::bucketsBefore(const AggregatedDataVariants & resu
 /// 1) The keys can reside in hashmap or in arena
 /// 2) The state can reside in arena or in the aggregation function
 /// And there is a special one which is group without key
-void Aggregator::checkpoint(AggregatedDataVariants & data_variants, WriteBuffer & wb)
+void Aggregator::checkpoint(const AggregatedDataVariants & data_variants, WriteBuffer & wb)
 {
     /// Serialization layout
     /// [version][uint8][uint16][aggr-func-state-block]
@@ -3353,7 +3353,8 @@ void Aggregator::checkpoint(AggregatedDataVariants & data_variants, WriteBuffer 
     writeIntBinary(num_aggr_funcs, wb);
 
     /// FIXME, set a good max_threads
-    auto blocks = convertToBlocks(data_variants, false, ConvertAction::CHECKPOINT, 8);
+    /// For ConvertAction::CHECKPOINT, don't clear state `data_variants`
+    auto blocks = convertToBlocks(const_cast<AggregatedDataVariants &>(data_variants), false, ConvertAction::CHECKPOINT, 8);
 
     /// assert(!blocks.empty());
 

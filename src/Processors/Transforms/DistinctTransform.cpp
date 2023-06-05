@@ -1,5 +1,10 @@
 #include <Processors/Transforms/DistinctTransform.h>
 
+/// proton; starts.
+#include <Checkpoint/CheckpointContext.h>
+#include <Checkpoint/CheckpointCoordinator.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -110,4 +115,15 @@ void DistinctTransform::transform(Chunk & chunk)
     chunk.setColumns(std::move(columns), data.getTotalRowCount() - old_set_size);
 }
 
+/// proton: starts.
+void DistinctTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+{
+    ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) { data.serialize(wb); });
+}
+
+void DistinctTransform::recover(CheckpointContextPtr ckpt_ctx)
+{
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) { data.deserialize(rb); });
+}
+/// proton: ends.
 }

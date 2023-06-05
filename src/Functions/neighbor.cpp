@@ -199,6 +199,18 @@ public:
             return result_column;
         }
     }
+
+    void serialize(WriteBuffer &) const override
+    {
+        /// FIXME: is stateful ?
+        /// Do nothing
+    }
+
+    void deserialize(ReadBuffer &) const override
+    {
+        /// FIXME: is stateful ?
+        /// Do nothing
+    }
 };
 
 }

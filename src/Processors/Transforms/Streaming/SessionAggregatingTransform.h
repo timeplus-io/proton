@@ -24,8 +24,6 @@ private:
 private:
     SessionWindowParams & window_params;
 
-    SessionInfoQueue sessions;
-
     ssize_t wstart_col_pos = -1;
     ssize_t wend_col_pos = -1;
     size_t time_col_pos;

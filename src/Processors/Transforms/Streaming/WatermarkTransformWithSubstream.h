@@ -31,11 +31,12 @@ private:
     inline WatermarkStamper & getOrCreateSubstreamWatermark(const SubstreamID & id);
 
     Chunk input_chunk;
-    Chunks output_chunks;
+    /// We always push output_chunks first, so we can assume no output_chunks when received request checkpoint
+    NO_SERDE Chunks output_chunks;
     typename Chunks::iterator output_iter{output_chunks.begin()};
 
     WatermarkStamperPtr watermark_template;
-    SubstreamHashMap<WatermarkStamperPtr> substream_watermarks;
+    SERDE SubstreamHashMap<WatermarkStamperPtr> substream_watermarks;
 
     Poco::Logger * log;
 };

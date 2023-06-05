@@ -4,6 +4,10 @@
 #include <Core/ColumnNumbers.h>
 #include <Interpreters/SetVariants.h>
 
+/// proton: starts.
+#include <base/SerdeTag.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -18,12 +22,19 @@ public:
 
     String getName() const override { return "DistinctTransform"; }
 
+    /// proton: starts.
+    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
+    void recover(CheckpointContextPtr ckpt_ctx) override;
+    /// proton: ends.
+
 protected:
     void transform(Chunk & chunk) override;
 
 private:
     ColumnNumbers key_columns_pos;
-    SetVariants data;
+    /// proton: starst.
+    SERDE SetVariants data;
+    /// proton: ends.
     Sizes key_sizes;
     UInt64 limit_hint;
 

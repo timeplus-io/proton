@@ -196,7 +196,7 @@ Chunk StreamingStoreSourceBase::doCheckpoint(CheckpointContextPtr current_ckpt_c
     auto processor_id = static_cast<UInt32>(pid);
 
     /// FIXME : async checkpointing
-    current_ckpt_ctx->coordinator->checkpoint(getVersion(), logic_pid, current_ckpt_ctx, [&](WriteBuffer & wb) {
+    current_ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), current_ckpt_ctx, [&](WriteBuffer & wb) {
         writeIntBinary(processor_id, wb);
         writeStringBinary(stream_shard.first, wb);
         writeIntBinary(stream_shard.second, wb);
@@ -210,7 +210,7 @@ Chunk StreamingStoreSourceBase::doCheckpoint(CheckpointContextPtr current_ckpt_c
 
 void StreamingStoreSourceBase::recover(CheckpointContextPtr ckpt_ctx_)
 {
-    ckpt_ctx_->coordinator->recover(logic_pid, ckpt_ctx_, [&](VersionType /*version*/, ReadBuffer & rb) {
+    ckpt_ctx_->coordinator->recover(getLogicID(), ckpt_ctx_, [&](VersionType /*version*/, ReadBuffer & rb) {
         UInt32 recovered_pid = 0;
         readIntBinary(recovered_pid, rb);
         if (recovered_pid != static_cast<UInt32>(pid))

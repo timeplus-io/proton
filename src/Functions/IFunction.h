@@ -46,6 +46,18 @@ public:
 
     ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count, bool dry_run) const;
 
+    /// proton: starts.
+    virtual void serialize(WriteBuffer &) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "serialize() is not implemented in {}", getName());
+    }
+
+    virtual void deserialize(ReadBuffer &) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "deserialize() is not implemented in {}", getName());
+    }
+    /// proton: ends.
+
 protected:
 
     virtual ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const = 0;
@@ -409,6 +421,18 @@ public:
     {
         return executeImpl(arguments, result_type, input_rows_count);
     }
+
+    /// proton: starts.
+    virtual void serialize(WriteBuffer &) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "serialize() is not implemented in {}", getName());
+    }
+
+    virtual void deserialize(ReadBuffer &) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "deserialize() is not implemented in {}", getName());
+    }
+    /// proton: ends.
 
     /** Default implementation in presence of Nullable arguments or NULL constants as arguments is the following:
       *  if some of arguments are NULL constants then return NULL constant,

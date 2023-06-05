@@ -1,7 +1,11 @@
 #include <Processors/Transforms/Streaming/JoinTranform.h>
 
-#include <Interpreters/TableJoin.h>
+#include <Checkpoint/CheckpointContext.h>
+#include <Checkpoint/CheckpointCoordinator.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Streaming/joinKind.h>
+#include <Interpreters/TableJoin.h>
 
 namespace DB
 {
@@ -67,7 +71,7 @@ IProcessor::Status JoinTransform::prepare()
 
     for (size_t i = 0; auto & input_port_with_data : input_ports_with_data)
     {
-        if (input_port_with_data.input_chunk)
+        if (input_port_with_data.input_chunk || input_port_with_data.input_chunk.requestCheckpoint())
         {
             status = Status::Ready;
         }
@@ -109,6 +113,7 @@ void JoinTransform::work()
 
     bool has_watermark = false;
     bool has_data = false;
+    bool all_requested_checkpoint = true;
 
     Chunks chunks;
     {
@@ -129,6 +134,8 @@ void JoinTransform::work()
                     local_watermark = std::min(local_watermark, watermark);
                     has_watermark = true;
                 }
+                else if (!input_chunk.requestCheckpoint())
+                    all_requested_checkpoint = false;
 
                 if (input_chunk.hasRows())
                     has_data = true;
@@ -155,6 +162,11 @@ void JoinTransform::work()
         else
             /// If there is no join result or chunks don't have data but have watermark, we still need propagate the watermark
             propagateWatermark(local_watermark);
+    }
+    else if (all_requested_checkpoint)
+    {
+        std::scoped_lock lock(mutex);
+        checkpoint(chunks.front().getCheckpointContext());
     }
 }
 
@@ -261,6 +273,24 @@ inline void JoinTransform::rangeJoinBidirectionally(Chunks chunks)
         for (size_t j = 0; j < joined_blocks.size(); ++j)
             output_chunks.emplace_back(joined_blocks[j].getColumns(), joined_blocks[j].rows());
     }
+}
+
+void JoinTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+{
+    ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
+        /// TODO: join state
+        // join->serialize(wb);
+        DB::writeIntBinary(watermark, wb);
+    });
+}
+
+void JoinTransform::recover(CheckpointContextPtr ckpt_ctx)
+{
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
+        /// TODO: join state
+        // join->deserialize(rb);
+        DB::readIntBinary(watermark, rb);
+    });
 }
 }
 }

@@ -49,6 +49,9 @@ namespace ErrorCodes
     extern const int TOO_MANY_TEMPORARY_COLUMNS;
     extern const int TOO_MANY_TEMPORARY_NON_CONST_COLUMNS;
     extern const int TYPE_MISMATCH;
+    /// proton: starts.
+    extern const int RECOVER_CHECKPOINT_FAILED;
+    /// proton: ends.
 }
 
 static std::unordered_set<const ActionsDAG::Node *> processShortCircuitFunctions(const ActionsDAG & actions_dag, ShortCircuitFunctionEvaluation short_circuit_function_evaluation);
@@ -1109,5 +1112,69 @@ const ActionsDAGPtr & ExpressionActionsChain::Step::actions() const
 {
     return typeid_cast<const ExpressionActionsStep *>(this)->actions_dag;
 }
+
+/// proton: starts.
+void ExpressionActions::serialize(WriteBuffer & wb) const
+{
+    std::vector<ExecutableFunctionPtr> stateful_functions;
+    const auto & nodes = getNodes();
+    for (auto & node : nodes)
+    {
+        if (node.type == ActionsDAG::ActionType::FUNCTION)
+        {
+            assert(node.function_base && node.function);
+            if (node.function_base->isStateful())
+                stateful_functions.emplace_back(node.function);
+        }
+    }
+
+    writeIntBinary(stateful_functions.size(), wb);
+    for (auto & func : stateful_functions)
+    {
+        writeStringBinary(func->getName(), wb);
+        func->serialize(wb);
+    }
+}
+
+void ExpressionActions::deserialize(ReadBuffer & rb) const
+{
+    std::vector<ExecutableFunctionPtr> stateful_functions;
+    const auto & nodes = getNodes();
+    for (auto & node : nodes)
+    {
+        if (node.type == ActionsDAG::ActionType::FUNCTION)
+        {
+            assert(node.function_base && node.function);
+            if (node.function_base->isStateful())
+                stateful_functions.emplace_back(node.function);
+        }
+    }
+
+    size_t size = 0;
+    readIntBinary(size, rb);
+    if (size != stateful_functions.size())
+        throw Exception(
+            ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+            "Failed to recover expression actions checkpoint. Number of stateful functions are not the same, checkpointed={}, "
+            "current={}",
+            size,
+            stateful_functions.size());
+
+    for (auto & func : stateful_functions)
+    {
+        String func_name;
+        readStringBinary(func_name, rb);
+        if (unlikely(func_name != func->getName()))
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Failed to recover expression actions checkpoint. Name of stateful function is not the same, checkpointed={}, "
+                "current={}",
+                func_name,
+                func->getName());
+
+        func->deserialize(rb);
+    }
+}
+/// proton: ends.
 
 }

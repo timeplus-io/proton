@@ -4,6 +4,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
+#include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/castColumn.h>
 #include <Common/AllocatorWithMemoryTracking.h>
@@ -25,6 +26,63 @@ namespace
     struct NameToLag { static constexpr auto * name = "lag"; };
     struct NameToLags { static constexpr auto * name = "lags"; };
 
+    ALWAYS_INLINE void
+    writeColumn(const DB::ColumnPtr & column, const DataTypePtr & column_type, DB::WriteBuffer & wb)
+    {
+        DB::writeIntBinary(column->size(), wb);
+
+        auto info = column_type->getSerializationInfo(*column);
+        auto serialization = column_type->getSerialization(*info);
+        bool has_custom = info->hasCustomSerialization();
+        writeIntBinary(static_cast<uint8_t>(has_custom), wb);
+        if (has_custom)
+            info->serialializeKindBinary(wb);
+
+        /// If there are columns-constants - then we materialize them.
+        /// (Since the data type does not know how to serialize / deserialize constants.)
+        DB::ColumnPtr full_column = column->convertToFullColumnIfConst();
+        DB::ISerialization::SerializeBinaryBulkSettings settings;
+        settings.getter = [&wb](DB::ISerialization::SubstreamPath) -> DB::WriteBuffer * { return &wb; };
+        settings.position_independent_encoding = false;
+        settings.low_cardinality_max_dictionary_size = 0; //-V1048
+
+        uint64_t offset = 0, limit = 0;
+        DB::ISerialization::SerializeBinaryBulkStatePtr state;
+        serialization->serializeBinaryBulkStatePrefix(*full_column, settings, state);
+        serialization->serializeBinaryBulkWithMultipleStreams(*full_column, offset, limit, settings, state);
+        serialization->serializeBinaryBulkStateSuffix(settings, state);
+    }
+
+    ALWAYS_INLINE void readColumn(DB::ColumnPtr & column, const DataTypePtr & column_type, DB::ReadBuffer & rb)
+    {
+        size_t rows;
+        DB::readIntBinary(rows, rb);
+
+        auto info = column_type->createSerializationInfo({});
+
+        uint8_t has_custom;
+        DB::readIntBinary(has_custom, rb);
+        if (has_custom)
+            info->deserializeFromKindsBinary(rb);
+
+        auto serialization = column_type->getSerialization(*info);
+        column = column_type->createColumn(*serialization);
+
+        DB::ISerialization::DeserializeBinaryBulkSettings settings;
+        settings.getter = [&](DB::ISerialization::SubstreamPath) -> DB::ReadBuffer * { return &rb; };
+        settings.avg_value_size_hint = 0;
+        settings.position_independent_encoding = false;
+        settings.native_format = true;
+
+        DB::ISerialization::DeserializeBinaryBulkStatePtr state;
+
+        serialization->deserializeBinaryBulkStatePrefix(settings, state);
+        serialization->deserializeBinaryBulkWithMultipleStreams(column, rows, settings, state, nullptr);
+        if (column->size() != rows)
+            throw DB::Exception(
+                DB::ErrorCodes::CANNOT_READ_ALL_DATA, "Cannot read all data. Rows read: {}. Rows expected: {}", column->size(), rows);
+    }
+
     /// Cache prev-columns + current-column
     class ColumnsCache final
     {
@@ -33,13 +91,17 @@ namespace
         /// Default alloctor will tracking by `CurrentMemoryTracker::allocNoThrow()`, which means that the memory will be unlimited
         /// Fixed here by using 'AllocatorWithMemoryTracking' -> `CurrentMemoryTracker::alloc()`
         using ColumnsWithIndex = std::deque<std::pair<size_t, ColumnPtr>, AllocatorWithMemoryTracking<std::pair<size_t, ColumnPtr>>>;
-        Int64 max_prev_cache_rows = 0;
+        const Int64 max_prev_cache_rows = 0;
+        DataTypePtr column_type;
         ColumnsWithIndex columns;
         Int64 curr_cache_rows = 0;
         mutable std::mutex mutex;
 
     public:
-        ColumnsCache(size_t max_prev_cache_rows_) : max_prev_cache_rows(max_prev_cache_rows_) { }
+        ColumnsCache(size_t max_prev_cache_rows_, const DataTypePtr & column_type_)
+            : max_prev_cache_rows(max_prev_cache_rows_), column_type(column_type_)
+        {
+        }
 
         void add(ColumnPtr column)
         {
@@ -71,6 +133,35 @@ namespace
         {
             std::lock_guard lock(mutex);
             return {curr_cache_rows, columns};
+        }
+
+        void serialize(WriteBuffer & wb) const
+        {
+            writeIntBinary(columns.size(), wb);
+            for (const auto & [begin_offset, column] : columns)
+            {
+                writeIntBinary(begin_offset, wb);
+                writeColumn(column, column_type, wb);
+            }
+
+            writeIntBinary(curr_cache_rows, wb);
+        }
+
+        void deserialize(ReadBuffer & rb)
+        {
+            size_t columns_num;
+            readIntBinary(columns_num, rb);
+            for (size_t i = 0; i < columns_num; ++i)
+            {
+                size_t begin_offset;
+                ColumnPtr column;
+                readIntBinary(begin_offset, rb);
+                readColumn(column, column_type, rb);
+
+                columns.emplace_back(std::move(begin_offset), std::move(column));
+            }
+
+            readIntBinary(curr_cache_rows, rb);
         }
     };
 
@@ -202,7 +293,10 @@ namespace
         mutable ColumnsCache prev_offset_columns;
 
     public:
-        explicit FunctionStreamingNeighbor(Int64 offset_, Int64 count_) : prev_offset(static_cast<UInt32>(std::abs(offset_))), count(count_), prev_offset_columns(prev_offset + count - 1)
+        explicit FunctionStreamingNeighbor(Int64 offset_, Int64 count_, const DataTypePtr & cached_column_type)
+            : prev_offset(static_cast<UInt32>(std::abs(offset_)))
+            , count(count_)
+            , prev_offset_columns(prev_offset + count - 1, cached_column_type)
         {
             /// Protection from possible overflow.
             if constexpr (std::is_same_v<Name, NameToLag> || std::is_same_v<Name, NameToLags>)
@@ -433,6 +527,16 @@ namespace
 
             return result_column;
         }
+
+        void serialize(WriteBuffer & wb) const override
+        {
+            prev_offset_columns.serialize(wb);
+        }
+
+        void deserialize(ReadBuffer & rb) const override
+        {
+            prev_offset_columns.deserialize(rb);
+        }
     };
 
     template<typename Name>
@@ -486,7 +590,7 @@ namespace
             }
 
             return std::make_unique<FunctionToFunctionBaseAdaptor>(
-                std::make_shared<FunctionStreamingNeighbor<Name>>(offset, count),
+                std::make_shared<FunctionStreamingNeighbor<Name>>(offset, count, arguments[0].type),
                 collections::map<DataTypes>(arguments, [](const auto & elem) { return elem.type; }),
                 return_type);
         }

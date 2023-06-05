@@ -168,6 +168,70 @@ typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::choose
     return Type::hashed;
 }
 
+/// proton: starts.
+template <typename Variant>
+void SetVariantsTemplate<Variant>::serialize(WriteBuffer & wb) const
+{
+    DB::writeIntBinary<UInt16>(static_cast<UInt16>(type), wb);
+    switch (type)
+    {
+        case Type::EMPTY: return;
+
+    #define M(NAME) \
+        case Type::NAME: { \
+            DB::writeIntBinary((NAME)->data.size(), wb); \
+            for (const auto & elem : (NAME)->data) \
+                DB::writeBinary(elem.getValue(), wb); \
+            return; \
+        }
+        APPLY_FOR_SET_VARIANTS(M)
+    #undef M
+    }
+
+    UNREACHABLE();
+}
+
+template <typename Variant>
+void SetVariantsTemplate<Variant>::deserialize(ReadBuffer & rb)
+{
+    assert(empty());
+
+    UInt16 variants_type;
+    readIntBinary<UInt16>(variants_type, rb);
+    init(static_cast<Type>(variants_type));
+
+    switch (type)
+    {
+        case Type::EMPTY: return;
+
+    #define M(NAME) \
+        case Type::NAME: { \
+            size_t count; \
+            DB::readIntBinary(count, rb); \
+            using Table = std::decay_t<decltype((NAME)->data)>; \
+            typename Table::value_type value; \
+            typename Table::LookupResult lookup_result; \
+            bool inserted; \
+            for (size_t i = 0; i < count; ++i) \
+            { \
+                if constexpr (std::is_same_v<typename Table::value_type, StringRef>) \
+                    value = DB::readStringBinaryInto(string_pool, rb); \
+                else \
+                    DB::readBinary(value, rb); \
+                (NAME)->data.emplace(value, lookup_result, inserted); \
+                assert(inserted); \
+                /* insertSetMapped(lookup_result->getMapped(), value); /// HashSet doesn't need set mapped */ \
+            } \
+            return; \
+        }
+        APPLY_FOR_SET_VARIANTS(M)
+    #undef M
+    }
+
+    UNREACHABLE();
+}
+/// proton: ends.
+
 template struct SetVariantsTemplate<NonClearableSet>;
 template struct SetVariantsTemplate<ClearableSet>;
 

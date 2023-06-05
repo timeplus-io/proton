@@ -119,6 +119,11 @@ public:
 
     ExpressionActionsPtr clone() const;
 
+    /// proton: starts.
+    void serialize(WriteBuffer & wb) const;
+    void deserialize(ReadBuffer & rb) const;
+    /// proton: ends.
+
 private:
     void checkLimits(const ColumnsWithTypeAndName & columns) const;
 

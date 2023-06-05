@@ -6,6 +6,7 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
 #include <Common/IntervalKind.h>
+#include <base/SerdeTag.h>
 
 class DateLUTImpl;
 
@@ -51,7 +52,7 @@ public:
     IntervalKind::Kind delay_interval_kind = IntervalKind::Second;
 };
 
-class WatermarkStamper
+SERDE class WatermarkStamper
 {
 public:
     WatermarkStamper(WatermarkStamperParams && params_, Poco::Logger * log_) : params(std::move(params_)), log(log_) { }
@@ -91,19 +92,19 @@ protected:
     Int64 next_emit_timeout_ts = 0;
 
     /// (State)
-    mutable std::optional<VersionType> version;
+    SERDE mutable std::optional<VersionType> version;
 
     /// max event time observed so far
-    Int64 max_event_ts = 0;
+    SERDE Int64 max_event_ts = 0;
 
     /// max watermark projected so far
-    Int64 watermark_ts = 0;
+    SERDE Int64 watermark_ts = 0;
 
     /// Event count which is late than current watermark
     static constexpr Int64 LOG_LATE_EVENTS_INTERVAL_SECONDS = 5; /// 5s, TODO: add settings ?
-    UInt64 late_events = 0;
-    UInt64 last_logged_late_events = 0;
-    Int64 last_logged_late_events_ts = 0;
+    SERDE UInt64 late_events = 0;
+    SERDE UInt64 last_logged_late_events = 0;
+    SERDE Int64 last_logged_late_events_ts = 0;
 };
 
 using WatermarkStamperPtr = std::unique_ptr<WatermarkStamper>;

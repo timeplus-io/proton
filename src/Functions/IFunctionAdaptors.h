@@ -14,6 +14,11 @@ public:
 
     String getName() const override { return function->getName(); }
 
+    /// proton: starts.
+    void serialize(WriteBuffer & wb) const override { function->serialize(wb); }
+    void deserialize(ReadBuffer & rb) const override { function->deserialize(rb); }
+    /// proton: ends.
+
 protected:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const final

@@ -82,6 +82,34 @@ struct KeySet
         return result;
     }
 
+    void serialize(WriteBuffer & wb) const
+    {   
+        key_set.write(wb);
+
+        writeIntBinary(keys.size(), wb);
+        for (const auto & [key, time] : keys)
+        {
+            writeIntBinary(key, wb);
+            writeIntBinary(time, wb);
+        }
+    }
+
+    void deserialize(ReadBuffer & rb)
+    {
+        key_set.readAndMerge(rb);
+
+        size_t keys_num;
+        readIntBinary(keys_num, rb);
+        for (size_t i = 0; i < keys_num; ++i)
+        {
+            UInt128 key;
+            Int64 time;
+            readIntBinary(key, rb);
+            readIntBinary(time, rb);
+            keys.emplace_back(std::move(key), std::move(time));
+        }
+    }
+
 private:
     /// FIXME, if dedup column is integer, use them directly
     UInt32 limit_args;
@@ -98,6 +126,7 @@ private:
     struct KeyTime
     {
         explicit KeyTime(UInt128 key_) : key(key_), time(MonotonicMilliseconds::now()) { }
+        explicit KeyTime(UInt128 key_, Int64 time_) : key(key_), time(time_) { }
 
         bool timedOut(Int32 timeout_) const { return timeout_ > 0 && MonotonicMilliseconds::now() - time > timeout_; }
 
@@ -170,6 +199,16 @@ public:
         col->reserve(input_rows_count);
 
         return key_set.populateKeySetsAndCalculateResults(arguments, input_rows_count, std::move(result));
+    }
+
+    void serialize(WriteBuffer & wb) const override
+    {
+        key_set.serialize(wb);
+    }
+
+    void deserialize(ReadBuffer & rb) const override
+    {
+        key_set.deserialize(rb);
     }
 
 private:

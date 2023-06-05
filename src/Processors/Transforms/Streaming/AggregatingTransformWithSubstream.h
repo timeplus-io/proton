@@ -13,33 +13,52 @@ namespace DB
 {
 namespace Streaming
 {
-struct SubstreamContext
+class AggregatingTransformWithSubstream;
+
+SERDE struct SubstreamContext
 {
-    SubstreamID id;
-    AggregatedDataVariants variants;
-    Int64 version = 0;
-    UInt64 rows_since_last_finalization = 0;
-    Int64 watermark;
+    /// Reference to current transform
+    AggregatingTransformWithSubstream * aggregating_transform;
+
+    SERDE SubstreamID id;
+
+    SERDE AggregatedDataVariants variants;
 
     /// `finalized_watermark` is capturing the max watermark we have progressed and 
     /// it is used to garbage collect time bucketed memory : time buckets which 
     /// are below this watermark can be safely GCed.
-    Int64 finalized_watermark = INVALID_WATERMARK;
+    SERDE Int64 finalized_watermark = INVALID_WATERMARK;
 
-    std::any field;  /// Stuff additional data context to it if needed
+    SERDE Int64 version = 0;
 
-    explicit SubstreamContext(const SubstreamID & id_) : id(id_) { }
+    SERDE UInt64 rows_since_last_finalization = 0;
 
-    bool hasField() const { return field.has_value(); }
+    /// Stuff additional data context to it if needed
+    SERDE struct AnyField
+    {
+        std::any field;
+        std::function<void(const std::any &, WriteBuffer &)> serializer;
+        std::function<void(std::any &, ReadBuffer &)> deserializer;
+    } any_field;
+
+    explicit SubstreamContext(AggregatingTransformWithSubstream * aggr, const SubstreamID & id_ = {}) : aggregating_transform(aggr), id(id_)
+    {
+        assert(aggregating_transform);
+    }
+
+    void serialize(WriteBuffer & wb) const;
+
+    void deserialize(ReadBuffer & rb);
+
+    bool hasField() const { return any_field.field.has_value(); }
+
+    void setField(AnyField && field_) { any_field = std::move(field_); }
 
     template<typename T>
-    void setField(T && field_) { field = field_; }
+    T & getField() { return std::any_cast<T &>(any_field.field); }
 
     template<typename T>
-    T & getField() { return std::any_cast<T &>(field); }
-
-    template<typename T>
-    const T & getField() const { return std::any_cast<const T &>(field); }
+    const T & getField() const { return std::any_cast<const T &>(any_field.field); }
 
     bool hasNewData() const { return rows_since_last_finalization > 0; }
     void resetRowCounts() { rows_since_last_finalization = 0; }
@@ -55,6 +74,11 @@ public:
 
     Status prepare() override;
     void work() override;
+
+    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
+    void recover(CheckpointContextPtr ckpt_ctx) override;
+
+    friend struct SubstreamContext;
 
 private:
     virtual void consume(Chunk chunk, const SubstreamContextPtr & substream_ctx);

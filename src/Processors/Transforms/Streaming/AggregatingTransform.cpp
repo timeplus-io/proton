@@ -278,18 +278,15 @@ void AggregatingTransform::checkpointAlignment(Chunk & chunk)
 void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
     /// FIXME, concurrency
-    UInt16 num_variants = many_data->variants.size();
-    Int64 last_version = many_data->version;
-    for (size_t current_aggr = 0; const auto & data_variant : many_data->variants)
+    for (size_t current_aggr = 0; const auto & current_aggr_transform : many_data->aggregating_transforms)
     {
-        auto logic_id = many_data->aggregating_transforms[current_aggr]->getLogicID();
-        UInt64 last_rows = *many_data->rows_since_last_finalizations[current_aggr];
-        ckpt_ctx->coordinator->checkpoint(getVersion(), logic_id, ckpt_ctx, [num_variants, last_version, last_rows, data_variant, this](WriteBuffer & wb) {
-            DB::writeIntBinary(num_variants, wb);
-            DB::writeIntBinary(last_version, wb);
-            DB::writeIntBinary(last_rows, wb);
-            params->aggregator.checkpoint(*data_variant, wb);
-        });
+        auto logic_id = current_aggr_transform->getLogicID();
+
+        /// Only need one aggr transform to do checkpoint, others just notify checkpoint coordinator the processor has seen
+        if (current_aggr == 0)
+            ckpt_ctx->coordinator->checkpoint(getVersion(), logic_id, ckpt_ctx, [this](WriteBuffer & wb) { many_data->serialize(wb); });
+        else
+            ckpt_ctx->coordinator->checkpointed(getVersion(), logic_id, ckpt_ctx);
 
         ++current_aggr;
     }
@@ -298,32 +295,79 @@ void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
     /// FIXME, concurrency
-    for (size_t current_aggr = 0; auto & data_variant : many_data->variants)
+    for (size_t current_aggr = 0; const auto & current_aggr_transform : many_data->aggregating_transforms)
     {
-        auto logic_id = many_data->aggregating_transforms[current_aggr]->getLogicID();
-        ckpt_ctx->coordinator->recover(logic_id, ckpt_ctx, [&data_variant, current_aggr, this](VersionType /*version*/, ReadBuffer & rb) {
-            UInt16 num_variants = 0;
-            DB::readIntBinary(num_variants, rb);
-            if (num_variants != many_data->variants.size())
-                throw Exception(
-                    ErrorCodes::RECOVER_CHECKPOINT_FAILED,
-                    "Failed to recover aggregation checkpoint. Number of data variants are not the same, checkpointed={}, current={}",
-                    num_variants,
-                    many_data->variants.size());
-
-            Int64 last_version = 0;
-            DB::readIntBinary(last_version, rb);
-            many_data->version = last_version;
-
-            UInt64 last_rows = 0;
-            DB::readIntBinary(last_rows, rb);
-            *many_data->rows_since_last_finalizations[current_aggr] = last_rows;
-
-            params->aggregator.recover(*data_variant, rb);
-        });
+        auto logic_id = current_aggr_transform->getLogicID();
+        /// Only need one aggr transform to do recover, because many_data is shared for all aggr transform
+        if (current_aggr == 0)
+            ckpt_ctx->coordinator->recover(
+                logic_id, ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) { many_data->deserialize(rb); });
 
         ++current_aggr;
     }
+}
+
+void ManyAggregatedData::serialize(WriteBuffer & wb) const
+{
+    UInt16 num_variants = variants.size();
+    DB::writeIntBinary(num_variants, wb);
+    for (const auto & data_variant : variants)
+        aggregating_transforms.at(0)->params->aggregator.checkpoint(*data_variant, wb);
+
+    assert(num_variants == watermarks.size());
+    for (const auto & local_watermark : watermarks)
+        DB::writeIntBinary(local_watermark, wb);
+
+    DB::writeIntBinary(finalized_watermark, wb);
+
+    DB::writeIntBinary(version, wb);
+
+    assert(num_variants == rows_since_last_finalizations.size());
+    for (const auto & last_row : rows_since_last_finalizations)
+        writeIntBinary<UInt64>(*last_row, wb);
+
+    bool has_field = hasField();
+    DB::writeBoolText(has_field, wb);
+    if (has_field)
+        any_field.serializer(any_field.field, wb);
+}
+
+void ManyAggregatedData::deserialize(ReadBuffer & rb)
+{
+    UInt16 num_variants = 0;
+    DB::readIntBinary(num_variants, rb);
+    if (num_variants != variants.size())
+        throw Exception(
+            ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+            "Failed to recover aggregation checkpoint. Number of data variants are not the same, checkpointed={}, current={}",
+            num_variants,
+            variants.size());
+
+    for (auto & data_variant : variants)
+        aggregating_transforms.at(0)->params->aggregator.recover(*data_variant, rb);
+
+    assert(num_variants == watermarks.size());
+    for (auto & local_watermark : watermarks)
+        DB::readIntBinary(local_watermark, rb);
+
+    DB::readIntBinary(finalized_watermark, rb);
+
+    Int64 last_version = 0;
+    DB::readIntBinary(last_version, rb);
+    version = last_version;
+
+    assert(num_variants == rows_since_last_finalizations.size());
+    for (auto & rows_since_last_finalization : rows_since_last_finalizations)
+    {
+        UInt64 last_rows = 0;
+        DB::readIntBinary<UInt64>(last_rows, rb);
+        *rows_since_last_finalization = last_rows;
+    }
+
+    bool has_field;
+    DB::readBoolText(has_field, rb);
+    if (has_field)
+        any_field.deserializer(any_field.field, rb);
 }
 
 }

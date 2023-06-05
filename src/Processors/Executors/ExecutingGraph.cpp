@@ -462,12 +462,17 @@ void ExecutingGraph::deserialize(ReadBuffer & rb) const
 
             for (; recovered_ports_iter != recovered_ports.end();)
             {
-                if (!blocksHaveEqualStructure(recovered_ports_iter->getHeader(), new_ports_iter->getHeader()))
+                /// Use `isCompatibleHeader` instead of `blocksHaveEqualStructure`,
+                /// since the recovered columns are always non-const columns after serializing/deserializing for now
+                if (!isCompatibleHeader(new_ports_iter->getHeader(), recovered_ports_iter->getHeader()))
                     throw Exception(
                         ErrorCodes::RECOVER_CHECKPOINT_FAILED,
-                        "Recovered processor logic_id={} name={} doesn't have same input structure as the new planned processor.",
+                        "Recovered processor logic_id={} name={} doesn't have same input structure as the new planned processor. expected "
+                        "structure: \"{}\", but recovered structure: \"{}\"",
                         recovered_processor->getLogicID(),
-                        recovered_processor->getName());
+                        recovered_processor->getName(),
+                        new_ports_iter->getHeader().dumpStructure(),
+                        recovered_ports_iter->getHeader().dumpStructure());
 
                 ++recovered_ports_iter;
                 ++new_ports_iter;

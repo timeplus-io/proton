@@ -1,5 +1,6 @@
-#include "AggregatingTransformWithSubstream.h"
+#include <Processors/Transforms/Streaming/AggregatingTransformWithSubstream.h>
 
+#include <Checkpoint/CheckpointCoordinator.h>
 #include <Processors/Transforms/convertToChunk.h>
 
 namespace DB
@@ -127,8 +128,8 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
         assert(!(chunk.hasWatermark() && need_finalization));
         finalize(substream_ctx, chunk.getChunkContext());
     }
-    // else if (chunk.requestCheckpoint())
-    //     checkpointAlignment(chunk);
+    else if (chunk.requestCheckpoint())
+        checkpoint(chunk.getCheckpointContext());
 }
 
 void AggregatingTransformWithSubstream::emitVersion(Block & block, const SubstreamContextPtr & substream_ctx)
@@ -201,7 +202,7 @@ SubstreamContextPtr AggregatingTransformWithSubstream::getOrCreateSubstreamConte
 
     auto iter = substream_contexts.find(id);
     if (iter == substream_contexts.end())
-        return substream_contexts.emplace(id, std::make_shared<SubstreamContext>(id)).first->second;
+        return substream_contexts.emplace(id, std::make_shared<SubstreamContext>(this, id)).first->second;
 
     return iter->second;
 }
@@ -218,6 +219,69 @@ IProcessor::Status AggregatingTransformWithSubstream::preparePushToOutput()
     has_input = false;
 
     return Status::PortFull;
+}
+
+void AggregatingTransformWithSubstream::checkpoint(CheckpointContextPtr ckpt_ctx)
+{
+    ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
+        writeIntBinary(substream_contexts.size(), wb);
+        for (const auto & [id, substream_ctx] : substream_contexts)
+        {
+            assert(id == substream_ctx->id);
+            substream_ctx->serialize(wb);
+        }
+    });
+}
+
+void AggregatingTransformWithSubstream::recover(CheckpointContextPtr ckpt_ctx)
+{
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
+        size_t num_substreams;
+        readIntBinary(num_substreams, rb);
+        substream_contexts.reserve(num_substreams);
+        for (size_t i = 0; i < num_substreams; ++i)
+        {
+            auto substream_ctx = std::make_shared<SubstreamContext>(this);
+            substream_ctx->deserialize(rb);
+            substream_contexts.emplace(substream_ctx->id, std::move(substream_ctx));
+        }
+    });
+}
+
+void SubstreamContext::serialize(WriteBuffer & wb) const
+{
+    DB::Streaming::serialize(id, wb);
+
+    aggregating_transform->params->aggregator.checkpoint(variants, wb);
+
+    DB::writeIntBinary(finalized_watermark, wb);
+
+    DB::writeIntBinary(version, wb);
+
+    DB::writeIntBinary(rows_since_last_finalization, wb);
+
+    bool has_field = hasField();
+    DB::writeBoolText(has_field, wb);
+    if (has_field)
+        any_field.serializer(any_field.field, wb);
+}
+
+void SubstreamContext::deserialize(ReadBuffer & rb)
+{
+    DB::Streaming::deserialize(id, rb);
+
+    aggregating_transform->params->aggregator.recover(variants, rb);
+
+    DB::readIntBinary(finalized_watermark, rb);
+
+    DB::readIntBinary(version, rb);
+
+    DB::readIntBinary(rows_since_last_finalization, rb);
+
+    bool has_field;
+    DB::readBoolText(has_field, rb);
+    if (has_field)
+        any_field.deserializer(any_field.field, rb);
 }
 
 }

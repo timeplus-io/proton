@@ -6,8 +6,7 @@ namespace DB
 {
 namespace Streaming
 {
-SessionAggregatingTransformWithSubstream::SessionAggregatingTransformWithSubstream(
-    Block header, AggregatingTransformParamsPtr params_)
+SessionAggregatingTransformWithSubstream::SessionAggregatingTransformWithSubstream(Block header, AggregatingTransformParamsPtr params_)
     : WindowAggregatingTransformWithSubstream(
         std::move(header),
         std::move(params_),
@@ -31,7 +30,12 @@ SubstreamContextPtr SessionAggregatingTransformWithSubstream::getOrCreateSubstre
 {
     auto substream_ctx = AggregatingTransformWithSubstream::getOrCreateSubstreamContext(id);
     if (!substream_ctx->hasField())
-        substream_ctx->setField<SessionInfoQueue>({});
+        substream_ctx->setField(
+            {SessionInfoQueue{},
+             /// Field serializer
+             [](const std::any & field, WriteBuffer & wb) { serialize(std::any_cast<const SessionInfoQueue &>(field), wb); },
+             /// Field deserializer
+             [](std::any & field, ReadBuffer & rb) { deserialize(std::any_cast<SessionInfoQueue &>(field), rb); }});
     return substream_ctx;
 }
 
@@ -50,7 +54,7 @@ SessionAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, c
     if (!sessions.empty())
     {
         if (chunk.hasTimeoutWatermark())
-            sessions.back()->active = false;  /// force to finalize current session
+            sessions.back()->active = false; /// force to finalize current session
 
         for (auto riter = sessions.rbegin(); riter != sessions.rend(); ++riter)
         {
@@ -67,8 +71,8 @@ SessionAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, c
     return result;
 }
 
-WindowsWithBuckets SessionAggregatingTransformWithSubstream::getFinalizedWindowsWithBuckets(
-    Int64 watermark, const SubstreamContextPtr & substream_ctx) const
+WindowsWithBuckets
+SessionAggregatingTransformWithSubstream::getFinalizedWindowsWithBuckets(Int64 watermark, const SubstreamContextPtr & substream_ctx) const
 {
     WindowsWithBuckets windows_with_buckets;
 

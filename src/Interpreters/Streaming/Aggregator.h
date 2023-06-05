@@ -1196,7 +1196,8 @@ private:
     VersionType getVersionFromRevision(UInt64 revision) const;
     VersionType getVersion() const;
 
-    void checkpoint(AggregatedDataVariants & data_variants, WriteBuffer & wb);
+public:
+    void checkpoint(const AggregatedDataVariants & data_variants, WriteBuffer & wb);
     void recover(AggregatedDataVariants & data_variants, ReadBuffer & rb);
     void recoverStates(AggregatedDataVariants & data_variants, BlocksList & blocks);
     void recoverStatesWithoutKey(AggregatedDataVariants & data_variants, BlocksList & blocks);

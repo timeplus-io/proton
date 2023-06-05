@@ -277,6 +277,11 @@ struct SetVariantsTemplate: public Variant
     size_t getTotalRowCount() const;
     /// Counts the size in bytes of the Set buffer and the size of the `string_pool`
     size_t getTotalByteCount() const;
+
+    /// proton: starts.
+    void serialize(WriteBuffer & wb) const;
+    void deserialize(ReadBuffer & rb);
+    /// proton: ends.
 };
 
 using SetVariants = SetVariantsTemplate<NonClearableSet>;

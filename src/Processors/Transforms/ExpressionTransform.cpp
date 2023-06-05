@@ -1,5 +1,11 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Interpreters/ExpressionActions.h>
+
+/// proton; starts.
+#include <Checkpoint/CheckpointContext.h>
+#include <Checkpoint/CheckpointCoordinator.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -24,6 +30,19 @@ void ExpressionTransform::transform(Chunk & chunk)
 
     chunk.setColumns(block.getColumns(), num_rows);
 }
+
+/// proton: starts.
+void ExpressionTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+{
+    ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) { expression->serialize(wb); });
+}
+
+void ExpressionTransform::recover(CheckpointContextPtr ckpt_ctx)
+{
+    ckpt_ctx->coordinator->recover(
+        getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) { expression->deserialize(rb); });
+}
+/// proton: ends.
 
 ConvertingTransform::ConvertingTransform(const Block & header_, ExpressionActionsPtr expression_)
     : ExceptionKeepingTransform(header_, ExpressionTransform::transformHeader(header_, expression_->getActionsDAG()), true, ProcessorID::ConvertingTransformID)

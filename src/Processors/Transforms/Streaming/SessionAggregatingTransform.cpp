@@ -27,10 +27,19 @@ SessionAggregatingTransform::SessionAggregatingTransform(Block header, Aggregati
     time_col_pos = input_header.getPositionByName(window_params.desc->argument_names[0]);
     session_start_col_pos = input_header.getPositionByName(ProtonConsts::STREAMING_SESSION_START);
     session_end_col_pos = input_header.getPositionByName(ProtonConsts::STREAMING_SESSION_END);
+
+    assert(!many_data->hasField());
+    many_data->setField(
+        {SessionInfoQueue{},
+         /// Field serializer
+         [](const std::any & field, WriteBuffer & wb) { serialize(std::any_cast<const SessionInfoQueue &>(field), wb); },
+         /// Field deserializer
+         [](std::any & field, ReadBuffer & rb) { deserialize(std::any_cast<SessionInfoQueue &>(field), rb); }});
 }
 
 std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk & chunk, size_t num_rows)
 {
+    auto & sessions = many_data->getField<SessionInfoQueue>();
     auto columns = chunk.detachColumns();
     SessionHelper::assignWindow(
         sessions, window_params, columns, wstart_col_pos, wend_col_pos, time_col_pos, session_start_col_pos, session_end_col_pos);
@@ -41,7 +50,7 @@ std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk &
     if (!sessions.empty())
     {
         if (chunk.hasTimeoutWatermark())
-            sessions.back()->active = false;  /// force to finalize current session
+            sessions.back()->active = false; /// force to finalize current session
 
         for (auto riter = sessions.rbegin(); riter != sessions.rend(); ++riter)
         {
@@ -60,6 +69,7 @@ std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk &
 
 WindowsWithBuckets SessionAggregatingTransform::getFinalizedWindowsWithBuckets(Int64 watermark) const
 {
+    auto & sessions = many_data->getField<SessionInfoQueue>();
     WindowsWithBuckets windows_with_buckets;
     for (const auto & session : sessions)
     {
@@ -75,6 +85,7 @@ WindowsWithBuckets SessionAggregatingTransform::getFinalizedWindowsWithBuckets(I
 
 void SessionAggregatingTransform::removeBucketsImpl(Int64 watermark)
 {
+    auto & sessions = many_data->getField<SessionInfoQueue>();
     for (auto iter = sessions.begin(); iter != sessions.end();)
     {
         if ((*iter)->id > watermark)

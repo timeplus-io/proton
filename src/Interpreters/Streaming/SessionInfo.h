@@ -6,6 +6,9 @@
 
 namespace DB
 {
+class ReadBuffer;
+class WriteBuffer;
+
 namespace Streaming
 {
 using SessionID = Int64;
@@ -24,9 +27,15 @@ struct SessionInfo
     bool active = false;
 
     String string() const { return fmt::format("({}, {})", win_start, win_end); }
+
+    void serialize(WriteBuffer & wb) const;
+    void deserialize(ReadBuffer & rb);
 };
 
 using SessionInfoPtr = std::shared_ptr<SessionInfo>;
 using SessionInfoQueue = std::deque<SessionInfoPtr>;
+
+void serialize(const SessionInfoQueue & sessions, WriteBuffer & wb);
+void deserialize(SessionInfoQueue & sessions, ReadBuffer & rb);
 }
 }

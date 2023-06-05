@@ -2,6 +2,10 @@
 #include <Processors/Transforms/ExceptionKeepingTransform.h>
 #include <Processors/ISimpleTransform.h>
 
+/// proton: starts.
+#include <base/SerdeTag.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -26,11 +30,18 @@ public:
 
     static Block transformHeader(Block header, const ActionsDAG & expression);
 
+    /// proton: starts.
+    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
+    void recover(CheckpointContextPtr ckpt_ctx) override;
+    /// proton: ends.
+
 protected:
     void transform(Chunk & chunk) override;
 
 private:
-    ExpressionActionsPtr expression;
+    /// proton: starts.
+    SERDE ExpressionActionsPtr expression;
+    /// proton: ends.
 };
 
 class ConvertingTransform final : public ExceptionKeepingTransform

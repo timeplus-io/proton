@@ -30,8 +30,6 @@ void WindowAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     doFinalize(watermark, substream_ctx, chunk_ctx);
     auto end = MonotonicMilliseconds::now();
 
-    substream_ctx->watermark = watermark;
-
     LOG_DEBUG(
         log, "Took {} milliseconds to finalize aggregation in substream id={}. watermark={}", end - start, substream_ctx->id, watermark);
 

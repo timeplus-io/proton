@@ -63,12 +63,12 @@ void WatermarkTransform::transform(Chunk & chunk)
 
 void WatermarkTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
-    ckpt_ctx->coordinator->checkpoint(getVersion(), logic_pid, ckpt_ctx, [this](WriteBuffer & wb) { watermark->serialize(wb); });
+    ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) { watermark->serialize(wb); });
 }
 
 void WatermarkTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
-    ckpt_ctx->coordinator->recover(logic_pid, ckpt_ctx, [this](VersionType, ReadBuffer & rb) { watermark->deserialize(rb); });
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType, ReadBuffer & rb) { watermark->deserialize(rb); });
 }
 }
 }

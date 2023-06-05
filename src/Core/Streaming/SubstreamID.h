@@ -22,7 +22,7 @@ template <typename T>
 using SubstreamHashMap = absl::flat_hash_map<Streaming::SubstreamID, T, UInt128TrivialHash>;
 
 void serialize(const SubstreamID & id, WriteBuffer & wb);
-SubstreamID deserialize(ReadBuffer & rb);
+void deserialize(SubstreamID & id, ReadBuffer & rb);
 }
 }
 

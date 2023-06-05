@@ -146,7 +146,9 @@ WatermarkStamper & WatermarkTransformWithSubstream::getOrCreateSubstreamWatermar
 
 void WatermarkTransformWithSubstream::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
-    ckpt_ctx->coordinator->checkpoint(getVersion(), logic_pid, ckpt_ctx, [this](WriteBuffer & wb) {
+    /// We always push output_chunks first, so we can assume no output_chunks when received request checkpoint
+    assert(output_chunks.empty());
+    ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
         writeIntBinary(substream_watermarks.size(), wb);
 
         for (const auto & [id, watermark] : substream_watermarks)
@@ -159,14 +161,15 @@ void WatermarkTransformWithSubstream::checkpoint(CheckpointContextPtr ckpt_ctx)
 
 void WatermarkTransformWithSubstream::recover(CheckpointContextPtr ckpt_ctx)
 {
-    ckpt_ctx->coordinator->recover(logic_pid, ckpt_ctx, [this](VersionType, ReadBuffer & rb) {
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType, ReadBuffer & rb) {
         size_t size = 0;
         readIntBinary(size, rb);
 
         substream_watermarks.reserve(size);
         for (size_t i = 0; i < size; ++i)
         {
-            SubstreamID substream_id{deserialize(rb)};
+            SubstreamID substream_id{};
+            deserialize(substream_id, rb);
 
             auto watermark = watermark_template->clone();
             watermark->deserialize(rb);

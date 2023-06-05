@@ -13,13 +13,10 @@ void serialize(const SubstreamID & id, WriteBuffer & wb)
         writeIntBinary(i, wb);
 }
 
-SubstreamID deserialize(ReadBuffer & rb)
+void deserialize(SubstreamID & id, ReadBuffer & rb)
 {
-    SubstreamID id{};
     for (auto & i : id.items)
         readIntBinary(i, rb);
-
-    return id;
 }
 }
 

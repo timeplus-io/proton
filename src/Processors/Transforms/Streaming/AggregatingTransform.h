@@ -5,6 +5,9 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Processors/IProcessor.h>
 #include <Common/Stopwatch.h>
+#include <base/SerdeTag.h>
+
+#include <any>
 
 namespace DB
 {
@@ -43,33 +46,67 @@ struct AggregatingTransformParams
 
 class AggregatingTransform;
 
-struct ManyAggregatedData
+SERDE struct ManyAggregatedData
 {
-    ManyAggregatedDataVariants variants;
-
     /// Reference to all transforms
     std::vector<AggregatingTransform *> aggregating_transforms;
 
-    /// Watermarks for all variants
-    std::vector<Int64> watermarks;
-    std::atomic<UInt32> num_finished = 0;
-    std::atomic<UInt32> finalizations = 0;
-    std::atomic<Int64> version = 0;
+    SERDE ManyAggregatedDataVariants variants;
 
-    std::condition_variable finalized;
-    std::mutex finalizing_mutex;
+    /// Watermarks for all variants
+    SERDE std::vector<Int64> watermarks;
 
     /// `finalized_watermark` is capturing the max watermark we have progressed and 
     /// it is used to garbage collect time bucketed memory : time buckets which 
     /// are below this watermark can be safely GCed.
-    Int64 finalized_watermark = INVALID_WATERMARK;
+    SERDE Int64 finalized_watermark = INVALID_WATERMARK;
+
+    SERDE std::atomic<Int64> version = 0;
+
+    SERDE std::vector<std::unique_ptr<std::atomic<UInt64>>> rows_since_last_finalizations;
+
+    std::condition_variable finalized;
+    std::mutex finalizing_mutex;
+    std::atomic<UInt32> num_finished = 0;
+    std::atomic<UInt32> finalizations = 0;
 
     std::condition_variable ckpted;
     std::mutex ckpt_mutex;
     std::vector<Int64> ckpt_epochs;
     std::atomic<UInt32> ckpt_requested = 0;
 
-    std::vector<std::unique_ptr<std::atomic<UInt64>>> rows_since_last_finalizations;
+    /// Stuff additional data context to it if needed
+    SERDE struct AnyField
+    {
+        SERDE std::any field;
+        std::function<void(const std::any &, WriteBuffer &)> serializer;
+        std::function<void(std::any &, ReadBuffer &)> deserializer;
+    } any_field;
+
+    explicit ManyAggregatedData(size_t num_threads) : variants(num_threads), watermarks(num_threads), ckpt_epochs(num_threads)
+    {
+        for (auto & elem : variants)
+            elem = std::make_shared<AggregatedDataVariants>();
+
+        for (size_t i = 0; i < num_threads; ++i)
+            rows_since_last_finalizations.emplace_back(std::make_unique<std::atomic<UInt64>>(0));
+
+        aggregating_transforms.resize(variants.size());
+    }
+
+    void serialize(WriteBuffer & wb) const;
+
+    void deserialize(ReadBuffer & rb);
+
+    bool hasField() const { return any_field.field.has_value(); }
+
+    void setField(AnyField && field_) { any_field = std::move(field_); }
+
+    template<typename T>
+    T & getField() { return std::any_cast<T &>(any_field.field); }
+
+    template<typename T>
+    const T & getField() const { return std::any_cast<const T &>(any_field.field); }
 
     bool hasNewData() const
     {
@@ -86,17 +123,6 @@ struct ManyAggregatedData
     void addRowCount(size_t rows, size_t current_variant)
     {
         *rows_since_last_finalizations[current_variant] += rows;
-    }
-
-    explicit ManyAggregatedData(size_t num_threads) : variants(num_threads), watermarks(num_threads), ckpt_epochs(num_threads)
-    {
-        for (auto & elem : variants)
-            elem = std::make_shared<AggregatedDataVariants>();
-
-        for (size_t i = 0; i < num_threads; ++i)
-            rows_since_last_finalizations.emplace_back(std::make_unique<std::atomic<UInt64>>(0));
-
-        aggregating_transforms.resize(variants.size());
     }
 };
 
@@ -131,6 +157,8 @@ public:
     void checkpoint(CheckpointContextPtr ckpt_ctx) override;
     void recover(CheckpointContextPtr ckpt_ctx) override;
 
+    friend struct ManyAggregatedData;
+
 private:
     virtual void consume(Chunk chunk);
 
@@ -164,7 +192,7 @@ protected:
      */
     bool no_more_keys = false;
 
-    ManyAggregatedDataPtr many_data;
+    SERDE ManyAggregatedDataPtr many_data;
     AggregatedDataVariants & variants;
     Int64 & watermark;
     Int64 & ckpt_epoch;

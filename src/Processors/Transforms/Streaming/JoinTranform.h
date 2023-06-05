@@ -2,6 +2,7 @@
 
 #include <Interpreters/Streaming/IHashJoin.h>
 #include <Processors/IProcessor.h>
+#include <base/SerdeTag.h>
 
 namespace DB
 {
@@ -32,6 +33,9 @@ public:
     Status prepare() override;
     void work() override;
 
+    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
+    void recover(CheckpointContextPtr ckpt_ctx) override;
+
     static Block transformHeader(Block header, const HashJoinPtr & join);
 
 private:
@@ -55,7 +59,7 @@ private:
     /// std::atomic_bool stop_reading = false;
     [[maybe_unused]] bool process_non_joined = true;
 
-    HashJoinPtr join;
+    SERDE HashJoinPtr join;
     bool range_bidirectional_hash_join = false;
     bool bidirectional_hash_join = false;
 
@@ -68,10 +72,12 @@ private:
 
     mutable std::mutex mutex;
 
-    std::array<InputPortWithData, 2> input_ports_with_data;
-    std::list<Chunk> output_chunks;
+    /// When received request checkpoint, it's always empty chunk with checkpoint context
+    NO_SERDE std::array<InputPortWithData, 2> input_ports_with_data;
+    /// We always push output_chunks first, so we can assume no output_chunks when received request checkpoint
+    NO_SERDE std::list<Chunk> output_chunks;
 
-    int64_t watermark = INVALID_WATERMARK;
+    SERDE int64_t watermark = INVALID_WATERMARK;
 };
 }
 }
