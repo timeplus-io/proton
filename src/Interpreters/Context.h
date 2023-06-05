@@ -90,6 +90,7 @@ class OpenTelemetrySpanLog;
 class ZooKeeperLog;
 class SessionLog;
 class ProcessorsProfileLog;
+class FilesystemCacheLog;
 class TransactionsInfoLog;
 class IAsynchronousReader;
 class StorageS3Settings;
@@ -900,6 +901,8 @@ public:
     std::shared_ptr<SessionLog> getSessionLog() const;
     std::shared_ptr<ProcessorsProfileLog> getProcessorsProfileLog() const;
     std::shared_ptr<TransactionsInfoLog> getTransactionsInfoLog() const;
+
+    std::shared_ptr<FilesystemCacheLog> getFilesystemCacheLog() const;
 
     /// Returns an object used to log operations with parts if it possible.
     /// Provide table name to make required checks.

@@ -281,7 +281,10 @@ void LRUFileCache::fillHolesWithEmptyFileSegments(
         if (fill_with_detached_file_segments)
         {
             auto file_segment = std::make_shared<FileSegment>(current_pos, hole_size, key, this, FileSegment::State::EMPTY);
-            file_segment->detached = true;
+            {
+                std::lock_guard segment_lock(file_segment->mutex);
+                file_segment->markAsDetached(segment_lock);
+            }
             file_segments.insert(it, file_segment);
         }
         else
@@ -305,7 +308,10 @@ void LRUFileCache::fillHolesWithEmptyFileSegments(
         if (fill_with_detached_file_segments)
         {
             auto file_segment = std::make_shared<FileSegment>(current_pos, hole_size, key, this, FileSegment::State::EMPTY);
-            file_segment->detached = true;
+            {
+                std::lock_guard segment_lock(file_segment->mutex);
+                file_segment->markAsDetached(segment_lock);
+            }
             file_segments.insert(file_segments.end(), file_segment);
         }
         else
@@ -361,7 +367,10 @@ FileSegmentsHolder LRUFileCache::get(const Key & key, size_t offset, size_t size
     if (file_segments.empty())
     {
         auto file_segment = std::make_shared<FileSegment>(offset, size, key, this, FileSegment::State::EMPTY);
-        file_segment->detached = true;
+        {
+            std::lock_guard segment_lock(file_segment->mutex);
+            file_segment->markAsDetached(segment_lock);
+        }
         file_segments = { file_segment };
     }
     else
@@ -794,6 +803,18 @@ std::vector<String> LRUFileCache::tryGetCachePaths(const Key & key)
     }
 
     return cache_paths;
+}
+
+size_t LRUFileCache::getUsedCacheSize() const
+{
+    std::lock_guard cache_lock(mutex);
+    return current_size;
+}
+
+size_t LRUFileCache::getCacheFilesNum() const
+{
+    std::lock_guard cache_lock(mutex);
+    return files.size();
 }
 
 LRUFileCache::FileSegmentCell::FileSegmentCell(FileSegmentPtr file_segment_, LRUQueue & queue_)

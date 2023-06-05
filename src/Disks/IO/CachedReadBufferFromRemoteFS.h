@@ -5,6 +5,13 @@
 #include <IO/WriteBufferFromFile.h>
 #include <IO/ReadSettings.h>
 #include <Common/logger_useful.h>
+#include <Interpreters/FilesystemCacheLog.h>
+
+
+namespace CurrentMetrics
+{
+extern const Metric FilesystemCacheReadBuffers;
+}
 
 namespace DB
 {
@@ -19,6 +26,7 @@ public:
         FileCachePtr cache_,
         RemoteFSFileReaderCreator remote_file_reader_creator_,
         const ReadSettings & settings_,
+        const String & query_id_,
         size_t read_until_position_);
 
     bool nextImpl() override;
@@ -64,6 +72,8 @@ private:
     size_t getTotalSizeToRead();
     bool completeFileSegmentAndGetNext();
 
+    void appendFilesystemCacheLog(const FileSegment::Range & file_segment_range, ReadType read_type);
+
     Poco::Logger * log;
     IFileCache::Key cache_key;
     String remote_fs_object_path;
@@ -104,6 +114,11 @@ private:
     size_t first_offset = 0;
     String nextimpl_step_log_info;
     String last_caller_id;
+
+    String query_id;
+    bool enable_logging = false;
+
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::FilesystemCacheReadBuffers};
 };
 
 }

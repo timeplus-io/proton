@@ -31,6 +31,8 @@ public:
         const ReadSettings & settings_,
         const String & path_);
 
+    ~ReadBufferFromRemoteFSGather() override;
+
     String getFileName() const;
 
     void reset();
@@ -56,7 +58,9 @@ public:
     size_t getImplementationBufferOffset() const;
 
 protected:
-    virtual SeekableReadBufferPtr createImplementationBuffer(const String & path, size_t file_size) = 0;
+    virtual SeekableReadBufferPtr createImplementationBufferImpl(const String & path, size_t file_size) = 0;
+
+    std::string common_path_prefix;
 
     //BlobsPathWithSize blobs_to_read;
     BlobsPathToSize blobs_to_read;
@@ -67,11 +71,18 @@ protected:
 
     size_t read_until_position = 0;
 
-    String current_path;
+    String current_file_path;
+    size_t current_file_size = 0;
+
+    bool with_cache;
+
+    String query_id;
 
     String canonical_path;
 
 private:
+    SeekableReadBufferPtr createImplementationBuffer(const String & path, size_t file_size);
+
     bool nextImpl() override;
 
     void initialize();
@@ -79,6 +90,8 @@ private:
     bool readImpl();
 
     bool moveToNextBuffer();
+
+    void appendFilesystemCacheLog();
 
     SeekableReadBufferPtr current_buf;
 
@@ -95,6 +108,10 @@ private:
 
 
     Poco::Logger * log;
+
+    size_t total_bytes_read_from_current_file = 0;
+
+    bool enable_cache_log = false;
 };
 
 
@@ -107,6 +124,7 @@ public:
         const String & path_,
         std::shared_ptr<Aws::S3::S3Client> client_ptr_,
         const String & bucket_,
+        const String & version_id_,
         //BlobsPathWithSize blobs_to_read_,
         BlobsPathToSize blobs_to_read_,
         size_t max_single_read_retries_,
@@ -114,15 +132,17 @@ public:
         : ReadBufferFromRemoteFSGather(std::move(blobs_to_read_), settings_, path_)
         , client_ptr(std::move(client_ptr_))
         , bucket(bucket_)
+        , version_id(version_id_)
         , max_single_read_retries(max_single_read_retries_)
     {
     }
 
-    SeekableReadBufferPtr createImplementationBuffer(const String & path, size_t file_size) override;
+    SeekableReadBufferPtr createImplementationBufferImpl(const String & path, size_t file_size) override;
 
 private:
     std::shared_ptr<Aws::S3::S3Client> client_ptr;
     String bucket;
+    String version_id;
     UInt64 max_single_read_retries;
 };
 #endif
@@ -148,7 +168,7 @@ public:
     {
     }
 
-    SeekableReadBufferPtr createImplementationBuffer(const String & path, size_t file_size) override;
+    SeekableReadBufferPtr createImplementationBufferImpl(const String & path, size_t file_size) override;
 
 private:
     std::shared_ptr<Azure::Storage::Blobs::BlobContainerClient> blob_container_client;
@@ -174,7 +194,7 @@ public:
     {
     }
 
-    SeekableReadBufferPtr createImplementationBuffer(const String & path, size_t file_size) override;
+    SeekableReadBufferPtr createImplementationBufferImpl(const String & path, size_t file_size) override;
 
 private:
     String uri;

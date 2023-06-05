@@ -26,6 +26,7 @@
 #include <Interpreters/AsynchronousMetricLog.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/ZooKeeperLog.h>
+#include <Interpreters/FilesystemCacheLog.h>
 #include <Interpreters/ProcessorsProfileLog.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <IO/copyData.h>
@@ -539,7 +540,8 @@ BlockIO InterpreterSystemQuery::execute()
                 [&] { if (auto query_views_log = getContext()->getQueryViewsLog()) query_views_log->flush(true); },
                 [&] { if (auto zookeeper_log = getContext()->getZooKeeperLog()) zookeeper_log->flush(true); },
                 [&] { if (auto session_log = getContext()->getSessionLog()) session_log->flush(true); },
-                [&] { if (auto processors_profile_log = getContext()->getProcessorsProfileLog()) processors_profile_log->flush(true); }
+                [&] { if (auto processors_profile_log = getContext()->getProcessorsProfileLog()) processors_profile_log->flush(true); },
+                [&] { if (auto cache_log = getContext()->getFilesystemCacheLog()) cache_log->flush(true); }
             );
             break;
         }
