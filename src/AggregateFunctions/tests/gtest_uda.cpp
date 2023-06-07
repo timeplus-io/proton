@@ -6,10 +6,11 @@
 #include <V8/ConvertDataTypes.h>
 #include <V8/Utils.h>
 
+#include <Columns/ColumnArray.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
 #include <IO/ReadBufferFromString.h>
 #include <Interpreters/IExternalLoadable.h>
-#include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
 
 #include <gtest/gtest.h>
 #include <Poco/JSON/Parser.h>
@@ -97,6 +98,11 @@ String UDA1 = R"###(
         }
     }
 })###";
+
+String ARGS_NESTED_ARRAY = R"###([{ "name": "value","type": "array(array(int64))"}])###";
+String ARGS_INT_ARRAY = R"###([{ "name": "value","type": "array(int64)"}])###";
+String ARGS_BOOL_ARRAY = R"###([{ "name": "value","type": "array(bool)"}])###";
+String ARGS_STR_ARRAY = R"###([{ "name": "value","type": "array(string)"}])###";
 
 void initV8()
 {
@@ -323,9 +329,7 @@ TEST_F(UDATestCase, IntArray)
     isolate_params.array_buffer_allocator_shared
         = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
     v8::Isolate * isolate = v8::Isolate::New(isolate_params);
-    SCOPE_EXIT({
-        isolate->Dispose();
-    });
+    SCOPE_EXIT({ isolate->Dispose(); });
 
     v8::Locker locker(isolate);
     v8::Isolate::Scope isolate_scope(isolate);
@@ -360,9 +364,7 @@ TEST_F(UDATestCase, ArrayInArray)
     isolate_params.array_buffer_allocator_shared
         = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
     v8::Isolate * isolate = v8::Isolate::New(isolate_params);
-    SCOPE_EXIT({
-        isolate->Dispose();
-    });
+    SCOPE_EXIT({ isolate->Dispose(); });
     v8::Locker locker(isolate);
     v8::Isolate::Scope isolate_scope(isolate);
     v8::HandleScope handle_scope(isolate);
@@ -395,9 +397,7 @@ TEST_F(UDATestCase, EmptyArray)
     isolate_params.array_buffer_allocator_shared
         = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
     v8::Isolate * isolate = v8::Isolate::New(isolate_params);
-    SCOPE_EXIT({
-        isolate->Dispose();
-    });
+    SCOPE_EXIT({ isolate->Dispose(); });
     v8::Locker locker(isolate);
     v8::Isolate::Scope isolate_scope(isolate);
     v8::HandleScope handle_scope(isolate);
@@ -430,9 +430,7 @@ TEST_F(UDATestCase, NestedArray)
     isolate_params.array_buffer_allocator_shared
         = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
     v8::Isolate * isolate = v8::Isolate::New(isolate_params);
-    SCOPE_EXIT({
-        isolate->Dispose();
-    });
+    SCOPE_EXIT({ isolate->Dispose(); });
     v8::Locker locker(isolate);
     v8::Isolate::Scope isolate_scope(isolate);
     v8::HandleScope handle_scope(isolate);
@@ -454,4 +452,228 @@ TEST_F(UDATestCase, NestedArray)
     Field result_elem1;
     col_ptr->get(0, result_elem1);
     ASSERT_EQ(result_elem1.get<Array &>().size(), 2);
+}
+
+void dumpArray(ColumnArray & col)
+{
+    std::cout << "structure: " << col.dumpStructure() << std::endl;
+    std::cout << "data: ";
+    for (int i = 0; i < col.getData().size(); i++)
+    {
+        std::cout << col.getData()[i] << ",";
+    }
+    std::cout << std::endl;
+
+    std::cout << "offsets: ";
+    for (int i = 0; i < col.getOffsets().size(); i++)
+    {
+        std::cout << col.getOffsets()[i] << ",";
+    }
+    std::cout << std::endl;
+}
+
+TEST_F(UDATestCase, prepareArguments_IntArray)
+{
+    v8::Isolate::CreateParams isolate_params;
+    isolate_params.array_buffer_allocator_shared
+        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
+    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
+    SCOPE_EXIT({ isolate->Dispose(); });
+    v8::Locker locker(isolate);
+    v8::Isolate::Scope isolate_scope(isolate);
+    v8::HandleScope handle_scope(isolate);
+    v8::TryCatch try_catch(isolate);
+    /// try_catch.SetVerbose(true);
+    try_catch.SetCaptureMessage(true);
+
+    auto config = createUDFConfig("int_array", ARGS_INT_ARRAY, RETURN_UDA1, UDA1);
+
+    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
+    v8::Context::Scope context_scope(local_ctx);
+
+    auto array_type_ptr = DataTypeFactory::instance().get("array(int64)");
+    auto col_ptr = array_type_ptr->createColumn();
+    /// prepare input column
+    auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
+    column_array.insert(Array{1, 2});
+    column_array.insert(Array{3, 4, 5});
+
+    MutableColumns columns;
+    columns.emplace_back(std::move(col_ptr));
+    auto argv = V8::prepareArguments(isolate, config.arguments, columns);
+
+    ASSERT_EQ(argv.size(), 1);
+    v8::Local<v8::Array> v8_arr = argv[0].As<v8::Array>();
+    ASSERT_EQ(v8_arr->Length(), 2);
+    v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
+    v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
+    ASSERT_EQ(elem1.As<v8::Array>()->Length(), 2);
+    ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
+}
+
+TEST_F(UDATestCase, prepareArguments_BoolArray)
+{
+    v8::Isolate::CreateParams isolate_params;
+    isolate_params.array_buffer_allocator_shared
+        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
+    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
+    SCOPE_EXIT({ isolate->Dispose(); });
+    v8::Locker locker(isolate);
+    v8::Isolate::Scope isolate_scope(isolate);
+    v8::HandleScope handle_scope(isolate);
+    v8::TryCatch try_catch(isolate);
+    /// try_catch.SetVerbose(true);
+    try_catch.SetCaptureMessage(true);
+
+    auto config = createUDFConfig("bool_array", ARGS_BOOL_ARRAY, RETURN_UDA1, UDA1);
+
+    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
+    v8::Context::Scope context_scope(local_ctx);
+
+    auto array_type_ptr = DataTypeFactory::instance().get("array(bool)");
+    auto col_ptr = array_type_ptr->createColumn();
+    /// prepare input column
+    auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
+    column_array.insert(Array{true, false});
+    column_array.insert(Array{true, true, true});
+
+    MutableColumns columns;
+    columns.emplace_back(std::move(col_ptr));
+    auto argv = V8::prepareArguments(isolate, config.arguments, columns);
+
+    ASSERT_EQ(argv.size(), 1);
+    v8::Local<v8::Array> v8_arr = argv[0].As<v8::Array>();
+    ASSERT_EQ(v8_arr->Length(), 2);
+    v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
+    v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
+    ASSERT_EQ(elem1.As<v8::Array>()->Length(), 2);
+    ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
+}
+
+TEST_F(UDATestCase, prepareArguments_StrArray)
+{
+    v8::Isolate::CreateParams isolate_params;
+    isolate_params.array_buffer_allocator_shared
+        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
+    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
+    SCOPE_EXIT({ isolate->Dispose(); });
+    v8::Locker locker(isolate);
+    v8::Isolate::Scope isolate_scope(isolate);
+    v8::HandleScope handle_scope(isolate);
+    v8::TryCatch try_catch(isolate);
+    /// try_catch.SetVerbose(true);
+    try_catch.SetCaptureMessage(true);
+
+    auto config = createUDFConfig("str_array", ARGS_STR_ARRAY, RETURN_UDA1, UDA1);
+
+    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
+    v8::Context::Scope context_scope(local_ctx);
+
+    auto array_type_ptr = DataTypeFactory::instance().get("array(string)");
+    auto col_ptr = array_type_ptr->createColumn();
+    /// prepare input column
+    auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
+    column_array.insert(Array{"aaa", "bbb"});
+    column_array.insert(Array{"ccc", "ddd", "eee"});
+
+    MutableColumns columns;
+    columns.emplace_back(std::move(col_ptr));
+    auto argv = V8::prepareArguments(isolate, config.arguments, columns);
+
+    ASSERT_EQ(argv.size(), 1);
+    v8::Local<v8::Array> v8_arr = argv[0].As<v8::Array>();
+    ASSERT_EQ(v8_arr->Length(), 2);
+    v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
+    v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
+    ASSERT_EQ(elem1.As<v8::Array>()->Length(), 2);
+    ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
+}
+
+TEST_F(UDATestCase, prepareArguments_EmptyArray)
+{
+    v8::Isolate::CreateParams isolate_params;
+    isolate_params.array_buffer_allocator_shared
+        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
+    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
+    SCOPE_EXIT({ isolate->Dispose(); });
+    v8::Locker locker(isolate);
+    v8::Isolate::Scope isolate_scope(isolate);
+    v8::HandleScope handle_scope(isolate);
+    v8::TryCatch try_catch(isolate);
+    /// try_catch.SetVerbose(true);
+    try_catch.SetCaptureMessage(true);
+
+    auto config = createUDFConfig("int_array", ARGS_INT_ARRAY, RETURN_UDA1, UDA1);
+
+    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
+    v8::Context::Scope context_scope(local_ctx);
+
+    auto array_type_ptr = DataTypeFactory::instance().get("array(int64)");
+    auto col_ptr = array_type_ptr->createColumn();
+    /// prepare input column
+    auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
+    column_array.insert(Array{});
+    column_array.insert(Array{3, 4, 5});
+
+    MutableColumns columns;
+    columns.emplace_back(std::move(col_ptr));
+    auto argv = V8::prepareArguments(isolate, config.arguments, columns);
+
+    ASSERT_EQ(argv.size(), 1);
+    v8::Local<v8::Array> v8_arr = argv[0].As<v8::Array>();
+    ASSERT_EQ(v8_arr->Length(), 2);
+    v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
+    v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
+    ASSERT_EQ(elem1.As<v8::Array>()->Length(), 0);
+    ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
+}
+
+TEST_F(UDATestCase, prepareArguments_NestedArray)
+{
+    v8::Isolate::CreateParams isolate_params;
+    isolate_params.array_buffer_allocator_shared
+        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
+    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
+    SCOPE_EXIT({ isolate->Dispose(); });
+    v8::Locker locker(isolate);
+    v8::Isolate::Scope isolate_scope(isolate);
+    v8::HandleScope handle_scope(isolate);
+    v8::TryCatch try_catch(isolate);
+    /// try_catch.SetVerbose(true);
+    try_catch.SetCaptureMessage(true);
+
+    auto config = createUDFConfig("nested_array", ARGS_NESTED_ARRAY, RETURN_UDA1, UDA1);
+
+    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
+    v8::Context::Scope context_scope(local_ctx);
+
+    auto array_type_ptr = DataTypeFactory::instance().get("array(array(int64))");
+    auto col_ptr = array_type_ptr->createColumn();
+
+    /// prepare input column
+    auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
+    Array nested1 = Array{Array{1, 2}, Array{3, 4, 5}};
+    column_array.insert(nested1);
+    Array nested2 = Array{Array{6}, Array{7}};
+    column_array.insert(nested2);
+    /// dumpArray(column_array);
+
+    MutableColumns columns;
+    columns.emplace_back(std::move(col_ptr));
+    auto argv = V8::prepareArguments(isolate, config.arguments, columns);
+
+    ASSERT_EQ(argv.size(), 1);
+    v8::Local<v8::Array> v8_arr = argv[0].As<v8::Array>();
+    ASSERT_EQ(v8_arr->Length(), 2);
+    v8::Local<v8::Array> v8_nested1 = v8_arr->Get(local_ctx, 0).ToLocalChecked().As<v8::Array>();
+    v8::Local<v8::Array> v8_nested2 = v8_arr->Get(local_ctx, 1).ToLocalChecked().As<v8::Array>();
+    ASSERT_EQ(v8_nested1->Length(), 2);
+    v8::Local<v8::Value> elem1 = v8_nested1->Get(local_ctx, 0).ToLocalChecked();
+    v8::Local<v8::Value> elem2 = v8_nested1->Get(local_ctx, 1).ToLocalChecked();
+    ASSERT_EQ(elem1.As<v8::Array>()->Length(), 2);
+    ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
+    elem1 = v8_nested2->Get(local_ctx, 0).ToLocalChecked();
+    elem2 = v8_nested2->Get(local_ctx, 1).ToLocalChecked();
+    ASSERT_EQ(elem1.As<v8::Array>()->Length(), 1);
+    ASSERT_EQ(elem2.As<v8::Array>()->Length(), 1);
 }

@@ -65,35 +65,53 @@ v8::Local<v8::Value> toV8Date(v8::Isolate * isolate, double dt)
 }
 
 /// convert the input column to v8::Array
-v8::Local<v8::Array> fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableColumnPtr & column)
+v8::Local<v8::Array>
+fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableColumnPtr & column, uint64_t offset, uint64_t size)
 {
     /// Map proton data type to v8 data type.
     auto arg_type_id = arg_type->getTypeId();
 
     v8::EscapableHandleScope scope(isolate);
     v8::Local<v8::Context> context = isolate->GetCurrentContext();
-    v8::Local<v8::Array> result = v8::Array::New(isolate, static_cast<int>(column->size()));
+    v8::Local<v8::Array> result = v8::Array::New(isolate, static_cast<int>(size));
+
+    assert(offset + size <= column->size());
 
     switch (arg_type_id)
     {
         case TypeIndex::Bool: {
-            for (int i = 0; i < column->size(); i++)
-                result->Set(context, i, to_v8(isolate, column->getBool(i))).FromJust();
+            for (int i = 0; i < size; i++)
+                result->Set(context, i, to_v8(isolate, column->getBool(offset + i))).FromJust();
             break;
         }
         case TypeIndex::String:
         case TypeIndex::FixedString: {
-            for (int i = 0; i < column->size(); i++)
-                result->Set(context, i, to_v8(isolate, column->getDataAt(i).data, (*column).getDataAt(i).size)).FromJust();
+            for (int i = 0; i < size; i++)
+                result->Set(context, i, to_v8(isolate, column->getDataAt(offset + i).data, (*column).getDataAt(offset + i).size))
+                    .FromJust();
             break;
         }
         case TypeIndex::DateTime64: {
             const auto * source = checkAndGetColumn<ColumnDecimal<DateTime64>>(column.get());
             const auto & scale = reinterpret_cast<const DataTypeDateTime64 *>(arg_type.get())->getScale();
-            for (int i = 0; i < column->size(); i++)
+            for (int i = 0; i < size; i++)
             {
-                auto dt64 = static_cast<Int64>((*source).getElement(i));
+                auto dt64 = static_cast<Int64>((*source).getElement(offset + i));
                 result->Set(context, i, toV8Date(isolate, toDateTime64(dt64, scale, 3).value)).FromJust();
+            }
+            break;
+        }
+        case TypeIndex::Array: {
+            const auto * array_type_ptr = reinterpret_cast<const DataTypeArray *>(arg_type.get());
+            const auto * col_arr = checkAndGetColumn<ColumnArray>(column.get());
+            assert(col_arr && array_type_ptr);
+            for (int i = 0; i < size; i++)
+            {
+                uint64_t elem_offset = col_arr->getOffsets()[offset + i - 1];
+                uint64_t elem_size = col_arr->getOffsets()[offset + i] - elem_offset;
+                v8::Local<v8::Value> val = fillV8Array(
+                    isolate, array_type_ptr->getNestedType(), IColumn::mutate(col_arr->getData().getPtr()), elem_offset, elem_size);
+                result->Set(context, i, val).FromJust();
             }
             break;
         }
@@ -101,9 +119,9 @@ v8::Local<v8::Array> fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_
 #define FOR_DATE(DATE_TYPE_ID, DATE_TYPE_INTERNAL) \
     case (TypeIndex::DATE_TYPE_ID): { \
         const auto * col_date = checkAndGetColumn<ColumnVector<DATE_TYPE_INTERNAL>>(column.get()); \
-        for (int i = 0; i < column->size(); i++) \
+        for (int i = 0; i < size; i++) \
         { \
-            auto d = toDateTime64<DATE_TYPE_INTERNAL>((*col_date).getElement(i)); \
+            auto d = toDateTime64<DATE_TYPE_INTERNAL>((*col_date).getElement(offset + i)); \
             result->Set(context, i, toV8Date(isolate, d)).FromJust(); \
         } \
         break; \
@@ -114,7 +132,7 @@ v8::Local<v8::Array> fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_
 #define DISPATCH(NUMERIC_TYPE_ID) \
     case (TypeIndex::NUMERIC_TYPE_ID): { \
         const auto & internal_data = assert_cast<const ColumnVector<NUMERIC_TYPE_ID> &>(*column).getData(); \
-        result = to_v8(isolate, internal_data.begin(), internal_data.end()); \
+        result = to_v8(isolate, internal_data.begin() + offset, internal_data.begin() + offset + size); \
         break; \
     }
             FOR_BASIC_NUMERIC_TYPES(DISPATCH)
@@ -137,7 +155,7 @@ std::vector<v8::Local<v8::Value>> prepareArguments(
     /// input is v8::Array
     for (int i = 0; const auto & arg : arguments)
     {
-        argv.emplace_back(fillV8Array(isolate, arg.type, columns[i]));
+        argv.emplace_back(fillV8Array(isolate, arg.type, columns[i], 0, columns[i]->size()));
         ++i;
     }
     return argv;
