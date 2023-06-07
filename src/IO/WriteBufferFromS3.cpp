@@ -21,7 +21,7 @@
 namespace ProfileEvents
 {
     extern const Event WriteBufferFromS3Bytes;
-    extern const Event RemoteFSCacheDownloadBytes;
+    extern const Event CachedReadBufferCacheWriteBytes;
 }
 
 namespace DB
@@ -30,7 +30,6 @@ namespace DB
 // In case server does not return an error on exceeding that number, we print a warning
 // because custom S3 implementation may allow relaxed requirements on that.
 const int S3_WARN_MAX_PARTS = 10000;
-
 
 namespace ErrorCodes
 {
@@ -485,7 +484,7 @@ void WriteBufferFromS3::finalizeCacheIfNeeded(std::optional<FileSegmentsHolder> 
             size_t size = (*file_segment_it)->finalizeWrite();
             file_segment_it = file_segments.erase(file_segment_it);
 
-            ProfileEvents::increment(ProfileEvents::RemoteFSCacheDownloadBytes, size);
+            ProfileEvents::increment(ProfileEvents::CachedReadBufferCacheWriteBytes, size);
         }
         catch (...)
         {

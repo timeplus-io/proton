@@ -89,7 +89,8 @@ public:
         }
         else if (compression_method == CompressionMethod::Zstd)
         {
-            compressed_buffer = std::make_unique<ZstdDeflatingAppendableWriteBuffer>(std::move(file_buf), /* compression level = */ 3, /* append_to_existing_stream = */ mode == WriteMode::Append);
+            compressed_buffer = std::make_unique<ZstdDeflatingAppendableWriteBuffer>(
+                std::move(file_buf), /* compression level = */ 3, /* append_to_existing_file_ = */ mode == WriteMode::Append);
         }
         else
         {
@@ -145,7 +146,7 @@ private:
 
     std::string filepath;
     std::unique_ptr<WriteBufferFromFile> file_buf;
-    std::unique_ptr<WriteBufferWithOwnMemoryDecorator> compressed_buffer;
+    std::unique_ptr<ZstdDeflatingAppendableWriteBuffer> compressed_buffer;
     uint64_t start_index;
 };
 

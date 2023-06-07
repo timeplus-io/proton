@@ -67,8 +67,6 @@ protected:
 
     ReadSettings settings;
 
-    bool use_external_buffer;
-
     size_t read_until_position = 0;
 
     String current_file_path;

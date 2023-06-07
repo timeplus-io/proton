@@ -164,6 +164,9 @@ bool AsynchronousReadIndirectBufferFromRemoteFS::nextImpl()
     if (!hasPendingDataToRead())
         return false;
 
+    Stopwatch watch;
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::AsynchronousReadWait};
+
     size_t size = 0;
     if (prefetch_future.valid())
     {
@@ -171,8 +174,6 @@ bool AsynchronousReadIndirectBufferFromRemoteFS::nextImpl()
 
         size_t offset = 0;
         {
-            Stopwatch watch;
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::AsynchronousReadWait};
             auto result = prefetch_future.get();
             size = result.size;
             offset = result.offset;
@@ -209,6 +210,9 @@ bool AsynchronousReadIndirectBufferFromRemoteFS::nextImpl()
             pos = working_buffer.begin();
         }
     }
+
+    watch.stop();
+    ProfileEvents::increment(ProfileEvents::AsynchronousReadWaitMicroseconds, watch.elapsedMicroseconds());
 
     file_offset_of_buffer_end = impl->getFileOffsetOfBufferEnd();
     assert(file_offset_of_buffer_end == impl->getImplementationBufferOffset());
