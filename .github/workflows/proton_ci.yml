@@ -69,11 +69,12 @@ jobs:
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
+      timeout: 30
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
         export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
@@ -105,11 +106,12 @@ jobs:
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
+      timeout: 30
       command: |
         # run stream test
         cd $GITHUB_WORKSPACE/tests/stream
@@ -147,11 +149,12 @@ jobs:
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
+      timeout: 30
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
         # make virtualenv
@@ -181,11 +184,12 @@ jobs:
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_AMI }}
-      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      ec2-image-id: ${{vars.X64_TEST_AMI }}
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
+      timeout: 30
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
         # make virtualenv
