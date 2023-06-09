@@ -1109,7 +1109,7 @@
         },
         {
             "id": 76,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "session_window_aggr",
             "description": "session window aggregation state checkpoint",
             "steps":[
@@ -1140,7 +1140,7 @@
         },
         {
             "id": 77,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "recover_session_window_aggr",
             "description": "recover session window aggregation from a state checkpoint",
             "steps":[
@@ -1182,7 +1182,7 @@
         },
         {
             "id": 78,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "multiple_times_recover_session_window_aggr",
             "description": "multiple times recover session window aggregation from a state checkpoint",
             "steps":[
@@ -1207,7 +1207,7 @@
                 {
                     "statements": [
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream2(id, location, value, timestamp) values ('dev4', 'ca', 58.3, '2020-02-02 20:00:16')"},
-                        {"client":"python", "query_type": "stream","query_id":"1978-1", "terminate": "manual","wait":2, "query":"recover from '1978'"},
+                        {"client":"python", "query_type": "stream","query_id":"1978-2", "terminate": "manual","wait":2, "query":"recover from '1978'"},
                         {"client":"python", "query_type": "table", "depends_on":"1978",  "wait":2, "query": "kill query where query_id='1978' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1978'"}
                     ]
@@ -1224,7 +1224,7 @@
                 {
                     "query_id":"1978-1",
                     "expected_results":[
-                        ["dev2", 66, "2020-02-02 20:00:03", "2020-02-02 20:00:5"]
+                        ["dev2", 66, "2020-02-02 20:00:03", "2020-02-02 20:00:05"]
                     ]
                 },
                 {
