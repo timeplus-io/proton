@@ -17,7 +17,7 @@
 #include <Columns/FilterDescription.h>
 
 /// proton: starts.
-#include <Interpreters/Streaming/FunctionDescription.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 /// proton: ends.
 

@@ -15,7 +15,7 @@ private:
     const char * getStorageTypeName() const override { return "session"; }
     void parseArguments(const ASTPtr & func_ast, ContextPtr context) override;
     ASTs checkAndExtractArguments(ASTFunction * node) const override;
-    String functionNamePrefix() const override;
+    void handleResultType(const ColumnsWithTypeAndName & arguments) override;
 };
 }
 }

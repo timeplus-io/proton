@@ -42,11 +42,6 @@ void TableFunctionTumble::postArgs(ASTs & args) const
         args.pop_back();
 }
 
-String TableFunctionTumble::functionNamePrefix() const
-{
-    return ProtonConsts::TUMBLE_FUNC_NAME + "(";
-}
-
 void registerTableFunctionTumble(TableFunctionFactory & factory)
 {
     factory.registerFunction("tumble", []() -> TableFunctionPtr { return std::make_shared<TableFunctionTumble>("tumble"); });

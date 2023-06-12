@@ -85,59 +85,70 @@ void TableFunctionWindow::doParseArguments(const ASTPtr & func_ast, ContextPtr c
     node->arguments->children.swap(args);
 
     /// Calculate column description
-    init(std::move(context), std::move(streaming_func_ast), functionNamePrefix(), std::move(timestamp_expr_ast));
+    init(std::move(context), std::move(streaming_func_ast), std::move(timestamp_expr_ast));
 }
 
-void TableFunctionWindow::init(ContextPtr context, ASTPtr streaming_func_ast, const String & func_name_prefix, ASTPtr timestamp_expr_ast)
+void TableFunctionWindow::init(ContextPtr context, ASTPtr streaming_func_ast, ASTPtr timestamp_expr_ast)
 {
     auto storage = calculateColumnDescriptions(context);
 
     /// We will first need analyze time column expression since the streaming window function depends on the result of time column expr
     if (timestamp_expr_ast)
     {
-        auto syntax_analyzer_result = TreeRewriter(context).analyze(
-            timestamp_expr_ast, columns.getAll(), storage ? storage : nullptr, storage ? underlying_storage_snapshot : nullptr);
-        timestamp_func_desc = createStreamingFunctionDescription(timestamp_expr_ast, std::move(syntax_analyzer_result), context, "");
+        timestamp_func_desc = createTimestampFunctionDescription(timestamp_expr_ast, context);
+        assert(timestamp_func_desc);
 
-        /// Check the resulting type. It shall be a datetime / datetime64.
-        const auto & time_column = timestamp_func_desc->expr->getSampleBlock().getByPosition(0);
-        assert(time_column.name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS);
-        if (!isDateTime(time_column.type) && !isDateTime64(time_column.type))
-            throw Exception("The resulting type of time column expression shall be datetime or datetime64", ErrorCodes::BAD_ARGUMENTS);
-
-        auto * node = streaming_func_ast->as<ASTFunction>();
         /// We need rewrite streaming function ast to depend on the time expression resulting column directly
         /// The following ast / expression analysis for streaming func will pick up this rewritten timestamp expr ast
-        node->arguments->children[0] = std::make_shared<ASTIdentifier>(ProtonConsts::STREAMING_TIMESTAMP_ALIAS);
+        auto & table_func = streaming_func_ast->as<ASTFunction &>();
+        table_func.arguments->children[0] = std::make_shared<ASTIdentifier>(ProtonConsts::STREAMING_TIMESTAMP_ALIAS);
 
-        ColumnDescription time_column_desc(ProtonConsts::STREAMING_TIMESTAMP_ALIAS, time_column.type);
+        ColumnDescription time_column_desc(
+            ProtonConsts::STREAMING_TIMESTAMP_ALIAS, timestamp_func_desc->expr->getSampleBlock().getByPosition(0).type);
         columns.add(time_column_desc);
     }
 
-    auto func_syntax_analyzer_result = TreeRewriter(context).analyze(
-        streaming_func_ast, columns.getAll(), storage ? storage : nullptr, storage ? underlying_storage_snapshot : nullptr);
-    streaming_func_desc
-        = createStreamingFunctionDescription(streaming_func_ast, std::move(func_syntax_analyzer_result), context, func_name_prefix);
+    streaming_func_desc = createStreamingTableFunctionDescription(streaming_func_ast, context);
 
     /// Parsing the result type of the streaming win function
-    const auto & streaming_win_block = streaming_func_desc->expr->getSampleBlock();
-    assert(streaming_win_block.columns() >= 1);
-
-    const auto & result_type_and_name = streaming_win_block.getByPosition(streaming_win_block.columns() - 1);
-    handleResultType(result_type_and_name);
+    handleResultType(streaming_func_desc->expr_before_table_function->getSampleBlock().getColumnsWithTypeAndName());
 }
 
-void TableFunctionWindow::handleResultType(const ColumnWithTypeAndName & type_and_name)
+void TableFunctionWindow::handleResultType(const ColumnsWithTypeAndName & arguments)
 {
-    const auto * tuple_result_type = checkAndGetDataType<DataTypeTuple>(type_and_name.type.get());
-    assert(tuple_result_type);
-    assert(tuple_result_type->haveExplicitNames());
-    size_t elem_size = tuple_result_type->getElements().size();
-    assert(elem_size >= 2);
-
+    assert(!arguments.empty());
     /// If streaming table function is used, we will need project `wstart, wend ...` columns to metadata
-    for (size_t i = 1; const auto & type : tuple_result_type->getElements())
-        columns.add(ColumnDescription(tuple_result_type->getNameByPosition(i++), type));
+    columns.add(ColumnDescription(ProtonConsts::STREAMING_WINDOW_START, arguments[0].type));
+    columns.add(ColumnDescription(ProtonConsts::STREAMING_WINDOW_END, arguments[0].type));
 }
+
+TimestampFunctionDescriptionPtr TableFunctionWindow::createTimestampFunctionDescription(ASTPtr timestamp_expr_ast, ContextPtr context)
+{
+    auto & timestamp_expr_func = timestamp_expr_ast->as<ASTFunction &>();
+    bool is_now_func = false;
+    if (timestamp_expr_func.name == "now" || timestamp_expr_func.name == "now64")
+    {
+        is_now_func = true;
+        timestamp_expr_func.name = "__streaming_" + timestamp_expr_func.name; /// Replace to processing time
+    }
+    else if (timestamp_expr_func.name == "__streaming_now" || timestamp_expr_func.name == "__streaming_now64")
+        is_now_func = true;
+
+    auto syntax_analyzer_result = TreeRewriter(context).analyze(
+        timestamp_expr_ast, columns.getAll(), storage ? storage : nullptr, storage ? underlying_storage_snapshot : nullptr);
+    ExpressionAnalyzer func_expr_analyzer(timestamp_expr_ast, syntax_analyzer_result, context);
+
+    auto timestamp_func_expr = func_expr_analyzer.getActions(true);
+
+    /// Check the resulting type. It shall be a datetime / datetime64.
+    const auto & time_column = timestamp_func_expr->getSampleBlock().getByPosition(0);
+    assert(time_column.name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS);
+    if (!isDateTime(time_column.type) && !isDateTime64(time_column.type))
+        throw Exception("The resulting type of time column expression shall be datetime or datetime64", ErrorCodes::BAD_ARGUMENTS);
+
+    return std::make_shared<TimestampFunctionDescription>(
+        std::move(timestamp_expr_ast), std::move(timestamp_func_expr), syntax_analyzer_result->requiredSourceColumns(), is_now_func);
+}
+
 }
 }

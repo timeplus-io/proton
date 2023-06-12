@@ -1347,7 +1347,7 @@
         },
         {
             "id": 44,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "func_dedup",
             "description": "function dedup state checkpoint",
             "steps":[
@@ -1373,7 +1373,7 @@
         },
         {
             "id": 45,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "recover_func_dedup",
             "description": "recover function dedup from a state checkpoint",
             "steps":[

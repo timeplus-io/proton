@@ -1,7 +1,8 @@
 #pragma once
 
 #include <Interpreters/Context.h>
-#include <Interpreters/Streaming/FunctionDescription.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
+#include <Interpreters/Streaming/TimestampFunctionDescription.h>
 #include <Storages/IStorage.h>
 #include <base/shared_ptr_helper.h>
 
@@ -47,13 +48,13 @@ public:
 
     NamesAndTypesList getVirtuals() const override;
 
-    FunctionDescriptionPtr getStreamingFunctionDescription() const { return streaming_func_desc; }
+    TableFunctionDescriptionPtr getStreamingTableFunctionDescription() const { return table_func_desc; }
 
     /// Whether it reads data from streaming store or historical store
     bool isStreaming() const { return streaming; }
 
     /// Return WindowType::NONE, if it has no window func
-    WindowType windowType() const { return streaming_func_desc != nullptr ? streaming_func_desc->type : WindowType::NONE; }
+    WindowType windowType() const { return table_func_desc != nullptr ? table_func_desc->type : WindowType::NONE; }
 
     /// Whether has GlobalAggregation in subquery
     bool hasGlobalAggregation() const { return has_global_aggr; }
@@ -111,16 +112,16 @@ private:
         const StorageID & id_,
         const ColumnsDescription & columns_,
         ContextPtr context_,
-        FunctionDescriptionPtr streaming_func_desc_,
-        FunctionDescriptionPtr timestamp_func_desc_,
+        TableFunctionDescriptionPtr table_func_desc_,
+        TimestampFunctionDescriptionPtr timestamp_func_desc_,
         StoragePtr nested_proxy_storage_,
         String internal_name_,
         StoragePtr storage_,
         ASTPtr subquery_,
         bool streaming_ = false);
 
-    FunctionDescriptionPtr streaming_func_desc;
-    FunctionDescriptionPtr timestamp_func_desc;
+    TableFunctionDescriptionPtr table_func_desc;
+    TimestampFunctionDescriptionPtr timestamp_func_desc;
     /// ProxyStream can wrap a ProxyStream
     StoragePtr nested_proxy_storage;
     String internal_name;

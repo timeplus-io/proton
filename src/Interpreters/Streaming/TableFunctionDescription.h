@@ -12,23 +12,21 @@ namespace DB
 {
 namespace Streaming
 {
-struct FunctionDescription
+struct TableFunctionDescription
 {
-    FunctionDescription(
+    TableFunctionDescription(
         ASTPtr func_ast_,
         WindowType type_,
         Names argument_names_,
         DataTypes argument_types_,
-        ExpressionActionsPtr expr_,
-        Names input_columns_,
-        bool is_now = false)
+        ExpressionActionsPtr args_expr_,
+        Names input_columns_)
         : func_ast(std::move(func_ast_))
         , type(type_)
         , argument_names(std::move(argument_names_))
         , argument_types(std::move(argument_types_))
-        , expr(std::move(expr_))
+        , expr_before_table_function(std::move(args_expr_))
         , input_columns(std::move(input_columns_))
-        , is_now_func(is_now)
     {
         assert(func_ast);
     }
@@ -38,16 +36,14 @@ struct FunctionDescription
     Names argument_names;
     DataTypes argument_types;
 
-    ExpressionActionsPtr expr;
+    ExpressionActionsPtr expr_before_table_function;
 
     Names input_columns;
-
-    bool is_now_func = false;
 };
 
 /// FIXME, move this to forward header file
-using FunctionDescriptionPtr = std::shared_ptr<FunctionDescription>;
-using FunctionDescriptionPtrs = std::vector<FunctionDescriptionPtr>;
+using TableFunctionDescriptionPtr = std::shared_ptr<TableFunctionDescription>;
+using FunctionDescriptionPtrs = std::vector<TableFunctionDescriptionPtr>;
 
 }
 }

@@ -4,7 +4,8 @@
 
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/StorageID.h>
-#include <Interpreters/Streaming/FunctionDescription.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
+#include <Interpreters/Streaming/TimestampFunctionDescription.h>
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/StorageSnapshot.h>
 
@@ -30,10 +31,7 @@ protected:
     StoragePtr
     executeImpl(const ASTPtr & func_ast, ContextPtr context, const String & table_name, ColumnsDescription cached_columns) const override;
 
-    virtual String functionNamePrefix() const = 0;
-
-    FunctionDescriptionPtr createStreamingFunctionDescription(
-    ASTPtr ast, TreeRewriterResultPtr syntax_analyzer_result, ContextPtr context, const String & func_name_prefix) const;
+    TableFunctionDescriptionPtr createStreamingTableFunctionDescription(ASTPtr ast, ContextPtr context) const;
 
 private:
     void validateProxyChain() const;
@@ -41,12 +39,10 @@ private:
 protected:
     String name;
 
-    FunctionDescriptionPtr streaming_func_desc;
+    TableFunctionDescriptionPtr streaming_func_desc;
 
     /// Timestamp column expression
-    FunctionDescriptionPtr timestamp_func_desc;
-    /// Names timestamp_expr_required_columns;
-    /// ExpressionActionsPtr timestamp_expr;
+    TimestampFunctionDescriptionPtr timestamp_func_desc;
 
     StoragePtr storage;
     ASTPtr subquery;

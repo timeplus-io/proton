@@ -1,9 +1,9 @@
 #include "WatermarkStamper.h"
 
-#include <Functions/Streaming/FunctionsStreamingWindow.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Interpreters/Streaming/FunctionDescription.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
+#include <Interpreters/Streaming/TimeTransformHelper.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/Streaming/ASTEmitQuery.h>

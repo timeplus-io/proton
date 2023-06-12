@@ -12,11 +12,61 @@ namespace DB
 {
 
 class ASTFunction;
-class ExpressionActions;
-using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
 namespace Streaming
 {
+#define DISPATCH_FOR_WINDOW_INTERVAL(interval_kind, M) \
+    do \
+    { \
+        switch (interval_kind) \
+        { \
+            case IntervalKind::Nanosecond: { \
+                M(IntervalKind::Nanosecond); \
+                break; \
+            } \
+            case IntervalKind::Microsecond: { \
+                M(IntervalKind::Microsecond); \
+                break; \
+            } \
+            case IntervalKind::Millisecond: { \
+                M(IntervalKind::Millisecond); \
+                break; \
+            } \
+            case IntervalKind::Second: { \
+                M(IntervalKind::Second); \
+                break; \
+            } \
+            case IntervalKind::Minute: { \
+                M(IntervalKind::Minute); \
+                break; \
+            } \
+            case IntervalKind::Hour: { \
+                M(IntervalKind::Hour); \
+                break; \
+            } \
+            case IntervalKind::Day: { \
+                M(IntervalKind::Day); \
+                break; \
+            } \
+            case IntervalKind::Week: { \
+                M(IntervalKind::Week); \
+                break; \
+            } \
+            case IntervalKind::Month: { \
+                M(IntervalKind::Month); \
+                break; \
+            } \
+            case IntervalKind::Quarter: { \
+                M(IntervalKind::Quarter); \
+                break; \
+            } \
+            case IntervalKind::Year: { \
+                M(IntervalKind::Year); \
+                break; \
+            } \
+        } \
+    } while (0);
+
 enum class WindowType
 {
     NONE,
@@ -167,24 +217,24 @@ void convertToSameKindIntervalAST(const BaseScaleInterval & bs1, const BaseScale
 UInt32 getAutoScaleByInterval(Int64 num_units, IntervalKind kind);
 
 /// Window Params
-struct FunctionDescription;
-using FunctionDescriptionPtr = std::shared_ptr<FunctionDescription>;
+struct TableFunctionDescription;
+using TableFunctionDescriptionPtr = std::shared_ptr<TableFunctionDescription>;
 struct WindowParams;
 using WindowParamsPtr = std::shared_ptr<WindowParams>;
 struct WindowParams : public TypePromotion<WindowParams>
 {
     WindowType type;
-    FunctionDescriptionPtr desc;
+    TableFunctionDescriptionPtr desc;
 
     String time_col_name;
     bool time_col_is_datetime64; /// DateTime64 or DateTime
     UInt32 time_scale;
     const DateLUTImpl * time_zone;
 
-    static WindowParamsPtr create(const FunctionDescriptionPtr & desc);
+    static WindowParamsPtr create(const TableFunctionDescriptionPtr & desc);
 
 protected:
-    WindowParams(FunctionDescriptionPtr window_desc);
+    WindowParams(TableFunctionDescriptionPtr window_desc);
     virtual ~WindowParams() = default;
 };
 
@@ -194,7 +244,7 @@ struct TumbleWindowParams : WindowParams
     Int64 window_interval = 0;
     IntervalKind::Kind interval_kind = IntervalKind::Second;
 
-    TumbleWindowParams(FunctionDescriptionPtr window_desc);
+    TumbleWindowParams(TableFunctionDescriptionPtr window_desc);
 };
 
 /// __hop(time_expr, hop_interval, win_interval, [timezone])
@@ -207,7 +257,7 @@ struct HopWindowParams : WindowParams
     Int64 gcd_interval = 0;
     IntervalKind::Kind interval_kind = IntervalKind::Second;
 
-    HopWindowParams(FunctionDescriptionPtr window_desc);
+    HopWindowParams(TableFunctionDescriptionPtr window_desc);
 };
 
 /// __session(timestamp_expr, timeout_interval, max_emit_interval, start_cond, start_with_inclusion, end_cond, end_with_inclusion)
@@ -219,7 +269,7 @@ struct SessionWindowParams : WindowParams
     bool start_with_inclusion;
     bool end_with_inclusion;
 
-    SessionWindowParams(FunctionDescriptionPtr window_desc);
+    SessionWindowParams(TableFunctionDescriptionPtr window_desc);
 };
 
 struct Window
@@ -237,6 +287,8 @@ struct WindowWithBuckets
 };
 using WindowsWithBuckets = std::vector<WindowWithBuckets>;
 
+void assignWindow(
+    Columns & columns, const WindowInterval & interval, size_t time_col_pos, bool time_col_is_datetime64, const DateLUTImpl & time_zone);
 void reassignWindow(Block & block, const Window & window);
 
 }

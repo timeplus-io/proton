@@ -3584,7 +3584,7 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
     {
         if (auto * proxy = storage->as<Streaming::ProxyStream>())
         {
-            if (auto desc = proxy->getStreamingFunctionDescription(); desc && desc->type != Streaming::WindowType::NONE)
+            if (auto desc = proxy->getStreamingTableFunctionDescription(); desc && desc->type != Streaming::WindowType::NONE)
                 query_info.streaming_window_params = Streaming::WindowParams::create(desc);
         }
     }

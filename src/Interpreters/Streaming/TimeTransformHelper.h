@@ -1,26 +1,13 @@
 #pragma once
 
-#include <Common/DateLUT.h>
-#include <DataTypes/DataTypeInterval.h>
-#include <Functions/IFunction.h>
 #include <Interpreters/Context_fwd.h>
+#include <Common/DateLUT.h>
+#include <Common/IntervalKind.h>
 
 namespace DB
 {
-/** Streaming Window functions:
-  *
-  * __tumble(time_attr, interval [, alignment, [, timezone]])
-  *
-  * __hop(time_attr, hop_interval, window_interval [, alignment, [, timezone]])
-  *
-  */
-enum WindowFunctionName
+namespace Streaming
 {
-    TUMBLE,
-    HOP,
-    SESSION,
-};
-
 template <typename DateOrTime, typename Divisor>
 inline DateOrTime roundDown(DateOrTime x, Divisor divisor)
 {
@@ -48,7 +35,7 @@ struct ToStartOfTransform;
             return static_cast<UInt32>(time_zone.fromDayNum(days)); \
         } \
         template <typename Timestamp> \
-        requires (std::is_same_v<Timestamp, Int64> || std::is_same_v<Timestamp, DateTime64>) \
+            requires(std::is_same_v<Timestamp, Int64> || std::is_same_v<Timestamp, DateTime64>) \
         static Timestamp execute(Timestamp t, UInt64 delta, const DateLUTImpl & time_zone, UInt32 scale) \
         { \
             auto scale_multiplier = common::exp10_i64(static_cast<int>(scale)); \
@@ -70,7 +57,7 @@ struct ToStartOfTransform<IntervalKind::Day>
         return static_cast<UInt32>(time_zone.toStartOfDayInterval(time_zone.toDayNum(time_sec), delta));
     }
     template <typename Timestamp>
-    requires (std::is_same_v<Timestamp, Int64> || std::is_same_v<Timestamp, DateTime64>)
+        requires(std::is_same_v<Timestamp, Int64> || std::is_same_v<Timestamp, DateTime64>)
     static Timestamp execute(Timestamp t, UInt64 delta, const DateLUTImpl & time_zone, UInt32 scale)
     {
         auto scale_multiplier = common::exp10_i64(static_cast<int>(scale));
@@ -87,7 +74,7 @@ struct ToStartOfTransform<IntervalKind::Day>
             return time_zone.toStartOf##INTERVAL_KIND##Interval(time_sec, delta); \
         } \
         template <typename Timestamp> \
-        requires (std::is_same_v<Timestamp, Int64> || std::is_same_v<Timestamp, DateTime64>) \
+            requires(std::is_same_v<Timestamp, Int64> || std::is_same_v<Timestamp, DateTime64>) \
         static Timestamp execute(Timestamp t, UInt64 delta, const DateLUTImpl & time_zone, UInt32 scale) \
         { \
             auto scale_multiplier = common::exp10_i64(static_cast<int>(scale)); \
@@ -109,7 +96,7 @@ TRANSFORM_TIME(Second)
         { \
             if (likely(interval_scale_multiplier % delta == 0)) \
                 return t; \
-            \
+\
             Int64 start_of_hour = time_zone.toStartOfHour(t); \
             auto start_interval_of_hour = roundDown((t - start_of_hour) * interval_scale_multiplier, delta) / interval_scale_multiplier; \
             return static_cast<UInt32>(start_of_hour + start_interval_of_hour); \
@@ -122,15 +109,15 @@ TRANSFORM_TIME(Second)
             { \
                 if (likely(scale >= INTERVAL_SCALE)) \
                     return roundDown(static_cast<Int64>(t), delta * common::exp10_i64(scale - INTERVAL_SCALE)); \
-                \
+\
                 auto multiplier = common::exp10_i64(INTERVAL_SCALE - scale); \
                 return roundDown(t * multiplier, delta) / multiplier; \
             } \
-            \
+\
             Int64 start_of_hour = time_zone.toStartOfHour(t / interval_scale_multiplier) * interval_scale_multiplier; \
             if (likely(scale >= INTERVAL_SCALE)) \
                 return start_of_hour + roundDown(t - start_of_hour, delta * common::exp10_i64(scale - INTERVAL_SCALE)); \
-            \
+\
             auto multiplier = common::exp10_i64(INTERVAL_SCALE - scale); \
             return start_of_hour + roundDown((t - start_of_hour) * multiplier, delta) / multiplier; \
         } \
@@ -152,7 +139,7 @@ struct AddTime;
             return static_cast<UInt32>(time_zone.add##INTERVAL_KIND##s(time_sec, delta)); \
         } \
         template <typename Timestamp> \
-        requires (std::is_same_v<Timestamp, Int64> || std::is_same_v<Timestamp, DateTime64>) \
+            requires(std::is_same_v<Timestamp, Int64> || std::is_same_v<Timestamp, DateTime64>) \
         static inline Timestamp execute(Timestamp t, Int64 delta, const DateLUTImpl & time_zone, UInt32 scale) \
         { \
             auto scale_multiplier = common::exp10_i64(static_cast<int>(scale)); \
@@ -175,7 +162,7 @@ ADD_DATE(Day)
             return static_cast<UInt32>(time_sec + INTERVAL * delta); \
         } \
         template <typename Timestamp> \
-        requires (std::is_same_v<Timestamp, Int64> || std::is_same_v<Timestamp, DateTime64>) \
+            requires(std::is_same_v<Timestamp, Int64> || std::is_same_v<Timestamp, DateTime64>) \
         static inline NO_SANITIZE_UNDEFINED Timestamp execute(Timestamp t, Int64 delta, const DateLUTImpl &, UInt32 scale) \
         { \
             return t + delta * INTERVAL * common::exp10_i64(static_cast<int>(scale)); \
@@ -196,7 +183,7 @@ ADD_TIME(Second, 1)
             return static_cast<UInt32>(time_sec + delta / interval_scale_multiplier); \
         } \
         template <typename Timestamp> \
-        requires (std::is_same_v<Timestamp, Int64> || std::is_same_v<Timestamp, DateTime64>) \
+            requires(std::is_same_v<Timestamp, Int64> || std::is_same_v<Timestamp, DateTime64>) \
         static inline NO_SANITIZE_UNDEFINED Timestamp execute(Timestamp t, Int64 delta, const DateLUTImpl &, UInt32 scale) \
         { \
             if (likely(scale >= INTERVAL_SCALE)) \
@@ -210,39 +197,5 @@ ADD_TIME(Microsecond, 6)
 ADD_TIME(Nanosecond, 9)
 #undef ADD_TIME
 
-template <WindowFunctionName type>
-struct WindowImpl
-{
-    static constexpr auto name = "unknown";
-
-    static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name);
-
-    static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & function_name);
-};
-
-template <WindowFunctionName type>
-class FunctionWindow : public IFunction
-{
-public:
-    static constexpr auto name = WindowImpl<type>::name;
-    static constexpr auto external_name = WindowImpl<type>::external_name;
-
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionWindow>(); }
-    String getName() const override { return name; }
-    bool isVariadic() const override { return true; }
-    size_t getNumberOfArguments() const override { return 0; }
-    bool useDefaultImplementationForConstants() const override { return true; }
-    bool useDefaultImplementationForNothing() const override { return false; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2, 3}; }
-    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo &) const override { return true; }
-
-    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override;
-
-    ColumnPtr
-    executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & /*result_type*/, size_t /*input_rows_count*/) const override;
-};
-
-using FunctionTumble = FunctionWindow<TUMBLE>;
-using FunctionHop = FunctionWindow<HOP>;
-using FunctionSession = FunctionWindow<SESSION>;
+}
 }

@@ -56,11 +56,8 @@ void TableFunctionDedup::parseArguments(const ASTPtr & func_ast, ContextPtr cont
     /// Calculate column description
     auto storage = TableFunctionProxyBase::calculateColumnDescriptions(context);
 
-    auto syntax_analyzer_result = TreeRewriter(context).analyze(
-        dedup_func_ast, columns.getAll(), storage ? storage : nullptr, storage ? underlying_storage_snapshot : nullptr);
-
-    streaming_func_desc
-        = createStreamingFunctionDescription(dedup_func_ast, std::move(syntax_analyzer_result), context, functionNamePrefix());
+    /// Create table func desc
+    streaming_func_desc = createStreamingTableFunctionDescription(dedup_func_ast, context);
 }
 
 ASTs TableFunctionDedup::checkAndExtractArguments(ASTFunction * node) const
@@ -118,11 +115,6 @@ ASTs TableFunctionDedup::checkAndExtractArguments(ASTFunction * node) const
             throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
 
     return args;
-}
-
-String TableFunctionDedup::functionNamePrefix() const
-{
-    return ProtonConsts::DEDUP_FUNC_NAME + "(";
 }
 
 void registerTableFunctionDedup(TableFunctionFactory & factory)

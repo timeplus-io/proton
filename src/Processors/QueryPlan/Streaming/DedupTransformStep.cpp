@@ -27,7 +27,7 @@ DB::ITransformingStep::Traits getTraits()
 DedupTransformStep::DedupTransformStep(
     const DataStream & input_stream_,
     Block output_header,
-    FunctionDescriptionPtr dedup_func_desc_)
+    TableFunctionDescriptionPtr dedup_func_desc_)
     : ITransformingStep(input_stream_, std::move(output_header), getTraits())
     , dedup_func_desc(std::move(dedup_func_desc_))
 {

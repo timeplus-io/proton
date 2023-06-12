@@ -30,7 +30,7 @@ public:
 private:
     /// Calculate the positions of columns required by window expr
     void calculateColumns(const Block & input_header, const Block & output_header);
-    virtual void assignWindow(Chunk & chunk, Columns && columns, ColumnTuple && column_tuple) const = 0;
+    virtual void assignWindow(Columns & columns) const = 0;
 
 protected:
     Chunk chunk_header;

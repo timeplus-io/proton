@@ -3,7 +3,7 @@
 #include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Interpreters/Streaming/FunctionDescription.h>
+#include <Interpreters/Streaming/TimestampFunctionDescription.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/ISimpleTransform.h>
 
@@ -21,7 +21,7 @@ class TimestampTransform final : public ISimpleTransform
 {
 public:
     TimestampTransform(
-        const Block & input_header, const Block & output_header, FunctionDescriptionPtr timestamp_func_desc_, bool backfill_);
+        const Block & input_header, const Block & output_header, TimestampFunctionDescriptionPtr timestamp_func_desc_, bool backfill_);
 
     ~TimestampTransform() override = default;
 
@@ -34,12 +34,12 @@ private:
     void calculateColumns(const Block & input_header, const Block & output_header, const Names & input_columns_);
     void handleProcessingTimeFunc();
     void transformTimestamp(Chunk & chunk);
-    void assignProcTimestamp(Chunk & chunk);
+    bool backfillProcTimestamp(Chunk & chunk);
 
 private:
     ContextPtr context;
 
-    FunctionDescriptionPtr timestamp_func_desc;
+    TimestampFunctionDescriptionPtr timestamp_func_desc;
 
     /// process time streaming processing
     bool backfill = false;

@@ -37,7 +37,7 @@
 #include <Core/Streaming/SubstreamID.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Interpreters/Aggregator.h>
-#include <Interpreters/Streaming/FunctionDescription.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 #include <Parsers/ASTFunction.h>
 #include <Common/HashTable/Hash.h>

@@ -16,7 +16,6 @@ private:
     void parseArguments(const ASTPtr & func_ast, ContextPtr context) override;
     ASTs checkAndExtractArguments(ASTFunction * node) const override;
     void postArgs(ASTs & args) const override;
-    String functionNamePrefix() const override;
 };
 }
 }

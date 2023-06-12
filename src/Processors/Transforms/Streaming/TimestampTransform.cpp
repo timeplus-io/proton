@@ -16,7 +16,7 @@ namespace DB
 namespace Streaming
 {
 TimestampTransform::TimestampTransform(
-    const Block & input_header, const Block & output_header, FunctionDescriptionPtr timestamp_func_desc_, bool backfill_)
+    const Block & input_header, const Block & output_header, TimestampFunctionDescriptionPtr timestamp_func_desc_, bool backfill_)
     : ISimpleTransform(input_header, output_header, false, ProcessorID::TimestampTransformID)
     , timestamp_func_desc(std::move(timestamp_func_desc_))
     , backfill(backfill_)
@@ -32,8 +32,13 @@ void TimestampTransform::transform(Chunk & chunk)
 {
     if (chunk.hasRows())
     {
-        if (proc_time)
-            assignProcTimestamp(chunk);
+        /// For now, we support `__streaming_now` and `__streaming_now64` to get processing time.
+        /// So only handle specially in case `proc_time && backfill`
+        if (unlikely(backfill && proc_time))
+        {
+            if (!backfillProcTimestamp(chunk))
+                transformTimestamp(chunk); /// No backfill, then switch common transform
+        }
         else
             transformTimestamp(chunk);
     }
@@ -78,7 +83,7 @@ void TimestampTransform::transformTimestamp(Chunk & chunk)
     chunk.setColumns(result.getColumns(), result.rows());
 }
 
-void TimestampTransform::assignProcTimestamp(Chunk & chunk)
+bool TimestampTransform::backfillProcTimestamp(Chunk & chunk)
 {
     auto num_rows = chunk.getNumRows();
     ColumnPtr column;
@@ -123,15 +128,8 @@ void TimestampTransform::assignProcTimestamp(Chunk & chunk)
             backfill = false;
     }
 
-    if (likely(!column))
-    {
-        if (is_datetime64)
-            /// Call now64(scale, timezone)
-            column = timestamp_col_data_type->createColumnConst(num_rows, nowSubsecond(scale));
-        else
-            /// Call now(timezone)
-            column = timestamp_col_data_type->createColumnConst(num_rows, static_cast<UInt64>(time(nullptr)));
-    }
+    if (!column)
+        return false;
 
     auto time_column = column->convertToFullColumnIfConst();
 
@@ -148,6 +146,7 @@ void TimestampTransform::assignProcTimestamp(Chunk & chunk)
         columns.emplace(columns.begin() + timestamp_col_pos, std::move(time_column));
         chunk.setColumns(columns, num_rows);
     }
+    return true;
 }
 
 void TimestampTransform::calculateColumns(const Block & input_header, const Block & output_header, const Names & input_columns)
@@ -185,12 +184,12 @@ void TimestampTransform::calculateColumns(const Block & input_header, const Bloc
 
 void TimestampTransform::handleProcessingTimeFunc()
 {
-    if (!timestamp_func_desc->input_columns.empty())
+    if (!timestamp_func_desc->is_now_func)
         return;
 
     auto * func_node = timestamp_func_desc->func_ast->as<ASTFunction>();
     assert(func_node);
-    assert(func_node->name == "now" || func_node->name == "now64");
+    assert(func_node->name == "__streaming_now" || func_node->name == "__streaming_now64");
 
     auto get_timezone = [&](size_t index) {
         /// arguments is an ASTExpressionList
@@ -202,7 +201,7 @@ void TimestampTransform::handleProcessingTimeFunc()
     };
 
     /// Parse function arguments
-    if (func_node->name == "now")
+    if (func_node->name == "__streaming_now")
     {
         is_datetime64 = false;
 
@@ -220,7 +219,7 @@ void TimestampTransform::handleProcessingTimeFunc()
     }
     else
     {
-        assert(func_node->name == "now64");
+        assert(func_node->name == "__streaming_now64");
         is_datetime64 = true;
 
         if (const auto * type = typeid_cast<const DataTypeDateTime64 *>(timestamp_col_data_type.get()))

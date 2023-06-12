@@ -5,7 +5,8 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Interpreters/Streaming/FunctionDescription.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
+#include <Common/ProtonCommon.h>
 
 namespace DB
 {
@@ -26,30 +27,38 @@ void WindowAssignmentTransform::transform(Chunk & chunk)
 {
     if (chunk.hasRows())
     {
-        auto block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
+        auto input_block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
 
-        Block expr_block;
+        Block transformed_block;
 
         /// Most of the time, we copied only one column
         for (auto pos : expr_column_positions)
-            expr_block.insert(block.getByPosition(pos));
+            transformed_block.insert(input_block.getByPosition(pos));
 
-        window_params->desc->expr->execute(expr_block);
+        window_params->desc->expr_before_table_function->execute(transformed_block);
 
-        /// auto * col_with_type = expr_block.findByName(STREAMING_WINDOW_FUNC_ALIAS);
-        /// So far we assume, the streaming function produces only one column
-        assert(expr_block);
+        assert(transformed_block);
 
-        auto & col_with_type = expr_block.getByPosition(0);
-        assert(isTuple(col_with_type.type));
+        Columns transformed_columns;
+        for (auto & col_with_type : transformed_block)
+            transformed_columns.emplace_back(std::move(col_with_type.column));
 
-        assert(col_with_type.column);
-        auto col = IColumn::mutate(col_with_type.column->convertToFullColumnIfConst());
-        auto & col_tuple = assert_cast<ColumnTuple &>(*col);
+        /// Assign window function result columns (such as window_start and window_end)
+        /// @params: transformed_columns:
+        /// <args columns> => <args columns> + <window_start> + <window_end>
+        assignWindow(transformed_columns);
 
-        /// 1) Assign window function result columns (such as window_start and window_end)
-        /// 2) Remove unused columns
-        assignWindow(chunk, block.getColumns(), std::move(col_tuple));
+        Columns res;
+        res.reserve(output_column_positions.size());
+        for (auto pos : output_column_positions)
+        {
+            if (pos < 0)
+                res.push_back(std::move(transformed_columns[-1 - pos]));
+            else
+                res.push_back(std::move(input_block.getByPosition(pos).column));
+        }
+        auto num_rows = res.at(0)->size();
+        chunk.setColumns(std::move(res), num_rows);
     }
     else
     {
@@ -69,17 +78,16 @@ void WindowAssignmentTransform::calculateColumns(const Block & input_header, con
 
     /// Generate assign window function
     auto transformed_header = input_header.cloneEmpty();
-    window_params->desc->expr->execute(transformed_header);
-
-    auto * tuple_type = checkAndGetDataType<DataTypeTuple>(transformed_header.getByPosition(0).type.get());
-    assert(tuple_type && tuple_type->haveExplicitNames());
+    window_params->desc->expr_before_table_function->execute(transformed_header);
+    transformed_header.insert({window_params->desc->argument_types[0], ProtonConsts::STREAMING_WINDOW_START});
+    transformed_header.insert({window_params->desc->argument_types[0], ProtonConsts::STREAMING_WINDOW_END});
 
     output_column_positions.reserve(output_header.columns());
     for (const auto & col_with_type : output_header)
     {
-        if (auto tuple_elem_pos = tuple_type->tryGetPositionByName(col_with_type.name); tuple_elem_pos.has_value())
-            /// we use negative pos `-1, ... , -n` to indicate tuple elem columns pos (0, ..., n-1)
-            output_column_positions.push_back(-1 - tuple_elem_pos.value());
+        if (transformed_header.has(col_with_type.name))
+            /// we use negative pos `-1, ... , -n` to indicate transformed columns pos (0, ..., n-1)
+            output_column_positions.push_back(-1 - transformed_header.getPositionByName(col_with_type.name));
         else
             output_column_positions.push_back(input_header.getPositionByName(col_with_type.name));
     }

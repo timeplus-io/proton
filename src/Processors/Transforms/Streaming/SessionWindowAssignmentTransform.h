@@ -16,7 +16,7 @@ public:
     String getName() const override { return "StreamingSessionWindowAssignmentTransform"; }
 
 private:
-    void assignWindow(Chunk & chunk, Columns && columns, ColumnTuple && column_tuple) const override;
+    void assignWindow(Columns & columns) const override;
 
 private:
     SessionWindowParams & params;

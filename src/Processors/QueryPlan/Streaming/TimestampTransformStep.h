@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Interpreters/Streaming/FunctionDescription.h>
+#include <Interpreters/Streaming/TimestampFunctionDescription.h>
 /// #include <Interpreters/TreeRewriter.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 
@@ -12,7 +12,7 @@ class TimestampTransformStep final : public ITransformingStep
 {
 public:
     TimestampTransformStep(
-        const DataStream & input_stream_, Block output_header, FunctionDescriptionPtr timestamp_func_desc_, bool backfill_);
+        const DataStream & input_stream_, Block output_header, TimestampFunctionDescriptionPtr timestamp_func_desc_, bool backfill_);
 
     ~TimestampTransformStep() override = default;
 
@@ -21,7 +21,7 @@ public:
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
 
 private:
-    FunctionDescriptionPtr timestamp_func_desc;
+    TimestampFunctionDescriptionPtr timestamp_func_desc;
     bool backfill;
 };
 }

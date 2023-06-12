@@ -1973,7 +1973,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                     if (proxy->windowType() == Streaming::WindowType::SESSION)
                     {
                         auto & step = chain.getLastStep();
-                        step.addRequiredOutput(proxy->getStreamingFunctionDescription()->argument_names[0]);
+                        step.addRequiredOutput(proxy->getStreamingTableFunctionDescription()->argument_names[0]);
                         step.addRequiredOutput(ProtonConsts::STREAMING_SESSION_START);
                         step.addRequiredOutput(ProtonConsts::STREAMING_SESSION_END);
                     }

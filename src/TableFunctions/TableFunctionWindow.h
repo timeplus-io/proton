@@ -20,9 +20,11 @@ protected:
 
     virtual ASTs checkAndExtractArguments(ASTFunction *) const = 0;
 
+    virtual void handleResultType(const ColumnsWithTypeAndName & arguments);
+
 protected:
-    virtual void init(ContextPtr context, ASTPtr streaming_func_ast, const String & func_name_prefix, ASTPtr timestamp_expr_ast);
-    virtual void handleResultType(const ColumnWithTypeAndName & type_and_name);
+    void init(ContextPtr context, ASTPtr streaming_func_ast, ASTPtr timestamp_expr_ast);
+    TimestampFunctionDescriptionPtr createTimestampFunctionDescription(ASTPtr timestamp_expr_ast, ContextPtr context);
 };
 }
 }

@@ -1,8 +1,9 @@
 #include <Interpreters/Streaming/WindowCommon.h>
 
+#include <DataTypes/DataTypeInterval.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/Streaming/FunctionsStreamingWindow.h>
-#include <Interpreters/Streaming/FunctionDescription.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
+#include <Interpreters/Streaming/TimeTransformHelper.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -74,6 +75,50 @@ ALWAYS_INLINE bool isIntervalAST(const ASTPtr ast)
 ALWAYS_INLINE bool isTimeZoneAST(const ASTPtr ast)
 {
     return (ast->as<ASTLiteral>());
+}
+
+/// Calculate window start / end for time column in num_units
+/// @return (window_start, window_end) tuple
+template <IntervalKind::Kind unit, typename TimeColumnType>
+Columns getWindowStartAndEndFor(const TimeColumnType & time_column, UInt64 num_units, const DateLUTImpl & time_zone)
+{
+    constexpr bool time_col_is_datetime64 = std::is_same_v<TimeColumnType, ColumnDateTime64>;
+
+    const auto & time_data = time_column.getData();
+    size_t size = time_column.size();
+    typename TimeColumnType::MutablePtr start, end;
+    if constexpr (time_col_is_datetime64)
+    {
+        start = TimeColumnType::create(size, time_column.getScale());
+        end = TimeColumnType::create(size, time_column.getScale());
+    }
+    else
+    {
+        start = TimeColumnType::create(size);
+        end = TimeColumnType::create(size);
+    }
+
+    auto & start_data = start->getData();
+    auto & end_data = end->getData();
+
+    for (size_t i = 0; i != size; ++i)
+    {
+        if constexpr (time_col_is_datetime64)
+        {
+            start_data[i] = ToStartOfTransform<unit>::execute(time_data[i], num_units, time_zone, time_column.getScale());
+            end_data[i] = AddTime<unit>::execute(start_data[i], num_units, time_zone, time_column.getScale());
+        }
+        else
+        {
+            start_data[i] = ToStartOfTransform<unit>::execute(time_data[i], num_units, time_zone);
+            end_data[i] = AddTime<unit>::execute(start_data[i], num_units, time_zone);
+        }
+    }
+
+    Columns result;
+    result.emplace_back(std::move(start));
+    result.emplace_back(std::move(end));
+    return result;
 }
 }
 
@@ -367,6 +412,10 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
         if (i != args.size())
             break;
 
+        /// They may be used in aggregation transform, so set an internal alias for them
+        start_condition->setAlias(ProtonConsts::STREAMING_SESSION_START);
+        end_condition->setAlias(ProtonConsts::STREAMING_SESSION_END);
+
         asts.emplace_back(std::move(table));
         asts.emplace_back(std::move(time_expr));
         asts.emplace_back(std::move(timeout_interval));
@@ -613,7 +662,7 @@ UInt32 getAutoScaleByInterval(Int64 num_units, IntervalKind kind)
     return scale;
 }
 
-WindowParams::WindowParams(FunctionDescriptionPtr window_desc) : desc(std::move(window_desc))
+WindowParams::WindowParams(TableFunctionDescriptionPtr window_desc) : desc(std::move(window_desc))
 {
     assert(desc->type != WindowType::NONE);
     type = desc->type;
@@ -625,15 +674,23 @@ WindowParams::WindowParams(FunctionDescriptionPtr window_desc) : desc(std::move(
         time_scale = type.getScale();
         time_zone = &type.getTimeZone();
     }
-    else
+    else if (isDateTime(desc->argument_types[0]))
     {
         const auto & type = assert_cast<const DataTypeDateTime &>(*desc->argument_types[0].get());
         time_scale = 0;
         time_zone = &type.getTimeZone();
     }
+    else
+    {
+        throw Exception(
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+            "Illegal column {} argument of function {}. Must be datetime or datetime64",
+            time_col_name,
+            magic_enum::enum_name(type));
+    }
 }
 
-TumbleWindowParams::TumbleWindowParams(FunctionDescriptionPtr window_desc) : WindowParams(std::move(window_desc))
+TumbleWindowParams::TumbleWindowParams(TableFunctionDescriptionPtr window_desc) : WindowParams(std::move(window_desc))
 {
     assert(desc->type == WindowType::TUMBLE);
 
@@ -667,7 +724,7 @@ TumbleWindowParams::TumbleWindowParams(FunctionDescriptionPtr window_desc) : Win
             ErrorCodes::BAD_ARGUMENTS, "Invalid window interval, one hour must have an integer number of windows in tumble function");
 }
 
-HopWindowParams::HopWindowParams(FunctionDescriptionPtr window_desc) : WindowParams(std::move(window_desc))
+HopWindowParams::HopWindowParams(TableFunctionDescriptionPtr window_desc) : WindowParams(std::move(window_desc))
 {
     assert(desc->type == WindowType::HOP);
 
@@ -714,7 +771,7 @@ HopWindowParams::HopWindowParams(FunctionDescriptionPtr window_desc) : WindowPar
     gcd_interval = std::gcd(slide_interval, window_interval);
 }
 
-SessionWindowParams::SessionWindowParams(FunctionDescriptionPtr window_desc) : WindowParams(std::move(window_desc))
+SessionWindowParams::SessionWindowParams(TableFunctionDescriptionPtr window_desc) : WindowParams(std::move(window_desc))
 {
     assert(desc->type == WindowType::SESSION);
 
@@ -739,7 +796,7 @@ SessionWindowParams::SessionWindowParams(FunctionDescriptionPtr window_desc) : W
             ErrorCodes::BAD_ARGUMENTS, "Session timeout size shall be less than or equal to max session size in session function");
 }
 
-WindowParamsPtr WindowParams::create(const FunctionDescriptionPtr & desc)
+WindowParamsPtr WindowParams::create(const TableFunctionDescriptionPtr & desc)
 {
     assert(desc);
     switch (desc->type)
@@ -754,6 +811,37 @@ WindowParamsPtr WindowParams::create(const FunctionDescriptionPtr & desc)
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "No support window type: {}", magic_enum::enum_name(desc->type));
     }
     __builtin_unreachable();
+}
+
+void assignWindow(
+    Columns & columns, const WindowInterval & interval, size_t time_col_pos, bool time_col_is_datetime64, const DateLUTImpl & time_zone)
+{
+    assert(columns.size() > time_col_pos);
+    const auto & time_column = columns[time_col_pos];
+    Columns window_cols;
+    if (time_col_is_datetime64)
+    {
+#define M(INTERVAL_KIND) \
+    const auto & time_column_vec = assert_cast<const ColumnDateTime64 &>(*time_column); \
+    window_cols = getWindowStartAndEndFor<INTERVAL_KIND, ColumnDateTime64>(time_column_vec, interval.interval, time_zone);
+
+        DISPATCH_FOR_WINDOW_INTERVAL(interval.unit, M)
+#undef M
+    }
+    else
+    {
+#define M(INTERVAL_KIND) \
+    const auto & time_column_vec = assert_cast<const ColumnDateTime &>(*time_column); \
+    window_cols = getWindowStartAndEndFor<INTERVAL_KIND, ColumnDateTime>(time_column_vec, interval.interval, time_zone);
+
+        DISPATCH_FOR_WINDOW_INTERVAL(interval.unit, M)
+#undef M
+    }
+
+    /// Append window start/end columns
+    assert(window_cols.size() == 2);
+    columns.emplace_back(std::move(window_cols[0]));
+    columns.emplace_back(std::move(window_cols[1]));
 }
 
 void reassignWindow(Block & block, const Window & window)

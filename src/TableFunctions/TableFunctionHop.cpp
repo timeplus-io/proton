@@ -50,11 +50,6 @@ void TableFunctionHop::postArgs(ASTs & args) const
         args[2]);
 }
 
-String TableFunctionHop::functionNamePrefix() const
-{
-    return ProtonConsts::HOP_FUNC_NAME + "(";
-}
-
 void registerTableFunctionHop(TableFunctionFactory & factory)
 {
     factory.registerFunction("hop", []() -> TableFunctionPtr { return std::make_shared<TableFunctionHop>("hop"); });

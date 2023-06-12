@@ -25,7 +25,7 @@ DB::ITransformingStep::Traits getTraits()
 }
 
 TimestampTransformStep::TimestampTransformStep(
-    const DataStream & input_stream_, Block output_header, FunctionDescriptionPtr timestamp_func_desc_, bool backfill_)
+    const DataStream & input_stream_, Block output_header, TimestampFunctionDescriptionPtr timestamp_func_desc_, bool backfill_)
     : ITransformingStep(input_stream_, std::move(output_header), getTraits())
     , timestamp_func_desc(std::move(timestamp_func_desc_))
     , backfill(backfill_)

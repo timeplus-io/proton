@@ -3,7 +3,7 @@
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/Streaming/FunctionsStreamingWindow.h>
+#include <Interpreters/Streaming/TimeTransformHelper.h>
 
 namespace DB
 {
@@ -18,47 +18,6 @@ namespace SessionHelper
 {
 namespace
 {
-#define DISPATCH_FOR_WINDOW_INTERVAL(interval_kind, M) \
-    do \
-    { \
-        switch (interval_kind) \
-        { \
-            case IntervalKind::Nanosecond: \
-                M(IntervalKind::Nanosecond); \
-                break; \
-            case IntervalKind::Microsecond: \
-                M(IntervalKind::Microsecond); \
-                break; \
-            case IntervalKind::Millisecond: \
-                M(IntervalKind::Millisecond); \
-                break; \
-            case IntervalKind::Second: \
-                M(IntervalKind::Second); \
-                break; \
-            case IntervalKind::Minute: \
-                M(IntervalKind::Minute); \
-                break; \
-            case IntervalKind::Hour: \
-                M(IntervalKind::Hour); \
-                break; \
-            case IntervalKind::Day: \
-                M(IntervalKind::Day); \
-                break; \
-            case IntervalKind::Week: \
-                M(IntervalKind::Week); \
-                break; \
-            case IntervalKind::Month: \
-                M(IntervalKind::Month); \
-                break; \
-            case IntervalKind::Quarter: \
-                M(IntervalKind::Quarter); \
-                break; \
-            case IntervalKind::Year: \
-                M(IntervalKind::Year); \
-                break; \
-        } \
-    } while (0);
-
 template <typename TimeColumnType, IntervalKind::Kind unit>
 MutableColumnPtr calculateSessionIdColumnImpl(
     SessionInfoQueue & sessions,

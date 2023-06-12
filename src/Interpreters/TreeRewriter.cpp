@@ -1021,7 +1021,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
         {
             if (proxy->windowType() != Streaming::WindowType::NONE)
             {
-                required.insert(proxy->getStreamingFunctionDescription()->argument_names[0]);
+                required.insert(proxy->getStreamingTableFunctionDescription()->argument_names[0]);
 
                 /// We will need propagate session start/end columns to the required output column even though users doesn't explicitly SELECT them
                 /// because we will need access them for down stream processing like aggregation

@@ -66,8 +66,8 @@ ProxyStream::ProxyStream(
     const StorageID & id_,
     const ColumnsDescription & columns_,
     ContextPtr context_,
-    FunctionDescriptionPtr streaming_func_desc_,
-    FunctionDescriptionPtr timestamp_func_desc_,
+    TableFunctionDescriptionPtr table_func_desc_,
+    TimestampFunctionDescriptionPtr timestamp_func_desc_,
     StoragePtr nested_proxy_storage_,
     String internal_name_,
     StoragePtr storage_,
@@ -75,7 +75,7 @@ ProxyStream::ProxyStream(
     bool streaming_)
     : IStorage(id_)
     , WithContext(context_->getGlobalContext())
-    , streaming_func_desc(std::move(streaming_func_desc_))
+    , table_func_desc(std::move(table_func_desc_))
     , timestamp_func_desc(std::move(timestamp_func_desc_))
     , nested_proxy_storage(nested_proxy_storage_)
     , internal_name(std::move(internal_name_))
@@ -85,7 +85,7 @@ ProxyStream::ProxyStream(
     , log(&Poco::Logger::get(id_.getNameForLogs()))
 {
     if (streaming)
-        assert(streaming_func_desc);
+        assert(table_func_desc);
 
     if (nested_proxy_storage)
         assert(nested_proxy_storage->as<ProxyStream>());
@@ -264,8 +264,8 @@ Names ProxyStream::mergeAdditionalRequiredColumnsAfterFunc(Names required, const
                 required.push_back(name);
         });
 
-    if (streaming_func_desc)
-        std::ranges::for_each(streaming_func_desc->input_columns, [&required](const auto & name) {
+    if (table_func_desc)
+        std::ranges::for_each(table_func_desc->input_columns, [&required](const auto & name) {
             if (std::ranges::find(required, name) == required.end())
                 required.push_back(name);
         });
@@ -324,14 +324,14 @@ void ProxyStream::buildStreamingFunctionQueryPlan(
             processTimestampStep(query_plan, query_info);
 
         /// tumble(dedup(table(stream), columns...), 5s)
-        if (streaming_func_desc && streaming_func_desc->type != WindowType::NONE)
+        if (table_func_desc && table_func_desc->type != WindowType::NONE)
             processWindowAssignmentStep(query_plan, query_info, required_columns_after_streaming_window, storage_snapshot);
     }
 }
 
 void ProxyStream::processDedupStep(QueryPlan & query_plan, const Names & required_columns_after_streaming_window) const
 {
-    assert(streaming_func_desc);
+    assert(table_func_desc);
 
     auto required_columns_after_dedup = mergeAdditionalRequiredColumnsAfterFunc(required_columns_after_streaming_window, internal_name);
 
@@ -341,7 +341,7 @@ void ProxyStream::processDedupStep(QueryPlan & query_plan, const Names & require
         output_header.insert(input_header.getByName(name));
 
     /// Insert dedup step
-    query_plan.addStep(std::make_unique<DedupTransformStep>(query_plan.getCurrentDataStream(), output_header, streaming_func_desc));
+    query_plan.addStep(std::make_unique<DedupTransformStep>(query_plan.getCurrentDataStream(), output_header, table_func_desc));
 }
 
 void ProxyStream::processTimestampStep(QueryPlan & query_plan, const SelectQueryInfo & query_info) const
@@ -370,7 +370,7 @@ void ProxyStream::processWindowAssignmentStep(
     const Names & required_columns_after_streaming_window,
     const StorageSnapshotPtr & storage_snapshot) const
 {
-    assert(streaming_func_desc && streaming_func_desc->type != WindowType::NONE);
+    assert(table_func_desc && table_func_desc->type != WindowType::NONE);
     auto required_columns_after_window = mergeAdditionalRequiredColumnsAfterFunc(required_columns_after_streaming_window, internal_name);
     Block output_header = storage_snapshot->getSampleBlockForColumns(required_columns_after_window);
 

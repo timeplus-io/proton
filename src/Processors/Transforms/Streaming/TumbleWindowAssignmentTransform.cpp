@@ -13,19 +13,14 @@ TumbleWindowAssignmentTransform::TumbleWindowAssignmentTransform(
 {
 }
 
-void TumbleWindowAssignmentTransform::assignWindow(Chunk & chunk, Columns && columns, ColumnTuple && column_tuple) const
+void TumbleWindowAssignmentTransform::assignWindow(Columns & columns) const
 {
-    Columns res;
-    res.reserve(output_column_positions.size());
-    for (auto pos : output_column_positions)
-    {
-        if (pos < 0)
-            res.push_back(std::move(column_tuple.getColumnPtr(-1 - pos)));
-        else
-            res.push_back(std::move(columns[pos]));
-    }
-    auto num_rows = res.at(0)->size();
-    chunk.setColumns(std::move(res), num_rows);
+    ::DB::Streaming::assignWindow(
+        columns,
+        WindowInterval{params.window_interval, params.interval_kind},
+        /*time_col_pos*/ 0,
+        params.time_col_is_datetime64,
+        *params.time_zone);
 }
 }
 }

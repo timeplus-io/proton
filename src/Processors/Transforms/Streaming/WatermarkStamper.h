@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <Interpreters/Streaming/FunctionDescription.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>

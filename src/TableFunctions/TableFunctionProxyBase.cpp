@@ -69,8 +69,8 @@ StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr contex
 {
     if (subquery)
     {
-        auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(
-            subquery->children[0], context, SelectQueryOptions().subquery().analyze());
+        auto interpreter_subquery
+            = std::make_unique<InterpreterSelectWithUnionQuery>(subquery->children[0], context, SelectQueryOptions().subquery().analyze());
         auto source_header = interpreter_subquery->getSampleBlock();
         columns = ColumnsDescription(source_header.getNamesAndTypesList());
 
@@ -133,57 +133,36 @@ ColumnsDescription TableFunctionProxyBase::getActualTableStructure(ContextPtr /*
     return columns;
 }
 
-FunctionDescriptionPtr TableFunctionProxyBase::createStreamingFunctionDescription(
-    ASTPtr ast, TreeRewriterResultPtr syntax_analyzer_result, ContextPtr context, const String & func_name_prefix) const
+TableFunctionDescriptionPtr TableFunctionProxyBase::createStreamingTableFunctionDescription(ASTPtr ast, ContextPtr context) const
 {
-    ExpressionAnalyzer func_expr_analyzer(ast, syntax_analyzer_result, context);
-    auto streaming_func_expr = func_expr_analyzer.getActions(true);
+    auto & func = ast->as<ASTFunction &>();
+    auto syntax_analyzer_result
+        = TreeRewriter(context).analyze(func.arguments, columns.getAll(), storage, storage ? underlying_storage_snapshot : nullptr);
+    ExpressionAnalyzer func_expr_analyzer(func.arguments, syntax_analyzer_result, context);
+    auto expr_before_table_function = func_expr_analyzer.getActions(true);
 
-    WindowType type = toWindowType(ast->as<ASTFunction>()->name);
-
-    const auto & actions = streaming_func_expr->getActions();
+    const auto & args_header = expr_before_table_function->getSampleBlock();
 
     /// Loop actions to figure out input argument types
-    for (const auto & action : actions)
+    Names argument_names;
+    argument_names.reserve(args_header.columns());
+
+    DataTypes argument_types;
+    argument_types.reserve(args_header.columns());
+
+    for (const auto & column_with_type : args_header)
     {
-        if (action.node->type == ActionsDAG::ActionType::FUNCTION && action.node->result_name.starts_with(func_name_prefix))
-        {
-            Names argument_names;
-            argument_names.reserve(action.node->children.size());
-
-            DataTypes argument_types;
-            argument_types.reserve(action.node->children.size());
-
-            for (const auto * node : action.node->children)
-            {
-                argument_names.push_back(node->result_name);
-                argument_types.push_back(node->result_type);
-            }
-            return std::make_shared<FunctionDescription>(
-                std::move(ast),
-                type,
-                argument_names,
-                argument_types,
-                std::move(streaming_func_expr),
-                syntax_analyzer_result->requiredSourceColumns());
-        }
+        argument_names.emplace_back(column_with_type.name);
+        argument_types.emplace_back(column_with_type.type);
     }
 
-    /// The timestamp function ends up with const column, like toDateTime('2020-01-01 00:00:00') or now('UTC') or now64(3, 'UTC')
-    /// Check the function name is now or now64 since these are the only const function we support
-    const auto & func_name = ast->as<ASTFunction>()->name;
-    if (func_name != "now" && func_name != "now64")
-        throw Exception("Unsupported const timestamp func for timestamp column", ErrorCodes::BAD_ARGUMENTS);
-
-    /// Parse the argument names
-    return std::make_shared<FunctionDescription>(
+    return std::make_shared<TableFunctionDescription>(
         std::move(ast),
-        type,
-        Names{},
-        DataTypes{},
-        std::move(streaming_func_expr),
-        syntax_analyzer_result->requiredSourceColumns(),
-        true);
+        toWindowType(func.name),
+        argument_names,
+        argument_types,
+        std::move(expr_before_table_function),
+        syntax_analyzer_result->requiredSourceColumns());
 }
 }
 }
