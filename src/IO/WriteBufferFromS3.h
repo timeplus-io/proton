@@ -50,14 +50,13 @@ class WriteBufferFromS3 final : public BufferWithOwnMemory<WriteBuffer>
 {
 public:
     explicit WriteBufferFromS3(
-        std::shared_ptr<Aws::S3::S3Client> client_ptr_,
+        std::shared_ptr<const Aws::S3::S3Client> client_ptr_,
         const String & bucket_,
         const String & key_,
         const S3Settings::ReadWriteSettings & s3_settings_,
         std::optional<std::map<String, String>> object_metadata_ = std::nullopt,
         size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE,
         ThreadPoolCallbackRunner<void> schedule_ = {},
-        const String & blob_name = "",
         FileCachePtr cache_ = nullptr);
 
     ~WriteBufferFromS3() override;
@@ -93,10 +92,11 @@ private:
 
     String bucket;
     String key;
-    std::optional<std::map<String, String>> object_metadata;
-    std::shared_ptr<Aws::S3::S3Client> client_ptr;
+    std::shared_ptr<const Aws::S3::S3Client> client_ptr;
     size_t upload_part_size = 0;
     S3Settings::ReadWriteSettings s3_settings;
+    std::optional<std::map<String, String>> object_metadata;
+
     /// Buffer to accumulate data.
     std::shared_ptr<Aws::StringStream> temporary_buffer;
     size_t last_part_size = 0;
@@ -121,7 +121,6 @@ private:
 
     Poco::Logger * log = &Poco::Logger::get("WriteBufferFromS3");
 
-    const String blob_name;
     FileCachePtr cache;
     size_t current_download_offset = 0;
     std::optional<FileSegmentsHolder> file_segments_holder;

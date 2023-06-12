@@ -93,7 +93,7 @@ add_headers_and_sources(clickhouse_common_io IO/S3)
 list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_delete.cpp)
 
 add_headers_and_sources(dbms Disks/IO)
-
+add_headers_and_sources(dbms Disks/ObjectStorages)
 if (USE_LIBPQXX)
     add_headers_and_sources(dbms Core/PostgreSQL)
 endif()
@@ -104,11 +104,11 @@ endif()
 
 if (TARGET ch_contrib::aws_s3)
     add_headers_and_sources(dbms Common/S3)
-    add_headers_and_sources(dbms Disks/S3)
+    add_headers_and_sources(dbms Disks/ObjectStorages/S3)
 endif()
 
 if (TARGET ch_contrib::azure_sdk)
-    add_headers_and_sources(dbms Disks/AzureBlobStorage)
+    add_headers_and_sources(dbms Disks/ObjectStorages/AzureBlobStorage)
 endif()
 
 add_headers_and_sources(dbms Storages/Cache)

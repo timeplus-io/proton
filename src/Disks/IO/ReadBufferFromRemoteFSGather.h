@@ -1,9 +1,9 @@
 #pragma once
 
 #include "config.h"
-#include <Disks/IDiskRemote.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadSettings.h>
+#include <Disks/ObjectStorages/IObjectStorage.h>
 
 #if USE_AZURE_BLOB_STORAGE
 #include <azure/storage/blobs.hpp>
@@ -26,10 +26,9 @@ friend class ReadIndirectBufferFromRemoteFS;
 
 public:
     ReadBufferFromRemoteFSGather(
-        //BlobsPathWithSize blobs_to_read_,
-        BlobsPathToSize blobs_to_read_,
-        const ReadSettings & settings_,
-        const String & path_);
+        const std::string & common_path_prefix_,
+        const BlobsPathToSize & blobs_to_read_,
+        const ReadSettings & settings_);
 
     ~ReadBufferFromRemoteFSGather() override;
 
@@ -62,7 +61,6 @@ protected:
 
     std::string common_path_prefix;
 
-    //BlobsPathWithSize blobs_to_read;
     BlobsPathToSize blobs_to_read;
 
     ReadSettings settings;
@@ -75,8 +73,6 @@ protected:
     bool with_cache;
 
     String query_id;
-
-    String canonical_path;
 
 private:
     SeekableReadBufferPtr createImplementationBuffer(const String & path, size_t file_size);
@@ -119,15 +115,14 @@ class ReadBufferFromS3Gather final : public ReadBufferFromRemoteFSGather
 {
 public:
     ReadBufferFromS3Gather(
-        const String & path_,
-        std::shared_ptr<Aws::S3::S3Client> client_ptr_,
+        std::shared_ptr<const Aws::S3::S3Client> client_ptr_,
         const String & bucket_,
         const String & version_id_,
-        //BlobsPathWithSize blobs_to_read_,
-        BlobsPathToSize blobs_to_read_,
+        const std::string & common_path_prefix_,
+        const BlobsPathToSize & blobs_to_read_,
         size_t max_single_read_retries_,
         const ReadSettings & settings_)
-        : ReadBufferFromRemoteFSGather(std::move(blobs_to_read_), settings_, path_)
+        : ReadBufferFromRemoteFSGather(common_path_prefix_, blobs_to_read_, settings_)
         , client_ptr(std::move(client_ptr_))
         , bucket(bucket_)
         , version_id(version_id_)
@@ -138,7 +133,7 @@ public:
     SeekableReadBufferPtr createImplementationBufferImpl(const String & path, size_t file_size) override;
 
 private:
-    std::shared_ptr<Aws::S3::S3Client> client_ptr;
+    std::shared_ptr<const Aws::S3::S3Client> client_ptr;
     String bucket;
     String version_id;
     UInt64 max_single_read_retries;
@@ -152,14 +147,13 @@ class ReadBufferFromAzureBlobStorageGather final : public ReadBufferFromRemoteFS
 {
 public:
     ReadBufferFromAzureBlobStorageGather(
-        const String & path_,
-        std::shared_ptr<Azure::Storage::Blobs::BlobContainerClient> blob_container_client_,
-        //BlobsPathWithSize blobs_to_read_,
-        BlobsPathToSize blobs_to_read_,
+        std::shared_ptr<const Azure::Storage::Blobs::BlobContainerClient> blob_container_client_,
+        const std::string & common_path_prefix_,
+        const BlobsPathToSize & blobs_to_read_,
         size_t max_single_read_retries_,
         size_t max_single_download_retries_,
         const ReadSettings & settings_)
-        : ReadBufferFromRemoteFSGather(std::move(blobs_to_read_), settings_, path_)
+        : ReadBufferFromRemoteFSGather(common_path_prefix_, blobs_to_read_, settings_)
         , blob_container_client(blob_container_client_)
         , max_single_read_retries(max_single_read_retries_)
         , max_single_download_retries(max_single_download_retries_)
@@ -169,7 +163,7 @@ public:
     SeekableReadBufferPtr createImplementationBufferImpl(const String & path, size_t file_size) override;
 
 private:
-    std::shared_ptr<Azure::Storage::Blobs::BlobContainerClient> blob_container_client;
+    std::shared_ptr<const Azure::Storage::Blobs::BlobContainerClient> blob_container_client;
     size_t max_single_read_retries;
     size_t max_single_download_retries;
 };
@@ -180,13 +174,12 @@ class ReadBufferFromWebServerGather final : public ReadBufferFromRemoteFSGather
 {
 public:
     ReadBufferFromWebServerGather(
-            const String & path_,
             const String & uri_,
-            //BlobsPathWithSize blobs_to_read_,
-            BlobsPathToSize blobs_to_read_,
+            const std::string & common_path_prefix_,
+            const BlobsPathToSize & blobs_to_read_,
             ContextPtr context_,
             const ReadSettings & settings_)
-        : ReadBufferFromRemoteFSGather(std::move(blobs_to_read_), settings_, path_)
+        : ReadBufferFromRemoteFSGather(common_path_prefix_, blobs_to_read_, settings_)
         , uri(uri_)
         , context(context_)
     {

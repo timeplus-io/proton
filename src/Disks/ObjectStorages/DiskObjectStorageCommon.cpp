@@ -1,4 +1,4 @@
-#include <Disks/RemoteDisksCommon.h>
+#include <Disks/ObjectStorages/DiskObjectStorageCommon.h>
 #include <Common/getRandomASCIIString.h>
 #include <Common/FileCacheFactory.h>
 #include <Common/FileCache.h>

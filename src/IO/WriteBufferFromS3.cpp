@@ -34,7 +34,6 @@ const int S3_WARN_MAX_PARTS = 10000;
 namespace ErrorCodes
 {
     extern const int S3_ERROR;
-    extern const int LOGICAL_ERROR;
 }
 
 struct WriteBufferFromS3::UploadPartTask
@@ -55,24 +54,22 @@ struct WriteBufferFromS3::PutObjectTask
 };
 
 WriteBufferFromS3::WriteBufferFromS3(
-    std::shared_ptr<Aws::S3::S3Client> client_ptr_,
+    std::shared_ptr<const Aws::S3::S3Client> client_ptr_,
     const String & bucket_,
     const String & key_,
     const S3Settings::ReadWriteSettings & s3_settings_,
     std::optional<std::map<String, String>> object_metadata_,
     size_t buffer_size_,
     ThreadPoolCallbackRunner<void> schedule_,
-    const String & blob_name_,
     FileCachePtr cache_)
     : BufferWithOwnMemory<WriteBuffer>(buffer_size_, nullptr, 0)
     , bucket(bucket_)
     , key(key_)
-    , object_metadata(std::move(object_metadata_))
     , client_ptr(std::move(client_ptr_))
     , upload_part_size(s3_settings_.min_upload_part_size)
     , s3_settings(s3_settings_)
+    , object_metadata(std::move(object_metadata_))
     , schedule(std::move(schedule_))
-    , blob_name(blob_name_)
     , cache(cache_)
 {
     allocateBuffer();
@@ -96,10 +93,7 @@ void WriteBufferFromS3::nextImpl()
 
     if (cacheEnabled())
     {
-        if (blob_name.empty())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Empty blob name");
-
-        auto cache_key = cache->hash(blob_name);
+        auto cache_key = cache->hash(key);
 
         file_segments_holder.emplace(cache->setDownloading(cache_key, current_download_offset, size));
         current_download_offset += size;

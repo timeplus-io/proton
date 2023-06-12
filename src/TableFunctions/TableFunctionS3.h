@@ -26,7 +26,7 @@ public:
     }
     bool hasStaticStructure() const override { return configuration.structure != "auto"; }
 
-    bool needStructureHint() const override { return configuration.structure == "auto";
+    bool needStructureHint() const override { return configuration.structure == "auto"; }
 
     void setStructureHint(const ColumnsDescription & structure_hint_) override { structure_hint = structure_hint_; }
 

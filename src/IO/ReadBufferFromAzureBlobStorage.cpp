@@ -1,6 +1,4 @@
-#if !defined(ARCADIA_BUILD)
 #include "config.h"
-#endif
 
 #if USE_AZURE_BLOB_STORAGE
 
@@ -23,7 +21,7 @@ namespace ErrorCodes
 
 
 ReadBufferFromAzureBlobStorage::ReadBufferFromAzureBlobStorage(
-    std::shared_ptr<Azure::Storage::Blobs::BlobContainerClient> blob_container_client_,
+    std::shared_ptr<const Azure::Storage::Blobs::BlobContainerClient> blob_container_client_,
     const String & path_,
     size_t max_single_read_retries_,
     size_t max_single_download_retries_,
