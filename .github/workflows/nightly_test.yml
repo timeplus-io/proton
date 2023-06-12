@@ -13,12 +13,13 @@ on: # yamllint disable-line rule:truthy
     # │     └──────────────────── hour (0 - 23)
     # └───────────────────────── minute (0 - 59)
     # build at 00:30(UTC) on every day
-    - cron:  '00 23 * * *'
+    - cron:  '00 23 * * 0,1,2,3,4,6'
+    - cron:  '00 23 * * 5'
 
 jobs:
   prepare_sanitizer_build:
     runs-on: ubuntu-latest
-    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    if: github.event.schedule == '00 23 * * 5' 
     outputs:
       command: |
             cd $GITHUB_WORKSPACE
@@ -62,7 +63,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_unit_test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    if: github.event.schedule == '00 23 * * 5'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -84,7 +85,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_smoke_test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    if: github.event.schedule == '00 23 * * 5'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/stream
@@ -110,7 +111,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_stateless_test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    if: github.event.schedule == '00 23 * * 5'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -132,7 +133,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_stateful_test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    if: github.event.schedule == '00 23 * * 5'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -154,7 +155,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release_build:
     runs-on: ubuntu-latest
-    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    if: github.event.schedule == '00 23 * * 5'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE
@@ -192,7 +193,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release_smoke_test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    if: github.event.schedule == '00 23 * * 5'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/stream
@@ -218,7 +219,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release_stateless_test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    if: github.event.schedule == '00 23 * * 5'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -240,7 +241,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release_stateful_test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.schedule == '0 23 * * 5' }}
+    if: github.event.schedule == '00 23 * * 5'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci

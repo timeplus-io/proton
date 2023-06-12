@@ -25,17 +25,17 @@ on: # yamllint disable-line rule:truthy
         description: 'Run unit test'
         required: true
         type: boolean
-        default: false
+        default: true
       has_stateless_test:
         description: 'Run stateless test'
         required: true
         type: boolean
-        default: false
+        default: true
       has_stateful_test:
         description: 'Run stateful test'
         required: true
         type: boolean
-        default: false
+        default: true
       has_query_compatibility_test:
         description: 'Run query compatibility test'
         required: true
