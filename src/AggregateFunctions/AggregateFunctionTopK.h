@@ -236,7 +236,7 @@ class AggregateFunctionTopKWithCount : public AggregateFunctionTopK<T, is_weight
 public:
     using AggregateFunctionTopK<T, is_weighted>::AggregateFunctionTopK;
 
-    String getName() const override { return is_weighted ? "top_k_weighted_with_count" : "top_k_with_count"; }
+    String getName() const override { return is_weighted ? "top_k_weighted" : "top_k"; }
 
     /// Result: (top_value, count)
     DataTypePtr getReturnType() const override
@@ -273,7 +273,7 @@ class AggregateFunctionTopKGenericWithCount : public AggregateFunctionTopKGeneri
 public:
     using AggregateFunctionTopKGeneric<is_plain_column, is_weighted>::AggregateFunctionTopKGeneric;
 
-    String getName() const override { return is_weighted ? "top_k_weighted_with_count" : "top_k_with_count"; }
+    String getName() const override { return is_weighted ? "top_k_weighted" : "top_k"; }
 
     /// Result: (top_value, count)
     DataTypePtr getReturnType() const override

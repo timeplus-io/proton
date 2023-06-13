@@ -883,7 +883,7 @@
         },
         {
             "id": 30,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "global_aggr_with_fun_top_k",
             "description": "global aggregation with function top_k state checkpoint",
             "steps":[
@@ -908,7 +908,7 @@
         },
         {
             "id": 31,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "recover_global_aggr_with_top_k",
             "description": "recover global aggregation with function top_k from a state checkpoint",
             "steps":[
