@@ -18,7 +18,7 @@ public:
 private:
     WindowsWithBuckets getFinalizedWindowsWithBuckets(Int64 watermark, const SubstreamContextPtr & substream_ctx) const override;
     void removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx) override;
-    bool needReassignWindow() const override { return false; }
+    bool needReassignWindow() const override { return true; }
 
 private:
     HopWindowParams & window_params;

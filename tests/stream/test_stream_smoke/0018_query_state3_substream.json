@@ -427,7 +427,7 @@
         },
         {
             "id": 109,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "hop_window_aggr_in_substream",
             "description": "hop window aggregation in substream state checkpoint",
             "steps":[
