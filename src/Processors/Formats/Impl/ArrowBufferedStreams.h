@@ -3,8 +3,9 @@
 
 #if USE_ARROW || USE_ORC || USE_PARQUET
 
-#include <arrow/io/interfaces.h>
 #include <optional>
+
+#include <arrow/io/interfaces.h>
 
 namespace DB
 {

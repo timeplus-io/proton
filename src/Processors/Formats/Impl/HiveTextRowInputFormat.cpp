@@ -13,6 +13,7 @@ namespace ErrorCodes
 static FormatSettings updateFormatSettings(const FormatSettings & settings)
 {
     FormatSettings updated = settings;
+    updated.with_names_use_header = true;
     updated.csv.delimiter = updated.hive_text.fields_delimiter;
     return updated;
 }

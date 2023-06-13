@@ -1,40 +1,35 @@
 #pragma once
 
 #include <IO/AsynchronousReader.h>
-#include <IO/SeekableReadBuffer.h>
+#include <IO/ReadBuffer.h>
 #include <Common/ThreadPool.h>
-#include <Disks/IO/ReadBufferFromRemoteFSGather.h>
-
 
 namespace DB
 {
 
 class ThreadPoolRemoteFSReader : public IAsynchronousReader
 {
-
-private:
-    ThreadPool pool;
-
 public:
     ThreadPoolRemoteFSReader(size_t pool_size, size_t queue_size_);
 
-    std::future<Result> submit(Request request) override;
+    std::future<IAsynchronousReader::Result> submit(Request request) override;
 
     void wait() override {}
 
-    struct RemoteFSFileDescriptor;
+private:
+    ThreadPool pool;
 };
 
 
-struct ThreadPoolRemoteFSReader::RemoteFSFileDescriptor : public IFileDescriptor
+class RemoteFSFileDescriptor : public IAsynchronousReader::IFileDescriptor
 {
 public:
-    explicit RemoteFSFileDescriptor(std::shared_ptr<ReadBufferFromRemoteFSGather> reader_) : reader(reader_) {}
+    explicit RemoteFSFileDescriptor(ReadBufferPtr reader_) : reader(std::move(reader_)) { }
 
-    ReadBufferFromRemoteFSGather::ReadResult readInto(char * data, size_t size, size_t offset, size_t ignore = 0);
+    IAsynchronousReader::Result readInto(char * data, size_t size, size_t offset, size_t ignore = 0);
 
 private:
-    std::shared_ptr<ReadBufferFromRemoteFSGather> reader;
+    ReadBufferPtr reader;
 };
 
 }

@@ -4,6 +4,7 @@
 
 namespace DB
 {
+
 IAsynchronousReader & IObjectStorage::getThreadPoolReader()
 {
     auto context = Context::getGlobalContextInstance();
