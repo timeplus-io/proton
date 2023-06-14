@@ -48,6 +48,8 @@ using Reservations = std::vector<ReservationPtr>;
 class ReadBufferFromFileBase;
 class WriteBufferFromFileBase;
 class MMappedFileCache;
+class IMetadataStorage;
+using MetadataStoragePtr = std::shared_ptr<IMetadataStorage>;
 struct IDiskTransaction;
 using DiskTransactionPtr = std::shared_ptr<IDiskTransaction>;
 struct RemoveRequest;
@@ -309,7 +311,7 @@ public:
     /// Actually it's a part of IDiskRemote implementation but we have so
     /// complex hierarchy of disks (with decorators), so we cannot even
     /// dynamic_cast some pointer to IDisk to pointer to IDiskRemote.
-    virtual std::shared_ptr<IDisk> getMetadataDiskIfExistsOrSelf() { return std::static_pointer_cast<IDisk>(shared_from_this()); }
+    virtual MetadataStoragePtr getMetadataStorage();
 
     /// Very similar case as for getMetadataDiskIfExistsOrSelf(). If disk has "metadata"
     /// it will return mapping for each required path: path -> metadata as string.

@@ -79,7 +79,7 @@ public:
     std::vector<String> getRemotePaths(const String & path) const override { return delegate->getRemotePaths(path); }
     void getRemotePathsRecursive(const String & path, std::vector<LocalPathWithRemotePaths> & paths_map) override { return delegate->getRemotePathsRecursive(path, paths_map); }
 
-    DiskPtr getMetadataDiskIfExistsOrSelf() override { return delegate->getMetadataDiskIfExistsOrSelf(); }
+    MetadataStoragePtr getMetadataStorage() override { return delegate->getMetadataStorage(); }
 
     std::unordered_map<String, String> getSerializedMetadata(const std::vector<String> & file_paths) const override { return delegate->getSerializedMetadata(file_paths); }
 

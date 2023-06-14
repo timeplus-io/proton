@@ -69,6 +69,7 @@ public:
 
     using MinMaxBlockNumber = std::pair<Int64, Int64>;
     static std::optional<MinMaxBlockNumber> tryParseMinMaxBlockNumber(const String & filename);
+    void shutdown();
 
     /// Drop all write ahead logs from disk. Useful during table drop.
     static void dropAllWriteAheadLogs(DiskPtr disk_to_drop, std::string relative_data_path);
@@ -94,6 +95,7 @@ private:
 
     size_t bytes_at_last_sync = 0;
     bool sync_scheduled = false;
+    bool shutdown_called = false;
 
     mutable std::mutex write_mutex;
 
