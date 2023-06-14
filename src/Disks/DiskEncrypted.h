@@ -110,7 +110,7 @@ public:
         delegate->replaceFile(wrapped_from_path, wrapped_to_path);
     }
 
-    void listFiles(const String & path, std::vector<String> & file_names) override
+    void listFiles(const String & path, std::vector<String> & file_names) const override
     {
         auto wrapped_path = wrappedPath(path);
         delegate->listFiles(wrapped_path, file_names);
@@ -193,10 +193,16 @@ public:
         delegate->setLastModified(wrapped_path, timestamp);
     }
 
-    Poco::Timestamp getLastModified(const String & path) override
+    Poco::Timestamp getLastModified(const String & path) const override
     {
         auto wrapped_path = wrappedPath(path);
         return delegate->getLastModified(wrapped_path);
+    }
+
+    time_t getLastChanged(const String & path) const override
+    {
+        auto wrapped_path = wrappedPath(path);
+        return delegate->getLastChanged(wrapped_path);
     }
 
     void setReadOnly(const String & path) override

@@ -386,7 +386,7 @@ void DiskLocal::removeRecursive(const String & path)
     fs::remove_all(fs::path(disk_path) / path);
 }
 
-void DiskLocal::listFiles(const String & path, std::vector<String> & file_names)
+void DiskLocal::listFiles(const String & path, std::vector<String> & file_names) const
 {
     file_names.clear();
     for (const auto & entry : fs::directory_iterator(fs::path(disk_path) / path))
@@ -398,9 +398,14 @@ void DiskLocal::setLastModified(const String & path, const Poco::Timestamp & tim
     FS::setModificationTime(fs::path(disk_path) / path, timestamp.epochTime());
 }
 
-Poco::Timestamp DiskLocal::getLastModified(const String & path)
+Poco::Timestamp DiskLocal::getLastModified(const String & path) const
 {
     return FS::getModificationTimestamp(fs::path(disk_path) / path);
+}
+
+time_t DiskLocal::getLastChanged(const String & path) const
+{
+    return FS::getChangeTime(fs::path(disk_path) / path);
 }
 
 void DiskLocal::createHardLink(const String & src_path, const String & dst_path)

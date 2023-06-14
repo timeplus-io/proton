@@ -48,7 +48,10 @@ bool createFile(const std::string & path);
 bool canRead(const std::string & path);
 bool canWrite(const std::string & path);
 
+/// st_mtime
 time_t getModificationTime(const std::string & path);
 Poco::Timestamp getModificationTimestamp(const std::string & path);
 void setModificationTime(const std::string & path, time_t time);
+/// st_ctime
+time_t getChangeTime(const std::string & path);
 }

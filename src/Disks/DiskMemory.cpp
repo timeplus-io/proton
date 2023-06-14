@@ -409,7 +409,7 @@ void DiskMemory::removeRecursive(const String & path)
     }
 }
 
-void DiskMemory::listFiles(const String & path, std::vector<String> & file_names)
+void DiskMemory::listFiles(const String & path, std::vector<String> & file_names) const
 {
     std::lock_guard lock(mutex);
 

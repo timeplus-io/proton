@@ -91,7 +91,7 @@ public:
 
     size_t getFileSize(const String & path) const override;
 
-    void listFiles(const String & /* path */, std::vector<String> & /* file_names */) override { }
+    void listFiles(const String & /* path */, std::vector<String> & /* file_names */) const override { }
 
     void setReadOnly(const String & /* path */) override {}
 
@@ -99,7 +99,9 @@ public:
 
     DirectoryIteratorPtr iterateDirectory(const String & /* path */) const override;
 
-    Poco::Timestamp getLastModified(const String &) override { return Poco::Timestamp{}; }
+    Poco::Timestamp getLastModified(const String &) const override { return Poco::Timestamp{}; }
+
+    time_t getLastChanged(const String &) const override { return {}; }
 
     /// Write and modification part
 

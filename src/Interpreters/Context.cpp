@@ -3290,6 +3290,9 @@ ReadSettings Context::getReadSettings() const
     res.read_from_filesystem_cache_if_exists_otherwise_bypass_cache = settings.read_from_filesystem_cache_if_exists_otherwise_bypass_cache;
     res.enable_filesystem_cache_log = settings.enable_filesystem_cache_log;
 
+    res.max_query_cache_size = settings.max_query_cache_size;
+    res.skip_download_if_exceeds_query_cache = settings.skip_download_if_exceeds_query_cache;
+
     res.remote_read_min_bytes_for_seek = settings.remote_read_min_bytes_for_seek;
 
     /// Zero read buffer will not make progress.
