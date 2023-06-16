@@ -29,44 +29,6 @@ private:
     /// Finished readers removed from queue and data from next readers processed
     bool nextImpl() override;
 
-    class Segment : private boost::noncopyable
-    {
-    public:
-        Segment(size_t size_, SynchronizedArenaWithFreeLists * arena_) : arena(arena_), m_data(arena->alloc(size_)), m_size(size_) { }
-
-        Segment() = default;
-
-        Segment(Segment && other) noexcept : arena(other.arena)
-        {
-            std::swap(m_data, other.m_data);
-            std::swap(m_size, other.m_size);
-        }
-
-        Segment & operator=(Segment && other) noexcept
-        {
-            arena = other.arena;
-            std::swap(m_data, other.m_data);
-            std::swap(m_size, other.m_size);
-            return *this;
-        }
-
-        ~Segment()
-        {
-            if (m_data)
-            {
-                arena->free(m_data, m_size);
-            }
-        }
-
-        auto data() const noexcept { return m_data; }
-        auto size() const noexcept { return m_size; }
-
-    private:
-        SynchronizedArenaWithFreeLists * arena{nullptr};
-        char * m_data{nullptr};
-        size_t m_size{0};
-    };
-
 public:
     class ReadBufferFactory : public WithFileSize
     {
@@ -82,38 +44,14 @@ public:
     ~ParallelReadBuffer() override { finishAndWait(); }
 
     off_t seek(off_t off, int whence) override;
-    std::optional<size_t> getFileSize();
+    size_t getFileSize();
     off_t getPosition() override;
 
     const ReadBufferFactory & getReadBufferFactory() const { return *reader_factory; }
 
 private:
     /// Reader in progress with a list of read segments
-    struct ReadWorker
-    {
-        explicit ReadWorker(SeekableReadBufferPtr reader_) : reader(std::move(reader_)), range(reader->getRemainingReadRange())
-        {
-            assert(range.right);
-            bytes_left = *range.right - range.left + 1;
-        }
-
-        Segment nextSegment()
-        {
-            assert(!segments.empty());
-            auto next_segment = std::move(segments.front());
-            segments.pop_front();
-            range.left += next_segment.size();
-            return next_segment;
-        }
-
-        SeekableReadBufferPtr reader;
-        std::deque<Segment> segments;
-        bool finished{false};
-        SeekableReadBuffer::Range range;
-        size_t bytes_left{0};
-        std::atomic_bool cancel{false};
-    };
-
+    struct ReadWorker;
     using ReadWorkerPtr = std::shared_ptr<ReadWorker>;
 
     /// First worker in deque have new data or processed all available amount
@@ -121,10 +59,10 @@ private:
     /// First worker in deque processed and flushed all data
     bool currentWorkerCompleted() const;
 
-    void handleEmergencyStop();
+    [[noreturn]] void handleEmergencyStop();
 
-    void addReaders(std::unique_lock<std::mutex> & buffer_lock);
-    bool addReaderToPool(std::unique_lock<std::mutex> & buffer_lock);
+    void addReaders();
+    bool addReaderToPool();
 
     /// Process read_worker, read data and save into internal segments queue
     void readerThreadFunction(ReadWorkerPtr read_worker);
@@ -132,14 +70,10 @@ private:
     void onBackgroundException();
     void finishAndWait();
 
-    SynchronizedArenaWithFreeLists arena;
-
-    Segment current_segment;
+    Memory<> current_segment;
 
     size_t max_working_readers;
-    size_t active_working_reader{0};
-    // Triggered when all reader workers are done
-    std::condition_variable readers_done;
+    std::atomic_size_t active_working_reader{0};
 
     ThreadPoolCallbackRunner<void> schedule;
 
@@ -153,10 +87,10 @@ private:
      */
     std::deque<ReadWorkerPtr> read_workers;
 
-    std::mutex mutex;
     /// Triggered when new data available
     std::condition_variable next_condvar;
 
+    std::mutex exception_mutex;
     std::exception_ptr background_exception = nullptr;
     std::atomic_bool emergency_stop{false};
 

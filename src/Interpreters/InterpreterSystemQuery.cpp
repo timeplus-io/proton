@@ -6,7 +6,7 @@
 #include <Common/escapeForFileName.h>
 #include <Common/ShellCommand.h>
 #include <Common/FileCacheFactory.h>
-#include <Common/FileCache.h>
+#include <Common/IFileCache.h>
 #include <Functions/UserDefined/ExternalUserDefinedFunctionsLoader.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
@@ -398,12 +398,12 @@ BlockIO InterpreterSystemQuery::execute()
             {
                 auto caches = FileCacheFactory::instance().getAll();
                 for (const auto & [_, cache_data] : caches)
-                    cache_data.cache->remove();
+                    cache_data.cache->removeIfReleasable(/* remove_persistent_files */false);
             }
             else
             {
                 auto cache = FileCacheFactory::instance().get(query.filesystem_cache_path);
-                cache->remove();
+                cache->removeIfReleasable(/* remove_persistent_files */false);
             }
             break;
         }

@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <utime.h>
+#include <Common/Exception.h>
 
 namespace fs = std::filesystem;
 
@@ -25,6 +26,7 @@ namespace ErrorCodes
     extern const int SYSTEM_ERROR;
     extern const int NOT_IMPLEMENTED;
     extern const int CANNOT_STAT;
+    extern const int CANNOT_FSTAT;
     extern const int CANNOT_STATVFS;
     extern const int PATH_ACCESS_DENIED;
     extern const int CANNOT_CREATE_FILE;
@@ -147,6 +149,20 @@ bool fileOrSymlinkPathStartsWith(const String & path, const String & prefix_path
     auto filesystem_prefix_path = std::filesystem::path(prefix_path);
 
     return fileOrSymlinkPathStartsWith(filesystem_path, filesystem_prefix_path);
+}
+
+size_t getSizeFromFileDescriptor(int fd, const String & file_name)
+{
+    struct stat buf;
+    int res = fstat(fd, &buf);
+    if (-1 == res)
+    {
+        throwFromErrnoWithPath(
+            "Cannot execute fstat" + (file_name.empty() ? "" : " file: " + file_name),
+            file_name,
+            ErrorCodes::CANNOT_FSTAT);
+    }
+    return buf.st_size;
 }
 
 }

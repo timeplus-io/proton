@@ -1,10 +1,9 @@
 #pragma once
 
-#include "WriteMode.h"
-
 #include <string>
 #include <vector>
 #include <boost/noncopyable.hpp>
+#include <Disks/IDisk.h>
 
 namespace DB
 {

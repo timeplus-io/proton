@@ -66,8 +66,7 @@ public:
         std::optional<size_t> file_size = {}) const override;
 
     std::unique_ptr<ReadBufferFromFileBase> readObjects( /// NOLINT
-        const std::string & common_path_prefix,
-        const BlobsPathToSize & blobs_to_read,
+        const PathsWithSize & paths_to_read,
         const ReadSettings & read_settings = ReadSettings{},
         std::optional<size_t> read_hint = {},
         std::optional<size_t> file_size = {}) const override;
@@ -81,21 +80,22 @@ public:
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         const WriteSettings & write_settings = {}) override;
 
-    void listPrefix(const std::string & path, BlobsPathToSize & children) const override;
+    void listPrefix(const std::string & path, RelativePathsWithSize & children) const override;
+
     /// Remove file. Throws exception if file doesn't exist or it's a directory.
     /// Uses `DeleteObjectRequest`.
     void removeObject(const std::string & path) override;
 
     /// Uses `DeleteObjectsRequest` if it is allowed by `s3_capabilities`, otherwise `DeleteObjectRequest`.
     /// `DeleteObjectsRequest` is not supported on GCS, see https://issuetracker.google.com/issues/162653700 .
-    void removeObjects(const std::vector<std::string> & paths) override;
+    void removeObjects(const PathsWithSize & paths) override;
 
     /// Uses `DeleteObjectRequest`.
     void removeObjectIfExists(const std::string & path) override;
 
     /// Uses `DeleteObjectsRequest` if it is allowed by `s3_capabilities`, otherwise `DeleteObjectRequest`.
     /// `DeleteObjectsRequest` does not exist on GCS, see https://issuetracker.google.com/issues/162653700 .
-    void removeObjectsIfExist(const std::vector<std::string> & paths) override;
+    void removeObjectsIfExist(const PathsWithSize & paths) override;
 
     ObjectMetadata getObjectMetadata(const std::string & path) const override;
 
@@ -114,28 +114,44 @@ public:
 
     void startup() override;
 
-    void applyNewSettings(const Poco::Util::AbstractConfiguration & config, const std::string & config_prefix, ContextPtr context) override;
+    void applyNewSettings(
+        const Poco::Util::AbstractConfiguration & config,
+        const std::string & config_prefix,
+        ContextPtr context) override;
 
     void setCapabilitiesSupportBatchDelete(bool value) { s3_capabilities.support_batch_delete = value; }
 
     String getObjectsNamespace() const override { return bucket; }
 
-    std::unique_ptr<IObjectStorage> cloneObjectStorage(const std::string & new_namespace, const Poco::Util::AbstractConfiguration & config, const std::string & config_prefix, ContextPtr context) override;
+    std::unique_ptr<IObjectStorage> cloneObjectStorage(
+        const std::string & new_namespace,
+        const Poco::Util::AbstractConfiguration & config,
+        const std::string & config_prefix,
+        ContextPtr context) override;
+
 private:
     void setNewSettings(std::unique_ptr<S3ObjectStorageSettings> && s3_settings_);
 
     void setNewClient(std::unique_ptr<Aws::S3::S3Client> && client_);
 
-    void copyObjectImpl(const String & src_bucket, const String & src_key, const String & dst_bucket, const String & dst_key,
-                        std::optional<Aws::S3::Model::HeadObjectResult> head = std::nullopt,
-                        std::optional<ObjectAttributes> metadata = std::nullopt) const;
+    void copyObjectImpl(
+        const String & src_bucket,
+        const String & src_key,
+        const String & dst_bucket,
+        const String & dst_key,
+        std::optional<Aws::S3::Model::HeadObjectResult> head = std::nullopt,
+        std::optional<ObjectAttributes> metadata = std::nullopt) const;
 
-    void copyObjectMultipartImpl(const String & src_bucket, const String & src_key, const String & dst_bucket, const String & dst_key,
-                                 std::optional<Aws::S3::Model::HeadObjectResult> head = std::nullopt,
-                                 std::optional<ObjectAttributes> metadata = std::nullopt) const;
+    void copyObjectMultipartImpl(
+        const String & src_bucket,
+        const String & src_key,
+        const String & dst_bucket,
+        const String & dst_key,
+        std::optional<Aws::S3::Model::HeadObjectResult> head = std::nullopt,
+        std::optional<ObjectAttributes> metadata = std::nullopt) const;
 
     void removeObjectImpl(const std::string & path, bool if_exists);
-    void removeObjectsImpl(const std::vector<std::string> & paths, bool if_exists);
+    void removeObjectsImpl(const PathsWithSize & paths, bool if_exists);
 
     Aws::S3::Model::HeadObjectOutcome requestObjectHeadData(const std::string & bucket_from, const std::string & key) const;
 
