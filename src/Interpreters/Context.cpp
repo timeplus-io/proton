@@ -251,6 +251,10 @@ struct ContextSharedPart
     mutable std::unique_ptr<IAsynchronousReader> synchronous_local_fs_reader;
 
     mutable std::unique_ptr<ThreadPool> threadpool_writer;
+
+    mutable ThrottlerPtr remote_read_throttler;             /// A server-wide throttler for remote IO reads
+    mutable ThrottlerPtr remote_write_throttler;            /// A server-wide throttler for remote IO writes
+
     MultiVersion<Macros> macros;                            /// Substitutions extracted from config.
     /// Rules for selecting the compression settings, depending on the size of the part.
     mutable std::unique_ptr<CompressionCodecSelector> compression_codec_selector;
@@ -1945,6 +1949,26 @@ BackgroundSchedulePool & Context::getMessageBrokerSchedulePool() const
     return *shared->message_broker_schedule_pool;
 }
 
+ThrottlerPtr Context::getRemoteReadThrottler() const
+{
+    auto lock = getLock();
+    if (!shared->remote_read_throttler)
+        shared->remote_read_throttler = std::make_shared<Throttler>(
+            settings.max_remote_read_network_bandwidth_for_server);
+
+    return shared->remote_read_throttler;
+}
+
+ThrottlerPtr Context::getRemoteWriteThrottler() const
+{
+    auto lock = getLock();
+    if (!shared->remote_write_throttler)
+        shared->remote_write_throttler = std::make_shared<Throttler>(
+            settings.max_remote_write_network_bandwidth_for_server);
+
+    return shared->remote_write_throttler;
+}
+
 bool Context::hasDistributedDDL() const
 {
     return getConfigRef().has("distributed_ddl");
@@ -3307,6 +3331,8 @@ ReadSettings Context::getReadSettings() const
     res.mmap_threshold = settings.min_bytes_to_use_mmap_io;
     res.priority = settings.read_priority;
 
+    res.remote_throttler = getRemoteReadThrottler();
+
     res.http_max_tries = settings.http_max_tries;
     res.http_retry_initial_backoff_ms = settings.http_retry_initial_backoff_ms;
     res.http_retry_max_backoff_ms = settings.http_retry_max_backoff_ms;
@@ -3322,6 +3348,8 @@ WriteSettings Context::getWriteSettings() const
     WriteSettings res;
 
     res.enable_filesystem_cache_on_write_operations = settings.enable_filesystem_cache_on_write_operations;
+
+    res.remote_throttler = getRemoteWriteThrottler();
 
     return res;
 }

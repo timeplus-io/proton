@@ -8,7 +8,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/filesystemHelpers.h>
 #include <Common/FileCacheFactory.h>
-#include <Common/IFileCache.h>
+#include <Common/FileCache.h>
 #include <Server/ProtocolServerAdapter.h>
 #include <Storages/MarkCache.h>
 #include <Storages/StorageMergeTree.h>

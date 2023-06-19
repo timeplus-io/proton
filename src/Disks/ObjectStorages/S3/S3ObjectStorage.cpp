@@ -24,7 +24,7 @@
 #include <aws/s3/model/UploadPartCopyRequest.h>
 #include <aws/s3/model/AbortMultipartUploadRequest.h>
 
-#include <Common/IFileCache.h>
+#include <Common/FileCache.h>
 #include <Common/FileCacheFactory.h>
 #include <Common/getRandomASCIIString.h>
 #include <Common/logger_useful.h>
@@ -127,7 +127,7 @@ void S3ObjectStorage::removeCacheIfExists(const std::string & path_key)
     if (!cache || path_key.empty())
         return;
 
-    IFileCache::Key key = cache->hash(path_key);
+    FileCache::Key key = cache->hash(path_key);
     cache->removeIfExists(key);
 }
 
@@ -139,14 +139,7 @@ std::unique_ptr<ReadBufferFromFileBase> S3ObjectStorage::readObjects( /// NOLINT
 {
     assert(!objects[0].getPathKeyForCache().empty());
 
-    ReadSettings disk_read_settings{read_settings};
-    if (cache)
-    {
-        if (IFileCache::isReadOnly())
-            disk_read_settings.read_from_filesystem_cache_if_exists_otherwise_bypass_cache = true;
-
-        disk_read_settings.remote_fs_cache = cache;
-    }
+    ReadSettings disk_read_settings = patchSettings(read_settings);
 
     auto settings_ptr = s3_settings.get();
 
@@ -183,9 +176,8 @@ std::unique_ptr<ReadBufferFromFileBase> S3ObjectStorage::readObject( /// NOLINT
         object.absolute_path,
         version_id,
         settings_ptr->s3_settings.max_single_read_retries,
-        read_settings);
+        patchSettings(read_settings));
 }
-
 
 std::unique_ptr<WriteBufferFromFileBase> S3ObjectStorage::writeObject( /// NOLINT
     const StoredObject & object,
@@ -195,6 +187,8 @@ std::unique_ptr<WriteBufferFromFileBase> S3ObjectStorage::writeObject( /// NOLIN
     size_t buf_size,
     const WriteSettings & write_settings)
 {
+    WriteSettings disk_write_settings = IObjectStorage::patchSettings(write_settings);
+
     if (mode != WriteMode::Rewrite)
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "S3 doesn't support append to files");
 
@@ -213,6 +207,7 @@ std::unique_ptr<WriteBufferFromFileBase> S3ObjectStorage::writeObject( /// NOLIN
         attributes,
         buf_size,
         std::move(scheduler),
+        disk_write_settings,
         cache_on_write ? cache : nullptr);
 
 
@@ -487,6 +482,19 @@ void S3ObjectStorage::copyObject( // NOLINT
     }
 }
 
+ReadSettings S3ObjectStorage::patchSettings(const ReadSettings & read_settings) const
+{
+    ReadSettings settings{read_settings};
+    if (cache)
+    {
+        if (FileCache::isReadOnly())
+            settings.read_from_filesystem_cache_if_exists_otherwise_bypass_cache = true;
+
+        settings.remote_fs_cache = cache;
+    }
+    return IObjectStorage::patchSettings(settings);
+}
+
 void S3ObjectStorage::setNewSettings(std::unique_ptr<S3ObjectStorageSettings> && s3_settings_)
 {
     s3_settings.set(std::move(s3_settings_));
@@ -519,6 +527,7 @@ void S3ObjectStorage::applyNewSettings(const Poco::Util::AbstractConfiguration &
 {
     s3_settings.set(getSettings(config, config_prefix, context));
     client.set(getClient(config, config_prefix, context));
+    applyRemoteThrottlingSettings(context);
 }
 
 std::unique_ptr<IObjectStorage> S3ObjectStorage::cloneObjectStorage(
