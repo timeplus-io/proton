@@ -3243,9 +3243,10 @@ void Aggregator::setupAggregatesPoolTimestamps(size_t row_begin, size_t row_end,
     Int64 max_timestamp = std::numeric_limits<Int64>::min();
 
     /// FIXME, can we avoid this loop ?
+    auto & window_col = *key_columns[0];
     for (size_t i = row_begin; i < row_end; ++i)
     {
-        auto window = key_columns[0]->get64(i);
+        auto window = window_col.getInt(i);
         if (window > max_timestamp)
             max_timestamp = window;
     }

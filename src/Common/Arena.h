@@ -465,12 +465,12 @@ public:
         Stats stats;
 
         /// `head` points to the largest timestamp
-        /// Walk through the chunk list to find the first chunk which has timestamp less than argument `timestamp`
+        /// Walk through the chunk list to find the first chunk which has timestamp less than and equal argument `timestamp`
         auto * prev_p = head;
         auto * p = head;
         while (p)
         {
-            if (p->timestamp >= timestamp)
+            if (p->timestamp > timestamp)
             {
                 prev_p = p;
                 p = p->prev;
@@ -482,11 +482,12 @@ public:
         /// If p is head, only recycle head when its size reaches 2 pages
         if (p && ((p != head) || (p == head && p->size() > page_size * 2)))
         {
-            /// Free all chunks starting from the first chunk which has timestamp less than argument `timestamp`
+            /// Free all chunks starting from the first chunk which has timestamp less than and equal argument `timestamp`
             auto * pp = p;
             while (pp)
             {
                 size_in_bytes -= pp->size();
+                assert(chunks > 0);
                 --chunks;
                 pp = recycle(pp, stats);
             }
@@ -494,7 +495,12 @@ public:
             prev_p->prev = nullptr; /// NOLINT(clang-analyzer-cplusplus.NewDelete)
 
             if (p == head)
-                head = new MemoryChunk(page_size, nullptr, std::numeric_limits<Int64>::min());
+            {
+                head = new MemoryChunk(page_size, nullptr, current_timestamp);
+                size_in_bytes += head->size();
+                ++chunks;
+                assert(chunks == 1);
+            }
         }
 
         assert(head);

@@ -499,7 +499,7 @@ struct ExecutorImpl
     bool recycle_enabled = false;
     Block header;
     std::vector<size_t> keys_indices;
-    UInt64 last_watermark{0}; /// used for pool recycle
+    Int64 last_watermark{std::numeric_limits<Int64>::min()}; /// used for pool recycle
 
     Type type = Type::EMPTY;
     size_t keys_size{}; /// Number of keys. NOTE do we need this field?
@@ -626,11 +626,8 @@ struct ExecutorImpl
 
     /// Return {removed, last_removed_watermark, remaining_size}
     template <DestroyDataFunc<Data>... F>
-    void removeBucketsBefore(UInt64 watermark, F &&... destory)
+    void removeBucketsBefore(Int64 watermark, F &&... destory)
     {
-        if (watermark == 0)
-            return;
-
         auto destroy_wrapper = [&](DataPtr & data) {
             if (nullptr == data)
                 return;
@@ -642,7 +639,7 @@ struct ExecutorImpl
         };
 
         size_t removed = 0;
-        UInt64 last_removed_watermark = 0;
+        Int64 last_removed_watermark = 0;
         size_t remaining = 0;
 
         switch (type)
@@ -1172,9 +1169,10 @@ private:
         Int64 max_timestamp = std::numeric_limits<Int64>::min();
 
         /// FIXME, can we avoid this loop ?
+        auto & window_col = *key_columns[0];
         for (size_t i = 0; i < num_rows; ++i)
         {
-            auto window = key_columns[0]->get64(i);
+            auto window = window_col.getInt(i);
             if (window > max_timestamp)
                 max_timestamp = window;
         }
@@ -1186,7 +1184,7 @@ private:
         /// When new watermark come in, we shall recycle pool by last watermark
         if (last_watermark < max_timestamp)
         {
-            if (last_watermark != 0)
+            if (last_watermark != std::numeric_limits<Int64>::min())
                 removeBucketsBefore(last_watermark);
 
             last_watermark = max_timestamp;
