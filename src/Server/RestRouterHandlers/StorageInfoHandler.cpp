@@ -185,6 +185,17 @@ StreamStorageInfoPtr StorageInfoHandler::loadStorageInfo(const String & ns, cons
     /// Load from historical storage
     loadLocalStoragesInfo(disk_info, ns, stream);
 
+    /// If no specified namespace and no specified stream name, we use actual total used space on disk
+    if (ns.empty() && stream.empty())
+    {
+        disk_info->total_bytes_on_disk = 0;
+        for (auto & [_, disk] : query_context->getDisksMap())
+        {
+            if (disk)
+                disk_info->total_bytes_on_disk += disk->getTotalSpace() - disk->getAvailableSpace();
+        }
+    }
+
     return disk_info;
 }
 
