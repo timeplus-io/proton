@@ -43,7 +43,7 @@
         },
         {
             "id": 101,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "recover_global_aggr_in_substream",
             "description": "recover from global aggregation in substream from state checkpoint",
             "steps":[
@@ -85,7 +85,7 @@
         },
         {
             "id": 102,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "multiple_recover_global_aggr_in_substream",
             "description": "multiple recover global aggregation in substream from state checkpoint",
             "steps":[
@@ -135,7 +135,6 @@
                     "query_id":"19102-2",
                     "expected_results":[
                         ["dev1", 3, 55, 68],
-                        ["dev2", 2, 58.3, 70],
                         ["dev3", 1, 77, 77]
                     ]
                 }
@@ -177,7 +176,7 @@
         },
         {
             "id": 104,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "recover_tumble_window_aggr_in_substream",
             "description": "recover from tumble window aggregation in substream from a state checkpoint",
             "steps":[
@@ -222,7 +221,7 @@
         },
         {
             "id": 105,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "multiple_recover_tumble_window_aggr_in_substream",
             "description": "multiple recover tumble window in substream from a state checkpoint",
             "steps":[
@@ -317,7 +316,7 @@
         },
         {
             "id": 107,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "recover_tumble_window_aggr_in_substream_with_delay_interval",
             "description": "recover tumble window aggregation in substream with delay interval from state checkpoint",
             "steps":[
@@ -358,14 +357,14 @@
                     "query_id":"19107-1",
                     "expected_results":[
                         ["dev1", 3, "55", "67", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
-                        ["dev2", 1, "67", "69", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
+                        ["dev2", 2, "67", "69", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
                     ]
                 }
             ]
         },
         {
             "id": 108,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "multiple_recover_tumble_window_aggr_in_substream_with_delay_interval",
             "description": "multiple recover tumble window aggregation in substream with delay interval from state checkpoint",
             "steps":[
@@ -414,13 +413,13 @@
                     "query_id":"19108-1",
                     "expected_results":[
                         ["dev1", 3, "55", "67", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
-                        ["dev2", 1, "67", "69", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
+                        ["dev2", 2, "67", "69", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
                     ]
                 },
                 {
                     "query_id":"19108-2",
                     "expected_results":[
-                        ["dev1", 1, "68", "77", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
+                        ["dev1", 2, "68", "77", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
                     ]
                 }
             ]
@@ -457,7 +456,7 @@
         },
         {
             "id": 110,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "recover_hopping_window_in_substream",
             "description": "recover hopping window aggregation in substream from state checkpoint",
             "steps":[
@@ -502,7 +501,7 @@
         },
         {
             "id": 111,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "multiple_recover_hopping_window_aggr_in_substream",
             "description": "multiple recover hopping_window in substream from state checkpoint",
             "steps":[
@@ -538,14 +537,14 @@
             ],
             "expected_results": [
                 {
-                    "query_id":"19110",
+                    "query_id":"19111",
                     "expected_results":[
                         ["dev2", 1, "58.3", "58.3", "2020-02-02 19:59:57", "2020-02-02 20:00:02"],
                         ["dev1", 2, "57.3", "68","2020-02-02 19:59:57", "2020-02-02 20:00:02"]
                     ]
                 },
                 {
-                    "query_id":"19110-1",
+                    "query_id":"19111-1",
                     "expected_results":[
                         ["dev1", 3, "57.3", "69","2020-02-02 20:00:00", "2020-02-02 20:00:05"],
                         ["dev2", 2, "55",  "58.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
@@ -555,14 +554,14 @@
                     "query_id":"19111-2",
                     "expected_results":[
                         ["dev1", 2, "55", "69","2020-02-02 20:00:03", "2020-02-02 20:00:08"],
-                        ["dev2", 2, "55", "57", "2020-02-02 20:00:03", "2020-02-02 20:00:08"]
+                        ["dev2", 2, "55", "67", "2020-02-02 20:00:03", "2020-02-02 20:00:08"]
                     ]
                 }
             ]
         },
         {
             "id": 112,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "hop_window_aggr_in_substream_with_delay_interval",
             "description": "hop window aggregation in substream with delay interval state checkpoint",
             "steps":[
@@ -587,7 +586,7 @@
                 {
                     "query_id":"19112",
                     "expected_results":[
-                        ["dev1", 2, "57.3", "57.3","2020-02-02 19:59:57", "2020-02-02 20:00:02"],
+                        ["dev1", 2, "55", "57.3","2020-02-02 19:59:57", "2020-02-02 20:00:02"],
                         ["dev2", 1, "58.3", "58.3", "2020-02-02 19:59:57", "2020-02-02 20:00:02"]
                     ]
                 }
@@ -595,7 +594,7 @@
         },
         {
             "id": 113,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "recover_hopping_window_in_substream_with_delay_interval",
             "description": "recover hopping window aggregation in substream with delay interval from state checkpoint",
             "steps":[
@@ -611,8 +610,7 @@
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 79, '2020-02-02 20:00:03')"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:02')"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 69, '2020-02-02 20:00:04')"},  
-                        {"client":"python", "query_type": "table", "kill":"19113", "kill_wait":3, "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 55, '2020-02-02 20:00:05')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19113'"}
+                        {"client":"python", "query_type": "table", "kill":"19113", "kill_wait":3, "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 55, '2020-02-02 20:00:05')"}
                     ]
                 },
                 {
@@ -636,7 +634,7 @@
                 {
                     "query_id":"19113-1",
                     "expected_results":[
-                        ["dev1", 3, "57", "69","2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["dev1", 4, "55", "69","2020-02-02 20:00:00", "2020-02-02 20:00:05"],
                         ["dev2", 2, "58.3",  "79", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
                     ]
                 }
@@ -644,7 +642,7 @@
         },
         {
             "id": 114,
-            "tags": ["query_state", "bug"],
+            "tags": ["query_state"],
             "name": "multiple_recover_hopping_window_aggr_in_substream_with_delay_interval",
             "description": "multiple recover hopping_window in substream with delay interval from state checkpoint",
             "steps":[
@@ -660,8 +658,7 @@
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 79, '2020-02-02 20:00:03')"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:02')"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 69, '2020-02-02 20:00:04')"},  
-                        {"client":"python", "query_type": "table", "kill":"19114", "kill_wait":3, "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 55, '2020-02-02 20:00:05')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19114'"}
+                        {"client":"python", "query_type": "table", "kill":"19114", "kill_wait":3, "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 55, '2020-02-02 20:00:05')"}
                     ]
                 },
                 {
@@ -669,8 +666,7 @@
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:08')"},  
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:07')"},
                         {"client":"python", "query_type": "stream","query_id":"19114-1", "terminate": "manual","wait":2, "query":"recover from '19114'"},
-                        {"client":"python", "query_type": "table", "depends_on":"19114", "wait":1, "query": "kill query where query_id='19114' sync"},
-                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19114'"}
+                        {"client":"python", "query_type": "table", "depends_on":"19114", "wait":1, "query": "kill query where query_id='19114' sync"}
                     ]
                 },
                 {
@@ -694,7 +690,7 @@
                 {
                     "query_id":"19114-1",
                     "expected_results":[
-                        ["dev1", 3, "57", "69","2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["dev1", 4, "55", "69","2020-02-02 20:00:00", "2020-02-02 20:00:05"],
                         ["dev2", 2, "58.3",  "79", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
                     ]
                 },

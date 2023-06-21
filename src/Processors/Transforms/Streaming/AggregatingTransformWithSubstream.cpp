@@ -129,7 +129,11 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
         finalize(substream_ctx, chunk.getChunkContext());
     }
     else if (chunk.requestCheckpoint())
+    {
         checkpoint(chunk.getCheckpointContext());
+        /// Propagate the checkpoint barrier to all down stream output ports
+        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0}, chunk.getChunkContext());
+    }
 }
 
 void AggregatingTransformWithSubstream::emitVersion(Block & block, const SubstreamContextPtr & substream_ctx)

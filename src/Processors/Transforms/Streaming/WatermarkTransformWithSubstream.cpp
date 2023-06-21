@@ -117,17 +117,25 @@ void WatermarkTransformWithSubstream::work()
     }
     else
     {
-        /// FIXME, we shall establish timer only when necessary instead of blindly generating empty heartbeat chunk
-        output_chunks.reserve(substream_watermarks.size());
-        for (auto & [id, watermark] : substream_watermarks)
+        if (unlikely(process_chunk.requestCheckpoint()))
         {
-            auto chunk = process_chunk.clone();
-            watermark->process(chunk);
-
-            if (chunk.hasChunkContext())
+            checkpoint(process_chunk.getCheckpointContext());
+            output_chunks.emplace_back(std::move(process_chunk));
+        }
+        else
+        {
+            /// FIXME, we shall establish timer only when necessary instead of blindly generating empty heartbeat chunk
+            output_chunks.reserve(substream_watermarks.size());
+            for (auto & [id, watermark] : substream_watermarks)
             {
-                chunk.getChunkContext()->setSubstreamID(id);
-                output_chunks.emplace_back(std::move(chunk));
+                auto chunk = process_chunk.clone();
+                watermark->process(chunk);
+
+                if (chunk.hasChunkContext())
+                {
+                    chunk.getChunkContext()->setSubstreamID(id);
+                    output_chunks.emplace_back(std::move(chunk));
+                }
             }
         }
     }
