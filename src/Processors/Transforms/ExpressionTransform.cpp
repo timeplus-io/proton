@@ -34,13 +34,15 @@ void ExpressionTransform::transform(Chunk & chunk)
 /// proton: starts.
 void ExpressionTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
+    assert(isStreaming());
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) { expression->serialize(wb); });
 }
 
 void ExpressionTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
-    ckpt_ctx->coordinator->recover(
-        getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) { expression->deserialize(rb); });
+    if (isStreaming())
+        ckpt_ctx->coordinator->recover(
+            getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) { expression->deserialize(rb); });
 }
 /// proton: ends.
 

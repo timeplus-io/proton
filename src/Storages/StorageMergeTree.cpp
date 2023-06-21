@@ -283,9 +283,6 @@ void StorageMergeTree::readConcat(
             processed_stage, nullptr, enable_parallel_reading, std::move(create_streaming_source)))
     {
         query_plan = std::move(*plan);
-        /// We will need reset the streaming mode since the original plan got overridden and readConcat is only
-        /// used in streaming mode
-        query_plan.setStreaming(true);
     }
 }
 /// proton: ends

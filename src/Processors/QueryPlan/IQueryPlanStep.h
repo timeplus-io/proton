@@ -44,6 +44,10 @@ public:
     SortDescription sort_description = {};
     SortScope sort_scope = SortScope::None;
 
+    /// proton: starts.
+    bool is_streaming = false;
+    /// proton: ends.
+
     /// Things which may be added:
     /// * limit
     /// * estimated rows number
@@ -109,6 +113,15 @@ public:
 
     /// Get description of processors added in current step. Should be called after updatePipeline().
     virtual void describePipeline(FormatSettings & /*settings*/) const {}
+
+    /// proton: starts.
+    bool isStreaming() const
+    {
+        return output_stream
+            ? output_stream->is_streaming
+            : std::any_of(input_streams.begin(), input_streams.end(), [](const auto & stream) { return stream.is_streaming; });
+    }
+    /// proton: ends.
 
 protected:
     DataStreams input_streams;

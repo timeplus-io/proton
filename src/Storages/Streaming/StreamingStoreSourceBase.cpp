@@ -25,6 +25,8 @@ StreamingStoreSourceBase::StreamingStoreSourceBase(
     , header_chunk(header.getColumns(), 0)
     , columns_desc(header.getNames(), storage_snapshot)
 {
+    is_streaming = true;
+
     /// Reset current object description and update current storage snapshot for streaming source
     if (!columns_desc.physical_object_columns_to_read.empty())
         storage_snapshot->object_columns.set(std::make_unique<ColumnsDescription>(storage_snapshot->object_columns.get()->getByNames(

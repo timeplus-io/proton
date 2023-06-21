@@ -155,7 +155,7 @@ void streamingFlatRecords()
     size_t consumed = 0;
     size_t unconsumed = n;
 
-    std::cout << "File size: " << rbuf.size() << ", first read: " << n << std::endl;
+    std::cout << "File size: " << rbuf.getFileSize() << ", first read: " << n << std::endl;
 
     /// Return true done, else false
     auto copy_and_read = [&](bool resize = false) -> bool {

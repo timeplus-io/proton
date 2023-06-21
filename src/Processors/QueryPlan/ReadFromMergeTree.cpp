@@ -91,11 +91,13 @@ ReadFromMergeTree::ReadFromMergeTree(
     MergeTreeDataSelectAnalysisResultPtr analyzed_result_ptr_,
     bool enable_parallel_reading,
     std::function<std::shared_ptr<ISource>(Int64 &)> create_streaming_source_)
-    : ISourceStep(DataStream{.header = MergeTreeBaseSelectProcessor::transformHeader(
-        storage_snapshot_->getSampleBlockForColumns(real_column_names_),
-        getPrewhereInfo(query_info_),
-        data_.getPartitionValueType(),
-        virt_column_names_)})
+    : ISourceStep(DataStream{
+        .header = MergeTreeBaseSelectProcessor::transformHeader(
+            storage_snapshot_->getSampleBlockForColumns(real_column_names_),
+            getPrewhereInfo(query_info_),
+            data_.getPartitionValueType(),
+            virt_column_names_),
+        .is_streaming = static_cast<bool>(create_streaming_source_)})
     , reader_settings(getMergeTreeReaderSettings(context_, query_info_))
     , prepared_parts(std::move(parts_))
     , real_column_names(std::move(real_column_names_))

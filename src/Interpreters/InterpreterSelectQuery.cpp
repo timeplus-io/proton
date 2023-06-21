@@ -962,10 +962,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
 void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
 {
-    /// proton: starts.
-    query_plan.setStreaming(isStreaming());
-    /// proton: ends.
-
     executeImpl(query_plan, std::move(input_pipe));
 
     /// We must guarantee that result structure is the same as in getSampleBlock()
@@ -1390,7 +1386,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
 
     if (options.only_analyze)
     {
-        auto read_nothing = std::make_unique<ReadNothingStep>(source_header);
+        auto read_nothing = std::make_unique<ReadNothingStep>(source_header, isStreaming());
         query_plan.addStep(std::move(read_nothing));
 
         if (expressions.filter_info)
@@ -1629,8 +1625,6 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                             max_streams,
                             analysis_result.optimize_read_in_order);
                     }
-
-                    auto streaming_plan = query_plan.isStreaming();
                     /// proton : ends
 
                     join_step->setStepDescription(fmt::format("JOIN {}", expressions.join->pipelineType()));
@@ -1640,10 +1634,6 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
 
                     query_plan = QueryPlan();
                     query_plan.unitePlans(std::move(join_step), {std::move(plans)});
-
-                    /// proton : starts. Propagate `streaming`
-                    query_plan.setStreaming(streaming_plan);
-                    /// proton : ends
                 }
             }
 

@@ -5,7 +5,7 @@ namespace DB
 {
 
 ReadFromPreparedSource::ReadFromPreparedSource(Pipe pipe_)
-    : ISourceStep(DataStream{.header = pipe_.getHeader()})
+    : ISourceStep(DataStream{.header = pipe_.getHeader(), .is_streaming = pipe_.isStreaming()})
     , pipe(std::move(pipe_))
 {
 }

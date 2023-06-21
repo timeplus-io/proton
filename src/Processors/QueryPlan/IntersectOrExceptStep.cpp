@@ -37,6 +37,11 @@ IntersectOrExceptStep::IntersectOrExceptStep(
 {
     input_streams = std::move(input_streams_);
     output_stream = DataStream{.header = header};
+
+    /// proton: starts. Propagate streaming flag to output stream
+    for (const auto & input_stream : input_streams)
+        output_stream->is_streaming |= input_stream.is_streaming;
+    /// proton: ends.
 }
 
 QueryPipelineBuilderPtr IntersectOrExceptStep::updatePipeline(QueryPipelineBuilders pipelines, const BuildQueryPipelineSettings &)

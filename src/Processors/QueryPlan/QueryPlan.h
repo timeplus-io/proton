@@ -63,8 +63,7 @@ public:
         ContextPtr query_context);
 
     /// proton: starts.
-    void setStreaming(bool is_streaming_) { is_streaming = is_streaming_; }
-    bool isStreaming() const { return is_streaming; }
+    bool isStreaming() const;
     /// proton: ends.
 
     struct ExplainPlanOptions
@@ -117,10 +116,6 @@ private:
     QueryPlanResourceHolder resources;
     Nodes nodes;
     Node * root = nullptr;
-
-    /// proton: starts.
-    bool is_streaming = false;
-    /// proton: ends.
 
     void checkInitialized() const;
     void checkNotCompleted() const;

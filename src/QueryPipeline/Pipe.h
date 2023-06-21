@@ -107,6 +107,16 @@ public:
     /// Get processors from Pipe without destroying pipe (used for EXPLAIN to keep QueryPlan).
     const Processors & getProcessors() const { return processors; }
 
+    /// proton: starts.
+    bool isStreaming() const
+    {
+        return std::any_of(output_ports.begin(), output_ports.end(), [](const auto * output) {
+            assert(output);
+            return output->getProcessor().isStreaming();
+        });
+    }
+    /// proton: ends.
+
 private:
     /// Header is common for all output below.
     Block header;

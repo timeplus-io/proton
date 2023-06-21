@@ -25,6 +25,9 @@ JoinStep::JoinStep(
     output_stream = DataStream
     {
         .header = JoiningTransform::transformHeader(left_stream_.header, join),
+        /// proton: starts. Propagate streaming flag to output stream
+        .is_streaming = left_stream_.is_streaming || right_stream_.is_streaming,
+        /// proton: ends.
     };
 }
 

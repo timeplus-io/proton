@@ -20,6 +20,10 @@ DataStream ITransformingStep::createOutputStream(
 {
     DataStream output_stream{.header = std::move(output_header)};
 
+    /// proton: starts. Propagate streaming flag to output stream
+    output_stream.is_streaming = input_stream.is_streaming;
+    /// proton: ends.
+
     if (stream_traits.preserves_distinct_columns)
         output_stream.distinct_columns = input_stream.distinct_columns;
 

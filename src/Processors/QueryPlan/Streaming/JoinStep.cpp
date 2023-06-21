@@ -30,6 +30,11 @@ JoinStep::JoinStep(
     output_stream = DataStream{
         .header = JoinTransform::transformHeader(left_stream_.header, std::dynamic_pointer_cast<IHashJoin>(join)),
     };
+
+    /// proton: starts. Propagate streaming flag to output stream
+    for (const auto & input_stream : input_streams)
+        output_stream->is_streaming |= input_stream.is_streaming;
+    /// proton: ends.
 }
 
 QueryPipelineBuilderPtr JoinStep::updatePipeline(QueryPipelineBuilders pipelines, const BuildQueryPipelineSettings &)

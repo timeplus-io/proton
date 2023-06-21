@@ -77,6 +77,11 @@ CreatingSetsStep::CreatingSetsStep(DataStreams input_streams_)
     input_streams = std::move(input_streams_);
     output_stream = input_streams.front();
 
+    /// proton: starts. Propagate streaming flag to output stream
+    for (const auto & input_stream : input_streams)
+        output_stream->is_streaming |= input_stream.is_streaming;
+    /// proton: ends.
+
     for (size_t i = 1; i < input_streams.size(); ++i)
         if (input_streams[i].header)
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Creating set input must have empty header. Got: {}",

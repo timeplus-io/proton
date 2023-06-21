@@ -19,7 +19,7 @@ public:
 
     void put(const StreamShard & stream_shard, RecordPtr record);
 
-    std::pair<RecordPtrs, bool> get(const StreamShard & stream_shard, int64_t wait_ms, int64_t start_sn, bool from_cache_only = false) const;
+    std::pair<RecordPtrs, bool> get(const StreamShard & stream_shard, int64_t wait_ms, int64_t & start_sn, bool from_cache_only = false) const;
 
     void remove(const StreamShard & stream_shard);
 

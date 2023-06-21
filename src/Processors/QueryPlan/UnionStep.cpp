@@ -35,6 +35,11 @@ UnionStep::UnionStep(DataStreams input_streams_, size_t max_threads_)
         output_stream = input_streams.front();
     else
         output_stream = DataStream{.header = header};
+
+    /// proton: starts. Propagate streaming flag to output stream
+    for (const auto & input_stream : input_streams)
+        output_stream->is_streaming |= input_stream.is_streaming;
+    /// proton: ends.
 }
 
 QueryPipelineBuilderPtr UnionStep::updatePipeline(QueryPipelineBuilders pipelines, const BuildQueryPipelineSettings &)

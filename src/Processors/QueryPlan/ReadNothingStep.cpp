@@ -5,8 +5,10 @@
 namespace DB
 {
 
-ReadNothingStep::ReadNothingStep(Block output_header)
-    : ISourceStep(DataStream{.header = std::move(output_header), .has_single_port = true})
+/// proton: starts.
+ReadNothingStep::ReadNothingStep(Block output_header, bool is_streaming_)
+    : ISourceStep(DataStream{.header = std::move(output_header), .has_single_port = true, .is_streaming = is_streaming_})
+/// proton: ends.
 {
 }
 

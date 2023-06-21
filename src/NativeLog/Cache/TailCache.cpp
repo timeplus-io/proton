@@ -45,10 +45,11 @@ void TailCache::put(const StreamShard & stream_shard, RecordPtr record)
     entry->new_records_cv.notify_all();
 }
 
-std::pair<RecordPtrs, bool> TailCache::get(const StreamShard & stream_shard, int64_t wait_ms, int64_t start_sn, bool from_cache_only) const
+std::pair<RecordPtrs, bool> TailCache::get(const StreamShard & stream_shard, int64_t wait_ms, int64_t & start_sn_, bool from_cache_only) const
 {
     assert(wait_ms > 0);
 
+    int64_t start_sn = start_sn_;
     if (start_sn == EARLIEST_SN && !from_cache_only)
         /// We can't serve earliest sn from cache since we don't know the earliest sn in file system
         /// fallback to log
@@ -103,8 +104,18 @@ std::pair<RecordPtrs, bool> TailCache::get(const StreamShard & stream_shard, int
             /// case 3, 4
             auto pred = [entry, start_sn] { return entry->shard_records.back()->getSN() >= start_sn; };
             if (!entry->new_records_cv.wait_for(lock, std::chrono::milliseconds(wait_ms), pred))
+            {
+                /// A bugfix: sometimes, When execute a select query
+                /// 1) First reading from latest, there is no data (i.e. last_sn = 0, by case 0, start_sn = last_sn + 1 = 1)
+                /// 2) Then the `last_sn` updated by BackgroundPolling (ingest data at this time, so updated last_sn = 1)
+                /// 3) Next second reading from latest (by case 0, start_sn = last_sn + 1 = 2, still no data), we lost these data
+                /// So for this case, we shall update @param start_sn_ to be continue reading from current sn.
+                if (start_sn_ == LATEST_SN)
+                    start_sn_ = start_sn;
+
                 /// Timed out and no new records has been inserted to cache
                 return {{}, false};
+            }
 
             /// fall-through, we have waited some new records within time out
             /// we need re-evaluate first_sn, last_sn since during waiting new records has been ingested, old records may be evicted

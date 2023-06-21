@@ -770,7 +770,7 @@
             {"client":"python", "query_type": "table", "depends_on":1023,"wait":1, "query": "insert into left_stream(i, s) values (1, 's')"},
             {"client":"python", "query_type": "table", "query": "insert into right_stream(ii, ss) values (1, 's1')"},
             {"client":"python", "query_type": "table", "query": "insert into right_stream(ii, ss) values (1, 's2')"},
-            {"client":"python", "query_type": "table", "kill":"1023", "kill_wait":6,"query": "insert into left_stream(i, s) values (1, 's3')"}
+            {"client":"python", "query_type": "table", "wait":1, "kill":"1023", "kill_wait":6,"query": "insert into left_stream(i, s) values (1, 's3')"}
           ]
         }
       ],
@@ -795,8 +795,8 @@
             {"client":"python","query_id":"1025", "wait":1, "terminate":"manual", "query_type": "stream", "query":"select sum(i) as total from left_stream latest join right_stream on i=ii emit periodic 1s"},
             {"client":"python", "query_type": "table", "depends_on":"1025", "wait":1, "query": "insert into left_stream(i, s) values (1, 's')"},
             {"client":"python", "query_type": "table", "query": "insert into right_stream(ii, ss) values (1, 's1')"},
-            {"client":"python", "query_type": "table", "wait":1, "query": "insert into right_stream(ii, ss) values (1, 's2')"},
-            {"client":"python", "query_type": "table", "wait":1,"kill":"1024,1025", "kill_wait":6, "query": "insert into left_stream(i, s) values (1, 's3')"}
+            {"client":"python", "query_type": "table", "wait":2, "query": "insert into right_stream(ii, ss) values (1, 's2')"},
+            {"client":"python", "query_type": "table", "wait":2,"kill":"1024,1025", "kill_wait":6, "query": "insert into left_stream(i, s) values (1, 's3')"}
           ]
         }
       ],

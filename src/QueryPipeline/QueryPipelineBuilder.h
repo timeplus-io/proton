@@ -188,7 +188,6 @@ public:
     /// Output ports should have same headers. (used for shuffling)
     void addShufflingTransform(const Pipe::ProcessorGetter & getter);
 
-    void setStreaming(bool is_streaming_);
     void setExecuteMode(ExecuteMode exec_mode_) { exec_mode = exec_mode_; }
     ExecuteMode getExecuteMode() const { return exec_mode; }
 

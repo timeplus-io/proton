@@ -96,11 +96,6 @@ void QueryPlan::unitePlans(QueryPlanStepPtr step, std::vector<std::unique_ptr<Qu
         max_threads = std::max(max_threads, plan->max_threads);
         resources = std::move(plan->resources);
     }
-
-    /// proton: starts. Propagate `streaming`
-    for (auto & plan : plans)
-        is_streaming |= plan->isStreaming();
-    /// protno: ends.
 }
 
 void QueryPlan::addStep(QueryPlanStepPtr step)
@@ -203,8 +198,7 @@ QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
     last_pipeline->addResources(std::move(resources));
 
     /// proton : starts
-    last_pipeline->setExecuteMode(queryExecuteMode(is_streaming, query_context->getSettingsRef()));
-    last_pipeline->setStreaming(is_streaming);
+    last_pipeline->setExecuteMode(queryExecuteMode(isStreaming(), query_context->getSettingsRef()));
     /// proton : ends
 
     return last_pipeline;
@@ -512,5 +506,12 @@ void QueryPlan::explainEstimate(MutableColumns & columns)
         columns[index++]->insert(counter.second->marks);
     }
 }
+
+/// proton: starts.
+bool QueryPlan::isStreaming() const
+{
+    return root && root->step && root->step->isStreaming();
+}
+/// proton: ends.
 
 }

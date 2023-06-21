@@ -372,14 +372,13 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesRightLe
 
     left->pipe.collected_processors = collected_processors;
 
-    /// Collect the NEW processors for the right pipeline.
-    QueryPipelineProcessorsCollector collector(*right);
     /// Remember the last step of the right pipeline.
     ExpressionStep * step = typeid_cast<ExpressionStep *>(right->pipe.processors.back()->getQueryPlanStep());
     if (!step)
-    {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "The top step of the right pipeline should be ExpressionStep");
-    }
+
+    /// Collect the NEW processors for the right pipeline.
+    QueryPipelineProcessorsCollector collector(*right, step);
 
     /// In case joined subquery has totals, and we don't, add default chunk to totals.
     bool default_totals = false;
@@ -579,8 +578,13 @@ QueryPipelineProcessorsCollector::~QueryPipelineProcessorsCollector()
 
 Processors QueryPipelineProcessorsCollector::detachProcessors(size_t group)
 {
+    /// proton: starts. Set streaming flag for newly added processsors, it's a trick usage
     for (auto & processor : processors)
+    {
         processor->setQueryPlanStep(step, group);
+        processor->setStreaming(step && step->isStreaming());
+    }
+    /// proton: ends.
 
     Processors res;
     res.swap(processors);
@@ -592,14 +596,6 @@ void QueryPipelineBuilder::addShufflingTransform(const Pipe::ProcessorGetter & g
 {
     checkInitializedAndNotCompleted();
     pipe.addShufflingTransform(getter);
-}
-
-void QueryPipelineBuilder::setStreaming(bool is_streaming_)
-{
-    for (const auto & processor : pipe.processors)
-        processor->setStreaming(is_streaming_);
-
-    is_streaming = is_streaming_;
 }
 
 std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreaming(
@@ -621,12 +617,13 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
 
     left->pipe.collected_processors = collected_processors;
 
-    /// Collect the NEW processors for the right pipeline.
-    QueryPipelineProcessorsCollector collector(*right);
     /// Remember the last step of the right pipeline.
     ExpressionStep * step = typeid_cast<ExpressionStep *>(right->pipe.processors.back()->getQueryPlanStep());
     if (!step)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "The top step of the right pipeline should be ExpressionStep");
+
+    /// Collect the NEW processors for the right pipeline.
+    QueryPipelineProcessorsCollector collector(*right, step);
 
     if (left->hasTotals() || right->hasTotals())
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Streaming join doesn't support totals");
