@@ -22,7 +22,7 @@ namespace Streaming
 {
 namespace
 {
-WatermarkStamperPtr initWatermark(WatermarkStamperParams params, Poco::Logger * log)
+WatermarkStamperPtr initWatermark(const WatermarkStamperParams & params, Poco::Logger * log)
 {
     assert(params.mode != WatermarkStamperParams::EmitMode::NONE);
     if (params.window_params)
@@ -30,23 +30,23 @@ WatermarkStamperPtr initWatermark(WatermarkStamperParams params, Poco::Logger * 
         switch (params.window_params->type)
         {
             case WindowType::TUMBLE:
-                return std::make_unique<TumbleWatermarkStamper>(std::move(params), log);
+                return std::make_unique<TumbleWatermarkStamper>(params, log);
             case WindowType::HOP:
-                return std::make_unique<HopWatermarkStamper>(std::move(params), log);
+                return std::make_unique<HopWatermarkStamper>(params, log);
             case WindowType::SESSION:
-                return std::make_unique<SessionWatermarkStamper>(std::move(params), log);
+                return std::make_unique<SessionWatermarkStamper>(params, log);
             default:
                 break;
         }
     }
-    return std::make_unique<WatermarkStamper>(std::move(params), log);
+    return std::make_unique<WatermarkStamper>(params, log);
 }
 }
 
-WatermarkTransformWithSubstream::WatermarkTransformWithSubstream(const Block & header, WatermarkStamperParams params, Poco::Logger * log_)
-    : IProcessor({header}, {header}, ProcessorID::WatermarkTransformWithSubstreamID), log(log_)
+WatermarkTransformWithSubstream::WatermarkTransformWithSubstream(const Block & header, WatermarkStamperParamsPtr params_, Poco::Logger * log_)
+    : IProcessor({header}, {header}, ProcessorID::WatermarkTransformWithSubstreamID), params(std::move(params_)), log(log_)
 {
-    watermark_template = initWatermark(std::move(params), log);
+    watermark_template = initWatermark(*params, log);
     assert(watermark_template);
     watermark_template->preProcess(header);
 }

@@ -23,7 +23,7 @@ DB::ITransformingStep::Traits getTraits()
         }};
 }
 }
-WatermarkStep::WatermarkStep(const DataStream & input_stream_, WatermarkStamperParams params_, Poco::Logger * log_)
+WatermarkStep::WatermarkStep(const DataStream & input_stream_, WatermarkStamperParamsPtr params_, Poco::Logger * log_)
     : ITransformingStep(input_stream_, input_stream_.header, getTraits()), params(std::move(params_)), log(log_)
 {
 }
@@ -31,7 +31,7 @@ WatermarkStep::WatermarkStep(const DataStream & input_stream_, WatermarkStamperP
 void WatermarkStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & /* settings */)
 {
     pipeline.addSimpleTransform([&](const Block & header) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        return std::make_shared<WatermarkTransform>(header, std::move(params), log);
+        return std::make_shared<WatermarkTransform>(header, params, log);
     });
 }
 }

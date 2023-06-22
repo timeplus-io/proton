@@ -16,7 +16,7 @@ namespace Streaming
 class WatermarkTransformWithSubstream final : public IProcessor
 {
 public:
-    WatermarkTransformWithSubstream(const Block & header, WatermarkStamperParams params, Poco::Logger * log);
+    WatermarkTransformWithSubstream(const Block & header, WatermarkStamperParamsPtr params_, Poco::Logger * log);
 
     ~WatermarkTransformWithSubstream() override = default;
 
@@ -35,6 +35,7 @@ private:
     NO_SERDE Chunks output_chunks;
     typename Chunks::iterator output_iter{output_chunks.begin()};
 
+    WatermarkStamperParamsPtr params;
     WatermarkStamperPtr watermark_template;
     SERDE SubstreamHashMap<WatermarkStamperPtr> substream_watermarks;
 

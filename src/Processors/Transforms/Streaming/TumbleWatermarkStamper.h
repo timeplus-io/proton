@@ -9,7 +9,7 @@ namespace Streaming
 class TumbleWatermarkStamper final : public WatermarkStamper
 {
 public:
-    TumbleWatermarkStamper(WatermarkStamperParams && params_, Poco::Logger * log_);
+    TumbleWatermarkStamper(const WatermarkStamperParams & params_, Poco::Logger * log_);
     TumbleWatermarkStamper(const TumbleWatermarkStamper &) = default;
     ~TumbleWatermarkStamper() override = default;
 

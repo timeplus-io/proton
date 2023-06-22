@@ -10,8 +10,8 @@ extern const int INCORRECT_QUERY;
 
 namespace Streaming
 {
-HopWatermarkStamper::HopWatermarkStamper(WatermarkStamperParams && params_, Poco::Logger * log_)
-    : WatermarkStamper(std::move(params_), log_), window_params(params.window_params->as<HopWindowParams &>())
+HopWatermarkStamper::HopWatermarkStamper(const WatermarkStamperParams & params_, Poco::Logger * log_)
+    : WatermarkStamper(params_, log_), window_params(params.window_params->as<HopWindowParams &>())
 {
     if (params.mode != WatermarkStamperParams::EmitMode::WATERMARK && params.mode != WatermarkStamperParams::EmitMode::WATERMARK_PER_ROW
         && params.mode != WatermarkStamperParams::EmitMode::TAIL)

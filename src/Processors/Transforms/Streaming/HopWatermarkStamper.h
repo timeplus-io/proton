@@ -9,7 +9,7 @@ namespace Streaming
 class HopWatermarkStamper final : public WatermarkStamper
 {
 public:
-    HopWatermarkStamper(WatermarkStamperParams && params_, Poco::Logger * log_);
+    HopWatermarkStamper(const WatermarkStamperParams & params_, Poco::Logger * log_);
     HopWatermarkStamper(const HopWatermarkStamper &) = default;
     ~HopWatermarkStamper() override = default;
 

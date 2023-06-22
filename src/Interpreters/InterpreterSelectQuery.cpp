@@ -3430,7 +3430,7 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
     /// Build `WatermarkStep`
     if (shouldApplyWatermark())
     {
-        Streaming::WatermarkStamperParams params(query_info.query, query_info.syntax_analyzer_result, query_info.streaming_window_params);
+        auto params = std::make_shared<Streaming::WatermarkStamperParams>(query_info.query, query_info.syntax_analyzer_result, query_info.streaming_window_params);
         if (query_info.hasPartitionByKeys())
             query_plan.addStep(
                 std::make_unique<Streaming::WatermarkStepWithSubstream>(query_plan.getCurrentDataStream(), std::move(params), log));

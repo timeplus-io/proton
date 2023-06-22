@@ -40,22 +40,21 @@ public:
 
     EmitMode mode = EmitMode::NONE;
 
-    Int64 periodic_interval = 0;
-    IntervalKind::Kind periodic_interval_kind = IntervalKind::Second;
+    WindowInterval periodic_interval;
 
     /// With timeout
-    Int64 timeout_interval = 0;
-    IntervalKind::Kind timeout_interval_kind = IntervalKind::Second;
+    WindowInterval timeout_interval;
 
     /// With delay
-    Int64 delay_interval = 0;
-    IntervalKind::Kind delay_interval_kind = IntervalKind::Second;
+    WindowInterval delay_interval;
 };
+
+using WatermarkStamperParamsPtr = std::shared_ptr<const WatermarkStamperParams>;
 
 SERDE class WatermarkStamper
 {
 public:
-    WatermarkStamper(WatermarkStamperParams && params_, Poco::Logger * log_) : params(std::move(params_)), log(log_) { }
+    WatermarkStamper(const WatermarkStamperParams & params_, Poco::Logger * log_) : params(params_), log(log_) { }
     WatermarkStamper(const WatermarkStamper &) = default;
     virtual ~WatermarkStamper() { }
 
@@ -78,18 +77,31 @@ private:
     template <typename TimeColumnType, bool apply_watermark_per_row>
     void processWatermark(Chunk & chunk);
 
+    void processPeriodic(Chunk & chunk);
+
     void processTimeout(Chunk & chunk);
 
     void logLateEvents();
 
     virtual Int64 calculateWatermark(Int64 event_ts) const;
 
+    void initPeriodicTimer(const WindowInterval & interval);
+
+    void initTimeoutTimer(const WindowInterval & interval);
+
 protected:
-    WatermarkStamperParams params;
+    const WatermarkStamperParams & params;
     Poco::Logger * log;
 
     ssize_t time_col_pos = -1;
-    Int64 next_emit_timeout_ts = 0;
+
+    /// For periodic
+    Int64 next_periodic_emit_ts = 0;
+    Int64 periodic_interval = 0;
+
+    /// For timeout
+    Int64 next_timeout_emit_ts = 0;
+    Int64 timeout_interval = 0;
 
     /// (State)
     SERDE mutable std::optional<VersionType> version;

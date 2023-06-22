@@ -99,8 +99,10 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast);
 
 struct WindowInterval
 {
-    Int64 interval;
-    IntervalKind::Kind unit;
+    Int64 interval = 0;
+    IntervalKind::Kind unit = IntervalKind::Second;
+
+    operator bool() const { return interval != 0; }
 };
 
 void checkIntervalAST(const ASTPtr & ast, const String & msg = "Invalid interval");

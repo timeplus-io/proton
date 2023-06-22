@@ -9,7 +9,7 @@ namespace Streaming
 class SessionWatermarkStamper final : public WatermarkStamper
 {
 public:
-    SessionWatermarkStamper(WatermarkStamperParams && params_, Poco::Logger * log_);
+    SessionWatermarkStamper(const WatermarkStamperParams & params_, Poco::Logger * log_);
     SessionWatermarkStamper(const SessionWatermarkStamper &) = default;
     ~SessionWatermarkStamper() override = default;
 
