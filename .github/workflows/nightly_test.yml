@@ -38,7 +38,7 @@ jobs:
             fi
 
             # Don't need to upload ccache to S3 at the moment
-            # tar -zcf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
+            tar -zcf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
             # aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://tp-internal/proton/ci_cache/
 
             # clean ccache and build footprint
@@ -174,7 +174,7 @@ jobs:
             fi
 
             # Don't need to upload ccache to S3 at the moment
-            # tar -zcf ./cache${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
+            tar -zcf ./cache${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
             # aws s3 cp --no-progress ./cache${ARCH:+_}$ARCH.tar.gz s3://tp-internal/proton/ci_cache/
 
             # clean ccache and build footprint
