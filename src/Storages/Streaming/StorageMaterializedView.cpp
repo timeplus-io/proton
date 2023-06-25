@@ -8,10 +8,13 @@
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/ProcessList.h>
 #include <Interpreters/getColumnFromBlock.h>
 #include <Interpreters/getHeaderForProcessingStage.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTShowProcesslistQuery.h>
+#include <Parsers/formatAST.h>
 #include <Processors/Executors/CompletedPipelineExecutor.h>
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
@@ -41,6 +44,7 @@ extern const int QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW;
 extern const int NOT_IMPLEMENTED;
 extern const int NUMBER_OF_COLUMNS_DOESNT_MATCH;
 extern const int RESOURCE_NOT_INITED;
+extern const int QUERY_WAS_CANCELLED;
 }
 
 namespace
@@ -271,6 +275,10 @@ void StorageMaterializedView::cancelBackgroundPipeline()
 
     if (background_thread.joinable())
         background_thread.join();
+
+    background_executor.reset();
+    background_pipeline.reset();
+    process_list_entry.reset();
 }
 
 void StorageMaterializedView::read(
@@ -516,8 +524,13 @@ void StorageMaterializedView::doBuildBackgroundPipeline()
     local_context->setCurrentQueryId(""); /// generate random query_id
     local_context->setInternalQuery(false); /// We like to log materialized query like a regular one
 
+    auto & inner_query = metadata_snapshot->getSelectQuery().inner_query;
+
     InterpreterSelectWithUnionQuery select_interpreter(
-        metadata_snapshot->getSelectQuery().inner_query, local_context, SelectQueryOptions());
+        inner_query, local_context, SelectQueryOptions());
+
+    process_list_entry = local_context->getProcessList().insert(serializeAST(*inner_query), inner_query.get(), local_context);
+    local_context->setProcessListElement(&process_list_entry->get());
 
     /// [Pipeline]: `Source` -> `Converting` -> `Materializing const` -> `target_table`
     background_pipeline = select_interpreter.buildQueryPipeline();
@@ -588,6 +601,16 @@ void StorageMaterializedView::doBuildBackgroundPipeline()
 
     local_context->setInsertionTable(target_table->getStorageID());
     local_context->setupQueryStatusPollId(target_table->as<StorageStream &>().nextBlockId()); /// Async insert requried
+
+    if (process_list_entry)
+    {
+        /// Query was killed before execution
+        if ((*process_list_entry)->isKilled())
+            throw Exception("Query '" + (*process_list_entry)->getInfo().client_info.current_query_id + "' is killed in pending state",
+                ErrorCodes::QUERY_WAS_CANCELLED);
+    }
+
+    background_pipeline.setProcessListElement(local_context->getProcessListElement());
 
     background_executor = background_pipeline.execute();
 }

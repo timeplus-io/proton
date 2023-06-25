@@ -14,6 +14,7 @@ namespace DB
 class CompletedPipelineExecutor;
 class InterpreterSelectWithUnionQuery;
 struct ExtraBlock;
+class ProcessListEntry;
 
 class StorageMaterializedView final : public shared_ptr_helper<StorageMaterializedView>, public IStorage, WithMutableContext
 {
@@ -109,6 +110,8 @@ private:
     QueryPipelineBuilder background_pipeline;
     ThreadFromGlobalPool build_pipeline_thread;
     ThreadFromGlobalPool background_thread;
+
+    std::shared_ptr<ProcessListEntry> process_list_entry;
 
 protected:
     StorageMaterializedView(
