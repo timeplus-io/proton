@@ -367,3 +367,11 @@ SYSTEM RESTORE REPLICA test ON CLUSTER cluster;
 ### RESTART REPLICAS {#query_language-system-restart-replicas}
 
 Provides possibility to reinitialize Zookeeper sessions state for all `ReplicatedMergeTree` tables, will compare current state with Zookeeper as source of true and add tasks to Zookeeper queue if needed
+
+### DROP FILESYSTEM CACHE
+
+Allows to drop filesystem cache.
+
+```sql
+SYSTEM DROP FILESYSTEM CACHE
+```

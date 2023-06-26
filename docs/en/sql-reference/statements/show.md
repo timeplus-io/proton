@@ -491,6 +491,20 @@ Result:
 └──────────────────┴────────┴─────────────┘
 ```
 
+## SHOW FILESYSTEM CACHES
+
+```sql
+SHOW FILESYSTEM CACHES
+```
+
+Result:
+
+``` text
+┌─Caches────┐
+│ s3_cache  │
+└───────────┘
+```
+
 **See Also**
 
 -   [system.settings](../../operations/system-tables/settings.md) table
