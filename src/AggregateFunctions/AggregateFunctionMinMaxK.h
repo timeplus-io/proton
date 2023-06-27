@@ -60,10 +60,10 @@ enum class TypeCategory : UInt8
 struct TupleOperators
 {
     using Comparer = std::function<int(const std::any &, const std::any &)>;
-    using Getter = std::function<std::pair<std::any, TypeCategory>(const IColumn **, size_t, Arena *)>;
+    using Getter = std::function<std::pair<std::any, /*is_string_ref*/bool>(const IColumn **, size_t)>;
     using Appender = std::function<void(const std::any &, ColumnTuple &)>;
     using Writer = std::function<void(const std::any &, WriteBuffer &)>;
-    using Reader = std::function<std::pair<std::any, size_t /*alloc_size*/>(ReadBuffer &, Arena *)>;
+    using Reader = std::function<std::any(ReadBuffer &, ArenaWithFreeLists *)>;
 
     std::vector<Comparer> comparers; /// Tuple element comparers
     std::vector<Getter> getters; /// Tuple element retrievers
@@ -75,7 +75,7 @@ struct TupleOperators
 struct TupleValue
 {
     std::vector<std::any> values;
-    std::vector<size_t> string_ref_indexs;
+    std::vector<size_t> string_ref_indexs; /// need to alloc memory
 
     TupleValue(std::vector<std::any> values_, std::vector<size_t> string_ref_indexs_)
         : values(std::move(values_)), string_ref_indexs(std::move(string_ref_indexs_))
@@ -115,6 +115,8 @@ struct SpaceSavingArena<TupleValue>
         }
     }
 
+    ArenaWithFreeLists * getArenaWithFreeLists() { return &arena; }
+
 private:
     ArenaWithFreeLists arena;
 };
@@ -145,7 +147,7 @@ struct AggregateFunctionMinMaxKTupleData
     }
     AggregateFunctionMinMaxKTupleData() { }
 
-    void read(ReadBuffer & rb, Arena * arena_)
+    void read(ReadBuffer & rb)
     {
         size_t size = 0;
         readVarUInt(size, rb);
@@ -163,18 +165,15 @@ struct AggregateFunctionMinMaxKTupleData
         {
             std::vector<std::any> tuple_values;
             tuple_values.reserve(operators.readers.size());
-            size_t arena_allocated_size = 0;
             for (size_t idx = 0; idx < operators.readers.size(); ++idx)
             {
-                auto [val, alloc_size] = operators.readers[idx](rb, arena_);
-                tuple_values.push_back(val);
-                arena_allocated_size += alloc_size;
+                auto val = operators.readers[idx](rb, arena.getArenaWithFreeLists());
+                tuple_values.push_back(std::move(val));
             }
 
             std::vector<size_t> string_ref_indexs;
             readVectorBinary(string_ref_indexs, rb);
             this->values.push_back(TupleValue(std::move(tuple_values), std::move(string_ref_indexs)));
-            arena_->rollback(arena_allocated_size);
         }
 
         readBoolText(this->is_sorted, rb);
@@ -270,20 +269,18 @@ public:
             return std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(this->argument_types));
     }
 
-    bool allocatesMemoryInArena() const override { return true; }
+    bool allocatesMemoryInArena() const override { return false; }
 
-    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         auto & top_k = this->data(place);
         std::vector<std::any> tuple_value;
         std::vector<size_t> string_ref_indexs;
         for (const auto & getter : top_k.operators.getters)
         {
-            auto [val, type_category] = getter(columns, row_num, arena);
-            if (type_category == TypeCategory::STRING_REF)
-            {
+            auto [val, is_string_ref] = getter(columns, row_num);
+            if (is_string_ref)
                 string_ref_indexs.push_back(tuple_value.size());
-            }
 
             tuple_value.push_back(std::move(val));
         }
@@ -304,10 +301,10 @@ public:
         this->data(place).write(buf);
     }
 
-    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /*version*/, Arena * arena) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /*version*/, Arena *) const override
     {
         auto & top_k = this->data(place);
-        top_k.read(buf, arena);
+        top_k.read(buf);
     }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override;

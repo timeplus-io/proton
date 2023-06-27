@@ -40,6 +40,10 @@
 
 #include <double-conversion/double-conversion.h>
 
+/// proton: starts.
+#include <Common/ArenaWithFreeLists.h>
+/// proton: ends.
+
 static constexpr auto DEFAULT_MAX_STRING_SIZE = 1_GiB;
 
 namespace DB
@@ -148,6 +152,18 @@ inline StringRef readStringBinaryInto(Arena & arena, ReadBuffer & buf)
     return StringRef(data, size);
 }
 
+/// proton: starts.
+inline StringRef readStringBinaryInto(ArenaWithFreeLists & arena, ReadBuffer & buf)
+{
+    size_t size = 0;
+    readVarUInt(size, buf);
+
+    char * data = arena.alloc(size);
+    buf.readStrict(data, size);
+
+    return StringRef(data, size);
+}
+/// proton: ends.
 
 template <typename T>
 void readVectorBinary(std::vector<T> & v, ReadBuffer & buf, size_t MAX_VECTOR_SIZE = DEFAULT_MAX_STRING_SIZE)

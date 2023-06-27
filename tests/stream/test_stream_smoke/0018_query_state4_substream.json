@@ -1,5 +1,5 @@
 {
-    "test_suite_name": "query_state3_substream",
+    "test_suite_name": "query_state_substream",
     "tag": "smoke",
     "test_suite_config":{
         "setup": {
@@ -58,9 +58,8 @@
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 68, '2020-02-02 20:00:03')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 70, '2020-02-02 20:00:04')"},
-                        {"client":"python", "query_type": "stream","query_id":"19101-1", "terminate": "manual","wait":3, "query":"recover from '19101'"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 68, '2020-02-02 20:00:03') ('dev2', 'ca', 70, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "stream","query_id":"19101-1", "terminate": "manual","wait":2, "query":"recover from '19101'"},
                         {"client":"python", "query_type": "table", "depends_on":"19101", "wait":1, "query":"kill query where query_id='19101' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19101'"}
                     ]
@@ -100,17 +99,15 @@
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 68, '2020-02-02 20:00:03')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 70, '2020-02-02 20:00:04')"},
-                        {"client":"python", "query_type": "stream","query_id":"19102-1", "terminate": "manual","wait":3, "query":"recover from '19102'"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 68, '2020-02-02 20:00:03') ('dev2', 'ca', 70, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "stream","query_id":"19102-1", "terminate": "manual","wait":2, "query":"recover from '19102'"},
                         {"client":"python", "query_type": "table", "depends_on":"19102", "wait":1, "query":"kill query where query_id='19102' sync"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:03')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev3', 'ca', 77, '2020-02-02 20:00:04')"},
-                        {"client":"python", "query_type": "stream","query_id":"19102-2", "terminate": "manual","wait":3, "query":"recover from '19102'"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:03') ('dev3', 'ca', 77, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "stream","query_id":"19102-2", "terminate": "manual","wait":2, "query":"recover from '19102'"},
                         {"client":"python", "query_type": "table", "depends_on":"19102", "wait":1, "query":"kill query where query_id='19102' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19102'"}
                     ]
@@ -151,12 +148,8 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists state_substream"},
                         {"client":"python", "query_type": "table", "exist":"state_substream", "exist_wait":2, "wait":1, "query":"create stream state_substream (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
                         {"client":"python", "query_type": "stream", "query_id":"19103", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*) over (partition by id), min(value) over (partition by id), max(value) over (partition by id), window_start, window_end from tumble(state_substream, timestamp, 5s) group by window_start, window_end settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"19103", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 66, '2020-02-02 20:00:04')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 69, '2020-02-02 20:00:06')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 67, '2020-02-02 20:00:07')"},           
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:11')"},
+                        {"client":"python", "query_type": "table", "depends_on":"19103", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00') ('dev2', 'ca', 58.3, '2020-02-02 20:00:02') ('dev1', 'ca', 66, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 69, '2020-02-02 20:00:06') ('dev1', 'ca', 67, '2020-02-02 20:00:07') ('dev1', 'ca', 55, '2020-02-02 20:00:11')"},  
                         {"client":"python", "query_type": "table", "kill":"19103", "kill_wait":3, "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 77, '2020-02-02 20:00:12')"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19103'"}
                     ]
@@ -186,16 +179,13 @@
                         {"client":"python", "query_type": "table", "exist":"state_substream", "exist_wait":2, "wait":1, "query":"create stream state_substream (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
                         {"client":"python", "query_type": "stream", "query_id":"19104", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*) over (partition by id), min(value) over (partition by id), max(value) over (partition by id), window_start, window_end from tumble(state_substream, timestamp, 5s) group by window_start, window_end settings checkpoint_interval=1"},
                         {"client":"python", "query_type": "table", "depends_on":"19104", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 66, '2020-02-02 20:00:04')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 69, '2020-02-02 20:00:06')"},  
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02') ('dev1', 'ca', 66, '2020-02-02 20:00:04') ('dev2', 'ca', 69, '2020-02-02 20:00:06')"},
                         {"client":"python", "query_type": "table", "kill":"19104", "kill_wait":3, "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 67, '2020-02-02 20:00:07')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:11')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 77, '2020-02-02 20:00:12')"},  
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:11') ('dev2', 'ca', 77, '2020-02-02 20:00:12')"},
                         {"client":"python", "query_type": "stream","query_id":"19104-1", "terminate": "manual","wait":2, "query":"recover from '19104'"},
                         {"client":"python", "query_type": "table", "depends_on":"19104", "wait":1, "query":"kill query where query_id='19104' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19104'"}
@@ -231,25 +221,20 @@
                         {"client":"python", "query_type": "table", "exist":"state_substream", "exist_wait":2, "wait":1, "query":"create stream state_substream (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
                         {"client":"python", "query_type": "stream", "query_id":"19105", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*) over (partition by id), min(value) over (partition by id), max(value) over (partition by id), window_start, window_end from tumble(state_substream, timestamp, 5s) group by window_start, window_end settings checkpoint_interval=1"},
                         {"client":"python", "query_type": "table", "depends_on":"19105", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 66, '2020-02-02 20:00:04')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 69, '2020-02-02 20:00:06')"},  
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02') ('dev1', 'ca', 66, '2020-02-02 20:00:04') ('dev2', 'ca', 69, '2020-02-02 20:00:06')"},
                         {"client":"python", "query_type": "table", "kill":"19105", "kill_wait":3, "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 67, '2020-02-02 20:00:07')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:11')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 77, '2020-02-02 20:00:12')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 66, '2020-02-02 20:00:13')"},  
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:11') ('dev2', 'ca', 77, '2020-02-02 20:00:12') ('dev2', 'ca', 66, '2020-02-02 20:00:13')"},
                         {"client":"python", "query_type": "stream","query_id":"19105-1", "terminate": "manual","wait":2, "query":"recover from '19105'"},
                         {"client":"python", "query_type": "table", "depends_on":"19105", "wait":1, "query":"kill query where query_id='19105' sync"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 68, '2020-02-02 20:00:15')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 78, '2020-02-02 20:00:16')"}, 
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 68, '2020-02-02 20:00:15') ('dev2', 'ca', 78, '2020-02-02 20:00:16')"},
                         {"client":"python", "query_type": "stream","query_id":"19105-2", "terminate": "manual","wait":2, "query":"recover from '19105'"},
                         {"client":"python", "query_type": "table", "depends_on":"19105", "wait":1, "query":"kill query where query_id='19105' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19105'"}
@@ -292,13 +277,9 @@
                         {"client":"python", "query_type": "table", "exist":"state_substream", "exist_wait":2, "wait":1, "query":"create stream state_substream (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
                         {"client":"python", "query_type": "stream", "query_id":"19106", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*), min(value), max(value), window_start, window_end from tumble(state_substream, timestamp, 5s) partition by id group by window_start, window_end emit stream after watermark and delay 2s settings checkpoint_interval=1"},
                         {"client":"python", "query_type": "table", "depends_on":"19106", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 67, '2020-02-02 20:00:03')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 69, '2020-02-02 20:00:03')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 77, '2020-02-02 20:00:06')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 69, '2020-02-02 20:00:07')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:04')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 66, '2020-02-02 20:00:04')"},  
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02') ('dev1', 'ca', 67, '2020-02-02 20:00:03') ('dev2', 'ca', 69, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 77, '2020-02-02 20:00:06') ('dev2', 'ca', 69, '2020-02-02 20:00:07')"},  
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:04') ('dev2', 'ca', 66, '2020-02-02 20:00:04')"},  
                         {"client":"python", "query_type": "table", "kill":"19106", "kill_wait":3, "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 67, '2020-02-02 20:00:07')"},           
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19106'"}
                     ]
@@ -325,21 +306,14 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists state_substream"},
                         {"client":"python", "query_type": "table", "exist":"state_substream", "exist_wait":2, "wait":1, "query":"create stream state_substream (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
                         {"client":"python", "query_type": "stream", "query_id":"19107", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*), min(value), max(value), window_start, window_end from tumble(state_substream, timestamp, 5s) partition by id group by window_start, window_end emit stream after watermark and delay 2s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"19107", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 67, '2020-02-02 20:00:03')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 69, '2020-02-02 20:00:03')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 77, '2020-02-02 20:00:06')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 69, '2020-02-02 20:00:07')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:04')"},  
+                        {"client":"python", "query_type": "table", "depends_on":"19107", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00') ('dev2', 'ca', 58.3, '2020-02-02 20:00:02') ('dev1', 'ca', 67, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 69, '2020-02-02 20:00:03') ('dev1', 'ca', 77, '2020-02-02 20:00:06') ('dev2', 'ca', 69, '2020-02-02 20:00:07') ('dev1', 'ca', 55, '2020-02-02 20:00:04')"},  
                         {"client":"python", "query_type": "table", "kill":"19107", "kill_wait":3,  "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 66, '2020-02-02 20:00:04')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:9')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 68, '2020-02-02 20:00:7')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 78, '2020-02-02 20:00:13')"}, 
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:9') ('dev1', 'ca', 68, '2020-02-02 20:00:7') ('dev2', 'ca', 78, '2020-02-02 20:00:13')"},
                         {"client":"python", "query_type": "stream","query_id":"19107-1", "terminate": "manual","wait":2, "query":"recover from '19107'"},
                         {"client":"python", "query_type": "table", "depends_on":"19107", "wait":1, "query":"kill query where query_id='19107' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19107'"}
@@ -372,54 +346,49 @@
                     "statements": [
                         {"client":"python", "query_type": "table", "query":"drop stream if exists state_substream"},
                         {"client":"python", "query_type": "table", "exist":"state_substream", "exist_wait":2, "wait":1, "query":"create stream state_substream (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
-                        {"client":"python", "query_type": "stream", "query_id":"19108", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*), min(value), max(value), window_start, window_end from tumble(state_substream, timestamp, 5s) partition by id group by window_start, window_end emit stream after watermark and delay 2s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"19108", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 67, '2020-02-02 20:00:03')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 69, '2020-02-02 20:00:03')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 77, '2020-02-02 20:00:06')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 69, '2020-02-02 20:00:07')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:04')"},  
-                        {"client":"python", "query_type": "table", "kill":"19108", "kill_wait":3,  "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 66, '2020-02-02 20:00:04')"}
+                        {"client":"python", "query_type": "stream", "query_id":"19114", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*), min(value), max(value), window_start, window_end from hop(state_substream, timestamp, 3s, 5s) partition by id group by window_start, window_end emit stream after watermark and delay 2s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19114", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:00') ('dev1', 'ca', 57, '2020-02-02 20:00:01') ('dev1', 'ca', 77, '2020-02-02 20:00:05')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 79, '2020-02-02 20:00:03') ('dev1', 'ca', 55, '2020-02-02 20:00:02') ('dev1', 'ca', 69, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "table", "kill":"19114", "kill_wait":3, "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 55, '2020-02-02 20:00:05')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:9')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 68, '2020-02-02 20:00:7')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 78, '2020-02-02 20:00:13')"}, 
-                        {"client":"python", "query_type": "stream","query_id":"19108-1", "terminate": "manual","wait":2, "query":"recover from '19108'"},
-                        {"client":"python", "query_type": "table", "depends_on":"19108", "wait":1, "query":"kill query where query_id='19108' sync"}
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:08') ('dev2', 'ca', 67, '2020-02-02 20:00:07')"},  
+                        {"client":"python", "query_type": "stream","query_id":"19114-1", "terminate": "manual","wait":2, "query":"recover from '19114'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19114", "wait":1, "query": "kill query where query_id='19114' sync"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 77, '2020-02-02 20:00:13')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 68, '2020-02-02 20:00:8')"},
-                        {"client":"python", "query_type": "stream","query_id":"19108-2", "terminate": "manual","wait":2, "query":"recover from '19108'"},
-                        {"client":"python", "query_type": "table", "depends_on":"19108", "wait":1, "query":"kill query where query_id='19108' sync"},
-                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19108'"}
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 67, '2020-02-02 20:00:11') ('dev2', 'ca', 33, '2020-02-02 20:00:12')"},  
+                        {"client":"python", "query_type": "stream","query_id":"19114-2", "terminate": "manual","wait":2, "query":"recover from '19114'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19114", "wait":1, "query": "kill query where query_id='19114' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19114'"}
                     ]
                 }
             ],
             "expected_results": [
                 {
-                    "query_id":"19108",
+                    "query_id":"19114",
                     "expected_results":[
-                        ["dev2", 2, "58.3", "69", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                        ["dev1", 2, "57", "57.3","2020-02-02 19:59:57", "2020-02-02 20:00:02"],
+                        ["dev2", 1, "58.3", "58.3", "2020-02-02 19:59:57", "2020-02-02 20:00:02"]
                     ]
                 },
                 {
-                    "query_id":"19108-1",
+                    "query_id":"19114-1",
                     "expected_results":[
-                        ["dev1", 3, "55", "67", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
-                        ["dev2", 2, "67", "69", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
+                        ["dev1", 4, "55", "69","2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        ["dev2", 2, "58.3",  "79", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
                     ]
                 },
                 {
-                    "query_id":"19108-2",
+                    "query_id":"19114-2",
                     "expected_results":[
-                        ["dev1", 2, "68", "77", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
+                        ["dev1", 2, "69", "77","2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                        ["dev2", 3, "55", "79", "2020-02-02 20:00:03", "2020-02-02 20:00:08"]
                     ]
                 }
             ]
@@ -436,9 +405,7 @@
                         {"client":"python", "query_type": "table", "exist":"state_substream", "exist_wait":2, "wait":1, "query":"create stream state_substream (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
                         {"client":"python", "query_type": "stream", "query_id":"19109", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*), min(value), max(value), window_start, window_end from hop(state_substream, timestamp, 3s, 5s) partition by id group by window_start, window_end settings checkpoint_interval=1"},
                         {"client":"python", "query_type": "table", "depends_on":"19109", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 68, '2020-02-02 20:00:01')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 55, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:00') ('dev1', 'ca', 68, '2020-02-02 20:00:01') ('dev2', 'ca', 55, '2020-02-02 20:00:03')"},
                         {"client":"python", "query_type": "table", "kill":"19109", "kill_wait":3, "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 69, '2020-02-02 20:00:04')"},  
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19109'"}
                     ]
@@ -466,16 +433,13 @@
                         {"client":"python", "query_type": "table", "exist":"state_substream", "exist_wait":2, "wait":1, "query":"create stream state_substream (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
                         {"client":"python", "query_type": "stream", "query_id":"19110", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*), min(value), max(value), window_start, window_end from hop(state_substream, timestamp, 3s, 5s) partition by id group by window_start, window_end settings checkpoint_interval=1"},
                         {"client":"python", "query_type": "table", "depends_on":"19110", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 68, '2020-02-02 20:00:01')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 55, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:00') ('dev1', 'ca', 68, '2020-02-02 20:00:01') ('dev2', 'ca', 55, '2020-02-02 20:00:03')"},
                         {"client":"python", "query_type": "table", "kill":"19110", "kill_wait":3, "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 69, '2020-02-02 20:00:04')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:06')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:07')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:06') ('dev2', 'ca', 67, '2020-02-02 20:00:07')"},  
                         {"client":"python", "query_type": "stream","query_id":"19110-1", "terminate": "manual","wait":2, "query":"recover from '19110'"},
                         {"client":"python", "query_type": "table", "depends_on":"19110", "wait":1, "query": "kill query where query_id='19110' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19110'"}
@@ -511,24 +475,20 @@
                         {"client":"python", "query_type": "table", "exist":"state_substream", "exist_wait":2, "wait":1, "query":"create stream state_substream (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
                         {"client":"python", "query_type": "stream", "query_id":"19111", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*), min(value), max(value), window_start, window_end from hop(state_substream, timestamp, 3s, 5s) partition by id group by window_start, window_end settings checkpoint_interval=1"},
                         {"client":"python", "query_type": "table", "depends_on":"19111", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 68, '2020-02-02 20:00:01')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 55, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:00') ('dev1', 'ca', 68, '2020-02-02 20:00:01') ('dev2', 'ca', 55, '2020-02-02 20:00:03')"},
                         {"client":"python", "query_type": "table", "kill":"19111", "kill_wait":3, "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 69, '2020-02-02 20:00:04')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:06')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:07')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:06') ('dev2', 'ca', 67, '2020-02-02 20:00:07')"},  
                         {"client":"python", "query_type": "stream","query_id":"19111-1", "terminate": "manual","wait":2, "query":"recover from '19111'"},
                         {"client":"python", "query_type": "table", "depends_on":"19111", "wait":1, "query": "kill query where query_id='19111' sync"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 67, '2020-02-02 20:00:9')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 33, '2020-02-02 20:00:10')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 67, '2020-02-02 20:00:9') ('dev2', 'ca', 33, '2020-02-02 20:00:10')"},  
                         {"client":"python", "query_type": "stream","query_id":"19111-2", "terminate": "manual","wait":2, "query":"recover from '19111'"},
                         {"client":"python", "query_type": "table", "depends_on":"19111", "wait":1, "query": "kill query where query_id='19111' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19111'"}
@@ -571,12 +531,8 @@
                         {"client":"python", "query_type": "table", "exist":"state_substream", "exist_wait":2, "wait":1, "query":"create stream state_substream (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
                         {"client":"python", "query_type": "stream", "query_id":"19112", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*), min(value), max(value), window_start, window_end from hop(state_substream, timestamp, 3s, 5s) partition by id group by window_start, window_end emit stream after watermark and delay 2s settings checkpoint_interval=1"},
                         {"client":"python", "query_type": "table", "depends_on":"19112", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:01')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 77, '2020-02-02 20:00:05')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 77, '2020-02-02 20:00:03')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:02')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 66, '2020-02-02 20:00:04')"},  
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:00') ('dev1', 'ca', 55, '2020-02-02 20:00:01') ('dev1', 'ca', 77, '2020-02-02 20:00:05')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 77, '2020-02-02 20:00:03') ('dev1', 'ca', 55, '2020-02-02 20:00:02') ('dev1', 'ca', 66, '2020-02-02 20:00:04')"},
                         {"client":"python", "query_type": "table", "kill":"19112", "kill_wait":3, "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 55, '2020-02-02 20:00:05')"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19112'"}
                     ]
@@ -603,20 +559,14 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists state_substream"},
                         {"client":"python", "query_type": "table", "exist":"state_substream", "exist_wait":2, "wait":1, "query":"create stream state_substream (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
                         {"client":"python", "query_type": "stream", "query_id":"19113", "wait":1, "terminate":"manuel", "query":"subscribe to select id, count(*), min(value), max(value), window_start, window_end from hop(state_substream, timestamp, 3s, 5s) partition by id group by window_start, window_end emit stream after watermark and delay 2s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"19113", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57, '2020-02-02 20:00:01')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 77, '2020-02-02 20:00:05')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 79, '2020-02-02 20:00:03')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:02')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 69, '2020-02-02 20:00:04')"},  
+                        {"client":"python", "query_type": "table", "depends_on":"19113", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00') ('dev2', 'ca', 58.3, '2020-02-02 20:00:00') ('dev1', 'ca', 57, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 77, '2020-02-02 20:00:05') ('dev2', 'ca', 79, '2020-02-02 20:00:03') ('dev1', 'ca', 55, '2020-02-02 20:00:02') ('dev1', 'ca', 69, '2020-02-02 20:00:04')"},  
                         {"client":"python", "query_type": "table", "kill":"19113", "kill_wait":3, "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 55, '2020-02-02 20:00:05')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:08')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev2', 'ca', 67, '2020-02-02 20:00:07')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_substream(id, location, value, timestamp) values ('dev1', 'ca', 55, '2020-02-02 20:00:08') ('dev2', 'ca', 67, '2020-02-02 20:00:07')"},  
                         {"client":"python", "query_type": "stream","query_id":"19113-1", "terminate": "manual","wait":2, "query":"recover from '19113'"},
                         {"client":"python", "query_type": "table", "depends_on":"19113", "wait":1, "query": "kill query where query_id='19113' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19113'"}
