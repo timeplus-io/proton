@@ -418,7 +418,7 @@ protected:
                     }
                 }
                 else
-                    src_index += 3;
+                    src_index += 4;
 
                 StorageMetadataPtr metadata_snapshot;
                 if (table)
