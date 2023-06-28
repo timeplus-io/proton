@@ -1,0 +1,856 @@
+{
+    "test_suite_name": "query_state1",
+    "tag": "smoke",
+    "test_suite_config":{
+        "setup": {
+        "statements": [
+            ]
+        },
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
+    },
+    "comments": "Tests covering query state checkpointing smoke test cases",
+    "tests": [
+        {
+            "id": 20,
+            "tags": ["query_state"],
+            "name": "global_aggr_with_fun_unique_exact_if",
+            "description": "global aggregation with function unique_exact_if state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1920", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select unique_exact_if(id, value > 57.0) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1920",  "kill":"1920", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 57.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1920'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1920",
+                    "expected_results":[
+                        ["2"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 21,
+            "tags": ["query_state"],
+            "name": "recover_global_aggr_with_fun_unique_exact_if",
+            "description": "recover global aggregation with function unique_exact_if from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1921", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select unique_exact_if(id, value > 57.0) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1921", "kill":"1921", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}                ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 66, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "stream","query_id":"1921-1", "terminate": "manual","wait":2, "query":"recover from '1921'"},
+                        {"client":"python", "query_type": "table", "depends_on":"1921", "wait":1, "query": "kill query where query_id='1921' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1921'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1921",
+                    "expected_results":[
+                        ["2"]
+                    ]
+                },
+                {
+                    "query_id":"1921-1",
+                    "expected_results":[
+                        ["3"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 22,
+            "tags": ["query_state"],
+            "name": "global_aggr_with_fun_median",
+            "description": "global aggregation with function median state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1922", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select median(value) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1922", "kill":"1922", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1922'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1922",
+                    "expected_results":[
+                        ["58.3"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 23,
+            "tags": ["query_state"],
+            "name": "recover_global_aggr_with_fun_median",
+            "description": "recover global aggregation with function median from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1923", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select median(value) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1923", "kill":"1923", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 66, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "stream","query_id":"1923-1", "terminate": "manual","wait":2, "query":"recover from '1923'"},
+                        {"client":"python", "query_type": "table","depends_on":"1923", "wait":1, "query": "kill query where query_id='1923' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1923'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1923",
+                    "expected_results":[
+                        ["58.3"]
+                    ]
+                },
+                {
+                    "query_id":"1923-1",
+                    "expected_results":[
+                        ["62.1"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 24,
+            "tags": ["query_state"],
+            "name": "global_aggr_with_fun_quantile",
+            "description": "global aggregation with function quantile state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1924", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select quantile(value, 0.5) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1924", "kill":"1924", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1924'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1924",
+                    "expected_results":[
+                        ["58.3"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 25,
+            "tags": ["query_state"],
+            "name": "recover_global_aggr_with_fun_quantile",
+            "description": "recover global aggregation with function quantile from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1925", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select quantile(value, 0.5) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1925", "kill":"1925", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 66, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "stream","query_id":"1925-1", "terminate": "manual","wait":3, "query":"recover from '1925'"},
+                        {"client":"python", "query_type": "table", "depends_on":"1925", "wait":1, "query": "kill query where query_id='1925' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1925'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1925",
+                    "expected_results":[
+                        ["58.3"]
+                    ]
+                },
+                {
+                    "query_id":"1925-1",
+                    "expected_results":[
+                        ["62.1"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 26,
+            "tags": ["query_state"],
+            "name": "global_aggr_with_fun_P90",
+            "description": "global aggregation with function P90 state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1926", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select quantile(value, 0.9) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1926", "kill":"1926", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1926'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1926",
+                    "expected_results":[
+                        ["64.5"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 27,
+            "tags": ["query_state"],
+            "name": "recover_global_aggr_with_fun_P90",
+            "description": "recover global aggregation with function P90 from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1927", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select quantile(value,  0.9) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1927", "kill":"1927", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 66, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "stream","query_id":"1927-1", "terminate": "manual","wait":3, "query":"recover from '1927'"},
+                        {"client":"python", "query_type": "table", "depends_on":"1927", "wait":1, "query": "kill query where query_id='1927' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1927'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1927",
+                    "expected_results":[
+                        ["64.5"]
+                    ]
+                },
+                {
+                    "query_id":"1927-1",
+                    "expected_results":[
+                        ["73"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 28,
+            "tags": ["query_state"],
+            "name": "global_aggr_with_fun_P95",
+            "description": "global aggregation with function P95 state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1928", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select quantile(value, 0.95) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1928", "kill":"1928", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1928'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1928",
+                    "expected_results":[
+                        ["65.2"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 29,
+            "tags": ["query_state"],
+            "name": "recover_global_aggr_with_fun_P95",
+            "description": "recover global aggregation with function P95 from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1929", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select quantile(value,  0.95) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1929", "kill":"1929", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 66, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "stream","query_id":"1929-1", "terminate": "manual","wait":3, "query":"recover from '1929'"},
+                        {"client":"python", "query_type": "table", "depends_on":"1929", "wait":1, "query": "kill query where query_id='1929' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1929'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1929",
+                    "expected_results":[
+                        ["65.2"]
+                    ]
+                },
+                {
+                    "query_id":"1929-1",
+                    "expected_results":[
+                        ["76.5"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 30,
+            "tags": ["query_state"],
+            "name": "global_aggr_with_fun_top_k",
+            "description": "global aggregation with function top_k state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1930", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select top_k(id, 2) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1930", "kill":"1930", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1930'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1930",
+                    "expected_results":[
+                        ["[('dev1', 2), ('dev2', 1)]"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 31,
+            "tags": ["query_state"],
+            "name": "recover_global_aggr_with_top_k",
+            "description": "recover global aggregation with function top_k from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1931", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select top_k(id, 2) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1931", "kill":"1931", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev4', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 66, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "stream","query_id":"1931-1", "terminate": "manual","wait":3, "query":"recover from '1931'"},
+                        {"client":"python", "query_type": "table", "depends_on":"1931", "wait":1, "query": "kill query where query_id='1931' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1931'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1931",
+                    "expected_results":[
+                        ["[('dev1', 2), ('dev2', 1)]"]
+                    ]
+                },
+                {
+                    "query_id":"1931-1",
+                    "expected_results":[
+                        ["[('dev1', 2), ('dev8', 2)]"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 32,
+            "tags": ["query_state"],
+            "name": "global_aggr_with_fun_min_k",
+            "description": "global aggregation with function min_k state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value int, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1932", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select min_k(value, 2, id) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1932", "kill":"1932", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1932'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1932",
+                    "expected_results":[
+                        ["[(57, 'dev1'), (58, 'dev2')]"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 33,
+            "tags": ["query_state"],
+            "name": "recover_global_aggr_with_min_k",
+            "description": "recover global aggregation with function min_k from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value int, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1933", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select min_k(value, 2, id) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1933", "kill":"1933", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58, '2020-02-02 20:00:03')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev4', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 66, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "stream","query_id":"1933-1", "terminate": "manual","wait":3, "query":"recover from '1933'"},
+                        {"client":"python", "query_type": "table", "depends_on":"1933", "wait":1, "query": "kill query where query_id='1933' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1933'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1933",
+                    "expected_results":[
+                        ["[(57, 'dev1'), (58, 'dev2')]"]
+                    ]
+                },
+                {
+                    "query_id":"1933-1",
+                    "expected_results":[
+                        ["[(55, 'dev8'), (57, 'dev1')]"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 34,
+            "tags": ["query_state"],
+            "name": "global_aggr_with_fun_max_k",
+            "description": "global aggregation with function max_k state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value int, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1934", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select max_k(value, 2, id) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1934", "kill":"1934", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1934'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1934",
+                    "expected_results":[
+                        ["[(66, 'dev1'), (58, 'dev2')]"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 35,
+            "tags": ["query_state"],
+            "name": "recover_global_aggr_with_max_k",
+            "description": "recover global aggregation with function max_k from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value int, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1935", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select max_k(value, 2, id) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1935", "kill":"1935", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58, '2020-02-02 20:00:03')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev4', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 66, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "stream","query_id":"1935-1", "terminate": "manual","wait":3, "query":"recover from '1935'"},
+                        {"client":"python", "query_type": "table", "depends_on":"1935", "wait":1, "query": "kill query where query_id='1935' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1935'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1935",
+                    "expected_results":[
+                        ["[(66, 'dev1'), (58, 'dev2')]"]
+                    ]
+                },
+                {
+                    "query_id":"1935-1",
+                    "expected_results":[
+                        ["[(80, 'dev4'), (66, 'dev1')]"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 36,
+            "tags": ["query_state"],
+            "name": "global_aggr_with_fun_group_array",
+            "description": "global aggregation with function group_array state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1936", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select group_array(id) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1936",  "kill":"1936", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1936'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1936",
+                    "expected_results":[
+                        ["['dev1', 'dev2']"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 37,
+            "tags": ["query_state"],
+            "name": "recover_global_aggr_with_group_array",
+            "description": "recover global aggregation with function group_array from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1937", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select group_array(id) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1937", "kill":"1937", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev4', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07')"},  
+                        {"client":"python", "query_type": "stream","query_id":"1937-1","terminate": "manual","wait":3, "query":"recover from '1937'"},
+                        {"client":"python", "query_type": "table", "depends_on":"1937", "wait":1, "query": "kill query where query_id='1937' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1937'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1937",
+                    "expected_results":[
+                        ["['dev1', 'dev2']"]
+                    ]
+                },
+                {
+                    "query_id":"1937-1",
+                    "expected_results":[
+                        ["['dev1', 'dev2', 'dev4', 'dev8']"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 38,
+            "tags": ["query_state"],
+            "name": "global_aggr_with_fun_moving_sum",
+            "description": "global aggregation with function moving_sum state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value int, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1938", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select moving_sum(value) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1938", "kill":"1938", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1938'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1938",
+                    "expected_results":[
+                        ["[57, 123, 181]"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 39,
+            "tags": ["query_state"],
+            "name": "global_aggr_with_fun_moving_sum",
+            "description": "global aggregation with function moving_sum state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value int, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1939", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select moving_sum(value) from state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1939", "kill":"1939", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 57, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58, '2020-02-02 20:00:03')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev4', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07')"},  
+                        {"client":"python", "query_type": "stream","query_id":"1939-1","terminate": "manual","wait":3, "query":"recover from '1939'"},
+                        {"client":"python", "query_type": "table", "depends_on":"1939", "wait":1, "query": "kill query where query_id='1939' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1939'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1939",
+                    "expected_results":[
+                        ["[57, 123, 181]"]
+                    ]
+                },
+                {
+                    "query_id":"1939-1",
+                    "expected_results":[
+                        ["[57, 123, 181, 261, 316]"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 40,
+            "tags": ["query_state"],
+            "name": "func_lag",
+            "description": "function lag state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value int, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1940", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select value, lag(value) as prev_1, lag(value, 3, 0) as prev_3_0 from state_stream1 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1940", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 1, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 2, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "kill":"1940", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev2', 'ca', 3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1940'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1940",
+                    "expected_results":[
+                        [1, 0, 0],
+                        [2, 1, 0],
+                        [3, 2, 0]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 41,
+            "tags": ["query_state"],
+            "name": "recover_func_lag",
+            "description": "recover function lag from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value int, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1941", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select value, lag(value) as prev_1, lag(value, 3, 0) as prev_3_0 from state_stream1 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1941", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 1, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 2, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "kill":"1941", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev2', 'ca', 3, '2020-02-02 20:00:03')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev2', 'ca', 4, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev3', 'ca', 5, '2020-02-02 20:00:05')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev4', 'ca', 6, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "stream","query_id":"1941-1", "terminate": "manual","wait":3, "query":"recover from '1941'"},
+                        {"client":"python", "query_type": "table", "depends_on":"1941", "wait":1, "query": "kill query where query_id='1941' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1941'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1941",
+                    "expected_results":[
+                        [1, 0, 0],
+                        [2, 1, 0],
+                        [3, 2, 0]
+                    ]
+                },
+                {
+                    "query_id":"1941-1",
+                    "expected_results":[
+                        [4, 3, 1],
+                        [5, 4, 2],
+                        [6, 5, 3]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 42,
+            "tags": ["query_state"],
+            "name": "func_neighbor",
+            "description": "function neighbor state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value int, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1942", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select value, neighbor(value, -1) as prev_1, neighbor(value, -3, 0) as prev_3_0  from state_stream1 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1942", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 1, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 2, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "kill":"1942", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev2', 'ca', 3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1942'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1942",
+                    "expected_results":[
+                        [1, 0, 0],
+                        [2, 1, 0],
+                        [3, 2, 0]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 43,
+            "tags": ["query_state"],
+            "name": "recover_func_neighbor",
+            "description": "recover function neighbor from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream state_stream1 (id string, location string, value int, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1943", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select value, neighbor(value, -1) as prev_1, neighbor(value, -3, 0) from state_stream1 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1943", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 1, '2020-02-02 20:00:00')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev1', 'ca', 2, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "kill":"1943", "kill_wait":3, "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev2', 'ca', 3, '2020-02-02 20:00:03')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev2', 'ca', 4, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev3', 'ca', 5, '2020-02-02 20:00:05')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(id, location, value, timestamp) values ('dev4', 'ca', 6, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "stream","query_id":"1943-1", "terminate": "manual","wait":3, "query":"recover from '1943'"},
+                        {"client":"python", "query_type": "table", "depends_on":"1943", "wait":1, "query": "kill query where query_id='1943' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1943'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1943",
+                    "expected_results":[
+                        [1, 0, 0],
+                        [2, 1, 0],
+                        [3, 2, 0]
+                    ]
+                },
+                {
+                    "query_id":"1943-1",
+                    "expected_results":[
+                        [4, 3, 1],
+                        [5, 4, 2],
+                        [6, 5, 3]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 44,
+            "tags": ["query_state"],
+            "name": "func_dedup",
+            "description": "function dedup state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists state_stream1(i int, s string)"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1944", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select i, s from dedup(state_stream1, s) settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1944", "wait":1, "query": "insert into state_stream1(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
+                        {"client":"python", "query_type": "table", "kill":"1944", "kill_wait":3, "wait":1, "query": "insert into state_stream1(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1944'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1944",
+                    "expected_results":[
+                        [1, "s1"], [2, "s2"], [3, "s3"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 45,
+            "tags": ["query_state"],
+            "name": "recover_func_dedup",
+            "description": "recover function dedup from a state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream1"},
+                        {"client":"python", "query_type": "table", "exist":"state_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists state_stream1(i int, s string)"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1945", "depends_on_stream":"state_stream1", "wait":1, "terminate":"manuel", "query":"subscribe to select i, s from dedup(state_stream1, s) settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1945", "kill":"1945", "kill_wait":3, "wait":1, "query": "insert into state_stream1(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream1(i, s) values (2, 's2'), (3, 's3'), (4, 's4')"},
+                        {"client":"python", "query_type": "stream","query_id":"1945-1", "terminate": "manual","wait":3, "query":"recover from '1945'"},
+                        {"client":"python", "query_type": "table", "depends_on":"1945", "wait":1, "query": "kill query where query_id='1945' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1945'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1945",
+                    "expected_results":[
+                        [1, "s1"], [2, "s2"], [3, "s3"]
+                    ]
+                },
+                {
+                    "query_id":"1945-1",
+                    "expected_results":[
+                        [4, "s4"]
+                    ]
+                }
+            ]
+        }
+    ]
+}
