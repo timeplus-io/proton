@@ -1172,42 +1172,33 @@ void DatabaseCatalog::cleanupStoreDirectoryTask()
         size_t affected_dirs = 0;
         for (auto it = disk->iterateDirectory("store"); it->isValid(); it->next())
         {
-            String prefix = it->name();
-            bool expected_prefix_dir = disk->isDirectory(it->path()) && prefix.size() == 3 && isHexDigit(prefix[0]) && isHexDigit(prefix[1])
-                && isHexDigit(prefix[2]);
+            /// proton: starts. parse UUID of stream. adjust due to proton changes the directory structure of table
+            /// old directory: store/<3-bit-prefix>/<UUID>
+            /// proton new directory: store/<UUID>/<shard>|<part_name>
+            String uuid_str = it->name();
+            UUID uuid;
+            bool parsed = tryParse(uuid, uuid_str);
 
-            if (!expected_prefix_dir)
+            bool expected_dir = disk->isDirectory(it->path()) && parsed && uuid != UUIDHelpers::Nil;
+
+
+            if (!expected_dir)
             {
                 LOG_WARNING(log, "Found invalid directory {} on disk {}, will try to remove it", it->path(), disk_name);
                 affected_dirs += maybeRemoveDirectory(disk_name, disk, it->path());
                 continue;
             }
 
-            for (auto jt = disk->iterateDirectory(it->path()); jt->isValid(); jt->next())
+            /// Order is important
+            if (!hasUUIDMapping(uuid))
             {
-                String uuid_str = jt->name();
-                UUID uuid;
-                bool parsed = tryParse(uuid, uuid_str);
-
-                bool expected_dir = disk->isDirectory(jt->path()) && parsed && uuid != UUIDHelpers::Nil && uuid_str.starts_with(prefix);
-
-                if (!expected_dir)
-                {
-                    LOG_WARNING(log, "Found invalid directory {} on disk {}, will try to remove it", jt->path(), disk_name);
-                    affected_dirs += maybeRemoveDirectory(disk_name, disk, jt->path());
-                    continue;
-                }
-
-                /// Order is important
-                if (!hasUUIDMapping(uuid))
-                {
-                    /// We load uuids even for detached and permanently detached tables,
-                    /// so it looks safe enough to remove directory if we don't have uuid mapping for it.
-                    /// No table or database using this directory should concurrently appear,
-                    /// because creation of new table would fail with "directory already exists".
-                    affected_dirs += maybeRemoveDirectory(disk_name, disk, jt->path());
-                }
+                /// We load uuids even for detached and permanently detached tables,
+                /// so it looks safe enough to remove directory if we don't have uuid mapping for it.
+                /// No table or database using this directory should concurrently appear,
+                /// because creation of new table would fail with "directory already exists".
+                affected_dirs += maybeRemoveDirectory(disk_name, disk, it->path());
             }
+            /// proton: ends
         }
 
         if (affected_dirs)

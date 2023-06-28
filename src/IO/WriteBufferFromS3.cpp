@@ -234,19 +234,19 @@ void WriteBufferFromS3::writePart()
         {
             fillUploadRequest(task->req, part_number);
 
-        schedule([this, task, task_finish_notify]()
-        {
-            try
+            schedule([this, task, task_finish_notify]()
             {
-                processUploadRequest(*task);
-            }
-            catch (...)
-            {
-                task->exception = std::current_exception();
-            }
+                try
+                {
+                    processUploadRequest(*task);
+                }
+                catch (...)
+                {
+                    task->exception = std::current_exception();
+                }
 
-            task_finish_notify();
-        },0);
+                task_finish_notify();
+            },0);
         }
         catch (...)
         {
