@@ -14,6 +14,11 @@ using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
 class ActionsDAG;
 
+/// proton: starts.
+class IExecutableFunction;
+using ExecutableFunctionPtr = std::shared_ptr<IExecutableFunction>;
+/// proton: ends.
+
 /** Executes a certain expression over the block.
   * The expression consists of column identifiers from the block, constants, common functions.
   * For example: hits * 2 + 3, url LIKE '%yandex%'
@@ -39,8 +44,9 @@ protected:
     void transform(Chunk & chunk) override;
 
 private:
+    ExpressionActionsPtr expression;
     /// proton: starts.
-    SERDE ExpressionActionsPtr expression;
+    SERDE std::vector<ExecutableFunctionPtr> stateful_functions;
     /// proton: ends.
 };
 

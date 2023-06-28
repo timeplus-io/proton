@@ -33,6 +33,11 @@ void connect(OutputPort & output, InputPort & input)
     output.input_port = &input;
     input.state = std::make_shared<Port::State>();
     output.state = input.state;
+
+    /// proton: starts. Propagate streaming flag, when any one connected input is streaming, this processor is streaming
+    if (output.getProcessor().isStreaming())
+        input.getProcessor().setStreaming(true);
+    /// proton: ends.
 }
 
 /// proton : starts

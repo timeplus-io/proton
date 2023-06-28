@@ -1386,7 +1386,9 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
 
     if (options.only_analyze)
     {
+        /// proton: starts. We need keep the streaming flag is same with actual source
         auto read_nothing = std::make_unique<ReadNothingStep>(source_header, isStreaming());
+        /// proton: ends.
         query_plan.addStep(std::move(read_nothing));
 
         if (expressions.filter_info)

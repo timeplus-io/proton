@@ -74,11 +74,6 @@ private:
     std::vector<Chunk>::iterator iter;
     MutableColumns current_batch;
 
-    /// watermark, only support periodical flush for now
-    /// FIXME, late event etc, every second
-    Int64 flush_interval_ms = 1000;
-    Int64 last_flush_ms = 0;
-
     UInt32 record_consume_batch_count = 1000;
     Int32 record_consume_timeout = 100;
 };

@@ -1,4 +1,3 @@
-#include <Storages/Streaming/StorageRandom.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
@@ -29,6 +28,7 @@
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageFactory.h>
+#include <Storages/Streaming/StorageRandom.h>
 #include <base/ClockUtils.h>
 #include <base/unaligned.h>
 #include <Common/ProtonCommon.h>
@@ -371,6 +371,8 @@ public:
         , rate_limitor(rate_limitor_)
         , header_chunk(Nested::flatten(block_full.cloneEmpty()).getColumns(), 0)
     {
+        is_streaming = true;
+
         rate_limitor_timer = MonotonicMilliseconds::now() + rate_limitor_interval;
         block_idx_in_window = 0;
         max_full_block_count = rate_limitor / block_size;
@@ -416,10 +418,10 @@ protected:
         else
             return doGenerate(block_size);
     }
-    
+
     Chunk doGenerate(UInt64 block_size)
     {
-        if (block_size == 0) 
+        if (block_size == 0)
             return header_chunk.clone();
 
         Columns columns;
@@ -471,7 +473,8 @@ private:
     UInt64 max_full_block_count;
     UInt64 partial_size;
     Chunk header_chunk;
-    static constexpr UInt64 rate_limitor_interval = 100; // Set the size of a window for random storages to generate data, measured in milliseconds.
+    static constexpr UInt64 rate_limitor_interval
+        = 100; // Set the size of a window for random storages to generate data, measured in milliseconds.
 
     static Block & prepareBlockToFill(Block & block)
     {

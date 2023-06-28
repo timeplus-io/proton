@@ -42,6 +42,8 @@ KafkaSource::KafkaSource(
     , virtual_time_columns_calc(header.columns(), nullptr)
     , virtual_col_types(header.columns(), nullptr)
 {
+    is_streaming = true;
+
     calculateColumnPositions();
     initConsumer(kafka);
     initFormatExecutor(kafka);
@@ -51,7 +53,6 @@ KafkaSource::KafkaSource(
 
     header_chunk = Chunk(header.getColumns(), 0);
     iter = result_chunks.begin();
-    last_flush_ms = MonotonicMilliseconds::now();
 }
 
 KafkaSource::~KafkaSource()
@@ -74,19 +75,10 @@ Chunk KafkaSource::generate()
 
         /// After processing blocks, check again to see if there are new results
         if (result_chunks.empty() || iter == result_chunks.end())
-        {
-            /// Act as a heart beat and flush
-            last_flush_ms = MonotonicMilliseconds::now();
+            /// Act as a heart beat
             return header_chunk.clone();
-        }
 
         /// result_blocks is not empty, fallthrough
-    }
-
-    if (MonotonicMilliseconds::now() - last_flush_ms >= flush_interval_ms)
-    {
-        last_flush_ms = MonotonicMilliseconds::now();
-        return header_chunk.clone();
     }
 
     return std::move(*iter++);

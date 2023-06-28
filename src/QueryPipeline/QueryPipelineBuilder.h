@@ -151,7 +151,7 @@ public:
         auto num_threads = pipe.maxParallelStreams();
 
         /// proton : starts, we will need take the max of pipe's max parallel streams and user provided max_threads
-        if (is_streaming)
+        if (isStreaming())
         {
             if (max_threads) //-V1051
                 num_threads = std::max(num_threads, max_threads);
@@ -191,6 +191,8 @@ public:
     void setExecuteMode(ExecuteMode exec_mode_) { exec_mode = exec_mode_; }
     ExecuteMode getExecuteMode() const { return exec_mode; }
 
+    bool isStreaming() const { return pipe.isStreaming(); }
+
     /// Join two streaming pipelines together using JoinPtr.
     /// If collector is used, it will collect only newly-added processors, but not processors from pipelines.
     static std::unique_ptr<QueryPipelineBuilder> joinPipelinesStreaming(
@@ -218,7 +220,6 @@ private:
 
     /// proton : starts
     ExecuteMode exec_mode = ExecuteMode::NORMAL;
-    bool is_streaming = false;
     /// proton : ends
 
     void checkInitialized();

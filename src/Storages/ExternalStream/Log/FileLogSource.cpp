@@ -39,6 +39,8 @@ FileLogSource::FileLogSource(
     , files(std::move(files_))
     , log(log_)
 {
+    is_streaming = true;
+
     iter = files.begin();
 
     last_flush_ms = MonotonicMilliseconds::now();

@@ -120,8 +120,7 @@ public:
     ExpressionActionsPtr clone() const;
 
     /// proton: starts.
-    void serialize(WriteBuffer & wb) const;
-    void deserialize(ReadBuffer & rb) const;
+    std::vector<ExecutableFunctionPtr> getStatulFunctions() const;
     /// proton: ends.
 
 private:

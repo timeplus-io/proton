@@ -52,10 +52,5 @@ protected:
     Int64 last_epoch = -1;
     /// FIXME, switch to llvm-15
     std::atomic<CheckpointContext *> ckpt_ctx;
-
-    /// watermark, only support periodical flush for now
-    /// FIXME, late event etc, every second
-    Int64 flush_interval_ms = 1000;
-    Int64 last_flush_ms = 0;
 };
 }

@@ -199,6 +199,13 @@ QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
 
     /// proton : starts
     last_pipeline->setExecuteMode(queryExecuteMode(isStreaming(), query_context->getSettingsRef()));
+
+    if (isStreaming() != last_pipeline->isStreaming())
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Invalid query pipeline, the query plan is {}, but the built query pipeline is {}.",
+            isStreaming() ? "streaming" : "historical",
+            last_pipeline->isStreaming() ? "streaming" : "historical");
     /// proton : ends
 
     return last_pipeline;

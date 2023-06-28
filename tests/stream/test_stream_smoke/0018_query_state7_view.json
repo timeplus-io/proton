@@ -207,7 +207,7 @@
         },
         {
             "id": 169,
-            "tags": ["query_state", "view", "bug"],
+            "tags": ["query_state", "view"],
             "name": "recover tumble aggr based on tail join table view",
             "description": "recover tumble aggr based on tail join table view from state checkpoint",
             "steps":[

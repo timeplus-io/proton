@@ -578,13 +578,8 @@ QueryPipelineProcessorsCollector::~QueryPipelineProcessorsCollector()
 
 Processors QueryPipelineProcessorsCollector::detachProcessors(size_t group)
 {
-    /// proton: starts. Set streaming flag for newly added processsors, it's a trick usage
     for (auto & processor : processors)
-    {
         processor->setQueryPlanStep(step, group);
-        processor->setStreaming(step && step->isStreaming());
-    }
-    /// proton: ends.
 
     Processors res;
     res.swap(processors);

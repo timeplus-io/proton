@@ -4,10 +4,20 @@
 /// proton; starts.
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
+#include <Functions/IFunction.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 /// proton: ends.
 
 namespace DB
 {
+
+/// proton: starts.
+namespace ErrorCodes
+{
+extern const int RECOVER_CHECKPOINT_FAILED;
+}
+/// proton: ends.
 
 Block ExpressionTransform::transformHeader(Block header, const ActionsDAG & expression)
 {
@@ -18,6 +28,9 @@ Block ExpressionTransform::transformHeader(Block header, const ActionsDAG & expr
 ExpressionTransform::ExpressionTransform(const Block & header_, ExpressionActionsPtr expression_)
     : ISimpleTransform(header_, transformHeader(header_, expression_->getActionsDAG()), false, ProcessorID::ExpressionTransformID)
     , expression(std::move(expression_))
+    /// proton: starts.
+    , stateful_functions(expression->getStatulFunctions())
+    /// proton ends.
 {
 }
 
@@ -35,14 +48,53 @@ void ExpressionTransform::transform(Chunk & chunk)
 void ExpressionTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
     assert(isStreaming());
-    ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) { expression->serialize(wb); });
+    if (stateful_functions.empty())
+    {
+        ckpt_ctx->coordinator->checkpointed(getVersion(), getLogicID(), ckpt_ctx);
+        return;
+    }
+
+    ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
+        writeIntBinary(stateful_functions.size(), wb);
+        for (auto & func : stateful_functions)
+        {
+            writeStringBinary(func->getName(), wb);
+            func->serialize(wb);
+        }
+    });
 }
 
 void ExpressionTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
-    if (isStreaming())
-        ckpt_ctx->coordinator->recover(
-            getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) { expression->deserialize(rb); });
+    if (!isStreaming() || stateful_functions.empty())
+        return;
+
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
+        size_t size = 0;
+        readIntBinary(size, rb);
+        if (size != stateful_functions.size())
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Failed to recover expression actions checkpoint. Number of stateful functions are not the same, checkpointed={}, "
+                "current={}",
+                size,
+                stateful_functions.size());
+
+        for (auto & func : stateful_functions)
+        {
+            String func_name;
+            readStringBinary(func_name, rb);
+            if (unlikely(func_name != func->getName()))
+                throw Exception(
+                    ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                    "Failed to recover expression actions checkpoint. Name of stateful function is not the same, checkpointed={}, "
+                    "current={}",
+                    func_name,
+                    func->getName());
+
+            func->deserialize(rb);
+        }
+    });
 }
 /// proton: ends.
 
