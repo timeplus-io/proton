@@ -24,6 +24,7 @@ void registerDiskEncrypted(DiskFactory & factory);
 
 void registerDiskWebServer(DiskFactory & factory);
 
+void registerDiskCache(DiskFactory & factory);
 
 void registerDisks()
 {
@@ -45,6 +46,8 @@ void registerDisks()
 #endif
 
     registerDiskWebServer(factory);
+
+    registerDiskCache(factory);
 }
 
 }

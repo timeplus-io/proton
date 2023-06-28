@@ -22,10 +22,11 @@ MergedBlockOutputStream::MergedBlockOutputStream(
     const MergeTreeTransactionPtr & txn,
     bool reset_columns_,
     bool blocks_are_granules_size,
-    const WriteSettings & write_settings)
+    const WriteSettings & write_settings_)
     : IMergedBlockOutputStream(data_part, metadata_snapshot_, columns_list_, reset_columns_)
     , columns_list(columns_list_)
     , default_codec(default_codec_)
+    , write_settings(write_settings_)
 {
     MergeTreeWriterSettings writer_settings(
         storage.getContext()->getSettings(),
@@ -132,8 +133,7 @@ MergedBlockOutputStream::Finalizer MergedBlockOutputStream::finalizePartAsync(
     const MergeTreeMutableDataPartPtr & new_part,
     bool sync,
     const NamesAndTypesList * total_columns_list,
-    MergeTreeData::DataPart::Checksums * additional_column_checksums,
-    const WriteSettings & write_settings)
+    MergeTreeData::DataPart::Checksums * additional_column_checksums)
 {
     /// Finish write and get checksums.
     MergeTreeData::DataPart::Checksums checksums;
@@ -166,7 +166,7 @@ MergedBlockOutputStream::Finalizer MergedBlockOutputStream::finalizePartAsync(
 
     auto finalizer = std::make_unique<Finalizer::Impl>(*writer, new_part, files_to_remove_after_sync, sync);
     if (new_part->isStoredOnDisk())
-       finalizer->written_files = finalizePartOnDisk(new_part, checksums, write_settings);
+        finalizer->written_files = finalizePartOnDisk(new_part, checksums);
 
     new_part->rows_count = rows_count;
     new_part->modification_time = time(nullptr);
@@ -184,8 +184,7 @@ MergedBlockOutputStream::Finalizer MergedBlockOutputStream::finalizePartAsync(
 
 MergedBlockOutputStream::WrittenFiles MergedBlockOutputStream::finalizePartOnDisk(
     const MergeTreeMutableDataPartPtr & new_part,
-    MergeTreeData::DataPart::Checksums & checksums,
-    const WriteSettings & write_settings)
+    MergeTreeData::DataPart::Checksums & checksums)
 {
     WrittenFiles written_files;
     if (new_part->isProjectionPart())

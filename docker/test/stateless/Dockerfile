@@ -14,6 +14,8 @@ RUN apt-get update -y \
             lsof \
             ncdu \
             netcat-openbsd \
+            nodejs \
+            npm \
             openssl \
             protobuf-compiler \
             python3 \
@@ -61,6 +63,8 @@ RUN arch=${TARGETARCH:-amd64} \
 ENV MINIO_ROOT_USER="clickhouse"
 ENV MINIO_ROOT_PASSWORD="clickhouse"
 ENV EXPORT_S3_STORAGE_POLICIES=1
+
+RUN npm install -g azurite
 
 COPY run.sh /
 COPY setup_minio.sh /

@@ -11,6 +11,7 @@
 #include <aws/s3/model/HeadObjectResult.h>
 #include <aws/s3/model/ListObjectsV2Result.h>
 #include <Storages/StorageS3Settings.h>
+#include <Common/MultiVersion.h>
 
 
 namespace DB
@@ -47,14 +48,12 @@ public:
         std::unique_ptr<S3ObjectStorageSettings> && s3_settings_,
         String version_id_,
         const S3Capabilities & s3_capabilities_,
-        String bucket_,
-        FileCachePtr cache_)
+        String bucket_)
         : bucket(bucket_)
         , client(std::move(client_))
         , s3_settings(std::move(s3_settings_))
         , s3_capabilities(s3_capabilities_)
         , version_id(std::move(version_id_))
-        , cache(cache_)
     {
     }
 
@@ -135,15 +134,9 @@ public:
         const std::string & config_prefix,
         ContextPtr context) override;
 
-    bool supportsCache() const override { return true; }
-
-    void removeCacheIfExists(const std::string & path_key) override;
-
-    String getCacheBasePath() const override;
+    bool supportParallelWrite() const override { return true; }
 
 private:
-    ReadSettings patchSettings(const ReadSettings & read_settings) const;
-
     void setNewSettings(std::unique_ptr<S3ObjectStorageSettings> && s3_settings_);
 
     void setNewClient(std::unique_ptr<Aws::S3::S3Client> && client_);
@@ -176,8 +169,6 @@ private:
     S3Capabilities s3_capabilities;
 
     const String version_id;
-
-    FileCachePtr cache;
 };
 
 }

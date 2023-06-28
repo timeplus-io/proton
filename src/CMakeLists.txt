@@ -111,6 +111,9 @@ if (TARGET ch_contrib::azure_sdk)
     add_headers_and_sources(dbms Disks/ObjectStorages/AzureBlobStorage)
 endif()
 
+add_headers_and_sources(dbms Disks/ObjectStorages/Cached)
+add_headers_and_sources(dbms Disks/ObjectStorages/Web)
+
 add_headers_and_sources(dbms Storages/Cache)
 
 # proton: start

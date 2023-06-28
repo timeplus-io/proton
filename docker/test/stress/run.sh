@@ -179,6 +179,7 @@ install_packages package_folder
 
 configure
 
+azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --debug /azurite_log &
 ./setup_minio.sh
 
 start
@@ -281,6 +282,11 @@ then
 
     # Start server from previous release
     configure
+
+    # Remove s3 related configs to avoid "there is no disk type `cache`"
+    rm -f /etc/clickhouse-server/config.d/storage_conf.xml ||:
+    rm -f /etc/clickhouse-server/config.d/azure_storage_conf.xml ||:
+
     start
 
     clickhouse-client --query="SELECT 'Server version: ', version()"

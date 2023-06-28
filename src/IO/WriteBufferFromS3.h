@@ -7,13 +7,10 @@
 #include <memory>
 #include <vector>
 #include <list>
-#include <Common/logger_useful.h>
+
 #include <base/types.h>
-
+#include <Common/logger_useful.h>
 #include <Common/ThreadPool.h>
-#include <Common/FileCache_fwd.h>
-#include <Common/FileSegment.h>
-
 #include <IO/BufferWithOwnMemory.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteSettings.h>
@@ -58,8 +55,7 @@ public:
         std::optional<std::map<String, String>> object_metadata_ = std::nullopt,
         size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE,
         ThreadPoolCallbackRunner<void> schedule_ = {},
-        const WriteSettings & write_settings_ = {},
-        FileCachePtr cache_ = nullptr);
+        const WriteSettings & write_settings_ = {});
 
     ~WriteBufferFromS3() override;
 
@@ -89,8 +85,6 @@ private:
 
     void waitForReadyBackGroundTasks();
     void waitForAllBackGroundTasks();
-
-    bool cacheEnabled() const;
 
     String bucket;
     String key;
@@ -124,11 +118,6 @@ private:
     Poco::Logger * log = &Poco::Logger::get("WriteBufferFromS3");
 
     WriteSettings write_settings;
-
-    FileCachePtr cache;
-    size_t current_download_offset = 0;
-    std::optional<FileSegmentsHolder> file_segments_holder;
-    static void finalizeCacheIfNeeded(std::optional<FileSegmentsHolder> &);
 };
 
 }
