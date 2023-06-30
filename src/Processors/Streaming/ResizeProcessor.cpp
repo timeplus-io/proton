@@ -1,10 +1,10 @@
-#include "ResizeProcessor.h"
+#include <Processors/Streaming/ResizeProcessor.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 namespace Streaming
@@ -228,9 +228,10 @@ IProcessor::Status ResizeProcessor::prepare(const PortNumbers & updated_inputs, 
         waiting_outputs.pop();
 
         auto & input_with_data = input_ports[inputs_with_data.front()];
+        readed_input_ports.push(inputs_with_data.front());
         inputs_with_data.pop();
 
-        waiting_output.port->pushData(input_with_data.port->pullData());
+        waiting_output.port->pushData(input_with_data.port->pullData(true));
         input_with_data.status = InputStatus::NotActive;
         waiting_output.status = OutputStatus::NotActive;
 
@@ -250,7 +251,17 @@ IProcessor::Status ResizeProcessor::prepare(const PortNumbers & updated_inputs, 
     }
 
     if (!waiting_outputs.empty())
+    {
+        /// Only when buffered input data are drained, then pull more data in from input port.
+        while (!readed_input_ports.empty())
+        {
+            auto & input = input_ports[readed_input_ports.front()];
+            readed_input_ports.pop();
+            input.port->setNeeded();
+        }
+
         return Status::NeedData;
+    }
 
     return Status::PortFull;
 }

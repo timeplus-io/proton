@@ -51,7 +51,7 @@ public:
     {
     }
 
-    String getName() const override { return "Resize"; }
+    String getName() const override { return "StreamingResize"; }
 
     Status prepare() override;
     Status prepare(const PortNumbers &, const PortNumbers &) override;
@@ -64,6 +64,7 @@ private:
     size_t num_finished_outputs = 0;
     std::queue<UInt64> waiting_outputs;
     std::queue<UInt64> inputs_with_data;
+    std::queue<UInt64> readed_input_ports;
     bool initialized = false;
 
     enum class OutputStatus
@@ -107,7 +108,7 @@ public:
     {
     }
 
-    String getName() const override { return "StrictResize"; }
+    String getName() const override { return "StreamingStrictResize"; }
 
     Status prepare(const PortNumbers &, const PortNumbers &) override;
 

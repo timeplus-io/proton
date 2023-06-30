@@ -13,6 +13,10 @@
 #include <QueryPipeline/ReadProgressCallback.h>
 #include <Columns/ColumnConst.h>
 
+/// proton: starts.
+#include <Processors/Streaming/ResizeProcessor.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -716,10 +720,20 @@ void Pipe::resize(size_t num_streams, bool force, bool strict)
 
     ProcessorPtr resize;
 
-    if (strict)
-        resize = std::make_shared<StrictResizeProcessor>(getHeader(), numOutputPorts(), num_streams);
+    if (isStreaming())
+    {
+        if (strict)
+            resize = std::make_shared<Streaming::StrictResizeProcessor>(getHeader(), numOutputPorts(), num_streams);
+        else
+            resize = std::make_shared<Streaming::ResizeProcessor>(getHeader(), numOutputPorts(), num_streams);
+    }
     else
-        resize = std::make_shared<ResizeProcessor>(getHeader(), numOutputPorts(), num_streams);
+    {
+        if (strict)
+            resize = std::make_shared<StrictResizeProcessor>(getHeader(), numOutputPorts(), num_streams);
+        else
+            resize = std::make_shared<ResizeProcessor>(getHeader(), numOutputPorts(), num_streams);
+    }
 
     addTransform(std::move(resize));
 }
@@ -860,13 +874,13 @@ void Pipe::transform(const Transformer & transformer)
 /// proton: starts.
 /* Shuffling data from one input to N outputs
 * 1) Add shuffling transform for each output port
-* 2) Merge the same index outputs of all transforms (FIXME, using `resizeStreaming(1)` instead of `resize(1)`)
+* 2) Merge the same index outputs of all transforms
 *
-*                             port-1 ——+=============> resize(1) -->
+*                             port-1 ——+=============> resizeStreaming(1) -->
 *                           /          |
-* --> shuffling transform-1 - prot-2 ——|————+========> resize(1) -->
+* --> shuffling transform-1 - prot-2 ——|————+========> resizeStreaming(1) -->
 *                           \          |    |
-*                             port-3 ——|————|————+===> resize(1) -->
+*                             port-3 ——|————|————+===> resizeStreaming(1) -->
 *                                      |    |    |
 *                             prot-1 ——+    |    |
 *                           /               |    |
@@ -945,10 +959,10 @@ void Pipe::addShufflingTransform(const ProcessorGetter & getter)
     output_ports.reserve(new_outputs_num);
 
     /// Merge the same index outputs of all transforms
+    assert(isStreaming());
     for (auto & to_merge_outputs : to_merge_outputs_list)
     {
-        /// FIXME, using `resizeStreaming(1)` instead of `resize(1)`
-        auto resize = std::make_shared<ResizeProcessor>(new_header, to_merge_outputs.size(), 1);
+        auto resize = std::make_shared<Streaming::ResizeProcessor>(new_header, to_merge_outputs.size(), 1);
 
         /// -----------------------------------       -------------------------------
         /// | shuffling transform 1, output 1 | ->    | resize transform 1, input 1 |
