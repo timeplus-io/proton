@@ -81,7 +81,10 @@ IProcessor::Status WatermarkTransformWithSubstream::prepare()
     if (!input_chunk)
     {
         if (input.isFinished())
+        {
+            output.finish();
             return Status::Finished;
+        }
 
         if (!input.hasData())
         {
