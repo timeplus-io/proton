@@ -83,6 +83,8 @@
     M(FilesystemCacheReadBuffers, "Number of active cache buffers") \
     M(CacheFileSegments, "Number of existing cache file segments") \
     M(CacheDetachedFileSegments, "Number of existing detached cache file segments") \
+    M(FilesystemCacheSize, "Filesystem cache size in bytes") \
+    M(FilesystemCacheElements, "Filesystem cache elements (file segments)") \
     M(BackgroundSchedulePoolNativeLogTask, "Number of active threads in the NativeLog schedule pool.") \
     M(IOUringPendingEvents, "Number of io_uring SQEs waiting to be submitted") \
     M(IOUringInFlightEvents, "Number of io_uring SQEs in flight") \

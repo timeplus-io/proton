@@ -2,6 +2,8 @@
 
 #include <IO/AsynchronousReader.h>
 #include <Common/ThreadPool.h>
+#include <Interpreters/threadPoolCallbackRunner.h>
+
 
 namespace DB
 {

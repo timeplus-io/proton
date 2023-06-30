@@ -16,7 +16,6 @@
 #include <Disks/IO/AsynchronousReadIndirectBufferFromRemoteFS.h>
 #include <Disks/ObjectStorages/StoredObject.h>
 #include <Common/ThreadPool.h>
-#include <Common/FileCache.h>
 #include <Disks/WriteMode.h>
 
 

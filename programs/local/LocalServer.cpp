@@ -412,7 +412,7 @@ int LocalServer::main(const std::vector<std::string> & /*args*/)
 try
 {
     UseSSL use_ssl;
-    ThreadStatus thread_status;
+    thread_status.emplace();
     setupSignalHandler();
 
     std::cout << std::fixed << std::setprecision(3);

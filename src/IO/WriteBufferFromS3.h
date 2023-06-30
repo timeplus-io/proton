@@ -34,7 +34,6 @@ namespace Aws::S3::Model
 namespace DB
 {
 
-using ScheduleFunc = std::function<void(std::function<void()>)>;
 class WriteBufferFromFile;
 
 /**
