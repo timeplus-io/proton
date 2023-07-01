@@ -549,9 +549,13 @@ Pipe QueryPipelineBuilder::getPipe(QueryPipelineBuilder pipeline, QueryPlanResou
 
 QueryPipeline QueryPipelineBuilder::getPipeline(QueryPipelineBuilder builder)
 {
+    /// proton: starts.
+    /// Get num threads before move pipeline since the `getNumThreads()` depends on pipe
+    auto num_threads = builder.getNumThreads();
     QueryPipeline res(std::move(builder.pipe));
     res.addResources(std::move(builder.resources));
-    res.setNumThreads(builder.getNumThreads());
+    res.setNumThreads(num_threads);
+    /// proton: ends.
     res.setProcessListElement(builder.process_list_element);
 
     /// proton : starts
