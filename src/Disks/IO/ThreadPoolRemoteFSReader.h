@@ -15,7 +15,7 @@ public:
 
     std::future<IAsynchronousReader::Result> submit(Request request) override;
 
-    void wait() override {}
+    void wait() override { pool.wait(); }
 
 private:
     ThreadPool pool;
@@ -25,12 +25,12 @@ private:
 class RemoteFSFileDescriptor : public IAsynchronousReader::IFileDescriptor
 {
 public:
-    explicit RemoteFSFileDescriptor(ReadBufferPtr reader_) : reader(std::move(reader_)) { }
+    explicit RemoteFSFileDescriptor(ReadBuffer & reader_) : reader(reader_) { }
 
     IAsynchronousReader::Result readInto(char * data, size_t size, size_t offset, size_t ignore = 0);
 
 private:
-    ReadBufferPtr reader;
+    ReadBuffer & reader;
 };
 
 }

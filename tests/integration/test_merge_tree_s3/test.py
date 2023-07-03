@@ -6,7 +6,6 @@ import pytest
 from helpers.cluster import ClickHouseCluster, get_instances_dir
 from helpers.utility import generate_values, replace_config, SafeThread
 
-
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_DIR, './{}/node/configs/config.d/storage_conf.xml'.format(get_instances_dir()))
 
@@ -31,6 +30,7 @@ def cluster():
                 "/jbod1:size=2M",
             ],
         )
+
         logging.info("Starting cluster...")
         cluster.start()
         logging.info("Cluster started")
@@ -515,3 +515,79 @@ def test_cache_with_full_disk_space(cluster, node_name):
         "Insert into cache is skipped due to insufficient disk space"
     )
     node.query("DROP TABLE IF EXISTS s3_test NO DELAY")
+
+
+@pytest.mark.parametrize("node_name", ["node"])
+def test_cache_setting_compatibility(cluster, node_name):
+    node = cluster.instances[node_name]
+
+    node.query("DROP TABLE IF EXISTS s3_test NO DELAY")
+
+    node.query(
+        "CREATE TABLE s3_test (key UInt32, value String) Engine=MergeTree() ORDER BY key SETTINGS storage_policy='s3_cache_r';"
+    )
+    node.query(
+        "INSERT INTO s3_test SELECT * FROM generateRandom('key UInt32, value String') LIMIT 500"
+    )
+
+    result = node.query("SYSTEM DROP FILESYSTEM CACHE")
+
+    result = node.query(
+        "SELECT count() FROM system.filesystem_cache WHERE cache_path LIKE '%persistent'"
+    )
+    assert int(result) == 0
+
+    node.query("SELECT * FROM s3_test")
+
+    result = node.query(
+        "SELECT count() FROM system.filesystem_cache WHERE cache_path LIKE '%persistent'"
+    )
+    assert int(result) > 0
+
+    config_path = os.path.join(
+        SCRIPT_DIR,
+        f"./{cluster.instances_dir_name}/node/configs/config.d/storage_conf.xml",
+    )
+
+    replace_config(
+        config_path,
+        "<do_not_evict_index_and_mark_files>1</do_not_evict_index_and_mark_files>",
+        "<do_not_evict_index_and_mark_files>0</do_not_evict_index_and_mark_files>",
+    )
+
+    result = node.query("DESCRIBE CACHE 's3_cache_r'")
+    assert result.strip().endswith("1")
+
+    node.restart_clickhouse()
+
+    result = node.query("DESCRIBE CACHE 's3_cache_r'")
+    assert result.strip().endswith("0")
+
+    result = node.query(
+        "SELECT count() FROM system.filesystem_cache WHERE cache_path LIKE '%persistent'"
+    )
+    assert int(result) > 0
+
+    node.query("SELECT * FROM s3_test FORMAT Null")
+
+    assert not node.contains_in_log("No such file or directory: Cache info:")
+
+    replace_config(
+        config_path,
+        "<do_not_evict_index_and_mark_files>0</do_not_evict_index_and_mark_files>",
+        "<do_not_evict_index_and_mark_files>1</do_not_evict_index_and_mark_files>",
+    )
+
+    result = node.query(
+        "SELECT count() FROM system.filesystem_cache WHERE cache_path LIKE '%persistent'"
+    )
+    assert int(result) > 0
+
+    node.restart_clickhouse()
+
+    result = node.query("DESCRIBE CACHE 's3_cache_r'")
+    assert result.strip().endswith("1")
+
+    node.query("SELECT * FROM s3_test FORMAT Null")
+
+    assert not node.contains_in_log("No such file or directory: Cache info:")
