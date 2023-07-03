@@ -58,7 +58,10 @@ void TimestampTransform::transformTimestamp(Chunk & chunk)
     for (auto pos : expr_column_positions)
         expr_block.insert(block.getByPosition(pos));
 
-    timestamp_func_desc->expr->execute(expr_block);
+    /// In case `__streaming_now()`, the expr_block is empty, so we must pass in rows
+    auto num_rows = block.rows();
+    timestamp_func_desc->expr->execute(expr_block, num_rows);
+    expr_block.getByPosition(0).column = expr_block.getByPosition(0).column->convertToFullColumnIfConst();
 
     /// auto * col_with_type = expr_block.findByName(STREAMING_WINDOW_FUNC_ALIAS);
     /// So far we assume, the streaming function produces only one column

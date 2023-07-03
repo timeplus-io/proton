@@ -185,7 +185,19 @@ bool EmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & select_query)
     /// Create a table function: hop(table_expression, now(), periodic_interval, last_time_interval)
     /// The table_expression can be table, table(table) and subquery.
     auto table_expr = std::make_shared<ASTTableExpression>();
-    table_expr->table_function = makeASTFunction("hop", table, makeASTFunction("now"), periodic_interval, last_interval);
+    ASTPtr timestamp_expr;
+    if (proc_time)
+    {
+        auto scale = getAutoScaleByInterval(periodic_interval_bs.num_units, periodic_interval_bs.scale);
+        if (scale == 0)
+            timestamp_expr = makeASTFunction("now", std::make_shared<ASTLiteral>("UTC"));
+        else
+            timestamp_expr = makeASTFunction("now64", std::make_shared<ASTLiteral>(scale), std::make_shared<ASTLiteral>("UTC"));
+    }
+    else
+        timestamp_expr = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME);
+
+    table_expr->table_function = makeASTFunction("hop", table, std::move(timestamp_expr), periodic_interval, last_interval);
 
     table_expr->children.emplace_back(table_expr->table_function);
     auto element = std::make_shared<ASTTablesInSelectQueryElement>();
