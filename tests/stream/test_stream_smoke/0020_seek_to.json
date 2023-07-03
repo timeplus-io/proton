@@ -514,7 +514,8 @@
             {"client":"python","query_id":"2103", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time = earliest_ts()"},
             {"client":"python","query_id":"2104", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time != earliest_ts()"},
             {"client":"python","query_id":"2105", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time < earliest_ts()"},
-            {"client":"python","query_id":"2106", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time <= earliest_ts()"}
+            {"client":"python","query_id":"2106", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select s from seek_to_stream where _tp_time <= earliest_ts()"},
+            {"client":"python","query_id":"2107", "depends_on_stream":"seek_to_stream","query_end_timer":2, "query_type": "stream", "query":"select s from seek_to_stream as a inner join seek_to_stream as b using (i) where a._tp_time >= earliest_ts() and b._tp_time >= earliest_ts()"}
           ]
         }
       ],
@@ -525,7 +526,8 @@
         {"query_id":"2103", "expected_results":"error_code:183"},
         {"query_id":"2104", "expected_results":"error_code:183"},
         {"query_id":"2105", "expected_results":"error_code:183"},
-        {"query_id":"2106", "expected_results":"error_code:183"}
+        {"query_id":"2106", "expected_results":"error_code:183"},
+        {"query_id":"2107", "expected_results":[["s1"], ["s2"], ["s3"], ["s4"]]}
       ]
     }
   ]

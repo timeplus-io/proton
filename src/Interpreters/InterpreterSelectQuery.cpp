@@ -3496,18 +3496,26 @@ void InterpreterSelectQuery::analyzeEventPredicateAsSeekTo()
     Streaming::EventPredicateVisitor::Data data(getSelectQuery(), context);
     Streaming::EventPredicateVisitor(data).visit(query_ptr);
 
-    /// Try set seek to info for the left table
-    if (auto seek_to_info = data.tryGetSeekToInfoForLeftStream())
-        query_info.seek_to_info = seek_to_info;
+    /// Try set seek to info for the left table (if exists, no need analyzing for the second time)
+    /// For example: select s from stream as a inner join stream as b using (i) where a._tp_time >= earliest_ts() and b._tp_time >= earliest_ts()
+    /// After first analyze, the where clause `where a._tp_time >= earliest_ts() and b._tp_time >= earliest_ts()` was optimized (where true and true => removed)
+    /// So we don't need analyze again.
+    if (!query_info.seek_to_info || query_info.seek_to_info->getSeekTo().empty())
+        if (auto seek_to_info = data.tryGetSeekToInfoForLeftStream())
+            query_info.seek_to_info = std::move(seek_to_info);
 
-    /// Try set seek to info for the right table if exists
-    if (auto seek_to_info_of_right_stream = data.tryGetSeekToInfoForRightStream())
+    /// Try set seek to info for the right table (if exists, no need analyzing for the second time)
+    if (!query_info.seek_to_info_of_right_stream || query_info.seek_to_info_of_right_stream->getSeekTo().empty())
     {
-        if (!query_analyzer->hasTableJoin())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown seek to info");
+        if (auto seek_to_info_of_right_stream = data.tryGetSeekToInfoForRightStream())
+        {
+            if (!query_analyzer->hasTableJoin())
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown seek to info");
 
-        query_analyzer->setSeekToInfoForJoinedTable(seek_to_info_of_right_stream);
+            query_info.seek_to_info_of_right_stream = std::move(seek_to_info_of_right_stream);
+        }
     }
+    query_analyzer->setSeekToInfoForJoinedTable(query_info.seek_to_info_of_right_stream);
 }
 
 bool InterpreterSelectQuery::isStreaming() const

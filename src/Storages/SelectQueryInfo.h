@@ -181,7 +181,8 @@ struct SelectQueryInfo
     bool has_window = false;
 
     /// proton: starts.
-    SeekToInfoPtr seek_to_info;  /// Rewind info for streaming store in streaming query
+    SeekToInfoPtr seek_to_info; /// Rewind info for left streaming store in streaming query
+    SeekToInfoPtr seek_to_info_of_right_stream; /// Rewind info for right streaming store in streaming query
 
     Streaming::WindowParamsPtr streaming_window_params;
 
