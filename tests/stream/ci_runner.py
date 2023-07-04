@@ -299,7 +299,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run CI in local mode")
     run_mode = "github"
     loop = 1
-    logging_level = "INFO"
+    logging_level = "ERROR"
     os.environ["PROTON_TEST_IDS"] = "all"
     test_suites = "all"
     settings = []
@@ -458,10 +458,18 @@ if __name__ == "__main__":
     logger.addHandler(console_handler)
     if logging_level == "INFO":
         logger.setLevel(logging.INFO)
-    else:
+    elif logging_level == "DEBUG":
         logger.setLevel(logging.DEBUG)
+    elif logging_level == "WARNING":
+        logger.setLevel(logging.WARNING)
+    elif logging_level == "ERROR":
+        logger.setLevel(logging.ERROR)
+    elif logging_level == "CRITICAL":
+        logger.setLevel(logging.CRITICAL)
+    else:
+        logger.setLevel(logging.INFO)
 
-    logger.info(
+    print(
         f"ci_runner starting: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}, test_retry = {test_retry}, test_suite_timeout = {test_suite_timeout}, test_folders = {test_folders} starts"
     )
 
@@ -529,7 +537,7 @@ if __name__ == "__main__":
             # test_event_tag_from_env = os.getenv("TIMEPLUS_TEST_EVENT_TAG")
             # print(f"test_event_tag_from_env = {test_event_tag_from_env}")
         except(BaseException) as error:
-            logger.debug(f"timeplus event write exception: {error}")
+            logger.error(f"timeplus event write exception: {error}")
             traceback.print_exc()
     else:
         print(f"one of TIMEPLUS_API_KEY,TIMEPLUS_ADDRESS,TIMEPLUS_WORKSPACE is not found in ENV")   
@@ -614,5 +622,5 @@ if __name__ == "__main__":
 
 
         except(BaseException) as error:
-            logger.debug(f"timeplus event write exception: {error}")
+            logger.error(f"timeplus event write exception: {error}")
             traceback.print_exc()  

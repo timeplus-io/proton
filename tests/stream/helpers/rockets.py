@@ -235,8 +235,16 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     logger.info(f"rockets_run starts..., root_logger.level={root_logger.level}")
     if root_logger.level != None and root_logger.level == 20:
         logging_level = "INFO"
-    else:
+    elif root_logger.level != None and root_logger.level == 10:
         logging_level = "DEBUG"
+    elif root_logger.level is not None and root_logger.level == 30:
+        logging_level = "WARNING"
+    elif root_logger.level is not None and root_logger.level == 40:
+        logging_level = "ERROR"
+    elif root_logger.level is not None and root_logger.level == 50:
+        logging_level = "CRITICAL"
+    else:
+        logging_level = "INFO"
 
     config = rockets_env_var_get()
     if config == None:
@@ -416,7 +424,7 @@ def kill_query(proton_client, query_2_kill, logging_level="INFO"):
             )
             return True
     except(BaseException) as error:
-        logger.debug(f"Kill Query Exception: error = {error}")
+        logger.error(f"Kill Query Exception: error = {error}")
         return False
 
 def request_rest(
@@ -468,7 +476,7 @@ def request_rest(
         logger.debug(f"res.status_code = {res.status_code}")
         return res
     except (BaseException) as error:
-        logger.debug(f"exception, error= {error}")
+        logger.error(f"exception, error= {error}")
         traceback.print_exc()
         return None
 
@@ -575,7 +583,7 @@ def query_run_exec(statement_2_run, config):
             "query_id_type": query_id_type,
         }
     except (BaseException) as error:  
-        logger.debug(f"exception, error = {error}")
+        logger.error(f"exception, error = {error}")
         traceback.print_exc()
         query_end_time_str = str(datetime.datetime.now())
         query_results = {
@@ -718,7 +726,7 @@ def query_run_rest(rest_setting, statement_2_run):
         error_string = f"query_run_rest, exception, error = {error}" #todo: handle the error code but not string match
         traceback.print_exc()
         if '. Connection' in error_string:
-            logger.debug(f"crash, connection failure, proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_rest, exception, query_id={query_id}, query={query}, error = {error}")
+            logger.error(f"crash, connection failure, proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_rest, exception, query_id={query_id}, query={query}, error = {error}")
             query_results = {
                 "query_id": query_id,
                 "query": query,
@@ -732,7 +740,7 @@ def query_run_rest(rest_setting, statement_2_run):
             }          
         #elif 'Fatal' in error_string or 'fatal' in error_string:
         elif 'FATAL' in str.upper(error_string):
-            logger.debug(f"QUERY_RUN_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_rest, query_id={query_id}, query={query}, error = {error}")
+            logger.error(f"QUERY_RUN_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_rest, query_id={query_id}, query={query}, error = {error}")
             query_results = {
                 "query_id": query_id,
                 "query": query,
@@ -746,7 +754,7 @@ def query_run_rest(rest_setting, statement_2_run):
             }
    
         else:                    
-            logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_rest, exception, query_id={query_id}, query={query}, error = {error}")        
+            logger.error(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_rest, exception, query_id={query_id}, query={query}, error = {error}")        
             query_end_time_str = str(datetime.datetime.now())
             query_results = {
                 "query_id": query_id,
@@ -1107,8 +1115,16 @@ def query_run_py(
             logger.addHandler(console_handler)
             if logging_level == "INFO":
                 logger.setLevel(logging.INFO)
-            else:
+            elif logging_level == "DEBUG":
                 logger.setLevel(logging.DEBUG)
+            elif logging_level == "ERROR":
+                logger.setLevel(logging.ERROR)
+            elif logging_level == "WARNING":
+                logger.setLevel(logging.WARNING)
+            elif logging_level == "CRITICAL":
+                logger.setLevel(logging.CRITICAL)
+            else:
+                logger.setLevel(logging.INFO)
             logger.debug(
                 f"process started: query_run_py_run_mode = {query_run_py_run_mode}, handler of logger = {logger.handlers}, logger.level = {logger.level}"
             )
@@ -1298,7 +1314,7 @@ def query_run_py(
                             )
                             logger.info(f"trace_stream_check, proton_setting = {proton_setting},test_suite_name = {test_suite_name}, test_id = {test_id}, proton_server_container_name = {proton_server_container_name},  trace_id = {trace_id}, stream_2_trace = {stream}, trace_result = {res}")
         except(BaseException) as error: #catch trace_stream error and log and no impact to the test execution
-            logger.info(f"trace_stream exception, error = {error}")
+            logger.error(f"trace_stream exception, error = {error}")
             traceback.print_exc()
             #raise Exception(f"trace_stream exception, error = {error}")
 
@@ -1429,7 +1445,7 @@ def query_run_py(
         error_string = f"query_run_py, exception, error = {error}" #todo: handle the error code but not string match
         
         if '. Connection' in error_string:
-            logger.debug(f"crash, connection failure,proton_server_container_name = {proton_server_container_name}, proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_py, query_run_py_run_mode = {query_run_py_run_mode}, exception, query_id={query_id}, query={query}, error = {error}")
+            logger.error(f"crash, connection failure,proton_server_container_name = {proton_server_container_name}, proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_py, query_run_py_run_mode = {query_run_py_run_mode}, exception, query_id={query_id}, query={query}, error = {error}")
             traceback.print_exc()
             query_results = {
                 "query_id": query_id,
@@ -1466,7 +1482,7 @@ def query_run_py(
                 pyclient.disconnect()            
         #elif 'Fatal' in error_string or 'fatal' in error_string:
         elif 'FATAL' in str.upper(error_string):
-            logger.debug(f"QUERY_RUN_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, proton_server_container_name = {proton_server_container_name},  query_id = {query_id}, query_run_py, query_run_py_run_mode = {query_run_py_run_mode}, query_id={query_id}, query={query}, error = {error}")
+            logger.error(f"QUERY_RUN_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, proton_server_container_name = {proton_server_container_name},  query_id = {query_id}, query_run_py, query_run_py_run_mode = {query_run_py_run_mode}, query_id={query_id}, query={query}, error = {error}")
             traceback.print_exc()
             query_results = {
                 "query_id": query_id,
@@ -1499,7 +1515,7 @@ def query_run_py(
 
                 pyclient.disconnect()     
         else:            
-            logger.debug(f"proton_setting = {proton_setting}, proton_server_container_name = {proton_server_container_name},test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_py, query_run_py_run_mode = {query_run_py_run_mode}, exception, query_id={query_id}, query={query}, error = {error}")
+            print(f"proton_setting = {proton_setting}, proton_server_container_name = {proton_server_container_name},test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query_run_py, query_run_py_run_mode = {query_run_py_run_mode}, exception, query_id={query_id}, query={query}, exception = {error}")
             if isinstance(error, errors.ServerException):
                 if (
                     error.code == 394
@@ -1686,7 +1702,7 @@ def query_exists_cluster(config, query_proc, client, retry_limit=300):
             return False
 
     except (BaseException, errors.ServerException) as error:
-        logger.debug(f"QUERY_EXISTS_CLUSTER_ERROR FATAL exception: proton_setting  = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, error = {error}")
+        logger.error(f"QUERY_EXISTS_CLUSTER_ERROR FATAL exception: proton_setting  = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, error = {error}")
         traceback.print_exc()
         raise Exception(f"QUERY_EXISTS_CLUSTER_ERROR FATAL exception: proton_setting  = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, error = {error}")
 
@@ -1739,8 +1755,16 @@ def query_execute(config, child_conn, query_results_queue, alive, query_states_d
     logger.addHandler(console_handler)
     if logging_level == "INFO":
         logger.setLevel(logging.INFO)
-    else:
+    elif logging_level == "DEBUG":
         logger.setLevel(logging.DEBUG)
+    elif logging_level == "ERROR":
+        logger.setLevel(logging.ERROR)
+    elif logging_level == "WARNING":
+        logger.setLevel(logging.WARNING)
+    elif logging_level == "CRITICAL":
+        logger.setLevel(logging.CRITICAL)
+    else:
+        logger.setLevel(logging.INFO)
 
     logger.debug(
         f"query_execute starts, logging_level = {logging_level}, logger.handlers = {logger.handlers}, query_states_dict = {query_states_dict}"
@@ -2050,7 +2074,7 @@ def query_execute(config, child_conn, query_results_queue, alive, query_states_d
 
                 query_run_count = query_run_count - 1
         except (BaseException, errors.ServerException) as error:
-            logger.debug(f"exception: error = {error}")
+            logger.error(f"exception: error = {error}")
             if isinstance(error, errors.ServerException):
                 query_end_time_str = str(datetime.datetime.now())
                 query_results = {
@@ -2277,7 +2301,7 @@ def query_id_exists_py(py_client, query_id, query_exist_check_sql=None):
             return False
     except (BaseException) as error:
         error_string = f"query_id_exists_py, exception, Error = {error}"
-        logger.debug(f"query_id_exists_py, exception, Error = {error}")
+        logger.error(f"query_id_exists_py, exception, Error = {error}")
         traceback.print_exc()
         if '. Connection' in error_string: #todo: handle error code rather than error string match
             raise Exception(f"query_id_exists, exception, Error = {error}")
@@ -2324,7 +2348,7 @@ def query_id_exists_rest(query_url, query_id, query_body=None):
     #                 return True
     #         return False
     except (BaseException) as error:
-         logger.info(f"query_id_exists_rest, exception, Error = {error}")
+         logger.error(f"query_id_exists_rest, exception, Error = {error}")
          traceback.print_exc()
          return False
 
@@ -2348,7 +2372,7 @@ def query_exists(
             try:
                 query_id_exists = query_id_exists_rest(query_url, query_id)
             except (BaseException) as error:
-                logger.debug(
+                logger.error(
                     f"query_exist exception, query_url = {query_url}, query_id = {query_id}, error = {error}"
                 )
                 traceback.print_exc()
@@ -2359,7 +2383,7 @@ def query_exists(
             try:
                 query_id_exists = query_id_exists_py(client, query_id)
             except (BaseException) as error:
-                logger.debug(
+                logger.error(
                     f"query_exist exception, query_id = {query_id}, error = {error}"
                 )
                 traceback.print_exc()
@@ -2397,7 +2421,7 @@ def query_state_check(query_states_dict, state_4_check, test_id, query_id):
             else:
                 return True
     except(BaseException) as error:
-        logger.debug(f"Query State Check, test_id = {test_id}, query_id = {query_id}, state_4_check = {state_4_check}, query_states_dict = {query_states_dict}, error: {error}")
+        logger.error(f"Query State Check, test_id = {test_id}, query_id = {query_id}, state_4_check = {state_4_check}, query_states_dict = {query_states_dict}, error: {error}")
         traceback.print_exc()
         return False    
 
@@ -2729,7 +2753,7 @@ def input_walk_through_rest(
 
 
     except (BaseException) as error:
-        logger.info(f"INPUT_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, error = {error}")
+        logger.error(f"INPUT_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, error = {error}")
         traceback.print_exc()
         if client is not None:
             client.disconnect()        
@@ -2779,7 +2803,7 @@ def drop_table_if_exist_rest(table_ddl_url, table_name):  #todo: combine drop_ta
         )
         logger.info(f"table {table_name} is dropped, {time_spent_ms} spent.")
     except(BaseException) as error:
-        logger.info(f"raise DROP_STREAM_REST_ERROR FATAL exception: url = {table_ddl_url}, table_name = {table_name}, error = {error}.")
+        logger.error(f"raise DROP_STREAM_REST_ERROR FATAL exception: url = {table_ddl_url}, table_name = {table_name}, error = {error}.")
         traceback.print_exc()
         raise Exception(f"DROP_STREAM_REST_ERROR FATAL exception: url = {table_ddl_url}, table_name = {table_name}, error = {error}.")                                          
 
@@ -2850,7 +2874,7 @@ def table_exist_py(pyclient, table_name):
                 return True
         return False
     except (BaseException) as error:
-        logger.info(f"exception, error = {error}")
+        logger.error(f"exception, error = {error}")
         traceback.print_exc()
         return False
 
@@ -3017,7 +3041,7 @@ def create_table_rest(config, table_schema, retry=3):
                 time.sleep(1)
                 continue
         except (BaseException) as error:
-            logging.debug(f"raise CREATE_TABLE_FAILURE_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, create_table_rest, rest api exception: {error}")
+            logging.error(f"raise CREATE_TABLE_FAILURE_ERROR FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, create_table_rest, rest api exception: {error}")
             traceback.print_exc()
             exception_retry -= 1
             if exception_retry <= 0:
@@ -3052,7 +3076,7 @@ def create_table_rest(config, table_schema, retry=3):
                 raise Exception(f"raise CREATE_TABLE_FAILURE_ERROR FATAL exception: proton_setting={proton_setting}, test_suite_name = {test_suite_name}, table_ddl_url = {table_ddl_url}, table_name = {table_name}")
         # time.sleep(1) # wait the table creation completed
         except (BaseException) as error:
-            logging.debug(f"exception: Error = {error}")
+            logging.error(f"exception: Error = {error}")
             traceback.print_exc()
             exception_retry -= 1
             if exception_retry <= 0:
@@ -3160,7 +3184,7 @@ def drop_if_exist_py(client, type, table_name):
             logger.debug(f"{type} {table_name} does not exist, bypass drop")
             return True
     except(BaseException) as error:
-        logger.info(f"drop_if_exist_py, exception, error = {error}")
+        logger.error(f"drop_if_exist_py, exception, error = {error}")
         traceback.print_exc()
         raise Exception(f"drop_if_exist_py, exception, error = {error}")
 
@@ -3269,7 +3293,7 @@ def test_suite_env_setup(client, config, test_suite_name, test_suite_config):
         timer.cancel()
 
     except (BaseException) as error:
-        logger.info(f"TEST_SUITE_ENV_SETUP_ERROR FATAL exception: proton_setting = {proton_setting},test_suite_name = {test_suite_name}, test_id = {test_id}, proton_server_container_name = {proton_server_container_name},  error = {error}") #todo: define private exception
+        logger.error(f"TEST_SUITE_ENV_SETUP_ERROR FATAL exception: proton_setting = {proton_setting},test_suite_name = {test_suite_name}, test_id = {test_id}, proton_server_container_name = {proton_server_container_name},  error = {error}") #todo: define private exception
         traceback.print_exc()
         timer.cancel()
         raise Exception(f"TEST_SUITE_ENV_SETUP_ERROR FATAL exception: proton_setting = {proton_setting},test_suite_name = {test_suite_name}, test_id = {test_id}, proton_server_container_name = {proton_server_container_name},  error = {error}")
@@ -3287,15 +3311,15 @@ def env_setup(
     env_health_check_res_list = []
     for rest_setting in rest_settings:
         health_url = rest_setting.get("health_check_url")
-        logger.debug(f"env_setup: health_url = {health_url}")
+        print(f"env_setup: health_url = {health_url}")
         tables_cleaned = []
         env_health_check_res = env_health_check(health_url)
-        logger.info(f"env_setup: env_health_check_res: {env_health_check_res}")
-        retry = 20
+        print(f"env_setup: env_health_check_res: {env_health_check_res}")
+        retry = 30
         while env_health_check_res == False and retry > 0:
-            time.sleep(2)
+            time.sleep(4)
             env_health_check_res = env_health_check(health_url)
-            logger.debug(f"env_setup: retry = {retry}")
+            print(f"env_health_check retry, env_setup: health_url = {health_url}, retry = {retry}")
             retry -= 1
 
         if env_health_check_res == False:
@@ -3408,7 +3432,7 @@ def reset_tables_of_test_inputs(client, config, table_schemas, test_case):
             logger.debug(f"tables: {tables_recreated} are dropted and recreated.")
         return tables_recreated
     except (BaseException) as error:
-        logger.info(f"RESET_TABLES_OF_TEST_INPUTS_ERROR FATAL exception: proton_setting = {proton_setting}, proton_server_container_name = {proton_server_container_name},test_suite_name = {test_suite_name}, exception: {error}")
+        logger.error(f"RESET_TABLES_OF_TEST_INPUTS_ERROR FATAL exception: proton_setting = {proton_setting}, proton_server_container_name = {proton_server_container_name},test_suite_name = {test_suite_name}, exception: {error}")
         traceback.print_exc()
         raise Exception(f"RESET_TABLES_OF_TEST_INPUTS_ERROR FATAL exception: proton_setting = {proton_setting},test_suite_name = {test_suite_name}, proton_server_container_name = {proton_server_container_name},  exception: {error}")
 
@@ -3511,7 +3535,7 @@ def test_case_collect(test_suite, tests_2_run, test_ids_set, proton_setting):
                     f"test_suite_name = {test_suite_name}, tests_run_id_list = {test_run_id_list}, {len(tests)} cases in total, {test_run_list_len} cases to run in total"
                 )
     except(BaseException) as error:
-        logger.info(f"exception, error = {error}")
+        logger.error(f"exception, error = {error}")
         traceback.print_exc()
         raise Exception(f"test case collection exception, error = {error}") 
     return test_run_list
@@ -3525,7 +3549,7 @@ def test_suite_event_write(test_suite_event,test_suite_name, setting_config, tes
         test_suite_event_record.write(timeplus_env, timeplus_stream_name)
         return test_suite_event_record
     except(BaseException) as error:
-        logger.debug(f"timeplus event write exception: {error}")
+        logger.error(f"timeplus event write exception: {error}")
         traceback.print_exc()
         return     
 
@@ -3576,7 +3600,7 @@ def test_suite_run(
             test_suite_event = test_suite_event_write(test_suite_event_start,test_suite_name, config, test_suite_config, test_event_tag, test_event_version, timeplus_env, timeplus_event_stream)
 
         except(BaseException) as error:
-            logger.debug(f"timeplus event write exception: {error}")
+            logger.error(f"timeplus event write exception: {error}")
             traceback.print_exc() 
 
 
@@ -3593,120 +3617,8 @@ def test_suite_run(
             test_case_timeout = DEFAULT_CASE_TIMEOUT
     rest_setting = config.get("rest_setting")
 
-    logger.info(f"proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, test_retry = {test_retry}, test_suite_timeout = {test_suite_timeout},test_event_tag = {test_event_tag}, query_states_dict = {query_states_dict}, test_running starts......")
-    query_results_queue = test_suite_set_dict.get("query_results_queue")
-    # q_exec_client = test_suite_set_dict.get("query_exe_client")
-
-    (
-        query_conn,  # query_exe_parent_conn
-        q_exec_client_conn,  # query_exe_child_conn
-    ) = mp.Pipe(
-        True
-    )  # create the pipe for inter-process conn of each test_suite_run and query_execute pair, control path
-
-    # query_conn = test_suite_set_dict.get("query_exe_parent_conn")
-    # q_exec_client_conn = test_suite_set_dict.get("query_exe_child_conn")
-    alive = test_suite_set_dict.get("alive")
-    
-    query_exe_client = mp.Process(
-        target=query_execute,
-        args=(
-            config,
-            q_exec_client_conn,
-            query_results_queue,
-            alive,
-            query_states_dict,
-            logging_level,
-        ),
-    )  # Create query_exe_client process
-
-    query_results_queue = test_suite_set_dict.get("query_results_queue")
-    logger.debug(f"alive.value = {alive.value}")
-    query_exe_client.start()  # start the query execute process
-    logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, query_exe_client started: {query_exe_client}.")
-
-    to_start_at = config.get("to_start_at") #calculate wait time to launch
-    test_suite_launch_interval = config.get("test_suite_launch_interval")
-    if test_suite_launch_interval is None:
-        test_suite_launch_interval = TEST_SUITE_LAUNCH_INTERVAL
-    logger.debug(f"watch: proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name},to_start_at = {to_start_at}")
-    if to_start_at is not None: #if no last_test_suite_lanuched_at in config, that means the 1st test suite running on the env
-        to_start_at = datetime.datetime.strptime(to_start_at, TIME_STR_FORMAT)
-        sleep_time = to_start_at - datetime.datetime.now()
-        #logger.debug(f"watch: proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name},sleep_time = {sleep_time}")
-        # if sleep_time.days < 0:
-        #     sleep_time = test_suite_launch_interval
-        # else:
-        #     sleep_time = sleep_time.seconds
-        #     time.sleep(sleep_time)
-        time.sleep(sleep_time.total_seconds())
-        logger.debug(f"proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, waited for sleep_time = {sleep_time} seconds to launch.")
-    
-    test_suite_start = datetime.datetime.now()
-    test_suite_case_run_end = datetime.datetime.now()
-    test_suite_end = datetime.datetime.now()
-    test_suite_case_run_duration = test_suite_case_run_end - test_suite_start
-    test_suite_run_duration = test_suite_end - test_suite_start
-    test_suite_passed_total = 0
-    test_id = '' #initialize test_id
-
-    test_suite_timeout_hit = threading.Event() #set the test_suite_timeout_hit flag as False and start a timer to set this flag
-    # def timeout_flag(timeout_hit_event, proton_setting, test_suite_name): #timeout_hit_event is a threading.Event, todo: use signal.signal() to register a signal handler and signal.alarm(timeout)
-    #     try:
-    #         timeout_hit_event.set()
-    #         query_exe_client.terminate()
-    #         #query_exe_client.send_signal(signal.SIGINT)
-    #         message_2_send = "case_result_done"
-    #         q_exec_client_conn.send(message_2_send)
-    #         q_exec_client_conn.send("tear_down_done")
-
-    #         print(f"test_suite_name = {test_suite_name}, proton_setting = {proton_setting}, TEST_SUITE_TIME_OUT_ERROR FATAL and set the timeout treading event and stop query_execute process and send case_result_done to pipe")
-    #         return
-    #     except(BaseException) as error:
-    #         traceback.print_exc()
-    #         print(f"timeout_flat exception, error = {error}")
-    
-    timer = threading.Timer(test_suite_timeout, timeout_flag, [test_suite_timeout_hit, "TEST_SUITE_TIME_OUT_ERROR FATAL and set the timeout treading event", f"test_suite_name = {test_suite_name}, proton_setting = {proton_setting}"])
-    timer.start()
-    logger.debug(f"proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, test_suite_timeout = {test_suite_timeout}, timer started.")
-    # proton_server = config.get("proton_server")
-    # proton_server_native_ports = config.get("proton_server_native_port")
-    # proton_server_native_ports = proton_server_native_ports.split(",")
-    # proton_server_native_port = proton_server_native_ports[
-    #     0
-    # ]  # todo: assign proton_server and port at config for test_suite reset_tables_of_test_inputs
-    proton_cluster_query_node = config.get("proton_cluster_query_node")
-    proton_server = None
-    if "cluster" not in proton_setting:
-        proton_server = config.get("proton_server")
-        proton_server_native_ports = config.get("proton_server_native_port")
-        proton_server_native_ports = proton_server_native_ports.split(",")
-        proton_server_native_port = proton_server_native_ports[
-            0
-        ]  # todo: get proton_server and port from statement
-    elif "cluster" in proton_setting and proton_cluster_query_node != "default":
-        proton_servers = config.get("proton_servers")
-        for item in proton_servers:
-            node = item.get("node")
-            if node == proton_cluster_query_node:
-                proton_server = item.get("host")
-                proton_server_native_port = item.get("port")
-
-    else:  # if 'cluster' in proton_setting, go through the list and get the 1st node as default proton
-        proton_servers = config.get("proton_servers")
-        proton_server = proton_servers[0].get("host")
-        proton_server_native_port = proton_servers[0].get("port")
-
-    logger.debug(
-        f"proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}"
-    )
-
     test_ids_set = os.getenv("PROTON_TEST_IDS", None)
-
-    table_ddl_url = rest_setting.get("table_ddl_url")
-
-    test_run_list_len_total = 0
-    test_sets = []  # test_set for collecting testing results of all test_suites
+    test_run_list = []
     if test_suite != None and len(test_suite) != 0:
         test_id_run = 0
         #test_suite_config = test_suite.get("test_suite_config")
@@ -3723,33 +3635,150 @@ def test_suite_run(
         logger.debug("test_case_collect is to be started......")
         test_run_list = test_case_collect(
             test_suite, tests_2_run, test_ids_set, proton_setting
-        )
-
-        
-        
+        )   
         test_run_list_len = len(test_run_list)
         client = None
-        if test_run_list_len == 0:
-            logger.info(
-                f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_run_list = {test_run_list}, 0 case collected, bypass."
-            )
-            test_suite_result_summary = {
-                "test_suite_name": test_suite_name,
-                "test_run_list_len": 0,
-                "test_sets": [],
-                "test_list": [],
-                "proton_setting": proton_setting,
-                #"test_suite_run_status": [],
-                "test_suite_result":False,
-                "test_suite_case_run_duration": 0,
-                "test_suite_run_duration": 0,
-                "test_suite_passed_total": 0,
-                "proton_server_container_name": proton_server_container_name,                
-            }
-            test_suite_run_ctl_queue.get()
-            test_suite_run_ctl_queue.task_done()                      
+    if test_run_list_len == 0:
+        print(f"proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, test_retry = {test_retry}, test_run_list_lan = 0, test_running bypassed......")
+        logger.info(
+            f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_run_list = {test_run_list}, 0 case collected, bypass."
+        )
+        test_suite_result_summary = {
+            "test_suite_name": test_suite_name,
+            "test_run_list_len": 0,
+            "test_sets": [],
+            "test_list": [],
+            "proton_setting": proton_setting,
+            #"test_suite_run_status": [],
+            "test_suite_result":False,
+            "test_suite_case_run_duration": 0,
+            "test_suite_run_duration": 0,
+            "test_suite_passed_total": 0,
+            "proton_server_container_name": proton_server_container_name,                
+        }
+        test_run_list_len_total = 0
+        test_sets = []
+        test_suite_run_ctl_queue.get()
+        test_suite_run_ctl_queue.task_done()                  
+        test_suite_result_done_queue.put(test_suite_result_summary)   
+        test_suite_result_done_queue.join()        
+    else:
+        print(f"proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, test_retry = {test_retry}, test_suite_timeout = {test_suite_timeout},test_event_tag = {test_event_tag}, query_states_dict = {query_states_dict}, test_running starts......")
+        query_results_queue = test_suite_set_dict.get("query_results_queue")
+        # q_exec_client = test_suite_set_dict.get("query_exe_client")
+
+        (
+            query_conn,  # query_exe_parent_conn
+            q_exec_client_conn,  # query_exe_child_conn
+        ) = mp.Pipe(
+            True
+        )  # create the pipe for inter-process conn of each test_suite_run and query_execute pair, control path
+
+        # query_conn = test_suite_set_dict.get("query_exe_parent_conn")
+        # q_exec_client_conn = test_suite_set_dict.get("query_exe_child_conn")
+        alive = test_suite_set_dict.get("alive")
         
-        else:
+        query_exe_client = mp.Process(
+            target=query_execute,
+            args=(
+                config,
+                q_exec_client_conn,
+                query_results_queue,
+                alive,
+                query_states_dict,
+                logging_level,
+            ),
+        )  # Create query_exe_client process
+
+        query_results_queue = test_suite_set_dict.get("query_results_queue")
+        logger.debug(f"alive.value = {alive.value}")
+        query_exe_client.start()  # start the query execute process
+        logger.debug(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, query_exe_client started: {query_exe_client}.")
+
+        to_start_at = config.get("to_start_at") #calculate wait time to launch
+        test_suite_launch_interval = config.get("test_suite_launch_interval")
+        if test_suite_launch_interval is None:
+            test_suite_launch_interval = TEST_SUITE_LAUNCH_INTERVAL
+        logger.debug(f"watch: proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name},to_start_at = {to_start_at}")
+        if to_start_at is not None: #if no last_test_suite_lanuched_at in config, that means the 1st test suite running on the env
+            to_start_at = datetime.datetime.strptime(to_start_at, TIME_STR_FORMAT)
+            sleep_time = to_start_at - datetime.datetime.now()
+            time.sleep(sleep_time.total_seconds())
+            logger.debug(f"proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, waited for sleep_time = {sleep_time} seconds to launch.")
+        
+        test_suite_start = datetime.datetime.now()
+        test_suite_case_run_end = datetime.datetime.now()
+        test_suite_end = datetime.datetime.now()
+        test_suite_case_run_duration = test_suite_case_run_end - test_suite_start
+        test_suite_run_duration = test_suite_end - test_suite_start
+        test_suite_passed_total = 0
+        test_id = '' #initialize test_id
+
+        test_suite_timeout_hit = threading.Event() #set the test_suite_timeout_hit flag as False and start a timer to set this flag
+        
+        timer = threading.Timer(test_suite_timeout, timeout_flag, [test_suite_timeout_hit, "TEST_SUITE_TIME_OUT_ERROR FATAL and set the timeout treading event", f"test_suite_name = {test_suite_name}, proton_setting = {proton_setting}"])
+        timer.start()
+        logger.debug(f"proton_setting = {proton_setting}, test_suite = {test_suite_name}, proton_server_container_name = {proton_server_container_name}, test_suite_timeout = {test_suite_timeout}, timer started.")
+        # proton_server = config.get("proton_server")
+        # proton_server_native_ports = config.get("proton_server_native_port")
+        # proton_server_native_ports = proton_server_native_ports.split(",")
+        # proton_server_native_port = proton_server_native_ports[
+        #     0
+        # ]  # todo: assign proton_server and port at config for test_suite reset_tables_of_test_inputs
+        proton_cluster_query_node = config.get("proton_cluster_query_node")
+        proton_server = None
+        if "cluster" not in proton_setting:
+            proton_server = config.get("proton_server")
+            proton_server_native_ports = config.get("proton_server_native_port")
+            proton_server_native_ports = proton_server_native_ports.split(",")
+            proton_server_native_port = proton_server_native_ports[
+                0
+            ]  # todo: get proton_server and port from statement
+        elif "cluster" in proton_setting and proton_cluster_query_node != "default":
+            proton_servers = config.get("proton_servers")
+            for item in proton_servers:
+                node = item.get("node")
+                if node == proton_cluster_query_node:
+                    proton_server = item.get("host")
+                    proton_server_native_port = item.get("port")
+
+        else:  # if 'cluster' in proton_setting, go through the list and get the 1st node as default proton
+            proton_servers = config.get("proton_servers")
+            proton_server = proton_servers[0].get("host")
+            proton_server_native_port = proton_servers[0].get("port")
+
+        logger.debug(
+            f"proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}"
+        )
+
+        # test_ids_set = os.getenv("PROTON_TEST_IDS", None)
+
+        table_ddl_url = rest_setting.get("table_ddl_url")
+
+        test_run_list_len_total = 0
+        test_sets = []  # test_set for collecting testing results of all test_suites
+        if test_suite != None and len(test_suite) != 0:
+            test_id_run = 0
+            #test_suite_config = test_suite.get("test_suite_config")
+            if test_suite_config != None:
+                table_schemas = test_suite_config.get("table_schemas")
+            else:
+                table_schemas = []
+            tests = test_suite.get("tests")
+            tests_2_run = test_suite_config.get("tests_2_run")
+            test_run_list = []
+            test_run_id_list = []
+            test_suite_run_status = []
+            test_sets_2_run = []
+            logger.debug("test_case_collect is to be started......")
+            test_run_list = test_case_collect(
+                test_suite, tests_2_run, test_ids_set, proton_setting
+            )
+
+            
+            
+            test_run_list_len = len(test_run_list)
+            client = None
             for test in test_run_list:
                 test_id = test.get("id")
                 test_name = test.get("name")
@@ -3803,7 +3832,7 @@ def test_suite_run(
                 retry_cases_num = 0 #retry_case_num will be set when the 1st round of the test_suite execution ends
                 fatal_retry_times = CASE_RETRY_TIMES #count for retried fatal
                 case_retry_flag = False
-                               
+                            
                 while (i < len(test_run_list) or (j < retry_cases_num and retry_times > 0 and retry_cases_num <=CASE_RETRY_UP_LIMIT) and test_retry == "True") and not test_suite_timeout_hit.is_set():#only case retry when failed case number less than case_retry_up_limit
                     test_case_start = datetime.datetime.now()
                     test_case_end = datetime.datetime.now()
@@ -3882,7 +3911,7 @@ def test_suite_run(
                                 )
                                 # time.sleep(0.5) #wait for the data inputs done.
                             except(BaseException) as error:
-                                logger.info(f"INPUT_ERROR FATAL exception: proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag},  test_id = {test_id}, error = {error}")
+                                logger.error(f"INPUT_ERROR FATAL exception: proton_setting = {proton_setting}, test_id_run = {test_id_run}, test_suite_name = {test_suite_name},case_retry_flag = {case_retry_flag},  test_id = {test_id}, error = {error}")
                                 traceback.print_exc()
                                 if not fatal_exception_flag:
                                     fatal_exception_flag = True
@@ -4027,7 +4056,7 @@ def test_suite_run(
                     "proton_server_container_name": proton_server_container_name,
                 }                
             except (BaseException) as error:
-                logger.info(f"test_suite_run, exception: {error}, ")
+                logger.error(f"test_suite_run, exception: {error}, ")
                 traceback.print_exc()
                 test_suite_result_summary = {
                     "test_suite_name": test_suite_name,
@@ -4050,7 +4079,7 @@ def test_suite_run(
                         test_suite_event = test_suite_event_write(test_suite_event_exception,test_suite_name, config, test_suite_config, test_event_tag, test_event_version, timeplus_env, timeplus_event_stream)
                         print(f"test_suite_event = {test_suite_event}")
                     except(BaseException) as error:
-                        logger.debug(f"timeplus event write exception: {error}")
+                        logger.error(f"timeplus event write exception: {error}")
                         traceback.print_exc()                 
 
 
@@ -4092,61 +4121,62 @@ def test_suite_run(
                     test_suite_event = test_suite_event_write(test_suite_event_end,test_suite_name, config, test_suite_config, test_event_tag, test_event_version, timeplus_env, timeplus_event_stream)
                     print(f"test_suite_event = {test_suite_event}")
                 except(BaseException) as error:
-                    logger.debug(f"timeplus event write exception: {error}")
+                    logger.error(f"timeplus event write exception: {error}")
                     traceback.print_exc() 
-        test_suite_result_done_queue.put(test_suite_result_summary)
-        if not test_suite_timeout_hit.is_set():    
-            test_suite_result_done_queue.join()    
+            test_suite_result_done_queue.put(test_suite_result_summary)
+            if not test_suite_timeout_hit.is_set():    
+                test_suite_result_done_queue.join()    
     
-    TESTS_QUERY_RESULTS = test_sets
-    timer.cancel() #test_suite execution done, cancel timer otherwise the process will not terminate until timer done
-    query_conn.send("tear_down")
-    print(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, waiting for message from query_execute......")
-    if not test_suite_timeout_hit.is_set():
-        message_recv = query_conn.recv()
-        print(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, mssage_recv from query_execute: {message_recv}")
-    else:
-        print(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_suite_timeout_hit.is_set(), bypass msssage_recv")
-    query_results_queue.close()
-    query_conn.close()
-    q_exec_client_conn.close()
-    alive.value = False
-    # q_exec_client.terminate()
-    query_exe_client.join()
-    del alive
-    if client is not None:
-        client.disconnect()
-    logger.debug(f"TABLE_CREATE_RECORDS = {TABLE_CREATE_RECORDS}")
-    logger.debug(f"TABLE_DROP_RECORDS = {TABLE_DROP_RECORDS}")
-    count = 0
-    time_spent_create = 0
-    for item in TABLE_CREATE_RECORDS:
-        time_spent_create = time_spent_create + item.get("time_spent")
-        count += 1
-    if count != 0:
-        avg_time_spent_create = time_spent_create / count
-    else:
-        avg_time_spent_create = 0
-    logger.info(
-        f"table create {count} times, total time spent = {time_spent_create}ms, avg_time_spent_create = {avg_time_spent_create}"
-    )
-    count = 0
-    time_spent_drop = 0
-    for item in TABLE_DROP_RECORDS:
-        time_spent_drop = time_spent_drop + item.get("time_spent")
-        count += 1
-    if count != 0:
-        avg_time_spent_drop = time_spent_drop / count
-    else:
-        avg_time_spent_drop = 0
+        TESTS_QUERY_RESULTS = test_sets
+        timer.cancel() #test_suite execution done, cancel timer otherwise the process will not terminate until timer done
+        query_conn.send("tear_down")
+        print(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, waiting for message from query_execute......")
+        if not test_suite_timeout_hit.is_set():
+            message_recv = query_conn.recv()
+            print(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, mssage_recv from query_execute: {message_recv}")
+        else:
+            print(f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_suite_timeout_hit.is_set(), bypass msssage_recv")
+        query_results_queue.close()
+        query_conn.close()
+        q_exec_client_conn.close()
+        alive.value = False
+        # q_exec_client.terminate()
+        query_exe_client.join()
+        del alive
+        if client is not None:
+            client.disconnect()
+        logger.debug(f"TABLE_CREATE_RECORDS = {TABLE_CREATE_RECORDS}")
+        logger.debug(f"TABLE_DROP_RECORDS = {TABLE_DROP_RECORDS}")
+        count = 0
+        time_spent_create = 0
+        for item in TABLE_CREATE_RECORDS:
+            time_spent_create = time_spent_create + item.get("time_spent")
+            count += 1
+        if count != 0:
+            avg_time_spent_create = time_spent_create / count
+        else:
+            avg_time_spent_create = 0
+        logger.info(
+            f"table create {count} times, total time spent = {time_spent_create}ms, avg_time_spent_create = {avg_time_spent_create}"
+        )
+        count = 0
+        time_spent_drop = 0
+        for item in TABLE_DROP_RECORDS:
+            time_spent_drop = time_spent_drop + item.get("time_spent")
+            count += 1
+        if count != 0:
+            avg_time_spent_drop = time_spent_drop / count
+        else:
+            avg_time_spent_drop = 0
+        logger.info(
+            f"table drop {count} times, total time spent = {time_spent_drop}ms, avg_time_spent_drop = { avg_time_spent_drop}"
+        )            
 
-    
-    test_suite_run_duration = test_suite_end - test_suite_start
-    test_suite_result_summary["test_suite_run_duration"] = test_suite_run_duration.seconds
+    # test_suite_end = datetime.datetime.now()
+    # test_suite_run_duration = test_suite_end - test_suite_start
+    # test_suite_result_summary["test_suite_run_duration"] = test_suite_run_duration.seconds
 
-    logger.info(
-        f"table drop {count} times, total time spent = {time_spent_drop}ms, avg_time_spent_drop = { avg_time_spent_drop}"
-    )
+
     return (test_run_list_len_total, test_sets)
 
 
@@ -4393,7 +4423,6 @@ def get_top():
         return "get_top error, no top info collected"  
 
 
-
 def run_test_suites(config, test_suite_run_ctl_queue, test_suites_selected_sets,test_suite_result_done_queue):
     test_summary = {}
     module_summary = {}
@@ -4461,6 +4490,7 @@ def run_test_suites(config, test_suite_run_ctl_queue, test_suites_selected_sets,
         test_suite_name = test_suite_set_dict.get("test_suite_name")
         test_suite_names.append(test_suite_name)
         test_suite_run_ctl_queue.put("run a test suite")
+        proton_server_container_name = ''
         if multi_protons == True: #if multi_protons is True, there are multiple settings for allocating the test suites on configs
             proton_config = proton_configs[i]
             proton_server_container_name = proton_config["proton_server_container_name"]
@@ -4516,6 +4546,9 @@ def run_test_suites(config, test_suite_run_ctl_queue, test_suites_selected_sets,
             {
                 "test_suite_name": test_suite_name,
                 "test_suite_runner": test_suite_runner,
+                "proton_setting": proton_setting,
+                "proton_server_container_name":proton_server_container_name,
+                "status":'' #status: running, done
             }
         )
 
@@ -4569,14 +4602,32 @@ def run_test_suites(config, test_suite_run_ctl_queue, test_suites_selected_sets,
                 )
 
     except (BaseException) as error:
-        logger.debug(f"exception, error = {error}")
+        logger.error(f"exception, error = {error}")
         traceback.print_exc()
-      
+    all_run_done = False
+    while not all_run_done:
+        print(f"\nTest_suite running status:")  
+        for test_suite_runner_dict in test_suite_runners:
+            proc = test_suite_runner_dict["test_suite_runner"]
+            exitcode = proc.exitcode
+            if exitcode is None:
+                test_suite_runner_dict["status"] = "running"
+            else:
+                test_suite_runner_dict["status"] = "done"
+            print(f"test_suite_name = {test_suite_runner_dict['test_suite_name']}, proton_setting = {test_suite_runner_dict['proton_setting']}, proton_server_container_name = {test_suite_runner_dict['proton_server_container_name']}, running status = {test_suite_runner_dict['status']}")    
+            
+        for test_suite_runner_dict in test_suite_runners:
+            if test_suite_runner_dict["status"] == "running":
+                break
+            all_run_done = True
+        
+        time.sleep(30) #wait for 30 seconds before checking again
+    
     for test_suite_runner_dict in test_suite_runners:
         test_suite_runner_dict["test_suite_runner"].join()
 
     
-    print(f"proton_setting = {proton_setting}, Test_Suites_Running_Statistics:\n")
+    print(f"\nproton_setting = {proton_setting}, Test_Suites_Running_Statistics:\n")
     for test_suite_summary in test_suite_result_summary_list:
         test_suite_name = test_suite_summary.get("test_suite_name")
         test_suite_run_status = test_suite_summary.get("test_suite_run_status")

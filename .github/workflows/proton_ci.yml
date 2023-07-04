@@ -127,7 +127,7 @@ jobs:
 
         pip install --upgrade pip
         pip install -r helpers/requirements.txt
-        python ci_runner.py --debug --settings=redp,nativelog
+        python ci_runner.py --settings=redp,nativelog
 
         echo "check test result"
         cat $GITHUB_WORKSPACE/tests/stream/.status
