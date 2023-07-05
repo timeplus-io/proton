@@ -1,8 +1,13 @@
 #pragma once
 
 #include <Processors/IProcessor.h>
+
 #include <queue>
 
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
@@ -26,45 +31,80 @@ namespace Streaming
   * Since resize processor can be arbitrary M inputs -> N outputs dimension mapping, this introduces some challenges when
   * dealing with watermarks and checkpoint barrier propagations
   *     Input -> Output
-  * Case 1: M -> M:
+  * Case 1: M -> M: [USE: StrictResizeProcessor]
   *   a. For watermarks, don't need alignment, (actually defer the watermark alignment to down stream pipe)
   *   b. For checkpoint barriers, don't need alignment
-  * Case 2: M -> 1 (M > 1)
+  * Case 2: M -> 1 (M > 1) [USE: ShrinkResizeProcessor]
   *   a. For watermarks, need wait for all watermarks from all M inputs and pick the smallest watermark as the watermark
   *   b. For checkpoint barriers, need wait for all checkpoint barriers from all M inputs and then propagate the checkpoint
   *      barrier further to the down stream
-  * Case 3: 1 -> N (N > 1)
+  * Case 3: 1 -> N (N > 1) [USE: ExpandResizeProcessor]
   *   a. For watermarks, replicate watermark to all N outputs
   *   b. For checkpoint barriers, replicate checkpoint barriers to all N outputs
-  * Case 4: M -> N (M != N, M > 1, N > 1)
+  * Case 4: M -> N (M != N, M > 1, N > 1) [USE: NO SUPPORT]
   *   a. For watermarks, don't support this combination
   *   b. For checkpoint barriers, replicate checkpoint barriers to all N outputs
   */
-class ResizeProcessor final : public IProcessor
+
+/// @brief Resize M -> 1
+class ShrinkResizeProcessor final : public IProcessor
 {
 public:
-    /// TODO Check that there is non zero number of inputs and outputs.
-    ResizeProcessor(const Block & header, size_t num_inputs, size_t num_outputs)
-        : IProcessor(InputPorts(num_inputs, header), OutputPorts(num_outputs, header), ProcessorID::ResizeProcessorID)
-        , current_input(inputs.begin())
-        , current_output(outputs.begin())
-    {
-    }
+    ShrinkResizeProcessor(const Block & header, size_t num_inputs);
 
-    String getName() const override { return "StreamingResize"; }
+    String getName() const override { return "StreamingShrinkResize"; }
 
-    Status prepare() override;
     Status prepare(const PortNumbers &, const PortNumbers &) override;
 
 private:
-    InputPorts::iterator current_input;
-    OutputPorts::iterator current_output;
-
     size_t num_finished_inputs = 0;
-    size_t num_finished_outputs = 0;
-    std::queue<UInt64> waiting_outputs;
     std::queue<UInt64> inputs_with_data;
-    std::queue<UInt64> readed_input_ports;
+    bool initialized = false;
+
+    enum class InputStatus
+    {
+        NeedData,
+        NotNeedData,
+        HasData,
+        Finished,
+    };
+
+    struct InputPortWithStatus
+    {
+        InputPort * port;
+        InputStatus status;
+        Int64 watermark = 0;
+        bool requested_checkpoint = false;
+    };
+
+    std::vector<InputPortWithStatus> input_ports;
+
+    /// @returns true if has watermark handling.
+    bool updateAndAlignWatermark(InputPortWithStatus & input_with_data, Chunk & chunk);
+    /// @returns true if has request checkpoint handling.
+    bool updateAndRequestCheckpoint(InputPortWithStatus & input_with_data, Chunk & chunk);
+
+    /// Used in `updateAndAlignWatermark`
+    Int64 aligned_watermark = INVALID_WATERMARK;
+    /// Used in `updateAndRequestCheckpoint`
+    UInt8 num_requested_checkpoint = 0;
+
+    Poco::Logger * log;
+};
+
+/// @brief Resize 1 -> N
+class ExpandResizeProcessor final : public IProcessor
+{
+public:
+    ExpandResizeProcessor(const Block & header, size_t num_outputs);
+
+    String getName() const override { return "StreamingExpandResize"; }
+
+    Status prepare(const PortNumbers &, const PortNumbers &) override;
+
+private:
+    size_t num_finished_outputs = 0;
+
     bool initialized = false;
 
     enum class OutputStatus
@@ -74,48 +114,38 @@ private:
         Finished,
     };
 
-    enum class InputStatus
-    {
-        NotActive,
-        HasData,
-        Finished,
-    };
-
-    struct InputPortWithStatus
-    {
-        InputPort * port;
-        InputStatus status;
-    };
-
     struct OutputPortWithStatus
     {
         OutputPort * port;
         OutputStatus status;
+
+        static constexpr UInt8 NO_PROPAGATE = 0x0;
+        static constexpr UInt8 PROPAGATE_HEARTBEAT = 0x1;
+        static constexpr UInt8 PROPAGATE_WATERMARK = 0x2;
+        static constexpr UInt8 PROPAGATE_CHECKPOINT_REQUEST = 0x8;
+        UInt8 propagate_flag = NO_PROPAGATE;
     };
 
-    std::vector<InputPortWithStatus> input_ports;
     std::vector<OutputPortWithStatus> output_ports;
+    std::list<OutputPortWithStatus *> waiting_outputs;
+
+    /// To propagate
+    Chunk header_chunk;
+    Int64 watermark = INVALID_WATERMARK;
+    CheckpointContextPtr ckpt_ctx;
+    UInt8 num_checkpoint_requests = 0;
 };
 
 class StrictResizeProcessor final : public IProcessor
 {
 public:
-    /// TODO Check that there is non zero number of inputs and outputs.
-    StrictResizeProcessor(const Block & header, size_t num_inputs, size_t num_outputs)
-        : IProcessor(InputPorts(num_inputs, header), OutputPorts(num_outputs, header), ProcessorID::StrictResizeProcessorID)
-        , current_input(inputs.begin())
-        , current_output(outputs.begin())
-    {
-    }
+    StrictResizeProcessor(const Block & header, size_t num_inputs_and_outputs);
 
     String getName() const override { return "StreamingStrictResize"; }
 
     Status prepare(const PortNumbers &, const PortNumbers &) override;
 
 private:
-    InputPorts::iterator current_input;
-    OutputPorts::iterator current_output;
-
     size_t num_finished_inputs = 0;
     size_t num_finished_outputs = 0;
     std::queue<UInt64> disabled_input_ports;

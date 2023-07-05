@@ -104,6 +104,9 @@ enum class ProcessorID : UInt32
     TumbleWindowAssignmentTransformID = 85,
     HopWindowAssignmentTransformID = 86,
     SessionWindowAssignmentTransformID = 87,
+    StreamingShrinkResizeProcessorID = 88,
+    StreamingExpandResizeProcessorID = 89,
+    StreamingStrictResizeProcessorID = 90,
 
     /// Aggregating transform
     AggregatingInOrderTransformID = 1'000,

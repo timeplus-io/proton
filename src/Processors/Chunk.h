@@ -250,6 +250,12 @@ public:
         if (chunk_ctx)
             chunk_ctx->clearWatermark();
     }
+
+    void clearRequestCheckpoint() const
+    {
+        if (chunk_ctx)
+            chunk_ctx->setCheckpointContext(nullptr);
+    }
     /// proton : ends
 
 private:

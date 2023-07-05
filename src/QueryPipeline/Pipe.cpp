@@ -23,7 +23,27 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    /// proton: starts.
+    extern const int NOT_IMPLEMENTED;
+    /// proton: ends.
 }
+
+/// proton: starts.
+namespace
+{
+ProcessorPtr getStreamingResizeProcessor(const Block & header, size_t from_num_streams, size_t to_num_streams)
+{
+    if (from_num_streams == to_num_streams)
+        return std::make_shared<Streaming::StrictResizeProcessor>(header, to_num_streams);
+    else if (to_num_streams == 1)
+        return std::make_shared<Streaming::ShrinkResizeProcessor>(header, from_num_streams);
+    else if (from_num_streams == 1)
+        return std::make_shared<Streaming::ExpandResizeProcessor>(header, to_num_streams);
+    else
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Don't support resize combination from {} to {}", from_num_streams, to_num_streams);
+}
+}
+/// proton: ends.
 
 static void checkSource(const IProcessor & source)
 {
@@ -712,6 +732,11 @@ void Pipe::addChains(std::vector<Chain> chains)
 
 void Pipe::resize(size_t num_streams, bool force, bool strict)
 {
+    /// proton: starts.
+    if (isStreaming())
+        return resizeStreaming(num_streams, force);
+    /// proton: ends.
+
     if (output_ports.empty())
         throw Exception("Cannot resize an empty Pipe", ErrorCodes::LOGICAL_ERROR);
 
@@ -720,20 +745,10 @@ void Pipe::resize(size_t num_streams, bool force, bool strict)
 
     ProcessorPtr resize;
 
-    if (isStreaming())
-    {
-        if (strict)
-            resize = std::make_shared<Streaming::StrictResizeProcessor>(getHeader(), numOutputPorts(), num_streams);
-        else
-            resize = std::make_shared<Streaming::ResizeProcessor>(getHeader(), numOutputPorts(), num_streams);
-    }
+    if (strict)
+        resize = std::make_shared<StrictResizeProcessor>(getHeader(), numOutputPorts(), num_streams);
     else
-    {
-        if (strict)
-            resize = std::make_shared<StrictResizeProcessor>(getHeader(), numOutputPorts(), num_streams);
-        else
-            resize = std::make_shared<ResizeProcessor>(getHeader(), numOutputPorts(), num_streams);
-    }
+        resize = std::make_shared<ResizeProcessor>(getHeader(), numOutputPorts(), num_streams);
 
     addTransform(std::move(resize));
 }
@@ -959,10 +974,9 @@ void Pipe::addShufflingTransform(const ProcessorGetter & getter)
     output_ports.reserve(new_outputs_num);
 
     /// Merge the same index outputs of all transforms
-    assert(isStreaming());
     for (auto & to_merge_outputs : to_merge_outputs_list)
     {
-        auto resize = std::make_shared<Streaming::ResizeProcessor>(new_header, to_merge_outputs.size(), 1);
+        auto resize = getStreamingResizeProcessor(new_header, to_merge_outputs.size(), 1);
 
         /// -----------------------------------       -------------------------------
         /// | shuffling transform 1, output 1 | ->    | resize transform 1, input 1 |
@@ -977,10 +991,24 @@ void Pipe::addShufflingTransform(const ProcessorGetter & getter)
 
         processors.emplace_back(std::move(resize));
     }
+    assert(isStreaming());
 
     header = output_ports.front()->getHeader();
 
     max_parallel_streams = std::max<size_t>(max_parallel_streams, output_ports.size());
+}
+
+void Pipe::resizeStreaming(size_t num_streams, bool force)
+{
+    assert(isStreaming());
+    if (output_ports.empty())
+        throw Exception("Cannot resize an empty Pipe", ErrorCodes::LOGICAL_ERROR);
+
+    ProcessorPtr resize;
+    if (num_streams == numOutputPorts() && !force)
+        return;
+
+    addTransform(getStreamingResizeProcessor(getHeader(), numOutputPorts(), num_streams));
 }
 /// proton: ends.
 }

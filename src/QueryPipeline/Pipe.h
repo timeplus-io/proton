@@ -115,6 +115,8 @@ public:
             return output->getProcessor().isStreaming();
         });
     }
+
+    void resizeStreaming(size_t num_streams, bool force = false);
     /// proton: ends.
 
 private:

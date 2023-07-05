@@ -72,8 +72,10 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
     if (pipeline.getNumStreams() > 1)
     {
         /// Add resize transform to uniformly distribute data between aggregating streams.
-        if (!storage_has_evenly_distributed_read)
-            pipeline.resize(pipeline.getNumStreams(), true, true);
+        /// For streaming aggregating, we don't need use StrictResizeProcessor.
+        /// There is no case that some upstream closed, since AggregatingTransform required `watermark` of upstream to trigger finalize.
+        // if (!storage_has_evenly_distributed_read)
+        //     pipeline.resize(pipeline.getNumStreams(), true, true);
 
         auto many_data = std::make_shared<ManyAggregatedData>(pipeline.getNumStreams());
 

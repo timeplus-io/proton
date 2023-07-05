@@ -1,5 +1,7 @@
 #include <Processors/Streaming/ResizeProcessor.h>
 
+#include <Common/logger_useful.h>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -9,196 +11,28 @@ extern const int LOGICAL_ERROR;
 
 namespace Streaming
 {
-ResizeProcessor::Status ResizeProcessor::prepare()
+ShrinkResizeProcessor::ShrinkResizeProcessor(const Block & header, size_t num_inputs)
+    : IProcessor(InputPorts(num_inputs, header), OutputPorts(1, header), ProcessorID::StreamingShrinkResizeProcessorID)
+    , log(&Poco::Logger::get("ShrinkResizeProcessor"))
 {
-    bool is_first_output = true;
-    auto output_end = current_output;
-
-    bool all_outs_full_or_unneeded = true;
-    bool all_outs_finished = true;
-
-    bool is_first_input = true;
-    auto input_end = current_input;
-
-    bool all_inputs_finished = true;
-
-    auto is_end_input = [&]() { return !is_first_input && current_input == input_end; };
-    auto is_end_output = [&]() { return !is_first_output && current_output == output_end; };
-
-    auto inc_current_input = [&]() {
-        is_first_input = false;
-        ++current_input;
-
-        if (current_input == inputs.end())
-            current_input = inputs.begin();
-    };
-
-    auto inc_current_output = [&]() {
-        is_first_output = false;
-        ++current_output;
-
-        if (current_output == outputs.end())
-            current_output = outputs.begin();
-    };
-
-    /// Find next output where can push.
-    auto get_next_out = [&, this]() -> OutputPorts::iterator {
-        while (!is_end_output())
-        {
-            if (!current_output->isFinished())
-            {
-                all_outs_finished = false;
-
-                if (current_output->canPush())
-                {
-                    all_outs_full_or_unneeded = false;
-                    auto res_output = current_output;
-                    inc_current_output();
-                    return res_output;
-                }
-            }
-
-            inc_current_output();
-        }
-
-        return outputs.end();
-    };
-
-    /// Find next input from where can pull.
-    auto get_next_input = [&, this]() -> InputPorts::iterator {
-        while (!is_end_input())
-        {
-            if (!current_input->isFinished())
-            {
-                all_inputs_finished = false;
-
-                current_input->setNeeded();
-                if (current_input->hasData())
-                {
-                    auto res_input = current_input;
-                    inc_current_input();
-                    return res_input;
-                }
-            }
-
-            inc_current_input();
-        }
-
-        return inputs.end();
-    };
-
-    auto get_status_if_no_outputs = [&]() -> Status {
-        if (all_outs_finished)
-        {
-            for (auto & in : inputs)
-                in.close();
-
-            return Status::Finished;
-        }
-
-        if (all_outs_full_or_unneeded)
-        {
-            for (auto & in : inputs)
-                in.setNotNeeded();
-
-            return Status::PortFull;
-        }
-
-        /// Now, we pushed to output, and it must be full.
-        return Status::PortFull;
-    };
-
-    auto get_status_if_no_inputs = [&]() -> Status {
-        if (all_inputs_finished)
-        {
-            for (auto & out : outputs)
-                out.finish();
-
-            return Status::Finished;
-        }
-
-        return Status::NeedData;
-    };
-
-    /// Set all inputs needed in order to evenly process them.
-    /// Otherwise, in case num_outputs < num_inputs and chunks are consumed faster than produced,
-    ///   some inputs can be skipped.
-    //    auto set_all_unprocessed_inputs_needed = [&]()
-    //    {
-    //        for (; cur_input != inputs.end(); ++cur_input)
-    //            if (!cur_input->isFinished())
-    //                cur_input->setNeeded();
-    //    };
-
-    while (!is_end_input() && !is_end_output())
-    {
-        auto output = get_next_out();
-        auto input = get_next_input();
-
-        if (output == outputs.end())
-            return get_status_if_no_outputs();
-
-        if (input == inputs.end())
-            return get_status_if_no_inputs();
-
-        output->push(input->pull());
-    }
-
-    if (is_end_input())
-        return get_status_if_no_outputs();
-
-    /// cur_input == inputs_end()
-    return get_status_if_no_inputs();
+    assert(num_inputs > 0);
 }
 
-IProcessor::Status ResizeProcessor::prepare(const PortNumbers & updated_inputs, const PortNumbers & updated_outputs)
+IProcessor::Status ShrinkResizeProcessor::prepare(const PortNumbers & updated_inputs, const PortNumbers & /*updated_outputs*/)
 {
-    if (!initialized)
+    if (unlikely(!initialized))
     {
         initialized = true;
 
         for (auto & input : inputs)
         {
+            assert(input.getOutputPort().getProcessor().isStreaming());
             input.setNeeded();
-            input_ports.push_back({.port = &input, .status = InputStatus::NotActive});
-        }
-
-        for (auto & output : outputs)
-            output_ports.push_back({.port = &output, .status = OutputStatus::NotActive});
-    }
-
-    for (const auto & output_number : updated_outputs)
-    {
-        auto & output = output_ports[output_number];
-        if (output.port->isFinished())
-        {
-            if (output.status != OutputStatus::Finished)
-            {
-                ++num_finished_outputs;
-                output.status = OutputStatus::Finished;
-            }
-
-            continue;
-        }
-
-        if (output.port->canPush())
-        {
-            if (output.status != OutputStatus::NeedData)
-            {
-                output.status = OutputStatus::NeedData;
-                waiting_outputs.push(output_number);
-            }
+            input_ports.push_back({.port = &input, .status = InputStatus::NeedData, .watermark = INVALID_WATERMARK});
         }
     }
 
-    if (num_finished_outputs == outputs.size())
-    {
-        for (auto & input : inputs)
-            input.close();
-
-        return Status::Finished;
-    }
-
+    /// Update inputs
     for (const auto & input_number : updated_inputs)
     {
         auto & input = input_ports[input_number];
@@ -222,48 +56,278 @@ IProcessor::Status ResizeProcessor::prepare(const PortNumbers & updated_inputs, 
         }
     }
 
-    while (!waiting_outputs.empty() && !inputs_with_data.empty())
-    {
-        auto & waiting_output = output_ports[waiting_outputs.front()];
-        waiting_outputs.pop();
-
-        auto & input_with_data = input_ports[inputs_with_data.front()];
-        readed_input_ports.push(inputs_with_data.front());
-        inputs_with_data.pop();
-
-        waiting_output.port->pushData(input_with_data.port->pullData(true));
-        input_with_data.status = InputStatus::NotActive;
-        waiting_output.status = OutputStatus::NotActive;
-
-        if (input_with_data.port->isFinished())
-        {
-            input_with_data.status = InputStatus::Finished;
-            ++num_finished_inputs;
-        }
-    }
-
     if (num_finished_inputs == inputs.size())
     {
-        for (auto & output : outputs)
+        for (auto output : outputs)
             output.finish();
 
         return Status::Finished;
     }
 
-    if (!waiting_outputs.empty())
+    /// Check output can push
+    auto & output = outputs.front();
+    if (output.isFinished())
     {
-        /// Only when buffered input data are drained, then pull more data in from input port.
-        while (!readed_input_ports.empty())
-        {
-            auto & input = input_ports[readed_input_ports.front()];
-            readed_input_ports.pop();
-            input.port->setNeeded();
-        }
+        for (auto & input : inputs)
+            input.close();
 
-        return Status::NeedData;
+        return Status::Finished;
     }
 
+    if (!output.canPush())
+        return Status::PortFull;
+
+    /// Check inputs has data
+    for (auto & input_port : input_ports)
+    {
+        if (input_port.status == InputStatus::NeedData)
+            input_port.port->setNeeded();
+    }
+
+    if (!inputs_with_data.empty())
+    {
+        auto & input_with_data = input_ports[inputs_with_data.front()];
+        inputs_with_data.pop();
+
+        auto data = input_with_data.port->pullData(true);
+        if (updateAndAlignWatermark(input_with_data, data.chunk) || updateAndRequestCheckpoint(input_with_data, data.chunk))
+        {
+            /// Do nothing
+        }
+        else
+            input_with_data.status = InputStatus::NeedData;
+
+        output.pushData(std::move(data));
+        return Status::PortFull;
+    }
+
+    return Status::NeedData;
+}
+
+bool ShrinkResizeProcessor::updateAndAlignWatermark(InputPortWithStatus & input_with_data, Chunk & chunk)
+{
+    if (!chunk.hasWatermark())
+        return false;
+
+    bool updated = false;
+    auto new_watermark = chunk.getWatermark();
+    if (new_watermark > input_with_data.watermark || (input_with_data.watermark == TIMEOUT_WATERMARK && new_watermark >= aligned_watermark))
+    {
+        input_with_data.watermark = new_watermark;
+        aligned_watermark
+            = std::ranges::min(input_ports, [](const auto & l, const auto & r) { return l.watermark < r.watermark; }).watermark;
+        updated = aligned_watermark != INVALID_WATERMARK;
+    }
+    else
+    {
+        if (unlikely(new_watermark < aligned_watermark))
+            LOG_INFO(log, "Found outdate watermark. aligned watermark={}, but got watermark = {}", aligned_watermark, new_watermark);
+    }
+
+    input_with_data.status = InputStatus::NeedData;
+
+    if (updated)
+        chunk.getChunkContext()->setWatermark(aligned_watermark);
+    else
+        chunk.clearWatermark();
+
+    return true;
+}
+
+bool ShrinkResizeProcessor::updateAndRequestCheckpoint(InputPortWithStatus & input_with_data, Chunk & chunk)
+{
+    if (!chunk.requestCheckpoint())
+        return false;
+
+    if (!input_with_data.requested_checkpoint)
+    {
+        input_with_data.requested_checkpoint = true;
+        ++num_requested_checkpoint;
+    }
+
+    /// When all inputs request checkpoint, propagate the request and reset all checkpoint request
+    if (num_requested_checkpoint == input_ports.size())
+    {
+        chunk.getChunkContext()->setCheckpointContext(chunk.getCheckpointContext());
+        std::ranges::for_each(input_ports, [](auto & input) {
+            input.requested_checkpoint = false;
+            input.status = InputStatus::NeedData;
+        });
+        num_requested_checkpoint = 0;
+    }
+    else
+    {
+        input_with_data.status = InputStatus::NotNeedData;
+        chunk.clearRequestCheckpoint();
+    }
+    return true;
+}
+
+ExpandResizeProcessor::ExpandResizeProcessor(const Block & header, size_t num_outputs)
+    : IProcessor(InputPorts(1, header), OutputPorts(num_outputs, header), ProcessorID::StreamingExpandResizeProcessorID)
+    , header_chunk(outputs.front().getHeader().getColumns(), 0)
+{
+    assert(num_outputs > 0);
+}
+
+IProcessor::Status ExpandResizeProcessor::prepare(const PortNumbers & /*updated_inputs*/, const PortNumbers & updated_outputs)
+{
+    if (!initialized)
+    {
+        initialized = true;
+
+        for (auto & input : inputs)
+            input.setNeeded();
+
+        for (auto & output : outputs)
+            output_ports.push_back({.port = &output, .status = OutputStatus::NotActive});
+    }
+
+    /// Update outputs
+    for (const auto & output_number : updated_outputs)
+    {
+        auto & output = output_ports[output_number];
+        if (output.port->isFinished())
+        {
+            if (output.status != OutputStatus::Finished)
+            {
+                ++num_finished_outputs;
+                output.status = OutputStatus::Finished;
+            }
+
+            continue;
+        }
+
+        if (output.port->canPush())
+        {
+            if (output.status != OutputStatus::NeedData)
+            {
+                output.status = OutputStatus::NeedData;
+                waiting_outputs.push_back(&output);
+            }
+        }
+    }
+
+    if (num_finished_outputs == outputs.size())
+    {
+        for (auto & input : inputs)
+            input.close();
+
+        return Status::Finished;
+    }
+
+    /// Check input is finished
+    auto & input = inputs.front();
+    if (input.isFinished())
+    {
+        /// Flush all outputs before finish
+        bool all_outputs_finished = true;
+        for (auto & output : output_ports)
+        {
+            if (output.port->isFinished())
+                continue;
+
+            if (output.port->hasData() || output.propagate_flag)
+            {
+                all_outputs_finished = false;
+                continue;
+            }
+
+            output.port->finish();
+        }
+
+        if (all_outputs_finished)
+            return Status::Finished;
+    }
+
+    /// Check input has data
+    /// If has checkpoint request, we must waiting for the request is propagated in all outputs before read new data
+    if (!waiting_outputs.empty() && num_checkpoint_requests == 0)
+    {
+        input.setNeeded();
+
+        if (input.hasData())
+        {
+            auto data = input.pullData(/*set_not_needed*/ true);
+            if (data.chunk.hasWatermark())
+            {
+                std::ranges::for_each(
+                    output_ports, [](auto & output) { output.propagate_flag |= OutputPortWithStatus::PROPAGATE_WATERMARK; });
+                watermark = std::max(watermark, data.chunk.getWatermark());
+            }
+            else if (data.chunk.requestCheckpoint())
+            {
+                std::ranges::for_each(
+                    output_ports, [](auto & output) { output.propagate_flag |= OutputPortWithStatus::PROPAGATE_CHECKPOINT_REQUEST; });
+                ckpt_ctx = data.chunk.getCheckpointContext();
+                num_checkpoint_requests = output_ports.size();
+            }
+            else if (!data.chunk.hasRows())
+            {
+                std::ranges::for_each(
+                    output_ports, [](auto & output) { output.propagate_flag |= OutputPortWithStatus::PROPAGATE_HEARTBEAT; });
+            }
+            
+            if (data.chunk.hasRows())
+            {
+                assert(num_checkpoint_requests == 0);
+                auto & waiting_output = *waiting_outputs.front();
+                waiting_outputs.pop_front();
+                waiting_output.port->pushData(std::move(data));
+                waiting_output.propagate_flag = OutputPortWithStatus::NO_PROPAGATE;
+                waiting_output.status = OutputStatus::NotActive;
+            }
+        }
+    }
+
+    /// Try propagate some context (e.g. watermark/checkpoint or heartbeat)
+    for (auto iter = waiting_outputs.begin(); iter != waiting_outputs.end();)
+    {
+        auto & waiting_output = **iter;
+        if (waiting_output.propagate_flag)
+        {
+            auto chunk = header_chunk.clone();
+
+            /// Checkpoint barrier is always standalone, it can't coexist with watermark, we must propagate watermark first
+            if (waiting_output.propagate_flag & OutputPortWithStatus::PROPAGATE_WATERMARK)
+            {
+                chunk.getOrCreateChunkContext()->setWatermark(watermark);
+                waiting_output.propagate_flag &= ~(OutputPortWithStatus::PROPAGATE_WATERMARK | OutputPortWithStatus::PROPAGATE_HEARTBEAT);
+            }
+            else if (waiting_output.propagate_flag & OutputPortWithStatus::PROPAGATE_CHECKPOINT_REQUEST)
+            {
+                chunk.getOrCreateChunkContext()->setCheckpointContext(ckpt_ctx);
+                waiting_output.propagate_flag
+                    &= ~(OutputPortWithStatus::PROPAGATE_CHECKPOINT_REQUEST | OutputPortWithStatus::PROPAGATE_HEARTBEAT);
+                assert(num_checkpoint_requests > 0);
+                --num_checkpoint_requests;
+            }
+            else
+            {
+                waiting_output.propagate_flag &= ~OutputPortWithStatus::PROPAGATE_HEARTBEAT;
+            }
+
+            waiting_output.port->push(std::move(chunk));
+            waiting_output.status = OutputStatus::NotActive;
+            iter = waiting_outputs.erase(iter);
+        }
+        else
+            ++iter;
+    }
+
+    if (!waiting_outputs.empty())
+        return Status::NeedData;
+
     return Status::PortFull;
+}
+
+StrictResizeProcessor::StrictResizeProcessor(const Block & header, size_t num_inputs_and_outputs)
+    : IProcessor(
+        InputPorts(num_inputs_and_outputs, header),
+        OutputPorts(num_inputs_and_outputs, header),
+        ProcessorID::StreamingStrictResizeProcessorID)
+{
+    assert(num_inputs_and_outputs > 0);
 }
 
 IProcessor::Status StrictResizeProcessor::prepare(const PortNumbers & updated_inputs, const PortNumbers & updated_outputs)
