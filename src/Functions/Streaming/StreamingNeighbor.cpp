@@ -91,6 +91,7 @@ namespace
         /// Default alloctor will tracking by `CurrentMemoryTracker::allocNoThrow()`, which means that the memory will be unlimited
         /// Fixed here by using 'AllocatorWithMemoryTracking' -> `CurrentMemoryTracker::alloc()`
         using ColumnsWithIndex = std::deque<std::pair<size_t, ColumnPtr>, AllocatorWithMemoryTracking<std::pair<size_t, ColumnPtr>>>;
+        using CachedColumnsPair = std::pair<Int64, ColumnsWithIndex>;
         const Int64 max_prev_cache_rows = 0;
         DataTypePtr column_type;
         ColumnsWithIndex columns;
@@ -103,7 +104,7 @@ namespace
         {
         }
 
-        void add(ColumnPtr column)
+        CachedColumnsPair add(ColumnPtr column)
         {
             std::lock_guard lock(mutex);
             /// If prev columns cache full, we shall remove overflowing and useless column and/or set a valid begin_cursor
@@ -127,16 +128,13 @@ namespace
             /// Add current column
             columns.push_back({0, column});
             curr_cache_rows += column->size();
-        }
 
-        std::pair<Int64, ColumnsWithIndex> getRowsAndColumnsWithIndex() const
-        {
-            std::lock_guard lock(mutex);
             return {curr_cache_rows, columns};
         }
 
         void serialize(WriteBuffer & wb) const
         {
+            std::lock_guard lock(mutex);
             writeIntBinary(columns.size(), wb);
             for (const auto & [begin_offset, column] : columns)
             {
@@ -149,6 +147,7 @@ namespace
 
         void deserialize(ReadBuffer & rb)
         {
+            std::lock_guard lock(mutex);
             size_t columns_num;
             readIntBinary(columns_num, rb);
             for (size_t i = 0; i < columns_num; ++i)
@@ -356,7 +355,12 @@ namespace
 
         DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override { return checkAndGetReturnType<Name>(arguments); }
 
-        void insertIntoPrevColumn(MutableColumnPtr & result_column, size_t input_rows_count, bool default_is_constant, const ColumnPtr & default_column_casted) const
+        void insertIntoPrevColumn(
+            MutableColumnPtr & result_column,
+            const ColumnPtr & source_column_casted,
+            size_t input_rows_count,
+            bool default_is_constant,
+            const ColumnPtr & default_column_casted) const
         {
             Int64 missing_rows = input_rows_count;
             auto insert_range_from = [&](bool is_const, const ColumnPtr & src, Int64 begin, Int64 size) {
@@ -382,7 +386,7 @@ namespace
                 }
             };
 
-            auto [total_cached_rows, columns_with_index] = prev_offset_columns.getRowsAndColumnsWithIndex();
+            auto [total_cached_rows, columns_with_index] = prev_offset_columns.add(source_column_casted);
 
             /// insert default
             Int64 no_cached_rows = prev_offset + input_rows_count - total_cached_rows;
@@ -403,9 +407,14 @@ namespace
             }
         }
 
-        void insertIntoPrevColumns(MutableColumnPtr & result_column, size_t input_rows_count, bool default_is_constant, const ColumnPtr & default_column_casted) const
+        void insertIntoPrevColumns(
+            MutableColumnPtr & result_column,
+            const ColumnPtr & source_column_casted,
+            size_t input_rows_count,
+            bool default_is_constant,
+            const ColumnPtr & default_column_casted) const
         {
-            auto [total_cached_rows, columns_with_index] = prev_offset_columns.getRowsAndColumnsWithIndex();
+            auto [total_cached_rows, columns_with_index] = prev_offset_columns.add(source_column_casted);
             Int64 no_cached_rows = prev_offset + count - 1 + input_rows_count - total_cached_rows;
             size_t default_rows = no_cached_rows < 0 ? 0 : no_cached_rows;
             auto & array = assert_cast<ColumnArray &>(*result_column.get());
@@ -486,8 +495,6 @@ namespace
                     return source_column_casted;
             }
 
-            prev_offset_columns.add(source_column_casted);
-
             auto result_column = result_type->createColumn();
             ColumnPtr default_column_casted;
             bool default_is_constant = false;
@@ -505,7 +512,7 @@ namespace
                 if (default_is_constant)
                     default_column_casted = assert_cast<const ColumnConst &>(*default_column_casted).getDataColumnPtr();
 
-                insertIntoPrevColumns(result_column, input_rows_count, default_is_constant, default_column_casted);
+                insertIntoPrevColumns(result_column, source_column_casted, input_rows_count, default_is_constant, default_column_casted);
             }
             else
             {
@@ -522,8 +529,10 @@ namespace
                 if (default_is_constant)
                     default_column_casted = assert_cast<const ColumnConst &>(*default_column_casted).getDataColumnPtr();
 
-                insertIntoPrevColumn(result_column, input_rows_count, default_is_constant, default_column_casted);
+                insertIntoPrevColumn(result_column, source_column_casted, input_rows_count, default_is_constant, default_column_casted);
             }
+
+            assert(result_column->size() == input_rows_count);
 
             return result_column;
         }
