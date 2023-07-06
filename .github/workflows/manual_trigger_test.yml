@@ -25,7 +25,7 @@ on: # yamllint disable-line rule:truthy
         description: 'Run unit test'
         required: true
         type: boolean
-        default: true
+        default: false
       has_stateless_test:
         description: 'Run stateless test'
         required: true
