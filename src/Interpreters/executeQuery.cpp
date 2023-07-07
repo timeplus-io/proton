@@ -88,6 +88,8 @@ namespace ProfileEvents
     extern const Event QueryTimeMicroseconds;
     extern const Event SelectQueryTimeMicroseconds;
     extern const Event InsertQueryTimeMicroseconds;
+    extern const Event OSCPUWaitMicroseconds;
+    extern const Event OSCPUVirtualTimeMicroseconds;
 }
 
 namespace DB
@@ -664,6 +666,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             /// processlist also has query masked now, to avoid secrets leaks though SHOW PROCESSLIST by other users.
             process_list_entry = context->getProcessList().insert(query_for_logging, ast.get(), context);
             context->setProcessListElement(&process_list_entry->get());
+            /// proton: starts.
+            CurrentThread::get().performance_counters[ProfileEvents::OSCPUWaitMicroseconds] = 0;
+            CurrentThread::get().performance_counters[ProfileEvents::OSCPUVirtualTimeMicroseconds] = 0;
+            /// proton: ends.
         }
 
         /// Load external tables if they were provided

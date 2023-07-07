@@ -31,8 +31,16 @@
 #include <Storages/StorageFactory.h>
 #include <Common/ProtonCommon.h>
 #include <Common/checkStackSize.h>
+#include <Common/ProfileEvents.h>
 
 #include <ranges>
+
+
+namespace ProfileEvents
+{
+    extern const Event OSCPUWaitMicroseconds;
+    extern const Event OSCPUVirtualTimeMicroseconds;
+}
 
 namespace DB
 {
@@ -46,6 +54,8 @@ extern const int NUMBER_OF_COLUMNS_DOESNT_MATCH;
 extern const int RESOURCE_NOT_INITED;
 extern const int QUERY_WAS_CANCELLED;
 }
+
+
 
 namespace
 {
@@ -531,6 +541,8 @@ void StorageMaterializedView::doBuildBackgroundPipeline()
 
     process_list_entry = local_context->getProcessList().insert(serializeAST(*inner_query), inner_query.get(), local_context);
     local_context->setProcessListElement(&process_list_entry->get());
+    CurrentThread::get().performance_counters[ProfileEvents::OSCPUWaitMicroseconds] = 0;
+    CurrentThread::get().performance_counters[ProfileEvents::OSCPUVirtualTimeMicroseconds] = 0;
 
     /// [Pipeline]: `Source` -> `Converting` -> `Materializing const` -> `target_table`
     background_pipeline = select_interpreter.buildQueryPipeline();
