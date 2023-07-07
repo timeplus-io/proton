@@ -490,7 +490,7 @@
         },
         {
             "id": 163,
-            "tags": ["query_state", "view", "bug"],
+            "tags": ["query_state", "view"],
             "name": "to_float on filed out of map with emit version as view",
             "description": "create a stream state_stream6 with low_cardinality type and ingest, recover query view from state checkpoint",
             "steps":[

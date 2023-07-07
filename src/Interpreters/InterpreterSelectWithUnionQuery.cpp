@@ -21,6 +21,8 @@
 /// proton: starts.
 #include <DataTypes/ObjectUtils.h>
 #include <Processors/QueryPlan/QueryExecuteMode.h>
+#include <Processors/QueryPlan/Streaming/LimitStep.h>
+#include <Processors/QueryPlan/Streaming/OffsetStep.h>
 /// proton: ends.
 
 namespace DB
@@ -344,18 +346,38 @@ void InterpreterSelectWithUnionQuery::buildQueryPlan(QueryPlan & query_plan)
 
     if (settings_limit_offset_needed && !options.settings_limit_offset_done)
     {
-        if (settings.limit > 0)
+        /// proton: starts
+        if (isStreaming())
         {
-            auto limit = std::make_unique<LimitStep>(query_plan.getCurrentDataStream(), settings.limit, settings.offset);
-            limit->setStepDescription("LIMIT OFFSET for SETTINGS");
-            query_plan.addStep(std::move(limit));
+            if (settings.limit > 0)
+            {
+                auto limit = std::make_unique<Streaming::LimitStep>(query_plan.getCurrentDataStream(), settings.limit, settings.offset);
+                limit->setStepDescription("Streaming LIMIT OFFSET for SETTINGS");
+                query_plan.addStep(std::move(limit));
+            }
+            else
+            {
+                auto offset = std::make_unique<Streaming::OffsetStep>(query_plan.getCurrentDataStream(), settings.offset);
+                offset->setStepDescription("Streaming OFFSET for SETTINGS");
+                query_plan.addStep(std::move(offset));
+            }
         }
         else
         {
-            auto offset = std::make_unique<OffsetStep>(query_plan.getCurrentDataStream(), settings.offset);
-            offset->setStepDescription("OFFSET for SETTINGS");
-            query_plan.addStep(std::move(offset));
+            if (settings.limit > 0)
+            {
+                auto limit = std::make_unique<LimitStep>(query_plan.getCurrentDataStream(), settings.limit, settings.offset);
+                limit->setStepDescription("LIMIT OFFSET for SETTINGS");
+                query_plan.addStep(std::move(limit));
+            }
+            else
+            {
+                auto offset = std::make_unique<OffsetStep>(query_plan.getCurrentDataStream(), settings.offset);
+                offset->setStepDescription("OFFSET for SETTINGS");
+                query_plan.addStep(std::move(offset));
+            }
         }
+        /// proton: ends.
     }
 
     query_plan.addInterpreterContext(context);

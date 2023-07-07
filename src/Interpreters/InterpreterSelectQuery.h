@@ -190,6 +190,9 @@ private:
     void executeStreamingWindow(QueryPlan & query_plan);
     void executeStreamingOrder(QueryPlan & query_plan);
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
+    void executeStreamingPreLimit(QueryPlan & query_plan, bool do_not_skip_offset);
+    void executeStreamingLimit(QueryPlan & query_plan);
+    void executeStreamingOffset(QueryPlan & query_plan);
     void checkForStreamingQuery() const;
     bool shouldApplyWatermark() const;
     bool shouldKeepState() const;

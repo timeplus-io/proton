@@ -95,7 +95,9 @@
 #include <Parsers/ASTWindowDefinition.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStepWithSubstream.h>
+#include <Processors/QueryPlan/Streaming/LimitStep.h>
 #include <Processors/QueryPlan/Streaming/JoinStep.h>
+#include <Processors/QueryPlan/Streaming/OffsetStep.h>
 #include <Processors/QueryPlan/Streaming/ShufflingStep.h>
 #include <Processors/QueryPlan/Streaming/SortingStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
@@ -2897,6 +2899,11 @@ void InterpreterSelectQuery::executeDistinct(QueryPlan & query_plan, bool before
 /// Preliminary LIMIT - is used in every source, if there are several sources, before they are combined.
 void InterpreterSelectQuery::executePreLimit(QueryPlan & query_plan, bool do_not_skip_offset)
 {
+    /// proton: starts.
+    if (isStreaming())
+        return executeStreamingPreLimit(query_plan, do_not_skip_offset);
+    /// proton: ends.
+
     auto & query = getSelectQuery();
     /// If there is LIMIT
     if (query.limitLength())
@@ -2964,6 +2971,11 @@ void InterpreterSelectQuery::executeWithFill(QueryPlan & query_plan)
 
 void InterpreterSelectQuery::executeLimit(QueryPlan & query_plan)
 {
+    /// proton: starts.
+    if (isStreaming())
+        return executeStreamingLimit(query_plan);
+    /// proton: ends.
+
     auto & query = getSelectQuery();
     /// If there is LIMIT
     if (query.limitLength())
@@ -3011,6 +3023,11 @@ void InterpreterSelectQuery::executeLimit(QueryPlan & query_plan)
 
 void InterpreterSelectQuery::executeOffset(QueryPlan & query_plan)
 {
+    /// proton: starts.
+    if (isStreaming())
+        return executeStreamingOffset(query_plan);
+    /// proton: ends.
+
     auto & query = getSelectQuery();
     /// If there is not a LIMIT but an offset
     if (!query.limitLength() && query.limitOffset())
@@ -3714,6 +3731,95 @@ void InterpreterSelectQuery::checkUDA()
 bool InterpreterSelectQuery::isChangelog() const
 {
     return getDataStreamSemantic() == Streaming::DataStreamSemantic::Changelog || getDataStreamSemantic() == Streaming::DataStreamSemantic::ChangelogKV || analysis_result.force_internal_changelog_emit;
+}
+
+/// Preliminary LIMIT - is used in every source, if there are several sources, before they are combined.
+void InterpreterSelectQuery::executeStreamingPreLimit(QueryPlan & query_plan, bool do_not_skip_offset)
+{
+    auto & query = getSelectQuery();
+    /// If there is LIMIT
+    if (query.limitLength())
+    {
+        auto [limit_length, limit_offset] = getLimitLengthAndOffset(query, context);
+
+        if (do_not_skip_offset)
+        {
+            if (limit_length > std::numeric_limits<UInt64>::max() - limit_offset)
+                return;
+
+            limit_length += limit_offset;
+            limit_offset = 0;
+        }
+
+        auto limit = std::make_unique<Streaming::LimitStep>(query_plan.getCurrentDataStream(), limit_length, limit_offset);
+        if (do_not_skip_offset)
+            limit->setStepDescription("preliminary Streaming LIMIT (with OFFSET)");
+        else
+            limit->setStepDescription("preliminary Streaming LIMIT (without OFFSET)");
+
+        query_plan.addStep(std::move(limit));
+    }
+}
+
+void InterpreterSelectQuery::executeStreamingLimit(QueryPlan & query_plan)
+{
+    auto & query = getSelectQuery();
+    /// If there is LIMIT
+    if (query.limitLength())
+    {
+        /** Rare case:
+          *  if there is no WITH TOTALS and there is a subquery in FROM, and there is WITH TOTALS on one of the levels,
+          *  then when using LIMIT, you should read the data to the end, rather than cancel the query earlier,
+          *  because if you cancel the query, we will not get `totals` data from the remote server.
+          *
+          * Another case:
+          *  if there is WITH TOTALS and there is no ORDER BY, then read the data to the end,
+          *  otherwise TOTALS is counted according to incomplete data.
+          */
+        bool always_read_till_end = false;
+
+        if (query.group_by_with_totals && !query.orderBy())
+            always_read_till_end = true;
+
+        if (!query.group_by_with_totals && hasWithTotalsInAnySubqueryInFromClause(query))
+            always_read_till_end = true;
+
+        UInt64 limit_length;
+        UInt64 limit_offset;
+        std::tie(limit_length, limit_offset) = getLimitLengthAndOffset(query, context);
+
+        SortDescription order_descr;
+        if (query.limit_with_ties)
+        {
+            if (!query.orderBy())
+                throw Exception("Streaming LIMIT WITH TIES without ORDER BY", ErrorCodes::LOGICAL_ERROR);
+            order_descr = getSortDescription(query, context);
+        }
+
+        auto limit = std::make_unique<Streaming::LimitStep>(
+                query_plan.getCurrentDataStream(),
+                limit_length, limit_offset, always_read_till_end, query.limit_with_ties, order_descr);
+
+        if (query.limit_with_ties)
+            limit->setStepDescription("Streaming LIMIT WITH TIES");
+
+        query_plan.addStep(std::move(limit));
+    }
+}
+
+void InterpreterSelectQuery::executeStreamingOffset(QueryPlan & query_plan)
+{
+    auto & query = getSelectQuery();
+    /// If there is not a LIMIT but an offset
+    if (!query.limitLength() && query.limitOffset())
+    {
+        UInt64 limit_length;
+        UInt64 limit_offset;
+        std::tie(limit_length, limit_offset) = getLimitLengthAndOffset(query, context);
+
+        auto offsets_step = std::make_unique<Streaming::OffsetStep>(query_plan.getCurrentDataStream(), limit_offset);
+        query_plan.addStep(std::move(offsets_step));
+    }
 }
 /// proton: ends
 }
