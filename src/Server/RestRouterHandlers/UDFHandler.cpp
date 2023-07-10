@@ -159,6 +159,12 @@ bool UDFHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & 
     }
 
     const auto & args = payload->getArray("arguments");
+    if (args->size() < 1)
+    {
+        error_msg = fmt::format("Empty input argument is not supported.");
+        return false;
+    }
+
     for (unsigned int i = 0; i < args->size(); i++)
     {
         if (!args->getObject(i))

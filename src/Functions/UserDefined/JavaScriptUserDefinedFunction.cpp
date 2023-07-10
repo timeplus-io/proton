@@ -47,6 +47,9 @@ ColumnPtr JavaScriptUserDefinedFunction::userDefinedExecuteImpl(
 {
     const auto * config = executable_function->getConfiguration()->as<const JavaScriptUserDefinedFunctionConfiguration>();
 
+    if (arguments.size() < 1)
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Empty input argument is not supported for Javascript UDF.");
+
     assert(arguments[0].column);
     size_t row_num = arguments[0].column->size();
     MutableColumns columns;
