@@ -1,4 +1,5 @@
 #include "config.h"
+#include <Common/ProfileEvents.h>
 
 #if USE_AWS_S3
 
@@ -8,6 +9,7 @@
 
 #include <IO/WriteBufferFromS3.h>
 #include <IO/WriteHelpers.h>
+#include <IO/S3Common.h>
 #include <Interpreters/Context.h>
 
 #include <aws/s3/S3Client.h>
@@ -15,6 +17,7 @@
 #include <aws/s3/model/CompleteMultipartUploadRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/UploadPartRequest.h>
+#include <aws/s3/model/HeadObjectRequest.h>
 
 #include <utility>
 
@@ -22,6 +25,10 @@
 namespace ProfileEvents
 {
     extern const Event WriteBufferFromS3Bytes;
+    extern const Event S3WriteBytes;
+    extern const Event CompleteS3MultipartUpload;
+    extern const Event UploadS3Part;
+    extern const Event PutS3ObjectRequest;
 }
 
 namespace DB
@@ -156,6 +163,22 @@ void WriteBufferFromS3::finalizeImpl()
 
     if (!multipart_upload_id.empty())
         completeMultipartUpload();
+
+    if (s3_settings.check_objects_after_upload)
+    {
+        LOG_TRACE(log, "Checking object {} exists after upload", key);
+
+        Aws::S3::Model::HeadObjectRequest request;
+        request.SetBucket(bucket);
+        request.SetKey(key);
+
+        auto response = client_ptr->HeadObject(request);
+
+        if (!response.IsSuccess())
+            throw S3Exception(fmt::format("Object {} from bucket {} disappeared immediately after upload, it's a bug in S3 or S3 API.", key, bucket), response.GetError().GetErrorType());
+        else
+            LOG_TRACE(log, "Object {} exists after upload", key);
+    }
 }
 
 void WriteBufferFromS3::createMultipartUpload()
@@ -178,7 +201,7 @@ void WriteBufferFromS3::createMultipartUpload()
         LOG_TRACE(log, "Multipart upload has created. Bucket: {}, Key: {}, Upload id: {}", bucket, key, multipart_upload_id);
     }
     else
-        throw Exception(outcome.GetError().GetMessage(), ErrorCodes::S3_ERROR);
+        throw S3Exception(outcome.GetError().GetMessage(), outcome.GetError().GetErrorType());
 }
 
 void WriteBufferFromS3::writePart()
@@ -278,6 +301,7 @@ void WriteBufferFromS3::fillUploadRequest(Aws::S3::Model::UploadPartRequest & re
 
 void WriteBufferFromS3::processUploadRequest(UploadPartTask & task)
 {
+    ProfileEvents::increment(ProfileEvents::UploadS3Part);
     auto outcome = client_ptr->UploadPart(task.req);
 
     if (outcome.IsSuccess())
@@ -286,7 +310,7 @@ void WriteBufferFromS3::processUploadRequest(UploadPartTask & task)
         LOG_TRACE(log, "Writing part finished. Bucket: {}, Key: {}, Upload_id: {}, Etag: {}, Parts: {}", bucket, key, multipart_upload_id, task.tag, part_tags.size());
     }
     else
-        throw Exception(outcome.GetError().GetMessage(), ErrorCodes::S3_ERROR);
+        throw S3Exception(outcome.GetError().GetMessage(), outcome.GetError().GetErrorType());
 
     total_parts_uploaded++;
 }
@@ -298,6 +322,7 @@ void WriteBufferFromS3::completeMultipartUpload()
     if (part_tags.empty())
         throw Exception("Failed to complete multipart upload. No parts have uploaded", ErrorCodes::S3_ERROR);
 
+    ProfileEvents::increment(ProfileEvents::CompleteS3MultipartUpload);
     Aws::S3::Model::CompleteMultipartUploadRequest req;
     req.SetBucket(bucket);
     req.SetKey(key);
@@ -400,12 +425,13 @@ void WriteBufferFromS3::fillPutRequest(Aws::S3::Model::PutObjectRequest & req)
 
 void WriteBufferFromS3::processPutRequest(PutObjectTask & task)
 {
+    ProfileEvents::increment(ProfileEvents::PutS3ObjectRequest);
     auto outcome = client_ptr->PutObject(task.req);
     bool with_pool = bool(schedule);
     if (outcome.IsSuccess())
         LOG_TRACE(log, "Single part upload has completed. Bucket: {}, Key: {}, Object size: {}, WithPool: {}", bucket, key, task.req.GetContentLength(), with_pool);
     else
-        throw Exception(outcome.GetError().GetMessage(), ErrorCodes::S3_ERROR);
+        throw S3Exception(outcome.GetError().GetMessage(), outcome.GetError().GetErrorType());
 }
 
 void WriteBufferFromS3::waitForReadyBackGroundTasks()

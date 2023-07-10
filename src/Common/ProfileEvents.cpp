@@ -248,6 +248,18 @@
     M(S3WriteRequestsThrottling, "Number of 429 and 503 errors in POST, DELETE, PUT and PATCH requests to S3 storage.") \
     M(S3WriteRequestsRedirects, "Number of redirects in POST, DELETE, PUT and PATCH requests to S3 storage.") \
     \
+    M(DiskS3ReadMicroseconds, "Time of GET and HEAD requests to DiskS3 storage.") \
+    M(DiskS3ReadRequestsCount, "Number of GET and HEAD requests to DiskS3 storage.") \
+    M(DiskS3ReadRequestsErrors, "Number of non-throttling errors in GET and HEAD requests to DiskS3 storage.") \
+    M(DiskS3ReadRequestsThrottling, "Number of 429 and 503 errors in GET and HEAD requests to DiskS3 storage.") \
+    M(DiskS3ReadRequestsRedirects, "Number of redirects in GET and HEAD requests to DiskS3 storage.") \
+    \
+    M(DiskS3WriteMicroseconds, "Time of POST, DELETE, PUT and PATCH requests to DiskS3 storage.") \
+    M(DiskS3WriteRequestsCount, "Number of POST, DELETE, PUT and PATCH requests to DiskS3 storage.") \
+    M(DiskS3WriteRequestsErrors, "Number of non-throttling errors in POST, DELETE, PUT and PATCH requests to DiskS3 storage.") \
+    M(DiskS3WriteRequestsThrottling, "Number of 429 and 503 errors in POST, DELETE, PUT and PATCH requests to DiskS3 storage.") \
+    M(DiskS3WriteRequestsRedirects, "Number of redirects in POST, DELETE, PUT and PATCH requests to DiskS3 storage.") \
+    \
     M(ReadBufferFromS3Microseconds, "Time spend in reading from S3.") \
     M(ReadBufferFromS3Bytes, "Bytes read from S3.") \
     M(ReadBufferFromS3RequestsErrors, "Number of exceptions while reading from S3.") \
@@ -314,6 +326,17 @@
     M(MergeTreeMetadataCacheSeek, "Number of rocksdb seeks(used for merge tree metadata cache)") \
     M(MergeTreeMetadataCacheHit, "Number of times the read of meta file was done from MergeTree metadata cache") \
     M(MergeTreeMetadataCacheMiss, "Number of times the read of meta file was not done from MergeTree metadata cache") \
+    M(DeleteS3Objects, "Number of s3 API DeleteObjects be called") \
+    M(CopyS3Object, "Number of s3 API CopyObject be called") \
+    M(ListS3Objects, "Number of s3 API ListObjects be called") \
+    M(HeadS3Object,  "Number of s3 API HeadObject be called") \
+    M(CreateS3MultipartUpload, "Number of s3 API CreateMultipartUpload be called") \
+    M(UploadS3PartCopy, "Number of s3 API UploadPartCopy be called") \
+    M(UploadS3Part, "Number of s3 API UploadS3Part be called") \
+    M(AbortS3MultipartUpload, "Number of s3 API AbortMultipartUpload be called") \
+    M(CompleteS3MultipartUpload, "Number of s3 API CompleteS3MultipartUpload be called") \
+    M(PutS3ObjectRequest, "Number of s3 API PutS3ObjectRequest be called") \
+    M(GetS3ObjectRequest, "Number of s3 API GetS3ObjectRequest be called") \
     M(IOUringSQEsSubmitted, "Total number of io_uring SQEs submitted") \
     M(IOUringSQEsResubmits, "Total number of io_uring SQE resubmits performed") \
     M(IOUringCQEsCompleted, "Total number of successfully completed io_uring CQEs") \
