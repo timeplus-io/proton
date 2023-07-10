@@ -110,10 +110,13 @@ public:
     /// proton: starts.
     bool isStreaming() const
     {
-        return std::any_of(output_ports.begin(), output_ports.end(), [](const auto * output) {
-            assert(output);
-            return output->getProcessor().isStreaming();
-        });
+        if (!output_ports.empty())
+            return std::any_of(output_ports.begin(), output_ports.end(), [](const auto * output) {
+                assert(output);
+                return output->getProcessor().isStreaming();
+            });
+        else
+            return !processors.empty() ? processors.back()->isStreaming() : false; /// last sink prcessor
     }
 
     void resizeStreaming(size_t num_streams, bool force = false);

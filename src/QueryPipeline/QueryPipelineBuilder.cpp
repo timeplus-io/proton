@@ -259,6 +259,13 @@ QueryPipelineBuilder QueryPipelineBuilder::unitePipelines(
     if (pipelines.empty())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot unite an empty set of pipelines");
 
+    /// proton: starts.
+    /// FIXME: so far only supported by ConcatProcessor/JoinTransfrom, to support to support union/intersect/except ?
+    if (std::ranges::any_of(pipelines, [](const auto & pipeline) { return pipeline->isStreaming(); })
+        && std::ranges::any_of(pipelines, [](const auto & pipeline) { return !pipeline->isStreaming(); }))
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unite histocal pipeline and streaming pipeline doesn't support.");
+    /// proton: ends.
+
     Block common_header = pipelines.front()->getHeader();
 
     /// Should we limit the number of threads for united pipeline. True if all pipelines have max_threads != 0.

@@ -16,6 +16,23 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+/// proton: starts.
+void propagateStreaming(IProcessor & processor)
+{
+    if (processor.isStreaming())
+        return;
+
+    processor.setStreaming(true);
+
+    /// Continue to propagate streaming if the output port is connected
+    for (auto & output_port : processor.getOutputs())
+    {
+        if (output_port.isConnected())
+            propagateStreaming(output_port.getInputPort().getProcessor());
+    }
+}
+/// proton: ends.
+
 void connect(OutputPort & output, InputPort & input)
 {
     if (input.state)
@@ -36,7 +53,7 @@ void connect(OutputPort & output, InputPort & input)
 
     /// proton: starts. Propagate streaming flag, when any one connected input is streaming, this processor is streaming
     if (output.getProcessor().isStreaming())
-        input.getProcessor().setStreaming(true);
+        propagateStreaming(input.getProcessor());
     /// proton: ends.
 }
 
