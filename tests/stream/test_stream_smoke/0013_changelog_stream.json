@@ -8,12 +8,10 @@
         {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_stream"},
         {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists changelog_stream(i int) settings mode='changelog'"},
         {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_kv_stream"},
-        {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists changelog_kv_stream(i int, s string) primary key s settings mode='changelog_kv'"},
-        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists versioned_kv_stream"},
-        {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists versioned_kv_stream(i int, s string) primary key s settings mode='versioned_kv'"}
+        {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists changelog_kv_stream(i int, s string) primary key s settings mode='changelog_kv'"}
       ]
     },    
-    "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
+    "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "native_not_support"],"cluster": ["view", "cluster_table_bug"]}}
   },
   "comments": "Tests covering the single shard changelog stream query smoke cases.",
   "tests": [
@@ -68,31 +66,6 @@
     },
     {
       "id": 2,
-      "tags": ["versioned_kv_stream"],
-      "name": "single shard versioned_kv stream",
-      "description": "single shard versioned_kv stream creation and query",
-      "steps":[
-        {
-          "statements": [
-            {"client":"python", "query_type": "table", "depends_on_stream":"versioned_kv_stream", "wait":1, "query": "insert into versioned_kv_stream(i, s) values (1, 'a')"},
-            {"client":"python", "query_type": "table", "depends_on_stream":"versioned_kv_stream","wait":1, "query": "insert into versioned_kv_stream(i, s) values (2, 'b')"},
-            {"client":"python", "query_type": "table", "depends_on_stream":"versioned_kv_stream","wait":1, "query": "insert into versioned_kv_stream(i, s) values (2, 'a'), (3, 'b'), (4, 'c')"},
-            {"client":"python","query_id":"1402", "wait":2, "depends_on_stream":"versioned_kv_stream","query_end_timer":10, "query_type": "stream", "query":"select i, s from versioned_kv_stream;"},
-            {"client":"python", "query_type": "table","depends_on":1402, "depends_on_stream":"versioned_kv_stream", "wait":2, "query": "insert into versioned_kv_stream(i, s) values (5, 'd'), (6, 'c')"}
-          ]
-        }
-      ],
-      "expected_results": [
-        {
-          "query_id":"1402",
-          "expected_results":[
-            [2, "a"], [3, "b"], [4, "c"], [5, "d"], [6, "c"]
-          ]
-        }
-      ]
-    },
-    {
-      "id": 3,
       "tags": ["changelog_stream"],
       "name": "single shard changelog stream via rest",
       "description": "single shard changelog stream creation via rest",
@@ -100,8 +73,29 @@
         {
           "statements": [
             {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_stream_rest"},
-            {"client":"rest", "query_type": "table", "wait": 2, "rest_type": "raw", "query_url":"/proton/v1/ddl/streams", "query_id": 1403,"http_method": "POST",
+            {"client":"rest", "query_type": "table", "wait": 2, "rest_type": "raw", "query_url":"/proton/v1/ddl/streams", "query_id": 1402,"http_method": "POST",
               "data" : {"name": "changelog_stream_rest", "columns": [{"name": "i", "type": "int"}], "mode": "changelog"}}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1402",
+          "expected_results": {"request_id": "1402"}
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "tags": ["changelog_stream"],
+      "name": "single shard changelog_kv stream via rest",
+      "description": "single shard changelog_kv stream creation via rest",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_kv_stream_rest"},
+            {"client":"rest", "query_type": "table", "wait": 2, "rest_type": "raw", "query_url":"/proton/v1/ddl/streams", "query_id": 1403,"http_method": "POST",
+              "data" : {"name": "changelog_kv_stream_rest", "columns": [{"name": "i", "type": "int"}, {"name": "k", "type": "string"}], "mode": "changelog_kv", "primary_key": "k"}}
           ]
         }
       ],
@@ -113,46 +107,182 @@
       ]
     },
     {
-      "id": 4,
-      "tags": ["changelog_stream"],
-      "name": "single shard changelog_kv stream via rest",
-      "description": "single shard changelog_kv stream creation via rest",
-      "steps":[
-        {
-          "statements": [
-            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_kv_stream_rest"},
-            {"client":"rest", "query_type": "table", "wait": 2, "rest_type": "raw", "query_url":"/proton/v1/ddl/streams", "query_id": 1404,"http_method": "POST",
-              "data" : {"name": "changelog_kv_stream_rest", "columns": [{"name": "i", "type": "int"}, {"name": "k", "type": "string"}], "mode": "changelog_kv", "primary_key": "k"}}
-          ]
-        }
-      ],
-      "expected_results": [
-        {
-          "query_id":"1404",
-          "expected_results": {"request_id": "1404"}
-        }
-      ]
+        "id": 4,
+        "tags": ["changelog_kv_aggr", "bug"],
+        "name": "aggr_func_count_and_sum_changelog_kv",
+        "description": "aggregation function count and sum changelog_kv",
+        "steps":[
+            {
+                "statements": [
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists changelog_kv_stream"},
+                    {"client":"python", "query_type": "table", "exist":"changelog_kv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists changelog_kv_stream(id int, val float) primary key id settings mode='changelog_kv'"}, 
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(id, val) values (1, 1.1), (2, 2.2), (3, 3.3)"},
+                    {"client":"python", "query_type": "stream", "query_id":"1404", "depends_on_stream":"changelog_kv_stream", "wait":1, "terminate":"manuel", "query":"select count(val), min(val), max(val), sum(val), avg(val) from changelog_kv_stream emit periodic 1s"},
+                    {"client":"python", "query_type": "table", "depends_on":"1404", "wait":1, "query": "insert into changelog_kv_stream(id, val) values (4, 4.4), (5, 5.5)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(id, _tp_delta) values (3, -1)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(id, _tp_delta) values (1, -1)"},
+                    {"client":"python", "query_type": "table", "kill":"1404", "kill_wait":3, "wait":1, "query": "insert into changelog_kv_stream(id, _tp_delta) values (5, -1)"}
+                ]
+            }
+        ],
+        "expected_results": [
+            {
+                "query_id":"1404",
+                "expected_results":[
+                    ["3", "1.1", "3.3", "6.6", "2.2"],
+                    ["5", "1.1", "5.5", "16.5", "3.3"],
+                    ["4", "1.1", "5.5", "13.2", "3.3"],
+                    ["3", "2.2", "5.5", "12.1", "4.1"],
+                    ["2", "2.2", "4.4", "6.6", "3.3"]
+                ]
+            }
+        ]
     },
     {
-      "id": 5,
-      "tags": ["changelog_stream"],
-      "name": "single shard versioned_kv stream via rest",
-      "description": "single shard versioned_kv stream creation via rest",
-      "steps":[
-        {
-          "statements": [
-            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists versioned_kv_stream_rest"},
-            {"client":"rest", "query_type": "table", "wait": 2, "rest_type": "raw", "query_url":"/proton/v1/ddl/streams", "query_id": 1405,"http_method": "POST",
-              "data" : {"name": "versioned_kv_stream_rest", "columns": [{"name": "i", "type": "int"}, {"name": "k", "type": "string"}], "mode": "changelog_kv", "primary_key": "k"}}
-          ]
-        }
-      ],
-      "expected_results": [
-        {
-          "query_id":"1405",
-          "expected_results": {"request_id": "1405"}
-        }
-      ]
+        "id": 5,
+        "tags": ["changelog_kv_aggr", "native_not_support", "bug"],
+        "name": "aggr_func_count_distinct_and_count_if_changelog_kv",
+        "description": "aggregation function count_distinct and count_if changelog_kv",
+        "steps":[
+            {
+                "statements": [
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists changelog_kv_stream"},
+                    {"client":"python", "query_type": "table", "exist":"changelog_kv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists changelog_kv_stream(id int, val float) primary key id settings mode='changelog_kv'"}, 
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(id, val) values (1, 1.1), (2, 2.2), (3, 3.3)"},
+                    {"client":"python", "query_type": "stream", "query_id":"1405", "depends_on_stream":"changelog_kv_stream", "wait":1, "terminate":"manuel", "query":"select count(1), count_distinct(val), count_if(val > 2) from changelog_kv_stream emit periodic 1s"},
+                    {"client":"python", "query_type": "table", "depends_on":"1405", "wait":1, "query": "insert into changelog_kv_stream(id, val) values (4, 4.4), (5, 5.5)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(id, _tp_delta) values (3, -1)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(id, _tp_delta) values (1, -1)"},
+                    {"client":"python", "query_type": "table", "kill":"1405", "kill_wait":3, "wait":1, "query": "insert into changelog_kv_stream(id, _tp_delta) values (5, -1)"}
+                ]
+            }
+        ],
+        "expected_results": [
+            {
+                "query_id":"1405",
+                "expected_results":[
+                    ["3", "3", "2"],
+                    ["5", "5", "4"],
+                    ["4", "4", "3"],
+                    ["3", "3", "3"],
+                    ["2", "2", "2"]
+                ]
+            }
+        ]
+    },
+    {
+        "id": 6,
+        "tags": ["changelog_kv_aggr", "native_not_support", "bug"],
+        "name": "aggr_func_unique_exact_and_unique_exact_changelog_kv",
+        "description": "aggregation function unique_exact and unique_exact changelog_kv",
+        "steps":[
+            {
+                "statements": [
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists changelog_kv_stream"},
+                    {"client":"python", "query_type": "table", "exist":"changelog_kv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists changelog_kv_stream(id int, val float) primary key id settings mode='changelog_kv'"}, 
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(id, val) values (1, 1.1), (2, 2.2), (3, 3.3)"},
+                    {"client":"python", "query_type": "stream", "query_id":"1406", "depends_on_stream":"changelog_kv_stream", "wait":1, "terminate":"manuel", "query":"select unique(id), unique_exact(val), unique_exact_if(val > 2) from changelog_kv_stream emit periodic 1s"},
+                    {"client":"python", "query_type": "table", "depends_on":"1406", "wait":1, "query": "insert into changelog_kv_stream(id, val) values (4, 4.4), (5, 5.5)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(id, _tp_delta) values (2, -1)"},
+                    {"client":"python", "query_type": "table", "kill":"1406", "kill_wait":3, "wait":1, "query": "insert into changelog_kv_stream(id, _tp_delta) values (3, -1)"}
+                ]
+            }
+        ],
+        "expected_results": [
+            {
+                "query_id":"1406",
+                "expected_results":[
+                    ["3", "2", "1"],
+                    ["5", "3", "2"],
+                    ["4", "3", "2"],
+                    ["3", "2", "1"]
+                ]
+            }
+        ]
+    },
+    {
+        "id": 7,
+        "tags": ["changelog_kv_aggr", "native_not_support", "bug"],
+        "name": "aggr_func_median_and_quantile_changelog_kv",
+        "description": "aggregation function median and quantile changelog_kv",
+        "steps":[
+            {
+                "statements": [
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists changelog_kv_stream"},
+                    {"client":"python", "query_type": "table", "exist":"changelog_kv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists changelog_kv_stream(id int, val float) primary key id settings mode='changelog_kv'"}, 
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(id, val) values (1, 1.1), (2, 2.2), (3, 3.3)"},
+                    {"client":"python", "query_type": "stream", "query_id":"1407", "depends_on_stream":"changelog_kv_stream", "wait":1, "terminate":"manuel", "query":"select median(val), quantile(val, 0.5) from changelog_kv_stream emit periodic 1s"},
+                    {"client":"python", "query_type": "table", "depends_on":"1407", "wait":1, "query": "insert into changelog_kv_stream(id, val) values (4, 4.4), (5, 5.5)"},
+                    {"client":"python", "query_type": "table", "kill":"1407", "kill_wait":3, "wait":1, "query": "insert into changelog_kv_stream(id, _tp_delta) values (2, -1) (3, -1)"}
+                ]
+            }
+        ],
+        "expected_results": [
+            {
+                "query_id":"1407",
+                "expected_results":[
+                    ["2.2", "2.2"],
+                    ["3.3", "3.3"],
+                    ["4.4", "4.4"]
+                ]
+            }
+        ]
+    },
+    {
+        "id": 8,
+        "tags": ["changelog_kv_aggr", "native_not_support", "bug"],
+        "name": "aggr_func_top_k_changelog_kv",
+        "description": "aggregation function top_k changelog_kv",
+        "steps":[
+            {
+                "statements": [
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists changelog_kv_stream"},
+                    {"client":"python", "query_type": "table", "exist":"changelog_kv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists changelog_kv_stream(id int, val float) primary key id settings mode='changelog_kv'"}, 
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(id, val) values (1, 1.1), (1, 2.2), (3, 3.3)"},
+                    {"client":"python", "query_type": "stream", "query_id":"1408", "depends_on_stream":"changelog_kv_stream", "wait":1, "terminate":"manuel", "query":"select top_k(id, 2) from changelog_kv_stream emit periodic 1s"},
+                    {"client":"python", "query_type": "table", "depends_on":"1408", "wait":1, "query": "insert into changelog_kv_stream(id, val) values (4, 4.4), (4, 5.5)"},
+                    {"client":"python", "query_type": "table", "kill":"1408", "kill_wait":3, "wait":1, "query": "insert into changelog_kv_stream(id, _tp_delta) values (1, -1)"}
+                ]
+            }
+        ],
+        "expected_results": [
+            {
+                "query_id":"1408",
+                "expected_results":[
+                    ["(1, 2),(3, 1)"],
+                    ["(1, 2),(4, 2)"],
+                    ["(4, 2),(3, 1)"]
+                ]
+            }
+        ]
+    },
+    {
+        "id": 9,
+        "tags": ["changelog_kv_aggr", "native_not_support", "bug"],
+        "name": "aggr_func_min_k_and_max_k_changelog_kv",
+        "description": "aggregation function min_k and max_k changelog_kv",
+        "steps":[
+            {
+                "statements": [
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists changelog_kv_stream"},
+                    {"client":"python", "query_type": "table", "exist":"changelog_kv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists changelog_kv_stream(id int, val float) primary key id settings mode='changelog_kv'"}, 
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(id, val) values (1, 1.1), (1, 2.2), (3, 3.3)"},
+                    {"client":"python", "query_type": "stream", "query_id":"1409", "depends_on_stream":"changelog_kv_stream", "wait":1, "terminate":"manuel", "query":"select min_k(val, 2, id), max_k(val, 2, id) from changelog_kv_stream emit periodic 1s"},
+                    {"client":"python", "query_type": "table", "depends_on":"1409", "wait":1, "query": "insert into changelog_kv_stream(id, val) values (4, 4.4), (4, 5.5)"},
+                    {"client":"python", "query_type": "table", "kill":"1409", "kill_wait":3, "wait":1, "query": "insert into changelog_kv_stream(id, _tp_delta) values (1, -1) (5, -1)"}
+                ]
+            }
+        ],
+        "expected_results": [
+            {
+                "query_id":"1409",
+                "expected_results":[
+                    [["(1.1, 1), (2.2, 2)"], ["(3.3, 3), (2.2, 2)"]],
+                    [["(1.1, 1), (2.2, 2)"], ["(5.5, 5), (4.4, 4)"]],
+                    [["(2.2, 2), (3.3, 3)"], ["(4.4, 4), (3.3, 3)"]]
+                ]
+            }
+        ]
     }
   ]
 }
