@@ -13,6 +13,7 @@ enum class Strictness
     All, /// If there are many suitable rows to join, use all of them and replicate rows of "left" table (usual semantic of JOIN).
     Asof, /// For the last JOIN column, pick the latest value
     Range,
+    Multiple, /// Non unique join. Used for partial primary key join
 };
 
 /// Join method.

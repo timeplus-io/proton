@@ -204,12 +204,12 @@ inline void JoinTransform::doJoin(Chunks chunks)
     else
     {
         /// First insert right block to update the build-side hash table
-        if (chunks[1])
+        if (chunks[1].hasRows())
             join->insertRightBlock(input_ports_with_data[1].input_port->getHeader().cloneWithColumns(chunks[1].detachColumns()));
 
         /// Then use left block to join the right updated hash table
         /// Please note in this mode, right stream data only changes won't trigger join since left stream data is not buffered
-        if (chunks[0])
+        if (chunks[0].hasRows())
         {
             auto joined_block = input_ports_with_data[0].input_port->getHeader().cloneWithColumns(chunks[0].detachColumns());
             join->joinLeftBlock(joined_block);
@@ -230,7 +230,7 @@ inline void JoinTransform::joinBidirectionally(Chunks chunks)
 
     for (size_t i = 0; i < chunks.size(); ++i)
     {
-        if (chunks[i].getNumRows() == 0)
+        if (!chunks[i].hasRows())
             continue;
 
         auto block = input_ports_with_data[i].input_port->getHeader().cloneWithColumns(chunks[i].detachColumns());
@@ -262,7 +262,7 @@ inline void JoinTransform::rangeJoinBidirectionally(Chunks chunks)
 
     for (size_t i = 0; i < chunks.size(); ++i)
     {
-        if (chunks[i].getNumRows() == 0)
+        if (!chunks[i].hasRows())
             continue;
 
         auto block = input_ports_with_data[i].input_port->getHeader().cloneWithColumns(chunks[i].detachColumns());

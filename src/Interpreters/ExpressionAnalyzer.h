@@ -405,7 +405,7 @@ private:
     ///  appendProjectResult
 
     /// proton : starts
-    std::shared_ptr<IJoin> chooseJoinAlgorithmStreaming(std::shared_ptr<TableJoin> analyzed_join);
+    std::shared_ptr<IJoin> chooseJoinAlgorithmStreaming(std::shared_ptr<TableJoin> analyzed_join, std::optional<std::vector<std::string>> && primary_key_columns);
     /// proton : ends
 };
 

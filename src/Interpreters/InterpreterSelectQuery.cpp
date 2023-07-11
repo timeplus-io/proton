@@ -825,11 +825,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         if (storage)
         {
             /// proton: starts
-            if (isChangelog() && !analysis_result.force_internal_changelog_emit)
-            {
-                if (std::find(required_columns.begin(), required_columns.end(), ProtonConsts::RESERVED_DELTA_FLAG) == required_columns.end())
-                    required_columns.push_back(ProtonConsts::RESERVED_DELTA_FLAG);
-            }
+            addRequiredColumns();
             /// proton: ends
 
             /// Fix source_header for filter actions.
@@ -3276,6 +3272,28 @@ Streaming::DataStreamSemantic InterpreterSelectQuery::getDataStreamSemantic() co
     return *data_stream_semantic;
 }
 
+std::optional<std::vector<std::string>> InterpreterSelectQuery::primaryKeyColumns() const
+{
+    if (storage)
+    {
+        if (storage->as<StorageView>())
+        {
+            auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
+            auto ctx = Context::createCopy(context);
+            ctx->setCollectRequiredColumns(false);
+            return InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().analyze()).primaryKeyColumns();
+        }
+        else
+        {
+            return storage->getInMemoryMetadataPtr()->primary_key.column_names;
+        }
+    }
+    else if (interpreter_subquery)
+        return interpreter_subquery->primaryKeyColumns();
+
+    return {};
+}
+
 std::set<String> InterpreterSelectQuery::getGroupByColumns() const
 {
     std::set<String> group_by_columns;
@@ -3819,6 +3837,57 @@ void InterpreterSelectQuery::executeStreamingOffset(QueryPlan & query_plan)
 
         auto offsets_step = std::make_unique<Streaming::OffsetStep>(query_plan.getCurrentDataStream(), limit_offset);
         query_plan.addStep(std::move(offsets_step));
+    }
+}
+
+void InterpreterSelectQuery::addRequiredColumns()
+{
+    bool check_or_add_special_required_columns = syntax_analyzer_result->hasAggregation() || syntax_analyzer_result->analyzed_join;
+    if (!check_or_add_special_required_columns)
+        return;
+
+    assert(storage);
+
+    /// FIXME, instead of hacking the internal pipeline, syntax analyzer etc, could we just rewrite the SQL to
+    /// simplify everything for join / aggregation cases ?
+    /// For example, for changelog_kv stream which has primary key as (k, k1)
+    /// select count() from changelog_kv => select count() from (select _tp_delta from changelog_kv);
+    /// For left changelog_kv stream which has primary key as (k, k1), right changelog_kv which has primary key as (kk, kk1)
+    /// select k, kk from left_changelog inner join right_changelog on left_changelog.k == right_changelog.kk =>
+    /// select k, kk from (select k, k1 from left_changelog) as l inner join (select kk, kk1 from right_changelog) as r on l.k == r.kk
+    /// For version_kv stream which has primary key as (k, k1):
+    /// select a, k from append inner join version_kv on append.k = version_kv.k =>
+    /// select a, k from append inner join (select k, k1 from version_kv) as vk on append.k = vk.k
+    /// Actually, the logic will be far simpler if we enforce users to select primary key column at least for
+    /// versioned kv or select _tp_delta at least for changelog storage, but this may have slightly bad user experience
+    auto data_semantic = getDataStreamSemantic();
+
+    if (options.is_join_subquery
+        && (data_semantic == Streaming::DataStreamSemantic::VersionedKV || data_semantic == Streaming::DataStreamSemantic::ChangelogKV))
+    {
+        /// We will need always select all primary key columns for versioned  / changelog kv data stream
+        /// for aggregation / join cases
+        auto storage_metadata = storage->getInMemoryMetadataPtr();
+        assert(storage_metadata);
+
+        const auto & primary_key_columns = storage_metadata->primary_key.column_names;
+        assert(!primary_key_columns.empty());
+
+        for (const auto & key_col : primary_key_columns)
+            if (std::find(required_columns.begin(), required_columns.end(), key_col) == required_columns.end())
+                throw Exception(
+                    ErrorCodes::UNSUPPORTED,
+                    "Not all primary key columns of the version kv stream are not selected in a join scenario: {} is not selected. Select "
+                    "all primary keys.",
+                    key_col);
+    }
+
+    if (isChangelog() && !analysis_result.force_internal_changelog_emit)
+    {
+        /// For changelog semantic, we actually should always select primary key + _tp_delta columns
+        /// The `primary key` is used for join, the `_tp_delta` is used for retraction
+        if (std::find(required_columns.begin(), required_columns.end(), ProtonConsts::RESERVED_DELTA_FLAG) == required_columns.end())
+            required_columns.push_back(ProtonConsts::RESERVED_DELTA_FLAG);
     }
 }
 /// proton: ends

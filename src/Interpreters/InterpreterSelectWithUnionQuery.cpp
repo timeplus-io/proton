@@ -63,7 +63,7 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
         throw Exception("INTO OUTFILE is not allowed", ErrorCodes::INTO_OUTFILE_NOT_ALLOWED);
     /// proton: ends
 
-    /// Note that we pass 'required_result_column_names' to first SELECT.
+    /// Note that we pass 'required_result_column_names' to the first SELECT.
     /// And for the rest, we pass names at the corresponding positions of 'required_result_column_names' in the result of first SELECT,
     ///  because names could be different.
 
@@ -452,16 +452,24 @@ bool InterpreterSelectWithUnionQuery::hasStreamingWindowFunc() const
 
 Streaming::DataStreamSemantic InterpreterSelectWithUnionQuery::getDataStreamSemantic() const
 {
-    auto hash_semantic = nested_interpreters[0]->getDataStreamSemantic();
+    auto data_semantic = nested_interpreters[0]->getDataStreamSemantic();
 
     for (const auto & interpreter : nested_interpreters)
     {
-        /// In a union select, all individual selects shall have the same hash semantic
-        if (interpreter->getDataStreamSemantic() != hash_semantic)
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Mixing different storage type in a union query is not supported");
+        /// In a union select, all individual selects shall have the same data semantic
+        if (interpreter->getDataStreamSemantic() != data_semantic)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Mixing different storage types in a union query is currently not supported");
     }
 
-    return hash_semantic;
+    return data_semantic;
+}
+
+std::optional<std::vector<std::string>> InterpreterSelectWithUnionQuery::primaryKeyColumns() const
+{
+    if (nested_interpreters.size() > 1)
+        return {};
+
+    return nested_interpreters.back()->primaryKeyColumns();
 }
 
 ColumnsDescriptionPtr InterpreterSelectWithUnionQuery::getExtendedObjects() const

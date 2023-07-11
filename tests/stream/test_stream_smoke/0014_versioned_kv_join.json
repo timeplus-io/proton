@@ -366,17 +366,17 @@
         "steps":[
             {
                 "statements": [
-                    {"client":"python", "query_type": "table", "query":"drop stream if exists left_stream"},
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists append_left_stream"},
                     {"client":"python", "query_type": "table", "query":"drop stream if exists vk_right_stream"},
-                    {"client":"python", "query_type": "table", "exist":"left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists left_stream (i1 int, i2 int, s string)"}, 
+                    {"client":"python", "query_type": "table", "exist":"left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists append_left_stream (i1 int, i2 int, s string)"},
                     {"client":"python", "query_type": "table", "exist":"vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists vk_right_stream (ii1 int, ii2 int, ss string) primary key (ii1, ii2) settings mode='versioned_kv'"}, 
-                    {"client":"python", "query_type": "stream", "query_id":"1512", "wait":1, "terminate":"manuel", "query":"select s, ss from left_stream inner join vk_right_stream on i1 = ii1 and i2 = ii2"},
+                    {"client":"python", "query_type": "stream", "query_id":"1512", "wait":1, "terminate":"manuel", "query":"select s, ss from append_left_stream inner join vk_right_stream on i1 = ii1 and i2 = ii2"},
                     {"client":"python", "query_type": "table", "depends_on":"1512", "wait":1, "query": "insert into vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss11')"},
-                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i1, i2, s) values (1, 1, 's11')"},
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into append_left_stream(i1, i2, s) values (1, 1, 's11')"},
                     {"client":"python", "query_type": "table", "wait":1, "query": "insert into vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss112')"},
-                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i1, i2, s) values (1, 1, 's11')"},
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into append_left_stream(i1, i2, s) values (1, 1, 's11')"},
                     {"client":"python", "query_type": "table", "wait":1, "query": "insert into vk_right_stream(ii1, ii2, ss) values (1, 2, 'ss12')"},
-                    {"client":"python", "query_type": "table", "kill":"1512", "kill_wait":3, "wait":1, "query": "insert into left_stream(i1, i2, s) values (1, 2, 's12')"}
+                    {"client":"python", "query_type": "table", "kill":"1512", "kill_wait":3, "wait":1, "query": "insert into append_left_stream(i1, i2, s) values (1, 2, 's12')"}
                 ]
             }
         ],
@@ -429,22 +429,22 @@
     },
     {
         "id": 14,
-        "tags": ["partial_primary_key_join", "bug"],
+        "tags": ["partial_primary_key_join"],
         "name": "append-only_join_versioned_kv",
         "description": "append-only join versioned_kv with partial primary key join",
         "steps":[
             {
                 "statements": [
-                    {"client":"python", "query_type": "table", "query":"drop stream if exists left_stream"},
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists append_left_stream"},
                     {"client":"python", "query_type": "table", "query":"drop stream if exists vk_right_stream"},
-                    {"client":"python", "query_type": "table", "exist":"left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists left_stream (i1 int, i2 int, s string)"}, 
+                    {"client":"python", "query_type": "table", "exist":"left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists append_left_stream (i1 int, i2 int, s string)"},
                     {"client":"python", "query_type": "table", "exist":"vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists vk_right_stream (ii1 int, ii2 int, ss string) primary key (ii1, ii2) settings mode='versioned_kv'"}, 
-                    {"client":"python", "query_type": "stream", "query_id":"1514", "wait":1, "terminate":"manuel", "query":"select s, ss from left_stream inner join vk_right_stream on i1 = ii1"},
+                    {"client":"python", "query_type": "stream", "query_id":"1514", "wait":1, "terminate":"manuel", "query":"select s, ss, ii2 from append_left_stream inner join vk_right_stream on i1 = ii1"},
                     {"client":"python", "query_type": "table", "depends_on":"1514", "wait":1, "query": "insert into vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss11')"},
-                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i1, i2, s) values (1, 1, 's11')"},
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into append_left_stream(i1, i2, s) values (1, 1, 's11')"},
                     {"client":"python", "query_type": "table", "wait":1, "query": "insert into vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss112')"},
                     {"client":"python", "query_type": "table", "wait":1, "query": "insert into vk_right_stream(ii1, ii2, ss) values (1, 2, 'ss12')"},
-                    {"client":"python", "query_type": "table", "kill":"1514", "kill_wait":3, "wait":1, "query": "insert into left_stream(i1, i2, s) values (1, 2, 's12')"}
+                    {"client":"python", "query_type": "table", "kill":"1514", "kill_wait":3, "wait":1, "query": "insert into append_left_stream(i1, i2, s) values (1, 2, 's12')"}
                 ]
             }
         ],
@@ -452,9 +452,9 @@
             {
                 "query_id":"1514",
                 "expected_results":[
-                    ["s11", "ss11"], 
-                    ["s12", "ss112"], 
-                    ["s12", "ss12"]
+                    ["s11", "ss11", 1],
+                    ["s12", "ss112", 1],
+                    ["s12", "ss12", 2]
                 ]
             }
         ]
@@ -499,16 +499,16 @@
         "steps":[
             {
                 "statements": [
-                    {"client":"python", "query_type": "table", "query":"drop stream if exists left_stream"},
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists append_left_stream"},
                     {"client":"python", "query_type": "table", "query":"drop stream if exists vk_right_stream"},
-                    {"client":"python", "query_type": "table", "exist":"left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists left_stream (i1 int, i2 int, s string)"}, 
+                    {"client":"python", "query_type": "table", "exist":"left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists append_left_stream (i1 int, i2 int, s string)"},
                     {"client":"python", "query_type": "table", "exist":"vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists vk_right_stream (ii1 int, ii2 int, ss string) primary key (ii1, ii2) settings mode='versioned_kv'"}, 
-                    {"client":"python", "query_type": "stream", "query_id":"1516", "wait":1, "terminate":"manuel", "query":"select i1, i2, ii1, ii2, s, ss from left_stream inner join vk_right_stream on s = ss"},
+                    {"client":"python", "query_type": "stream", "query_id":"1516", "wait":1, "terminate":"manuel", "query":"select i1, i2, ii1, ii2, s, ss from append_left_stream inner join vk_right_stream on s = ss"},
                     {"client":"python", "query_type": "table", "depends_on":"1516", "wait":1, "query": "insert into vk_right_stream(ii1, ii2, ss) values (1, 1, 's1')"},
-                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i1, i2, s) values (1, 1, 's1')"},
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into append_left_stream(i1, i2, s) values (1, 1, 's1')"},
                     {"client":"python", "query_type": "table", "wait":1, "query": "insert into vk_right_stream(ii1, ii2, ss) values (1, 1, 's2')"},
                     {"client":"python", "query_type": "table", "wait":1, "query": "insert into vk_right_stream(ii1, ii2, ss) values (1, 2, 's1')"},
-                    {"client":"python", "query_type": "table", "kill":"1516", "kill_wait":3, "wait":1, "query": "insert into left_stream(i1, i2, s) values (1, 2, 's1')"}
+                    {"client":"python", "query_type": "table", "kill":"1516", "kill_wait":3, "wait":1, "query": "insert into append_left_stream(i1, i2, s) values (1, 2, 's1')"}
                 ]
             }
         ],
@@ -523,7 +523,39 @@
         ]
     },
     {
-        "id": 17,
+      "id": 17,
+      "tags": ["no_primary_key_join"],
+      "name": "append-only_join_versioned_kv",
+      "description": "append-only join versioned_kv with no primary key join",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query":"drop stream if exists append_left_stream"},
+            {"client":"python", "query_type": "table", "query":"drop stream if exists vk_right_stream"},
+            {"client":"python", "query_type": "table", "exist":"append_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists append_left_stream (i1 int, i2 int, s string)"},
+            {"client":"python", "query_type": "table", "exist":"vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists vk_right_stream (ii1 int, ii2 int, ss string) primary key (ii1, ii2) settings mode='versioned_kv'"},
+            {"client":"python", "query_type": "stream", "query_id":"1517", "wait":1, "terminate":"manuel", "query":"select i1, i2, ii1, ii2, s, ss from append_left_stream inner join vk_right_stream on s = ss"},
+            {"client":"python", "query_type": "table", "depends_on":"1517", "wait":1, "query": "insert into vk_right_stream(ii1, ii2, ss) values (1, 1, 's1')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into append_left_stream(i1, i2, s) values (1, 1, 's1')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into vk_right_stream(ii1, ii2, ss) values (1, 1, 's2')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into vk_right_stream(ii1, ii2, ss) values (1, 2, 's1'), (1, 3, 's1')"},
+            {"client":"python", "query_type": "table", "kill":"1517", "kill_wait":3, "wait":1, "query": "insert into append_left_stream(i1, i2, s) values (1, 2, 's1')"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1517",
+          "expected_results":[
+            [1, 1, 1, 1, "s1", "s1"],
+            [1, 2, 1, 2, "s1", "s1"],
+            [1, 2, 1, 3, "s1", "s1"]
+          ]
+        }
+      ]
+    },
+    {
+        "id": 18,
         "tags": ["no_primary_key_join"],
         "name": "versioned_kv_join_versioned_kv",
         "description": "versioned_kv join versioned_kv with no primary key join",
@@ -534,17 +566,17 @@
                     {"client":"python", "query_type": "table", "query":"drop stream if exists vk_right_stream"},
                     {"client":"python", "query_type": "table", "exist":"vk_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists vk_left_stream (i1 int, i2 int, s string) primary key (i1, i2) settings mode='versioned_kv'"}, 
                     {"client":"python", "query_type": "table", "exist":"vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists vk_right_stream (ii1 int, ii2 int, ss string) primary key (ii1, ii2) settings mode='versioned_kv'"}, 
-                    {"client":"python", "query_type": "stream", "query_id":"1517", "wait":1, "terminate":"manuel", "query":"select i1, i2, ii1, ii2, s, ss, _tp_delta from vk_left_stream inner join vk_right_stream on s = ss"},
-                    {"client":"python", "query_type": "table", "depends_on":"1517", "wait":1, "query": "insert into vk_left_stream(i1, i2, s) values (1, 1, 's1')"},
+                    {"client":"python", "query_type": "stream", "query_id":"1518", "wait":1, "terminate":"manuel", "query":"select i1, i2, ii1, ii2, s, ss, _tp_delta from vk_left_stream inner join vk_right_stream on s = ss"},
+                    {"client":"python", "query_type": "table", "depends_on":"1518", "wait":1, "query": "insert into vk_left_stream(i1, i2, s) values (1, 1, 's1')"},
                     {"client":"python", "query_type": "table", "wait":1, "query": "insert into vk_right_stream(ii1, ii2, ss) values (1, 1, 's1')"},
                     {"client":"python", "query_type": "table", "wait":1, "query": "insert into vk_left_stream(i1, i2, s) values (1, 1, 's2')"},
-                    {"client":"python", "query_type": "table", "kill":"1517", "kill_wait":3, "wait":1, "query": "insert into vk_left_stream(i1, i2, s) values (1, 2, 's1')"}
+                    {"client":"python", "query_type": "table", "kill":"1518", "kill_wait":3, "wait":1, "query": "insert into vk_left_stream(i1, i2, s) values (1, 2, 's1')"}
                 ]
             }
         ],
         "expected_results": [
             {
-                "query_id":"1517",
+                "query_id":"1518",
                 "expected_results":[
                     [1, 1, 1, 1, "s1", "s1", 1], 
                     [1, 1, 1, 1, "s1", "s1", -1], 

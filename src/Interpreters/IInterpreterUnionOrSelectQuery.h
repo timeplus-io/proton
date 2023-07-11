@@ -84,6 +84,7 @@ public:
     virtual bool hasGlobalAggregation() const = 0;
     virtual bool hasStreamingWindowFunc() const = 0;
     virtual Streaming::DataStreamSemantic getDataStreamSemantic() const = 0;
+    virtual std::optional<std::vector<std::string>> primaryKeyColumns() const = 0;
 
     /// Return the object column descriptions of the current query to provide subcolumns information to downstream
     /// pipeline. If the current query doesn't have any object columns, return empty but non-nullptr ColumnsDescription.

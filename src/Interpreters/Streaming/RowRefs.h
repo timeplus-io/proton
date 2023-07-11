@@ -98,6 +98,42 @@ private:
     }
 };
 
+/// Use linked list to maintain the row refs
+/// since we may delete some of the row refs when there is override
+/// Used for partial primary key join scenarios
+struct RowRefListMultiple
+{
+    using Iterator = std::list<RowRefWithRefCount>::iterator;
+
+    std::list<RowRefWithRefCount> rows;
+
+    Iterator insert(JoinBlockList * blocks, size_t row_num) { return rows.emplace(rows.end(), blocks, row_num); }
+
+    void erase(Iterator iterator) { rows.erase(iterator); }
+};
+
+using RowRefListMultiplePtr = std::unique_ptr<RowRefListMultiple>;
+
+struct RowRefListMultipleRef
+{
+    RowRefListMultiple * row_ref_list = nullptr;
+    RowRefListMultiple::Iterator iterator;
+
+    void erase()
+    {
+        if (row_ref_list == nullptr)
+            /// Already erased or empty state
+            return;
+
+        row_ref_list->erase(iterator);
+
+        row_ref_list = nullptr;
+        iterator = RowRefListMultiple::Iterator{};
+    }
+};
+
+using RowRefListMultipleRefPtr = std::unique_ptr<RowRefListMultipleRef>;
+
 template <typename TEntry>
 class SortedLookupVector
 {
@@ -251,12 +287,9 @@ public:
         bool is_left_block) const;
 
     /// Find the last one
-    const RowRef * findAsof(
-        TypeIndex type,
-        const RangeAsofJoinContext & range_join_ctx,
-        const IColumn & asof_column,
-        size_t row_num,
-        UInt64 src_block_id) const;
+    const RowRef *
+    findAsof(TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num, UInt64 src_block_id)
+        const;
 
 private:
     // Lookups can be stored in a HashTable because it is memmovable

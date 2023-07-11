@@ -51,6 +51,10 @@ struct SelectQueryOptions
     bool settings_limit_offset_done = false;
     bool is_explain = false; /// The value is true if it's explain statement.
 
+    /// proton : starts
+    bool is_join_subquery = false; /// If the `select` is part of the right stream of the subquery in a join
+    /// proton : ends
+
     /// These two fields are used to evaluate shardNum() and shardCount() function when
     /// prefer_localhost_replica == 1 and local instance is selected. They are needed because local
     /// instance might have multiple shards and scalars can only hold one value.
@@ -157,6 +161,14 @@ struct SelectQueryOptions
         is_explain = value;
         return *this;
     }
+
+    /// proton : starts
+    SelectQueryOptions & setJoinSubquery(bool value = true)
+    {
+        is_join_subquery = value;
+        return *this;
+    }
+    /// proton : ends
 };
 
 }

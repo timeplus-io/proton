@@ -58,6 +58,7 @@ struct TreeRewriterResult
     bool streaming = true;
     bool has_group_by = false;
     NameSet unresolved_reserved_columns;
+    bool hasAggregation() const noexcept { return has_group_by || !aggregates.empty(); }
     /// proton: ends
 
     /// The backward mapping for array_join_alias_to_name.

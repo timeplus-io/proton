@@ -40,6 +40,8 @@ struct HashBlocks
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arena pool;
 
+    /// Hash maps variants are attached to original source blocks, and will be garbage collected
+    /// automatically along with the source blocks. Hence put it here instead of BufferedStreamData
     std::unique_ptr<HashJoinMapsVariants> maps;
     BlockNullmapList blocks_nullmaps; /// Nullmaps for blocks of "right" table (if needed)
 };
@@ -48,17 +50,10 @@ using HashBlocksPtr = std::shared_ptr<HashBlocks>;
 class HashJoin;
 struct BufferedStreamData
 {
-    explicit BufferedStreamData(HashJoin * join_) : join(join_), current_hash_blocks(std::make_shared<HashBlocks>(metrics)) { }
+    explicit BufferedStreamData(HashJoin * join_);
 
     /// For asof join
-    BufferedStreamData(HashJoin * join_, const RangeAsofJoinContext & range_asof_join_ctx_, const String & asof_column_name_)
-        : join(join_)
-        , range_asof_join_ctx(range_asof_join_ctx_)
-        , asof_col_name(asof_column_name_)
-        , current_hash_blocks(std::make_shared<HashBlocks>(metrics))
-    {
-        updateBucketSize();
-    }
+    BufferedStreamData(HashJoin * join_, const RangeAsofJoinContext & range_asof_join_ctx_, const String & asof_column_name_);
 
     /// Add block, assign block id and return block id
     Int64 addBlock(Block && block);
@@ -147,11 +142,6 @@ struct BufferedStreamData
 
     HashJoin * join;
 
-    /// Fast boolean to check if there are new data
-    /// For range join (range bucket) case, we don't need loop the `range_bucket_hashed_blocks`
-    /// to answer this inquery
-    bool has_new_data_since_last_join = false;
-
     RangeAsofJoinContext range_asof_join_ctx;
     Int64 bucket_size = 0;
     Int64 join_start_bucket_offset = 0;
@@ -178,6 +168,7 @@ private:
     /// 4) For global join, it points to the global working blocks since there is not range bucket in this case
     HashBlocksPtr current_hash_blocks;
 
+    /// Only for range join
     std::map<Int64, HashBlocksPtr> range_bucket_hash_blocks;
 };
 

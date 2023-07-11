@@ -556,7 +556,7 @@ JoinMask getColumnAsMask(const Block & block, const String & column_name)
         return JoinMask(std::move(join_condition_col));
 }
 
-
+/// Split sample block into joining-key block and non-joining-key block
 void splitAdditionalColumns(const Names & key_names, const Block & sample_block, Block & block_keys, Block & block_others)
 {
     block_others = materializeBlock(sample_block);

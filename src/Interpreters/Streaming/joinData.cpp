@@ -14,6 +14,20 @@ HashBlocks::HashBlocks(JoinMetrics & metrics) : blocks(metrics), maps(std::make_
 
 HashBlocks::~HashBlocks() = default;
 
+BufferedStreamData::BufferedStreamData(HashJoin * join_) : join(join_), current_hash_blocks(std::make_shared<HashBlocks>(metrics))
+{
+}
+
+/// For asof join
+BufferedStreamData::BufferedStreamData(HashJoin * join_, const RangeAsofJoinContext & range_asof_join_ctx_, const String & asof_column_name_)
+    : join(join_)
+    , range_asof_join_ctx(range_asof_join_ctx_)
+    , asof_col_name(asof_column_name_)
+    , current_hash_blocks(std::make_shared<HashBlocks>(metrics))
+{
+    updateBucketSize();
+}
+
 size_t BufferedStreamData::removeOldBuckets(std::string_view stream)
 {
     Int64 watermark = join->combined_watermark;

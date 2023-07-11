@@ -117,6 +117,7 @@ public:
     bool hasAggregation() const override { return query_analyzer->hasAggregation(); }
     bool isStreaming() const override;
     Streaming::DataStreamSemantic getDataStreamSemantic() const override;
+    std::optional<std::vector<std::string>> primaryKeyColumns() const override;
     std::set<String> getGroupByColumns() const override;
     bool hasStreamingWindowFunc() const override;
     Streaming::WindowType windowType() const;
@@ -205,6 +206,7 @@ private:
 
     ColumnsDescriptionPtr getExtendedObjects() const override;
     bool isChangelog() const;
+    void addRequiredColumns();
     /// proton: ends
 
     enum class Modificator

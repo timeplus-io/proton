@@ -1,5 +1,4 @@
 #include <Common/typeid_cast.h>
-#include <IO/WriteHelpers.h>
 
 #include <Storages/IStorage.h>
 
@@ -28,12 +27,17 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
     return interpretSubquery(table_expression, context, required_source_columns, subquery_options);
 }
 
+std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(const ASTPtr & table_expression, ContextPtr context, const Names & required_source_columns, const SelectQueryOptions & options)
+{
+    return interpretSubquery(table_expression, context, required_source_columns, options, nullptr);
+}
+
 std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
     const ASTPtr & table_expression,
     ContextPtr context,
     const Names & required_source_columns,
     const SelectQueryOptions & options,
-    SeekToInfoPtr seek_to_info) /// proton: added seek_to_info
+    SeekToInfoPtr seek_to_info)
 {
     if (auto * expr = table_expression->as<ASTTableExpression>())
     {
@@ -45,9 +49,7 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
         else if (expr->database_and_table_name)
             table = expr->database_and_table_name;
 
-        /// proton: starts. Added seek_to_info
         return interpretSubquery(table, context, required_source_columns, options, seek_to_info);
-        /// proton: ends.
     }
 
     /// Subquery or table name. The name of the table is similar to the subquery `SELECT * FROM t`.
@@ -56,9 +58,7 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
     const auto * table = table_expression->as<ASTTableIdentifier>();
 
     if (!subquery && !table && !function)
-        /// proton: starts
         throw Exception("Stream expression is undefined, Method: ExpressionAnalyzer::interpretSubquery." , ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
 
     /** The subquery in the IN / JOIN section does not have any restrictions on the maximum size of the result.
       * Because the result of this query is not the result of the entire query.

@@ -286,10 +286,11 @@ public:
     };
 
     using MapsOne = MapsTemplate<RowRefWithRefCount>;
+    using MapsMultiple = MapsTemplate<RowRefListMultiplePtr>;
     using MapsAll = MapsTemplate<RowRefList>;
     using MapsAsof = MapsTemplate<AsofRowRefs>;
     using MapsRangeAsof = MapsTemplate<RangeAsofRowRefs>;
-    using MapsVariant = std::variant<MapsOne, MapsAll, MapsAsof, MapsRangeAsof>;
+    using MapsVariant = std::variant<MapsOne, MapsAll, MapsAsof, MapsRangeAsof, MapsMultiple>;
 
     size_t sizeOfMapsVariant(const MapsVariant & maps_variant) const;
 
@@ -332,6 +333,7 @@ private:
     void initBufferedData();
     void initHashMaps(std::vector<MapsVariant> & all_maps);
     void dataMapInit(MapsVariant &);
+    void initPrimaryKeyHashTable();
 
     void initLeftBlockStructure();
     void initRightBlockStructure();
@@ -359,7 +361,7 @@ private:
     std::vector<Block> insertBlockToRangeBucketsAndJoin(Block block);
 
     template <bool is_left_block>
-    Int64 doInsertBlock(Block block, HashBlocksPtr target_hash_blocks);
+    Int64 doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std::vector<RowRefListMultipleRef *> row_refs = {});
 
     /// For bidirectional hash join
     /// Return retracted block if needs emit changelog, otherwise empty block
@@ -383,6 +385,13 @@ private:
     /// Secondly, `combined_watermark` is calculated periodically according the watermarks in the left and right streams
     void calculateWatermark();
 
+    /// Check if this ia row with a new primary key or an existing primary key
+    /// For the later, erase the element in the target join linked list
+    std::vector<RowRefListMultipleRef *> eraseOrAppendForPartialPrimaryKeyJoin(const Block & block);
+
+    template<typename KeyGetter, typename Map>
+    std::vector<RowRefListMultipleRef *> eraseOrAppendForPartialPrimaryKeyJoin(Map & map, const ColumnRawPtrs & primary_key_columns);
+
 private:
     std::shared_ptr<TableJoin> table_join;
     JoinKind kind;
@@ -400,16 +409,40 @@ private:
 
     std::vector<Sizes> key_sizes;
 
+    /// versioned-kv and changelog-kv both needs define a primary key
+    /// If join on partial primary key columns (or no primary key column is expressed in join on clause),
+    /// init this data structure
+    struct PrimaryKeyHashTable
+    {
+        PrimaryKeyHashTable(Type hash_method_type_, Sizes && key_size_);
+
+        Type hash_method_type;
+
+        Sizes key_size;
+
+        /// For key allocation
+        Arena pool;
+
+        /// Hash maps variants indexed by primary key columns
+        MapsTemplate<RowRefListMultipleRefPtr> map;
+    };
+    using PrimaryKeyHashTablePtr = std::shared_ptr<PrimaryKeyHashTable>;
+
     struct JoinData
     {
         explicit JoinData(JoinStreamDescriptionPtr join_stream_desc_) : join_stream_desc(std::move(join_stream_desc_))
         {
             assert(join_stream_desc);
+            /// [[maybe_unused]] auto kv_semantic = isKeyValueDataStreamSemantic(join_stream_desc->data_stream_semantic);
+            /// assert(!kv_semantic || (kv_semantic && join_stream_desc->primary_key_columns && !join_stream_desc->primary_key_columns.value().empty()));
         }
 
         JoinStreamDescriptionPtr join_stream_desc;
 
         ColumnWithTypeAndName asof_key_column;
+
+        /// Only for kv join. Used to maintain all unique keys
+        PrimaryKeyHashTablePtr primary_key_hash_table;
 
         BufferedStreamDataPtr buffered_data;
 

@@ -314,6 +314,7 @@ private:
 template <Kind KIND, Strictness STRICTNESS>
 struct JoinFeatures
 {
+    static constexpr bool is_multi_join = STRICTNESS == Strictness::Multiple;
     static constexpr bool is_latest_join = STRICTNESS == Strictness::Latest;
     static constexpr bool is_all_join = STRICTNESS == Strictness::All;
     static constexpr bool is_asof_join = STRICTNESS == Strictness::Asof;
@@ -323,7 +324,7 @@ struct JoinFeatures
     static constexpr bool right = KIND == Kind::Right;
     static constexpr bool inner = KIND == Kind::Inner;
 
-    static constexpr bool need_replication = is_all_join || (is_latest_join && right) || is_range_join;
+    static constexpr bool need_replication = is_all_join || (is_latest_join && right) || is_range_join || is_multi_join;
     static constexpr bool need_filter = !need_replication && (inner || right);
     static constexpr bool add_missing = left;
 
@@ -448,6 +449,17 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
                 {
                     setUsed<need_filter>(filter, i);
                     addFoundRowAll<Map, jf.add_missing>(mapped, added_columns, current_offset, i);
+                }
+                else if constexpr (jf.is_multi_join)
+                {
+                    setUsed<need_filter>(filter, i);
+
+                    assert(!mapped->rows.empty());
+                    for (const auto & row_ref : mapped->rows)
+                    {
+                        added_columns.appendFromBlock<jf.add_missing>(row_ref.block_iter->block, row_ref.row_num);
+                        ++current_offset;
+                    }
                 }
                 else if constexpr ((jf.is_latest_join) && jf.right)
                 {
@@ -592,6 +604,22 @@ struct Inserter
         }
     }
 
+    static ALWAYS_INLINE void
+    insertMultiple(const HashJoin & join, Map & map, KeyGetter & key_getter, JoinBlockList * blocks, size_t i, Arena & pool, RowRefListMultipleRef * multiple_ref)
+    {
+        assert(multiple_ref->row_ref_list == nullptr);
+
+        auto emplace_result = key_getter.emplaceKey(map, i, pool);
+        auto * mapped = &emplace_result.getMapped();
+
+        if (emplace_result.isInserted())
+            mapped = new (mapped) typename Map::mapped_type(std::make_unique<RowRefListMultiple>());
+
+        auto iter = (*mapped)->insert(blocks, i);
+        multiple_ref->iterator = iter;
+        multiple_ref->row_ref_list = mapped->get();
+    }
+
     static ALWAYS_INLINE void insertRangeAsof(
         HashJoin & join, Map & map, KeyGetter & key_getter, const Block * stored_block, size_t i, Arena & pool, const IColumn & asof_column)
     {
@@ -634,9 +662,11 @@ size_t NO_INLINE insertFromBlockImplTypeCase(
     const Sizes & key_sizes,
     JoinBlockList * blocks,
     ConstNullMapPtr null_map,
-    Arena & pool)
+    Arena & pool,
+    std::vector<RowRefListMultipleRef *> & row_refs)
 {
     [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<typename Map::mapped_type, RowRefWithRefCount>;
+    [[maybe_unused]] constexpr bool mapped_multiple = std::is_same_v<typename Map::mapped_type, RowRefListMultiplePtr>;
 
     constexpr bool is_range_asof_join = (STRICTNESS == Strictness::Range);
     constexpr bool is_asof_join = (STRICTNESS == Strictness::Asof);
@@ -658,6 +688,11 @@ size_t NO_INLINE insertFromBlockImplTypeCase(
             Inserter<Map, KeyGetter>::insertAsof(join, map, key_getter, blocks, i, pool, *asof_column, join.keepVersions());
         else if constexpr (mapped_one)
             Inserter<Map, KeyGetter>::insertOne(join, map, key_getter, blocks, i, pool);
+        else if constexpr (mapped_multiple)
+        {
+            if (row_refs[i])
+                Inserter<Map, KeyGetter>::insertMultiple(join, map, key_getter, blocks, i, pool, row_refs[i]);
+        }
         else
             Inserter<Map, KeyGetter>::insertAll(join, map, key_getter, blocks->lastBlock(), i, pool);
     }
@@ -673,14 +708,15 @@ size_t insertFromBlockImplType(
     const Sizes & key_sizes,
     JoinBlockList * blocks,
     ConstNullMapPtr null_map,
-    Arena & pool)
+    Arena & pool,
+    std::vector<RowRefListMultipleRef *> & row_refs)
 {
     if (null_map)
         return insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(
-            join, map, rows, key_columns, key_sizes, blocks, null_map, pool);
+            join, map, rows, key_columns, key_sizes, blocks, null_map, pool, row_refs);
     else
         return insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(
-            join, map, rows, key_columns, key_sizes, blocks, null_map, pool);
+            join, map, rows, key_columns, key_sizes, blocks, null_map, pool, row_refs);
 }
 
 template <Strictness STRICTNESS, typename Maps>
@@ -693,7 +729,8 @@ size_t insertFromBlockImpl(
     const Sizes & key_sizes,
     JoinBlockList * blocks,
     ConstNullMapPtr null_map,
-    Arena & pool)
+    Arena & pool,
+    std::vector<RowRefListMultipleRef *> & row_refs)
 {
     switch (type)
     {
@@ -702,7 +739,7 @@ size_t insertFromBlockImpl(
         return insertFromBlockImplType< \
             STRICTNESS, \
             typename KeyGetterForType<HashJoin::Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
-            join, *maps.TYPE, rows, key_columns, key_sizes, blocks, null_map, pool); \
+            join, *maps.TYPE, rows, key_columns, key_sizes, blocks, null_map, pool, row_refs); \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
@@ -733,20 +770,6 @@ HashJoin::HashJoin(
     , logger(&Poco::Logger::get("StreamingHashJoin"))
 {
     init();
-
-    if (table_join->oneDisjunct())
-    {
-        const auto & key_names_right = table_join->getOnlyClause().key_names_right;
-        JoinCommon::splitAdditionalColumns(
-            key_names_right, right_data.join_stream_desc->sample_block, right_data.table_keys, right_data.sample_block_with_columns_to_add);
-        right_data.required_keys = table_join->getRequiredRightKeys(right_data.table_keys, right_data.required_keys_sources);
-    }
-    else
-    {
-        /// required right keys concept does not work well if multiple disjuncts, we need all keys
-        /// SELECT * FROM left JOIN right ON left.key = right.key OR left.value = right.value
-        right_data.sample_block_with_columns_to_add = right_data.table_keys = materializeBlock(right_data.join_stream_desc->sample_block);
-    }
 
     initRightBlockStructure();
 
@@ -794,8 +817,11 @@ void HashJoin::init()
     /// There are only 2 case so far we will need emit changelog
     /// 1. append-only [inner] latest join append-only
     /// 2. versioned-kv [inner] join versioned-kv
+    /// 3. changelog-kv [inner] join changelog-kv
     emit_changelog = (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV
                       && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV)
+        || (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::ChangelogKV
+            && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::ChangelogKV)
         || (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
             && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
             && streaming_strictness == Strictness::Latest);
@@ -813,6 +839,9 @@ void HashJoin::init()
     /// append-only inner join append-only on ... and date_diff_within(10s)
     range_bidirectional_hash_join = bidirectional_hash_join && (streaming_strictness == Strictness::Range);
 
+    /// If right stream is key-value data stream semantic, init extra data structure
+    initPrimaryKeyHashTable();
+
     initBufferedData();
 
     /// Strictness::Any in streaming join means take the latest row to join
@@ -829,6 +858,64 @@ void HashJoin::init()
     cond_column_names.reserve(on_exprs.size());
     for (const auto & on_expr : on_exprs)
         cond_column_names.push_back(on_expr.condColumnNames());
+
+    if (table_join->oneDisjunct())
+    {
+        const auto & key_names_right = table_join->getOnlyClause().key_names_right;
+        JoinCommon::splitAdditionalColumns(
+            key_names_right, right_data.join_stream_desc->sample_block, right_data.table_keys, right_data.sample_block_with_columns_to_add);
+        right_data.required_keys = table_join->getRequiredRightKeys(right_data.table_keys, right_data.required_keys_sources);
+    }
+    else
+    {
+        /// required right keys concept does not work well if multiple disjuncts, we need all keys
+        /// SELECT * FROM left JOIN right ON left.key = right.key OR left.value = right.value
+        right_data.sample_block_with_columns_to_add = right_data.table_keys = materializeBlock(right_data.join_stream_desc->sample_block);
+    }
+}
+
+void HashJoin::initPrimaryKeyHashTable()
+{
+    /// FIXME, for version kv join version kv, changelog kv join changelog kv
+    /// we shall support join on non-primary key. For now for bidirectional hash join, do nothing
+    if (bidirectional_hash_join || streaming_strictness == Streaming::Strictness::Asof)
+        return;
+
+    assert(isKeyValueDataStreamSemantic(right_data.join_stream_desc->data_stream_semantic));
+
+    /// When `append-only` stream join `versioned-kv`, if we didn't join on primary key columns fully
+    /// We will need maintain extra data structures to figure out if a row is one with a new primary key
+    /// or an update to an existing primary key shown before
+    const auto & clause = table_join->getClauses().front();
+    const auto & key_names_right = clause.key_names_right;
+
+    ColumnRawPtrs primary_key_columns;
+    primary_key_columns.reserve(right_data.join_stream_desc->primary_key_columns->size());
+
+    bool join_on_partial_primary_key_columns = false;
+    for (const auto & key_col_pos : right_data.join_stream_desc->primary_key_columns.value())
+    {
+        const auto & key_col = right_data.join_stream_desc->sample_block.getByPosition(key_col_pos);
+        primary_key_columns.push_back(key_col.column.get());
+
+        if (std::find(key_names_right.begin(), key_names_right.end(), key_col.name) == key_names_right.end())
+            join_on_partial_primary_key_columns = true;
+    }
+
+    /// If all primary key columns are joined, then do nothing
+    if (!join_on_partial_primary_key_columns)
+        return;
+
+    Sizes primary_key_size;
+    auto primary_key_hash_method_type = chooseMethod(primary_key_columns, primary_key_size);
+
+    right_data.primary_key_hash_table = std::make_shared<PrimaryKeyHashTable>(primary_key_hash_method_type, std::move(primary_key_size));
+
+    /// Correct strictness from `latest` to `multiple` since we will need buffer multiple elements
+    /// for partial primary key columns
+    streaming_strictness = Streaming::Strictness::Multiple;
+
+    LOG_INFO(logger, "Partial primary key join case");
 }
 
 /// Left stream header is only known at late stage after HashJoin is created
@@ -1000,7 +1087,7 @@ void HashJoin::dataMapInit(MapsVariant & map)
     [[maybe_unused]] auto inited = joinDispatchInit(streaming_kind, streaming_strictness, map);
     assert(inited);
 
-    inited = joinDispatch(streaming_kind, streaming_strictness, map, [&](auto, auto, auto & map_) { map_.create(hash_method_type); });
+    inited = joinDispatch(streaming_kind, streaming_strictness, map, [this](auto, auto, auto & map_) { map_.create(hash_method_type); });
     assert(inited);
 }
 
@@ -1140,7 +1227,7 @@ bool HashJoin::addJoinedBlock(const Block & block, bool /*check_limits*/)
 }
 
 template <bool is_left_block>
-Int64 HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks)
+Int64 HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std::vector<RowRefListMultipleRef *> row_refs)
 {
     /// FIXME, there are quite some block copies
     /// FIXME, all_key_columns shall hold shared_ptr to columns instead of raw ptr
@@ -1211,7 +1298,8 @@ Int64 HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks)
                 key_sizes[0],
                 &target_hash_blocks->blocks,
                 null_map,
-                target_hash_blocks->pool);
+                target_hash_blocks->pool,
+                row_refs);
         });
 
     if (save_nullmap)
@@ -1423,6 +1511,7 @@ void HashJoin::doJoinBlockWithHashTable(Block & block, HashBlocksPtr target_hash
                 is_left_block ? onexpr.key_names_right : onexpr.key_names_left,
                 is_left_block ? cond_column_name.second : cond_column_name.first);
         }
+
         joining_data->validated_join_key_types = true;
     }
 
@@ -1555,7 +1644,7 @@ void HashJoin::initBufferedData()
     }
     else
     {
-        /// Although joining `versioned_kv` doesn't need hold left data in memory
+        /// Although `append-only` joining `versioned-kv` doesn't need hold left data in memory
         /// we init the left_data to handle different case uniformly
         right_data.buffered_data = std::make_unique<BufferedStreamData>(this);
         left_data.buffered_data = std::make_unique<BufferedStreamData>(this);
@@ -1573,7 +1662,8 @@ void HashJoin::insertRightBlock(Block right_block)
 {
     assert(!range_bidirectional_hash_join);
 
-    doInsertBlock<false>(std::move(right_block), right_data.buffered_data->getCurrentHashBlocksPtr());
+    auto row_refs = eraseOrAppendForPartialPrimaryKeyJoin(right_block);
+    doInsertBlock<false>(std::move(right_block), right_data.buffered_data->getCurrentHashBlocksPtr(), std::move(row_refs));
 }
 
 Block HashJoin::insertLeftBlockAndJoin(Block & left_block)
@@ -1709,6 +1799,76 @@ std::vector<Block> HashJoin::insertRightBlockToRangeBucketsAndJoin(Block right_b
         block.reorderColumnsInplace(output_header);
 
     return joined_blocks;
+}
+
+std::vector<RowRefListMultipleRef *> HashJoin::eraseOrAppendForPartialPrimaryKeyJoin(const Block & block)
+{
+    if (!right_data.primary_key_hash_table)
+        return {};
+
+    ColumnRawPtrs primary_key_columns;
+    primary_key_columns.reserve(right_data.join_stream_desc->primary_key_columns->size());
+
+    for (auto col_pos : right_data.join_stream_desc->primary_key_columns.value())
+        primary_key_columns.push_back(block.getByPosition(col_pos).column.get());
+
+    switch (right_data.primary_key_hash_table->hash_method_type)
+    {
+#define M(TYPE) \
+    case HashJoin::Type::TYPE: \
+        return eraseOrAppendForPartialPrimaryKeyJoin< \
+            typename KeyGetterForType<HashJoin::Type::TYPE, std::remove_reference_t<decltype(*right_data.primary_key_hash_table->map.TYPE)>>::Type>( \
+            *right_data.primary_key_hash_table->map.TYPE, primary_key_columns); \
+        break;
+        APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+    }
+}
+
+template<typename KeyGetter, typename Map>
+std::vector<RowRefListMultipleRef *> HashJoin::eraseOrAppendForPartialPrimaryKeyJoin(Map & map, const ColumnRawPtrs & primary_key_columns)
+{
+    auto key_getter = createKeyGetter<KeyGetter, false>(primary_key_columns, right_data.primary_key_hash_table->key_size);
+
+    auto rows = primary_key_columns[0]->size();
+
+    std::vector<RowRefListMultipleRef *> multi_refs;
+    multi_refs.reserve(rows);
+
+    /// Compact rows since there may be multiple rows which has the same primary key, in this case we only keep the
+    /// last one in this block
+    std::unordered_map<RowRefListMultipleRef *, size_t> compacted_multi_refs;
+    compacted_multi_refs.reserve(rows);
+
+    for (size_t i = 0; i < rows; ++i)
+    {
+        /// FIXME, null column
+        auto emplace_result = key_getter.emplaceKey(map, i, right_data.primary_key_hash_table->pool);
+        auto * mapped = &emplace_result.getMapped();
+
+        if (emplace_result.isInserted())
+            /// This row contains a new primary key,
+            /// init it with empty ref
+            mapped = new (mapped) typename Map::mapped_type(std::make_unique<RowRefListMultipleRef>());
+        else
+            /// We have seen this primary key before
+            /// Erase it from the target linked list since we will append this element soon
+            /// Erase followed by append acts like override
+            (*mapped)->erase();
+
+        auto iter = compacted_multi_refs.find(mapped->get());
+        if (iter != compacted_multi_refs.end())
+            /// Found dup key, null the previous slot and we will skip the previous row
+            /// when insert
+            multi_refs[iter->second] = nullptr;
+
+        multi_refs.push_back(mapped->get());
+        compacted_multi_refs[mapped->get()] = i;
+    }
+
+    assert(multi_refs.size() == rows);
+
+    return multi_refs;
 }
 
 void HashJoin::calculateWatermark()
@@ -1868,7 +2028,7 @@ void HashJoin::checkLimits() const
 
 void HashJoin::validateAsofJoinKey()
 {
-    if (streaming_strictness == Strictness::All || streaming_strictness == Strictness::Asof || streaming_strictness == Strictness::Latest)
+    if (streaming_strictness != Strictness::Range)
         return;
 
     if (table_join->rangeAsofJoinContext().type != RangeType::Interval)
@@ -2112,6 +2272,12 @@ size_t HashJoin::sizeOfMapsVariant(const MapsVariant & maps_variant) const
     return size;
 }
 
+HashJoin::PrimaryKeyHashTable::PrimaryKeyHashTable(HashJoin::Type hash_method_type_, Sizes && key_size_)
+    : hash_method_type(hash_method_type_), key_size(std::move(key_size_))
+{
+    map.create(hash_method_type);
+}
+
 String HashJoin::JoinResults::joinMetricsString(const HashJoin * join) const
 {
     size_t total_blocks_cached = blocks.size();
@@ -2159,5 +2325,5 @@ size_t HashJoinMapsVariants::size(const HashJoin * join) const
     return total_keys;
 }
 
-};
+}
 }

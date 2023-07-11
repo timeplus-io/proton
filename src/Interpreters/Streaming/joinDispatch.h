@@ -17,6 +17,27 @@ template <Kind kind, Strictness>
 struct MapGetter;
 
 template <>
+struct MapGetter<Kind::Left, Strictness::Multiple>
+{
+    using Map = HashJoin::MapsMultiple;
+    static constexpr bool flagged = false;
+};
+
+template <>
+struct MapGetter<Kind::Inner, Strictness::Multiple>
+{
+    using Map = HashJoin::MapsMultiple;
+    static constexpr bool flagged = true;
+};
+
+template <>
+struct MapGetter<Kind::Right, Strictness::Multiple>
+{
+    using Map = HashJoin::MapsMultiple;
+    static constexpr bool flagged = true;
+};
+
+template <>
 struct MapGetter<Kind::Left, Strictness::Latest>
 {
     using Map = HashJoin::MapsOne;
@@ -72,7 +93,7 @@ struct MapGetter<kind, Strictness::Range>
 };
 
 static constexpr std::array<Strictness, 5> STRICTNESSES
-    = {Strictness::All, Strictness::Range, Strictness::Asof, Strictness::Latest};
+    = {Strictness::All, Strictness::Range, Strictness::Asof, Strictness::Latest, Strictness::Multiple};
 
 static constexpr std::array<Kind, 3> KINDS = {Kind::Left, Kind::Inner, Kind::Right};
 
