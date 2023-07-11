@@ -29,17 +29,17 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageFactory.h>
+#include <Common/ProfileEvents.h>
 #include <Common/ProtonCommon.h>
 #include <Common/checkStackSize.h>
-#include <Common/ProfileEvents.h>
 
 #include <ranges>
 
 
 namespace ProfileEvents
 {
-    extern const Event OSCPUWaitMicroseconds;
-    extern const Event OSCPUVirtualTimeMicroseconds;
+extern const Event OSCPUWaitMicroseconds;
+extern const Event OSCPUVirtualTimeMicroseconds;
 }
 
 namespace DB
@@ -54,7 +54,6 @@ extern const int NUMBER_OF_COLUMNS_DOESNT_MATCH;
 extern const int RESOURCE_NOT_INITED;
 extern const int QUERY_WAS_CANCELLED;
 }
-
 
 
 namespace
@@ -188,8 +187,8 @@ void StorageMaterializedView::startup()
 
     DatabaseCatalog::instance().addDependency(target_table_id, storage_id);
 
-    /// Sync target table settings
-    updateStorageSettings();
+    /// Sync target table settings and ttls
+    updateStorageSettingsAndTTLs();
 
     if (!is_virtual)
         executeSelectPipeline();
@@ -354,7 +353,7 @@ void StorageMaterializedView::dropInnerTableIfAny(bool no_delay, ContextPtr loca
 void StorageMaterializedView::alter(const AlterCommands & commands, ContextPtr context_, AlterLockHolder & alter_lock_holder)
 {
     getTargetTable()->alter(commands, context_, alter_lock_holder);
-    updateStorageSettings();
+    updateStorageSettingsAndTTLs();
 }
 
 void StorageMaterializedView::checkAlterIsPossible(const AlterCommands & commands, ContextPtr ctx) const
@@ -362,10 +361,10 @@ void StorageMaterializedView::checkAlterIsPossible(const AlterCommands & command
     if (!has_inner_table)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Materialized view with specified target stream can't be altered.");
 
-    auto metadata = getInMemoryMetadataPtr();
-    if (!std::all_of(
-            commands.begin(), commands.end(), [&](const AlterCommand & c) { return c.isSettingsAlter() || c.isTTLAlter(*metadata); }))
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only materialized view's settings/ttl can be altered.");
+    if (!std::ranges::all_of(commands, [&](const AlterCommand & c) {
+            return c.isSettingsAlter() || c.type == AlterCommand::MODIFY_TTL || c.type == AlterCommand::REMOVE_TTL;
+        }))
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only materialized view's settings/table_ttl can be altered.");
 
     getTargetTable()->checkAlterIsPossible(commands, ctx);
 }
@@ -490,10 +489,13 @@ void StorageMaterializedView::doCreateInnerTable(const StorageMetadataPtr & meta
                           ->getStorageID();
 }
 
-void StorageMaterializedView::updateStorageSettings()
+void StorageMaterializedView::updateStorageSettingsAndTTLs()
 {
-    StorageInMemoryMetadata meta(*getInMemoryMetadataPtr());
-    meta.setSettingsChanges(getTargetTable()->getInMemoryMetadataPtr()->getSettingsChanges());
+    auto meta = getInMemoryMetadata();
+    auto target_metadata = getTargetTable()->getInMemoryMetadataPtr();
+    meta.setSettingsChanges(target_metadata->getSettingsChanges());
+    meta.setTableTTLs(target_metadata->getTableTTLs());
+    // meta.setColumnTTLs(target_metadata->getColumnTTLs()); /// Not support
     setInMemoryMetadata(meta);
 }
 
@@ -536,8 +538,7 @@ void StorageMaterializedView::doBuildBackgroundPipeline()
 
     auto & inner_query = metadata_snapshot->getSelectQuery().inner_query;
 
-    InterpreterSelectWithUnionQuery select_interpreter(
-        inner_query, local_context, SelectQueryOptions());
+    InterpreterSelectWithUnionQuery select_interpreter(inner_query, local_context, SelectQueryOptions());
 
     process_list_entry = local_context->getProcessList().insert(serializeAST(*inner_query), inner_query.get(), local_context);
     local_context->setProcessListElement(&process_list_entry->get());
@@ -618,7 +619,8 @@ void StorageMaterializedView::doBuildBackgroundPipeline()
     {
         /// Query was killed before execution
         if ((*process_list_entry)->isKilled())
-            throw Exception("Query '" + (*process_list_entry)->getInfo().client_info.current_query_id + "' is killed in pending state",
+            throw Exception(
+                "Query '" + (*process_list_entry)->getInfo().client_info.current_query_id + "' is killed in pending state",
                 ErrorCodes::QUERY_WAS_CANCELLED);
     }
 
@@ -637,7 +639,7 @@ void StorageMaterializedView::executeBackgroundPipeline()
             {
                 if (build_pipeline_thread.joinable())
                     build_pipeline_thread.join();
-            
+
                 if (unlikely(background_status.has_exception))
                 {
                     LOG_ERROR(log, "Skip to execute background pipeline for materialized view {}", getStorageID().getFullTableName());

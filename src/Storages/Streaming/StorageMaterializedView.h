@@ -81,7 +81,7 @@ private:
 
     void cancelBackgroundPipeline();
 
-    void updateStorageSettings();
+    void updateStorageSettingsAndTTLs();
 
     void validateInnerQuery(const StorageInMemoryMetadata & storage_metadata, const ContextPtr & local_context) const;
 
