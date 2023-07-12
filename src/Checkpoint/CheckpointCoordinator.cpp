@@ -41,7 +41,7 @@ String formatNodeDescriptions(const std::vector<ExecutingGraph::NodeDescription>
 struct CheckpointableQuery
 {
     /// Query DAG, maybe using std::weak_ptr makes more sense
-    std::shared_ptr<PipelineExecutor> executor;
+    std::weak_ptr<PipelineExecutor> executor;
 
     absl::flat_hash_set<UInt32> ack_node_ids_readonly;
     absl::flat_hash_set<UInt32> ack_node_ids;
@@ -65,7 +65,9 @@ struct CheckpointableQuery
 
     String ackNodeDescriptions() const
     {
-        auto node_descs = executor->getExecGraph().nodeDescriptions(
+        auto exec = executor.lock();
+        assert(exec);
+        auto node_descs = exec->getExecGraph().nodeDescriptions(
             ack_node_ids_readonly.begin(), ack_node_ids_readonly.end(), ack_node_ids_readonly.size());
 
         return formatNodeDescriptions(node_descs);
@@ -73,23 +75,28 @@ struct CheckpointableQuery
 
     String outstandingAckNodeDescriptions() const
     {
-        auto node_descs = executor->getExecGraph().nodeDescriptions(ack_node_ids.begin(), ack_node_ids.end(), ack_node_ids.size());
+        auto exec = executor.lock();
+        assert(exec);
+        auto node_descs = exec->getExecGraph().nodeDescriptions(ack_node_ids.begin(), ack_node_ids.end(), ack_node_ids.size());
 
         return formatNodeDescriptions(node_descs);
     }
 
     String sourceNodeDescriptions() const
     {
-        auto source_nodes = executor->getCheckpointSourceNodeIDs();
-        auto node_descs = executor->getExecGraph().nodeDescriptions(source_nodes.begin(), source_nodes.end(), source_nodes.size());
+        auto exec = executor.lock();
+        assert(exec);
+        auto source_nodes = exec->getCheckpointSourceNodeIDs();
+        auto node_descs = exec->getExecGraph().nodeDescriptions(source_nodes.begin(), source_nodes.end(), source_nodes.size());
 
         return formatNodeDescriptions(node_descs);
     }
 
-    CheckpointableQuery(std::shared_ptr<PipelineExecutor> executor_, std::optional<Int64> recovered_epoch) : executor(std::move(executor_))
+    CheckpointableQuery(std::weak_ptr<PipelineExecutor> executor_, std::optional<Int64> recovered_epoch) : executor(std::move(executor_))
     {
-        assert(executor);
-        auto node_ids{executor->getCheckpointAckNodeIDs()};
+        auto exec = executor.lock();
+        assert(exec);
+        auto node_ids{exec->getCheckpointAckNodeIDs()};
 
         ack_node_ids_readonly.reserve(node_ids.size());
         ack_node_ids_readonly.insert(node_ids.begin(), node_ids.end());
@@ -144,7 +151,7 @@ void CheckpointCoordinator::registerQuery(
     const String & qid,
     const String & query,
     UInt64 ckpt_interval,
-    std::shared_ptr<PipelineExecutor> executor,
+    std::weak_ptr<PipelineExecutor> executor,
     std::optional<Int64> recovered_epoch)
 {
     auto ckpt_query = std::make_unique<CheckpointableQuery>(executor, std::move(recovered_epoch));
@@ -169,7 +176,11 @@ void CheckpointCoordinator::registerQuery(
     auto ckpt_ctx = std::make_shared<CheckpointContext>(0, qid, this);
 
     /// First persist the graph
-    executor->serialize(ckpt_ctx);
+    {
+        auto exec = executor.lock();
+        assert(exec);
+        exec->serialize(ckpt_ctx);
+    }
 
     /// Then persist the query in a different file.
     /// We choose to persist query here for easier to recover the query from the ckpt
@@ -209,7 +220,7 @@ void CheckpointCoordinator::removeCheckpoint(const String & qid)
 {
     LOG_INFO(logger, "Going to clean checkpoints for query={}", qid);
 
-    PipelineExecutorPtr executor;
+    std::weak_ptr<PipelineExecutor> executor;
     {
         /// If query with qid is running, cancel it first
         std::scoped_lock lock(mutex);
@@ -218,8 +229,8 @@ void CheckpointCoordinator::removeCheckpoint(const String & qid)
             executor = iter->second->executor;
     }
 
-    if (executor)
-        executor->cancel();
+    if (auto exec = executor.lock())
+        exec->cancel();
 
     /// Mark the checkpoint to be removed and and schedule the checkpoint
     /// deletion later
@@ -239,7 +250,7 @@ void CheckpointCoordinator::triggerCheckpoint(const String & qid, UInt64 checkpo
     Int64 next_epoch = 0;
 
     String node_desc;
-    std::shared_ptr<PipelineExecutor> executor;
+    std::optional<std::weak_ptr<PipelineExecutor>> executor;
     std::vector<std::pair<Int32, String>> outstanding_ckpt_nodes;
     {
         std::scoped_lock lock(mutex);
@@ -262,7 +273,7 @@ void CheckpointCoordinator::triggerCheckpoint(const String & qid, UInt64 checkpo
         }
     }
 
-    if (executor)
+    if (executor.has_value())
     {
         /// Create directory before hand. Then all other processors don't need
         /// check and create target epoch ckpt directory.
@@ -270,7 +281,18 @@ void CheckpointCoordinator::triggerCheckpoint(const String & qid, UInt64 checkpo
         try
         {
             preCheckpoint(ckpt_ctx);
-            executor->triggerCheckpoint(std::move(ckpt_ctx));
+
+            {
+                auto exec = executor.value().lock();
+                if (!exec)
+                {
+                    LOG_ERROR(logger, "Failed to trigger checkpointing state for query={} epoch={}, since it's already cancelled", qid, next_epoch);
+                    return;
+                }
+
+                exec->triggerCheckpoint(std::move(ckpt_ctx));
+            }
+
             LOG_INFO(logger, "Triggered checkpointing state for query={} epoch={}", qid, next_epoch);
         }
         catch (const Exception & e)

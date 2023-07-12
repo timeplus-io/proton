@@ -432,8 +432,6 @@ String PipelineExecutor::dumpPipeline() const
 /// proton: starts.
 void PipelineExecutor::registerCheckpoint(ExecuteMode exec_mode_)
 {
-    exec_mode = exec_mode_;
-
     if (exec_mode_ == ExecuteMode::NORMAL)
         return;
 
@@ -443,7 +441,7 @@ void PipelineExecutor::registerCheckpoint(ExecuteMode exec_mode_)
     auto query_context = process_list_element->getContext();
 
     Int64 interval = 0;
-    if (exec_mode == ExecuteMode::RECOVER)
+    if (exec_mode_ == ExecuteMode::RECOVER)
     {
         recover();
         interval = recovered_ckpt_interval;
@@ -451,12 +449,22 @@ void PipelineExecutor::registerCheckpoint(ExecuteMode exec_mode_)
     else
         interval = query_context->getSettingsRef().checkpoint_interval.value;
 
+    /// Here requires a lock to cover following scenarios in multi-threads:
+    /// 1) registerQuery() -> dtor() OR cancel() -> deregisterQuery()
+    /// 2) dtor() OR cancel() -> deregisterQuery() -> registerQuery()
+    /// 3) dtor() OR cancel() -> registerQuery() -> deregisterQuery()
+    std::lock_guard lock(register_checkpoint_mutex);
+    if (cancelled)
+        return;
+
+    exec_mode = exec_mode_;
     auto & ckpt_coordinator = CheckpointCoordinator::instance(query_context->getGlobalContext());
-    ckpt_coordinator.registerQuery(process_list_element->getClientInfo().current_query_id, process_list_element->getQuery(), interval, shared_from_this(), recovered_epoch);
+    ckpt_coordinator.registerQuery(process_list_element->getClientInfo().current_query_id, process_list_element->getQuery(), interval, weak_from_this(), recovered_epoch);
 }
 
 void PipelineExecutor::deregisterCheckpoint()
 {
+    std::lock_guard lock(register_checkpoint_mutex);
     if (exec_mode == ExecuteMode::SUBSCRIBE || exec_mode == ExecuteMode::RECOVER)
     {
         CheckpointCoordinator::instance(process_list_element->getContext()->getGlobalContext())

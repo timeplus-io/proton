@@ -45,7 +45,7 @@ public:
         const String & qid,
         const String & query,
         UInt64 ckpt_interval,
-        std::shared_ptr<PipelineExecutor> executor,
+        std::weak_ptr<PipelineExecutor> executor,
         std::optional<Int64> recovered_epoch = {});
 
     void deregisterQuery(const String & qid);

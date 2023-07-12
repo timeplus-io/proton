@@ -260,7 +260,7 @@ void buildValueGetter(DataTypePtr data_type, size_t col_index, std::vector<Tuple
     }
     else
     {
-        assert(DB::isColumnedAsNumber(data_type));
+        assert(DB::isColumnedAsNumber(data_type) || DB::isEnum(data_type));
         getters.emplace_back([=](const DB::IColumn ** columns, size_t row_num) -> std::pair<std::any, bool> {
             const auto & column = assert_cast<const DB::ColumnVector<TYPE> &>(*columns[col_index]);
             return {column.getElement(row_num), false};
@@ -308,7 +308,7 @@ void buildValueAppender(DataTypePtr data_type, size_t tuple_element_index, std::
     }
     else
     {
-        assert(DB::isColumnedAsNumber(data_type));
+        assert(DB::isColumnedAsNumber(data_type) || DB::isEnum(data_type));
         appenders.emplace_back([=](const std::any & val, DB::ColumnTuple & to_column) {
             auto & column = assert_cast<DB::ColumnVector<TYPE> &>(to_column.getColumn(tuple_element_index));
             column.insertValue(std::any_cast<const TYPE &>(val));
@@ -450,7 +450,7 @@ void appendSingleValue(DataTypePtr data_type, ColumnArray & arr_to, auto & top_k
     }
     else
     {
-        assert(DB::isColumnedAsNumber(data_type));
+        assert(DB::isColumnedAsNumber(data_type) || DB::isEnum(data_type));
         auto & col_to = assert_cast<ColumnVector<TYPE> &>(arr_to.getData());
         for (const auto & tuple_value : top_k)
             col_to.insertValue(std::any_cast<const TYPE &>(tuple_value.values[0]));

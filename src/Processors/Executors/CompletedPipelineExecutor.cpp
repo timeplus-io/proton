@@ -98,9 +98,11 @@ void CompletedPipelineExecutor::execute()
     }
     else
     {
-        PipelineExecutor executor(pipeline.processors, pipeline.process_list_element);
-        executor.setReadProgressCallback(pipeline.getReadProgressCallback());
-        executor.execute(pipeline.getNumThreads());
+        /// proton: starts. use shared_ptr
+        auto executor = std::make_shared<PipelineExecutor>(pipeline.processors, pipeline.process_list_element);
+        executor->setReadProgressCallback(pipeline.getReadProgressCallback());
+        executor->execute(pipeline.getNumThreads());
+        /// proton: ends.
     }
 }
 

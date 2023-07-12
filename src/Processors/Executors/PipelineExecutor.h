@@ -102,6 +102,7 @@ private:
     std::atomic_bool cancelled = false;
 
     /// proton : starts
+    std::mutex register_checkpoint_mutex;
     ExecuteMode exec_mode = ExecuteMode::NORMAL;
     UInt16 execute_threads = 0;
     mutable std::optional<VersionType> version;
