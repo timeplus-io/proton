@@ -604,8 +604,14 @@ struct Inserter
         }
     }
 
-    static ALWAYS_INLINE void
-    insertMultiple(const HashJoin & join, Map & map, KeyGetter & key_getter, JoinBlockList * blocks, size_t i, Arena & pool, RowRefListMultipleRef * multiple_ref)
+    static ALWAYS_INLINE void insertMultiple(
+        const HashJoin & join,
+        Map & map,
+        KeyGetter & key_getter,
+        JoinBlockList * blocks,
+        size_t i,
+        Arena & pool,
+        RowRefListMultipleRef * multiple_ref)
     {
         assert(multiple_ref->row_ref_list == nullptr);
 
@@ -830,7 +836,9 @@ void HashJoin::init()
     /// SELECT * FROM append_only JOIN versioned_kv ON append_only.key = versioned_kv.key;
     /// SELECT * FROM append_only ASOF JOIN versioned_kv ON append_only.key = versioned_kv.key AND append_only.timestamp < versioned_kv.timestamp;
     /// SELECT * FROM left_append_only ASOF JOIN right_append_only ON left_append_only.key = right_append_only.key AND left_append_only.timestamp < right_append_only.timestamp;
-    auto data_enrichment_join = (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
+    auto data_enrichment_join = ((left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
+                                  || left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Changelog
+                                  || left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::ChangelogKV)
                                  && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV)
         || strictness == JoinStrictness::Asof;
 
@@ -1816,8 +1824,9 @@ std::vector<RowRefListMultipleRef *> HashJoin::eraseOrAppendForPartialPrimaryKey
     {
 #define M(TYPE) \
     case HashJoin::Type::TYPE: \
-        return eraseOrAppendForPartialPrimaryKeyJoin< \
-            typename KeyGetterForType<HashJoin::Type::TYPE, std::remove_reference_t<decltype(*right_data.primary_key_hash_table->map.TYPE)>>::Type>( \
+        return eraseOrAppendForPartialPrimaryKeyJoin<typename KeyGetterForType< \
+            HashJoin::Type::TYPE, \
+            std::remove_reference_t<decltype(*right_data.primary_key_hash_table->map.TYPE)>>::Type>( \
             *right_data.primary_key_hash_table->map.TYPE, primary_key_columns); \
         break;
         APPLY_FOR_JOIN_VARIANTS(M)
@@ -1825,7 +1834,7 @@ std::vector<RowRefListMultipleRef *> HashJoin::eraseOrAppendForPartialPrimaryKey
     }
 }
 
-template<typename KeyGetter, typename Map>
+template <typename KeyGetter, typename Map>
 std::vector<RowRefListMultipleRef *> HashJoin::eraseOrAppendForPartialPrimaryKeyJoin(Map & map, const ColumnRawPtrs & primary_key_columns)
 {
     auto key_getter = createKeyGetter<KeyGetter, false>(primary_key_columns, right_data.primary_key_hash_table->key_size);
@@ -2176,9 +2185,9 @@ void HashJoin::checkJoinSemantic() const
           {
               /// Changelog
               JoinKind::Inner,
-              {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, true}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, true}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, true}}}},
           }}},
         {DataStreamSemantic::ChangelogKV,
          {{
@@ -2190,9 +2199,9 @@ void HashJoin::checkJoinSemantic() const
           {
               /// ChangelogKV
               JoinKind::Inner,
-              {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}}}},
+              {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, true}}},
+               {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, true}}},
+               {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, true}}}},
           },
           {
               /// ChangelogKV
