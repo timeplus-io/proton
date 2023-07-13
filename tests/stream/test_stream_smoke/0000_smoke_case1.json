@@ -5,7 +5,7 @@
     "test_suite_config": {
         "table_schemas":[
             {
-                "name": "smoke1",
+                "name": "test_smoke1",
                 "type": "table",
                 "columns": [
                     {
@@ -34,7 +34,7 @@
                 "event_time_column":"timestamp"
             },
             {
-                "name": "smoke1_no_default_tp_time",
+                "name": "test_smoke1_no_default_tp_time",
                 "type": "table",
                 "columns": [
                     {
@@ -62,7 +62,7 @@
                 ]
             },
             {
-                "name": "smoke1_seek",
+                "name": "test_smoke1_seek",
                 "type": "table",
                 "columns": [
                     {
@@ -91,7 +91,7 @@
                 "event_time_column":"timestamp"
             },
             {
-                "name": "smoke1_d",
+                "name": "test_smoke1_d",
                 "type": "table",
                 "columns": [
                     {
@@ -108,7 +108,7 @@
         ],
         "setup": {
             "inputs": [
-                {"table_name":"smoke1_d", "data": [
+                {"table_name":"test_smoke1_d", "data": [
                 ["dev1", "roof"],
                 ["dev2", "field"],
                 ["dev3", "window"],
@@ -133,18 +133,18 @@
             "description": "hopping avg based on tumble sum subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream", "depends_on_stream":"smoke1","query_end_timer":2, "query":"with transformed_a as (select id, sum(value) as value_q, window_end as q_time from tumble(smoke1, timestamp, interval 1 second) group by id, window_end) select id, avg(value_q), window_end from hop(transformed_a, q_time, interval 2 second, interval 5 second) group by id, window_end"}]},
+                    {"client":"python","query_id":"101-1", "query_type": "stream", "depends_on_stream":"test_smoke1","query_end_timer":2, "query":"with transformed_a as (select id, sum(value) as value_q, window_end as q_time from tumble(test_smoke1, timestamp, interval 1 second) group by id, window_end) select id, avg(value_q), window_end from hop(transformed_a, q_time, interval 2 second, interval 5 second) group by id, window_end"}]},
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"101-1","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1", "depends_on":"101-1","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]}
@@ -170,18 +170,18 @@
             "description": "tumble avg based on hopping sum subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":1, "query":"with transformed_a as (select id, sum(value) as value_s, window_end as s_time from hop(smoke1, timestamp, interval 1 second, interval 5 second) group by id, window_end) select id, avg(value_s), window_end from tumble(transformed_a, s_time, interval 3 second) group by id, window_end"}]},
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":1, "query":"with transformed_a as (select id, sum(value) as value_s, window_end as s_time from hop(test_smoke1, timestamp, interval 1 second, interval 5 second) group by id, window_end) select id, avg(value_s), window_end from tumble(transformed_a, s_time, interval 3 second) group by id, window_end"}]},
                 {"inputs": [
-                    {"table_name":"smoke1","depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1","depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]}
@@ -204,7 +204,7 @@
             "description": "tumble avg based on hist subquery",
             "steps":[
                 {"inputs": [
-                    {"table_name":"smoke1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"],
                     ["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
@@ -218,7 +218,7 @@
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "wait":5, "query_type": "table","depends_on_stream":"smoke1", "query_end_timer":5, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(smoke1)) select id, max(value), window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_end"}]}
+                    {"client":"python","query_id":"101-1", "wait":5, "query_type": "table","depends_on_stream":"test_smoke1", "query_end_timer":5, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test_smoke1)) select id, max(value), window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_end"}]}
             ],
 
             "expected_results": [{"query_id":"101-1", "expected_results":
@@ -239,7 +239,7 @@
             "description": "hop count based on table subquery",
             "steps":[
                 {"inputs": [
-                    {"table_name":"smoke1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"],
                     ["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
@@ -250,7 +250,7 @@
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 5, "query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":5, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(smoke1)) select id, count(*), window_start, window_end from hop(transformed, tranformed_timestamp, interval 4 second, interval 5 second) group by id, window_start, window_end"}]}
+                    {"client":"python", "wait": 5, "query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":5, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test_smoke1)) select id, count(*), window_start, window_end from hop(transformed, tranformed_timestamp, interval 4 second, interval 5 second) group by id, window_start, window_end"}]}
             ],
 
             "expected_results": [{"query_id":"101-1", "expected_results":
@@ -271,18 +271,18 @@
             "description": "tumble count based on tumble join table subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream", "depends_on_stream":"smoke1","query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from tumble(smoke1, timestamp, interval 3 second) as a join table(smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from tumble(joined_stream, joined_w_end, interval 5 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101-1", "query_type": "stream", "depends_on_stream":"test_smoke1","query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from tumble(test_smoke1, timestamp, interval 3 second) as a join table(test_smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from tumble(joined_stream, joined_w_end, interval 5 second) group by id, window_start, window_end"}]},
                 {"inputs": [
-                    {"table_name":"smoke1","depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1","depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]}
@@ -302,18 +302,18 @@
             "description": "hop count based on tumble join table subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from tumble(smoke1, timestamp, interval 3 second) as a join table(smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from hop(joined_stream, joined_w_end, interval 3 second, interval 5 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from tumble(test_smoke1, timestamp, interval 3 second) as a join table(test_smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from hop(joined_stream, joined_w_end, interval 3 second, interval 5 second) group by id, window_start, window_end"}]},
                 { "inputs": [
-                    {"table_name":"smoke1", "depends_on":"101-1","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1", "depends_on":"101-1","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]}
@@ -334,18 +334,18 @@
             "description": "tumble count based on hop join table subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(smoke1, timestamp, interval 3 second, interval 5 second) as a join table(smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from tumble(joined_stream, joined_w_end, interval 3 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(test_smoke1, timestamp, interval 3 second, interval 5 second) as a join table(test_smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from tumble(joined_stream, joined_w_end, interval 3 second) group by id, window_start, window_end"}]},
                 { "inputs": [
-                    {"table_name":"smoke1","depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1","depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]}
@@ -365,15 +365,15 @@
             "description": "hop count based on hopping sum subquery",
             "steps":[
                 { "statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":10, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(smoke1, timestamp, interval 3 second, interval 5 second) as a join table(smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from hop(joined_stream, joined_w_end, interval 3 second, interval 5 second) group by id, window_start, window_end emit timeout 5s"}]},
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":10, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(test_smoke1, timestamp, interval 3 second, interval 5 second) as a join table(test_smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from hop(joined_stream, joined_w_end, interval 3 second, interval 5 second) group by id, window_start, window_end emit timeout 5s"}]},
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"101-1","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1", "depends_on":"101-1","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev3", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev4", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]}
                 ]}
@@ -394,18 +394,18 @@
             "description": "global count based on tail join table subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "terminate":"manuel", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from smoke1 as a join table(smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*) from joined_stream group by id"}]},
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "terminate":"manual", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test_smoke1 as a join table(test_smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*) from joined_stream group by id"}]},
                 {"inputs": [
-                    {"table_name":"smoke1","depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1","depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1","wait":1, "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1","wait":1, "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"smoke1","wait":1, "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1","wait":1, "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                    {"table_name":"smoke1", "wait":1,"data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "wait":1,"data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
@@ -427,18 +427,18 @@
             "description": "tumble count based on tail join table subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp from smoke1 as a join table(smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*), window_start, window_end from tumble(joined_stream,transformed_timestamp, 5s) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp from test_smoke1 as a join table(test_smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*), window_start, window_end from tumble(joined_stream,transformed_timestamp, 5s) group by id, window_start, window_end"}]},
                 {"inputs": [
-                    {"table_name":"smoke1","depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1","depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"],
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]}
@@ -457,18 +457,18 @@
             "description": "hop count based on tail join table subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp from smoke1 as a join table(smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*), window_start, window_end from hop(joined_stream,timestamp, 2s, 5s) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp from test_smoke1 as a join table(test_smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*), window_start, window_end from hop(joined_stream,timestamp, 2s, 5s) group by id, window_start, window_end"}]},
                 { "inputs": [
-                    {"table_name":"smoke1","depends_on":"101-1","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1","depends_on":"101-1","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"],
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]}
@@ -491,25 +491,25 @@
             "description": "tumble sum based on tail join table view",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_type": "table","wait":2,"query":"drop view if exists smoke1_join_v"},
-                    {"client":"python", "query_type": "table","wait":2,"query":"create view if not exists smoke1_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time from smoke1 as a join table(smoke1_d) as b on a.id =b.id"},
-                    {"client":"python","query_id":"101-1", "query_type": "stream", "depends_on_stream":"smoke1","query_end_timer":1, "query":"select id, type, sum(value), window_start, window_end from tumble(smoke1_join_v, timestamp, 5s) group by id, type, window_start, window_end"}]},
+                    {"client":"python", "query_type": "table","wait":2,"query":"drop view if exists test_smoke1_join_v"},
+                    {"client":"python", "query_type": "table","wait":2,"query":"create view if not exists test_smoke1_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time from test_smoke1 as a join table(test_smoke1_d) as b on a.id =b.id"},
+                    {"client":"python","query_id":"101-1", "query_type": "stream", "depends_on_stream":"test_smoke1","query_end_timer":1, "query":"select id, type, sum(value), window_start, window_end from tumble(test_smoke1_join_v, timestamp, 5s) group by id, type, window_start, window_end"}]},
                 {"inputs": [
-                    {"table_name":"smoke1","depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1","depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "query_type": "table","wait":2,"query":"drop view if exists smoke1_join_v"}]
+                    {"client":"python", "query_type": "table","wait":2,"query":"drop view if exists test_smoke1_join_v"}]
                 }                
             ],
 
@@ -529,26 +529,26 @@
             "description": "global sum based on tail join table view",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_type": "table","wait":2,"query":"drop view if exists smoke1_join_v"},
-                    {"client":"python", "query_type": "table","wait":2,"query":"create view if not exists smoke1_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time from smoke1 as a join table(smoke1_d) as b on a.id =b.id"},                   
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1",  "query_end_timer":10, "query":"select type, count(value) from smoke1_join_v group by type order by type emit periodic 8s"}]},
+                    {"client":"python", "query_type": "table","wait":2,"query":"drop view if exists test_smoke1_join_v"},
+                    {"client":"python", "query_type": "table","wait":2,"query":"create view if not exists test_smoke1_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time from test_smoke1 as a join table(test_smoke1_d) as b on a.id =b.id"},                   
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1",  "query_end_timer":10, "query":"select type, count(value) from test_smoke1_join_v group by type order by type emit periodic 8s"}]},
                 {"inputs": [
                     {"depends_on":"101-1",
-                     "table_name":"smoke1", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                     "table_name":"test_smoke1", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "query_type": "table","wait":2,"query":"drop view if exists smoke1_join_v"}]
+                    {"client":"python", "query_type": "table","wait":2,"query":"drop view if exists test_smoke1_join_v"}]
                 }                
             ],
 
@@ -568,21 +568,21 @@
             "description": "query_mode='table'",
             "steps":[
                 {"inputs": [
-                    {"table_name":"smoke1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","wait": 4,"query_id":"101-1", "query_type": "table","depends_on_stream":"smoke1","query_end_timer":1, "query":"select id, avg(value) from smoke1 group by id settings query_mode='table'"}]}
+                    {"client":"python","wait": 4,"query_id":"101-1", "query_type": "table","depends_on_stream":"test_smoke1","query_end_timer":1, "query":"select id, avg(value) from test_smoke1 group by id settings query_mode='table'"}]}
             ],
 
             "expected_results": [{"query_id":"101-1", "expected_results":
@@ -602,21 +602,21 @@
             "description": "asterisk_include_reserved_columns = false",
             "steps":[
                 {"inputs": [
-                    {"table_name":"smoke1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "table","depends_on_stream":"smoke1", "wait":1, "query":"select *  from smoke1 where id = 'dev1' settings query_mode='table', asterisk_include_reserved_columns=false"}]}
+                    {"client":"python","query_id":"101-1", "query_type": "table","depends_on_stream":"test_smoke1", "wait":1, "query":"select *  from test_smoke1 where id = 'dev1' settings query_mode='table', asterisk_include_reserved_columns=false"}]}
             ],
 
             "expected_results": [{"query_id":"101-1", "expected_results":
@@ -629,24 +629,24 @@
             "id": 51,
             "tags": ["seek to"],
             "name": "stream seek to earliest",
-            "description": "seek to earliest, no command could clear stream storage so not stable, so use smoke1_seek table created during setup to avoid stream storage impact, will introduce topic clean function in smoke1 automation later",
+            "description": "seek to earliest, no command could clear stream storage so not stable, so use test_smoke1_seek table created during setup to avoid stream storage impact, will introduce topic clean function in test_smoke1 automation later",
             "steps":[
                 {"inputs": [
-                    {"table_name":"smoke1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev1", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"],
                     ["dev1", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","wait": 4,"query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":2, "query":"select id, count(*), window_start, window_end from tumble(smoke1, timestamp, 5s) where id = 'dev1' group by id, window_start, window_end settings seek_to = 'earliest'"}]}
+                    {"client":"python","wait": 4,"query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":2, "query":"select id, count(*), window_start, window_end from tumble(test_smoke1, timestamp, 5s) where id = 'dev1' group by id, window_start, window_end settings seek_to = 'earliest'"}]}
             ],
 
             "expected_results": [{"query_id":"101-1", "expected_results":
@@ -662,15 +662,15 @@
             "description": "seek to ago interval",
             "steps":[
                 {"inputs": [
-                    {"table_name":"smoke1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "sleep": "10", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "sleep": "10", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":5, "query":"select id, value from smoke1 settings seek_to='-5s'"}]}
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":5, "query":"select id, value from test_smoke1 settings seek_to='-5s'"}]}
             ],
 
             "expected_results": [{"query_id":"101-1", "expected_results":
@@ -687,21 +687,21 @@
             "description": "seek to specific time",
             "steps":[
                 {"inputs": [
-                    {"table_name":"smoke1", "wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1", "wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                         ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                         ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                        {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                        {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                         ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                         ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                        {"table_name":"smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                        {"table_name":"test_smoke1", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                         ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                         ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                        {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                        {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                         ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"],
                         ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":5, "query":"select id, count(*), window_end from tumble(smoke1,timestamp, 5s) group by id, window_end settings seek_to='2021-11-02T20:00:05'"}]}
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":5, "query":"select id, count(*), window_end from tumble(test_smoke1,timestamp, 5s) group by id, window_end settings seek_to='2021-11-02T20:00:05'"}]}
             ],
 
             "expected_results": [{"query_id":"101-1", "expected_results":
@@ -714,21 +714,21 @@
             "id": 57,
             "tags": ["seek to", "order by per block"],
             "name": "stream seek to earliest w/order by per block",
-            "description": "seek to earliest, no command could clear stream storage so not stable, so use smoke1_seek table created during setup to avoid stream storage impact, will introduce topic clean function in smoke1 automation later",
+            "description": "seek to earliest, no command could clear stream storage so not stable, so use test_smoke1_seek table created during setup to avoid stream storage impact, will introduce topic clean function in test_smoke1 automation later",
             "steps":[
                 {"inputs": [
-                    {"table_name":"smoke1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_smoke1","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev2", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    {"table_name":"test_smoke1", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
                     ["dev1", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"],
                     ["dev1", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","wait": 4,"query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1","query_end_timer":1, "query":"select emit_version() as emit_version, id, count(*) from tumble(smoke1, timestamp, 5s)  group by id, window_end order by emit_version, id settings seek_to = 'earliest'"}]}
+                    {"client":"python","wait": 4,"query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1","query_end_timer":1, "query":"select emit_version() as emit_version, id, count(*) from tumble(test_smoke1, timestamp, 5s)  group by id, window_end order by emit_version, id settings seek_to = 'earliest'"}]}
             ],
 
             "expected_results": [{"query_id":"101-1", "expected_results":
@@ -747,11 +747,11 @@
             "description": "create materialized view as global aggregation by sum and group by id w/by 5s periodic, select id, sum_value from mv",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_type": "table", "query":"drop view if exists smoke1_stream_sum_view"},
-                    {"client":"python", "query_type": "table", "wait": 1, "query":"create materialized view smoke1_stream_sum_view as select id, sum(value) as sum_value from smoke1 group by id emit periodic 5s"},
-                    {"client":"python", "query_id":"101-1", "depends_on_stream":"smoke1_stream_sum_view","wait":5, "query_type": "stream", "terminate":"manual", "query":"select id, sum_value from smoke1_stream_sum_view"}]},
+                    {"client":"python", "query_type": "table", "query":"drop view if exists test_smoke1_stream_sum_view"},
+                    {"client":"python", "query_type": "table", "wait": 1, "query":"create materialized view test_smoke1_stream_sum_view as select id, sum(value) as sum_value from test_smoke1 group by id emit periodic 5s"},
+                    {"client":"python", "query_id":"101-1", "depends_on_stream":"test_smoke1_stream_sum_view","wait":5, "query_type": "stream", "terminate":"manual", "query":"select id, sum_value from test_smoke1_stream_sum_view"}]},
                 {"inputs": [
-                    {"table_name":"smoke1","depends_on":"101-1", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    {"table_name":"test_smoke1","depends_on":"101-1", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"],
                     ["dev2", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
@@ -766,7 +766,7 @@
                 ]},
                 {"statements": [
                     {"client":"python", "wait": 5, "depends":{"query_id":"101-1"}, "query_type": "table", "query":"kill query where query_id = '101-1'"},
-                    {"client":"python", "wait": 1, "query_type": "table", "query_end_timer": 3, "query":"drop view if exists smoke1_stream_sum_view"}
+                    {"client":"python", "wait": 1, "query_type": "table", "query_end_timer": 3, "query":"drop view if exists test_smoke1_stream_sum_view"}
                 ]
                 }
             ],
@@ -785,17 +785,17 @@
             "description": "function neighbor for streaming",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"102-1", "query_type": "stream","depends_on_stream":"smoke1","query_end_timer":1, "query":"select value, neighbor(value, -3) as prev_3, neighbor(value, -3, 0) as prev_3_0 from smoke1"}]},
+                    {"client":"python","query_id":"102-1", "query_type": "stream","depends_on_stream":"test_smoke1","query_end_timer":1, "query":"select value, neighbor(value, -3) as prev_3, neighbor(value, -3, 0) as prev_3_0 from test_smoke1"}]},
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"102-1", "data": [
+                    {"table_name":"test_smoke1", "depends_on":"102-1", "data": [
                         ["dev1", "ca", 1, "2021-11-02 20:00:01", "2020-02-02 20:00:01"]
                         ]},
-                    {"table_name":"smoke1", "data": [
+                    {"table_name":"test_smoke1", "data": [
                         ["dev2", "ca", 2, "2021-11-02 20:00:10", "2020-02-02 20:01:02"],
                         ["dev2", "ca", 3, "2021-11-02 20:00:10", "2020-02-02 20:00:02"],
                         ["dev2", "ca", 4, "2021-11-02 20:00:10", "2020-02-02 20:01:02"]
                         ]},
-                    {"table_name":"smoke1", "data": [
+                    {"table_name":"test_smoke1", "data": [
                         ["dev3", "ca", 5, "2021-11-02 20:00:10", "2020-02-02 20:01:03"]
                         ]}
                 ]}
@@ -816,17 +816,17 @@
             "description": "function lag",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"102-1", "query_type": "stream","depends_on_stream":"smoke1","query_end_timer":1, "query":"select value, lag(value) as prev_1, lag(value, 3, 0) as prev_3_0 from smoke1"}]},
+                    {"client":"python","query_id":"102-1", "query_type": "stream","depends_on_stream":"test_smoke1","query_end_timer":1, "query":"select value, lag(value) as prev_1, lag(value, 3, 0) as prev_3_0 from test_smoke1"}]},
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"102-1","data": [
+                    {"table_name":"test_smoke1", "depends_on":"102-1","data": [
                         ["dev1", "ca", 1, "2021-11-02 20:00:01", "2020-02-02 20:00:01"]
                         ]},
-                    {"table_name":"smoke1", "data": [
+                    {"table_name":"test_smoke1", "data": [
                         ["dev2", "ca", 2, "2021-11-02 20:00:10", "2020-02-02 20:01:02"],
                         ["dev2", "ca", 3, "2021-11-02 20:00:10", "2020-02-02 20:00:02"],
                         ["dev2", "ca", 4, "2021-11-02 20:00:10", "2020-02-02 20:01:02"]
                         ]},
-                    {"table_name":"smoke1", "data": [
+                    {"table_name":"test_smoke1", "data": [
                         ["dev3", "ca", 5, "2021-11-02 20:00:10", "2020-02-02 20:01:03"]
                         ]}
                 ]}
@@ -847,17 +847,17 @@
             "description": "function lags",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"102-1", "query_type": "stream","depends_on_stream":"smoke1","query_end_timer":1, "query":"select value, lags(value, 1, 3) as prev_1_3, lags(value, 2, 5, -1) as `prev_2_5_-1` from smoke1"}]},
+                    {"client":"python","query_id":"102-1", "query_type": "stream","depends_on_stream":"test_smoke1","query_end_timer":1, "query":"select value, lags(value, 1, 3) as prev_1_3, lags(value, 2, 5, -1) as `prev_2_5_-1` from test_smoke1"}]},
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"102-1","data": [
+                    {"table_name":"test_smoke1", "depends_on":"102-1","data": [
                         ["dev1", "ca", 1, "2021-11-02 20:00:01", "2020-02-02 20:00:01"]
                         ]},
-                    {"table_name":"smoke1", "data": [
+                    {"table_name":"test_smoke1", "data": [
                         ["dev2", "ca", 2, "2021-11-02 20:00:10", "2020-02-02 20:01:02"],
                         ["dev2", "ca", 3, "2021-11-02 20:00:10", "2020-02-02 20:00:02"],
                         ["dev2", "ca", 4, "2021-11-02 20:00:10", "2020-02-02 20:01:02"]
                         ]},
-                    {"table_name":"smoke1", "data": [
+                    {"table_name":"test_smoke1", "data": [
                         ["dev3", "ca", 5, "2021-11-02 20:00:10", "2020-02-02 20:01:03"]
                         ]}
                 ]}
@@ -878,22 +878,22 @@
             "description": "function grok",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"102-1", "query_type": "stream","depends_on_stream":"smoke1","query_end_timer":1, "query":"select grok(json, '{\"id\": %{INT:id}, \"type\": %{DATA:type}, \"ipv4\": %{IPV4:ipv4}, \"ipv6\": %{IP:ipv6}, \"uuid\": %{UUID:uuid}%{DATA}') as map, map['id'], map['type'] from smoke1"}]},
+                    {"client":"python","query_id":"102-1", "query_type": "stream","depends_on_stream":"test_smoke1","query_end_timer":1, "query":"select grok(json, '{\"id\": %{INT:id}, \"type\": %{DATA:type}, \"ipv4\": %{IPV4:ipv4}, \"ipv6\": %{IP:ipv6}, \"uuid\": %{UUID:uuid}%{DATA}') as map, map['id'], map['type'] from test_smoke1"}]},
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"102-1","data": [
+                    {"table_name":"test_smoke1", "depends_on":"102-1","data": [
                         ["dev1", "ca", 1, "{\"id\": 1, \"type\": T1, \"ipv4\": 127.0.0.1, \"ipv6\": ::1, \"uuid\": feb540dc-c4e4-4c7e-a975-02f0304364a9}", "2020-02-02 20:00:01"]
                         ]},
-                    {"table_name":"smoke1", "data": [
+                    {"table_name":"test_smoke1", "data": [
                         ["dev2", "ca", 2, "{\"id\": 2, \"type\": T2, \"ipv4\": 199.101.192.190, \"ipv6\": 1050:0000:0000:0000:0005:0600:300c:326b, \"uuid\": Feb540dc-c4e4-4c7e-a975-02f0304364a9, \"data\": \"abc\"}", "2020-02-02 20:01:02"],
                         ["dev2", "ca", 3, "{\"id\": 3, \"type\": T3, \"ipv4\": 0.0.0.0, \"ipv6\": 1050:0:0:0:5:600:300c:326b, \"uuid\": 0eb540dc-c4e4-4c7e-a975-02f0304364a9, \"data\": \"abc\"}", "2020-02-02 20:00:02"],
                         ["dev2", "ca", 4, "{\"id\": 4, \"data\": \"abc\", \"type\": T4, \"ipv4\": 0.0.0.0, \"ipv6\": 1050:0:0:0:5:600:300c:326b, \"uuid\": feb540dc-C4e4-4c7e-a975-02f0304364a9", "2020-02-02 20:01:02"]
                         ]},
-                    {"table_name":"smoke1", "data": [
+                    {"table_name":"test_smoke1", "data": [
                         ["dev3", "ca", 5, "{\"id\": 5, \"type\": T5, \"ipv4\": 172.31.255.255, \"ipv6\": ff06::c3, \"uuid\": feb540dc-C4e4-4c7e-a975-02f0304364a9, \"data\": \"abc\"}", "2020-02-02 20:01:03"]
                         ]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"103-1", "wait": 3, "query_type": "table", "query":"select grok(json, '{\"id\": %{INT:id}, \"type\": %{DATA:type}, \"ipv4\": %{IPV4:ipv4}, \"ipv6\": %{IP:ipv6}, \"uuid\": %{UUID:uuid}%{DATA}') as map, map['id'], map['type'] from table(smoke1)"}]}
+                    {"client":"python","query_id":"103-1", "wait": 3, "query_type": "table", "query":"select grok(json, '{\"id\": %{INT:id}, \"type\": %{DATA:type}, \"ipv4\": %{IPV4:ipv4}, \"ipv6\": %{IP:ipv6}, \"uuid\": %{UUID:uuid}%{DATA}') as map, map['id'], map['type'] from table(test_smoke1)"}]}
             ],
             "expected_results": [
                 {"query_id":"102-1", "expected_results": [
@@ -918,21 +918,21 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream", "query_end_timer":5,"depends_on_stream":"smoke1", "query":"select id, max(value), json_extract_bool(json, 'bool') as json_bool, to_date(json_extract_string(json, '1953')) as to_date, replace_regex(json_extract_string(json, '1953'), '11*', 'a') as replace_regex, json_extract_float(json, 'float') as json_float, json_extract_int(json, 'int') as json_extract_int, json_query(json, '$.array[*][0 to 2, 4]') as json_query, json_extract_array_raw(json, 'array') as json_extract_array_raw, json_value(json, '$.array[*][0 to 2, 4]') as json_value, window_end from tumble(smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, json_bool, json_float, json_extract_int, to_date, replace_regex, json_extract_array_raw, json_value, window_end"}
+                    {"client":"python","query_id":"101-1", "query_type": "stream", "query_end_timer":5,"depends_on_stream":"test_smoke1", "query":"select id, max(value), json_extract_bool(json, 'bool') as json_bool, to_date(json_extract_string(json, '1953')) as to_date, replace_regex(json_extract_string(json, '1953'), '11*', 'a') as replace_regex, json_extract_float(json, 'float') as json_float, json_extract_int(json, 'int') as json_extract_int, json_query(json, '$.array[*][0 to 2, 4]') as json_query, json_extract_array_raw(json, 'array') as json_extract_array_raw, json_value(json, '$.array[*][0 to 2, 4]') as json_value, window_end from tumble(test_smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, json_bool, json_float, json_extract_int, to_date, replace_regex, json_extract_array_raw, json_value, window_end"}
 
                 ]},
 
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int\": 100, \"bool\":true, \"array\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
+                    {"table_name":"test_smoke1", "depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int\": 100, \"bool\":true, \"array\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\", \"1953\":\"1953-11-02\", \"float\":127.001,\"int\": 100.03, \"bool\":true, \"array\":[[1, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "{\"create_time\":\"11-02-2021 20:00:02\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int\": 312,\"bool\":false, \"array\":[[22, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:03"]]},
-                    {"table_name":"smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int\": 65536.001, \"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
+                    {"table_name":"test_smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int\": 65536.001, \"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
                     ["dev1", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":true, \"array\":[[3, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:07"],
                     ["dev1", "ca", 77, "{\"create_time\":\"11-02-2021 20:00:06\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":false, \"array\":[[4, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:10"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":true, \"array\":[[5, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:14"],
                     ["dev2", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":false, \"array\":[[90, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
                     ["dev3", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"bool\":true, \"array\":[[72, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:12"],
                     ["dev3", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"bool\":true, \"array\":[[7, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:15"]]}
                 ]}
@@ -952,20 +952,20 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":5, "query":"select id, max(value), json_extract_bool(json, 'bool') as json_bool, to_date(json_extract_string(json, '1953')) as to_date, replace_regex(json_extract_string(json, '1953'), '11*', 'a') as replace_regex, json_extract_float(json, 'float') as json_float, json_extract_int(json, 'int') as json_extract_int, json_query(json, '$.array[*][0 to 2, 4]') as json_query, json_extract_array_raw(json, 'array') as json_extract_array_raw, json_value(json, '$.array[*][0 to 2, 4]') as json_value, window_end from tumble(smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, json_bool, json_float, json_extract_int, to_date, replace_regex, json_extract_array_raw, json_value, window_end"}
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":5, "query":"select id, max(value), json_extract_bool(json, 'bool') as json_bool, to_date(json_extract_string(json, '1953')) as to_date, replace_regex(json_extract_string(json, '1953'), '11*', 'a') as replace_regex, json_extract_float(json, 'float') as json_float, json_extract_int(json, 'int') as json_extract_int, json_query(json, '$.array[*][0 to 2, 4]') as json_query, json_extract_array_raw(json, 'array') as json_extract_array_raw, json_value(json, '$.array[*][0 to 2, 4]') as json_value, window_end from tumble(test_smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, json_bool, json_float, json_extract_int, to_date, replace_regex, json_extract_array_raw, json_value, window_end"}
 
                 ]},
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"101-1","data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int\": 231584178474632390847141970017375815706539969331281128078915168015826259279872, \"bool\":true, \"array\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
+                    {"table_name":"test_smoke1", "depends_on":"101-1","data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int\": 231584178474632390847141970017375815706539969331281128078915168015826259279872, \"bool\":true, \"array\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\", \"1953\":\"1953-11-02\", \"float\":127.001,\"int\": 100.03, \"bool\":true, \"array\":[[1, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "{\"create_time\":\"11-02-2021 20:00:02\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int\": 65536,\"bool\":false, \"array\":[[22, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:03"]]},
-                    {"table_name":"smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int\": 65536.001, \"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
+                    {"table_name":"test_smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int\": 65536.001, \"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
                     ["dev1", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":true, \"array\":[[3, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:07"],
                     ["dev1", "ca", 77, "{\"create_time\":\"11-02-2021 20:00:06\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":false, \"array\":[[4, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:10"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":true, \"array\":[[5, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:14"],
                     ["dev2", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":false, \"array\":[[90, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
                     ["dev3", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"bool\":true, \"array\":[[72, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:12"],
                     ["dev3", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"bool\":true, \"array\":[[7, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:15"]]}
                 ]}
@@ -985,21 +985,21 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":5, "query":"select id, max(value), to_int8(json_extract_string(json, 'int8')) as to_int8, to_int16(json_extract_string(json, 'int16')) as to_int16, to_int(json_extract_string(json, 'int32')) as to_int32, to_int64(json_extract_string(json, 'int64')) as to_int64, to_int128(json_extract_string(json, 'int128')) as to_int128, to_int256(json_extract_string(json, 'int256')) as to_int256, window_end from tumble(smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_int8, to_int16, to_int32, to_int64, to_int128, to_int256, window_end"}
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":5, "query":"select id, max(value), to_int8(json_extract_string(json, 'int8')) as to_int8, to_int16(json_extract_string(json, 'int16')) as to_int16, to_int(json_extract_string(json, 'int32')) as to_int32, to_int64(json_extract_string(json, 'int64')) as to_int64, to_int128(json_extract_string(json, 'int128')) as to_int128, to_int256(json_extract_string(json, 'int256')) as to_int256, window_end from tumble(test_smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_int8, to_int16, to_int32, to_int64, to_int128, to_int256, window_end"}
 
                 ]},
 
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int8\": -127, \"int16\": -888, \"int32\": -8888, \"int64\": -8888, \"int128\": -88888, \"int256\": -888888, \"bool\":true, \"array\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
+                    {"table_name":"test_smoke1", "depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int8\": -127, \"int16\": -888, \"int32\": -8888, \"int64\": -8888, \"int128\": -88888, \"int256\": -888888, \"bool\":true, \"array\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int8\": \"127\", \"int16\": 888, \"int32\": 8888, \"int64\": 8888, \"int128\": 88888,\"int256\": 888888, \"bool\":true, \"array\":[[1, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "{\"create_time\":\"11-02-2021 20:00:02\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": 888, \"int32\": 8888, \"int64\": 8888, \"int128\": 88888,\"int256\": 888888,\"bool\":false, \"array\":[[22, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:03"]]},
-                    {"table_name":"smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\":6000 , \"int32\":6000 , \"int64\": 6888, \"int128\": 6999, \"int256\": 7999,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
+                    {"table_name":"test_smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\":6000 , \"int32\":6000 , \"int64\": 6888, \"int128\": 6999, \"int256\": 7999,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
                     ["dev1", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[3, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:07"],
                     ["dev1", "ca", 77, "{\"create_time\":\"11-02-2021 20:00:06\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":false, \"array\":[[4, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:10"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[5, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:14"],
                     ["dev2", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":false, \"array\":[[90, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
                     ["dev3", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[72, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:12"],
                     ["dev3", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[7, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:15"]]}
                 ]}
@@ -1020,21 +1020,21 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":5, "query":"select id, max(value), to_int8(json_extract_string(json, 'int8')) as to_int8, to_int16(json_extract_string(json, 'int16')) as to_int16, to_int32(json_extract_string(json, 'int32')) as to_int32, to_int64(json_extract_string(json, 'int64')) as to_int64, to_int128(json_extract_string(json, 'int128')) as to_int128, to_int256(json_extract_string(json, 'int256')) as to_int256, window_end from tumble(smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_int8, to_int16, to_int32, to_int64, to_int128, to_int256, window_end"}
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":5, "query":"select id, max(value), to_int8(json_extract_string(json, 'int8')) as to_int8, to_int16(json_extract_string(json, 'int16')) as to_int16, to_int32(json_extract_string(json, 'int32')) as to_int32, to_int64(json_extract_string(json, 'int64')) as to_int64, to_int128(json_extract_string(json, 'int128')) as to_int128, to_int256(json_extract_string(json, 'int256')) as to_int256, window_end from tumble(test_smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_int8, to_int16, to_int32, to_int64, to_int128, to_int256, window_end"}
 
                 ]},
 
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int8\": -127, \"int16\": -32767, \"int32\": -2147483647, \"int64\": -9223372036854775807, \"int128\": -170141183460469231731687303715884105727, \"int256\": -7896044618658097711785492504343953926634992332820282019728792003956564819967, \"bool\":true, \"array\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
+                    {"table_name":"test_smoke1", "depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int8\": -127, \"int16\": -32767, \"int32\": -2147483647, \"int64\": -9223372036854775807, \"int128\": -170141183460469231731687303715884105727, \"int256\": -7896044618658097711785492504343953926634992332820282019728792003956564819967, \"bool\":true, \"array\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int8\": \"127\", \"int16\": 32767, \"int32\": 2147483647, \"int64\": 9223372036854775807, \"int128\": 170141183460469231731687303715884105727,\"int256\": 7896044618658097711785492504343953926634992332820282019728792003956564819967, \"bool\":true, \"array\":[[1, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "{\"create_time\":\"11-02-2021 20:00:02\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"120\",\"int16\": 5535, \"int32\": 294968295, \"int64\": 223372036854775807, \"int128\": 70141183460469231731687303715884105727,\"int256\": 896044618658097711785492504343953926634992332820282019728792003956564819967,\"bool\":false, \"array\":[[22, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:03"]]},
-                    {"table_name":"smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\":6000 , \"int32\":6000 , \"int64\": 6888, \"int128\": 6999, \"int256\": 7999,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
+                    {"table_name":"test_smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\":6000 , \"int32\":6000 , \"int64\": 6888, \"int128\": 6999, \"int256\": 7999,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
                     ["dev1", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[3, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:07"],
                     ["dev1", "ca", 77, "{\"create_time\":\"11-02-2021 20:00:06\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":false, \"array\":[[4, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:10"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[5, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:14"],
                     ["dev2", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":false, \"array\":[[90, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
                     ["dev3", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[72, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:12"],
                     ["dev3", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[7, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:15"]]}
                 ]}
@@ -1055,21 +1055,21 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":5, "query":"select id, max(value), to_int8(json_extract_string(json, 'int8')) as to_int8, to_int16(json_extract_string(json, 'int16')) as to_int16, to_int32(json_extract_string(json, 'int32')) as to_int32, to_int64(json_extract_string(json, 'int64')) as to_int64, to_int128(json_extract_string(json, 'int128')) as to_int128, to_int256(json_extract_string(json, 'int256')) as to_int256, window_end from tumble(smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_int8, to_int16, to_int32, to_int64, to_int128, to_int256, window_end"}
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":5, "query":"select id, max(value), to_int8(json_extract_string(json, 'int8')) as to_int8, to_int16(json_extract_string(json, 'int16')) as to_int16, to_int32(json_extract_string(json, 'int32')) as to_int32, to_int64(json_extract_string(json, 'int64')) as to_int64, to_int128(json_extract_string(json, 'int128')) as to_int128, to_int256(json_extract_string(json, 'int256')) as to_int256, window_end from tumble(test_smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_int8, to_int16, to_int32, to_int64, to_int128, to_int256, window_end"}
 
                 ]},
 
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int8\": -127, \"int16\": -65535, \"int32\": -4294967295, \"int64\": -18446744073709551615, \"int128\": -340282366920938463463374607431768211455, \"int256\": -115792089237316195423570985008687907853269984665640564039457584007913129639935, \"bool\":true, \"array\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
+                    {"table_name":"test_smoke1", "depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int8\": -127, \"int16\": -65535, \"int32\": -4294967295, \"int64\": -18446744073709551615, \"int128\": -340282366920938463463374607431768211455, \"int256\": -115792089237316195423570985008687907853269984665640564039457584007913129639935, \"bool\":true, \"array\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int8\": \"127\", \"int16\": 65535, \"int32\": 4294967295, \"int64\": 18446744073709551615, \"int128\": 340282366920938463463374607431768211455,\"int256\": 115792089237316195423570985008687907853269984665640564039457584007913129639935, \"bool\":true, \"array\":[[1, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "{\"create_time\":\"11-02-2021 20:00:02\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"312\",\"int16\": 75535, \"int32\": 4294968295, \"int64\": 18446744073719551615, \"int128\": 340282366920938463463374607431778211455,\"int256\": 115792089237316195423570985008687907853269984665640564039457584008913129639935,\"bool\":false, \"array\":[[22, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:03"]]},
-                    {"table_name":"smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\":6000 , \"int32\":4194968295 , \"int64\": 16446744073719551615, \"int128\": 330282366920938463463374607431768211455, \"int256\": 105792089237316195423570985008687907853269984665640564039457584007913129639935,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
+                    {"table_name":"test_smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\":6000 , \"int32\":4194968295 , \"int64\": 16446744073719551615, \"int128\": 330282366920938463463374607431768211455, \"int256\": 105792089237316195423570985008687907853269984665640564039457584007913129639935,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
                     ["dev1", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[3, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:07"],
                     ["dev1", "ca", 77, "{\"create_time\":\"11-02-2021 20:00:06\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":false, \"array\":[[4, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:10"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[5, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:14"],
                     ["dev2", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":false, \"array\":[[90, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
                     ["dev3", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[72, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:12"],
                     ["dev3", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int8\": \"126\",\"int16\": -127, \"int32\": -127, \"int64\": -127, \"int128\": -127,\"int256\": -127,\"bool\":true, \"array\":[[7, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:15"]]}
                 ]}
@@ -1089,21 +1089,21 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream", "depends_on_stream":"smoke1","query_end_timer":5, "query":"select id, max(value), to_decimal(json_extract_string(json, 'decimal32'), 5) as to_decimal32, to_decimal64(json_extract_string(json, 'decimal64'), 10) as to_decimal64, to_decimal128(json_extract_string(json, 'decimal128'), 20) as to_decimal128, to_decimal256(json_extract_string(json, 'decimal256'),30) as to_decimal256, window_end from tumble(smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_decimal32, to_decimal64, to_decimal128, to_decimal256, window_end"}
+                    {"client":"python","query_id":"101-1", "query_type": "stream", "depends_on_stream":"test_smoke1","query_end_timer":5, "query":"select id, max(value), to_decimal(json_extract_string(json, 'decimal32'), 5) as to_decimal32, to_decimal64(json_extract_string(json, 'decimal64'), 10) as to_decimal64, to_decimal128(json_extract_string(json, 'decimal128'), 20) as to_decimal128, to_decimal256(json_extract_string(json, 'decimal256'),30) as to_decimal256, window_end from tumble(test_smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_decimal32, to_decimal64, to_decimal128, to_decimal256, window_end"}
 
                 ]},
 
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"decimal32\": \"-9.99999999999999999999999999999999999999999999999\", \"decimal64\": -0.99999999999999999999999999999999999999999999999, \"decimal128\": -9.99999999999999999999999999999999999999999999999, \"decimal256\": -9.99999999999999999999999999999999999999999999999, \"bool\":true, \"array\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
+                    {"table_name":"test_smoke1", "depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"decimal32\": \"-9.99999999999999999999999999999999999999999999999\", \"decimal64\": -0.99999999999999999999999999999999999999999999999, \"decimal128\": -9.99999999999999999999999999999999999999999999999, \"decimal256\": -9.99999999999999999999999999999999999999999999999, \"bool\":true, \"array\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\", \"1953\":\"1953-11-02\", \"float\":127.001, \"decimal32\": 0.99999999999999999999999999999999999999999999999, \"decimal64\": \"0.99999999999999999999999999999999999999999999999\", \"decimal128\": 0.99999999999999999999999999999999999999999999999, \"decimal256\": 0.99999999999999999999999999999999999999999999999, \"bool\":true, \"array\":[[1, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "{\"create_time\":\"11-02-2021 20:00:02\", \"1953\":\"1953-11-02\",\"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": 0.99999999999999999999999999999999999999999999999, \"decimal128\": \"0.99999999999999999999999999999999999999999999999\", \"decimal256\": 0.99999999999999999999999999999999999999999999999,\"bool\":false, \"array\":[[22, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:03"]]},
-                    {"table_name":"smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": 0.99999999999999999999999999999999999999999999999, \"decimal128\": 0.99999999999999999999999999999999999999999999999, \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
+                    {"table_name":"test_smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": 0.99999999999999999999999999999999999999999999999, \"decimal128\": 0.99999999999999999999999999999999999999999999999, \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
                     ["dev1", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\", \"1953\":\"1953-11-02\",\"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": 0.99999999999999999999999999999999999999999999999, \"decimal128\": 0.99999999999999999999999999999999999999999999999, \"decimal256\": 0.99999999999999999999999999999999999999999999999,\"bool\":true, \"array\":[[3, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:07"],
                     ["dev1", "ca", 77, "{\"create_time\":\"11-02-2021 20:00:06\", \"1953\":\"1953-11-02\",\"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": 0.99999999999999999999999999999999999999999999999, \"decimal128\": 0.99999999999999999999999999999999999999999999999, \"decimal256\": 0.99999999999999999999999999999999999999999999999,\"bool\":false, \"array\":[[4, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:10"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": 0.99999999999999999999999999999999999999999999999, \"decimal128\": 0.99999999999999999999999999999999999999999999999, \"decimal256\": 0.99999999999999999999999999999999999999999999999,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": 0.99999999999999999999999999999999999999999999999, \"decimal128\": 0.99999999999999999999999999999999999999999999999, \"decimal256\": 0.99999999999999999999999999999999999999999999999,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\", \"1953\":\"1953-11-02\",\"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": 0.99999999999999999999999999999999999999999999999, \"decimal128\": 0.99999999999999999999999999999999999999999999999, \"decimal256\": 0.99999999999999999999999999999999999999999999999,\"bool\":true, \"array\":[[5, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:14"],
                     ["dev2", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\", \"1953\":\"1953-11-02\",\"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": 0.99999999999999999999999999999999999999999999999, \"decimal128\": 0.99999999999999999999999999999999999999999999999, \"decimal256\": 0.99999999999999999999999999999999999999999999999,\"bool\":false, \"array\":[[90, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": 0.99999999999999999999999999999999999999999999999, \"decimal128\": 0.99999999999999999999999999999999999999999999999, \"decimal256\": 0.99999999999999999999999999999999999999999999999,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": 0.99999999999999999999999999999999999999999999999, \"decimal128\": 0.99999999999999999999999999999999999999999999999, \"decimal256\": 0.99999999999999999999999999999999999999999999999,\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
                     ["dev3", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": 0.99999999999999999999999999999999999999999999999, \"decimal128\": 0.99999999999999999999999999999999999999999999999, \"decimal256\": 0.99999999999999999999999999999999999999999999999,\"bool\":true, \"array\":[[72, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:12"],
                     ["dev3", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": 0.99999999999999999999999999999999999999999999999, \"decimal128\": 0.99999999999999999999999999999999999999999999999, \"decimal256\": 0.99999999999999999999999999999999999999999999999,\"bool\":true, \"array\":[[7, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:15"]]}
                 ]}
@@ -1123,21 +1123,21 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":5, "query":"select id, max(value), to_decimal32(json_extract_string(json, 'decimal32'), 8) as to_decimal32, to_decimal64(json_extract_string(json, 'decimal64'), 17) as to_decimal64, to_decimal128(json_extract_string(json, 'decimal128'), 37) as to_decimal128, to_decimal256(json_extract_string(json, 'decimal256'),75) as to_decimal256, window_end from tumble(smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_decimal32, to_decimal64, to_decimal128, to_decimal256, window_end"}
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":5, "query":"select id, max(value), to_decimal32(json_extract_string(json, 'decimal32'), 8) as to_decimal32, to_decimal64(json_extract_string(json, 'decimal64'), 17) as to_decimal64, to_decimal128(json_extract_string(json, 'decimal128'), 37) as to_decimal128, to_decimal256(json_extract_string(json, 'decimal256'),75) as to_decimal256, window_end from tumble(test_smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_decimal32, to_decimal64, to_decimal128, to_decimal256, window_end"}
 
                 ]},
 
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"decimal32\": \"-9.99999999999999999999999999999999999999999999999\", \"decimal64\": \"-9.99999999999999999999999999999999999999999999999\", \"decimal128\": \"-9.99999999999999999999999999999999999999999999999\", \"decimal256\": \"-9.99999999999999999999999999999999999999999999999\", \"bool\":true, \"array\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
+                    {"table_name":"test_smoke1", "depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"decimal32\": \"-9.99999999999999999999999999999999999999999999999\", \"decimal64\": \"-9.99999999999999999999999999999999999999999999999\", \"decimal128\": \"-9.99999999999999999999999999999999999999999999999\", \"decimal256\": \"-9.99999999999999999999999999999999999999999999999\", \"bool\":true, \"array\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\", \"1953\":\"1953-11-02\", \"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": \"0.99999999999999999999999999999999999999999999999\", \"decimal128\": \"0.99999999999999999999999999999999999999999999999\", \"decimal256\": \"0.99999999999999999999999999999999999999999999999\", \"bool\":true, \"array\":[[1, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "{\"create_time\":\"11-02-2021 20:00:02\", \"1953\":\"1953-11-02\",\"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": 0.99999999999999999999999999999999999999999999999, \"decimal128\": \"0.99999999999999999999999999999999999999999999999\", \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":false, \"array\":[[22, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:03"]]},
-                    {"table_name":"smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": \"0.99999999999999999999999999999999999999999999999\", \"decimal128\": \"0.9999999999999999999999999999999999999999999999\"9, \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
+                    {"table_name":"test_smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": \"0.99999999999999999999999999999999999999999999999\", \"decimal128\": \"0.9999999999999999999999999999999999999999999999\"9, \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
                     ["dev1", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\", \"1953\":\"1953-11-02\",\"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": \"0.99999999999999999999999999999999999999999999999\", \"decimal128\": \"0.99999999999999999999999999999999999999999999999\", \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":true, \"array\":[[3, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:07"],
                     ["dev1", "ca", 77, "{\"create_time\":\"11-02-2021 20:00:06\", \"1953\":\"1953-11-02\",\"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": \"0.99999999999999999999999999999999999999999999999\", \"decimal128\": \"0.99999999999999999999999999999999999999999999999\", \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":false, \"array\":[[4, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:10"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": \"0.99999999999999999999999999999999999999999999999\", \"decimal128\": \"0.99999999999999999999999999999999999999999999999\", \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": \"0.99999999999999999999999999999999999999999999999\", \"decimal128\": \"0.99999999999999999999999999999999999999999999999\", \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\", \"1953\":\"1953-11-02\",\"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": \"0.99999999999999999999999999999999999999999999999\", \"decimal128\": \"0.99999999999999999999999999999999999999999999999\", \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":true, \"array\":[[5, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:14"],
                     ["dev2", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\", \"1953\":\"1953-11-02\",\"float\":127.001, \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": \"0.99999999999999999999999999999999999999999999999\", \"decimal128\": \"0.99999999999999999999999999999999999999999999999\", \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":false, \"array\":[[90, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": \"0.99999999999999999999999999999999999999999999999\", \"decimal128\": \"0.99999999999999999999999999999999999999999999999\", \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": \"0.99999999999999999999999999999999999999999999999\", \"decimal128\": \"0.99999999999999999999999999999999999999999999999\", \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":true, \"array\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
                     ["dev3", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": \"0.99999999999999999999999999999999999999999999999\", \"decimal128\": \"0.99999999999999999999999999999999999999999999999\", \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":true, \"array\":[[72, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:12"],
                     ["dev3", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"decimal32\": \"0.99999999999999999999999999999999999999999999999\", \"decimal64\": \"0.99999999999999999999999999999999999999999999999\", \"decimal128\": \"0.99999999999999999999999999999999999999999999999\", \"decimal256\": \"0.99999999999999999999999999999999999999999999999\",\"bool\":true, \"array\":[[7, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:15"]]}
                 ]}
@@ -1156,21 +1156,21 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":5, "query":"select id, max(value), json_extract_array_raw(json, 'array1') as array1, json_extract_array_raw(json, 'array1') as array2 , array_concat(array1, array2) as array_concat, length(array_concat) as array_length, window_end from tumble(smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, array1, array2, array_concat, array_length, window_end"}
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":5, "query":"select id, max(value), json_extract_array_raw(json, 'array1') as array1, json_extract_array_raw(json, 'array1') as array2 , array_concat(array1, array2) as array_concat, length(array_concat) as array_length, window_end from tumble(test_smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, array1, array2, array_concat, array_length, window_end"}
 
                 ]},
 
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int\": 100, \"bool\":true, \"array1\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], \"array2\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
+                    {"table_name":"test_smoke1", "depends_on":"101-1", "data": [["dev1", "ca", 60, "{\"create_time\":\"11/02/2021 20:00:01\", \"1953\":\"1953-11-02\", \"float\":127.001, \"int\": 100, \"bool\":true, \"array1\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], \"array2\":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\", \"1953\":\"1953-11-02\", \"float\":127.001,\"int\": 100.03, \"bool\":true, \"array1\":[[1, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "{\"create_time\":\"11-02-2021 20:00:02\", \"1953\":\"1953-11-02\",\"float\":127.001, \"int\": 312,\"bool\":false, \"array1\":[[22, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:03"]]},
-                    {"table_name":"smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int\": 65536.001, \"bool\":true, \"array1\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], \"array2\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
+                    {"table_name":"test_smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"11.02.2021 20:00:04\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"int\": 65536.001, \"bool\":true, \"array1\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], \"array2\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:06"],
                     ["dev1", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":true, \"array1\":[[3, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], \"array2\":[[3, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:07"],
                     ["dev1", "ca", 77, "{\"create_time\":\"11-02-2021 20:00:06\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":false, \"array1\":[[4, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], \"array2\":[[4, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:10"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":true, \"array1\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], \"array2\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":true, \"array1\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], \"array2\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":true, \"array1\":[[5, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], \"array2\":[[5, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:14"],
                     ["dev2", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\", \"1953\":\"1953-11-02\",\"float\":127.001, \"bool\":false, \"array1\":[[90, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], \"array2\":[[90, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:11"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"bool\":true, \"array1\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], \"array2\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"bool\":true, \"array1\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], \"array2\":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:13"],
                     ["dev3", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"bool\":true, \"array1\":[[72, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], \"array2\":[[72, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:12"],
                     ["dev3", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\", \"1953\":\"1953-11-02\",\"float\":\"127.001\", \"bool\":true, \"array1\":[[7, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], \"array2\":[[7, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}", "2020-02-02 20:01:15"]]}
                 ]}
@@ -1194,18 +1194,18 @@
             "description": "tranform function in subquery and run tumble on the subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":1, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from smoke1 settings seek_to='earliest') select id, max(value), window_start, window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":1, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test_smoke1 settings seek_to='earliest') select id, max(value), window_start, window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_start, window_end"}]},
                 {"inputs": [
-                    {"table_name":"smoke1", "depends_on":"101-1","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
+                    {"table_name":"test_smoke1", "depends_on":"101-1","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2020-02-02 20:01:03"]]},
-                    {"table_name":"smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2020-02-02 20:01:06"],
+                    {"table_name":"test_smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2020-02-02 20:01:06"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2020-02-02 20:01:07"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2020-02-02 20:01:10"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:11"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:11"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2020-02-02 20:01:14"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2020-02-02 20:01:11"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:13"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:13"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:12"],
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2020-02-02 20:01:15"]]}
                 ]}
@@ -1225,18 +1225,18 @@
             "description": "tranform function in subquery and run tumble on the subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"smoke1", "query_end_timer":5, "query":"select id, max(value), window_end from hop(smoke1, to_datetime64(_tp_append_time, 3, 'UTC'), interval 2 second, interval 5 second) where window_end < '2021-11-02 20:00:09' group by id, window_end"}]},
+                    {"client":"python","query_id":"101-1", "query_type": "stream","depends_on_stream":"test_smoke1", "query_end_timer":5, "query":"select id, max(value), window_end from hop(test_smoke1, to_datetime64(_tp_append_time, 3, 'UTC'), interval 2 second, interval 5 second) where window_end < '2021-11-02 20:00:09' group by id, window_end"}]},
                 {"inputs": [
-                    {"table_name":"smoke1","depends_on":"101-1","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
+                    {"table_name":"test_smoke1","depends_on":"101-1","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2020-02-02 20:01:03"]]},
-                    {"table_name":"smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2020-02-02 20:01:06"],
+                    {"table_name":"test_smoke1", "data": [["dev1", "ca", 59, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2020-02-02 20:01:06"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2020-02-02 20:01:07"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2020-02-02 20:01:10"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:11"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:11"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2020-02-02 20:01:14"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2020-02-02 20:01:11"]]},
-                    {"table_name":"smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:13"],
+                    {"table_name":"test_smoke1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:13"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:12"],
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2020-02-02 20:01:15"]]}
                 ]}
@@ -1256,16 +1256,16 @@
             "id": 889,
             "tags": ["input", "sample"],
             "name": "inputs sample",
-            "description": "ingest data into smoke1 w/full columes and values",
+            "description": "ingest data into test_smoke1 w/full columes and values",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_type": "input", "query":"truncate stream smoke1"},
-                    {"client":"python","query_id":"101-1", "query_type": "input", "query":"insert into smoke1 (id, location, value, json, timestamp) values ('dev1', 'ca', 370, 'jsonstring', '1999-01-01 11:11:11')"},
-                    {"client":"python","query_id":"102-1", "query_type": "input", "query":"insert into smoke1 (id, location, value, json, timestamp) values ('dev2', 'ca', 380, 'jsonstring', '1999-01-01 11:11:11')"}
+                    {"client":"python","query_type": "input", "query":"truncate stream test_smoke1"},
+                    {"client":"python","query_id":"101-1", "query_type": "input", "query":"insert into test_smoke1 (id, location, value, json, timestamp) values ('dev1', 'ca', 370, 'jsonstring', '1999-01-01 11:11:11')"},
+                    {"client":"python","query_id":"102-1", "query_type": "input", "query":"insert into test_smoke1 (id, location, value, json, timestamp) values ('dev2', 'ca', 380, 'jsonstring', '1999-01-01 11:11:11')"}
 
                     ]},
                 {"statements": [
-                    {"client":"python","query_id":"103-1", "wait": 5, "query_type": "table","depends_on_stream":"smoke1", "query_end_timer":5, "query":"select id, location, value,json, timestamp from table(smoke1)"}]}
+                    {"client":"python","query_id":"103-1", "wait": 5, "query_type": "table","depends_on_stream":"test_smoke1", "query_end_timer":5, "query":"select id, location, value,json, timestamp from table(test_smoke1)"}]}
 
                 ],
             "expected_results": [{"query_id":"103-1", "expected_results":

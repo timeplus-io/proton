@@ -4,8 +4,8 @@
   "test_suite_config":{
     "setup": {
       "statements": [
-        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists limit_by_stream"},
-        {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists limit_by_stream(i int, s string)"}
+        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test20_limit_by_stream"},
+        {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test20_limit_by_stream(i int, s string)"}
       ]
     },
     "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
@@ -20,8 +20,8 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"2000", "depends_on_stream":"limit_by_stream","query_end_timer":4, "query_type": "stream", "query":"select s, latest(i) as i, emit_version() as version from limit_by_stream group by s order by i desc limit 2 by version"},
-            {"client":"python", "query_type": "table","depends_on":2000,"depends_on_stream":"limit_by_stream", "query": "insert into limit_by_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3'), (4, 's4')"}
+            {"client":"python","query_id":"2000", "depends_on_stream":"test20_limit_by_stream","query_end_timer":4, "query_type": "stream", "query":"select s, latest(i) as i, emit_version() as version from test20_limit_by_stream group by s order by i desc limit 2 by version"},
+            {"client":"python", "query_type": "table","depends_on":2000,"depends_on_stream":"test20_limit_by_stream", "query": "insert into test20_limit_by_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3'), (4, 's4')"}
           ]
         }
       ],
@@ -42,13 +42,13 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"2001", "depends_on_stream":"limit_by_stream","query_end_timer":5, "query_type": "stream", "query":"select s, count(), sum(i) as total, avg(i), min(i), max(i) from tumble(limit_by_stream, 2s) group by window_start, s order by total desc limit 2 by window_start"},
-            {"client":"python", "query_type": "table","depends_on":2001,"depends_on_stream":"limit_by_stream", 
-              "query": "insert into limit_by_stream(i, s, _tp_time) values (1, 's1', '2022-01-01 00:00:00'), (2, 's2', '2022-01-01 00:00:00'), (3, 's3', '2022-01-01 00:00:01')"},
+            {"client":"python","query_id":"2001", "depends_on_stream":"test20_limit_by_stream","query_end_timer":5, "query_type": "stream", "query":"select s, count(), sum(i) as total, avg(i), min(i), max(i) from tumble(test20_limit_by_stream, 2s) group by window_start, s order by total desc limit 2 by window_start"},
+            {"client":"python", "query_type": "table","depends_on":2001,"depends_on_stream":"test20_limit_by_stream", 
+              "query": "insert into test20_limit_by_stream(i, s, _tp_time) values (1, 's1', '2022-01-01 00:00:00'), (2, 's2', '2022-01-01 00:00:00'), (3, 's3', '2022-01-01 00:00:01')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into limit_by_stream(i, s, _tp_time) values (11, 's1', '2022-01-01 00:00:02'), (22, 's2', '2022-01-01 00:00:03'), (33, 's3', '2022-01-01 00:00:03')"},
+              "query": "insert into test20_limit_by_stream(i, s, _tp_time) values (11, 's1', '2022-01-01 00:00:02'), (22, 's2', '2022-01-01 00:00:03'), (33, 's3', '2022-01-01 00:00:03')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into limit_by_stream(i, s, _tp_time) values (44, 's4', '2022-01-01 00:00:04')"}
+              "query": "insert into test20_limit_by_stream(i, s, _tp_time) values (44, 's4', '2022-01-01 00:00:04')"}
           ]
         }
       ],

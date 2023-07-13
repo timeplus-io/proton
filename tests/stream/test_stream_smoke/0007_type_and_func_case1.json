@@ -403,7 +403,7 @@
                     "statements": [
                         {"client":"python", "query_type": "table", "query":"drop stream if exists lower_stream"},
                         {"client":"python", "query_type": "table", "exist":"lower_stream", "exist_wait":2, "wait":1, "query":"create stream lower_stream (id int, location string)"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"800", "wait":1, "terminate":"manuel", "query":"select id, lower(location) from lower_stream"},
+                        {"client":"python", "query_type": "stream", "query_id":"800", "wait":1, "terminate":"manual", "query":"select id, lower(location) from lower_stream"},
                         {"client":"python", "query_type": "table", "depends_on":"800", "kill":"800", "kill_wait":3, "wait":1, "query": "insert into lower_stream(id, location) values (1, 'S'), (2, 'SS')"}
                     ]
                 }
@@ -427,7 +427,7 @@
                     "statements": [
                         {"client":"python", "query_type": "table", "query":"drop stream if exists substr_stream"},
                         {"client":"python", "query_type": "table", "exist":"substr_stream", "exist_wait":2, "wait":1, "query":"create stream substr_stream (id int, location string)"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"800", "wait":1, "terminate":"manuel", "query":"select id, substr(location, 1, 2) from substr_stream"},
+                        {"client":"python", "query_type": "stream", "query_id":"800", "wait":1, "terminate":"manual", "query":"select id, substr(location, 1, 2) from substr_stream"},
                         {"client":"python", "query_type": "table", "depends_on":"800", "kill":"800", "kill_wait":3, "wait":2, "query": "insert into substr_stream(id, location) values (1, 'abcd'), (2, 'efg')"}
                     ]
                 }
@@ -451,7 +451,7 @@
                     "statements": [
                         {"client":"python", "query_type": "table", "query":"drop stream if exists trim_stream"},
                         {"client":"python", "query_type": "table", "exist":"trim_stream", "exist_wait":2, "wait":1, "query":"create stream trim_stream (id int, location string)"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"800", "wait":1, "terminate":"manuel", "query":"select id, location, length(location) as length_before_trim, trim(location) as trim_location, length(trim_location) as length_after_trim from trim_stream"},
+                        {"client":"python", "query_type": "stream", "query_id":"800", "wait":1, "terminate":"manual", "query":"select id, location, length(location) as length_before_trim, trim(location) as trim_location, length(trim_location) as length_after_trim from trim_stream"},
                         {"client":"python", "query_type": "table", "depends_on":"800", "kill":"800", "kill_wait":3, "wait":2, "query": "insert into trim_stream(id, location) values (1, ' abcd '), (2, ' efg ')"}
                     ]
                 }
@@ -475,7 +475,7 @@
                     "statements": [
                         {"client":"python", "query_type": "table", "query":"drop stream if exists extract_all_groups_stream"},
                         {"client":"python", "query_type": "table", "exist":"trim_stream", "exist_wait":2, "wait":1, "query":"create stream extract_all_groups_stream (id int, location string)"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"800", "wait":1, "terminate":"manuel", "query":"select extract_all_groups(location, '(\"[^\"]+\"|\\w+)=(\"[^\"]+\"|\\w+)') as groups from extract_all_groups_stream"},
+                        {"client":"python", "query_type": "stream", "query_id":"800", "wait":1, "terminate":"manual", "query":"select extract_all_groups(location, '(\"[^\"]+\"|\\w+)=(\"[^\"]+\"|\\w+)') as groups from extract_all_groups_stream"},
                         {"client":"python", "query_type": "table", "depends_on":"800", "kill":"800", "kill_wait":3, "wait":2, "query": "insert into extract_all_groups_stream(id, location) values (1, 'v1=111, v2=222, v3=333')"}
                     ]
                 }

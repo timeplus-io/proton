@@ -19,11 +19,11 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists state_stream(i int, s string)"},
-                        {"client":"python", "query_type": "stream", "query_id":"1900", "depends_on_stream":"state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select i, s from state_stream settings seek_to='earliest', checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":1900, "query": "insert into state_stream(i, s) values (1, 's1')"},
-                        {"client":"python", "query_type": "table",  "kill":"1900", "kill_wait":3, "wait":1, "query": "insert into state_stream(i, s) values (2, 's2')"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_state_stream(i int, s string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1900", "depends_on_stream":"test19_state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select i, s from test19_state_stream settings seek_to='earliest', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":1900, "query": "insert into test19_state_stream(i, s) values (1, 's1')"},
+                        {"client":"python", "query_type": "table",  "kill":"1900", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(i, s) values (2, 's2')"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1900'"}
                     ]
                 }
@@ -45,16 +45,16 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists state_stream(i int, s string)"},
-                        {"client":"python", "query_type": "stream", "query_id":"1901", "depends_on_stream":"state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select i, s from state_stream settings seek_to='earliest', checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":1901, "query": "insert into state_stream(i, s) values (1, 's1')"},
-                        {"client":"python", "query_type": "table",  "kill":"1901", "kill_wait":3, "wait":1, "query": "insert into state_stream(i, s) values (2, 's2')"}
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_state_stream(i int, s string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1901", "depends_on_stream":"test19_state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select i, s from test19_state_stream settings seek_to='earliest', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":1901, "query": "insert into test19_state_stream(i, s) values (1, 's1')"},
+                        {"client":"python", "query_type": "table",  "kill":"1901", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(i, s) values (2, 's2')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream(i, s) values (3, 's3')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream(i, s) values (3, 's3')"},
                         {"client":"python", "query_type": "stream","query_id":"1901-1", "terminate": "manual","wait":2, "query":"recover from '1901'"},
                         {"client":"python", "query_type": "table", "depends_on":"1901", "wait":3, "query": "kill query where query_id='1901' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1901'"}
@@ -84,16 +84,16 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists state_stream(i int, s string)"},
-                        {"client":"python", "query_type": "stream", "query_id":"1902", "depends_on_stream":"state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select i, s from state_stream settings seek_to='earliest', checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":1902, "query": "insert into state_stream(i, s) values (1, 's1')"},
-                        {"client":"python", "query_type": "table",  "kill":"1902", "kill_wait":3, "wait":1, "query": "insert into state_stream(i, s) values (2, 's2')"}
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_state_stream(i int, s string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1902", "depends_on_stream":"test19_state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select i, s from test19_state_stream settings seek_to='earliest', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":1902, "query": "insert into test19_state_stream(i, s) values (1, 's1')"},
+                        {"client":"python", "query_type": "table",  "kill":"1902", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(i, s) values (2, 's2')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream(i, s) values (3, 's3')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream(i, s) values (3, 's3')"},
                         {"client":"python", "query_type": "stream","query_id":"1902-1", "terminate": "manual","wait":1, "query":"recover from '1902'"},
                         {"client":"python", "query_type": "table", "depends_on":"1902", "wait":3, "query": "kill query where query_id='1902' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1902'"}
@@ -132,7 +132,7 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python","query_id":"1903", "depends_on_stream":"state_stream","query_end_timer":2, "query_type": "stream", "query":"recover from '19000'"}
+                        {"client":"python","query_id":"1903", "depends_on_stream":"test19_state_stream","query_end_timer":2, "query_type": "stream", "query":"recover from '19000'"}
                     ]
                 }
             ],
@@ -151,10 +151,10 @@
             "steps":[
                 {
                 "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists state_stream(i int, s string)"},
-                        {"client":"python", "query_type": "stream", "query_id":"1904", "depends_on_stream":"state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from state_stream emit periodic 1s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table","depends_on":1904, "kill":"1904", "kill_wait":3, "wait":1, "query": "insert into state_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_state_stream(i int, s string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1904", "depends_on_stream":"test19_state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from test19_state_stream emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table","depends_on":1904, "kill":"1904", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1904'"}
                     ]
                 }
@@ -176,15 +176,15 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists state_stream(i int, s string)"},
-                        {"client":"python", "query_type": "stream", "query_id":"1905", "depends_on_stream":"state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from state_stream emit periodic 1s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":1905, "kill":"1905", "kill_wait":3, "wait":1, "query": "insert into state_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"}
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_state_stream(i int, s string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1905", "depends_on_stream":"test19_state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from test19_state_stream emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":1905, "kill":"1905", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream(i, s) values (6, 's4')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream(i, s) values (6, 's4')"},
                         {"client":"python", "query_type": "stream","query_id":"1905-1", "terminate": "manual","wait":1, "query":"recover from '1905'"},
                         {"client":"python", "query_type": "table", "depends_on":"1905", "wait":3, "query": "kill query where query_id='1905' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1905'"}
@@ -214,10 +214,10 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists state_stream(i int, s string)"},
-                        {"client":"python", "query_type": "stream", "query_id":"1906", "depends_on_stream":"state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from state_stream group by s emit periodic 1s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table","depends_on":1906, "kill":"1906", "kill_wait":3, "wait":1, "query": "insert into state_stream(i, s) values (1, 's1'), (2, 's1'), (3, 's1')"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_state_stream(i int, s string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1906", "depends_on_stream":"test19_state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from test19_state_stream group by s emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table","depends_on":1906, "kill":"1906", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(i, s) values (1, 's1'), (2, 's1'), (3, 's1')"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1906'"}
                     ]
                 }
@@ -239,15 +239,15 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists state_stream(i int, s string)"},
-                        {"client":"python", "query_type": "stream", "query_id":"1907", "depends_on_stream":"state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from state_stream group by s emit periodic 1s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table","depends_on":1907, "kill":"1907", "kill_wait":3, "wait":1, "query": "insert into state_stream(i, s) values (1, 's1'), (2, 's1'), (3, 's1')"}
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_state_stream(i int, s string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1907", "depends_on_stream":"test19_state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from test19_state_stream group by s emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table","depends_on":1907, "kill":"1907", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(i, s) values (1, 's1'), (2, 's1'), (3, 's1')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream(i, s) values (6, 's1')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream(i, s) values (6, 's1')"},
                         {"client":"python", "query_type": "stream","query_id":"1907-1", "terminate": "manual","wait":1, "query":"recover from '1907'"},
                         {"client":"python", "query_type": "table", "depends_on":"1907", "wait":3, "query": "kill query where query_id='1907' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1907'"}
@@ -277,10 +277,10 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists state_stream(i int, s string)"},
-                        {"client":"python", "query_type": "stream", "query_id":"1908", "depends_on_stream":"state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from tumble(state_stream, 2s) group by window_start settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table","depends_on":1908, "kill":"1908", "kill_wait":3, "wait":1, "query": "insert into state_stream(i, s, _tp_time) values (1, 's1', '2022-01-01 00:00:00'), (3, 's2', '2022-01-01 00:00:01'), (4, 's3', '2022-01-01 00:00:02')"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_state_stream(i int, s string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1908", "depends_on_stream":"test19_state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from tumble(test19_state_stream, 2s) group by window_start settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table","depends_on":1908, "kill":"1908", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(i, s, _tp_time) values (1, 's1', '2022-01-01 00:00:00'), (3, 's2', '2022-01-01 00:00:01'), (4, 's3', '2022-01-01 00:00:02')"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1908'"}
                     ]
                 }
@@ -302,15 +302,15 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists state_stream(i int, s string)"},
-                        {"client":"python", "query_type": "stream", "query_id":"1909", "depends_on_stream":"state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from tumble(state_stream, 2s) group by window_start settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table","depends_on":1909, "kill":"1909", "kill_wait":3, "wait":1, "query": "insert into state_stream(i, s, _tp_time) values (1, 's1', '2022-01-01 00:00:00'), (3, 's2', '2022-01-01 00:00:01'), (4, 's3', '2022-01-01 00:00:02')"}
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_state_stream(i int, s string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1909", "depends_on_stream":"test19_state_stream", "wait":1, "terminate": "manual", "query":"subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s) from tumble(test19_state_stream, 2s) group by window_start settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table","depends_on":1909, "kill":"1909", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(i, s, _tp_time) values (1, 's1', '2022-01-01 00:00:00'), (3, 's2', '2022-01-01 00:00:01'), (4, 's3', '2022-01-01 00:00:02')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream(i, s, _tp_time) values (6, 's4', '2022-01-01 00:00:03'), (7, 'wont appear in result', '2022-01-01 00:00:04')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream(i, s, _tp_time) values (6, 's4', '2022-01-01 00:00:03'), (7, 'wont appear in result', '2022-01-01 00:00:04')"},
                         {"client":"python", "query_type": "stream","query_id":"1909-1", "terminate": "manual","wait":1, "query":"recover from '1909'"},
                         {"client":"python", "query_type": "table", "depends_on":"1909", "wait":3, "query": "kill query where query_id='1909' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1909'"}
@@ -340,10 +340,10 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"1910", "depends_on_stream":"state_stream", "wait":1, "terminate":"manuel", "query":"subscribe to select count_distinct(id) from state_stream emit periodic 1s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"1910", "kill":"1910", "kill_wait":3, "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream test19_state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1910", "depends_on_stream":"test19_state_stream", "wait":1, "terminate":"manual", "query":"subscribe to select count_distinct(id) from test19_state_stream emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1910", "kill":"1910", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1910'"}
                     ]
                 }
@@ -365,15 +365,15 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"1911", "depends_on_stream":"state_stream", "wait":1, "terminate":"manuel", "query":"subscribe to select count_distinct(id) from state_stream emit periodic 1s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"1911", "kill":"1911", "kill_wait":3, "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream test19_state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1911", "depends_on_stream":"test19_state_stream", "wait":1, "terminate":"manual", "query":"subscribe to select count_distinct(id) from test19_state_stream emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1911", "kill":"1911", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 67, '2020-02-02 20:00:07'), ('dev8', 'ca', 77, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 67, '2020-02-02 20:00:07'), ('dev8', 'ca', 77, '2020-02-02 20:00:09')"},  
                         {"client":"python", "query_type": "stream","query_id":"1911-1", "terminate": "manual","wait":3, "query":"recover from '1911'"},
                         {"client":"python", "query_type": "table", "depends_on":"1911", "wait":1, "query": "kill query where query_id='1911' sync"}
                     ]
@@ -407,10 +407,10 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"1912", "depends_on_stream":"state_stream", "wait":1, "terminate":"manuel", "query":"subscribe to select count_if(value > 58) from state_stream emit periodic 1s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"1912", "kill":"1912", "kill_wait":3, "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream test19_state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1912", "depends_on_stream":"test19_state_stream", "wait":1, "terminate":"manual", "query":"subscribe to select count_if(value > 58) from test19_state_stream emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1912", "kill":"1912", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1912'"}
                     ]
                 }
@@ -432,15 +432,15 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"1913", "depends_on_stream":"state_stream", "wait":1, "terminate":"manuel", "query":"subscribe to select count_if(value > 58) from state_stream emit periodic 1s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"1913", "kill":"1913", "kill_wait":3, "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream test19_state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1913", "depends_on_stream":"test19_state_stream", "wait":1, "terminate":"manual", "query":"subscribe to select count_if(value > 58) from test19_state_stream emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1913", "kill":"1913", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 77, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 77, '2020-02-02 20:00:09')"},  
                         {"client":"python", "query_type": "stream","query_id":"1913-1", "terminate": "manual","wait":3, "query":"recover from '1913'"},
                         {"client":"python", "query_type": "table", "depends_on":"1913", "wait":1, "query": "kill query where query_id='1913' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1913'"}
@@ -470,10 +470,10 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"1914", "depends_on_stream":"state_stream", "wait":1, "terminate":"manuel", "query":"subscribe to select distinct(id) from state_stream emit periodic 1s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"1914", "kill":"1914", "kill_wait":3, "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream test19_state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1914", "depends_on_stream":"test19_state_stream", "wait":1, "terminate":"manual", "query":"subscribe to select distinct(id) from test19_state_stream emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1914", "kill":"1914", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1914'"}
                     ]
                 }
@@ -496,15 +496,15 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"1915", "depends_on_stream":"state_stream", "wait":1, "terminate":"manuel", "query":"subscribe to select distinct(id) from state_stream emit periodic 1s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"1915", "kill":"1915", "kill_wait":3, "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream test19_state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1915", "depends_on_stream":"test19_state_stream", "wait":1, "terminate":"manual", "query":"subscribe to select distinct(id) from test19_state_stream emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1915", "kill":"1915", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 77, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 77, '2020-02-02 20:00:09')"},  
                         {"client":"python", "query_type": "stream","query_id":"1915-1", "terminate": "manual","wait":3, "query":"recover from '1915'"},
                         {"client":"python", "query_type": "table", "depends_on":"1915", "wait":1, "query": "kill query where query_id='1915' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1915'"}
@@ -535,10 +535,10 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"1916", "depends_on_stream":"state_stream", "wait":1, "terminate":"manuel", "query":"subscribe to select unique(id) from state_stream emit periodic 1s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"1916", "kill":"1916", "kill_wait":3, "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream test19_state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1916", "depends_on_stream":"test19_state_stream", "wait":1, "terminate":"manual", "query":"subscribe to select unique(id) from test19_state_stream emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1916", "kill":"1916", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1916'"}
                     ]
                 }
@@ -560,15 +560,15 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"1917", "depends_on_stream":"state_stream", "wait":1, "terminate":"manuel", "query":"subscribe to select unique(id) from state_stream emit periodic 1s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"1917", "kill":"1917", "kill_wait":3, "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream test19_state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1917", "depends_on_stream":"test19_state_stream", "wait":1, "terminate":"manual", "query":"subscribe to select unique(id) from test19_state_stream emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1917", "kill":"1917", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 77, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 77, '2020-02-02 20:00:09')"},  
                         {"client":"python", "query_type": "stream","query_id":"1917-1", "terminate": "manual","wait":3, "query":"recover from '1917'"},
                         {"client":"python", "query_type": "table", "depends_on":"1917", "wait":1, "query": "kill query where query_id='1917' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1917'"}
@@ -598,10 +598,10 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"1918", "depends_on_stream":"state_stream", "wait":1, "terminate":"manuel", "query":"subscribe to select unique_exact(id) from state_stream emit periodic 1s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"1918", "kill":"1918", "kill_wait":3, "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream test19_state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1918", "depends_on_stream":"test19_state_stream", "wait":1, "terminate":"manual", "query":"subscribe to select unique_exact(id) from test19_state_stream emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1918", "kill":"1918", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1918'"}
                     ]
                 }
@@ -623,15 +623,15 @@
             "steps":[
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "query":"drop stream if exists state_stream"},
-                        {"client":"python", "query_type": "table", "exist":"state_stream", "exist_wait":2, "wait":1, "query":"create stream state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"1919", "depends_on_stream":"state_stream", "wait":1, "terminate":"manuel", "query":"subscribe to select unique_exact(id) from state_stream emit periodic 1s settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"1919", "kill":"1919", "kill_wait":3, "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_stream", "exist_wait":2, "wait":1, "query":"create stream test19_state_stream (id string, location string, value float, timestamp datetime64(3) default now64(3))"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"1919", "depends_on_stream":"test19_state_stream", "wait":1, "terminate":"manual", "query":"subscribe to select unique_exact(id) from test19_state_stream emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1919", "kill":"1919", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
                     ]
                 },
                 {
                     "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into state_stream(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 77, '2020-02-02 20:00:09')"},  
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream(id, location, value, timestamp) values ('dev2', 'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8', 'ca', 77, '2020-02-02 20:00:09')"},  
                         {"client":"python", "query_type": "stream","query_id":"1919-1", "terminate": "manual","wait":3, "query":"recover from '1919'"},
                         {"client":"python", "query_type": "table", "depends_on":"1919", "wait":1, "query": "kill query where query_id='1919' sync"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '1919'"}

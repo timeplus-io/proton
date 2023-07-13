@@ -11,17 +11,17 @@
             "id": 0,
             "tags": ["create random"],
             "name": "#1410",
-            "description": "create random stream with default generating function, BUG :for query like with cte as (select * from create_random limit 1000) select count(*) from cte where id <4it produces no output because the lower query ends when reaches limit while upper query hasnt emitted yet;",
+            "description": "create random stream with default generating function, BUG :for query like with cte as (select * from test22_create_random limit 1000) select count(*) from cte where id <4it produces no output because the lower query ends when reaches limit while upper query hasnt emitted yet;",
             "steps":[
               {
                 "statements": [
-                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
-                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int default rand()%4)"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"with cte as (select * from create_random ) select max(id) from cte where id<4 limit 1 settings max_threads=1"},
-                  {"client":"python", "query_type": "table", "query_id":"2201", "wait":2, "query":"with cte as (select id from tumble(create_random,2s) group by id,window_start limit 10) select max(id) from cte limit 1 settings max_threads=1"},
-                  {"client":"python", "query_type": "table", "query_id":"2202", "wait":2, "query":"select count(distinct id) from create_random limit 1 settings max_threads=1"},
-                  {"client":"python", "query_type": "table", "query_id":"2203", "wait":2, "query":"select count(distinct id) from tumble(create_random,2s) group by window_start limit 1 settings max_threads=1"},
-                  {"client":"python", "query_type": "table", "query_id":"2204", "wait":2, "query":"with cte as (select * from table(create_random) limit 1000) select count(*) from cte where id<4"}
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4)"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"with cte as (select * from test22_create_random ) select max(id) from cte where id<4 limit 1 settings max_threads=1"},
+                  {"client":"python", "query_type": "table", "query_id":"2201", "wait":2, "query":"with cte as (select id from tumble(test22_create_random,2s) group by id,window_start limit 10) select max(id) from cte limit 1 settings max_threads=1"},
+                  {"client":"python", "query_type": "table", "query_id":"2202", "wait":2, "query":"select count(distinct id) from test22_create_random limit 1 settings max_threads=1"},
+                  {"client":"python", "query_type": "table", "query_id":"2203", "wait":2, "query":"select count(distinct id) from tumble(test22_create_random,2s) group by window_start limit 1 settings max_threads=1"},
+                  {"client":"python", "query_type": "table", "query_id":"2204", "wait":2, "query":"with cte as (select * from table(test22_create_random) limit 1000) select count(*) from cte where id<4"}
                 ]
               }
             ],
@@ -51,10 +51,10 @@
             "steps":[
               {
                 "statements": [
-                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
-                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int default rand()%4) engine Random() settings random_storages_rate_limitor=1000"},
-                  {"client":"python", "query_type": "table", "query_id":"2205", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from create_random limit 2 emit periodic 1s) offset 1 settings max_threads=1"},
-                  {"client":"python", "query_type": "table", "query_id":"2206", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from create_random limit 2 emit periodic 100ms) offset 1 settings max_threads=1"}
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings random_storages_rate_limitor=1000"},
+                  {"client":"python", "query_type": "table", "query_id":"2205", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random limit 2 emit periodic 1s) offset 1 settings max_threads=1"},
+                  {"client":"python", "query_type": "table", "query_id":"2206", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random limit 2 emit periodic 100ms) offset 1 settings max_threads=1"}
                 ]
               }
             ],
@@ -75,9 +75,9 @@
             "steps":[
               {
                 "statements": [
-                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
-                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int8 default unique_random('int8'))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 0 and id < 256 from create_random limit 5"}
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int8 default unique_random('int8'))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 0 and id < 256 from test22_create_random limit 5"}
                   ]
               }
             ],
@@ -95,9 +95,9 @@
             "steps":[
               {
                 "statements": [
-                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
-                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id string default unique_random('string'))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from create_random limit 5"}
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id string default unique_random('string'))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from test22_create_random limit 5"}
                   ]
               }
             ],
@@ -115,9 +115,9 @@
             "steps":[
               {
                 "statements": [
-                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
-                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id decimal(9,4) default unique_random('decimal(9,4)'))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from create_random limit 5"}
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id decimal(9,4) default unique_random('decimal(9,4)'))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from test22_create_random limit 5"}
                   ]
               }
             ],
@@ -135,9 +135,9 @@
             "steps":[
               {
                 "statements": [
-                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
-                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id uint8 default unique_random('uint8',x->to_uint8(x+10)))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 10 from create_random limit 5"}
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id uint8 default unique_random('uint8',x->to_uint8(x+10)))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 10 from test22_create_random limit 5"}
                   ]
               }
             ],
@@ -155,9 +155,9 @@
             "steps":[
               {
                 "statements": [
-                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
-                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id int8 default unique_random('int8',5))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select count(distinct id) from create_random limit 1"}
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int8 default unique_random('int8',5))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select count(distinct id) from test22_create_random limit 1"}
                   ]
               }
             ],
@@ -175,9 +175,9 @@
             "steps":[
               {
                 "statements": [
-                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
-                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id uint8 default unique_random('uint8',x->to_uint8(x+10),5))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 10 and id < 15 from create_random limit 10"}
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id uint8 default unique_random('uint8',x->to_uint8(x+10),5))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 10 and id < 15 from test22_create_random limit 10"}
                   ]
               }
             ],
@@ -195,9 +195,9 @@
             "steps":[
               {
                 "statements": [
-                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists create_random"},
-                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream create_random(id uint8 default unique_random('uint8',5,x->to_uint8(x+10)))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 10 and id < 15 from create_random limit 10"}
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id uint8 default unique_random('uint8',5,x->to_uint8(x+10)))"},
+                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 10 and id < 15 from test22_create_random limit 10"}
                   ]
               }
             ],

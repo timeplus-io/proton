@@ -4,10 +4,10 @@
   "test_suite_config":{
     "setup": {
       "statements": [
-        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists left_stream1"},
-        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream1"},
-        {"client":"python", "query_type": "table", "wait":4,"exist":"left_stream1", "exist_wait":2, "query":"create stream if not exists left_stream1 (i int, s string, ts datetime)"},
-        {"client":"python", "query_type": "table", "wait":4,"exist":"right_stream1", "exist_wait":2, "query":"create stream if not exists right_stream1 (ii int, ss string, tts datetime)"}
+        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_left_stream1"},
+        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_right_stream1"},
+        {"client":"python", "query_type": "table", "wait":4,"exist":"test10_left_stream1", "exist_wait":2, "query":"create stream if not exists test10_left_stream1 (i int, s string, ts datetime)"},
+        {"client":"python", "query_type": "table", "wait":4,"exist":"test10_right_stream1", "exist_wait":2, "query":"create stream if not exists test10_right_stream1 (ii int, ss string, tts datetime)"}
       ]
     },
     "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["cluster_table_bug"]}}
@@ -23,7 +23,7 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1023-1", "query_end_timer":1,"wait":1, "query_type": "stream","query":"select s, ss from left_stream1 join right_stream1 on i=ii and date_diff('second', ts, tts) > -10 and date_diff('second', ts, tts) < -2"}
+            {"client":"python","query_id":"1023-1", "query_end_timer":1,"wait":1, "query_type": "stream","query":"select s, ss from test10_left_stream1 join test10_right_stream1 on i=ii and date_diff('second', ts, tts) > -10 and date_diff('second', ts, tts) < -2"}
           ]
         }
       ],
@@ -42,7 +42,7 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1024-1", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from left_stream1 join right_stream1 on i=ii and date_diff('second', ts, tts) > -200 and date_diff('second', ts, tts) < 200"}
+            {"client":"python","query_id":"1024-1", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from test10_left_stream1 join test10_right_stream1 on i=ii and date_diff('second', ts, tts) > -200 and date_diff('second', ts, tts) < 200"}
           ]
         }
       ],
@@ -61,7 +61,7 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1025-1", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream1 join right_stream1 on i=ii and date_diff('second', ts, tts) > -200"}
+            {"client":"python","query_id":"1025-1", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from test10_left_stream1 join test10_right_stream1 on i=ii and date_diff('second', ts, tts) > -200"}
           ]
         }
       ],
@@ -80,7 +80,7 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1026-1", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from left_stream1 join right_stream1 on i=ii and date_diff('second', ts, tts) < 200"}
+            {"client":"python","query_id":"1026-1", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from test10_left_stream1 join test10_right_stream1 on i=ii and date_diff('second', ts, tts) < 200"}
           ]
         }
       ],
@@ -99,7 +99,7 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1027-1", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from left_stream1 join right_stream1 on i=ii and date_diff('second', ts, tts) > -200 and date_diff('second', ts, tts) < 100 and date_diff('second', ts, tts) < 200"}
+            {"client":"python","query_id":"1027-1", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from test10_left_stream1 join test10_right_stream1 on i=ii and date_diff('second', ts, tts) > -200 and date_diff('second', ts, tts) < 100 and date_diff('second', ts, tts) < 200"}
           ]
         }
       ],
@@ -118,7 +118,7 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1028-1", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from left_stream1 asof join right_stream1 on i=ii and date_diff('second', ts, tts) > -200 and date_diff('second', ts, tts) < 200"}
+            {"client":"python","query_id":"1028-1", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from test10_left_stream1 asof join test10_right_stream1 on i=ii and date_diff('second', ts, tts) > -200 and date_diff('second', ts, tts) < 200"}
           ]
         }
       ],
@@ -137,7 +137,7 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1029-1", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from left_stream1 asof join right_stream1 on i=ii and s > ss"}
+            {"client":"python","query_id":"1029-1", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from test10_left_stream1 asof join test10_right_stream1 on i=ii and s > ss"}
           ]
         }
       ],
@@ -156,14 +156,14 @@
       "steps":[
         {
           "statements": [
-            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists left_stream1"},
-            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream1"},
-            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists left_stream1 (i int, s string, ts datetime)"},
-            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists right_stream1 (ii int, ss string, tts datetime)"},
-            {"client":"python", "query_type": "table","depends_on_stream":"right_stream1", "wait":3,
-              "query": "insert into left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_left_stream1"},
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_right_stream1"},
+            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists test10_left_stream1 (i int, s string, ts datetime)"},
+            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists test10_right_stream1 (ii int, ss string, tts datetime)"},
+            {"client":"python", "query_type": "table","depends_on_stream":"test10_right_stream1", "wait":3,
+              "query": "insert into test10_left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into right_stream1(ii, ss, tts) values
+              "query": "insert into test10_right_stream1(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:45:09'),
               (1, 's2', '2022-05-23 15:45:10'),
               (1, 's3', '2022-05-23 15:45:11'),
@@ -175,7 +175,7 @@
               (2, 's9', '2022-05-23 15:46:18'),
               (2, 's10', '2022-05-23 15:46:19')"
             },
-            {"client":"python","query_id":"1030-1", "wait":10, "query_type": "table", "query":"select s, ss from table(left_stream1) as left_stream1 asof join table(right_stream1) as right_stream1 on i=ii and tts > ts"}
+            {"client":"python","query_id":"1030-1", "wait":10, "query_type": "table", "query":"select s, ss from table(test10_left_stream1) as test10_left_stream1 asof join table(test10_right_stream1) as test10_right_stream1 on i=ii and tts > ts"}
           ]
         }
       ],
@@ -196,7 +196,7 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1031-1", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from table(left_stream1) as left_stream1 join table(right_stream1) as right_stream1 on i=ii and ts < tts"}
+            {"client":"python","query_id":"1031-1", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from table(test10_left_stream1) as test10_left_stream1 join table(test10_right_stream1) as test10_right_stream1 on i=ii and ts < tts"}
           ]
         }
       ],
@@ -215,7 +215,7 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1032-1", "query_end_timer":1, "wait":1,"query_type": "stream", "query":"select s, ss from left_stream1 join table(right_stream1) as right_stream1 on i=ii and date_diff('second', ts, tts) between -10 and 10"}
+            {"client":"python","query_id":"1032-1", "query_end_timer":1, "wait":1,"query_type": "stream", "query":"select s, ss from test10_left_stream1 join table(test10_right_stream1) as test10_right_stream1 on i=ii and date_diff('second', ts, tts) between -10 and 10"}
           ]
         }
       ],
@@ -234,7 +234,7 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1033-1", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from left_stream1 asof join table(right_stream1) as right_stream1 on i=ii and date_diff('second', ts, tts) between -10 and 10"}
+            {"client":"python","query_id":"1033-1", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from test10_left_stream1 asof join table(test10_right_stream1) as test10_right_stream1 on i=ii and date_diff('second', ts, tts) between -10 and 10"}
           ]
         }
       ],
@@ -253,10 +253,10 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1034-1", "terminate":"manuel", "wait":1,"query_type": "stream", "query":"select s, ss from (select * from left_stream1) as left_stream1 inner join (select * from right_stream1) as right_stream1 on i=ii and date_diff_within(10s, ts, tts)"},
-            {"client":"python", "query_type": "table","depends_on":"1034-1","wait":3, "trace_stream": {"trace_id": "33_start", "streams":"left_stream1, right_stream1", "trace_query": "select count() from table($)"},"query": "insert into left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python","query_id":"1034-1", "terminate":"manual", "wait":1,"query_type": "stream", "query":"select s, ss from (select * from test10_left_stream1) as test10_left_stream1 inner join (select * from test10_right_stream1) as test10_right_stream1 on i=ii and date_diff_within(10s, ts, tts)"},
+            {"client":"python", "query_type": "table","depends_on":"1034-1","wait":3, "trace_stream": {"trace_id": "33_start", "streams":"test10_left_stream1, test10_right_stream1", "trace_query": "select count() from table($)"},"query": "insert into test10_left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into right_stream1(ii, ss, tts) values
+              "query": "insert into test10_right_stream1(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),
               (1, 's2', '2022-05-23 15:45:00'),
               (1, 's3', '2022-05-23 15:45:09'),
@@ -266,7 +266,7 @@
               (1, 's7', '2022-05-23 15:45:20'),
               (1, 's8', '2022-05-23 15:45:21')"
             },
-            {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table","trace_stream": {"trace_id": "33_end","streams":"left_stream1, right_stream1", "trace_query": "select count() from table($)"},"query":"kill query where query_id = '1034-1'"}
+            {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table","trace_stream": {"trace_id": "33_end","streams":"test10_left_stream1, test10_right_stream1", "trace_query": "select count() from table($)"},"query":"kill query where query_id = '1034-1'"}
           ]
         }
       ],
@@ -287,10 +287,10 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1035-1", "terminate":"manuel","wait":1, "query_type": "stream", "query":"select s, ss from left_stream1 inner join right_stream1 on i=ii and date_diff_within(10s, date_add(ts, 1s), tts)"},
-            {"client":"python", "query_type": "table","depends_on":"1035-1", "wait":2, "query": "insert into left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python","query_id":"1035-1", "terminate":"manual","wait":1, "query_type": "stream", "query":"select s, ss from test10_left_stream1 inner join test10_right_stream1 on i=ii and date_diff_within(10s, date_add(ts, 1s), tts)"},
+            {"client":"python", "query_type": "table","depends_on":"1035-1", "wait":2, "query": "insert into test10_left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into right_stream1(ii, ss, tts) values
+              "query": "insert into test10_right_stream1(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),
               (1, 's2', '2022-05-23 15:45:00'),
               (1, 's3', '2022-05-23 15:45:09'),
@@ -321,12 +321,12 @@
       "steps":[
         {
           "statements": [
-            {"client":"python", "query_id":"35_left_stream1_count_0", "query_type": "table","depends_on_stream":"left_stream1","wait":1,"query": "select count() from table(left_stream1)"},
-            {"client":"python", "query_id":"35_right_stream1_count_0", "query_type": "table","depends_on_stream":"right_stream1","wait":1,"query": "select count() from table(right_stream1)"},               
-            {"client":"python","query_id":"1036-1", "terminate":"manuel", "wait":1,"query_type": "stream", "query":"select s, ss from left_stream1 inner join right_stream1 on i=ii and date_diff_within(10s, ts, date_add(tts, 1s))"},
-            {"client":"python", "query_type": "table", "wait":2,"depends_on":"1036-1", "query": "insert into left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_id":"35_test10_left_stream1_count_0", "query_type": "table","depends_on_stream":"test10_left_stream1","wait":1,"query": "select count() from table(test10_left_stream1)"},
+            {"client":"python", "query_id":"35_test10_right_stream1_count_0", "query_type": "table","depends_on_stream":"test10_right_stream1","wait":1,"query": "select count() from table(test10_right_stream1)"},               
+            {"client":"python","query_id":"1036-1", "terminate":"manual", "wait":1,"query_type": "stream", "query":"select s, ss from test10_left_stream1 inner join test10_right_stream1 on i=ii and date_diff_within(10s, ts, date_add(tts, 1s))"},
+            {"client":"python", "query_type": "table", "wait":2,"depends_on":"1036-1", "query": "insert into test10_left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into right_stream1(ii, ss, tts) values
+              "query": "insert into test10_right_stream1(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),
               (1, 's2', '2022-05-23 15:45:00'),
               (1, 's3', '2022-05-23 15:45:09'),
@@ -337,8 +337,8 @@
               (1, 's8', '2022-05-23 15:45:21')"
             },
             {"client":"python", "wait": 8, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1036-1'"},
-            {"client":"python","query_id":"35_left_stream1_count_1", "query_type": "table","query": "select count() from table(left_stream1)"},
-            {"client":"python","query_id":"35_right_stream1_count_1", "query_type": "table","query": "select count() from table(right_stream1)"}           
+            {"client":"python","query_id":"35_test10_left_stream1_count_1", "query_type": "table","query": "select count() from table(test10_left_stream1)"},
+            {"client":"python","query_id":"35_test10_right_stream1_count_1", "query_type": "table","query": "select count() from table(test10_right_stream1)"}           
           ]
         }
       ],
@@ -361,11 +361,11 @@
           "statements": [
             {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists middle_stream"},
             {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists middle_stream (iii int, sss string, ttts datetime)"},
-            {"client":"python","query_id":"1037-1", "terminate":"manuel", "query_type": "stream", "query":"select s, ss, sss from (select i, s, ss, ts from left_stream1 inner join right_stream1 on i=ii and date_diff_within(10s, ts, tts)) as joined inner join middle_stream on i=iii and date_diff_within(10s, ts, ttts)"},
-            {"client":"python", "query_type": "table","depends_on":"1037-1", "wait":1, "query": "insert into left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python","query_id":"1037-1", "terminate":"manual", "query_type": "stream", "query":"select s, ss, sss from (select i, s, ss, ts from test10_left_stream1 inner join test10_right_stream1 on i=ii and date_diff_within(10s, ts, tts)) as joined inner join middle_stream on i=iii and date_diff_within(10s, ts, ttts)"},
+            {"client":"python", "query_type": "table","depends_on":"1037-1", "wait":1, "query": "insert into test10_left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "depends_on_stream":"middle_stream", "wait":2, "query": "insert into middle_stream(iii, sss, ttts) values (1, 'sss', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into right_stream1(ii, ss, tts) values
+              "query": "insert into test10_right_stream1(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),
               (1, 's2', '2022-05-23 15:45:00'),
               (1, 's3', '2022-05-23 15:45:09'),
@@ -398,11 +398,11 @@
           "statements": [
             {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists middle_stream"},
             {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists middle_stream (iii int, sss string, ttts datetime)"},
-            {"client":"python","query_id":"1038-1", "terminate":"manuel", "query_type": "stream", "query":"select s, ss, sss from left_stream1 inner join right_stream1 on i=ii and date_diff_within(10s, ts, tts) inner join middle_stream on i=iii and date_diff_within(10s, ts, ttts)"},
-            {"client":"python", "query_type": "table","depends_on":"1038-1", "wait":1, "query": "insert into left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python","query_id":"1038-1", "terminate":"manual", "query_type": "stream", "query":"select s, ss, sss from test10_left_stream1 inner join test10_right_stream1 on i=ii and date_diff_within(10s, ts, tts) inner join middle_stream on i=iii and date_diff_within(10s, ts, ttts)"},
+            {"client":"python", "query_type": "table","depends_on":"1038-1", "wait":1, "query": "insert into test10_left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "depends_on_stream":"middle_stream", "wait":1, "query": "insert into middle_stream(iii, sss, ttts) values (1, 'sss', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into right_stream1(ii, ss, tts) values
+              "query": "insert into test10_right_stream1(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),
               (1, 's2', '2022-05-23 15:45:00'),
               (1, 's3', '2022-05-23 15:45:09'),
@@ -433,14 +433,14 @@
       "steps":[
         {
           "statements": [
-            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists left_stream1"},
-            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream1"},
-            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists left_stream1 (i int, s string, ts datetime)"},
-            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists right_stream1 (ii int, ss string, tts datetime)"},
-            {"client":"python","query_id":"1039-1", "terminate":"manuel", "query_type": "stream", "query":"select s, ss from left_stream1 inner join right_stream1 on i=ii and date_diff_within(1m, ts, tts)"},
-            {"client":"python", "query_type": "table","depends_on":"1039-1", "depends_on_stream":"left_stream1", "wait":2, "query": "insert into left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
-            {"client":"python", "query_type": "table","depends_on_stream":"right_stream1", "wait":1,
-              "query": "insert into right_stream1(ii, ss, tts) values
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_left_stream1"},
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_right_stream1"},
+            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists test10_left_stream1 (i int, s string, ts datetime)"},
+            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists test10_right_stream1 (ii int, ss string, tts datetime)"},
+            {"client":"python","query_id":"1039-1", "terminate":"manual", "query_type": "stream", "query":"select s, ss from test10_left_stream1 inner join test10_right_stream1 on i=ii and date_diff_within(1m, ts, tts)"},
+            {"client":"python", "query_type": "table","depends_on":"1039-1", "depends_on_stream":"test10_left_stream1", "wait":2, "query": "insert into test10_left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table","depends_on_stream":"test10_right_stream1", "wait":1,
+              "query": "insert into test10_right_stream1(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),
               (1, 's2', '2022-05-23 15:45:00'),
               (1, 's3', '2022-05-23 15:45:09'),
@@ -471,10 +471,10 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1040-1", "terminate":"manuel","wait":1, "query_type": "stream", "query":"select s, ss from left_stream1 inner join right_stream1 on i=ii and date_diff_within(100s, left_stream1._tp_time, right_stream1._tp_time)"},
-            {"client":"python", "query_type": "table","depends_on":"1040-1", "wait":1, "query": "insert into left_stream1(i, s, ts, _tp_time) values (1, 's', '2022-05-23 15:45:10', '2022-05-25 23:57:31.023')"},
+            {"client":"python","query_id":"1040-1", "terminate":"manual","wait":1, "query_type": "stream", "query":"select s, ss from test10_left_stream1 inner join test10_right_stream1 on i=ii and date_diff_within(100s, test10_left_stream1._tp_time, test10_right_stream1._tp_time)"},
+            {"client":"python", "query_type": "table","depends_on":"1040-1", "wait":1, "query": "insert into test10_left_stream1(i, s, ts, _tp_time) values (1, 's', '2022-05-23 15:45:10', '2022-05-25 23:57:31.023')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into right_stream1(ii, ss, tts, _tp_time) values
+              "query": "insert into test10_right_stream1(ii, ss, tts, _tp_time) values
               (1, 's1', '2022-05-23 15:44:59', '2022-05-25 23:57:39.204'),
               (1, 's2', '2022-05-23 15:44:59', '2022-05-25 23:59:06.204'),
               (1, 's3', '2022-05-23 15:44:59', '2022-05-25 23:59:39.204')"
@@ -500,15 +500,15 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1041-1", "terminate":"manuel","wait":1, "query_type": "stream", "query":"select s, ss from left_stream1 inner join right_stream1 on i=ii"},
-            {"client":"python", "query_type": "table","depends_on":"1041-1", "wait":1, "query": "insert into left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python","query_id":"1041-1", "terminate":"manual","wait":1, "query_type": "stream", "query":"select s, ss from test10_left_stream1 inner join test10_right_stream1 on i=ii"},
+            {"client":"python", "query_type": "table","depends_on":"1041-1", "wait":1, "query": "insert into test10_left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into right_stream1(ii, ss, tts) values
+              "query": "insert into test10_right_stream1(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),
               (1, 's2', '2022-05-23 15:45:00'),
               (1, 's3', '2022-05-23 15:45:09')"
             },
-            {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream1(i, s, ts) values (1, 'ss', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_left_stream1(i, s, ts) values (1, 'ss', '2022-05-23 15:45:10')"},
             {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1041-1'"}
           ]
         }
@@ -532,16 +532,16 @@
           "statements": [
             {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists middle_stream"},
             {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists middle_stream (iii int, sss string, ttts datetime)"},
-            {"client":"python","query_id":"1042-1", "terminate":"manuel", "query_type": "stream","wait":2, "query":"select s, ss, sss from left_stream1 inner join right_stream1 on i=ii inner join middle_stream on i=iii"},
-            {"client":"python", "query_type": "table","depends_on":"1042-1", "wait":3,"trace_stream": {"trace_id": "41_start", "streams":"left_stream1, right_stream1", "trace_query": "select count() from table($)"}, "query": "insert into left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python","query_id":"1042-1", "terminate":"manual", "query_type": "stream","wait":2, "query":"select s, ss, sss from test10_left_stream1 inner join test10_right_stream1 on i=ii inner join middle_stream on i=iii"},
+            {"client":"python", "query_type": "table","depends_on":"1042-1", "wait":3,"trace_stream": {"trace_id": "41_start", "streams":"test10_left_stream1, test10_right_stream1", "trace_query": "select count() from table($)"}, "query": "insert into test10_left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table","depends_on_stream":"middle_stream", "wait":1, "query": "insert into middle_stream(iii, sss, ttts) values (1, 'sss', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into right_stream1(ii, ss, tts) values
+              "query": "insert into test10_right_stream1(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),
               (1, 's2', '2022-05-23 15:45:00'),
               (1, 's3', '2022-05-23 15:45:21')"
             },
-            {"client":"python", "wait": 8, "run_mode":"batch", "query_type": "table","trace_stream": {"trace_id": "41_end", "streams":"left_stream1, right_stream1", "trace_query": "select count() from table($)"}, "query":"kill query where query_id = '1042-1'"}
+            {"client":"python", "wait": 8, "run_mode":"batch", "query_type": "table","trace_stream": {"trace_id": "41_end", "streams":"test10_left_stream1, test10_right_stream1", "trace_query": "select count() from table($)"}, "query":"kill query where query_id = '1042-1'"}
           ]
         }
       ],
@@ -562,15 +562,15 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1043-1", "terminate":"manuel","wait":1, "query_type": "stream", "query":"select s, ss from left_stream1 left join right_stream1 on i=ii"},
-            {"client":"python", "query_type": "table","depends_on":"1043-1", "wait":1, "query": "insert into left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python","query_id":"1043-1", "terminate":"manual","wait":1, "query_type": "stream", "query":"select s, ss from test10_left_stream1 left join test10_right_stream1 on i=ii"},
+            {"client":"python", "query_type": "table","depends_on":"1043-1", "wait":1, "query": "insert into test10_left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into right_stream1(ii, ss, tts) values
+              "query": "insert into test10_right_stream1(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),
               (1, 's2', '2022-05-23 15:45:00'),
               (1, 's3', '2022-05-23 15:45:09')"
             },
-            {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream1(i, s, ts) values (2, 'ss', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_left_stream1(i, s, ts) values (2, 'ss', '2022-05-23 15:45:10')"},
             {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1043-1'"}
           ]
         }
@@ -592,14 +592,14 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1044-1", "terminate":"manuel","wait":1, "query_type": "stream", "query":"select count() as c from left_stream1 inner join right_stream1 on i=ii emit periodic 1s"},
+            {"client":"python","query_id":"1044-1", "terminate":"manual","wait":1, "query_type": "stream", "query":"select count() as c from test10_left_stream1 inner join test10_right_stream1 on i=ii emit periodic 1s"},
             {"client":"python", "query_type": "table", "depends_on":"1044-1","wait":1,
-              "query": "insert into right_stream1(ii, ss, tts) values
+              "query": "insert into test10_right_stream1(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),
               (1, 's2', '2022-05-23 15:45:00'),
               (1, 's3', '2022-05-23 15:45:09')"
             },
-            {"client":"python", "query_type": "table","depends_on":"1044-1", "wait":1, "query": "insert into left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table","depends_on":"1044-1", "wait":1, "query": "insert into test10_left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1044-1'"}
           ]
         }
