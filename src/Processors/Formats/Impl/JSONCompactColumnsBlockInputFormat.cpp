@@ -55,7 +55,7 @@ void registerJSONCompactColumnsSchemaReader(FormatFactory & factory)
 {
     factory.registerSchemaReader(
         "JSONCompactColumns",
-        [](ReadBuffer & buf, const FormatSettings & settings, ContextPtr)
+        [](ReadBuffer & buf, const FormatSettings & settings)
         {
             return std::make_shared<JSONColumnsSchemaReaderBase>(buf, settings, std::make_unique<JSONCompactColumnsReader>(buf));
         }

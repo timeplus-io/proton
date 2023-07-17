@@ -35,16 +35,11 @@ public:
 
 protected:
     StorageS3Cluster(
-        const String & filename_,
-        const String & access_key_id_,
-        const String & secret_access_key_,
+        const StorageS3ClusterConfiguration & configuration_,
         const StorageID & table_id_,
-        String cluster_name_,
-        const String & format_name_,
         const ColumnsDescription & columns_,
         const ConstraintsDescription & constraints_,
-        ContextPtr context_,
-        const String & compression_method_);
+        ContextPtr context_);
 
 private:
     StorageS3::S3Configuration s3_configuration;

@@ -1,4 +1,3 @@
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
@@ -54,7 +53,7 @@ ColumnsDescription readSchemaFromFormat(
     ReadBufferIterator & read_buffer_iterator,
     bool retry,
     ContextPtr & context,
-    std::unique_ptr<ReadBuffer> & buf_out)
+    std::unique_ptr<ReadBuffer> & buf)
 {
     NamesAndTypesList names_and_types;
     if (FormatFactory::instance().checkIfFormatHasExternalSchemaReader(format_name))
@@ -66,21 +65,39 @@ ColumnsDescription readSchemaFromFormat(
         }
         catch (const DB::Exception & e)
         {
-            /// proton: starts
             throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "Cannot extract stream structure from {} format file. Error: {}", format_name, e.message());
-            /// proton: ends
         }
     }
     else if (FormatFactory::instance().checkIfFormatHasSchemaReader(format_name))
     {
         std::string exception_messages;
         SchemaReaderPtr schema_reader;
-        std::unique_ptr<ReadBuffer> buf;
-        while ((buf = read_buffer_iterator()))
+        size_t max_rows_to_read = format_settings ? format_settings->max_rows_to_read_for_schema_inference : context->getSettingsRef().input_format_max_rows_to_read_for_schema_inference;
+        size_t iterations = 0;
+        ColumnsDescription cached_columns;
+        while (true)
         {
+            try
+            {
+                buf = read_buffer_iterator(cached_columns);
+                if (!buf)
+                    break;
+            }
+            catch (...)
+            {
+                auto exception_message = getCurrentExceptionMessage(false);
+                throw Exception(
+                    ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE,
+                    "Cannot extract table structure from {} format file:\n{}\nYou can specify the structure manually",
+                    format_name,
+                    exception_message);
+            }
+
+            ++iterations;
+
             if (buf->eof())
             {
-                auto exception_message = fmt::format("Cannot extract table structure from {} format file, file is emptyg", format_name);
+                auto exception_message = fmt::format("Cannot extract table structure from {} format file, file is empty", format_name);
 
                 if (!retry)
                     throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, exception_message);
@@ -92,23 +109,42 @@ ColumnsDescription readSchemaFromFormat(
             try
             {
                 schema_reader = FormatFactory::instance().getSchemaReader(format_name, *buf, context, format_settings);
+                schema_reader->setMaxRowsToRead(max_rows_to_read);
                 names_and_types = schema_reader->readSchema();
-                buf_out = std::move(buf);
                 break;
             }
             catch (...)
             {
                 auto exception_message = getCurrentExceptionMessage(false);
+                if (schema_reader)
+                {
+                    size_t rows_read = schema_reader->getNumRowsRead();
+                    assert(rows_read <= max_rows_to_read);
+                    max_rows_to_read -= schema_reader->getNumRowsRead();
+                    if (rows_read != 0 && max_rows_to_read == 0)
+                    {
+                        exception_message += "\nTo increase the maximum number of rows to read for structure determination, use setting input_format_max_rows_to_read_for_schema_inference";
+                        if (iterations > 1)
+                        {
+                            exception_messages += "\n" + exception_message;
+                            break;
+                        }
+                        retry = false;
+                    }
+                }
 
                 if (!retry || !isRetryableSchemaInferenceError(getCurrentExceptionCode()))
-                    throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "Cannot extract table structure from {} format file. Error: {}", format_name, exception_message);
+                    throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "Cannot extract table structure from {} format file. Error: {}\nYou can specify the structure manually", format_name, exception_message);
 
                 exception_messages += "\n" + exception_message;
             }
         }
 
+        if (!cached_columns.empty())
+            return cached_columns;
+
         if (names_and_types.empty())
-            throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "All attempts to extract table structure from files failed. Errors:{}", exception_messages);
+            throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "All attempts to extract table structure from files failed. Errors:{}\nYou can specify the structure manually", exception_messages);
 
         /// If we have "INSERT SELECT" query then try to order
         /// columns as they are ordered in table schema for formats
@@ -138,8 +174,11 @@ ColumnsDescription readSchemaFromFormat(const String & format_name, const std::o
     return readSchemaFromFormat(format_name, format_settings, read_buffer_iterator, retry, context, buf_out);
 }
 
-DataTypePtr generalizeDataType(DataTypePtr type)
+DataTypePtr makeNullableRecursivelyAndCheckForNothing(DataTypePtr type)
 {
+    if (!type)
+        return nullptr;
+
     WhichDataType which(type);
 
     if (which.isNothing())
@@ -148,16 +187,13 @@ DataTypePtr generalizeDataType(DataTypePtr type)
     if (which.isNullable())
     {
         const auto * nullable_type = assert_cast<const DataTypeNullable *>(type.get());
-        return generalizeDataType(nullable_type->getNestedType());
+        return makeNullableRecursivelyAndCheckForNothing(nullable_type->getNestedType());
     }
-
-    if (isNumber(type))
-        return makeNullable(std::make_shared<DataTypeFloat64>());
 
     if (which.isArray())
     {
         const auto * array_type = assert_cast<const DataTypeArray *>(type.get());
-        auto nested_type = generalizeDataType(array_type->getNestedType());
+        auto nested_type = makeNullableRecursivelyAndCheckForNothing(array_type->getNestedType());
         return nested_type ? std::make_shared<DataTypeArray>(nested_type) : nullptr;
     }
 
@@ -167,7 +203,7 @@ DataTypePtr generalizeDataType(DataTypePtr type)
         DataTypes nested_types;
         for (const auto & element : tuple_type->getElements())
         {
-            auto nested_type = generalizeDataType(element);
+            auto nested_type = makeNullableRecursivelyAndCheckForNothing(element);
             if (!nested_type)
                 return nullptr;
             nested_types.push_back(nested_type);
@@ -178,19 +214,60 @@ DataTypePtr generalizeDataType(DataTypePtr type)
     if (which.isMap())
     {
         const auto * map_type = assert_cast<const DataTypeMap *>(type.get());
-        auto key_type = removeNullable(generalizeDataType(map_type->getKeyType()));
-        auto value_type = generalizeDataType(map_type->getValueType());
-        return key_type && value_type ? std::make_shared<DataTypeMap>(key_type, value_type) : nullptr;
+        auto key_type = makeNullableRecursivelyAndCheckForNothing(map_type->getKeyType());
+        auto value_type = makeNullableRecursivelyAndCheckForNothing(map_type->getValueType());
+        return key_type && value_type ? std::make_shared<DataTypeMap>(removeNullable(key_type), value_type) : nullptr;
     }
 
     if (which.isLowCarnality())
     {
         const auto * lc_type = assert_cast<const DataTypeLowCardinality *>(type.get());
-        auto nested_type = generalizeDataType(lc_type->getDictionaryType());
+        auto nested_type = makeNullableRecursivelyAndCheckForNothing(lc_type->getDictionaryType());
         return nested_type ? std::make_shared<DataTypeLowCardinality>(nested_type) : nullptr;
     }
 
     return makeNullable(type);
+}
+
+NamesAndTypesList getNamesAndRecursivelyNullableTypes(const Block & header)
+{
+    NamesAndTypesList result;
+    for (auto & [name, type] : header.getNamesAndTypesList())
+        result.emplace_back(name, makeNullableRecursivelyAndCheckForNothing(type));
+    return result;
+}
+
+String getKeyForSchemaCache(const String & source, const String & format, const std::optional<FormatSettings> & format_settings, const ContextPtr & context)
+{
+    return getKeysForSchemaCache({source}, format, format_settings, context).front();
+}
+
+static String makeSchemaCacheKey(const String & source, const String & format, const String & additional_format_info)
+{
+    return source + "@@" + format + "@@" + additional_format_info;
+}
+
+void splitSchemaCacheKey(const String & key, String & source, String & format, String & additional_format_info)
+{
+    size_t additional_format_info_pos = key.rfind("@@");
+    additional_format_info = key.substr(additional_format_info_pos + 2, key.size() - additional_format_info_pos - 2);
+    size_t format_pos = key.rfind("@@", additional_format_info_pos - 1);
+    format = key.substr(format_pos + 2, additional_format_info_pos - format_pos - 2);
+    source = key.substr(0, format_pos);
+}
+
+Strings getKeysForSchemaCache(const Strings & sources, const String & format, const std::optional<FormatSettings> & format_settings, const ContextPtr & context)
+{
+    /// For some formats data schema depends on some settings, so it's possible that
+    /// two queries to the same source will get two different schemas. To process this
+    /// case we add some additional information specific for the format to the cache key.
+    /// For example, for Protobuf format additional information is the path to the schema
+    /// and message name.
+    String additional_format_info = FormatFactory::instance().getAdditionalInfoForSchemaCache(format, context, format_settings);
+    Strings cache_keys;
+    cache_keys.reserve(sources.size());
+    std::transform(sources.begin(), sources.end(), std::back_inserter(cache_keys), [&](const auto & source){ return makeSchemaCacheKey(source, format, additional_format_info); });
+    return cache_keys;
 }
 
 }

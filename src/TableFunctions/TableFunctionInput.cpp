@@ -1,4 +1,3 @@
-#include <TableFunctions/ITableFunction.h>
 #include <TableFunctions/TableFunctionInput.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TableFunctions/parseColumnsListForTableFunction.h>
@@ -7,6 +6,7 @@
 #include <Common/Exception.h>
 #include <Common/typeid_cast.h>
 #include <Storages/StorageInput.h>
+#include <Storages/checkAndGetLiteralArgument.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <boost/algorithm/string.hpp>
@@ -39,7 +39,7 @@ void TableFunctionInput::parseArguments(const ASTPtr & ast_function, ContextPtr 
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         /// proton: ends
 
-    structure = evaluateConstantExpressionOrIdentifierAsLiteral(args[0], context)->as<ASTLiteral &>().value.safeGet<String>();
+    structure = checkAndGetLiteralArgument<String>(evaluateConstantExpressionOrIdentifierAsLiteral(args[0], context), "structure");
 }
 
 ColumnsDescription TableFunctionInput::getActualTableStructure(ContextPtr context) const

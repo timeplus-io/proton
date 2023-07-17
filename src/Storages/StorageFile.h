@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Storages/IStorage.h>
+#include <Storages/ExternalDataSourceConfiguration.h>
+#include <Storages/Cache/SchemaCache.h>
 
 #include <Common/logger_useful.h>
 
@@ -80,6 +82,8 @@ public:
         const std::optional<FormatSettings> & format_settings,
         ContextPtr context);
 
+    static SchemaCache & getSchemaCache(const ContextPtr & context);
+
 protected:
     friend class StorageFileSource;
     friend class StorageFileSink;
@@ -97,6 +101,16 @@ private:
     explicit StorageFile(CommonArguments args);
 
     void setStorageMetadata(CommonArguments args);
+
+    static std::optional<ColumnsDescription> tryGetColumnsFromCache(
+        const Strings & paths, const String & format_name, const std::optional<FormatSettings> & format_settings, ContextPtr context);
+
+    static void addColumnsToCache(
+        const Strings & paths,
+        const ColumnsDescription & columns,
+        const String & format_name,
+        const std::optional<FormatSettings> & format_settings,
+        const ContextPtr & context);
 
     std::string format_name;
     // We use format settings from global context + CREATE query for File table

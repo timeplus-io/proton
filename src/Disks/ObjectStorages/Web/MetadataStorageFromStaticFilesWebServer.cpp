@@ -1,5 +1,6 @@
 #include "MetadataStorageFromStaticFilesWebServer.h"
 #include <Disks/IDisk.h>
+#include <Disks/ObjectStorages/StaticDirectoryIterator.h>
 #include <Common/filesystemHelpers.h>
 #include <Common/logger_useful.h>
 #include <IO/WriteHelpers.h>
@@ -10,30 +11,10 @@ namespace DB
 
 namespace ErrorCodes
 {
-extern const int NOT_IMPLEMENTED;
-extern const int FILE_DOESNT_EXIST;
-extern const int NETWORK_ERROR;
+    extern const int NOT_IMPLEMENTED;
+    extern const int FILE_DOESNT_EXIST;
+    extern const int NETWORK_ERROR;
 }
-
-class DiskWebServerDirectoryIterator final : public IDirectoryIterator
-{
-public:
-    explicit DiskWebServerDirectoryIterator(std::vector<fs::path> && dir_file_paths_)
-        : dir_file_paths(std::move(dir_file_paths_)), iter(dir_file_paths.begin()) {}
-
-    void next() override { ++iter; }
-
-    bool isValid() const override { return iter != dir_file_paths.end(); }
-
-    String path() const override { return iter->string(); }
-
-    String name() const override { return iter->filename(); }
-
-private:
-    std::vector<fs::path> dir_file_paths;
-    std::vector<fs::path>::iterator iter;
-};
-
 
 MetadataStorageFromStaticFilesWebServer::MetadataStorageFromStaticFilesWebServer(
     const WebObjectStorage & object_storage_)
@@ -140,7 +121,7 @@ DirectoryIteratorPtr MetadataStorageFromStaticFilesWebServer::iterateDirectory(c
     std::vector<fs::path> dir_file_paths;
 
     if (!initializeIfNeeded(path))
-        return std::make_unique<DiskWebServerDirectoryIterator>(std::move(dir_file_paths));
+        return std::make_unique<StaticDirectoryIterator>(std::move(dir_file_paths));
 
     assertExists(path);
 
@@ -149,7 +130,7 @@ DirectoryIteratorPtr MetadataStorageFromStaticFilesWebServer::iterateDirectory(c
             dir_file_paths.emplace_back(file_path);
 
     LOG_TRACE(object_storage.log, "Iterate directory {} with {} files", path, dir_file_paths.size());
-    return std::make_unique<DiskWebServerDirectoryIterator>(std::move(dir_file_paths));
+    return std::make_unique<StaticDirectoryIterator>(std::move(dir_file_paths));
 }
 
 std::string MetadataStorageFromStaticFilesWebServer::readFileToString(const std::string &) const

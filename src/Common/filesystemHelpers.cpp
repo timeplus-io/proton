@@ -3,6 +3,7 @@
 #include <sys/stat.h>
 #if defined(OS_LINUX)
 #    include <mntent.h>
+#    include <sys/sysmacros.h>
 #endif
 #include <cerrno>
 #include <Poco/Timestamp.h>
@@ -11,6 +12,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <utime.h>
+#include <IO/Operators.h>
+#include <IO/WriteBufferFromString.h>
 #include <Common/Exception.h>
 
 namespace fs = std::filesystem;
@@ -56,6 +59,22 @@ std::unique_ptr<TemporaryFile> createTemporaryFile(const std::string & path)
 
     /// NOTE: std::make_shared cannot use protected constructors
     return std::make_unique<TemporaryFile>(path);
+}
+
+
+std::optional<String> tryGetBlockDeviceId([[maybe_unused]] const String & path)
+{
+#if defined(OS_LINUX)
+    struct stat sb;
+    if (lstat(path.c_str(), &sb))
+        return {};
+    WriteBufferFromOwnString ss;
+    ss << major(sb.st_dev) << ":" << minor(sb.st_dev);
+    return ss.str();
+#else
+    return {};
+#endif
+
 }
 
 std::filesystem::path getMountPoint(std::filesystem::path absolute_path)

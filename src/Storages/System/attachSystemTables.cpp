@@ -61,6 +61,7 @@
 #include <Storages/System/StorageSystemAsynchronousInserts.h>
 #include <Storages/System/StorageSystemFilesystemCache.h>
 #include <Storages/System/StorageSystemRemoteDataPaths.h>
+#include <Storages/System/StorageSystemSchemaInferenceCache.h>
 
 /// proton: starts.
 #include <Storages/Streaming/StorageSystemStreamSettings.h>
@@ -123,6 +124,7 @@ void attachSystemTablesLocal(ContextPtr context, IDatabase & system_database)
     attach<StorageSystemDataSkippingIndices>(context, system_database, "data_skipping_indices");
     attach<StorageSystemLicenses>(context, system_database, "licenses");
     attach<StorageSystemTimeZones>(context, system_database, "time_zones");
+    attach<StorageSystemSchemaInferenceCache>(context, system_database, "schema_inference_cache");
 #ifdef OS_LINUX
     attach<StorageSystemStackTrace>(context, system_database, "stack_trace");
 #endif

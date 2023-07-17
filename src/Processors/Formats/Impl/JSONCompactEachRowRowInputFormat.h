@@ -86,6 +86,8 @@ public:
 private:
     DataTypes readRowAndGetDataTypes() override;
 
+    void transformTypesIfNeeded(DataTypePtr & type, DataTypePtr & new_type, size_t) override;
+
     JSONCompactEachRowFormatReader reader;
     bool first_row = true;
 };

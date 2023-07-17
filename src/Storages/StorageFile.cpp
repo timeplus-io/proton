@@ -1,5 +1,10 @@
 #include <Storages/StorageFile.h>
 #include <Storages/StorageFactory.h>
+#include <Storages/ColumnsDescription.h>
+#include <Storages/StorageInMemoryMetadata.h>
+#include <Storages/PartitionedSink.h>
+#include <Storages/Distributed/DirectoryMonitor.h>
+#include <Storages/checkAndGetLiteralArgument.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/evaluateConstantExpression.h>
@@ -20,30 +25,26 @@
 #include <Formats/ReadSchemaUtils.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Processors/Transforms/AddingDefaultsTransform.h>
-
-#include <Common/escapeForFileName.h>
-#include <Common/typeid_cast.h>
-#include <Common/parseGlobs.h>
-#include <Common/filesystemHelpers.h>
-#include <Storages/ColumnsDescription.h>
-#include <Storages/StorageInMemoryMetadata.h>
-#include <Storages/PartitionedSink.h>
-
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-
-#include <re2/re2.h>
-#include <filesystem>
-#include <Storages/Distributed/DirectoryMonitor.h>
 #include <Processors/ISource.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Formats/IInputFormat.h>
 #include <Processors/Formats/ISchemaReader.h>
 #include <Processors/Sources/NullSource.h>
+#include <Processors/Executors/PullingPipelineExecutor.h>
+
+#include <Common/escapeForFileName.h>
+#include <Common/typeid_cast.h>
+#include <Common/parseGlobs.h>
+#include <Common/filesystemHelpers.h>
+
 #include <QueryPipeline/Pipe.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
-#include <Processors/Executors/PullingPipelineExecutor.h>
+
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <re2/re2.h>
+#include <filesystem>
 
 
 namespace fs = std::filesystem;
@@ -230,7 +231,7 @@ ColumnsDescription StorageFile::getTableStructureFromFileDescriptor(ContextPtr c
     /// in case of file descriptor we have a stream of data and we cannot
     /// start reading data from the beginning after reading some data for
     /// schema inference.
-    ReadBufferIterator read_buffer_iterator = [&]()
+    ReadBufferIterator read_buffer_iterator = [&](ColumnsDescription &)
     {
         /// We will use PeekableReadBuffer to create a checkpoint, so we need a place
         /// where we can store the original read buffer.
@@ -276,7 +277,11 @@ ColumnsDescription StorageFile::getTableStructureFromFile(
             "table structure manually",
             format);
 
-    ReadBufferIterator read_buffer_iterator = [&, it = paths.begin()]() mutable -> std::unique_ptr<ReadBuffer>
+    std::optional<ColumnsDescription> columns_from_cache;
+    if (context->getSettingsRef().schema_inference_use_cache_for_file)
+        columns_from_cache = tryGetColumnsFromCache(paths, format, format_settings, context);
+
+    ReadBufferIterator read_buffer_iterator = [&, it = paths.begin()](ColumnsDescription &) mutable -> std::unique_ptr<ReadBuffer>
     {
         if (it == paths.end())
             return nullptr;
@@ -284,7 +289,16 @@ ColumnsDescription StorageFile::getTableStructureFromFile(
         return createReadBuffer(*it++, false, "File", -1, compression_method, context);
     };
 
-    return readSchemaFromFormat(format, format_settings, read_buffer_iterator, paths.size() > 1, context);
+    ColumnsDescription columns;
+    if (columns_from_cache)
+        columns = *columns_from_cache;
+    else
+        columns = readSchemaFromFormat(format, format_settings, read_buffer_iterator, paths.size() > 1, context);
+
+    if (context->getSettingsRef().schema_inference_use_cache_for_file)
+        addColumnsToCache(paths, columns, format, format_settings, context);
+
+    return columns;
 }
 
 bool StorageFile::isColumnOriented() const
@@ -1056,7 +1070,7 @@ void registerStorageFile(StorageFactory & factory)
                     ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
             engine_args_ast[0] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args_ast[0], factory_args.getLocalContext());
-            storage_args.format_name = engine_args_ast[0]->as<ASTLiteral &>().value.safeGet<String>();
+            storage_args.format_name = checkAndGetLiteralArgument<String>(engine_args_ast[0], "format_name");
 
             // Use format settings from global server context + settings from
             // the SETTINGS clause of the create query. Settings from current
@@ -1124,7 +1138,7 @@ void registerStorageFile(StorageFactory & factory)
             if (engine_args_ast.size() == 3)
             {
                 engine_args_ast[2] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args_ast[2], factory_args.getLocalContext());
-                storage_args.compression_method = engine_args_ast[2]->as<ASTLiteral &>().value.safeGet<String>();
+                storage_args.compression_method = checkAndGetLiteralArgument<String>(engine_args_ast[2], "compression_method");
             }
             else
                 storage_args.compression_method = "auto";
@@ -1144,4 +1158,48 @@ NamesAndTypesList StorageFile::getVirtuals() const
         {"_path", std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>())},
         {"_file", std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>())}};
 }
+
+SchemaCache & StorageFile::getSchemaCache(const ContextPtr & context)
+{
+    static SchemaCache schema_cache(context->getConfigRef().getUInt("schema_inference_cache_max_elements_for_file", DEFAULT_SCHEMA_CACHE_ELEMENTS));
+    return schema_cache;
+}
+
+std::optional<ColumnsDescription> StorageFile::tryGetColumnsFromCache(
+    const Strings & paths, const String & format_name, const std::optional<FormatSettings> & format_settings, ContextPtr context)
+{
+    /// Check if the cache contains one of the paths.
+    auto & schema_cache = getSchemaCache(context);
+    struct stat file_stat{};
+    for (const auto & path : paths)
+    {
+        auto get_last_mod_time = [&]() -> std::optional<time_t>
+        {
+            if (0 != stat(path.c_str(), &file_stat))
+                return std::nullopt;
+
+            return file_stat.st_mtime;
+        };
+
+        String cache_key = getKeyForSchemaCache(path, format_name, format_settings, context);
+        auto columns = schema_cache.tryGet(cache_key, get_last_mod_time);
+        if (columns)
+            return columns;
+    }
+
+    return std::nullopt;
+}
+
+void StorageFile::addColumnsToCache(
+    const Strings & paths,
+    const ColumnsDescription & columns,
+    const String & format_name,
+    const std::optional<FormatSettings> & format_settings,
+    const ContextPtr & context)
+{
+    auto & schema_cache = getSchemaCache(context);
+    Strings cache_keys = getKeysForSchemaCache(paths, format_name, format_settings, context);
+    schema_cache.addMany(cache_keys, columns);
+}
+
 }

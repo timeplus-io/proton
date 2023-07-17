@@ -27,6 +27,8 @@ std::filesystem::path getMountPoint(std::filesystem::path absolute_path);
 #endif
 String getFilesystemName([[maybe_unused]] const String & mount_point);
 
+std::optional<String> tryGetBlockDeviceId([[maybe_unused]] const String & path);
+
 struct statvfs getStatVFS(const String & path);
 
 /// Returns true if path starts with prefix path

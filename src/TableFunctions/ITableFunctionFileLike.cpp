@@ -8,10 +8,9 @@
 
 #include <Storages/StorageFile.h>
 #include <Storages/Distributed/DirectoryMonitor.h>
+#include <Storages/checkAndGetLiteralArgument.h>
 
 #include <Interpreters/evaluateConstantExpression.h>
-
-#include <Processors/ISource.h>
 
 #include <Formats/FormatFactory.h>
 
@@ -44,6 +43,11 @@ namespace
     }
 }
 
+void ITableFunctionFileLike::parseFirstArguments(const ASTPtr & arg, const ContextPtr &)
+{
+        filename = checkAndGetLiteralArgument<String>(arg, "source");
+}
+
 void ITableFunctionFileLike::parseArguments(const ASTPtr & ast_function, ContextPtr context)
 {
     /// Parse args
@@ -64,10 +68,10 @@ void ITableFunctionFileLike::parseArguments(const ASTPtr & ast_function, Context
     for (auto & arg : args)
         arg = evaluateConstantExpressionOrIdentifierAsLiteral(arg, context);
 
-    filename = args[0]->as<ASTLiteral &>().value.safeGet<String>();
+    parseFirstArguments(args[0], context);
 
     if (args.size() > 1)
-        format = args[1]->as<ASTLiteral &>().value.safeGet<String>();
+        format = checkAndGetLiteralArgument<String>(args[1], "format");
 
     if (format == "auto")
         format = FormatFactory::instance().getFormatFromFileName(filename, true);
@@ -84,7 +88,7 @@ void ITableFunctionFileLike::parseArguments(const ASTPtr & ast_function, Context
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         /// proton: ends
 
-    structure = args[2]->as<ASTLiteral &>().value.safeGet<String>();
+    structure = checkAndGetLiteralArgument<String>(args[2], "structure");
     if (structure == "auto")
         checkIfFormatSupportsAutoStructure(getName(), format);
 
@@ -96,7 +100,7 @@ void ITableFunctionFileLike::parseArguments(const ASTPtr & ast_function, Context
         /// proton: ends
 
     if (args.size() == 4)
-        compression_method = args[3]->as<ASTLiteral &>().value.safeGet<String>();
+        compression_method = checkAndGetLiteralArgument<String>(args[3], "compression_method");
 }
 
 StoragePtr ITableFunctionFileLike::executeImpl(const ASTPtr & /*ast_function*/, ContextPtr context, const std::string & table_name, ColumnsDescription /*cached_columns*/) const

@@ -2,7 +2,7 @@
 #include <TableFunctions/TableFunctionZeros.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Parsers/ASTFunction.h>
-#include <Parsers/ASTLiteral.h>
+#include <Storages/checkAndGetLiteralArgument.h>
 #include <Storages/System/StorageSystemZeros.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/evaluateConstantExpression.h>
@@ -88,7 +88,7 @@ See also the `system.zeros` table.
 template <bool multithreaded>
 UInt64 TableFunctionZeros<multithreaded>::evaluateArgument(ContextPtr context, ASTPtr & argument) const
 {
-    return evaluateConstantExpressionOrIdentifierAsLiteral(argument, context)->as<ASTLiteral &>().value.safeGet<UInt64>();
+    return checkAndGetLiteralArgument<UInt64>(evaluateConstantExpressionOrIdentifierAsLiteral(argument, context), "length");
 }
 
 }

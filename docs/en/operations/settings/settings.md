@@ -4156,7 +4156,7 @@ Sets the character that is interpreted as a suffix after the result set for [Cus
 
 Default value: `''`.
 
-## shutdown_wait_unfinished_queries
+## shutdown_wait_unfinished_queries {#shutdown_wait_unfinished_queries}
 
 Enables or disables waiting unfinished queries when shutdown server.
 
@@ -4167,7 +4167,7 @@ Possible values:
 
 Default value: `0`.
 
-## shutdown_wait_unfinished
+## shutdown_wait_unfinished {#shutdown_wait_unfinished}
 
 The waiting time in seconds for currently handled connections when shutdown server.
 
@@ -4190,7 +4190,7 @@ Read more about [memory overcommit](memory-overcommit.md).
 
 Default value: `0`.
 
-## memory_usage_overcommit_max_wait_microseconds
+## memory_usage_overcommit_max_wait_microseconds {#memory_usage_overcommit_max_wait_microseconds}
 
 Maximum time thread will wait for memory to be freed in the case of memory overcommit on a user level.
 If the timeout is reached and memory is not freed, an exception is thrown.
@@ -4206,3 +4206,33 @@ Zero means unlimited.
 Read more about [memory overcommit](memory-overcommit.md).
 
 Default value: `0`.
+
+## schema_inference_use_cache_for_file {schema_inference_use_cache_for_file}
+
+Enable schemas cache for schema inference in `file` table function.
+
+Default value: `true`.
+
+## schema_inference_use_cache_for_s3 {schema_inference_use_cache_for_s3}
+
+Enable schemas cache for schema inference in `s3` table function.
+
+Default value: `true`.
+
+## schema_inference_use_cache_for_url {schema_inference_use_cache_for_url}
+
+Enable schemas cache for schema inference in `url` table function.
+
+Default value: `true`.
+
+## schema_inference_use_cache_for_hdfs {schema_inference_use_cache_for_hdfs}
+
+Enable schemas cache for schema inference in `hdfs` table function.
+
+Default value: `true`.
+
+## schema_inference_cache_require_modification_time_for_url {#schema_inference_cache_require_modification_time_for_url}
+
+Use schema from cache for URL with last modification time validation (for urls with Last-Modified header). If this setting is enabled and URL doesn't have Last-Modified header, schema from cache won't be used.
+
+Default value: `true`.

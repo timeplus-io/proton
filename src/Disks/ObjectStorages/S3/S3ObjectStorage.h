@@ -12,6 +12,7 @@
 #include <aws/s3/model/ListObjectsV2Result.h>
 #include <Storages/StorageS3Settings.h>
 #include <Common/MultiVersion.h>
+#include <Common/logger_useful.h>
 
 
 namespace DB
@@ -22,17 +23,17 @@ struct S3ObjectStorageSettings
     S3ObjectStorageSettings() = default;
 
     S3ObjectStorageSettings(
-        const S3Settings::ReadWriteSettings & s3_settings_,
+        const S3Settings::RequestSettings & request_settings_,
         uint64_t min_bytes_for_seek_,
         int32_t list_object_keys_size_,
         int32_t objects_chunk_size_to_delete_)
-        : s3_settings(s3_settings_)
+        : request_settings(request_settings_)
         , min_bytes_for_seek(min_bytes_for_seek_)
         , list_object_keys_size(list_object_keys_size_)
         , objects_chunk_size_to_delete(objects_chunk_size_to_delete_)
     {}
 
-    S3Settings::ReadWriteSettings s3_settings;
+    S3Settings::RequestSettings request_settings;
 
     uint64_t min_bytes_for_seek;
     int32_t list_object_keys_size;
@@ -42,19 +43,41 @@ struct S3ObjectStorageSettings
 
 class S3ObjectStorage : public IObjectStorage
 {
-public:
+private:
+    friend class S3PlainObjectStorage;
+
     S3ObjectStorage(
+        const char * logger_name,
         std::unique_ptr<Aws::S3::S3Client> && client_,
         std::unique_ptr<S3ObjectStorageSettings> && s3_settings_,
         String version_id_,
         const S3Capabilities & s3_capabilities_,
-        String bucket_)
+        String bucket_,
+        String connection_string)
         : bucket(bucket_)
         , client(std::move(client_))
         , s3_settings(std::move(s3_settings_))
         , s3_capabilities(s3_capabilities_)
         , version_id(std::move(version_id_))
     {
+        data_source_description.type = DataSourceType::S3;
+        data_source_description.description = connection_string;
+        data_source_description.is_cached = false;
+        data_source_description.is_encrypted = false;
+
+        log = &Poco::Logger::get(logger_name);
+    }
+
+public:
+    template <class ...Args>
+    S3ObjectStorage(std::unique_ptr<Aws::S3::S3Client> && client_, Args && ...args)
+        : S3ObjectStorage("S3ObjectStorage", std::move(client_), std::forward<Args>(args)...)
+    {
+    }
+
+    DataSourceDescription getDataSourceDescription() const override
+    {
+        return data_source_description;
     }
 
     std::string getName() const override { return "S3ObjectStorage"; }
@@ -169,6 +192,25 @@ private:
     S3Capabilities s3_capabilities;
 
     const String version_id;
+
+    Poco::Logger * log;
+    DataSourceDescription data_source_description;
+};
+
+/// Do not encode keys, store as-is, and do not require separate disk for metadata.
+/// But because of this does not support renames/hardlinks/attrs/...
+///
+/// NOTE: This disk has excessive API calls.
+class S3PlainObjectStorage : public S3ObjectStorage
+{
+public:
+    std::string generateBlobNameForPath(const std::string & path) override { return path; }
+    std::string getName() const override { return "S3PlainObjectStorage"; }
+
+    template <class ...Args>
+    S3PlainObjectStorage(Args && ...args)
+        : S3ObjectStorage("S3PlainObjectStorage", std::forward<Args>(args)...)
+    {}
 };
 
 }

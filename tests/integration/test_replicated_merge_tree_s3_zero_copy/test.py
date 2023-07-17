@@ -101,4 +101,6 @@ def test_insert_select_replicated(cluster, min_rows_for_wide_part, files_per_par
                           settings={"select_sequential_consistency": 1}) == all_values
 
     minio = cluster.minio_client
-    assert len(list(minio.list_objects(cluster.minio_bucket, 'data/'))) == (3 * FILES_OVERHEAD) + (files_per_part * 3)
+    assert len(
+        list(minio.list_objects(cluster.minio_bucket, "data/", recursive=True))
+    ) == (3 * FILES_OVERHEAD) + (files_per_part * 3)

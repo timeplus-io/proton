@@ -20,6 +20,12 @@ public:
     std::optional<UInt128> getChecksum() const override { return checksum; }
     std::unique_ptr<ReadBuffer> getReadBuffer() const override;
 
+    String getFilePath() const override { return ""; }
+
+    DataSourceDescription getDataSourceDescription() const override { return {}; }
+
+    DiskPtr tryGetDiskIfExists() const override { return nullptr; }
+
 private:
     BackupEntryPtr first_source;
     BackupEntryPtr second_source;

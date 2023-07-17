@@ -385,7 +385,7 @@ void MsgPackRowInputFormat::setReadBuffer(ReadBuffer & in_)
 }
 
 MsgPackSchemaReader::MsgPackSchemaReader(ReadBuffer & in_, const FormatSettings & format_settings_)
-    : IRowSchemaReader(buf, format_settings_.max_rows_to_read_for_schema_inference), buf(in_), number_of_columns(format_settings_.msgpack.number_of_columns)
+    : IRowSchemaReader(buf, format_settings_), buf(in_), number_of_columns(format_settings_.msgpack.number_of_columns)
 {
     if (!number_of_columns)
         /// proton: starts
@@ -502,7 +502,7 @@ void registerInputFormatMsgPack(FormatFactory & factory)
 
 void registerMsgPackSchemaReader(FormatFactory & factory)
 {
-    factory.registerSchemaReader("MsgPack", [](ReadBuffer & buf, const FormatSettings & settings, ContextPtr)
+    factory.registerSchemaReader("MsgPack", [](ReadBuffer & buf, const FormatSettings & settings)
     {
         return std::make_shared<MsgPackSchemaReader>(buf, settings);
     });

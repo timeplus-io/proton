@@ -19,6 +19,7 @@ public:
 
 protected:
     void parseArguments(const ASTPtr & ast_function, ContextPtr context) override;
+    virtual void parseFirstArguments(const ASTPtr & arg, const ContextPtr & context);
 
     String filename;
     String format = "auto";

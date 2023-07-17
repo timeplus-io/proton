@@ -1,6 +1,5 @@
 #include <Storages/StorageSet.h>
 #include <Storages/StorageFactory.h>
-#include <IO/ReadBufferFromFile.h>
 #include <Compression/CompressedReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Compression/CompressedWriteBuffer.h>

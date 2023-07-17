@@ -103,11 +103,17 @@ def run_s3_mocks(cluster):
 def wait_for_delete_s3_objects(cluster, expected, timeout=30):
     minio = cluster.minio_client
     while timeout > 0:
-        if len(list(minio.list_objects(cluster.minio_bucket, 'data/'))) == expected:
+        if (
+            len(list(minio.list_objects(cluster.minio_bucket, "data/", recursive=True)))
+            == expected
+        ):
             return
         timeout -= 1
         time.sleep(1)
-    assert(len(list(minio.list_objects(cluster.minio_bucket, 'data/'))) == expected)
+    assert (
+        len(list(minio.list_objects(cluster.minio_bucket, "data/", recursive=True)))
+        == expected
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -123,7 +129,9 @@ def drop_table(cluster, node_name):
         wait_for_delete_s3_objects(cluster, 0)
     finally:
         # Remove extra objects to prevent tests cascade failing
-        for obj in list(minio.list_objects(cluster.minio_bucket, 'data/')):
+        for obj in list(
+            minio.list_objects(cluster.minio_bucket, "data/", recursive=True)
+        ):
             minio.remove_object(cluster.minio_bucket, obj.object_name)
 
 
@@ -142,12 +150,12 @@ def test_simple_insert_select(cluster, min_rows_for_wide_part, files_per_part, n
     values1 = generate_values('2020-01-03', 4096)
     node.query("INSERT INTO s3_test VALUES {}".format(values1))
     assert node.query("SELECT * FROM s3_test order by dt, id FORMAT Values") == values1
-    assert len(list(minio.list_objects(cluster.minio_bucket, 'data/'))) == FILES_OVERHEAD + files_per_part
+    assert len(list(minio.list_objects(cluster.minio_bucket, 'data/', recursive=True)))) == FILES_OVERHEAD + files_per_part
 
     values2 = generate_values('2020-01-04', 4096)
     node.query("INSERT INTO s3_test VALUES {}".format(values2))
     assert node.query("SELECT * FROM s3_test ORDER BY dt, id FORMAT Values") == values1 + "," + values2
-    assert len(list(minio.list_objects(cluster.minio_bucket, 'data/'))) == FILES_OVERHEAD + files_per_part * 2
+    assert len(list(minio.list_objects(cluster.minio_bucket, 'data/', recursive=True)))) == FILES_OVERHEAD + files_per_part * 2
 
     assert node.query("SELECT count(*) FROM s3_test where id = 1 FORMAT Values") == "(2)"
 
@@ -255,12 +263,12 @@ def test_attach_detach_partition(cluster, node_name):
 
     node.query("ALTER TABLE s3_test DROP PARTITION '2020-01-03'")
     assert node.query("SELECT count(*) FROM s3_test FORMAT Values") == "(4096)"
-    assert len(list(minio.list_objects(cluster.minio_bucket, 'data/'))) == FILES_OVERHEAD + FILES_OVERHEAD_PER_PART_WIDE
+    assert len(list(minio.list_objects(cluster.minio_bucket, 'data/', recursive=True)))) == FILES_OVERHEAD + FILES_OVERHEAD_PER_PART_WIDE
 
     node.query("ALTER TABLE s3_test DETACH PARTITION '2020-01-04'")
     node.query("ALTER TABLE s3_test DROP DETACHED PARTITION '2020-01-04'", settings={"allow_drop_detached": 1})
     assert node.query("SELECT count(*) FROM s3_test FORMAT Values") == "(0)"
-    assert len(list(minio.list_objects(cluster.minio_bucket, 'data/'))) == FILES_OVERHEAD
+    assert len(list(minio.list_objects(cluster.minio_bucket, 'data/', recursive=True)))) == FILES_OVERHEAD
 
 
 @pytest.mark.parametrize("node_name", ["node"])
@@ -277,12 +285,12 @@ def test_move_partition_to_another_disk(cluster, node_name):
 
     node.query("ALTER TABLE s3_test MOVE PARTITION '2020-01-04' TO DISK 'hdd'")
     assert node.query("SELECT count(*) FROM s3_test FORMAT Values") == "(8192)"
-    assert len(list(minio.list_objects(cluster.minio_bucket, 'data/'))) == FILES_OVERHEAD + FILES_OVERHEAD_PER_PART_WIDE
+    assert len(list(minio.list_objects(cluster.minio_bucket, 'data/', recursive=True)))) == FILES_OVERHEAD + FILES_OVERHEAD_PER_PART_WIDE
 
     node.query("ALTER TABLE s3_test MOVE PARTITION '2020-01-04' TO DISK 's3'")
     assert node.query("SELECT count(*) FROM s3_test FORMAT Values") == "(8192)"
     assert len(
-        list(minio.list_objects(cluster.minio_bucket, 'data/'))) == FILES_OVERHEAD + FILES_OVERHEAD_PER_PART_WIDE * 2
+        list(minio.list_objects(cluster.minio_bucket, 'data/', recursive=True)))) == FILES_OVERHEAD + FILES_OVERHEAD_PER_PART_WIDE * 2
 
 
 @pytest.mark.parametrize("node_name", ["node"])
@@ -310,7 +318,7 @@ def test_table_manipulations(cluster, node_name):
 
     node.query("TRUNCATE TABLE s3_test")
     assert node.query("SELECT count(*) FROM s3_test FORMAT Values") == "(0)"
-    assert len(list(minio.list_objects(cluster.minio_bucket, 'data/'))) == FILES_OVERHEAD
+    assert len(list(minio.list_objects(cluster.minio_bucket, 'data/', recursive=True)))) == FILES_OVERHEAD
 
 
 @pytest.mark.parametrize("node_name", ["node"])

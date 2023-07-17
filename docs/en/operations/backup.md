@@ -37,4 +37,53 @@ For more information about queries related to partition manipulations, see the [
 
 A third-party tool is available to automate this approach: [clickhouse-backup](https://github.com/AlexAkulov/clickhouse-backup).
 
+## Backup to S3
+
+It is possible to `BACKUP`/`RESTORE` to S3, but this disk should be configured
+in a proper way, since by default you will need to backup metadata from local
+disk to make backup full.
+
+First of all, you need to configure S3 disk in a special way:
+
+```xml
+<clickhouse>
+    <storage_configuration>
+        <disks>
+            <s3_plain>
+                <type>s3_plain</type>
+                <endpoint></endpoint>
+                <access_key_id></access_key_id>
+                <secret_access_key></secret_access_key>
+            </s3_plain>
+        </disks>
+        <policies>
+            <s3>
+                <volumes>
+                    <main>
+                        <disk>s3</disk>
+                    </main>
+                </volumes>
+            </s3>
+        </policies>
+    </storage_configuration>
+
+    <backups>
+        <allowed_disk>s3_plain</allowed_disk>
+    </backups>
+</clickhouse>
+```
+
+And then `BACKUP`/`RESTORE` as usual:
+
+```sql
+BACKUP TABLE data TO Disk('s3_plain', 'cloud_backup');
+RESTORE TABLE data AS data_restored FROM Disk('s3_plain', 'cloud_backup');
+```
+
+:::note
+But keep in mind that:
+- This disk should not be used for `MergeTree` itself, only for `BACKUP`/`RESTORE`
+- It has excessive API calls
+  :::
+
 [Original article](https://clickhouse.com/docs/en/operations/backup/) <!--hide-->
