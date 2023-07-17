@@ -138,6 +138,12 @@ jobs:
         with:
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           submodules: ${{ inputs.submodules }}
+      - name: Checkout quark
+        uses: actions/checkout@v3
+        with:
+          repository: timeplus-io/quark
+          path: quark
+          token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       - name: Prepare directory
         run: mkdir /test_output /artifacts
       - name: execute

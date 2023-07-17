@@ -40,7 +40,7 @@ on: # yamllint disable-line rule:truthy
         description: 'Run query compatibility test'
         required: true
         type: boolean
-        default: false
+        default: true
 
 jobs:
   prepare_smoke_test:
@@ -130,11 +130,14 @@ jobs:
     if: ${{ github.event.inputs.has_query_compatibility_test == 'true' }}
     outputs:
       command: |
+      
         # pull docker image
         docker pull timeplus/proton:$TAG
 
-        echo "run stream test"
-        cd $GITHUB_WORKSPACE/tests/stream
+        echo "run quary compatibility test"
+        # cd $GITHUB_WORKSPACE/tests/stream
+        mkdir -p output
+        cd quark/api
         export PROTON_VERSION=$TAG
         env
 
@@ -148,11 +151,19 @@ jobs:
 
         pip install --upgrade pip
         pip install -r helpers/requirements.txt
-        python ci_runner.py --debug --settings=default --test_folders=test_production_compatibility
 
-        echo "check test result"
-        cat $GITHUB_WORKSPACE/tests/stream/.status
-        cat $GITHUB_WORKSPACE/tests/stream/.status | grep default:ExitCode.OK
+        aws s3 cp s3://tp-internal/proton/proton-python-driver/clickhouse-driver-0.2.4.tar.gz ./
+        pip install ./clickhouse-driver-0.2.4.tar.gz
+
+        #python ci_runner.py --debug --settings=default --test_folders=test_production_compatibility
+        
+        docker-compose -f test_production_compatibility/configs/docker/docker-compose.yaml up -d
+        sleep 10
+        bash ./api_test_run_proton.sh
+
+        #echo "check test result"
+        #cat $GITHUB_WORKSPACE/tests/stream/.status
+        #cat $GITHUB_WORKSPACE/tests/stream/.status | grep default:ExitCode.OK
     steps:
       - name: display command
         run: |
