@@ -2579,6 +2579,7 @@ ManyAggregatedDataVariantsPtr Aggregator::prepareVariantsToMerge(ManyAggregatedD
         /// all memory arenas merge to the first empty one, so we need create a new resulting arena
         /// at position 0.
         auto result_variants = std::make_shared<AggregatedDataVariants>(false);
+        result_variants->aggregator = this;
         result_variants->keys_size = params.keys_size;
         result_variants->key_sizes = key_sizes;
         result_variants->init(method_chosen);
@@ -3113,6 +3114,7 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block) const
         return {};
 
     AggregatedDataVariants data;
+    data.aggregator = this;
 
     ColumnRawPtrs key_columns(params.keys_size);
 
@@ -3705,6 +3707,7 @@ Block Aggregator::spliceAndConvertBucketsToBlock(
     AggregatedDataVariants & variants, bool final, ConvertAction action, const std::vector<Int64> & gcd_buckets) const
 {
     AggregatedDataVariants result_variants;
+    result_variants.aggregator = this;
     result_variants.keys_size = params.keys_size;
     result_variants.key_sizes = key_sizes;
     result_variants.init(method_chosen);
