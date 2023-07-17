@@ -30,6 +30,11 @@ public:
     virtual bool bidirectionalHashJoin() const = 0;
     virtual bool rangeBidirectionalHashJoin() const = 0;
     virtual void getKeyColumnPositions(std::vector<size_t> & left_key_column_positions, std::vector<size_t> & right_key_column_positions, bool include_asof_key_column = false) const = 0;
+
+    virtual void serialize(WriteBuffer & wb) const = 0;
+    virtual void deserialize(ReadBuffer & rb) = 0;
+
+    virtual void cancel() = 0;
 };
 
 using HashJoinPtr = std::shared_ptr<IHashJoin>;

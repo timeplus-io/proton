@@ -285,7 +285,7 @@
         },
         {
             "id": 171,
-            "tags": ["query_state", "view", "bug"],
+            "tags": ["query_state", "view"],
             "name": "recover global sum based on tail join table view",
             "description": "recover global sum based on tail join table view from state checkpoint",
             "steps":[
@@ -345,7 +345,8 @@
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev1', 'ca', 77, '2020-02-02 20:00:04') ('dev2', 'ca', 69, '2020-02-02 20:00:05') ('dev3', 'ca', 55, '2020-02-02 20:00:07')"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev3', 'ca', 55, '2020-02-02 20:00:07') ('dev2', 'ca', 69, '2020-02-02 20:00:08') ('dev3', 'ca', 72, '2020-02-02 20:00:09')"},  
                         {"client":"python", "query_type": "table", "kill":"19172", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev6', 'ca', 66, '2020-02-02 20:00:11')"},                      
-                        {"client":"python", "query_type": "table", "wait":3, "query":"unsubscribe to '19172'"}
+                        {"client":"python", "query_type": "table", "wait":3, "query":"unsubscribe to '19172'"},
+                        {"client":"python", "query_type": "table", "query":"drop view if exists test19_state_mv7"}
                     ]
                 }
             ],
@@ -385,7 +386,8 @@
                         {"client":"python", "query_type": "table", "kill":"19173", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev6', 'ca', 66, '2020-02-02 20:00:11')"},                      
                         {"client":"python", "query_type": "stream","query_id":"19173-1", "terminate": "manual","wait":4, "query":"recover from '19173'"},
                         {"client":"python", "query_type": "table", "depends_on":"19173", "wait":1, "query": "kill query where query_id='19173' sync"},
-                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19173'"}
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19173'"},
+                        {"client":"python", "query_type": "table", "query":"drop view if exists test19_state_mv7"}
                     ]
                 }
             ],
@@ -427,7 +429,8 @@
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev6', 'ca', 69, '2020-02-02 20:00:06')"},                      
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev8', 'ca', 68, '2020-02-02 20:00:07')"},  
                         {"client":"python", "query_type": "table", "kill":"19174", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:10')"},
-                        {"client":"python", "query_type": "table", "wait":3, "query":"unsubscribe to '19174'"}
+                        {"client":"python", "query_type": "table", "wait":3, "query":"unsubscribe to '19174'"},
+                        {"client":"python", "query_type": "table", "query":"drop view if exists test19_state_mv7"}
                     ]
                 }
             ],
@@ -472,7 +475,8 @@
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev8', 'ca', 67, '2020-02-02 20:00:10')"},
                         {"client":"python", "query_type": "stream","query_id":"19175-1", "terminate": "manual","wait":4, "query":"recover from '19175'"},
                         {"client":"python", "query_type": "table", "depends_on":"19175", "wait":1, "query": "kill query where query_id='19175' sync"},
-                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19175'"}
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19175'"},
+                        {"client":"python", "query_type": "table", "query":"drop view if exists test19_state_mv7"}
                     ]
                 }
             ],
@@ -511,8 +515,9 @@
                         {"client":"python", "query_type": "table", "exist":"test19_state_mv7", "exist_wait":2, "wait":1, "query":"create materialized view test19_state_mv7 as (select id, sum(value) as sum_value from test19_state_stream7 group by id limit 4 union select id, sum(value) as sum_value from test19_state_stream7 group by id limit 4)"},
                         {"client":"python", "query_type": "stream", "query_id":"19176", "wait":1, "terminate":"manual", "query":"subscribe to select id, sum_value from test19_state_mv7 settings checkpoint_interval=1"},
                         {"client":"python", "query_type": "table", "depends_on":"19176", "wait":1, "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"},
-                        {"client":"python", "query_type": "table", "kill":"19176", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev1', 'ca', 69, '2020-02-02 20:00:06')('dev4', 'ca', 67, '2020-02-02 20:00:10')"},
-                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19176'"}
+                        {"client":"python", "query_type": "table", "kill":"19176", "kill_wait":3, "wait":2, "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev1', 'ca', 69, '2020-02-02 20:00:06')('dev4', 'ca', 67, '2020-02-02 20:00:10')"},
+                        {"client":"python", "query_type": "table", "wait":2, "query":"unsubscribe to '19176'"},
+                        {"client":"python", "query_type": "table", "query":"drop view if exists test19_state_mv7"}
                     ]
                 }
             ],
@@ -545,15 +550,16 @@
                         {"client":"python", "query_type": "table", "exist":"test19_state_stream7", "exist_wait":2, "wait":1, "query":"create stream test19_state_stream7 (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
                         {"client":"python", "query_type": "table", "exist":"test19_state_mv7", "exist_wait":2, "wait":1, "query":"create materialized view test19_state_mv7 as (select id, sum(value) as sum_value from test19_state_stream7 group by id limit 4 union select id, sum(value) as sum_value from test19_state_stream7 group by id limit 4)"},
                         {"client":"python", "query_type": "stream", "query_id":"19177", "wait":1, "terminate":"manual", "query":"subscribe to select id, sum_value from test19_state_mv7 settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "kill":"19177", "kill_wait":4, "wait":1, "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
+                        {"client":"python", "query_type": "table", "depends_on":"19177", "kill":"19177", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
                     ]
                 },
                 {
                     "statements": [
                         {"client":"python", "query_type": "table", "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev2', 'ca', 69, '2020-02-02 20:00:06')('dev4', 'ca', 67, '2020-02-02 20:00:10')"},
                         {"client":"python", "query_type": "stream","query_id":"19177-1", "terminate": "manual","wait":1, "query":"recover from '19177'"},
-                        {"client":"python", "query_type": "table", "depends_on":"19177", "wait":4, "query": "kill query where query_id='19177' sync"},
-                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19177'"}
+                        {"client":"python", "query_type": "table", "wait":3, "query": "kill query where query_id='19177' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19177'"},
+                        {"client":"python", "query_type": "table", "query":"drop view if exists test19_state_mv7"}
                     ]
                 }
             ],
@@ -575,78 +581,6 @@
                         ["dev2", "127.3"],
                         ["dev1", "57.3"],
                         ["dev2", "127.3"]
-                    ]
-                }
-            ]
-        },
-        {
-            "id": 178,
-            "tags": ["query_state", "changelog_kv stream"],
-            "name": "query from changelog_kv stream",
-            "description": "query from changelog_kv stream state checkpoint",
-            "steps":[
-                {
-                    "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists changelog_kv_state_stream"},
-                        {"client":"python", "query_type": "table", "wait":1, "query":"create stream if not exists changelog_kv_state_stream(id int, s string) primary key s settings mode='changelog_kv'"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_state_stream(id, s) values (1, 'a')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_state_stream(id, s) values (2, 'b')"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_state_stream(id, s, _tp_delta) values (1, 'a', -1)"},
-                        {"client":"python", "query_type": "stream", "query_id":"19178", "wait":1, "terminate":"manual", "query":"subscribe to select id, s from changelog_kv_state_stream settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"19178", "kill":"19178", "kill_wait":3, "wait":1, "query": "insert into changelog_kv_state_stream(id, s, _tp_delta) values (3, 'b', 1), (4, 'c', 1)"},
-                        {"client":"python", "query_type": "table", "wait":3, "query":"unsubscribe to '19178'"}
-                    ]
-                }
-            ],
-            "expected_results": [
-                {
-                    "query_id":"19178", 
-                    "expected_results":[
-                        ["2", "b"],
-                        ["3", "b"],
-                        ["4", "c"]
-                    ]
-                }
-            ]
-        },
-        {
-            "id": 179,
-            "tags": ["query_state", "changelog_kv stream", "bug"],
-            "name": "changelog_kv stream with union selects",
-            "description": "changelog_kv stream stream state checkpoint",
-            "steps":[
-                {
-                    "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists changelog_kv_state_stream"},
-                        {"client":"python", "query_type": "table", "wait":1, "query":"create stream if not exists changelog_kv_state_stream(id int, s string) primary key s settings mode='changelog_kv'"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_state_stream(id, s, _tp_delta) values (1, 'a', 1)"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_state_stream(id, s, _tp_delta) values (2, 'b', 1)"},  
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_state_stream(id, s, _tp_delta) values (1, 'a', -1)"},
-                        {"client":"python", "query_type": "stream", "query_id":"19179", "wait":1, "terminate":"manual", "query":"subscribe to select id, s from changelog_kv_state_stream settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"19179", "wait":1, "query": "kill query where query_id='19179' sync"}
-                    ]
-                },
-                {
-                    "statements": [
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_state_stream(id, s, _tp_delta) values (2, 'b', -1)"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_state_stream(id, s, _tp_delta) values (4, 'c', 1)"},  
-                        {"client":"python", "query_type": "stream","query_id":"19179-1", "terminate": "manual","wait":4, "query":"recover from '19179'"},
-                        {"client":"python", "query_type": "table", "depends_on":"19179", "wait":1, "query": "kill query where query_id='19179' sync"},
-                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19179'"}
-                    ]
-                }
-            ],
-            "expected_results": [
-                {
-                    "query_id":"19179", 
-                    "expected_results":[
-                        ["2", "b"]
-                    ]
-                },
-                {
-                    "query_id":"19179-1", 
-                    "expected_results":[
-                        ["4", "c"]
                     ]
                 }
             ]

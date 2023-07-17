@@ -2,6 +2,7 @@
 
 #include <Interpreters/Streaming/RangeAsofJoinContext.h>
 #include <Interpreters/Streaming/joinBlockList.h>
+#include <Interpreters/Streaming/joinSerder_fwd.h>
 #include <Interpreters/Streaming/joinTuple.h>
 
 #include <Columns/IColumn.h>
@@ -86,6 +87,9 @@ struct RowRefWithRefCount
 
     ~RowRefWithRefCount() { deref(); }
 
+    void serialize(const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const;
+    void deserialize(JoinBlockList * block_list, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb);
+
 private:
     void ALWAYS_INLINE deref()
     {
@@ -110,6 +114,16 @@ struct RowRefListMultiple
     Iterator insert(JoinBlockList * blocks, size_t row_num) { return rows.emplace(rows.end(), blocks, row_num); }
 
     void erase(Iterator iterator) { rows.erase(iterator); }
+
+    void serialize(
+        const SerializedBlocksToIndices & serialized_blocks_to_indices,
+        WriteBuffer & wb,
+        SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices = nullptr) const;
+    void deserialize(
+        JoinBlockList * block_list,
+        const DeserializedIndicesToBlocks & deserialized_indices_to_blocks,
+        ReadBuffer & rb,
+        DeserializedIndicesToRowRefListMultiple * deserialized_indices_to_row_ref_list_multiple = nullptr);
 };
 
 using RowRefListMultiplePtr = std::unique_ptr<RowRefListMultiple>;
@@ -130,6 +144,9 @@ struct RowRefListMultipleRef
         row_ref_list = nullptr;
         iterator = RowRefListMultiple::Iterator{};
     }
+
+    void serialize(const SerializedRowRefListMultipleToIndices & serialized_row_ref_list_multiple_to_indices, WriteBuffer & wb) const;
+    void deserialize(const DeserializedIndicesToRowRefListMultiple & deserialized_indices_to_row_ref_list_multiple, ReadBuffer & rb);
 };
 
 using RowRefListMultipleRefPtr = std::unique_ptr<RowRefListMultipleRef>;
@@ -175,6 +192,18 @@ public:
         }
     }
 
+    using iterator = typename Base::iterator;
+    using const_iterator = typename Base::const_iterator;
+
+    iterator begin() { return array.begin(); }
+    iterator end() { return array.end(); }
+
+    size_t size() const { return array.size(); }
+    void resize(size_t s) { array.resize(s); }
+
+    const_iterator begin() const { return array.begin(); }
+    const_iterator end() const { return array.end(); }
+
 private:
     Base array;
 
@@ -194,6 +223,7 @@ public:
         T asof_value;
         RowRefWithRefCount row_ref;
 
+        Entry() = default;
         Entry(T v) : asof_value(v) { }
         Entry(T v, RowRefWithRefCount rr) : asof_value(v), row_ref(rr) { }
     };
@@ -231,6 +261,10 @@ public:
 
     /// This will be synchronized by the rwlock mutex in StreamingHashJoin.h
     const RowRefWithRefCount * findAsof(TypeIndex type, ASOFJoinInequality inequality, const IColumn & asof_column, size_t row_num) const;
+
+    void serialize(TypeIndex type, const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const;
+    void deserialize(
+        TypeIndex type, JoinBlockList * block_list, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb);
 
 private:
     // Lookups can be stored in a HashTable because it is memmovable
@@ -290,6 +324,9 @@ public:
     const RowRef *
     findAsof(TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num, UInt64 src_block_id)
         const;
+
+    void serialize(TypeIndex type, const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const;
+    void deserialize(TypeIndex type, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb);
 
 private:
     // Lookups can be stored in a HashTable because it is memmovable

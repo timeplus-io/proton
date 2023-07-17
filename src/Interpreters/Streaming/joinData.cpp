@@ -1,5 +1,6 @@
 #include <Interpreters/Streaming/HashJoin.h>
 #include <Interpreters/Streaming/joinData.h>
+#include <Interpreters/Streaming/joinSerder.h>
 
 #include <Interpreters/JoinUtils.h>
 
@@ -19,7 +20,8 @@ BufferedStreamData::BufferedStreamData(HashJoin * join_) : join(join_), current_
 }
 
 /// For asof join
-BufferedStreamData::BufferedStreamData(HashJoin * join_, const RangeAsofJoinContext & range_asof_join_ctx_, const String & asof_column_name_)
+BufferedStreamData::BufferedStreamData(
+    HashJoin * join_, const RangeAsofJoinContext & range_asof_join_ctx_, const String & asof_column_name_)
     : join(join_)
     , range_asof_join_ctx(range_asof_join_ctx_)
     , asof_col_name(asof_column_name_)
@@ -269,7 +271,8 @@ String BufferedStreamData::joinMetricsString() const
 
     return fmt::format(
         "total_buckets={}, total_blocks_cached={}, total_blocks_bytes_cached={}, total_blocks_allocated_bytes_cached={}, "
-        "total_blocks_rows_cached={}, total_blocks_nullmaps_cached={}, total_arena_bytes={}, total_arena_chunks={}, total_keys_cached={}; recorded_join_metrics={}, next_block_id={}",
+        "total_blocks_rows_cached={}, total_blocks_nullmaps_cached={}, total_arena_bytes={}, total_arena_chunks={}, total_keys_cached={}; "
+        "recorded_join_metrics={}, next_block_id={}",
         total_buckets,
         total_blocks_cached,
         total_blocks_bytes_cached,
@@ -282,5 +285,72 @@ String BufferedStreamData::joinMetricsString() const
         metrics.string(),
         block_id);
 }
+
+void BufferedStreamData::serialize(
+    WriteBuffer & wb, SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices) const
+{
+    std::scoped_lock lock(mutex);
+
+    range_asof_join_ctx.serialize(wb);
+
+    DB::writeIntBinary(bucket_size, wb);
+    DB::writeIntBinary(join_start_bucket_offset, wb);
+    DB::writeIntBinary(join_stop_bucket_offset, wb);
+
+    DB::writeIntBinary(current_watermark.load(), wb);
+
+    DB::writeIntBinary(block_id, wb);
+
+    assert(current_hash_blocks);
+    Streaming::serialize(*current_hash_blocks, *join, wb, serialized_row_ref_list_multiple_to_indices);
+
+    DB::writeIntBinary<UInt32>(static_cast<UInt32>(range_bucket_hash_blocks.size()), wb);
+    for (const auto & [bucket, hash_blocks] : range_bucket_hash_blocks)
+    {
+        DB::writeIntBinary(bucket, wb);
+        assert(hash_blocks);
+        Streaming::serialize(*hash_blocks, *join, wb, serialized_row_ref_list_multiple_to_indices);
+    }
+
+    metrics.serialize(wb);
+}
+
+void BufferedStreamData::deserialize(
+    ReadBuffer & rb, DeserializedIndicesToRowRefListMultiple * deserialized_indices_to_row_ref_list_multiple)
+{
+    std::scoped_lock lock(mutex);
+
+
+    range_asof_join_ctx.deserialize(rb);
+
+    DB::readIntBinary(bucket_size, rb);
+    DB::readIntBinary(join_start_bucket_offset, rb);
+    DB::readIntBinary(join_stop_bucket_offset, rb);
+
+    int64_t recovered_watermark;
+    DB::readIntBinary(recovered_watermark, rb);
+    current_watermark = recovered_watermark;
+
+    DB::readIntBinary(block_id, rb);
+
+    assert(current_hash_blocks);
+    Streaming::deserialize(*current_hash_blocks, *join, rb, deserialized_indices_to_row_ref_list_multiple);
+
+    UInt32 size;
+    Int64 bucket;
+    DB::readIntBinary<UInt32>(size, rb);
+    for (UInt32 i = 0; i < size; ++i)
+    {
+        DB::readIntBinary(bucket, rb);
+        auto [iter, inserted] = range_bucket_hash_blocks.emplace(bucket, newHashBlocks());
+        assert(inserted);
+        /// Init hash table
+        join->initHashMaps(iter->second->maps->map_variants);
+        Streaming::deserialize(*iter->second, *join, rb, deserialized_indices_to_row_ref_list_multiple);
+    }
+
+    metrics.deserialize(rb);
+}
+
 }
 }

@@ -4,6 +4,9 @@
 
 namespace DB
 {
+class WriteBuffer;
+class ReadBuffer;
+
 namespace Streaming
 {
 struct JoinMetrics
@@ -24,6 +27,9 @@ struct JoinMetrics
             current_total_blocks,
             gced_blocks);
     }
+
+    void serialize(WriteBuffer & wb) const;
+    void deserialize(ReadBuffer & rb);
 };
 
 struct JoinGlobalMetrics
@@ -41,6 +47,9 @@ struct JoinGlobalMetrics
             left_block_and_right_range_bucket_no_intersection_skip,
             right_block_and_left_range_bucket_no_intersection_skip);
     }
+
+    void serialize(WriteBuffer & wb) const;
+    void deserialize(ReadBuffer & rb);
 };
 
 }

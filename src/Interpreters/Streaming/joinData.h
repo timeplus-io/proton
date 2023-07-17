@@ -3,6 +3,7 @@
 #include <Interpreters/Streaming/RangeAsofJoinContext.h>
 #include <Interpreters/Streaming/joinBlockList.h>
 #include <Interpreters/Streaming/joinMetrics.h>
+#include <Interpreters/Streaming/joinSerder_fwd.h>
 #include <Interpreters/Streaming/joinTuple.h>
 
 #include <Columns/ColumnNullable.h>
@@ -10,6 +11,7 @@
 #include <Columns/IColumn.h>
 #include <Core/Block.h>
 #include <Core/BlockRangeSplitter.h>
+#include <base/SerdeTag.h>
 #include <Common/Arena.h>
 
 #include <deque>
@@ -48,7 +50,7 @@ struct HashBlocks
 using HashBlocksPtr = std::shared_ptr<HashBlocks>;
 
 class HashJoin;
-struct BufferedStreamData
+SERDE struct BufferedStreamData
 {
     explicit BufferedStreamData(HashJoin * join_);
 
@@ -78,8 +80,8 @@ struct BufferedStreamData
     /// data up-front before the join
     bool ALWAYS_INLINE intersect(Int64 left_min_ts, Int64 left_max_ts, Int64 right_min_ts, Int64 right_max_ts) const
     {
-        assert(left_min_ts > 0 && left_max_ts >= left_min_ts);
-        assert(right_min_ts > 0 && right_max_ts >= right_min_ts);
+        assert(left_max_ts >= left_min_ts);
+        assert(right_max_ts >= right_min_ts);
         /// left : [left_min_ts, right_max_ts]
         /// right : [right_min_ts, right_max_ts]
         /// lower_bound < left - right < upper_bound
@@ -140,20 +142,23 @@ struct BufferedStreamData
 
     HashBlocksPtr newHashBlocks() { return std::make_shared<HashBlocks>(metrics); }
 
-    HashJoin * join;
+    void serialize(WriteBuffer & wb, SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices = nullptr) const;
+    void deserialize(ReadBuffer & rb, DeserializedIndicesToRowRefListMultiple * deserialized_indices_to_row_ref_list_multiple = nullptr);
+
+    NO_SERDE HashJoin * join;
 
     RangeAsofJoinContext range_asof_join_ctx;
     Int64 bucket_size = 0;
     Int64 join_start_bucket_offset = 0;
     Int64 join_stop_bucket_offset = 0;
-    String asof_col_name;
-    Int64 asof_col_pos = -1;
-    BlockRangeSplitterPtr range_splitter;
+    NO_SERDE String asof_col_name;
+    NO_SERDE Int64 asof_col_pos = -1;
+    NO_SERDE BlockRangeSplitterPtr range_splitter;
     std::atomic_int64_t current_watermark = 0;
 
-    Block sample_block; /// Block as it would appear in the BlockList
+    NO_SERDE Block sample_block; /// Block as it would appear in the BlockList
 
-    std::mutex mutex;
+    NO_SERDE mutable std::mutex mutex;
 
 private:
     /// Global block id for left or right stream data

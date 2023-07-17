@@ -1,5 +1,6 @@
 #include <Interpreters/Streaming/HashJoin.h>
 #include <Interpreters/Streaming/joinDispatch.h>
+#include <Interpreters/Streaming/joinSerder.h>
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
@@ -40,6 +41,7 @@ extern const int SYNTAX_ERROR;
 extern const int SET_SIZE_LIMIT_EXCEEDED;
 extern const int TYPE_MISMATCH;
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 namespace Streaming
@@ -762,6 +764,133 @@ inline void addDeltaColumn(Block & block, size_t rows)
 }
 }
 
+/// [INNER] JOIN : only matching rows are returned
+/// LEFT [OUTER] JOIN: non-matching rows from left stream are returned in addition to matching rows
+/// RIGHT [OUTER] JOIN: non-matching rows from right stream are returned in addition to matching rows
+/// FULL [OUTER] JOIN: non-matching rows from both streams are returned in addition to matching rows
+/// CROSS JOIN: produces a cartesian product of the 2 streams. "join keys" are not specified
+///
+/// Non-standard join types:
+/// INNER LATEST JOIN : convert left / right stream to (versioned) kv and execute versioned kv join after
+/// LEFT / RIGHT ANY JOIN: partially (for opposite side of LEFT and RIGHT) disables the cartesian product for standard JOIN types
+/// INNER ANY JOIN: completely disables the cartesian product for standard JOIN types
+/// ASOF JOIN: Closest match (non-equal) join
+/// LEFT ASOF JOIN : non-matching rows from left stream are returned in addition to ASOF JOIN matching rows
+/// LEFT / RIGHT SEMI JOIN: a whitelist on "join keys", without producing a cartesian product
+/// LEFT / RIGHT ANTI JOIN: a blacklist on "join keys", without producing a cartesian product
+
+/// Difference between `LEFT SEMI` and `LEFT ANY`
+/// `LEFT SEMI` only produce matching rows on join keys and one left row only joins one right row
+/// `LEFT ANY` produce non-matching rows from left stream + `left semi`
+
+/// `ANTI JOIN` looks weird in streaming join but in some troubleshooting scenarios in historical join, it is handy since it is returning non-matching rows only
+/// `left anti`: if there are non-matching rows from left stream, returning these non-matching rows with default value filling for right projected columns
+/// `right anti`: if there are non-matching rows from right stream, returning these non-matching rows with default value filling left projected columns
+
+/// A 4 dimensions array : Left DataStreamSemantic, Kind, Strictness, Right DataStreamSemantic
+/// There are 4 * 6 * 5 * 4 = 480 total combinations
+const HashJoin::SupportMatrix HashJoin::support_matrix = {
+    {DataStreamSemantic::Append,
+     {{
+          JoinKind::Left,
+          {{JoinStrictness::All, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}}},
+      },
+      {
+          /// Append
+          JoinKind::Inner,
+          {{JoinStrictness::All, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}}},
+      },
+      {
+          /// Append
+          JoinKind::Right,
+          {{JoinStrictness::All, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Any,
+            {{DataStreamSemantic::Append, false}, {DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, false}}}},
+      },
+      {
+          /// Append
+          JoinKind::Full,
+          {{JoinStrictness::All, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}}},
+      }}},
+    {DataStreamSemantic::Changelog,
+     {{
+          JoinKind::Left,
+          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
+      },
+      {
+          /// Changelog
+          JoinKind::Inner,
+          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, true}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, true}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, true}}}},
+      }}},
+    {DataStreamSemantic::ChangelogKV,
+     {{
+          JoinKind::Left,
+          {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}}}},
+      },
+      {
+          /// ChangelogKV
+          JoinKind::Inner,
+          {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, true}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, true}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, true}}}},
+      },
+      {
+          /// ChangelogKV
+          JoinKind::Right,
+          {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}}}},
+      },
+      {
+          /// ChangelogKV
+          JoinKind::Full,
+          {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}}}},
+      }}},
+    {DataStreamSemantic::VersionedKV,
+     {{
+          JoinKind::Left,
+          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
+      },
+      {
+          /// VersionedKV
+          JoinKind::Inner,
+          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, true}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, true}}}},
+      },
+      {
+          /// VersionedKV
+          JoinKind::Right,
+          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
+      },
+      {
+          /// VersionedKV
+          JoinKind::Full,
+          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
+      }}},
+};
+
 HashJoin::HashJoin(
     std::shared_ptr<TableJoin> table_join_,
     JoinStreamDescriptionPtr left_join_stream_desc_,
@@ -845,6 +974,12 @@ void HashJoin::init()
     bidirectional_hash_join = !data_enrichment_join;
 
     /// append-only inner join append-only on ... and date_diff_within(10s)
+    /// In case when emitChangeLog()
+    if (streaming_strictness == Strictness::Range
+        && (left_data.join_stream_desc->data_stream_semantic != DataStreamSemantic::Append
+            || right_data.join_stream_desc->data_stream_semantic != DataStreamSemantic::Append))
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Stream range join only support append-only streams");
+
     range_bidirectional_hash_join = bidirectional_hash_join && (streaming_strictness == Strictness::Range);
 
     /// If right stream is key-value data stream semantic, init extra data structure
@@ -1720,8 +1855,7 @@ std::vector<Block> HashJoin::insertBlockToRangeBucketsAndJoin(Block block)
     /// Join
     for (auto & bucket_block : bucket_blocks)
     {
-        auto joining_bucket = bucket_block.bucket;
-        assert(joining_bucket > 0);
+        auto joining_bucket = static_cast<Int64>(bucket_block.bucket);
 
         /// Here we explicitly order the lock of the mutex to avoid deadlock
         std::scoped_lock lock(left_data.buffered_data->mutex, right_data.buffered_data->mutex);
@@ -2114,139 +2248,6 @@ void HashJoin::checkJoinSemantic() const
             magic_enum::enum_name(right_data.join_stream_desc->data_stream_semantic));
     };
 
-    /// [INNER] JOIN : only matching rows are returned
-    /// LEFT [OUTER] JOIN: non-matching rows from left stream are returned in addition to matching rows
-    /// RIGHT [OUTER] JOIN: non-matching rows from right stream are returned in addition to matching rows
-    /// FULL [OUTER] JOIN: non-matching rows from both streams are returned in addition to matching rows
-    /// CROSS JOIN: produces a cartesian product of the 2 streams. "join keys" are not specified
-    ///
-    /// Non-standard join types:
-    /// INNER LATEST JOIN : convert left / right stream to (versioned) kv and execute versioned kv join after
-    /// LEFT / RIGHT ANY JOIN: partially (for opposite side of LEFT and RIGHT) disables the cartesian product for standard JOIN types
-    /// INNER ANY JOIN: completely disables the cartesian product for standard JOIN types
-    /// ASOF JOIN: Closest match (non-equal) join
-    /// LEFT ASOF JOIN : non-matching rows from left stream are returned in addition to ASOF JOIN matching rows
-    /// LEFT / RIGHT SEMI JOIN: a whitelist on "join keys", without producing a cartesian product
-    /// LEFT / RIGHT ANTI JOIN: a blacklist on "join keys", without producing a cartesian product
-
-    /// Difference between `LEFT SEMI` and `LEFT ANY`
-    /// `LEFT SEMI` only produce matching rows on join keys and one left row only joins one right row
-    /// `LEFT ANY` produce non-matching rows from left stream + `left semi`
-
-    /// `ANTI JOIN` looks weird in streaming join but in some troubleshooting scenarios in historical join, it is handy since it is returning non-matching rows only
-    /// `left anti`: if there are non-matching rows from left stream, returning these non-matching rows with default value filling for right projected columns
-    /// `right anti`: if there are non-matching rows from right stream, returning these non-matching rows with default value filling left projected columns
-
-    /// A 4 dimensions array : Left DataStreamSemantic, Kind, Strictness, Right DataStreamSemantic
-    /// There are 4 * 6 * 5 * 4 = 480 total combinations
-
-    using SupportMatrix = std::unordered_map<
-        DataStreamSemantic,
-        std::unordered_map<JoinKind, std::unordered_map<JoinStrictness, std::unordered_map<DataStreamSemantic, bool>>>>;
-
-    /// So far we only support these join combinations
-    static const SupportMatrix support_matrix = {
-        {DataStreamSemantic::Append,
-         {{
-              JoinKind::Left,
-              {{JoinStrictness::All, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}}},
-          },
-          {
-              /// Append
-              JoinKind::Inner,
-              {{JoinStrictness::All, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}}},
-          },
-          {
-              /// Append
-              JoinKind::Right,
-              {{JoinStrictness::All, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any,
-                {{DataStreamSemantic::Append, false}, {DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, false}}}},
-          },
-          {
-              /// Append
-              JoinKind::Full,
-              {{JoinStrictness::All, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}}},
-          }}},
-        {DataStreamSemantic::Changelog,
-         {{
-              JoinKind::Left,
-              {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
-          },
-          {
-              /// Changelog
-              JoinKind::Inner,
-              {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, true}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, true}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, true}}}},
-          }}},
-        {DataStreamSemantic::ChangelogKV,
-         {{
-              JoinKind::Left,
-              {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}}}},
-          },
-          {
-              /// ChangelogKV
-              JoinKind::Inner,
-              {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, true}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, true}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, true}}}},
-          },
-          {
-              /// ChangelogKV
-              JoinKind::Right,
-              {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}}}},
-          },
-          {
-              /// ChangelogKV
-              JoinKind::Full,
-              {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}}}},
-          }}},
-        {DataStreamSemantic::VersionedKV,
-         {{
-              JoinKind::Left,
-              {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
-          },
-          {
-              /// VersionedKV
-              JoinKind::Inner,
-              {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, true}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, true}}}},
-          },
-          {
-              /// VersionedKV
-              JoinKind::Right,
-              {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
-          },
-          {
-              /// VersionedKV
-              JoinKind::Full,
-              {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
-               {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
-          }}},
-    };
-
     auto left_data_stream_semantic_iter = support_matrix.find(left_data.join_stream_desc->data_stream_semantic);
     if (left_data_stream_semantic_iter == support_matrix.end())
         throw_ex();
@@ -2332,6 +2333,191 @@ size_t HashJoinMapsVariants::size(const HashJoin * join) const
         total_keys += join->sizeOfMapsVariant(maps);
 
     return total_keys;
+}
+
+void HashJoin::serialize(WriteBuffer & wb) const
+{
+    /// Part-1: ON clauses
+    DB::writeStringBinary(TableJoin::formatClauses(table_join->getClauses(), true), wb);
+
+    /// Part-2: Description of left/right join stream
+    DB::writeStringBinary(left_data.join_stream_desc->sample_block.dumpStructure(), wb);
+    DB::writeIntBinary<UInt16>(static_cast<UInt16>(left_data.join_stream_desc->data_stream_semantic), wb);
+    DB::writeIntBinary(left_data.join_stream_desc->keep_versions, wb);
+
+    DB::writeStringBinary(right_data.join_stream_desc->sample_block.dumpStructure(), wb);
+    DB::writeIntBinary<UInt16>(static_cast<UInt16>(right_data.join_stream_desc->data_stream_semantic), wb);
+    DB::writeIntBinary(right_data.join_stream_desc->keep_versions, wb);
+
+    /// Part-3: Join method
+    DB::writeIntBinary<UInt16>(static_cast<UInt16>(streaming_kind), wb);
+    DB::writeIntBinary<UInt16>(static_cast<UInt16>(streaming_strictness), wb);
+    // DB::writeBinary(key_sizes, wb); /// No need after serialized `ON clauses` and left/right streams's header
+    DB::writeIntBinary<UInt16>(static_cast<UInt16>(hash_method_type), wb);
+
+    /// Part-4: Buffered data of left/right join stream
+    if (bidirectional_hash_join)
+        Streaming::serialize(left_data, wb);
+
+    Streaming::serialize(right_data, wb);
+
+    /// Part-5: Asof type (Optional)
+    bool need_asof = streaming_strictness == Strictness::Range || streaming_strictness == Strictness::Asof;
+    if (need_asof)
+    {
+        assert(asof_type.has_value());
+        DB::writeIntBinary<UInt16>(static_cast<UInt16>(*asof_type), wb);
+        DB::writeIntBinary<UInt16>(static_cast<UInt16>(asof_inequality), wb);
+    }
+
+    /// Part-6: Emit changelog (Optional)
+    DB::writeBoolText(emit_changelog, wb);
+    if (emit_changelog)
+    {
+        assert(bidirectional_hash_join);
+        assert(join_results.has_value());
+        Streaming::serialize(*join_results, *this, wb);
+    }
+
+    /// Part-7: Others
+    DB::writeIntBinary(combined_watermark.load(), wb);
+    join_metrics.serialize(wb);
+}
+
+void HashJoin::deserialize(ReadBuffer & rb)
+{
+    { /// Part-1: ON clauses
+        auto clauses_str = TableJoin::formatClauses(table_join->getClauses(), true);
+        String recovered_clauses_str;
+        DB::readStringBinary(recovered_clauses_str, rb);
+        if (recovered_clauses_str != clauses_str)
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Failed to recover hash join checkpoint. The ON clauses of join are not the same, checkpointed={}, current={}",
+                recovered_clauses_str,
+                clauses_str);
+    }
+
+    { /// Part-2: Description of left/right join stream
+        String recovered_left_header_str;
+        UInt16 recovered_left_stream_semantic;
+        UInt64 recovered_left_keep_versions;
+        DB::readStringBinary(recovered_left_header_str, rb);
+        DB::readIntBinary<UInt16>(recovered_left_stream_semantic, rb);
+        DB::readIntBinary(recovered_left_keep_versions, rb);
+
+        auto left_header_str = left_data.join_stream_desc->sample_block.dumpStructure();
+        if (recovered_left_header_str != left_header_str
+            || static_cast<DataStreamSemantic>(recovered_left_stream_semantic) != left_data.join_stream_desc->data_stream_semantic
+            || recovered_left_keep_versions != left_data.join_stream_desc->keep_versions)
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Failed to recover hash join checkpoint. The description of left join stream are not the same, checkpointed: header={}, "
+                "semantic={}, keep_versions={}, but current: header={}, semantic={}, keep_versions={}",
+                recovered_left_header_str,
+                static_cast<DataStreamSemantic>(recovered_left_stream_semantic),
+                recovered_left_keep_versions,
+                left_header_str,
+                left_data.join_stream_desc->data_stream_semantic,
+                left_data.join_stream_desc->keep_versions);
+
+        String recovered_right_header_str;
+        UInt16 recovered_right_stream_semantic;
+        UInt64 recovered_right_keep_versions;
+        DB::readStringBinary(recovered_right_header_str, rb);
+        DB::readIntBinary<UInt16>(recovered_right_stream_semantic, rb);
+        DB::readIntBinary(recovered_right_keep_versions, rb);
+
+        auto right_header_str = right_data.join_stream_desc->sample_block.dumpStructure();
+        if (recovered_right_header_str != right_header_str
+            || static_cast<DataStreamSemantic>(recovered_right_stream_semantic) != right_data.join_stream_desc->data_stream_semantic
+            || recovered_right_keep_versions != right_data.join_stream_desc->keep_versions)
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Failed to recover hash join checkpoint. The description of right join stream are not the same, checkpointed: header={}, "
+                "semantic={}, keep_versions={}, but current: header={}, semantic={}, keep_versions={}",
+                recovered_right_header_str,
+                static_cast<DataStreamSemantic>(recovered_right_stream_semantic),
+                recovered_right_keep_versions,
+                right_header_str,
+                right_data.join_stream_desc->data_stream_semantic,
+                right_data.join_stream_desc->keep_versions);
+    }
+
+    { /// Part-3: Join method
+        UInt16 recovered_streaming_kind;
+        DB::readIntBinary<UInt16>(recovered_streaming_kind, rb);
+        if (static_cast<Kind>(recovered_streaming_kind) != streaming_kind)
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Failed to recover hash join checkpoint. The kind of join are not the same, checkpointed={}, current={}",
+                magic_enum::enum_name(static_cast<Kind>(recovered_streaming_kind)),
+                magic_enum::enum_name(streaming_kind));
+
+        UInt16 recovered_streaming_strictness;
+        DB::readIntBinary<UInt16>(recovered_streaming_strictness, rb);
+        if (static_cast<Strictness>(recovered_streaming_strictness) != streaming_strictness)
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Failed to recover hash join checkpoint. The strictness of join are not the same, checkpointed={}, current={}",
+                magic_enum::enum_name(static_cast<Strictness>(recovered_streaming_strictness)),
+                magic_enum::enum_name(streaming_strictness));
+
+        UInt16 recovered_hash_method_type;
+        DB::readIntBinary<UInt16>(recovered_hash_method_type, rb);
+        if (static_cast<Type>(recovered_hash_method_type) != hash_method_type)
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Failed to recover hash join checkpoint. The hash method type of join are not the same, checkpointed={}, current={}",
+                magic_enum::enum_name(static_cast<Type>(recovered_hash_method_type)),
+                magic_enum::enum_name(hash_method_type));
+    }
+
+    /// Part-4: Buffered data of left/right join stream
+    if (bidirectional_hash_join)
+        Streaming::deserialize(left_data, rb);
+
+    Streaming::deserialize(right_data, rb);
+
+    /// Part-5: Asof type (Optional)
+    bool need_asof = streaming_strictness == Strictness::Range || streaming_strictness == Strictness::Asof;
+    if (need_asof)
+    {
+        assert(asof_type.has_value());
+        UInt16 recovered_asof_type;
+        DB::readIntBinary<UInt16>(recovered_asof_type, rb);
+        if (static_cast<TypeIndex>(recovered_asof_type) != asof_type)
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Failed to recover hash join checkpoint. The asof type of join are not the same, checkpointed={}, current={}",
+                magic_enum::enum_name(static_cast<TypeIndex>(recovered_asof_type)),
+                magic_enum::enum_name(*asof_type));
+
+        UInt16 recovered_asof_inequality;
+        DB::readIntBinary<UInt16>(recovered_asof_inequality, rb);
+        if (static_cast<ASOFJoinInequality>(recovered_asof_inequality) != asof_inequality)
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Failed to recover hash join checkpoint. The asof inequality of join are not the same, checkpointed={}, current={}",
+                magic_enum::enum_name(static_cast<ASOFJoinInequality>(recovered_asof_inequality)),
+                magic_enum::enum_name(asof_inequality));
+    }
+
+    /// Part-6: Emit changelog (Optional)
+    DB::readBoolText(emit_changelog, rb);
+    if (emit_changelog)
+    {
+        assert(bidirectional_hash_join);
+        assert(join_results.has_value());
+        Streaming::deserialize(*join_results, *this, rb);
+    }
+
+    /// Part-7: Others
+    int64_t recovered_combined_watermark;
+    DB::readIntBinary(recovered_combined_watermark, rb);
+    combined_watermark = recovered_combined_watermark;
+
+    join_metrics.deserialize(rb);
 }
 
 }

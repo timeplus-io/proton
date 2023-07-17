@@ -215,10 +215,15 @@ void SetVariantsTemplate<Variant>::deserialize(ReadBuffer & rb)
             for (size_t i = 0; i < count; ++i) \
             { \
                 if constexpr (std::is_same_v<typename Table::value_type, StringRef>) \
+                { \
                     value = DB::readStringBinaryInto(string_pool, rb); \
+                    (NAME)->data.emplace(SerializedKeyHolder{value, string_pool}, lookup_result, inserted); \
+                } \
                 else \
+                { \
                     DB::readBinary(value, rb); \
-                (NAME)->data.emplace(value, lookup_result, inserted); \
+                    (NAME)->data.emplace(value, lookup_result, inserted); \
+                } \
                 assert(inserted); \
                 /* insertSetMapped(lookup_result->getMapped(), value); /// HashSet doesn't need set mapped */ \
             } \

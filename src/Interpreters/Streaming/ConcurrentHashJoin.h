@@ -67,6 +67,11 @@ public:
         hash_joins[0]->data->getKeyColumnPositions(left_key_column_positions_, right_key_column_positions_, include_asof_key_column);
     }
 
+    void serialize(WriteBuffer &) const override;
+    void deserialize(ReadBuffer &) override;
+
+    void cancel() override;
+
 private:
     template <bool is_left_block>
     Block insertBlockAndJoin(Block & block);
@@ -76,6 +81,9 @@ private:
 
     IColumn::Selector selectDispatchBlock(const std::vector<size_t> & key_column_positions, const Block & from_block);
     BlocksWithShard dispatchBlock(const std::vector<size_t> & key_column_positions, Block && from_block);
+
+    void doSerialize(WriteBuffer &) const;
+    void doDeserialize(ReadBuffer &);
 
 private:
     struct InternalHashJoin
@@ -89,9 +97,16 @@ private:
     JoinStreamDescriptionPtr right_join_stream_desc;
     size_t slots;
     std::vector<std::shared_ptr<InternalHashJoin>> hash_joins;
+    size_t num_used_hash_joins; /// Actual number of used hash joins
 
     std::vector<size_t> left_key_column_positions;
     std::vector<size_t> right_key_column_positions;
+
+    mutable std::condition_variable serialized;
+    mutable std::mutex serialize_mutex;
+    mutable std::atomic_uint32_t serialize_requested = 0;
+
+    std::atomic_bool is_cancelled = false;
 };
 
 }

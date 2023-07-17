@@ -86,6 +86,8 @@ public:
     VersionType getVersion() const;
 
     ExecutingGraph & getExecGraph() const { return *graph; }
+
+    bool isCancelled() const { return cancelled; }
     /// proton: ends.
 
 private:

@@ -1,6 +1,7 @@
 #include "ProxyStream.h"
 #include "StorageStream.h"
 
+#include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -137,6 +138,16 @@ void ProxyStream::read(
 {
     auto reuired_column_names_for_proxy_storage = getRequiredColumnsForProxyStorage(column_names);
     doRead(query_plan, reuired_column_names_for_proxy_storage, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+
+    /// Create step which reads from empty source if storage has no data.
+    if (!query_plan.isInitialized())
+    {
+        /// Only in case when read from historical proxy storage
+        assert(!isStreaming());
+        auto header = storage_snapshot->getSampleBlockForColumns(reuired_column_names_for_proxy_storage);
+        InterpreterSelectQuery::addEmptySourceToQueryPlan(query_plan, header, query_info, context_);
+    }
+
     buildStreamingFunctionQueryPlan(query_plan, column_names, query_info, storage_snapshot);
 }
 

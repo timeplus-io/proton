@@ -1,8 +1,10 @@
 #pragma once
 
 #include <Interpreters/Streaming/joinMetrics.h>
+#include <Interpreters/Streaming/joinSerder_fwd.h>
 
 #include <Core/Block.h>
+#include <base/SerdeTag.h>
 
 namespace DB
 {
@@ -16,7 +18,7 @@ struct RefCountBlock
     RefCountBlock(Block && block_) : block(std::move(block_)), refcnt(static_cast<uint32_t>(block.rows())) { }
     RefCountBlock(const Block & block_) : block(block_), refcnt(static_cast<uint32_t>(block.rows())) { }
 
-    RefCountBlock(RefCountBlock && other) noexcept: block(std::move(other.block)), refcnt(other.refcnt) { }
+    RefCountBlock(RefCountBlock && other) noexcept : block(std::move(other.block)), refcnt(other.refcnt) { }
 
     RefCountBlock & operator=(RefCountBlock && other) noexcept
     {
@@ -126,12 +128,15 @@ struct JoinBlockList
     Int64 minTimestamp() const { return min_ts; }
     Int64 maxTimestamp() const { return max_ts; }
 
-private:
-    Int64 min_ts = std::numeric_limits<Int64>::max();
-    Int64 max_ts = std::numeric_limits<Int64>::min();
-    size_t total_bytes = 0;
+    void serialize(WriteBuffer & wb, SerializedBlocksToIndices * serialized_blocks_to_indices = nullptr) const;
+    void deserialize(ReadBuffer & rb, DeserializedIndicesToBlocks * deserialized_indices_with_block = nullptr);
 
-    std::list<RefCountBlock> blocks;
+private:
+    SERDE Int64 min_ts = std::numeric_limits<Int64>::max();
+    SERDE Int64 max_ts = std::numeric_limits<Int64>::min();
+    SERDE size_t total_bytes = 0;
+
+    SERDE std::list<RefCountBlock> blocks;
 
     JoinMetrics & metrics;
 };

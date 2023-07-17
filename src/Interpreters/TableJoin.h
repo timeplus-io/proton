@@ -341,6 +341,7 @@ public:
     std::shared_ptr<const IKeyValueEntity> getStorageKeyValue() { return right_kv_storage; }
 
     /// proton : starts
+    void setTableJoin(ASTTableJoin && table_join_) { table_join = std::move(table_join_); }
     void setTablesWithColumns(const TablesWithColumns & tables_with_columns_) { tables_with_columns = tables_with_columns_; }
     const TablesWithColumns & getTablesWithColumns() { return tables_with_columns; }
     void setRangeAsofLeftInequality(ASOFJoinInequality inequality) { range_asof_join_ctx.left_inequality = inequality; }

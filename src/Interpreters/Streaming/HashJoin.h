@@ -12,6 +12,7 @@
 #include <Interpreters/TableJoin.h>
 #include <Common/ColumnUtils.h>
 #include <Common/ProtonCommon.h>
+#include <base/SerdeTag.h>
 
 namespace DB
 {
@@ -93,6 +94,14 @@ struct HashJoinMapsVariants;
 
 class HashJoin final : public IHashJoin
 {
+public:
+    using SupportMatrix = std::unordered_map<
+        DataStreamSemantic,
+        std::unordered_map<JoinKind, std::unordered_map<JoinStrictness, std::unordered_map<DataStreamSemantic, bool>>>>;
+
+    /// So far we only support these join combinations
+    static const SupportMatrix support_matrix;
+
 public:
     HashJoin(
         std::shared_ptr<TableJoin> table_join_,
@@ -176,6 +185,7 @@ public:
 
     JoinKind getKind() const { return kind; }
     JoinStrictness getStrictness() const { return strictness; }
+    Kind getStreamingKind() const { return streaming_kind; }
     Strictness getStreamingStrictness() const { return streaming_strictness; }
     const std::optional<TypeIndex> & getAsofType() const { return asof_type; }
     ASOFJoinInequality getAsofInequality() const { return asof_inequality; }
@@ -183,6 +193,13 @@ public:
 
     const ColumnWithTypeAndName & rightAsofKeyColumn() const { return right_data.asof_key_column; }
     const ColumnWithTypeAndName & leftAsofKeyColumn() const { return left_data.asof_key_column; }
+
+    const Block & getOutputHeader() const { return output_header; }
+
+    void serialize(WriteBuffer & wb) const override;
+    void deserialize(ReadBuffer & rb) override;
+
+    void cancel() override { }
 
 /// Different types of keys for maps.
 #define APPLY_FOR_JOIN_VARIANTS(M) \
@@ -293,6 +310,7 @@ public:
     using MapsVariant = std::variant<MapsOne, MapsAll, MapsAsof, MapsRangeAsof, MapsMultiple>;
 
     size_t sizeOfMapsVariant(const MapsVariant & maps_variant) const;
+    Type getHashMethodType() const { return hash_method_type; }
 
     /// bool isUsed(size_t off) const { return used_flags.getUsedSafe(off); }
     /// bool isUsed(const Block * block_ptr, size_t row_idx) const { return used_flags.getUsedSafe(block_ptr, row_idx); }
@@ -312,7 +330,7 @@ public:
 
         String joinMetricsString(const HashJoin * join) const;
 
-        std::mutex mutex;
+        mutable std::mutex mutex;
 
         JoinMetrics metrics;
         JoinBlockList blocks;
@@ -393,21 +411,23 @@ private:
     std::vector<RowRefListMultipleRef *> eraseOrAppendForPartialPrimaryKeyJoin(Map & map, const ColumnRawPtrs & primary_key_columns);
 
 private:
-    std::shared_ptr<TableJoin> table_join;
+    /// Only SERDE the clauses of join
+    SERDE std::shared_ptr<TableJoin> table_join;
     JoinKind kind;
     JoinStrictness strictness;
 
-    Kind streaming_kind;
-    Strictness streaming_strictness;
+    SERDE Kind streaming_kind;
+    SERDE Strictness streaming_strictness;
 
     bool any_take_last_row; /// Overwrite existing values when encountering the same key again
-    std::optional<TypeIndex> asof_type;
-    ASOFJoinInequality asof_inequality;
+    /// Only SERDE for ASOF JOIN or RANGE JOIN
+    SERDE std::optional<TypeIndex> asof_type;
+    SERDE ASOFJoinInequality asof_inequality;
 
     /// Cache data members which avoid re-computation for every join
     std::vector<std::pair<String, String>> cond_column_names;
 
-    std::vector<Sizes> key_sizes;
+    SERDE std::vector<Sizes> key_sizes;
 
     /// versioned-kv and changelog-kv both needs define a primary key
     /// If join on partial primary key columns (or no primary key column is expressed in join on clause),
@@ -458,10 +478,13 @@ private:
         bool validated_join_key_types = false;
     };
 
+    friend void serialize(const JoinData & join_data, WriteBuffer & wb);
+    friend void deserialize(JoinData & join_data, ReadBuffer & rb);
+
     /// Note: when left block joins right hashtable, use `right_data`
-    JoinData right_data;
+    SERDE JoinData right_data;
     /// Note: when right block joins left hashtable, use `left_data`
-    JoinData left_data;
+    SERDE JoinData left_data;
 
     /// Right table data. StorageJoin shares it between many Join objects.
     /// Flags that indicate that particular row already used in join.
@@ -470,22 +493,23 @@ private:
     /// Changes in hash table broke correspondence,
     /// mutable JoinStuff::JoinUsedFlags used_flags;
 
-    Type hash_method_type;
+    SERDE Type hash_method_type;
 
-    std::optional<JoinResults> join_results;
+    /// Only SERDE when emit_changelog is true
+    SERDE std::optional<JoinResults> join_results;
 
-    bool emit_changelog = false;
-    bool bidirectional_hash_join = true;
-    bool range_bidirectional_hash_join = true;
+    SERDE bool emit_changelog = false;
+    SERDE bool bidirectional_hash_join = true;
+    SERDE bool range_bidirectional_hash_join = true;
 
     UInt64 join_max_cached_bytes = 0;
 
     Block output_header;
 
     /// Combined timestamp watermark progression of left stream and right stream
-    std::atomic_int64_t combined_watermark = 0;
+    SERDE std::atomic_int64_t combined_watermark = 0;
 
-    JoinGlobalMetrics join_metrics;
+    SERDE JoinGlobalMetrics join_metrics;
 
     Poco::Logger * logger;
 };

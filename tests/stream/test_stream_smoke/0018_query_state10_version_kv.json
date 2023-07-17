@@ -1,0 +1,357 @@
+{
+    "test_suite_name": "query_state10",
+    "tag": "smoke",
+    "test_suite_config":{
+        "setup": {
+            "statements": [
+            ]
+        },
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "native_not_support"],"cluster": ["view", "cluster_table_bug"]}}
+    }, 
+    "comments": "Tests covering query state checkpointing smoke test cases",
+    "tests": [
+        {
+            "id": 250,
+            "tags": ["versioned_kv"],
+            "name": "versioned_kv_state_checkpoint",
+            "description": "tail query from versioned_kv state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_vk_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_stream(i int, s string) primary key s settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_stream(i, s) values (1, 'a'), (2, 'b'), (3, 'a')"},
+                        {"client":"python", "query_type": "stream", "query_id":"19250", "wait":1, "terminate":"manual", "query":"subscribe to select i, s from test19_vk_stream settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19250", "kill":"19250", "kill_wait":3, "wait":1, "query": "insert into test19_vk_stream(i, s) values (4, 'c')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_stream(i, s) values (5, 'd'), (6, 'c')"},
+                        {"client":"python", "query_type": "stream","query_id":"19250-1", "terminate": "manual","wait":3, "query":"recover from '19250'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19250", "wait":2, "query": "kill query where query_id='19250' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19250'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19250",
+                    "expected_results":[
+                        [2, "b"], [3, "a"], [4, "c"]
+                    ]
+                },
+                {
+                    "query_id":"19250-1",
+                    "expected_results":[
+                        [5, "d"], [6, "c"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 251,
+            "tags": ["versioned_kv", "bug"],
+            "name": "versioned_kv_state_checkpoint",
+            "description": "global aggr query from versioned_kv state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_vk_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_stream(i int, s string, val float) primary key s settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_stream(i, s) values (1, 'a', 10), (2, 'b', 20)"},
+                        {"client":"python", "query_type": "stream", "query_id":"19251", "wait":1, "terminate":"manual", "query":"subscribe to select count(*), min(val), max(val), sum(val), avg(val) from test19_vk_stream emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19251", "kill":"19251", "kill_wait":3, "wait":1, "query": "insert into test19_vk_stream(i, s) values (3, 'a', 30)"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_stream(i, s) values (4, 'c', 50), (5, 'b', 10)"},
+                        {"client":"python", "query_type": "stream","query_id":"19251-1", "terminate": "manual","wait":3, "query":"recover from '19251'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19251", "wait":2, "query": "kill query where query_id='19251' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19251'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19251",
+
+                    "expected_results":[
+                        [2, 10, 20, 30, 15],
+                        [2, 20, 30, 50, 25]
+                    ]
+                },
+                {
+                    "query_id":"19251-1",
+                    "expected_results":[
+                        [3, 10, 50, 90, 30]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 252,
+            "tags": ["versioned_kv", "multiple_primary_key"],
+            "name": "all_primary_keys_join",
+            "description": "append-only join versioned_kv with all primary keys state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_append_left_stream"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_right_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_append_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_append_left_stream (i1 int, i2 int, s string)"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_right_stream (ii1 int, ii2 int, ss string) primary key (ii1, ii2) settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19252", "wait":1, "terminate":"manual", "query":"subscribe to select i1, i2, s, ii1, ii2, ss from test19_append_left_stream inner join test19_vk_right_stream on i1 = ii1 and i2 = ii2 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19252", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss1')"},
+                        {"client":"python", "query_type": "table", "kill":"19252", "kill_wait":3, "wait":1, "query": "insert into test19_append_left_stream(i1, i2, s) values (1, 1, 's1')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss2')"},
+                        {"client":"python", "query_type": "stream","query_id":"19252-1", "terminate": "manual","wait":1, "query":"recover from '19252'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19252", "wait":1, "query": "insert into test19_append_left_stream(i1, i2, s) values (1, 1, 's2')"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19252' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19252'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19252",
+                    "expected_results":[
+                        [1, 1, "s1", 1, 1, "ss1"]
+                    ]
+                },
+                {
+                    "query_id":"19252-1",
+                    "expected_results":[
+                        [1, 1, "s2", 1, 1, "ss2"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 253,
+            "tags": ["versioned_kv", "multiple_primary_key"],
+            "name": "all_primary_keys_join",
+            "description": "versioned_kv join versioned_kv with all primary keys state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_left_stream"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_right_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_append_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_left_stream (i1 int, i2 int, s string) primary key (i1, i2) settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_right_stream (ii1 int, ii2 int, ss string) primary key (ii1, ii2) settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19253", "wait":1, "terminate":"manual", "query":"subscribe to select i1, i2, s, ii1, ii2, ss, _tp_delta from test19_vk_left_stream inner join test19_vk_right_stream on i1 = ii1 and i2 = ii2 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19253", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss1')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_left_stream(i1, i2, s) values (1, 1, 's1')"},
+                        {"client":"python", "query_type": "table",  "kill":"19253", "kill_wait":3, "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss2')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_left_stream(i1, i2, s) values (1, 1, 's2')"},
+                        {"client":"python", "query_type": "stream","query_id":"19253-1", "terminate": "manual","wait":1, "query":"recover from '19253'"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19253' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19253'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19253",
+                    "expected_results":[
+                        [1, 1, "s1", 1, 1, "ss1", 1],
+                        [1, 1, "s1", 1, 1, "ss1", -1],
+                        [1, 1, "s1", 1, 1, "ss2", 1]
+                    ]
+                },
+                {
+                    "query_id":"19253-1",
+                    "expected_results":[
+                        [1, 1, "s1", 1, 1, "ss2", -1],
+                        [1, 1, "s2", 1, 1, "ss2", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 254,
+            "tags": ["versioned_kv", "multiple_primary_key"],
+            "name": "partial_primary_key_join",
+            "description": "append-only join versioned_kv with all primary keys state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_append_left_stream"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_right_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_append_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_append_left_stream (i1 int, i2 int, s string)"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_right_stream (ii1 int, ii2 int, ss string) primary key (ii1, ii2) settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19254", "wait":1, "terminate":"manual", "query":"subscribe to select i1, i2, s, ii1, ii2, ss from test19_append_left_stream inner join test19_vk_right_stream on i1 = ii1 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19254", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss1')"},
+                        {"client":"python", "query_type": "table", "kill":"19254", "kill_wait":3, "wait":1, "query": "insert into test19_append_left_stream(i1, i2, s) values (1, 1, 's1')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss2')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 2, 'ss3')"},
+                        {"client":"python", "query_type": "stream","query_id":"19254-1", "terminate": "manual","wait":1, "query":"recover from '19254'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19254", "wait":1, "query": "insert into test19_append_left_stream(i1, i2, s) values (1, 1, 's2')"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19254' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19254'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19254",
+                    "expected_results":[
+                        [1, 1, "s1", 1, 1, "ss1"]
+                    ]
+                },
+                {
+                    "query_id":"19254-1",
+                    "expected_results":[
+                        [1, 1, "s2", 1, 1, "ss2"],
+                        [1, 1, "s2", 1, 2, "ss3"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 255,
+            "tags": ["versioned_kv", "multiple_primary_key", "todo"],
+            "name": "partial_primary_key_join",
+            "description": "versioned_kv join versioned_kv with all primary keys state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_left_stream"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_right_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_vk_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_left_stream (i1 int, i2 int, s string) primary key (i1, i2) settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_right_stream (ii1 int, ii2 int, ss string) primary key (ii1, ii2) settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19255", "wait":1, "terminate":"manual", "query":"subscribe to select i1, i2, s, ii1, ii2, ss, _tp_delta from test19_vk_left_stream inner join test19_vk_right_stream on i1 = ii1 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19255", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss1')"},
+                        {"client":"python", "query_type": "table", "kill":"19255", "kill_wait":3, "wait":1, "query": "insert into test19_vk_left_stream(i1, i2, s) values (1, 1, 's1')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss2')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 2, 'ss3')"},
+                        {"client":"python", "query_type": "stream","query_id":"19255-1", "terminate": "manual","wait":1, "query":"recover from '19255'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19255", "wait":1, "query": "insert into test19_vk_left_stream(i1, i2, s) values (1, 1, 's2')"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19255' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19255'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19255",
+                    "expected_results":[
+                        [1, 1, "s1", 1, 1, "ss1", 1]
+                    ]
+                },
+                {
+                    "query_id":"19255-1",
+                    "expected_results":[
+                        [1, 1, "s1", 1, 1, "ss1", -1],
+                        [1, 1, "s1", 1, 1, "ss2", 1],
+                        [1, 1, "s1", 1, 2, "ss3", 1],
+                        [1, 1, "s1", 1, 2, "ss3", -1],
+                        [1, 1, "s2", 1, 2, "ss3", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 256,
+            "tags": ["versioned_kv", "multiple_primary_key"],
+            "name": " No_primary_key_join",
+            "description": "append-only join versioned_kv with No primary key(s) join state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_append_left_stream"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_right_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_append_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_append_left_stream (i1 int, i2 int, s string)"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_right_stream (ii1 int, ii2 int, ss string) primary key (ii1, ii2) settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19256", "wait":1, "terminate":"manual", "query":"subscribe to select i1, i2, s, ii1, ii2, ss from test19_append_left_stream inner join test19_vk_right_stream on s = ss settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19256", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 1, 's1')"},
+                        {"client":"python", "query_type": "table", "kill":"19256", "kill_wait":3, "wait":1, "query": "insert into test19_append_left_stream(i1, i2, s) values (1, 1, 's1')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 1, 's2')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (2, 2, 's1')"},
+                        {"client":"python", "query_type": "stream","query_id":"19256-1", "terminate": "manual","wait":1, "query":"recover from '19256'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19256", "wait":1, "query": "insert into test19_append_left_stream(i1, i2, s) values (1, 1, 's1')"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19256' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "unsubscribe to '19256'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19256",
+                    "expected_results":[
+                        [1, 1, "s1", 1, 1, "s1"]
+                    ]
+                },
+                {
+                    "query_id":"19256-1",
+                    "expected_results":[
+                        [1, 1, "s1", 2, 2, "s1"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 257,
+            "tags": ["versioned_kv", "multiple_primary_key","todo"],
+            "name": " No_primary_key_join",
+            "description": "versioned_kv join versioned_kv with No primary key(s) join state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_left_stream"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_right_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test19_append_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_left_stream (i1 int, i2 int, s string) primary key (i1, i2) settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_vk_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_right_stream (ii1 int, ii2 int, ss string) primary key (ii1, ii2) settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19257", "wait":1, "terminate":"manual", "query":"subscribe to select i1, i2, s, ii1, ii2, ss, _tp_delta from test19_vk_left_stream inner join test19_vk_right_stream on s = ss settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19257", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 1, 's1')"},
+                        {"client":"python", "query_type": "table", "kill":"19257", "kill_wait":3, "wait":1, "query": "insert into test19_vk_left_stream(i1, i2, s) values (1, 1, 's1')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 1, 's2')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_right_stream(ii1, ii2, ss) values (2, 2, 's1')"},
+                        {"client":"python", "query_type": "stream","query_id":"19257-1", "terminate": "manual","wait":3, "query":"recover from '19257'"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19257'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19257",
+                    "expected_results":[
+                        [1, 1, "s1", 1, 1, "s1", 1]
+                    ]
+                },
+                {
+                    "query_id":"19257-1",
+                    "expected_results":[
+                        [1, 1, "s1", 1, 1, "s1", -1],
+                        [1, 1, "s1", 2, 2, "s1", 1]
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -7,6 +7,9 @@
 #include <magic_enum.hpp>
 namespace DB
 {
+class WriteBuffer;
+class ReadBuffer;
+
 namespace Streaming
 {
 enum class RangeType : uint8_t
@@ -40,6 +43,9 @@ struct RangeAsofJoinContext
             magic_enum::enum_name(right_inequality),
             magic_enum::enum_name(type));
     }
+
+    void serialize(WriteBuffer & wb) const;
+    void deserialize(ReadBuffer & rb);
 };
 }
 }

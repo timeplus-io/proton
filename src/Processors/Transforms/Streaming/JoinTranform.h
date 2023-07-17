@@ -47,6 +47,8 @@ private:
     void joinBidirectionally(Chunks chunks);
     void rangeJoinBidirectionally(Chunks chunks);
 
+    void onCancel() override;
+
 private:
     struct InputPortWithData
     {

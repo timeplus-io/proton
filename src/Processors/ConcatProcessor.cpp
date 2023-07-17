@@ -1,5 +1,8 @@
 #include <Processors/ConcatProcessor.h>
 
+/// proton: starts.
+#include <Checkpoint/CheckpointContext.h>
+/// proton ends.
 
 namespace DB
 {
@@ -17,8 +20,10 @@ ConcatProcessor::Status ConcatProcessor::prepare()
 
     if (output.isFinished())
     {
-        for (; current_input != inputs.end(); ++current_input)
-            current_input->close();
+        /// proton: starts.
+        for (auto & input : inputs)
+            input.close();
+        /// proton: ends.
 
         return Status::Finished;
     }
@@ -41,6 +46,11 @@ ConcatProcessor::Status ConcatProcessor::prepare()
 
     if (current_input == inputs.end())
     {
+        /// proton: starts.
+        for (auto & input : inputs)
+            input.close();
+        /// proton: ends.
+
         output.finish();
         return Status::Finished;
     }
@@ -59,6 +69,32 @@ ConcatProcessor::Status ConcatProcessor::prepare()
     return Status::PortFull;
 }
 
+/// proton: starts.
+void ConcatProcessor::recover(CheckpointContextPtr ckpt_ctx)
+{
+    if (isStreaming())
+    {
+        /// If has checkpoint, close all historical inputs, since we shall continue to consume from streaming source start with recovered `sn`
+        /// Normally, streaming concat processor is used for VersionedKV/ChangelogKV:
+        /// Like to read historical data first and then stream data
+
+        // assert(ckpt_ctx->epoch > 0);
+        if (ckpt_ctx->epoch > 0)
+        {
+            for (; current_input != inputs.end(); ++current_input)
+            {
+                if (current_input->getOutputPort().getProcessor().isStreaming())
+                    break;
+
+                /// Close these inputs in `prepare()`
+                // current_input->close(); /// Close historical input
+            }
+
+            /// Always has at least one streaming input
+            assert(current_input != inputs.end() && current_input->getOutputPort().getProcessor().isStreaming());
+        }
+    }
 }
+/// proton: ends.
 
-
+}

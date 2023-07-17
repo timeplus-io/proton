@@ -134,6 +134,8 @@ public:
     Nodes nodes;
 
     /// proton : starts
+    /// Indcies of processors which need to serialize/deserialize
+    std::vector<UInt16> processors_indices_to_serde;
     //// Trigger nodes are source nodes which emit checkpoint barriers
     std::vector<Node *> checkpoint_trigger_nodes;
     /// Ack nodes are sink nodes which ack completion of a checkpoint
@@ -180,7 +182,7 @@ public:
         descs.reserve(size);
 
         for (; begin_id_iter != end_id_iter; ++begin_id_iter)
-            descs.emplace_back(NodeDescription{*begin_id_iter, nodes[*begin_id_iter]->processor->getName()});
+            descs.emplace_back(NodeDescription{*begin_id_iter, nodes[processors_indices_to_serde[*begin_id_iter]]->processor->getName()});
 
         return descs;
     }

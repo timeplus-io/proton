@@ -507,9 +507,9 @@
                 {
                     "statements": [
                         {"client":"python", "query_type": "table", "wait":1,"query":"insert into test19_state_stream6 (id, value_str) values ('c', '400.1') ('d', '500.1') ('e', '600.1')"},
-                        {"client":"python", "query_type": "stream","query_id":"19163-1", "terminate": "manual","wait":2, "query":"recover from '19163'"},
-                        {"client":"python", "query_type": "table", "depends_on":"19163",  "wait":1, "query": "kill query where query_id='19163' sync"},
-                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19163'"}
+                        {"client":"python", "query_type": "stream","query_id":"19163-1", "terminate": "manual", "query":"recover from '19163'"},
+                        {"client":"python", "query_type": "table", "wait":4, "query": "kill query where query_id='19163' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19163'"}
                     ]
                 }
             ],

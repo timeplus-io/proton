@@ -2,6 +2,7 @@
 
 #include <Columns/ColumnDecimal.h>
 #include <Columns/IColumn.h>
+#include <Interpreters/Streaming/joinSerder.h>
 #include <base/types.h>
 #include <Common/ColumnsHashing.h>
 #include <Common/typeid_cast.h>
@@ -58,6 +59,22 @@ void callWithType(TypeIndex which, F && f)
 
     UNREACHABLE();
 }
+}
+
+void RowRefWithRefCount::serialize(const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const
+{
+    DB::writeIntBinary<UInt32>(serialized_blocks_to_indices.at(reinterpret_cast<std::uintptr_t>(&(block_iter->block))), wb);
+    DB::writeBinary(row_num, wb);
+}
+
+void RowRefWithRefCount::deserialize(
+    JoinBlockList * block_list, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb)
+{
+    blocks = block_list;
+    UInt32 block_index;
+    DB::readIntBinary<UInt32>(block_index, rb);
+    block_iter = deserialized_indices_to_blocks.at(block_index);
+    DB::readBinary(row_num, rb);
 }
 
 AsofRowRefs::AsofRowRefs(TypeIndex type)
@@ -179,6 +196,47 @@ std::optional<TypeIndex> AsofRowRefs::getTypeSize(const IColumn & asof_column, s
     }
 
     throw Exception(ErrorCodes::BAD_TYPE_OF_FIELD, "ASOF join not supported for type: {}", asof_column.getFamilyName());
+}
+
+void AsofRowRefs::serialize(TypeIndex type, const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const
+{
+    auto call = [&](const auto & t) {
+        using T = std::decay_t<decltype(t)>;
+        const auto & sorted_lookup_vec = *std::get<typename Entry<T>::LookupPtr>(lookups);
+        DB::writeIntBinary<UInt32>(static_cast<UInt32>(sorted_lookup_vec.size()), wb);
+        for (const auto & [asof_value, row_ref] : sorted_lookup_vec)
+        {
+            /// Key
+            DB::writeBinary(asof_value, wb);
+            /// Mapped: RowRefWithRefCount
+            row_ref.serialize(serialized_blocks_to_indices, wb);
+        }
+    };
+
+    callWithType(type, call);
+}
+
+void AsofRowRefs::deserialize(
+    TypeIndex type, JoinBlockList * block_list, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb)
+{
+    auto call = [&](const auto & t) {
+        using T = std::decay_t<decltype(t)>;
+        lookups = std::make_unique<typename Entry<T>::LookupType>();
+        auto & sorted_lookup_vec = *std::get<typename Entry<T>::LookupPtr>(lookups);
+
+        UInt32 vec_size;
+        DB::readIntBinary<UInt32>(vec_size, rb);
+        sorted_lookup_vec.resize(vec_size);
+        for (auto & [asof_value, row_ref] : sorted_lookup_vec)
+        {
+            /// Key
+            DB::readBinary(asof_value, rb);
+            /// Mapped: RowRefWithRefCount
+            row_ref.deserialize(block_list, deserialized_indices_to_blocks, rb);
+        }
+    };
+
+    callWithType(type, call);
 }
 
 RangeAsofRowRefs::RangeAsofRowRefs(TypeIndex type)
@@ -418,5 +476,105 @@ const RowRef * RangeAsofRowRefs::findAsof(
     callWithType(type, call);
     return result;
 }
+
+void RangeAsofRowRefs::serialize(TypeIndex type, const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const
+{
+    auto call = [&](const auto & t) {
+        using T = std::decay_t<decltype(t)>;
+        const auto & map = *std::get<LookupPtr<T>>(lookups);
+        DB::writeIntBinary<UInt32>(static_cast<UInt32>(map.size()), wb);
+        for (const auto & [key, mapped] : map)
+        {
+            /// Key
+            DB::writeBinary(key, wb);
+            /// Mapped: RowRef
+            Streaming::serialize(mapped, serialized_blocks_to_indices, wb);
+        }
+    };
+
+    callWithType(type, call);
+}
+
+void RangeAsofRowRefs::deserialize(TypeIndex type, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb)
+{
+    auto call = [&](const auto & t) {
+        using T = std::decay_t<decltype(t)>;
+        static_assert(!std::is_same_v<T, StringRef>);
+        lookups = std::make_unique<LookupType<T>>();
+        auto & map = *std::get<LookupPtr<T>>(lookups);
+
+        T key;
+        UInt32 map_size;
+        DB::readIntBinary<UInt32>(map_size, rb);
+        for (size_t i = 0; i < map_size; ++i)
+        {
+            /// Key
+            DB::readBinary(key, rb);
+            assert(!map.contains(key));
+            auto iter = map.emplace(key, RowRef{});
+
+            /// Mapped: RowRef
+            Streaming::deserialize(iter->second, deserialized_indices_to_blocks, rb);
+        }
+    };
+
+    callWithType(type, call);
+}
+
+void RowRefListMultiple::serialize(
+    const SerializedBlocksToIndices & serialized_blocks_to_indices,
+    WriteBuffer & wb,
+    SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices) const
+{
+    writeIntBinary<UInt32>(static_cast<UInt32>(rows.size()), wb);
+    for (const auto & row_ref : rows)
+    {
+        row_ref.serialize(serialized_blocks_to_indices, wb);
+
+        if (serialized_row_ref_list_multiple_to_indices)
+        {
+            [[maybe_unused]] auto [_, inserted] = serialized_row_ref_list_multiple_to_indices->emplace(
+                reinterpret_cast<std::uintptr_t>(&row_ref), serialized_row_ref_list_multiple_to_indices->size());
+            assert(inserted);
+        }
+    }
+}
+
+void RowRefListMultiple::deserialize(
+    JoinBlockList * block_list,
+    const DeserializedIndicesToBlocks & deserialized_indices_to_blocks,
+    ReadBuffer & rb,
+    DeserializedIndicesToRowRefListMultiple * deserialized_indices_to_row_ref_list_multiple)
+{
+    UInt32 rows_size;
+    readIntBinary<UInt32>(rows_size, rb);
+    rows.resize(rows_size);
+    for (auto iter = rows.begin(); iter != rows.end(); ++iter)
+    {
+        iter->deserialize(block_list, deserialized_indices_to_blocks, rb);
+
+        if (deserialized_indices_to_row_ref_list_multiple)
+        {
+            [[maybe_unused]] auto [_, inserted] = deserialized_indices_to_row_ref_list_multiple->emplace(
+                deserialized_indices_to_row_ref_list_multiple->size(), RowRefListMultipleRef{this, iter});
+            assert(inserted);
+        }
+    }
+}
+
+void RowRefListMultipleRef::serialize(
+    const SerializedRowRefListMultipleToIndices & serialized_row_ref_list_multiple_to_indices, WriteBuffer & wb) const
+{
+    writeIntBinary<UInt32>(serialized_row_ref_list_multiple_to_indices.at(reinterpret_cast<std::uintptr_t>(&*iterator)), wb);
+}
+
+void RowRefListMultipleRef::deserialize(
+    const DeserializedIndicesToRowRefListMultiple & deserialized_indices_to_row_ref_list_multiple, ReadBuffer & rb)
+{
+    UInt32 ref_index;
+    readIntBinary<UInt32>(ref_index, rb);
+    *this = deserialized_indices_to_row_ref_list_multiple.at(ref_index);
+}
+
 }
 }

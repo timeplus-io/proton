@@ -20,8 +20,8 @@ BlockIO InterpreterUnsubscribeQuery::execute()
         throw Exception(ErrorCodes::SYNTAX_ERROR, "Unsubscribe query requires a string query ID, for example, UNSUBSCRIBE TO 'my-query-id'");
 
     auto query_id = literal->value.get<String>();
-
-    CheckpointCoordinator::instance(getContext()).removeCheckpoint(query_id);
+    if (!query_id.empty())
+        CheckpointCoordinator::instance(getContext()).removeCheckpoint(query_id);
 
     return {};
 }

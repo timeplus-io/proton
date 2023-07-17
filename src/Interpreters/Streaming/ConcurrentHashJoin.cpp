@@ -16,6 +16,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
+extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 namespace Streaming
@@ -41,6 +42,7 @@ ConcurrentHashJoin::ConcurrentHashJoin(
     , left_join_stream_desc(std::move(left_join_stream_desc_))
     , right_join_stream_desc(std::move(right_join_stream_desc_))
     , slots(getSlots(slots_))
+    , num_used_hash_joins(slots_)
 {
     for (size_t i = 0; i < slots; ++i)
     {
@@ -52,6 +54,8 @@ ConcurrentHashJoin::ConcurrentHashJoin(
 
 void ConcurrentHashJoin::rescale(size_t slots_)
 {
+    num_used_hash_joins = slots_;
+
     auto new_slots = getSlots(slots_);
     if (new_slots == slots)
         return;
@@ -99,23 +103,29 @@ void ConcurrentHashJoin::insertRightBlock(Block right_block)
 
     while (blocks_left > 0)
     {
+        if (is_cancelled)
+            break;
+
         /// insert blocks into corresponding HashJoin instances
         for (auto & dispatched_block : dispatched_blocks)
         {
             if (dispatched_block.block)
             {
-                auto & hash_join = hash_joins[dispatched_block.shard];
+                if (dispatched_block.block.rows() > 0)
+                {
+                    auto & hash_join = hash_joins[dispatched_block.shard];
 
-                /// if current hash_join is already processed by another thread, skip it and try later
-                std::unique_lock<std::mutex> lock(hash_join->mutex, std::try_to_lock);
-                if (!lock.owns_lock())
-                    continue;
+                    /// if current hash_join is already processed by another thread, skip it and try later
+                    std::unique_lock<std::mutex> lock(hash_join->mutex, std::try_to_lock);
+                    if (!lock.owns_lock())
+                        continue;
 
-                hash_join->data->insertRightBlock(std::move(dispatched_block.block));
+                    hash_join->data->insertRightBlock(std::move(dispatched_block.block));
+                }
+                else
+                    dispatched_block.block = {};
 
                 assert(!dispatched_block.block);
-                /// dispatched_block = {};
-
                 blocks_left--;
             }
         }
@@ -129,11 +139,40 @@ void ConcurrentHashJoin::joinLeftBlock(Block & left_block)
     joined_blocks.reserve(dispatched_blocks.size());
 
     left_block = {};
-    for (auto & dispatched_block : dispatched_blocks)
+
+    size_t blocks_left = dispatched_blocks.size();
+    while (blocks_left > 0)
     {
-        hash_joins[dispatched_block.shard]->data->joinLeftBlock(dispatched_block.block);
-        if (dispatched_block.block.rows() > 0)
-            joined_blocks.emplace_back(std::move(dispatched_block.block));
+        if (is_cancelled)
+            break;
+
+        for (auto & dispatched_block : dispatched_blocks)
+        {
+            if (dispatched_block.block)
+            {
+                if (dispatched_block.block.rows() > 0)
+                {
+                    auto & hash_join = hash_joins[dispatched_block.shard];
+
+                    /// if current hash_join is already processed by another thread, skip it and try later
+                    std::unique_lock<std::mutex> lock(hash_join->mutex, std::try_to_lock);
+                    if (!lock.owns_lock())
+                        continue;
+
+                    hash_join->data->joinLeftBlock(dispatched_block.block);
+
+                    if (dispatched_block.block.rows() > 0)
+                        joined_blocks.emplace_back(std::move(dispatched_block.block));
+                    else
+                        dispatched_block.block = {};
+                }
+                else
+                    dispatched_block.block = {};
+
+                assert(!dispatched_block.block);
+                blocks_left--;
+            }
+        }
     }
 
     left_block = concatenateBlocks(joined_blocks);
@@ -161,38 +200,45 @@ Block ConcurrentHashJoin::insertBlockAndJoin(Block & block)
 
     while (blocks_left > 0)
     {
+        if (is_cancelled)
+            break;
+
         /// insert blocks into corresponding HashJoin instances
         for (auto & dispatched_block : dispatched_blocks)
         {
             if (dispatched_block.block)
             {
-                auto & hash_join = hash_joins[dispatched_block.shard];
-
-                /// if current hash_join is already processed by another thread, skip it and try later
-                std::unique_lock<std::mutex> lock(hash_join->mutex, std::try_to_lock);
-                if (!lock.owns_lock())
-                    continue;
-
-                if constexpr (is_left_block)
-                {
-                    auto retracted_block = hash_join->data->insertLeftBlockAndJoin(dispatched_block.block);
-                    if (retracted_block.rows() > 0)
-                        retracted_blocks.emplace_back(std::move(retracted_block));
-                }
-                else
-                {
-                    auto retracted_block = hash_join->data->insertRightBlockAndJoin(dispatched_block.block);
-                    if (retracted_block.rows() > 0)
-                        retracted_blocks.emplace_back(std::move(retracted_block));
-                }
-
                 if (dispatched_block.block.rows() > 0)
-                    joined_blocks.emplace_back(std::move(dispatched_block.block));
+                {
+                    auto & hash_join = hash_joins[dispatched_block.shard];
+
+                    /// if current hash_join is already processed by another thread, skip it and try later
+                    std::unique_lock<std::mutex> lock(hash_join->mutex, std::try_to_lock);
+                    if (!lock.owns_lock())
+                        continue;
+
+                    if constexpr (is_left_block)
+                    {
+                        auto retracted_block = hash_join->data->insertLeftBlockAndJoin(dispatched_block.block);
+                        if (retracted_block.rows() > 0)
+                            retracted_blocks.emplace_back(std::move(retracted_block));
+                    }
+                    else
+                    {
+                        auto retracted_block = hash_join->data->insertRightBlockAndJoin(dispatched_block.block);
+                        if (retracted_block.rows() > 0)
+                            retracted_blocks.emplace_back(std::move(retracted_block));
+                    }
+
+                    if (dispatched_block.block.rows() > 0)
+                        joined_blocks.emplace_back(std::move(dispatched_block.block));
+                    else
+                        dispatched_block.block = {};
+                }
                 else
                     dispatched_block.block = {};
 
                 assert(!dispatched_block.block);
-
                 blocks_left--;
             }
         }
@@ -230,33 +276,40 @@ std::vector<Block> ConcurrentHashJoin::insertBlockToRangeBucketAndJoin(Block blo
 
     while (blocks_left > 0)
     {
+        if (is_cancelled)
+            break;
+
         /// insert blocks into corresponding HashJoin instances
         for (auto & dispatched_block : dispatched_blocks)
         {
             if (dispatched_block.block)
             {
-                auto & hash_join = hash_joins[dispatched_block.shard];
-
-                /// if current hash_join is already processed by another thread, skip it and try later
-                std::unique_lock<std::mutex> lock(hash_join->mutex, std::try_to_lock);
-                if (!lock.owns_lock())
-                    continue;
-
-                if constexpr (is_left_block)
+                if (dispatched_block.block.rows() > 0)
                 {
-                    auto joined_blocks = hash_join->data->insertLeftBlockToRangeBucketsAndJoin(std::move(dispatched_block.block));
-                    for (auto & joined_block : joined_blocks)
-                        joined_results.emplace_back(std::move(joined_block));
+                    auto & hash_join = hash_joins[dispatched_block.shard];
+
+                    /// if current hash_join is already processed by another thread, skip it and try later
+                    std::unique_lock<std::mutex> lock(hash_join->mutex, std::try_to_lock);
+                    if (!lock.owns_lock())
+                        continue;
+
+                    if constexpr (is_left_block)
+                    {
+                        auto joined_blocks = hash_join->data->insertLeftBlockToRangeBucketsAndJoin(std::move(dispatched_block.block));
+                        for (auto & joined_block : joined_blocks)
+                            joined_results.emplace_back(std::move(joined_block));
+                    }
+                    else
+                    {
+                        auto joined_blocks = hash_join->data->insertRightBlockToRangeBucketsAndJoin(std::move(dispatched_block.block));
+                        for (auto & joined_block : joined_blocks)
+                            joined_results.emplace_back(std::move(joined_block));
+                    }
                 }
                 else
-                {
-                    auto joined_blocks = hash_join->data->insertRightBlockToRangeBucketsAndJoin(std::move(dispatched_block.block));
-                    for (auto & joined_block : joined_blocks)
-                        joined_results.emplace_back(std::move(joined_block));
-                }
+                    dispatched_block.block = {};
 
                 assert(!dispatched_block.block);
-
                 blocks_left--;
             }
         }
@@ -398,6 +451,72 @@ BlocksWithShard ConcurrentHashJoin::dispatchBlock(const std::vector<size_t> & ke
     }
 
     return result;
+}
+
+void ConcurrentHashJoin::serialize(WriteBuffer & wb) const
+{
+    /// Only last join thread to do serialization
+    if (serialize_requested.fetch_add(1) + 1 == num_used_hash_joins)
+    {
+        if (is_cancelled)
+            return;
+
+        DB::writeBoolText(/*serialized*/ true, wb);
+        DB::writeVarInt(hash_joins.size(), wb);
+        for (const auto & hash_join : hash_joins)
+        {
+            std::lock_guard lock(hash_join->mutex);
+            hash_join->data->serialize(wb);
+        }
+
+        serialize_requested.store(0, std::memory_order_relaxed);
+        serialized.notify_all();
+    }
+    else
+    {
+        DB::writeBoolText(/*serialized*/ false, wb);
+
+        /// Condition wait for last join thread to finish the serialization
+        std::unique_lock<std::mutex> lk(serialize_mutex);
+        if (is_cancelled)
+            return;
+
+        serialized.wait(lk);
+    }
+}
+
+void ConcurrentHashJoin::deserialize(ReadBuffer & rb)
+{
+    bool is_serialized;
+    DB::readBoolText(is_serialized, rb);
+    if (!is_serialized)
+        return;
+
+    Int64 num_shards;
+    DB::readVarInt(num_shards, rb);
+    if (num_shards != hash_joins.size())
+        throw Exception(
+            ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+            "Failed to recover concurrent hash join checkpoint. The concurrent number of hash join are not the same, checkpointed={}, "
+            "current={}",
+            num_shards,
+            hash_joins.size());
+
+    for (auto & hash_join : hash_joins)
+    {
+        std::lock_guard lock(hash_join->mutex);
+        hash_join->data->deserialize(rb);
+    }
+}
+
+void ConcurrentHashJoin::cancel()
+{
+    is_cancelled = true;
+
+    serialize_requested.store(0, std::memory_order_relaxed);
+
+    std::unique_lock<std::mutex> lk(serialize_mutex);
+    serialized.notify_all();
 }
 
 }

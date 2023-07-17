@@ -1,0 +1,493 @@
+{
+    "test_suite_name": "query_state9",
+    "tag": "smoke",
+    "test_suite_config":{
+        "setup": {
+            "statements": [
+            ]
+        },
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "native_not_support"],"cluster": ["view", "cluster_table_bug"]}}
+    }, 
+    "comments": "Tests covering query state checkpointing smoke test cases",
+    "tests": [
+        {
+            "id": 220,
+            "tags": ["query_state", "stream_join_stream"],
+            "name": "inner-range-join-parallel_hash",
+            "description": "inner range join parallel_hash state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream2"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream2 (i int, s string, ts datetime)"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime)"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19220", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss from test19_left_stream2 inner join test19_right_stream2 on i=ii and date_diff_within(10s, ts, tts) settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19220", "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's1', '2022-05-23 15:44:59')"},
+                        {"client":"python", "query_type": "table", "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's2', '2022-05-23 15:45:00')"}, 
+                        {"client":"python", "query_type": "table", "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's3', '2022-05-23 15:45:09')"},
+                        {"client":"python", "query_type": "table", "kill":"19220", "kill_wait":3, "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's4', '2022-05-23 15:45:10') (1, 's5', '2022-05-23 15:45:15') (1, 's6', '2022-05-23 15:45:19') (1, 's7', '2022-05-23 15:45:20') (1, 's8', '2022-05-23 15:45:21')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19220'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19220",
+                    "expected_results":[
+                        ["s", "s2"], ["s", "s3"], ["s", "s4"], ["s", "s5"], ["s", "s6"], ["s", "s7"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 221,
+            "tags": ["query_state", "stream_join_stream"],
+            "name": "recover-inner-range-join-parallel_hash",
+            "description": "recover inner range join parallel_hash from state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream2"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream2 (i int, s string, ts datetime)"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime)"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19221", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss from test19_left_stream2 inner join test19_right_stream2 on i=ii and date_diff_within(10s, ts, tts) settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19221", "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "kill":"19221", "kill_wait":3, "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's1', '2022-05-23 15:44:59') (1, 's2', '2022-05-23 15:45:00') (1, 's3', '2022-05-23 15:45:09')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's4', '2022-05-23 15:45:10') (1, 's5', '2022-05-23 15:45:15') (1, 's6', '2022-05-23 15:45:19') (1, 's7', '2022-05-23 15:45:20') (1, 's8', '2022-05-23 15:45:21')"},
+                        {"client":"python", "query_type": "stream","query_id":"19221-1", "terminate": "manual", "query":"recover from '19221'"},
+                        {"client":"python", "query_type": "table", "wait":3, "query": "kill query where query_id='19221' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19221'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19221",
+                    "expected_results":[
+                        ["s", "s2"], ["s", "s3"]
+                    ]
+                },
+                {
+                    "query_id":"19221-1",
+                    "expected_results":[
+                        ["s", "s4"], ["s", "s5"], ["s", "s6"], ["s", "s7"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 224,
+            "tags": ["query_state", "stream_join_stream"],
+            "name": "append-only-innner-join-versioned-kv-parallel_hash",
+            "description": "append only innner join versioned kv parallel_hash state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream2"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream2 (i int, s string, ts datetime)"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime) primary key ii settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "stream", "depends_on_stream":"test19_right_stream2", "query_id":"19224", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss from test19_left_stream2 inner join test19_right_stream2 on i=ii settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19224", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's1', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's2', '2022-05-23 15:45:11')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (2, 's2', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "kill":"19224", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (2, 'ss', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19224'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19224",
+                    "expected_results":[
+                        ["s", "s2"], ["ss", "s2"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 225,
+            "tags": ["query_state", "stream_join_stream"],
+            "name": "recover-append-only-innner-join-versioned-kv-parallel_hash",
+            "description": "recover append only innner join versioned-kv parallel_hash from state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream2"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream2 (i int, s string, ts datetime)"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime) primary key ii settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "stream", "depends_on_stream":"test19_right_stream2", "query_id":"19225", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss from test19_left_stream2 inner join test19_right_stream2 on i=ii settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19225", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's1', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's2', '2022-05-23 15:45:11')"},
+                        {"client":"python", "query_type": "table", "kill":"19225", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"}
+                    ]
+                },        
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (2, 's2', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "stream","query_id":"19225-1", "terminate": "manual", "query":"recover from '19225'"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "insert into test19_left_stream2(i, s, ts) values (2, 'ss', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19225' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19225'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19225",
+                    "expected_results":[
+                        ["s", "s2"]
+                    ]
+                },
+                {
+                    "query_id":"19225-1",
+                    "expected_results":[
+                        ["ss", "s2"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 226,
+            "tags": ["query_state", "stream_join_stream"],
+            "name": "recover-append-only-innner-join-versioned-kv-parallel_hash",
+            "description": "recover append only innner join versioned-kv parallel_hash from state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream2"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream2 (i int, s string, ts datetime)"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime) primary key ii settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "table", "depends_on_stream":"test19_right_stream2", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's1', '2022-05-23 15:45:10') (1, 's2', '2022-05-23 15:45:11') (2, 's2', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "stream", "query_id":"19226", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss from test19_left_stream2 inner join test19_right_stream2 on i=ii settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19226", "kill":"19226", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"}
+                    ]
+                },        
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (2, 'ss', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "stream","query_id":"19226-1", "terminate": "manual", "query":"recover from '19226'"},
+                        {"client":"python", "query_type": "table", "wait":3, "query": "kill query where query_id='19226' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19226'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19226",
+                    "expected_results":[
+                        ["s", "s2"]
+                    ]
+                },
+                {
+                    "query_id":"19226-1",
+                    "expected_results":[
+                        ["ss", "s2"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 227,
+            "tags": ["query_state", "stream_join_stream"],
+            "name": "versioned-kv-innner-join-versioned-kv-parallel_hash",
+            "description": "versioned-kv innner join versioned kv parallel_hash state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream2"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream2 (i int, s string, ts datetime) primary key i settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime) primary key ii settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "stream", "depends_on_stream":"test19_right_stream2", "query_id":"19227", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss from test19_left_stream2 inner join test19_right_stream2 on i=ii settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19227", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's1', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's2', '2022-05-23 15:45:11')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "kill":"19227", "kill_wait":3, "query": "insert into test19_left_stream2(i, s, ts) values (1, 'ss', '2022-05-23 15:45:11')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19227'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19227",
+                    "expected_results":[
+                        ["s", "s2"], ["s", "s2"], ["ss", "s2"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 228,
+            "tags": ["query_state", "stream_join_stream"],
+            "name": "recover-versioned-kv-innner-join-versioned-kv-parallel_hash",
+            "description": "recover versioned-kv innner join versioned kv parallel_hash from state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream2"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream2 (i int, s string, ts datetime) primary key i settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime) primary key ii settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "stream", "depends_on_stream":"test19_right_stream2", "query_id":"19228", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss from test19_left_stream2 inner join test19_right_stream2 on i=ii settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19228", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's1', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's2', '2022-05-23 15:45:11')"},
+                        {"client":"python", "query_type": "table", "kill":"19228", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"}
+                    ]
+                },        
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (1, 'ss', '2022-05-23 15:45:11')"},
+                        {"client":"python", "query_type": "stream","query_id":"19228-1", "terminate": "manual", "query":"recover from '19228'"},
+                        {"client":"python", "query_type": "table", "wait":3, "query": "kill query where query_id='19228' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19228'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19228",
+                    "expected_results":[
+                        ["s", "s2"]
+                    ]
+                },
+                {
+                    "query_id":"19228-1",
+                    "expected_results":[
+                        ["s", "s2"], ["ss", "s2"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 229,
+            "tags": ["query_state", "stream_join_stream"],
+            "name": "append-only-innner-asof-join-append-only-parallel_hash",
+            "description": "append-only innner asof join append-only parallel_hash state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream2"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream2 (i int, s string, ts datetime)"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime)"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19229", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss from test19_left_stream2 inner asof join test19_right_stream2 on i=ii AND test19_left_stream2.ts > test19_right_stream2.tts settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19229", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's1', '2022-05-23 15:45:09') (1, 's2', '2022-05-23 15:45:10') (1, 's3', '2022-05-23 15:45:11') (1, 's4', '2022-05-23 15:45:12')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:13')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (2, 's5', '2022-05-23 15:45:14') (2, 's6', '2022-05-23 15:45:15')"},
+                        {"client":"python", "query_type": "table", "kill":"19229", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (2, 'ss', '2022-05-23 15:45:15')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19229'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19229",
+                    "expected_results":[
+                        ["s", "s4"], ["ss", "s5"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 230,
+            "tags": ["query_state", "stream_join_stream"],
+            "name": "recover-append-only-innner-asof-join-append-only-parallel_hash",
+            "description": "recover append-only innner asof join append-only parallel_hash from state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream2"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream2 (i int, s string, ts datetime)"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime)"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19230", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss from test19_left_stream2 inner asof join test19_right_stream2 on i=ii AND test19_left_stream2.ts > test19_right_stream2.tts settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19230", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's1', '2022-05-23 15:45:09') (1, 's2', '2022-05-23 15:45:10') (1, 's3', '2022-05-23 15:45:11') (1, 's4', '2022-05-23 15:45:12')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "kill":"19230", "kill_wait":3, "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:13')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (2, 's5', '2022-05-23 15:45:14') (2, 's6', '2022-05-23 15:45:15')"},
+                        {"client":"python", "query_type": "stream","query_id":"19230-1", "terminate": "manual", "query":"recover from '19230'"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "insert into test19_left_stream2(i, s, ts) values (2, 'ss', '2022-05-23 15:45:15')"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19230' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19230'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19230",
+                    "expected_results":[
+                        ["s", "s4"]
+                    ]
+                },
+                {
+                    "query_id":"19230-1",
+                    "expected_results":[
+                        ["ss", "s5"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 231,
+            "tags": ["query_state", "stream_join_stream"],
+            "name": "append-only-innner-asof-join-versioned-kv-parallel_hash",
+            "description": "append-only innner asof join versioned-kv parallel_hash state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream2"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream2 (i int, s string, ts datetime)"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime) primary key ii settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19231", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss from test19_left_stream2 inner asof join test19_right_stream2 on i=ii AND test19_left_stream2.ts > test19_right_stream2.tts settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19231", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's1', '2022-05-23 15:45:09') (1, 's2', '2022-05-23 15:45:10') (1, 's3', '2022-05-23 15:45:11') (1, 's4', '2022-05-23 15:45:12')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:13')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (2, 's5', '2022-05-23 15:45:14') (2, 's6', '2022-05-23 15:45:15')"},
+                        {"client":"python", "query_type": "table", "kill":"19231", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (2, 'ss', '2022-05-23 15:45:15')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19231'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19231",
+                    "expected_results":[
+                        ["s", "s4"], ["ss", "s5"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 232,
+            "tags": ["query_state", "stream_join_stream"],
+            "name": "recover-append-only-innner-asof-join-versioned-kv-parallel_hash",
+            "description": "recover append-only innner asof join versioned-kv parallel_hash from state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream2"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream2 (i int, s string, ts datetime)"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime) primary key ii settings mode='versioned_kv'"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19232", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss from test19_left_stream2 inner asof join test19_right_stream2 on i=ii AND test19_left_stream2.ts > test19_right_stream2.tts settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19232", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's1', '2022-05-23 15:45:09') (1, 's2', '2022-05-23 15:45:10') (1, 's3', '2022-05-23 15:45:11') (1, 's4', '2022-05-23 15:45:12')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+                        {"client":"python", "query_type": "table", "kill":"19232", "kill_wait":3, "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:13')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (2, 's5', '2022-05-23 15:45:14') (2, 's6', '2022-05-23 15:45:15')"},
+                        {"client":"python", "query_type": "stream","query_id":"19232-1", "terminate": "manual", "query":"recover from '19232'"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "insert into test19_left_stream2(i, s, ts) values (2, 'ss', '2022-05-23 15:45:15')"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19230' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19232'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19232",
+                    "expected_results":[
+                        ["s", "s4"]
+                    ]
+                },
+                {
+                    "query_id":"19232-1",
+                    "expected_results":[
+                        ["ss", "s5"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 233,
+            "tags": ["query_state", "stream_join_stream"],
+            "name": "append-only-innner-latest-join-append-only-parallel_hash",
+            "description": "append-only innner latest join append-only parallel_hash state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream2"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream2 (i int, s string, ts datetime)"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime)"}, 
+                        {"client":"python", "query_type": "stream", "depends_on_stream":"test19_right_stream2", "query_id":"19233", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss, _tp_delta from test19_left_stream2 inner latest join test19_right_stream2 on i=ii settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19233", "wait":1, "query": "insert into test19_left_stream2(i, s) values (1, 's')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_right_stream2(ii, ss) values (1, 's1')"},
+                        {"client":"python", "query_type": "table", "query": "insert into test19_right_stream2(ii, ss) values (1, 's2')"},
+                        {"client":"python", "query_type": "table", "kill":"19233", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream2(i, s) values (1, 's3')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19233'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19233",
+                    "expected_results":[
+                        ["s", "s1", 1], ["s", "s1", -1], ["s", "s2", 1], ["s", "s2", -1], ["s3", "s2", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 234,
+            "tags": ["query_state", "stream_join_stream"],
+            "name": "recover-append-only-innner-latest-join-append-only-parallel_hash",
+            "description": "recover append-only innner latest join append-only parallel_hash from state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream2"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream2 (i int, s string, ts datetime)"}, 
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime)"}, 
+                        {"client":"python", "query_type": "stream", "depends_on_stream":"test19_right_stream2", "query_id":"19235", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss, _tp_delta from test19_left_stream2 inner latest join test19_right_stream2 on i=ii settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19235", "wait":1, "query": "insert into test19_left_stream2(i, s) values (1, 's')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_right_stream2(ii, ss) values (1, 's1')"},
+                        {"client":"python", "query_type": "table", "kill":"19235", "kill_wait":3, "query": "insert into test19_right_stream2(ii, ss) values (1, 's2')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_left_stream2(i, s) values (1, 's3')"},
+                        {"client":"python", "query_type": "stream","query_id":"19235-1", "terminate": "manual", "query":"recover from '19235'"},
+                        {"client":"python", "query_type": "table", "wait":3, "query": "kill query where query_id='19235' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19235'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19235",
+                    "expected_results":[
+                        ["s", "s1", 1], ["s", "s1", -1], ["s", "s2", 1]
+                    ]
+                },
+                {
+                    "query_id":"19235-1",
+                    "expected_results":[
+                        ["s", "s2", -1], ["s3", "s2", 1]
+                    ]
+                }
+            ]
+        }
+    ]
+}

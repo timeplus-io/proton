@@ -1,5 +1,7 @@
 #include "RangeAsofJoinContext.h"
 
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Common/Exception.h>
 
 namespace DB
@@ -52,5 +54,33 @@ void Streaming::RangeAsofJoinContext::validate(Int64 max_range) const
     if (right_inequality != ASOFJoinInequality::Less && right_inequality != ASOFJoinInequality::LessOrEquals)
         throw Exception(ErrorCodes::SYNTAX_ERROR, "Range join requires upper bound of inequality shall be '<' or '<='");
 }
+
+void RangeAsofJoinContext::serialize(WriteBuffer & wb) const
+{
+    DB::writeIntBinary<UInt16>(static_cast<UInt16>(left_inequality), wb);
+    DB::writeIntBinary<UInt16>(static_cast<UInt16>(right_inequality), wb);
+    DB::writeIntBinary(lower_bound, wb);
+    DB::writeIntBinary(upper_bound, wb);
+    DB::writeIntBinary<UInt16>(static_cast<UInt16>(type), wb);
+}
+
+void RangeAsofJoinContext::deserialize(ReadBuffer & rb)
+{
+    UInt16 recovered_left_inequality;
+    DB::readIntBinary<UInt16>(recovered_left_inequality, rb);
+    left_inequality = static_cast<ASOFJoinInequality>(recovered_left_inequality);
+
+    UInt16 recovered_right_inequality;
+    DB::readIntBinary<UInt16>(recovered_right_inequality, rb);
+    right_inequality = static_cast<ASOFJoinInequality>(recovered_right_inequality);
+
+    DB::readIntBinary(lower_bound, rb);
+    DB::readIntBinary(upper_bound, rb);
+
+    UInt16 recovered_type;
+    DB::readIntBinary<UInt16>(recovered_type, rb);
+    type = static_cast<RangeType>(recovered_type);
+}
+
 }
 }

@@ -58,21 +58,27 @@ IProcessor::Status JoinTransform::prepare()
     }
 
     /// Do not disable inputs, so they can be executed in parallel.
-    bool is_port_full = !output.canPush();
+    if (!output.canPush())
+        return Status::PortFull;
 
     /// Push if we have data.
-    if (!output_chunks.empty() && !is_port_full)
+    if (!output_chunks.empty())
     {
         output.push(std::move(output_chunks.front()));
         output_chunks.pop_front();
+        return Status::PortFull;
     }
 
     Status status = Status::NeedData;
 
     for (size_t i = 0; auto & input_port_with_data : input_ports_with_data)
     {
-        if (input_port_with_data.input_chunk || input_port_with_data.input_chunk.requestCheckpoint())
+        if (input_port_with_data.input_chunk)
         {
+            /// In case, this input port request checkpoint, so we need wait for other inputs
+            if (input_port_with_data.input_chunk.requestCheckpoint())
+                continue;
+
             status = Status::Ready;
         }
         else if (input_port_with_data.input_port->isFinished())
@@ -94,15 +100,12 @@ IProcessor::Status JoinTransform::prepare()
 
             if (input_port_with_data.input_port->hasData())
             {
-                input_port_with_data.input_chunk = input_port_with_data.input_port->pull();
+                input_port_with_data.input_chunk = input_port_with_data.input_port->pull(true);
                 status = Status::Ready;
             }
         }
         ++i;
     }
-
-    if (is_port_full)
-        return Status::PortFull;
 
     return status;
 }
@@ -113,7 +116,8 @@ void JoinTransform::work()
 
     bool has_watermark = false;
     bool has_data = false;
-    bool all_requested_checkpoint = true;
+    UInt8 requested_checkpoint_num = 0;
+    CheckpointContextPtr requested_ckpt;
 
     Chunks chunks;
     {
@@ -134,8 +138,11 @@ void JoinTransform::work()
                     local_watermark = std::min(local_watermark, watermark);
                     has_watermark = true;
                 }
-                else if (!input_chunk.requestCheckpoint())
-                    all_requested_checkpoint = false;
+                else if (input_chunk.requestCheckpoint())
+                {
+                    ++requested_checkpoint_num;
+                    continue; /// keep in input_ports_with_data until all inputs checkpoint requested
+                }
 
                 if (input_chunk.hasRows())
                     has_data = true;
@@ -147,6 +154,13 @@ void JoinTransform::work()
         /// We propagate empty chunk with or without watermark
         if (!has_data)
             output_chunks.emplace_back(output_header_chunk.clone());
+
+        /// All inputs request checkpoint
+        if (requested_checkpoint_num == input_ports_with_data.size())
+        {
+            requested_ckpt = input_ports_with_data.front().input_chunk.getCheckpointContext();
+            std::ranges::for_each(input_ports_with_data, [](auto & data) { data.input_chunk.clear(); });
+        }
     }
 
     if (has_data)
@@ -163,10 +177,14 @@ void JoinTransform::work()
             /// If there is no join result or chunks don't have data but have watermark, we still need propagate the watermark
             propagateWatermark(local_watermark);
     }
-    else if (all_requested_checkpoint)
+    else if (requested_ckpt)
     {
+        checkpoint(requested_ckpt);
+
+        /// Propagate request checkpoint
         std::scoped_lock lock(mutex);
-        checkpoint(chunks.front().getCheckpointContext());
+        assert(!output_chunks.empty());
+        output_chunks.back().getOrCreateChunkContext()->setCheckpointContext(std::move(requested_ckpt));
     }
 }
 
@@ -278,8 +296,7 @@ inline void JoinTransform::rangeJoinBidirectionally(Chunks chunks)
 void JoinTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
-        /// TODO: join state
-        // join->serialize(wb);
+        join->serialize(wb);
         DB::writeIntBinary(watermark, wb);
     });
 }
@@ -287,10 +304,15 @@ void JoinTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 void JoinTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
-        /// TODO: join state
-        // join->deserialize(rb);
+        join->deserialize(rb);
         DB::readIntBinary(watermark, rb);
     });
 }
+
+void JoinTransform::onCancel()
+{
+    join->cancel();
+}
+
 }
 }
