@@ -54,6 +54,18 @@ protected:
     virtual void onFinish() {}
     virtual void onException() {}
 
+    /// proton: starts. Call default checkpoint routine.
+    /// If subclass likes to have a different checkpoint strategy, it needs
+    /// override `void consume(Chunk chunk)`
+    virtual void consumeForCheckpoint(Chunk chunk)
+    {
+        if (chunk.requestCheckpoint())
+            checkpoint(chunk.getCheckpointContext());
+
+        onConsume(std::move(chunk));
+    }
+    /// proton: ends.
+
 public:
     ExceptionKeepingTransform(const Block & in_header, const Block & out_header, bool ignore_on_start_and_finish_ = true,  ProcessorID pid_ = ProcessorID::ExceptionKeepingTransformID);
 
