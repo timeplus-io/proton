@@ -100,6 +100,10 @@ jobs:
             source env/bin/activate
 
             pip install --upgrade pip
+
+            # FIXME: remove this line after pyyaml community fixed install bug
+            pip install pyyaml==5.3.1
+
             pip install -r helpers/requirements.txt
             python ci_runner.py --debug --settings=redp,nativelog
 
@@ -208,6 +212,10 @@ jobs:
             source env/bin/activate
 
             pip install --upgrade pip
+
+            # FIXME: remove this line after pyyaml community fixed install bug
+            pip install pyyaml==5.3.1
+
             pip install -r helpers/requirements.txt
             python ci_runner.py --debug --settings=redp,nativelog
 
