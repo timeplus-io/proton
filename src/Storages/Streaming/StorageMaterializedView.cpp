@@ -432,15 +432,15 @@ void StorageMaterializedView::initBackgroundState()
                                 e.what()));
                         std::this_thread::sleep_for(recover_interval);
 
-                        /// NOTE: If failed to executing pipeline, we need to re-build an new pipeline,
-                        /// since the processors of current failed pipeline are invalid.
                         /// Retry recovering with recover mode
                         if (current_status == State::EXECUTING_PIPELINE)
-                        {
                             exec_mode = ExecuteMode::RECOVER;
-                            background_state.updateStatus(State::BUILDING_PIPELINE);
-                        }
                     }
+
+                    /// NOTE: If failed to executing pipeline, we need to re-build an new pipeline,
+                    /// since the processors of current failed pipeline are invalid.
+                    if (current_status == State::EXECUTING_PIPELINE)
+                        background_state.updateStatus(State::BUILDING_PIPELINE);
                 }
             }
         }
