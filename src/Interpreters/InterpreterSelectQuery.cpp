@@ -3124,20 +3124,27 @@ void InterpreterSelectQuery::executeStreamingAggregation(
 
     for (const auto & key : query_analyzer->aggregationKeys())
     {
-        if ((key.name == ProtonConsts::STREAMING_WINDOW_END) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type)))
+        /// In case when `select count() from (select 1 as window_start, 2 as window_end from test) group by window_start, window_end`
+        /// There is no window, so `window_start/window_end` are just normal group by keys.
+        if (query_info.streaming_window_params)
         {
-            keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
-            streaming_group_by = Streaming::Aggregator::Params::GroupBy::WINDOW_END;
-            ++window_keys_num;
+            if ((key.name == ProtonConsts::STREAMING_WINDOW_END) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type)))
+            {
+                keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
+                streaming_group_by = Streaming::Aggregator::Params::GroupBy::WINDOW_END;
+                ++window_keys_num;
+                continue;
+            }
+            else if ((key.name == ProtonConsts::STREAMING_WINDOW_START) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type)))
+            {
+                keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
+                streaming_group_by = Streaming::Aggregator::Params::GroupBy::WINDOW_START;
+                ++window_keys_num;
+                continue;
+            }
         }
-        else if ((key.name == ProtonConsts::STREAMING_WINDOW_START) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type)))
-        {
-            keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
-            streaming_group_by = Streaming::Aggregator::Params::GroupBy::WINDOW_START;
-            ++window_keys_num;
-        }
-        else
-            keys.push_back(header_before_aggregation.getPositionByName(key.name));
+
+        keys.push_back(header_before_aggregation.getPositionByName(key.name));
     }
 
     AggregateDescriptions aggregates = query_analyzer->aggregates();

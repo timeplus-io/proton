@@ -261,6 +261,24 @@
         {"query_id":"9900", "expected_results":"error_code:47"},
         {"query_id":"9901", "expected_results":[]}
       ]
+    },
+    {
+      "id": 10,
+      "tags": ["global aggr"],
+      "name": "#2900",
+      "description": "global aggr group by window_start/window_end",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query": "drop stream if exists test_stream_2900"},
+            {"client":"python", "query_type": "table", "exist": "test_stream_2900", "exist_wait":2, "wait":1, "query": "create stream test_stream_2900 (auction int64, bidder int64, channel string, price int64, url string, dateTime datetime64(3), extra string, _tp_time datetime64(3) default dateTime)"},
+            {"client":"python", "query_type": "stream", "query_id":"9900", "depends_on_stream":"test_stream_2900", "wait":1, "query_end_timer":3, "query":"with data as(select * from test_stream_2900 where _tp_time >= earliest_ts() limit 100000000) SELECT AuctionBids.auction, AuctionBids.num FROM (SELECT B1.auction, count(*) AS num, window_start, window_end FROM hop(data, _tp_time, INTERVAL 2 SECOND, INTERVAL 10 SECOND) as B1 GROUP BY B1.auction, window_start, window_end) AS AuctionBids JOIN (SELECT max(CountBids.num) AS maxn, CountBids.window_start, CountBids.window_end FROM ( SELECT count(*) AS num, window_start, window_end FROM hop(data, _tp_time, INTERVAL 2 SECOND, INTERVAL 10 SECOND) as B2 GROUP BY B2.auction, window_start, window_end) AS CountBids GROUP BY CountBids.window_start, CountBids.window_end) AS MaxBids ON AuctionBids.window_start = MaxBids.window_start AND AuctionBids.window_end = MaxBids.window_end where AuctionBids.num >= MaxBids.maxn"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":[]}
+      ]
     }
   ]
 }
