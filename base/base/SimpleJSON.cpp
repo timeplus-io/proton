@@ -302,7 +302,7 @@ SimpleJSON::Pos SimpleJSON::skipNumber(Pos begin) const
         ++pos;
     if (pos < ptr_end && (*pos == 'e' || *pos == 'E'))
         ++pos;
-    if (pos < ptr_end && *pos == '-')
+    if (pos < ptr_end && (*pos == '-' || *pos == '+'))
         ++pos;
     while (pos < ptr_end && *pos >= '0' && *pos <= '9')
         ++pos;

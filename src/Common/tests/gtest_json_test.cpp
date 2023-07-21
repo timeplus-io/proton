@@ -3,6 +3,7 @@
 #include <exception>
 #include <string_view>
 #include <base/JSON.h>
+#include <base/SimpleJSON.h>
 
 #include <boost/range/irange.hpp>
 #include <gtest/gtest.h>
@@ -19,6 +20,13 @@ struct GetStringTestRecord
     std::string_view input;
     ResultType result_type;
     std::string_view result;
+};
+
+struct GetDoubleTestRecord
+{
+    std::string_view input;
+    ResultType result_type;
+    double result;
 };
 
 TEST(JSONSuite, SimpleTest)
@@ -651,6 +659,31 @@ TEST(JSONSuite, SimpleTest)
             {
                 ASSERT_EQ(r.result_type, ResultType::Throw);
             }
+        }
+    }
+}
+
+TEST(SimpleJSONSuite, SimpleJSONTest)
+{
+    using namespace std::literals;
+
+    std::vector<GetDoubleTestRecord> test_data = {
+        {R"(1.2e+16)"sv, ResultType::Return, 1.2e16},
+        {R"(3.2e3)"sv, ResultType::Return, 3.2e3},
+        {R"(1.0e-8)"sv, ResultType::Return, 1e-8},
+    };
+    for (auto & r : test_data)
+    {
+        try
+        {
+            SimpleJSON j(r.input.data(), r.input.data() + r.input.size());
+
+            ASSERT_EQ(j.getDouble(), r.result);
+            ASSERT_EQ(r.result_type, ResultType::Return);
+        }
+        catch (const JSONException &)
+        {
+            ASSERT_EQ(r.result_type, ResultType::Throw);
         }
     }
 }

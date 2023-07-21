@@ -96,9 +96,13 @@ TEST(SimpleJSON, Search)
     info.clear();
 
     /// Number Check
-    req = R"###({"int": -1, "float": -2.3})###";
+    req = R"###({"int": -1, "float": -2.3, "float1": -2.3e-8, "float2": 2.4e+16, "float3": 3.1e8, "s": "a"})###";
     info.emplace("int", 3);
     info.emplace("float", 5);
+    info.emplace("float1", 8);
+    info.emplace("float2", 8);
+    info.emplace("float3", 6);
+    info.emplace("s", 4);
     checkJSON(req, info);
     info.clear();
 
