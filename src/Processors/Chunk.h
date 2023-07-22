@@ -43,7 +43,7 @@ struct ChunkContext
 
     ALWAYS_INLINE void setWatermark(Int64 watermark)
     {
-        assert(watermark);
+        assert(watermark != Streaming::INVALID_WATERMARK);
         flags |= WATERMARK_FLAG;
         ts_1 = watermark;
     }

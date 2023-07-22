@@ -22,18 +22,26 @@ public:
     ~WindowAggregatingTransform() override = default;
 
 protected:
+    bool needFinalization(Int64 min_watermark) const override;
+    bool prepareFinalization(Int64 min_watermark) override;
+
     void finalize(const ChunkContextPtr & chunk_ctx) override;
 
-private:
-    inline void doFinalize(Int64 watermark, const ChunkContextPtr & chunk_ctx);
+    void removeBuckets(Int64 finalized_watermark) override;
 
+    std::vector<Int64> getBucketsBefore(Int64 max_buckets) const;
+
+private:
     inline void initialize(ManyAggregatedDataVariantsPtr & data);
 
-    void convertTwoLevel(ManyAggregatedDataVariantsPtr & data, Int64 watermark, const ChunkContextPtr & chunk_ctx);
+    void convertTwoLevel(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx);
 
-    virtual WindowsWithBuckets getFinalizedWindowsWithBuckets(Int64 watermark) const = 0;
+    virtual WindowsWithBuckets getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark) const = 0;
     virtual void removeBucketsImpl(Int64 watermark) = 0;
     virtual bool needReassignWindow() const = 0;
+
+    /// Prepared windows to finalize in `prepareFinalization`
+    WindowsWithBuckets prepared_windows_with_buckets;
 };
 }
 }

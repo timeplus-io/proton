@@ -67,7 +67,7 @@ std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk &
     return result;
 }
 
-WindowsWithBuckets SessionAggregatingTransform::getFinalizedWindowsWithBuckets(Int64 watermark) const
+WindowsWithBuckets SessionAggregatingTransform::getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark) const
 {
     auto & sessions = many_data->getField<SessionInfoQueue>();
     WindowsWithBuckets windows_with_buckets;

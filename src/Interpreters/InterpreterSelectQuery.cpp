@@ -3225,20 +3225,12 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
         : static_cast<size_t>(settings.max_threads);
 
-    bool storage_has_evenly_distributed_read = storage && storage->hasEvenlyDistributedRead();
-
     if (query_info.hasPartitionByKeys())
         query_plan.addStep(
             std::make_unique<Streaming::AggregatingStepWithSubstream>(query_plan.getCurrentDataStream(), params, final, emit_version));
     else
         query_plan.addStep(std::make_unique<Streaming::AggregatingStep>(
-            query_plan.getCurrentDataStream(),
-            params,
-            final,
-            merge_threads,
-            temporary_data_merge_threads,
-            storage_has_evenly_distributed_read,
-            emit_version));
+            query_plan.getCurrentDataStream(), params, final, merge_threads, temporary_data_merge_threads, emit_version));
 }
 
 Streaming::DataStreamSemantic InterpreterSelectQuery::getDataStreamSemantic() const

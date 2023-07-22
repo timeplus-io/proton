@@ -31,87 +31,88 @@ WindowAggregatingTransform::WindowAggregatingTransform(
         || params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END);
 }
 
+bool WindowAggregatingTransform::needFinalization(Int64 min_watermark) const
+{
+    if (min_watermark <= many_data->finalized_watermark.load(std::memory_order_relaxed))
+        return false;
+
+    auto local_windows_with_buckets = getLocalFinalizedWindowsWithBucketsImpl(min_watermark);
+
+    /// In case when some lagged events arrived after timeout, we skip finalized windows and remove them later
+    auto last_finalized_window_end = many_data->finalized_window_end.load(std::memory_order_relaxed);
+    for (auto iter = local_windows_with_buckets.begin(); iter != local_windows_with_buckets.end();)
+    {
+        if (iter->window.end <= last_finalized_window_end)
+            iter = local_windows_with_buckets.erase(iter);
+        else
+            break; /// No need check next elements, since windows is always sorted.
+    }
+
+    /// Has windows to finalize
+    return !local_windows_with_buckets.empty();
+}
+
+bool WindowAggregatingTransform::prepareFinalization(Int64 min_watermark)
+{
+    if (min_watermark <= many_data->finalized_watermark.load(std::memory_order_relaxed))
+        return false;
+
+    /// After acquired finalizing lock
+    prepared_windows_with_buckets.clear();
+    for (auto * aggr_transform : many_data->aggregating_transforms)
+    {
+        auto * window_aggr_transform = reinterpret_cast<WindowAggregatingTransform *>(aggr_transform);
+        auto windows_with_buckets = window_aggr_transform->getLocalFinalizedWindowsWithBucketsImpl(min_watermark);
+
+        /// In case when some lagged events arrived after timeout, we skip finalized windows and remove them later
+        auto last_finalized_window_end = many_data->finalized_window_end.load(std::memory_order_relaxed);
+        for (auto iter = windows_with_buckets.begin(); iter != windows_with_buckets.end();)
+        {
+            if (iter->window.end <= last_finalized_window_end)
+                iter = windows_with_buckets.erase(iter);
+            else
+                break; /// No need check next elements, since windows is always sorted.
+        }
+
+        for (auto & window_with_buckets : windows_with_buckets)
+        {
+            auto iter = prepared_windows_with_buckets.begin();
+            for (; iter != prepared_windows_with_buckets.end(); ++iter)
+            {
+                if (iter->window.end == window_with_buckets.window.end)
+                {
+                    /// Unique merge buckets of same window (assume buckets always are sorted)
+                    assert(iter->window.start == window_with_buckets.window.start);
+                    std::vector<Int64> buckets;
+                    buckets.reserve(std::max(iter->buckets.size(), window_with_buckets.buckets.size()));
+                    std::ranges::set_union(iter->buckets, window_with_buckets.buckets, std::back_inserter(buckets));
+                    iter->buckets = std::move(buckets);
+                    break;
+                }
+                else if (iter->window.end > window_with_buckets.window.end)
+                {
+                    /// Merge a new window
+                    iter = prepared_windows_with_buckets.emplace(iter, std::move(window_with_buckets));
+                    break;
+                }
+            }
+
+            /// Merge a new window into the back
+            if (iter == prepared_windows_with_buckets.end())
+                prepared_windows_with_buckets.push_back(std::move(window_with_buckets));
+        }
+    }
+
+    /// Has windows to finalize
+    return !prepared_windows_with_buckets.empty();
+}
+
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
 void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 {
-    assert(chunk_ctx);
-    watermark = chunk_ctx->getWatermark();
-    if (many_data->finalizations.fetch_add(1) + 1 == many_data->variants.size())
-    {
-        if (isCancelled())
-            return;
+    assert(chunk_ctx && chunk_ctx->hasWatermark());
 
-        /// The current transform is the last one in this round of
-        /// finalization. Do watermark alignment for all of the variants
-        /// pick the smallest watermark
-        Int64 min_watermark{watermark};
-        Int64 max_watermark{watermark};
-
-        std::vector<Int64 *> timeout_watermarks;
-        for (auto & wm : many_data->watermarks)
-        {
-            if (unlikely(wm == TIMEOUT_WATERMARK))
-            {
-                timeout_watermarks.emplace_back(&wm);
-                continue;
-            }
-
-            if (wm < min_watermark)
-                min_watermark = wm;
-
-            if (wm > max_watermark)
-                max_watermark = wm;
-        }
-
-        if (min_watermark != max_watermark)
-            LOG_INFO(log, "Found watermark skew. min_watermark={}, max_watermark={}", min_watermark, max_watermark);
-
-        auto start = MonotonicMilliseconds::now();
-        doFinalize(min_watermark, chunk_ctx);
-        auto end = MonotonicMilliseconds::now();
-
-        LOG_INFO(log, "Took {} milliseconds to finalize {} shard aggregation", end - start, many_data->variants.size());
-
-        /// Aligning watermark
-        auto finalized_watermark = many_data->finalized_watermark;
-        for (auto * timeout_watermark : timeout_watermarks)
-            *timeout_watermark = finalized_watermark;
-
-        // Clear the finalization count
-        many_data->finalizations.store(0);
-
-        /// We are done with finalization, notify all transforms start to work again
-        many_data->finalized.notify_all();
-
-        /// We first notify all other variants that the aggregation is done for this round
-        /// and then remove the project window buckets and their memory arena for the current variant.
-        /// This save a bit time and a bit more efficiency because all variants can do memory arena
-        /// recycling in parallel.
-        removeBucketsImpl(finalized_watermark);
-    }
-    else
-    {
-        /// Condition wait for finalization transform thread to finish the aggregation
-        auto start = MonotonicMilliseconds::now();
-
-        std::unique_lock<std::mutex> lk(many_data->finalizing_mutex);
-        if (!isCancelled())
-            many_data->finalized.wait(lk);
-
-        auto end = MonotonicMilliseconds::now();
-        LOG_INFO(
-            log,
-            "StreamingAggregated. Took {} milliseconds to wait for finalizing {} shard aggregation",
-            end - start,
-            many_data->variants.size());
-
-        removeBucketsImpl(many_data->finalized_watermark);
-    }
-}
-
-void WindowAggregatingTransform::doFinalize(Int64 watermark, const ChunkContextPtr & chunk_ctx)
-{
     /// FIXME spill to disk, overflow_row etc cases
     auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(many_data->variants);
     if (prepared_data_ptr->empty())
@@ -122,7 +123,7 @@ void WindowAggregatingTransform::doFinalize(Int64 watermark, const ChunkContextP
     initialize(prepared_data_ptr);
 
     assert(prepared_data_ptr->at(0)->isTwoLevel());
-    convertTwoLevel(prepared_data_ptr, watermark, chunk_ctx);
+    convertTwoLevel(prepared_data_ptr, chunk_ctx);
 }
 
 void WindowAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & data)
@@ -137,7 +138,7 @@ void WindowAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & data
         first_pool.emplace_back(std::make_shared<Arena>());
 }
 
-void WindowAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr & data, Int64 watermark, const ChunkContextPtr & chunk_ctx)
+void WindowAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx)
 {
     /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
     /// one project window for streaming processing
@@ -148,15 +149,9 @@ void WindowAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr &
     Block merged_block;
     Block block;
 
-    const auto & last_finalized_windows_with_buckets = getFinalizedWindowsWithBuckets(many_data->finalized_watermark);
-    const auto & windows_with_buckets = getFinalizedWindowsWithBuckets(watermark);
-    for (const auto & window_with_buckets : windows_with_buckets)
+    assert(!prepared_windows_with_buckets.empty());
+    for (const auto & window_with_buckets : prepared_windows_with_buckets)
     {
-        /// In case when some lagged events arrived after timeout, we skip finalized windows
-        if (!last_finalized_windows_with_buckets.empty()
-            && window_with_buckets.window.end <= last_finalized_windows_with_buckets.back().window.end)
-            continue;
-
         if (window_with_buckets.buckets.size() == 1)
         {
             block = params->aggregator.mergeAndConvertOneBucketToBlock(
@@ -194,17 +189,36 @@ void WindowAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr &
             merged_block = std::move(block);
     }
 
-    if (watermark != TIMEOUT_WATERMARK)
-        many_data->finalized_watermark = watermark;
-    /// If is timeout, we set watermark after actual finalized last window
-    else if (!windows_with_buckets.empty())
-        many_data->finalized_watermark = windows_with_buckets.back().window.end;
+    many_data->finalized_window_end.store(prepared_windows_with_buckets.back().window.end, std::memory_order_relaxed);
+    prepared_windows_with_buckets.clear();
+    prepared_windows_with_buckets.shrink_to_fit();
+
+    auto finalized_watermark = chunk_ctx->getWatermark();
+    /// If is timeout, we set watermark after actual finalized last window end
+    if (unlikely(finalized_watermark == TIMEOUT_WATERMARK))
+    {
+        finalized_watermark = many_data->finalized_window_end.load(std::memory_order_relaxed);
+        chunk_ctx->setWatermark(finalized_watermark);
+    }
+
+    many_data->finalized_watermark.store(finalized_watermark, std::memory_order_relaxed);
 
     if (merged_block)
-    {
-        chunk_ctx->setWatermark(many_data->finalized_watermark);
         setCurrentChunk(convertToChunk(merged_block), chunk_ctx);
-    }
+}
+
+void WindowAggregatingTransform::removeBuckets(Int64 finalized_watermark)
+{
+    /// Blocking finalization during remove buckets from current variant
+    std::lock_guard lock(variants_mutex);
+    removeBucketsImpl(finalized_watermark);
+}
+
+std::vector<Int64> WindowAggregatingTransform::getBucketsBefore(Int64 max_bucket) const
+{
+    /// Blocking finalization, it's a lightweight lock
+    std::lock_guard lock(variants_mutex);
+    return params->aggregator.bucketsBefore(variants, max_bucket);
 }
 
 }

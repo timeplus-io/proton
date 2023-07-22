@@ -36,14 +36,12 @@ AggregatingStep::AggregatingStep(
     bool final_,
     size_t merge_threads_,
     size_t temporary_data_merge_threads_,
-    bool storage_has_evenly_distributed_read_,
     bool emit_version_)
     : ITransformingStep(input_stream_, AggregatingTransformParams::getHeader(params_, final_, emit_version_), getTraits(), false)
     , params(std::move(params_))
     , final(std::move(final_))
     , merge_threads(merge_threads_)
     , temporary_data_merge_threads(temporary_data_merge_threads_)
-    , storage_has_evenly_distributed_read(storage_has_evenly_distributed_read_)
     , emit_version(emit_version_)
 {
 }

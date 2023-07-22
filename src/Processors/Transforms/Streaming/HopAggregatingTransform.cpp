@@ -30,7 +30,7 @@ HopAggregatingTransform::HopAggregatingTransform(
 {
 }
 
-WindowsWithBuckets HopAggregatingTransform::getFinalizedWindowsWithBuckets(Int64 watermark) const
+WindowsWithBuckets HopAggregatingTransform::getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark) const
 {
     if (unlikely(watermark == INVALID_WATERMARK))
         return {}; /// No window
@@ -57,11 +57,7 @@ WindowsWithBuckets HopAggregatingTransform::getFinalizedWindowsWithBuckets(Int64
     calc_window_min_max_buckets();
 
     /// Get final buckets
-    std::set<Int64> final_buckets;
-    for (const auto & data_variant : many_data->variants)
-        for (auto bucket : params->aggregator.bucketsBefore(*data_variant, max_bucket_of_window))
-            final_buckets.emplace(bucket);
-
+    auto final_buckets = getBucketsBefore(max_bucket_of_window);
     if (final_buckets.empty())
         return {};
 

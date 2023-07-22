@@ -23,6 +23,9 @@ public:
     String getName() const override { return "GlobalAggregatingTransform"; }
 
 private:
+    bool needFinalization(Int64 min_watermark) const override;
+    bool prepareFinalization(Int64 min_watermark) override;
+
     void finalize(const ChunkContextPtr & chunk_ctx) override;
 
     inline void doFinalize(const ChunkContextPtr & chunk_ctx);

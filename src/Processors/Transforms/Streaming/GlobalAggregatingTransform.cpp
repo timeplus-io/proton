@@ -31,6 +31,30 @@ GlobalAggregatingTransform::GlobalAggregatingTransform(
     assert(params->params.group_by == Aggregator::Params::GroupBy::OTHER);
 }
 
+bool GlobalAggregatingTransform::needFinalization(Int64 min_watermark) const
+{
+    if (min_watermark == INVALID_WATERMARK)
+        return false;
+
+    return true;
+}
+
+bool GlobalAggregatingTransform::prepareFinalization(Int64 min_watermark)
+{
+    if (min_watermark == INVALID_WATERMARK)
+        return false;
+
+    std::lock_guard lock(many_data->watermarks_mutex);
+    if (std::ranges::all_of(many_data->watermarks, [](const auto & wm) { return wm != INVALID_WATERMARK; }))
+    {
+        /// Reset all watermarks to INVALID,
+        /// Next finalization will just be triggered when all transform watermarks are updated
+        std::ranges::for_each(many_data->watermarks, [](auto & wm) { wm = INVALID_WATERMARK; });
+        return true;
+    }
+    return false;
+}
+
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
 void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
@@ -39,35 +63,7 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
     if (!many_data->hasNewData())
         return;
 
-    if (many_data->finalizations.fetch_add(1) + 1 == many_data->variants.size())
-    {
-        if (isCancelled())
-            return;
-
-        auto start = MonotonicMilliseconds::now();
-        doFinalize(chunk_ctx);
-        auto end = MonotonicMilliseconds::now();
-
-        LOG_INFO(log, "Took {} milliseconds to finalize {} shard aggregation", end - start, many_data->variants.size());
-
-        // Clear the finalization count
-        many_data->finalizations.store(0);
-
-        /// We are done with finalization, notify all transforms start to work again
-        many_data->finalized.notify_all();
-    }
-    else
-    {
-        /// Condition wait for finalization transform thread to finish the aggregation
-        auto start = MonotonicMilliseconds::now();
-
-        std::unique_lock<std::mutex> lk(many_data->finalizing_mutex);
-        if (!isCancelled())
-            many_data->finalized.wait(lk);
-
-        auto end = MonotonicMilliseconds::now();
-        LOG_INFO(log, "Took {} milliseconds to wait for finalizing {} shard aggregation", end - start, many_data->variants.size());
-    }
+    doFinalize(chunk_ctx);
 }
 
 void GlobalAggregatingTransform::doFinalize(const ChunkContextPtr & chunk_ctx)
@@ -137,6 +133,8 @@ void GlobalAggregatingTransform::convertSingleLevel(ManyAggregatedDataVariantsPt
 
     if (params->emit_version)
         emitVersion(block);
+
+    many_data->finalized_watermark.store(chunk_ctx->getWatermark(), std::memory_order_relaxed);
 
     setCurrentChunk(convertToChunk(block), chunk_ctx);
 }

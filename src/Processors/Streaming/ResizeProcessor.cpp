@@ -109,14 +109,20 @@ bool ShrinkResizeProcessor::updateAndAlignWatermark(InputPortWithStatus & input_
     if (!chunk.hasWatermark())
         return false;
 
+    assert(!chunk.requestCheckpoint());
+
     bool updated = false;
     auto new_watermark = chunk.getWatermark();
     if (new_watermark > input_with_data.watermark || (input_with_data.watermark == TIMEOUT_WATERMARK && new_watermark >= aligned_watermark))
     {
         input_with_data.watermark = new_watermark;
-        aligned_watermark
+        auto min_watermark
             = std::ranges::min(input_ports, [](const auto & l, const auto & r) { return l.watermark < r.watermark; }).watermark;
-        updated = aligned_watermark != INVALID_WATERMARK;
+        if (min_watermark > aligned_watermark)
+        {
+            aligned_watermark = min_watermark;
+            updated = true;
+        }
     }
     else
     {
@@ -148,7 +154,6 @@ bool ShrinkResizeProcessor::updateAndRequestCheckpoint(InputPortWithStatus & inp
     /// When all inputs request checkpoint, propagate the request and reset all checkpoint request
     if (num_requested_checkpoint == input_ports.size())
     {
-        chunk.getChunkContext()->setCheckpointContext(chunk.getCheckpointContext());
         std::ranges::for_each(input_ports, [](auto & input) {
             input.requested_checkpoint = false;
             input.status = InputStatus::NeedData;

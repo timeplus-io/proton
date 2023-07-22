@@ -50,14 +50,6 @@ WatermarkTransform::WatermarkTransform(const Block & header, WatermarkStamperPar
 
 void WatermarkTransform::transform(Chunk & chunk)
 {
-    if (auto ckpt_ctx = chunk.getCheckpointContext(); ckpt_ctx)
-    {
-        checkpoint(std::move(ckpt_ctx));
-        /// Checkpoint barrier is always standalone
-        /// Directly return automatically propagate the checkpoint barrier to down stream
-        return;
-    }
-
     if (!chunk.avoidWatermark())
         watermark->process(chunk);
 }

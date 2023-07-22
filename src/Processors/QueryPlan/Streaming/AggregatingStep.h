@@ -21,7 +21,6 @@ public:
         bool final_,
         size_t merge_threads_,
         size_t temporary_data_merge_threads_,
-        bool storage_has_evenly_distributed_read_,
         bool emit_version_);
 
     String getName() const override { return "StreamingAggregating"; }
@@ -41,7 +40,6 @@ private:
     size_t merge_threads;
     size_t temporary_data_merge_threads;
 
-    bool storage_has_evenly_distributed_read;
     bool emit_version;
 
     Processors aggregating;

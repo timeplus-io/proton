@@ -17,7 +17,7 @@ public:
 
 private:
     std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, size_t num_rows) override;
-    WindowsWithBuckets getFinalizedWindowsWithBuckets(Int64 watermark) const override;
+    WindowsWithBuckets getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark) const override;
     void removeBucketsImpl(Int64 watermark) override;
     bool needReassignWindow() const override { return true; }
 

@@ -51,29 +51,26 @@ SERDE struct ManyAggregatedData
     /// Reference to all transforms
     std::vector<AggregatingTransform *> aggregating_transforms;
 
+    std::vector<std::unique_ptr<std::timed_mutex>> variants_mutexes;
     SERDE ManyAggregatedDataVariants variants;
 
     /// Watermarks for all variants
+    /// Acquire lock when update current watemark and find min watermark from all transform
+    std::mutex watermarks_mutex;
     SERDE std::vector<Int64> watermarks;
 
-    /// `finalized_watermark` is capturing the max watermark we have progressed and 
-    /// it is used to garbage collect time bucketed memory : time buckets which 
-    /// are below this watermark can be safely GCed.
-    SERDE Int64 finalized_watermark = INVALID_WATERMARK;
+    std::mutex finalizing_mutex;
+
+    /// `finalized_watermark` is capturing the max watermark we have progressed 
+    SERDE std::atomic<Int64> finalized_watermark = INVALID_WATERMARK;
+    SERDE std::atomic<Int64> finalized_window_end = INVALID_WATERMARK;
 
     SERDE std::atomic<Int64> version = 0;
 
     SERDE std::vector<std::unique_ptr<std::atomic<UInt64>>> rows_since_last_finalizations;
 
-    std::condition_variable finalized;
-    std::mutex finalizing_mutex;
-    std::atomic<UInt32> num_finished = 0;
-    std::atomic<UInt32> finalizations = 0;
-
-    std::condition_variable ckpted;
-    std::mutex ckpt_mutex;
-    std::vector<Int64> ckpt_epochs;
     std::atomic<UInt32> ckpt_requested = 0;
+    std::atomic<AggregatingTransform *> last_checkpointing_transform = nullptr;
 
     /// Stuff additional data context to it if needed
     SERDE struct AnyField
@@ -83,20 +80,19 @@ SERDE struct ManyAggregatedData
         std::function<void(std::any &, ReadBuffer &)> deserializer;
     } any_field;
 
-    explicit ManyAggregatedData(size_t num_threads) : variants(num_threads), watermarks(num_threads), ckpt_epochs(num_threads)
+    explicit ManyAggregatedData(size_t num_threads) : variants(num_threads), watermarks(num_threads, INVALID_WATERMARK)
     {
         for (auto & elem : variants)
             elem = std::make_shared<AggregatedDataVariants>();
 
         for (size_t i = 0; i < num_threads; ++i)
+        {
             rows_since_last_finalizations.emplace_back(std::make_unique<std::atomic<UInt64>>(0));
+            variants_mutexes.emplace_back(std::make_unique<std::timed_mutex>());
+        }
 
         aggregating_transforms.resize(variants.size());
     }
-
-    void serialize(WriteBuffer & wb) const;
-
-    void deserialize(ReadBuffer & rb);
 
     bool hasField() const { return any_field.field.has_value(); }
 
@@ -165,15 +161,33 @@ private:
     virtual void finalize(const ChunkContextPtr &) { }
 
     inline IProcessor::Status preparePushToOutput();
-    void checkpointAlignment(Chunk & chunk);
+
+    void checkpointAlignment(const CheckpointContextPtr &);
+
+    void finalizeAlignment(const ChunkContextPtr &);
+
+    /// returns @p min_watermark
+    Int64 updateAndAlignWatermark(Int64 new_watermark);
+
+    /// Try propagate and garbage collect time bucketed memory by finalized watermark
+    bool propagateWatermarkAndClear();
+
+    /// Try propagate checkpoint to downstream
+    bool propagateCheckpointAndReset();
 
 protected:
-    void onCancel() override;
-
     void emitVersion(Block & block);
     /// return {should_abort, need_finalization} pair
     virtual std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, size_t num_rows);
     void setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx);
+
+    /// Quickly check if need finalization
+    virtual bool needFinalization(Int64 /*min_watermark*/) const { return true; }
+
+    /// Prepare and check whether can finalization many_data (called after acquired finalizing lock)
+    virtual bool prepareFinalization(Int64 /*min_watermark*/) { return true; }
+
+    virtual void removeBuckets(Int64 /*finalized_watermark*/) { }
 
 protected:
     /// To read the data that was flushed into the temporary data file.
@@ -193,9 +207,17 @@ protected:
     bool no_more_keys = false;
 
     SERDE ManyAggregatedDataPtr many_data;
+    std::timed_mutex & variants_mutex;
     AggregatedDataVariants & variants;
-    Int64 & watermark;
-    Int64 & ckpt_epoch;
+    SERDE Int64 & watermark;
+
+    /// It is used to save the AggregatingTransform has been propagated watermark and garbage collect time bucketed memory for itself:
+    /// time buckets which are below this watermark can be safely GCed.
+    SERDE Int64 propagated_watermark = INVALID_WATERMARK;
+
+    /// Hold local checkpoint request until all checkpoint request completed, then propagate it to downstream.
+    CheckpointContextPtr ckpt_request;
+
     size_t current_variant;
 
     size_t max_threads = 1;
@@ -215,6 +237,12 @@ protected:
     /// Aggregated result which is pushed to downstream output
     Chunk current_chunk_aggregated;
     bool has_input = false;
+
+    static constexpr auto finalizing_check_interval_ms = std::chrono::milliseconds(100);
+
+    /// If the current thread fails to acquire the finalizing lock, then we keep the watermark and
+    /// continue to try in the next processing (it's efficient, avoiding lock waiting)
+    std::optional<Int64> try_finalizing_watermark;
 };
 }
 }

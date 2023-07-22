@@ -171,16 +171,11 @@ void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, const Chunk
 
     if (chunk_ctx)
     {
-        /// Aggregation is a stop operator, down stream will and shall establish its own watermark
-        /// according to a new timestamp column emitted by the aggregator transform, so we will
-        /// need clear watermark here and then propagate the chunk context to down stream.
-        /// Then downstream will not be confused with upstream (processed) watermark
-        /// FIXME, for global aggregation, we rely on periodic upstream timer to emit watermark,
-        /// so we should not clear its watermark (watermark act as a timer). This shall be fixed
-        /// by install a timer in down stream of the global aggregation instead of relying on
-        /// downstream watermark as timer
-        if (params->final && params->params.group_by != Aggregator::Params::GroupBy::OTHER)
-            chunk_ctx->clearWatermark();
+        /// NOTE: For StremaingShrinkResize of downstream, it's need all inputs propagate watermark then do watermark alignment,
+        /// So the watermark cannot be cleared. On the other hand, if the downstream needs to establish its own watermark,
+        /// the watermark will be cleared and reassigned in another `WatermarkStamper` of downstream.
+        // if (params->final && params->params.group_by != Aggregator::Params::GroupBy::OTHER)
+        //     chunk_ctx->clearWatermark();
 
         current_chunk_aggregated.setChunkContext(std::move(chunk_ctx));
     }
