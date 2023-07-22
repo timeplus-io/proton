@@ -40,7 +40,7 @@ struct SeekToInfo
     /// 2) relative time: -10m,-20m,-30m
     /// Sequence ID formats:
     /// 1) absolute sn: 1000,2000,3000,
-    /// 2) relative sn : latest,earliest,latest
+    /// 2) relative sn: latest,earliest,latest
     /// @return : timestamp or sequence number for each shard,
     /// and a bool to indicate if it is timestamp based seek : true timestamp seek otherwise sequence based seek
     static std::pair<SeekToType, std::vector<int64_t>> parse(const String & seek_to_str, bool utc);

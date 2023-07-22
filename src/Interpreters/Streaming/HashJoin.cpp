@@ -1551,7 +1551,7 @@ void HashJoin::joinBlockImpl(Block & block, const Block & block_with_columns_to_
                 const auto & col = block.getByName(joining_col_name);
                 bool is_nullable = JoinCommon::isNullable(joined_key.type);
 
-                /// We need rename right colum name if `is_left_block is true`
+                /// We need rename right column name if `is_left_block is true`
                 /// Otherwise keep the column name as it is as column from actual left block don't require a renaming
                 ColumnWithTypeAndName joined_key_col(
                     col.column, col.type, is_left_block ? getTableJoin().renamedRightColumnName(joined_key.name) : joined_key.name);
