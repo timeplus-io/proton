@@ -25,12 +25,13 @@ public:
     void onFinish() override;
     String getName() const override { return "StreamSink"; }
 
-    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
-
 private:
     BlocksWithShard shardBlock(Block block) const;
     BlocksWithShard doShardBlock(Block block) const;
     IngestMode getIngestMode() const;
+
+    void writeCallback(const klog::AppendResult & result);
+    static void writeCallback(const klog::AppendResult & result, void * data);
 
 private:
     StorageStream & storage;
@@ -41,17 +42,9 @@ private:
     std::vector<UInt16> column_positions;
 
     /// For writeCallback
-    std::uint64_t outstanding = 0;
-
-    struct IngestState
-    {
-        std::atomic_uint64_t committed = 0;
-        std::atomic_int32_t errcode = 0;
-    };
-    std::shared_ptr<IngestState> ingest_state;
-
-    std::mutex mutex;
-    std::condition_variable checkpoint_cv;
+    std::atomic_uint64_t committed = 0;
+    std::atomic_uint64_t outstanding = 0;
+    std::atomic_int32_t errcode = 0;
 };
 
 }

@@ -22,9 +22,7 @@ struct ConsumeResult
     nlog::RecordPtrs records;
 };
 
-using CallbackData = std::shared_ptr<void>;
-
-using AppendCallback = void (*)(const AppendResult & result, const CallbackData & data);
+using AppendCallback = void (*)(const AppendResult & result, void * data);
 
 using ConsumeCallbackData = nlog::SchemaProvider;
 

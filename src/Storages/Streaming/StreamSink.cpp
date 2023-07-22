@@ -1,8 +1,6 @@
 #include "StreamSink.h"
 #include "StorageStream.h"
 
-#include <Checkpoint/CheckpointContext.h>
-#include <Checkpoint/CheckpointCoordinator.h>
 #include <DataTypes/ObjectUtils.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
@@ -16,15 +14,11 @@ namespace ErrorCodes
 extern const int TIMEOUT_EXCEEDED;
 extern const int UNSUPPORTED_PARAMETER;
 extern const int INTERNAL_ERROR;
-extern const int NOT_IMPLEMENTED;
 extern const int OK;
 }
 
 StreamSink::StreamSink(StorageStream & storage_, const StorageMetadataPtr metadata_snapshot_, ContextPtr query_context_)
-    : SinkToStorage(
-        query_context_->getSettingsRef().insert_allow_materialized_columns.value ? metadata_snapshot_->getSampleBlock()
-                                                                                 : metadata_snapshot_->getSampleBlockNonMaterialized(),
-        ProcessorID::StreamSinkID)
+    : SinkToStorage(query_context_->getSettingsRef().insert_allow_materialized_columns.value ? metadata_snapshot_->getSampleBlock() : metadata_snapshot_->getSampleBlockNonMaterialized(), ProcessorID::StreamSinkID)
     , storage(storage_)
     , metadata_snapshot(metadata_snapshot_)
     /// , storage_snapshot(storage.getStorageSnapshot(metadata_snapshot))
@@ -34,9 +28,7 @@ StreamSink::StreamSink(StorageStream & storage_, const StorageMetadataPtr metada
     /// Check this case here
     const auto & sink_block_header = getHeader();
     auto full_metadata_snapshot = storage_.getInMemoryMetadataPtr(metadata_snapshot->version);
-    auto full_header = query_context->getSettingsRef().insert_allow_materialized_columns.value
-        ? full_metadata_snapshot->getSampleBlock()
-        : full_metadata_snapshot->getSampleBlockNonMaterialized();
+    auto full_header = query_context->getSettingsRef().insert_allow_materialized_columns.value ? full_metadata_snapshot->getSampleBlock() : full_metadata_snapshot->getSampleBlockNonMaterialized();
     if (full_header.columns() != sink_block_header.columns())
     {
         /// light ingest
@@ -48,8 +40,6 @@ StreamSink::StreamSink(StorageStream & storage_, const StorageMetadataPtr metada
         for (const auto & col : sink_block_header)
             column_positions.push_back(full_header.getPositionByName(col.name));
     }
-
-    ingest_state = std::make_shared<IngestState>();
 }
 
 BlocksWithShard StreamSink::doShardBlock(Block block) const
@@ -137,13 +127,6 @@ void StreamSink::consume(Chunk chunk)
     auto record = std::make_shared<nlog::Record>(nlog::OpCode::ADD_DATA_BLOCK, Block{}, schema_version);
     record->setColumnPositions(column_positions);
 
-    static auto append_callback = [](const auto & result, const auto & data) {
-        auto & state = *static_cast<IngestState *>(data.get());
-        ++state.committed;
-        if (result.err != ErrorCodes::OK)
-            state.errcode = result.err;
-    };
-
     for (auto & current_block : blocks)
     {
         record->getBlock().swap(current_block.block);
@@ -152,9 +135,24 @@ void StreamSink::consume(Chunk chunk)
         if (!idem_key.empty())
             record->setIdempotentKey(idem_key);
 
+        storage.append(record, ingest_mode, &StreamSink::writeCallback, this, query_context->getBlockBaseId(), outstanding);
         ++outstanding;
-        storage.append(record, ingest_mode, append_callback, ingest_state, query_context->getBlockBaseId(), outstanding);
     }
+}
+
+void StreamSink::writeCallback(const klog::AppendResult & result)
+{
+    ++committed;
+    if (result.err != ErrorCodes::OK)
+        errcode = result.err;
+
+    /// LOG_TRACE(storage.log, "[sync] written a block, and current committed={}, error={}", committed, errcode);
+}
+
+void StreamSink::writeCallback(const klog::AppendResult & result, void * data_)
+{
+    auto * stream = static_cast<StreamSink *>(data_);
+    stream->writeCallback(result);
 }
 
 void StreamSink::onFinish()
@@ -169,11 +167,11 @@ void StreamSink::onFinish()
     auto start = MonotonicSeconds::now();
     while (1)
     {
-        if (ingest_state->committed == outstanding)
+        if (committed == outstanding)
         {
             /// LOG_DEBUG(storage.log, "[sync] write a block done, written blocks={}, committed={}, error={}", outstanding, committed, errcode);
-            if (ingest_state->errcode != ErrorCodes::OK)
-                throw Exception("Failed to insert data", ingest_state->errcode);
+            if (errcode != ErrorCodes::OK)
+                throw Exception("Failed to insert data", errcode);
 
             return;
         }
@@ -190,44 +188,4 @@ void StreamSink::onFinish()
         }
     }
 }
-
-/// `checkpoint(...)` is a blocking operation, so the check interval cannot be too large
-static constexpr auto CHECK_INTERVAL = std::chrono::milliseconds(10);
-static constexpr int CHECKPOINT_TIMEOUT_SECONDS = 5;
-void StreamSink::checkpoint(CheckpointContextPtr ckpt_ctx)
-{
-    if (unlikely(getIngestMode() == IngestMode::FIRE_AND_FORGET))
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for ingest mode 'FIRE_AND_FORGET'");
-
-    const auto checkpoint_timeout = MonotonicSeconds::now() + CHECKPOINT_TIMEOUT_SECONDS;
-
-    std::unique_lock lock(mutex);
-    while (1)
-    {
-        if (checkpoint_cv.wait_for(lock, CHECK_INTERVAL, [&] { return ingest_state->committed == outstanding; }))
-        {
-            if (ingest_state->errcode != ErrorCodes::OK)
-                throw Exception("Failed to checkpoint, appended data got error", ingest_state->errcode);
-
-            ckpt_ctx->coordinator->checkpointed(getVersion(), getLogicID(), ckpt_ctx);
-
-            /// Checkpointed, there is no new data coming in at this time, so we can reset outstanding/committed count
-            outstanding = 0;
-            ingest_state->committed.store(0);
-            return;
-        }
-        else
-        {
-            storage.poll(10);
-        }
-
-        if (unlikely(MonotonicSeconds::now() > checkpoint_timeout))
-            throw Exception(
-                ErrorCodes::TIMEOUT_EXCEEDED,
-                "Timeout for checkpoint, outstanding={}, committed={}, appended data seems getting lost.",
-                outstanding,
-                ingest_state->committed.load());
-    }
-}
-
 }

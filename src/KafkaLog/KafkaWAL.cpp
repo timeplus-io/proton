@@ -269,7 +269,8 @@ void KafkaWAL::deliveryReport(struct rd_kafka_s *, const rd_kafka_message_s * rk
         };
 
         /// Since deliveryReport is invoked in the poller thread
-        /// we will need be extremely careful the `callback`'s lifetime are still valid here.
+        /// we will need be extremely careful the `callback` and
+        /// `data`'s lifetime are still valid here.
         report->callback(result, report->data);
     }
 
@@ -419,42 +420,21 @@ AppendResult KafkaWAL::append(nlog::Record & record, const KafkaWALContext & ctx
     __builtin_unreachable();
 }
 
-int32_t KafkaWAL::append(nlog::Record & record, AppendCallback callback, CallbackData data, const KafkaWALContext & ctx) const
+int32_t KafkaWAL::append(nlog::Record & record, AppendCallback callback, void * data, const KafkaWALContext & ctx) const
 {
     assert(!record.empty());
     assert(ctx.topic_handle);
 
     std::unique_ptr<DeliveryReport> dr;
-    int32_t err = static_cast<int32_t>(RD_KAFKA_RESP_ERR_NO_ERROR);
+    if (callback)
+        dr.reset(new DeliveryReport{callback, data, true});
 
-    try
-    {
-        if (callback)
-            dr.reset(new DeliveryReport{std::move(callback), std::move(data), true});
-
-        err = doAppend(record, dr.get(), ctx);
-        if (likely(err == static_cast<int32_t>(RD_KAFKA_RESP_ERR_NO_ERROR)))
-        {
-            /// Move the ownership to `delivery_report`
-            dr.release();
-        }
-        else
-        {
-            auto ret = handleError(err, record, ctx);
-            /// Callback manually
-            if (dr && dr->callback)
-                dr->callback(ret, dr->data);
-        }
-    }
-    catch (...)
-    {
-        /// Catch exception:
-        /// 1) Invoke callback first
-        /// 2) Rethrow
-        if (dr && dr->callback)
-            dr->callback(AppendResult{.err = DB::getCurrentExceptionCode(), .sn = record.getSN(), .partition = record.getShard()}, dr->data);
-        throw;
-    }
+    int32_t err = doAppend(record, dr.get(), ctx);
+    if (likely(err == static_cast<int32_t>(RD_KAFKA_RESP_ERR_NO_ERROR)))
+        /// Move the ownership to `delivery_report`
+        dr.release();
+    else
+        handleError(err, record, ctx);
 
     return mapErrorCode(static_cast<rd_kafka_resp_err_t>(err));
 }

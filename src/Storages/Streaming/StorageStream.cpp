@@ -9,7 +9,6 @@
 #include <Interpreters/DiskUtilChecker.h>
 
 #include <Columns/ColumnConst.h>
-#include <DataTypes/DataTypeFactory.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ClusterProxy/DistributedSelectStreamFactory.h>
@@ -31,9 +30,10 @@
 #include <Processors/Sources/NullSource.h>
 #include <QueryPipeline/Pipe.h>
 #include <Storages/StorageMergeTree.h>
-#include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
+#include <Common/ProtonCommon.h>
 #include <Common/randomSeed.h>
+#include <DataTypes/DataTypeFactory.h>
 
 
 namespace DB
@@ -586,8 +586,7 @@ void StorageStream::readStreaming(
         for (auto stream_shard : shards_to_read)
         {
             if (!column_names.empty())
-                pipes.emplace_back(
-                    stream_shard->source_multiplexers->createChannel(stream_shard->shard, column_names, storage_snapshot, context_));
+                pipes.emplace_back(stream_shard->source_multiplexers->createChannel(stream_shard->shard, column_names, storage_snapshot, context_));
             else
                 pipes.emplace_back(stream_shard->source_multiplexers->createChannel(
                     stream_shard->shard, {ProtonConsts::RESERVED_EVENT_TIME}, storage_snapshot, context_));
@@ -605,8 +604,8 @@ void StorageStream::readStreaming(
 
         auto offsets = stream_shards.back()->getOffsets(query_info.seek_to_info);
         for (auto stream_shard : shards_to_read)
-            pipes.emplace_back(std::make_shared<StreamingStoreSource>(
-                stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log));
+            pipes.emplace_back(
+                std::make_shared<StreamingStoreSource>(stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log));
     }
 
     LOG_INFO(
@@ -650,7 +649,7 @@ void StorageStream::read(
         /// For now, we only support read remote source
         if (processed_stage != QueryProcessingStage::FetchColumns)
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for distributed query");
-
+ 
         return readRemote(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage);
     }
 
@@ -659,7 +658,8 @@ void StorageStream::read(
     switch (shards_to_read.mode)
     {
         case QueryMode::STREAMING: {
-            return readStreaming(shards_to_read.local_shards, query_plan, query_info, column_names, storage_snapshot, std::move(context_));
+            return readStreaming(
+                shards_to_read.local_shards, query_plan, query_info, column_names, storage_snapshot, std::move(context_));
         }
         case QueryMode::STREAMING_CONCAT: {
             return readConcat(
@@ -777,8 +777,6 @@ void StorageStream::startup()
         assert(native_log->enabled());
     }
 
-    log_initialized.test_and_set();
-
     LOG_INFO(log, "Started");
 }
 
@@ -836,9 +834,8 @@ StorageStream::ShardsToRead StorageStream::getRequiredShardsToRead(ContextPtr co
     {
         assert(query_info.seek_to_info);
         const auto & settings_ref = context_->getSettingsRef();
-        bool require_back_fill_from_historical = !isInmemory()
-            && (isChangelogKvMode() || isVersionedKvMode()
-                || (query_info.seek_to_info->getSeekTo() == "earliest" && settings_ref.enable_backfill_from_historical_store.value));
+        bool require_back_fill_from_historical = !isInmemory() && (isChangelogKvMode() || isVersionedKvMode()
+            || (query_info.seek_to_info->getSeekTo() == "earliest" && settings_ref.enable_backfill_from_historical_store.value));
         result.mode = require_back_fill_from_historical ? QueryMode::STREAMING_CONCAT : QueryMode::STREAMING;
     }
     else
@@ -1514,180 +1511,130 @@ Int32 StorageStream::getNextShardIndex() const
 }
 
 void StorageStream::append(
-    nlog::RecordPtr & record,
-    IngestMode ingest_mode,
-    klog::AppendCallback callback,
-    klog::CallbackData data,
-    UInt64 base_block_id,
-    UInt64 sub_block_id)
+    nlog::RecordPtr & record, IngestMode ingest_mode, klog::AppendCallback callback, void * data, UInt64 base_block_id, UInt64 sub_block_id)
 {
     if (native_log)
     {
         record->setCodec(logstore_codec);
-        appendToNativeLog(record, ingest_mode, std::move(callback), std::move(data));
+        appendToNativeLog(record, ingest_mode);
     }
     else
-        appendToKafka(record, ingest_mode, std::move(callback), std::move(data), base_block_id, sub_block_id);
+        appendToKafka(record, ingest_mode, callback, data, base_block_id, sub_block_id);
 }
 
-inline void StorageStream::appendToNativeLog(
-    nlog::RecordPtr & record, IngestMode /*ingest_mode*/, klog::AppendCallback callback, klog::CallbackData data)
+inline void StorageStream::appendToNativeLog(nlog::RecordPtr & record, IngestMode /*ingest_mode*/)
 {
-    try
+    assert(native_log);
+
+    const auto & storage_id = getStorageID();
+    nlog::AppendRequest request(storage_id.getTableName(), storage_id.uuid, record->getShard(), record);
+
+    auto resp{native_log->append(storage_id.getDatabaseName(), request)};
+    if (resp.hasError())
     {
-        assert(native_log);
-
-        const auto & storage_id = getStorageID();
-        nlog::AppendRequest request(storage_id.getTableName(), storage_id.uuid, record->getShard(), record);
-
-        auto resp{native_log->append(storage_id.getDatabaseName(), request)};
-        if (resp.hasError())
-        {
-            LOG_ERROR(log, "Failed to append record to native log, error={}", resp.errString());
-            throw DB::Exception(ErrorCodes::INTERNAL_ERROR, "Failed to append record to native log, error={}", resp.errString());
-        }
-
-        /// TODO: Nativelog support more ingest mode
-        if (callback)
-            callback(klog::AppendResult{.err = resp.error_code, .sn = resp.sn, .partition = resp.stream_shard.shard}, data);
+        LOG_ERROR(log, "Failed to append record to native log, error={}", resp.errString());
+        throw DB::Exception(ErrorCodes::INTERNAL_ERROR, "Failed to append record to native log, error={}", resp.errString());
     }
-    catch (...)
-    {
-        /// Catch exception:
-        /// 1) Invoke callback first
-        /// 2) Rethrow
-        if (callback)
-            callback(klog::AppendResult{.err = getCurrentExceptionCode(), .sn = record->getSN(), .partition = record->getShard()}, data);
-        throw;
-    }
-}
-
-namespace
-{
-struct AppendAsyncCallbackData
-{
-    StoragePtr storage;
-    klog::AppendCallback callback;
-    klog::CallbackData data;
-    UInt64 base_id;
-    UInt64 sub_id;
-};
 }
 
 inline void StorageStream::appendToKafka(
-    nlog::RecordPtr & record,
-    IngestMode ingest_mode,
-    klog::AppendCallback callback,
-    klog::CallbackData data,
-    UInt64 base_block_id,
-    UInt64 sub_block_id)
+    nlog::RecordPtr & record, IngestMode ingest_mode, klog::AppendCallback callback, void * data, UInt64 base_block_id, UInt64 sub_block_id)
 {
-    try
+    assert(kafka_log);
+
+    switch (ingest_mode)
     {
-        assert(kafka_log);
+        case IngestMode::ASYNC: {
+            //                LOG_TRACE(
+            //                    storage.log,
+            //                    "[async] write a block={} rows={} shard={} query_status_poll_id={} ...",
+            //                    outstanding,
+            //                    record.block.rows(),
+            //                    current_block.shard,
+            //                    query_context->getQueryStatusPollId());
 
-        switch (ingest_mode)
-        {
-            case IngestMode::ASYNC: {
-                //                LOG_TRACE(
-                //                    storage.log,
-                //                    "[async] write a block={} rows={} shard={} query_status_poll_id={} ...",
-                //                    outstanding,
-                //                    record.block.rows(),
-                //                    current_block.shard,
-                //                    query_context->getQueryStatusPollId());
-                if (outstanding_blocks > max_outstanding_blocks)
-                    throw Exception("Too many request", ErrorCodes::RECEIVED_ERROR_TOO_MANY_REQUESTS);
-
-                auto data_wrapper = std::shared_ptr<AppendAsyncCallbackData>(
-                    new AppendAsyncCallbackData{shared_from_this(), std::move(callback), std::move(data), base_block_id, sub_block_id});
-                static auto callback_wrapper = [](const auto & result, const auto & data_wrapper_) {
-                    auto & pdata = *static_cast<AppendAsyncCallbackData *>(data_wrapper_.get());
-                    auto & storage = pdata.storage->as<StorageStream &>();
-                    --storage.outstanding_blocks;
-                    if (result.err)
-                    {
-                        storage.kafka_log->ingesting_blocks.fail(pdata.base_id, result.err);
-                        LOG_ERROR(
-                            storage.log,
-                            "[async] Failed to write sub_block_id={} in block_id={} error={}",
-                            pdata.base_id,
-                            pdata.sub_id,
-                            result.err);
-                    }
-                    else
-                        storage.kafka_log->ingesting_blocks.remove(pdata.base_id, pdata.sub_id);
-
-                    if (pdata.callback)
-                        pdata.callback(result, pdata.data);
-                };
-
-                ++outstanding_blocks;
-                [[maybe_unused]] auto added = kafka_log->ingesting_blocks.add(base_block_id, sub_block_id);
-                assert(added);
-
-                auto ret = kafka_log->log->append(*record, std::move(callback_wrapper), std::move(data_wrapper), kafka_log->append_ctx);
-                if (ret != ErrorCodes::OK)
-                    throw Exception("Failed to insert data async", ret);
-                break;
-            }
-            case IngestMode::SYNC: {
-                //                LOG_TRACE(
-                //                    log,
-                //                    "[sync] write a block={} rows={} shard={} committed={} ...",
-                //                    outstanding,
-                //                    record.block.rows(),
-                //                    current_block.shard,
-                //                    committed);
-
-                auto ret = kafka_log->log->append(*record, std::move(callback), std::move(data), kafka_log->append_ctx);
-                if (ret != 0)
-                    throw Exception("Failed to insert data sync", ret);
-
-                break;
-            }
-            case IngestMode::FIRE_AND_FORGET: {
-                //                LOG_TRACE(
-                //                    log,
-                //                    "[fire_and_forget] write a block={} rows={} shard={} ...",
-                //                    outstanding,
-                //                    record.block.rows(),
-                //                    current_block.shard);
-
-                auto ret = kafka_log->log->append(*record, nullptr, nullptr, kafka_log->append_ctx);
-                if (ret != 0)
-                    throw Exception("Failed to insert data fire_and_forget", ret);
-
-                if (callback)
-                    callback(klog::AppendResult{.err = 0, .sn = record->getSN(), .partition = record->getShard()}, data);
-
-                break;
-            }
-            case IngestMode::ORDERED: {
-                auto ret = kafka_log->log->append(*record, kafka_log->append_ctx);
-                if (ret.err != ErrorCodes::OK)
-                    throw Exception("Failed to insert data ordered", ret.err);
-
-                if (callback)
-                    callback(ret, data);
-
-                break;
-            }
-            case IngestMode::None:
-                /// FALLTHROUGH
-            case IngestMode::INVALID:
-                throw Exception("Failed to insert data, ingest mode is not setup", ErrorCodes::UNSUPPORTED_PARAMETER);
+            appendAsync(*record, base_block_id, sub_block_id);
+            break;
         }
+        case IngestMode::SYNC: {
+            //                LOG_TRACE(
+            //                    log,
+            //                    "[sync] write a block={} rows={} shard={} committed={} ...",
+            //                    outstanding,
+            //                    record.block.rows(),
+            //                    current_block.shard,
+            //                    committed);
+
+            auto ret = kafka_log->log->append(*record, callback, data, kafka_log->append_ctx);
+            if (ret != 0)
+                throw Exception("Failed to insert data sync", ret);
+
+            break;
+        }
+        case IngestMode::FIRE_AND_FORGET: {
+            //                LOG_TRACE(
+            //                    log,
+            //                    "[fire_and_forget] write a block={} rows={} shard={} ...",
+            //                    outstanding,
+            //                    record.block.rows(),
+            //                    current_block.shard);
+
+            auto ret = kafka_log->log->append(*record, nullptr, nullptr, kafka_log->append_ctx);
+            if (ret != 0)
+                throw Exception("Failed to insert data fire_and_forget", ret);
+
+            break;
+        }
+        case IngestMode::ORDERED: {
+            auto ret = kafka_log->log->append(*record, kafka_log->append_ctx);
+            if (ret.err != ErrorCodes::OK)
+                throw Exception("Failed to insert data ordered", ret.err);
+
+            break;
+        }
+        case IngestMode::None:
+            /// FALLTHROUGH
+        case IngestMode::INVALID:
+            throw Exception("Failed to insert data, ingest mode is not setup", ErrorCodes::UNSUPPORTED_PARAMETER);
     }
-    catch (...)
+}
+
+inline void StorageStream::appendAsync(nlog::Record & record, UInt64 block_id, UInt64 sub_block_id)
+{
+    if (outstanding_blocks > max_outstanding_blocks)
+        throw Exception("Too many request", ErrorCodes::RECEIVED_ERROR_TOO_MANY_REQUESTS);
+
+    [[maybe_unused]] auto added = kafka_log->ingesting_blocks.add(block_id, sub_block_id);
+    assert(added);
+
+    auto data = std::make_unique<WriteCallbackData>(block_id, sub_block_id, this);
+    auto ret = kafka_log->log->append(record, &StorageStream::writeCallback, data.get(), kafka_log->append_ctx);
+    if (ret == ErrorCodes::OK)
+        /// The writeCallback takes over the ownership of callback data
+        data.release();
+    else
+        throw Exception("Failed to insert data async", ret);
+}
+
+void StorageStream::writeCallback(const klog::AppendResult & result, UInt64 block_id, UInt64 sub_block_id)
+{
+    if (result.err)
     {
-        /// Catch exception:
-        /// 1) Invoke callback first
-        /// 2) Rethrow
-        if (callback)
-            callback(klog::AppendResult{.err = getCurrentExceptionCode(), .sn = record->getSN(), .partition = record->getShard()}, data);
-        throw;
+        kafka_log->ingesting_blocks.fail(block_id, result.err);
+        LOG_ERROR(log, "[async] Failed to write sub_block_id={} in block_id={} error={}", sub_block_id, block_id, result.err);
     }
+    else
+    {
+        kafka_log->ingesting_blocks.remove(block_id, sub_block_id);
+        LOG_TRACE(log, "[async] Written sub_block_id={} in block_id={}", sub_block_id, block_id);
+    }
+}
+
+void StorageStream::writeCallback(const klog::AppendResult & result, void * data)
+{
+    std::unique_ptr<StorageStream::WriteCallbackData> pdata(static_cast<WriteCallbackData *>(data));
+
+    pdata->storage->writeCallback(result, pdata->block_id, pdata->sub_block_id);
 }
 
 IngestMode StorageStream::ingestMode() const
@@ -1730,8 +1677,8 @@ UInt64 StorageStream::nextBlockId() const
 
 void StorageStream::poll(Int32 timeout_ms)
 {
-    if (kafka_log)
-        kafka_log->log->poll(timeout_ms, kafka_log->append_ctx);
+    assert(kafka_log);
+    kafka_log->log->poll(timeout_ms, kafka_log->append_ctx);
 }
 
 std::vector<std::pair<Int32, Int64>> StorageStream::lastCommittedSequences() const

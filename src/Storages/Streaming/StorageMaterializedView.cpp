@@ -1,7 +1,7 @@
 #include <Storages/Streaming/StorageMaterializedView.h>
 #include <Storages/Streaming/StorageStream.h>
 
-#include <Checkpoint/CheckpointCoordinator.h>
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/DiskUtilChecker.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
@@ -9,25 +9,29 @@
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/getColumnFromBlock.h>
+#include <Interpreters/getHeaderForProcessingStage.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/formatAST.h>
 #include <Processors/Executors/CompletedPipelineExecutor.h>
+#include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
+#include <Processors/QueryPlan/ExpressionStep.h>
+#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/Sinks/EmptySink.h>
+#include <Processors/Sources/SourceFromSingleChunk.h>
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
-#include <QueryPipeline/ReadProgressCallback.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageFactory.h>
-#include <Common/ErrorCodes.h>
 #include <Common/ProfileEvents.h>
 #include <Common/ProtonCommon.h>
 #include <Common/checkStackSize.h>
-#include <Common/setThreadName.h>
 
 #include <ranges>
 
@@ -42,7 +46,6 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int OK;
 extern const int BAD_ARGUMENTS;
 extern const int INCORRECT_QUERY;
 extern const int QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW;
@@ -50,8 +53,6 @@ extern const int NOT_IMPLEMENTED;
 extern const int NUMBER_OF_COLUMNS_DOESNT_MATCH;
 extern const int RESOURCE_NOT_INITED;
 extern const int QUERY_WAS_CANCELLED;
-extern const int MEMORY_LIMIT_EXCEEDED;
-extern const int DIRECTORY_DOESNT_EXIST;
 }
 
 
@@ -62,13 +63,6 @@ String generateInnerTableName(const StorageID & view_id)
     if (view_id.hasUUID())
         return ".inner.target-id." + toString(view_id.uuid);
     return ".inner.target." + view_id.getTableName();
-}
-
-String generateInnerQueryID(const StorageID & view_id)
-{
-    if (view_id.hasUUID())
-        return ".inner.query-id.from-" + toString(view_id.uuid);
-    return ".inner.query-id.from-" + view_id.getTableName();
 }
 }
 
@@ -89,69 +83,6 @@ private:
     const StorageMaterializedView & view;
 };
 
-
-StorageMaterializedView::State::~State()
-{
-    terminate();
-}
-
-void StorageMaterializedView::State::terminate()
-{
-    /// Cancel pipeline executing first
-    is_cancelled = true;
-
-    if (thread.joinable())
-        thread.join();
-
-    updateStatus(State::UNKNOWN);
-
-    err.store(ErrorCodes::OK);
-}
-
-void StorageMaterializedView::State::updateStatus(StorageMaterializedView::State::ThreadStatus status)
-{
-    thread_status.store(status, std::memory_order_relaxed);
-    thread_status.notify_all();
-}
-
-void StorageMaterializedView::State::waitStatusUntil(StorageMaterializedView::State::ThreadStatus target_status) const
-{
-    auto current_status = thread_status.load(std::memory_order_relaxed);
-    while (current_status < target_status)
-    {
-        thread_status.wait(current_status, std::memory_order_relaxed);
-        current_status = thread_status.load(std::memory_order_relaxed);
-    }
-
-    checkException();
-}
-
-void StorageMaterializedView::State::setException(int code, const String & msg, bool log_error)
-{
-    err_msg = msg;
-    err = code;
-
-    if (log_error)
-        LOG_ERROR(
-            log,
-            "{}: {} (Background status: {})",
-            ErrorCodes::getName(code),
-            msg,
-            magic_enum::enum_name(thread_status.load(std::memory_order_relaxed)));
-}
-
-void StorageMaterializedView::State::checkException(const String & msg_prefix) const
-{
-    auto err_code = err.load();
-    if (err_code != ErrorCodes::OK)
-        throw Exception(
-            err_code,
-            "{} {} (Background status: {})",
-            msg_prefix,
-            err_msg,
-            magic_enum::enum_name(thread_status.load(std::memory_order_relaxed)));
-}
-
 StorageMaterializedView::StorageMaterializedView(
     const StorageID & table_id_,
     ContextPtr local_context,
@@ -164,7 +95,6 @@ StorageMaterializedView::StorageMaterializedView(
     , log(&Poco::Logger::get(fmt::format("StorageMaterializedView ({})", table_id_.getFullTableName())))
     , is_attach(attach_)
     , is_virtual(is_virtual_)
-    , background_state{.log = log}
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
@@ -260,24 +190,8 @@ void StorageMaterializedView::startup()
     /// Sync target table settings and ttls
     updateStorageSettingsAndTTLs();
 
-    if (is_virtual)
-        return;
-
-    initBackgroundState();
-
-    /// NOTE: If it's an Create request, we should wait for done of startup background pipeline,
-    /// so that, we can report the error if has exception (e.g. bad query)
-    if (!is_attach)
-    {
-        auto start = MonotonicMilliseconds::now();
-        background_state.waitStatusUntil(State::EXECUTING_PIPELINE);
-        auto end = MonotonicMilliseconds::now();
-        LOG_INFO(
-            log,
-            "Took {} ms to wait for built background pipeline during matierialized view '{}' startup",
-            end - start,
-            getStorageID().getFullTableName());
-    }
+    if (!is_virtual)
+        executeSelectPipeline();
 }
 
 void StorageMaterializedView::shutdown()
@@ -285,7 +199,7 @@ void StorageMaterializedView::shutdown()
     if (shutdown_called.test_and_set())
         return;
 
-    background_state.terminate();
+    cancelBackgroundPipeline();
 
     auto storage_id = getStorageID();
     const auto & select_query = getInMemoryMetadataPtr()->getSelectQuery();
@@ -295,283 +209,85 @@ void StorageMaterializedView::shutdown()
     DatabaseCatalog::instance().removeDependency(target_table_id, storage_id);
 }
 
-void StorageMaterializedView::checkDependencies() const
+void StorageMaterializedView::waitForDependencies() const
 {
-    std::vector<StoragePtr> waiting_storages;
+    std::list<StoragePtr> waiting_storages;
 
     /// Check target stream
     if (auto target = getTargetTable(); !target->isReady())
-        waiting_storages.emplace_back(std::move(target));
+        waiting_storages.emplace_back(target);
 
     /// Check source storages
     auto context = getContext();
     const auto & select_query = getInMemoryMetadataPtr()->getSelectQuery();
     for (const auto & select_table_id : select_query.select_table_ids)
     {
-        if (unlikely(select_table_id == getStorageID()))
-            continue;
-
         auto source_storage = DatabaseCatalog::instance().getTable(select_table_id, context);
         if (!source_storage->isReady())
-            waiting_storages.emplace_back(std::move(source_storage));
+            waiting_storages.emplace_back(source_storage);
     }
 
-    if (waiting_storages.empty())
-        return;
+    /// Wait to ready
+    auto check_ready = [&waiting_storages]() {
+        for (auto iter = waiting_storages.begin(); iter != waiting_storages.end();)
+        {
+            if ((*iter)->isReady())
+                iter = waiting_storages.erase(iter);
+            else
+                ++iter;
+        }
+        return waiting_storages.empty();
+    };
 
     auto waiting_storages_names_v
-        = waiting_storages | std::views::transform([](const auto & storage) { return storage->getStorageID().getFullTableName(); });
+        = waiting_storages | std::views::transform([](const auto & storage) { return storage->getStorageID().getNameForLogs(); });
 
-    throw Exception(
-        ErrorCodes::RESOURCE_NOT_INITED,
-        "The dependencies '{}' of matierialized view '{}' are not ready yet",
-        fmt::join(waiting_storages_names_v, ", "),
-        getStorageID().getFullTableName());
+    auto times = 100; /// Timeout 20s
+    while (!check_ready())
+    {
+        if (shutdown_called.test())
+            return;
+
+        if (times-- == 0)
+            throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Timeout, wait for '{}' started", fmt::join(waiting_storages_names_v, ", "));
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        LOG_INFO(log, "Wait for '{}' started", fmt::join(waiting_storages_names_v, ", "));
+    }
 }
 
-void StorageMaterializedView::initBackgroundState()
+void StorageMaterializedView::executeSelectPipeline()
 {
-    background_state.thread = ThreadFromGlobalPool{[this]() {
-        try
-        {
-            setThreadName("MVBgQueryEx");
+    buildBackgroundPipeline();
 
-            auto local_context = Context::createCopy(getContext());
-            CurrentThread::QueryScope query_scope(local_context);
-            ExecuteMode exec_mode = is_attach ? ExecuteMode::RECOVER : ExecuteMode::SUBSCRIBE;
+    /// NOTE: If it's an Create request, we should wait for success to build background pipeline,
+    /// so that, we can report the error if has exception (e.g. bad query)
+    if (!is_attach)
+    {
+        if (build_pipeline_thread.joinable())
+            build_pipeline_thread.join();
 
-            /// FIXME: limit retry times ?
-            size_t retry_times = 0;
-            while (1)
-            {
-                if (background_state.is_cancelled)
-                    break;
+        if (background_status.has_exception)
+            throw background_status.exception;
+    }
 
-                ++retry_times;
-                try
-                {
-                    BlockIO io;
-                    auto current_status = background_state.thread_status.load(std::memory_order_relaxed);
-                    switch (current_status)
-                    {
-                        case State::UNKNOWN:
-                            [[fallthrough]];
-                        case State::CHECKING_DEPENDENCIES: {
-                            background_state.updateStatus(State::CHECKING_DEPENDENCIES);
-                            /// During server bootstrap, we shall startup all tables in parallel, so here
-                            /// needs validity check underlying tables.
-                            checkDependencies();
-                            [[fallthrough]];
-                        }
-                        case State::BUILDING_PIPELINE: {
-                            background_state.updateStatus(State::BUILDING_PIPELINE);
-                            local_context->setSetting(
-                                "exec_mode", exec_mode == ExecuteMode::RECOVER ? String("recover") : String("subscribe"));
-                            io = buildBackgroundPipeline(local_context);
-                            assert(io.pipeline.initialized());
-                            [[fallthrough]];
-                        }
-                        case State::EXECUTING_PIPELINE: {
-                            background_state.updateStatus(State::EXECUTING_PIPELINE);
-                            background_state.err = ErrorCodes::OK; /// Reset the status is ok after recovered
-                            io.pipeline.setExecuteMode(exec_mode);
-                            executeBackgroundPipeline(io, local_context);
-                            break;
-                        }
-                        default:
-                            throw Exception(
-                                ErrorCodes::LOGICAL_ERROR, "No support background state: {}", magic_enum::enum_name(current_status));
-                    }
-
-                    break; /// Cancelled normally, no retry
-                }
-                catch (Exception & e)
-                {
-                    auto current_status = background_state.thread_status.load(std::memory_order_relaxed);
-                    /// For create request, no retry if built pipeline fails
-                    /// and update status to `FATAL`, it will wake up the blocked thread (startup()) and then check whether exception exists later
-                    if (unlikely(retry_times == 1 && !is_attach && current_status < State::EXECUTING_PIPELINE))
-                    {
-                        background_state.setException(e.code(), e.message());
-                        background_state.updateStatus(State::FATAL);
-                        return;
-                    }
-
-                    /// FIXME: Add more (un)retriable error handling
-                    auto err_code = e.code();
-                    if (err_code == ErrorCodes::RESOURCE_NOT_INITED)
-                    {
-                        /// Retry to wait for dependencies
-                        /// The first check of dependencies will most likely fail, so we skip logging error once.
-                        bool log_error = (retry_times > 1);
-                        background_state.setException(err_code, fmt::format("{}, {}th wait for ready", e.what(), retry_times), log_error);
-                        std::this_thread::sleep_for(recheck_dependencies_interval);
-                    }
-                    else if (err_code == ErrorCodes::DIRECTORY_DOESNT_EXIST)
-                    {
-                        /// Compatibility case for attach old materialized views:
-                        /// Failed to recover with err msg "Failed to recover checkpoint since checkpoint directory ... doesn't exist"
-                        /// FIXME: match msg ?
-                        exec_mode = ExecuteMode::SUBSCRIBE;
-                        background_state.setException(
-                            err_code,
-                            fmt::format(
-                                "Retry {}th re-subscribe to background pipeline of matierialized view '{}'. Background runtime error: {}",
-                                retry_times,
-                                getStorageID().getFullTableName(),
-                                e.what()));
-                    }
-                    else
-                    {
-                        background_state.setException(
-                            err_code,
-                            fmt::format(
-                                "Wait for {}th recovering background pipeline of matierialized view '{}'. Background runtime error: {}",
-                                retry_times,
-                                getStorageID().getFullTableName(),
-                                e.what()));
-                        std::this_thread::sleep_for(recover_interval);
-
-                        /// Retry recovering with recover mode
-                        if (current_status == State::EXECUTING_PIPELINE)
-                            exec_mode = ExecuteMode::RECOVER;
-                    }
-
-                    /// NOTE: If failed to executing pipeline, we need to re-build an new pipeline,
-                    /// since the processors of current failed pipeline are invalid.
-                    if (current_status == State::EXECUTING_PIPELINE)
-                        background_state.updateStatus(State::BUILDING_PIPELINE);
-                }
-            }
-        }
-        catch (...)
-        {
-            auto e = std::current_exception();
-            background_state.setException(getExceptionErrorCode(e), getExceptionMessage(e, false));
-        }
-    }};
+    executeBackgroundPipeline();
 }
 
-BlockIO StorageMaterializedView::buildBackgroundPipeline(ContextMutablePtr local_context)
+void StorageMaterializedView::cancelBackgroundPipeline()
 {
-    BlockIO io;
+    if (build_pipeline_thread.joinable())
+        build_pipeline_thread.join();
 
-    auto target_table = getTargetTable();
-    auto target_metadata_snapshot = target_table->getInMemoryMetadataPtr();
-    auto metadata_snapshot = getInMemoryMetadataPtr();
+    if (background_executor)
+        background_executor->cancel();
 
-    local_context->setCurrentQueryId(generateInnerQueryID(getStorageID())); /// Use a query_id bound to the uuid of mv
-    local_context->setInternalQuery(false); /// We like to log materialized query like a regular one
-    local_context->setInsertionTable(target_table->getStorageID());
-    local_context->setIngestMode(IngestMode::SYNC); /// No need async mode status for internal ingest
+    if (background_thread.joinable())
+        background_thread.join();
 
-    auto & inner_query = metadata_snapshot->getSelectQuery().inner_query;
-    io.process_list_entry = local_context->getProcessList().insert(serializeAST(*inner_query), inner_query.get(), local_context);
-    local_context->setProcessListElement(&io.process_list_entry->get());
-    CurrentThread::get().performance_counters[ProfileEvents::OSCPUWaitMicroseconds] = 0;
-    CurrentThread::get().performance_counters[ProfileEvents::OSCPUVirtualTimeMicroseconds] = 0;
-
-    /// NOTE: Here we build two stages `select` + `insert` instead of directly building `insert select`,
-    /// so that the pipeline can be adjusted more flexibly
-    InterpreterSelectWithUnionQuery select_interpreter(inner_query, local_context, SelectQueryOptions());
-
-    /// [Pipeline]: `Source` -> `Converting` -> `Materializing const` -> `target_table`
-    auto pipeline_builder = select_interpreter.buildQueryPipeline();
-    pipeline_builder.resize(1);
-    const auto & source_header = pipeline_builder.getHeader();
-
-    Block target_header;
-    Names insert_columns;
-    ActionsDAG::MatchColumnsMode match_mode = ActionsDAG::MatchColumnsMode::Position;
-
-    if (!has_inner_table)
-    {
-        /// Has specified `INTO [target stream]`
-        /// The `select` output header may not match the target stream's schema
-
-        target_header.reserve(source_header.columns());
-        /// Insert columns only returned by select query
-        const auto & target_table_columns = target_metadata_snapshot->getColumns();
-        auto target_storage_header{target_metadata_snapshot->getSampleBlock()};
-        for (const auto & source_column : source_header)
-        {
-            /// Skip columns which target storage doesn't have
-            if (target_table_columns.hasPhysical(source_column.name))
-            {
-                insert_columns.emplace_back(source_column.name);
-                target_header.insert(target_storage_header.getByName(source_column.name));
-            }
-        }
-        /// We will need use by name since we may have less columns after filtering
-        match_mode = ActionsDAG::MatchColumnsMode::Name;
-    }
-    else
-    {
-        /// Internally inner table. The inner storage header shall be identical as the source header
-        insert_columns = source_header.getNames();
-        target_header = metadata_snapshot->getSampleBlock();
-
-        /// When inserted columns don't contains `_tp_time`, we will skip it, which will be filled by default
-        if (!source_header.has(ProtonConsts::RESERVED_EVENT_TIME) && target_header.has(ProtonConsts::RESERVED_EVENT_TIME))
-            target_header.erase(ProtonConsts::RESERVED_EVENT_TIME);
-    }
-
-    if (!blocksHaveEqualStructure(source_header, target_header))
-    {
-        auto converting = ActionsDAG::makeConvertingActions(
-            source_header.getColumnsWithTypeAndName(), target_header.getColumnsWithTypeAndName(), match_mode);
-
-        pipeline_builder.addTransform(std::make_shared<ExpressionTransform>(
-            source_header,
-            std::make_shared<ExpressionActions>(
-                std::move(converting), ExpressionActionsSettings::fromContext(local_context, CompileExpressions::yes))));
-    }
-
-    /// Materializing const columns
-    pipeline_builder.addTransform(std::make_shared<MaterializingTransform>(pipeline_builder.getHeader()));
-
-    /// Sink to target table
-    InterpreterInsertQuery interpreter(nullptr, local_context, false, false, false);
-    /// FIXME, thread status
-    auto out_chain = interpreter.buildChain(target_table, target_metadata_snapshot, insert_columns, nullptr, nullptr);
-    out_chain.addStorageHolder(target_table);
-    auto resources = out_chain.detachResources();
-
-    pipeline_builder.addChain(std::move(out_chain));
-
-    pipeline_builder.setSinks([&](const Block & cur_header, QueryPipelineBuilder::StreamType) -> ProcessorPtr {
-        return std::make_shared<EmptySink>(cur_header);
-    });
-
-    io.pipeline = QueryPipelineBuilder::getPipeline(std::move(pipeline_builder));
-    io.pipeline.addResources(std::move(resources));
-    io.pipeline.setProgressCallback(local_context->getProgressCallback());
-    io.pipeline.setProcessListElement(local_context->getProcessListElement());
-    io.pipeline.setNumThreads(std::min<size_t>(io.pipeline.getNumThreads(), local_context->getSettingsRef().max_threads));
-    return io;
-}
-
-void StorageMaterializedView::executeBackgroundPipeline(BlockIO & io, ContextMutablePtr local_context)
-{
-    assert(io.process_list_entry);
-    if ((*io.process_list_entry)->isKilled())
-        throw Exception(
-            ErrorCodes::QUERY_WAS_CANCELLED,
-            "The background pipeline for materialized view {} is killed before execution, it's abnormal.",
-            getStorageID().getFullTableName());
-
-    LOG_INFO(log, "Executing background pipeline for materialized view {}", getStorageID().getFullTableName());
-    CompletedPipelineExecutor executor(io.pipeline);
-    executor.setCancelCallback(
-        [this] { return background_state.is_cancelled.load(); }, local_context->getSettingsRef().interactive_delay / 1000);
-    executor.execute();
-
-    /// Normally, this background query is only canceled during shutdown and should not be killed
-    if ((*io.process_list_entry)->isKilled())
-        throw Exception(
-            ErrorCodes::QUERY_WAS_CANCELLED,
-            "The background pipeline for materialized view {} is killed, it's abnormal.",
-            getStorageID().getFullTableName());
+    background_executor.reset();
+    background_pipeline.reset();
+    process_list_entry.reset();
 }
 
 void StorageMaterializedView::read(
@@ -621,14 +337,6 @@ void StorageMaterializedView::read(
         query_plan.addStorageHolder(storage);
         query_plan.addTableLock(std::move(lock));
     }
-}
-
-void StorageMaterializedView::preDrop()
-{
-    shutdown();
-
-    /// Remove checkpoint of the inner query
-    CheckpointCoordinator::instance(getContext()).removeCheckpoint(generateInnerQueryID(getStorageID()));
 }
 
 void StorageMaterializedView::drop()
@@ -692,15 +400,20 @@ void StorageMaterializedView::checkValid() const
     /// check disk quota
     DiskUtilChecker::instance(getContext()).check();
 
-    background_state.checkException("Bad MaterializedView, please wait for auto-recovery or restart/recreate manually:");
+    if (background_status.has_exception)
+        throw Exception(
+            getExceptionErrorCode(background_status.exception),
+            "Bad MaterializedView, please drop it or try recovery by restart server. background exception: {}",
+            getExceptionMessage(background_status.exception, false));
 
     if (!isReady())
-        throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Background thread of '{}' are initializing", getStorageID().getFullTableName());
+        throw Exception(
+            ErrorCodes::RESOURCE_NOT_INITED, "Background resources of '{}' are initializing", getStorageID().getFullTableName());
 }
 
 bool StorageMaterializedView::isReady() const
 {
-    return is_virtual || background_state.thread_status.load(std::memory_order_relaxed) > State::CHECKING_DEPENDENCIES;
+    return background_status.resource_initialized;
 }
 
 NamesAndTypesList StorageMaterializedView::getVirtuals() const
@@ -786,6 +499,169 @@ void StorageMaterializedView::updateStorageSettingsAndTTLs()
     setInMemoryMetadata(meta);
 }
 
+void StorageMaterializedView::buildBackgroundPipeline()
+{
+    build_pipeline_thread = ThreadFromGlobalPool{[this]() {
+        try
+        {
+            /// During server bootstrap, we shall startup all tables in parallel, so here
+            /// needs validity check underlying tables.
+            if (is_attach)
+                waitForDependencies();
+
+            background_status.resource_initialized = true;
+
+            /// Build inner background query pipeline and keep it alive during the lifetime of Proton
+            doBuildBackgroundPipeline();
+        }
+        catch (...)
+        {
+            background_status.exception = std::current_exception();
+            background_status.has_exception = true;
+
+            LOG_ERROR(log, "Failed to build backgroud pipeline: {}", getExceptionMessage(background_status.exception, false));
+        }
+    }};
+}
+
+void StorageMaterializedView::doBuildBackgroundPipeline()
+{
+    auto target_table = getTargetTable();
+    auto target_metadata_snapshot = target_table->getInMemoryMetadataPtr();
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+
+    auto local_context = Context::createCopy(getContext());
+    local_context->makeQueryContext();
+    CurrentThread::QueryScope query_scope(local_context->getQueryContext());
+    local_context->setCurrentQueryId(""); /// generate random query_id
+    local_context->setInternalQuery(false); /// We like to log materialized query like a regular one
+
+    auto & inner_query = metadata_snapshot->getSelectQuery().inner_query;
+
+    InterpreterSelectWithUnionQuery select_interpreter(inner_query, local_context, SelectQueryOptions());
+
+    process_list_entry = local_context->getProcessList().insert(serializeAST(*inner_query), inner_query.get(), local_context);
+    local_context->setProcessListElement(&process_list_entry->get());
+    CurrentThread::get().performance_counters[ProfileEvents::OSCPUWaitMicroseconds] = 0;
+    CurrentThread::get().performance_counters[ProfileEvents::OSCPUVirtualTimeMicroseconds] = 0;
+
+    /// [Pipeline]: `Source` -> `Converting` -> `Materializing const` -> `target_table`
+    background_pipeline = select_interpreter.buildQueryPipeline();
+    background_pipeline.resize(1);
+    const auto & source_header = background_pipeline.getHeader();
+
+    Block target_header;
+    Names insert_columns;
+    ActionsDAG::MatchColumnsMode match_mode = ActionsDAG::MatchColumnsMode::Position;
+
+    if (!has_inner_table)
+    {
+        /// Has specified `INTO [target stream]`
+        /// The `select` output header may not match the target stream's schema
+
+        target_header.reserve(source_header.columns());
+        /// Insert columns only returned by select query
+        const auto & target_table_columns = target_metadata_snapshot->getColumns();
+        auto target_storage_header{target_metadata_snapshot->getSampleBlock()};
+        for (const auto & source_column : source_header)
+        {
+            /// Skip columns which target storage doesn't have
+            if (target_table_columns.hasPhysical(source_column.name))
+            {
+                insert_columns.emplace_back(source_column.name);
+                target_header.insert(target_storage_header.getByName(source_column.name));
+            }
+        }
+        /// We will need use by name since we may have less columns after filtering
+        match_mode = ActionsDAG::MatchColumnsMode::Name;
+    }
+    else
+    {
+        /// Internally inner table. The inner storage header shall be identical as the source header
+        insert_columns = source_header.getNames();
+        target_header = metadata_snapshot->getSampleBlock();
+
+        /// When inserted columns don't contains `_tp_time`, we will skip it, which will be filled by default
+        if (!source_header.has(ProtonConsts::RESERVED_EVENT_TIME) && target_header.has(ProtonConsts::RESERVED_EVENT_TIME))
+            target_header.erase(ProtonConsts::RESERVED_EVENT_TIME);
+    }
+
+    if (!blocksHaveEqualStructure(source_header, target_header))
+    {
+        auto converting = ActionsDAG::makeConvertingActions(
+            source_header.getColumnsWithTypeAndName(), target_header.getColumnsWithTypeAndName(), match_mode);
+
+        background_pipeline.addTransform(std::make_shared<ExpressionTransform>(
+            source_header,
+            std::make_shared<ExpressionActions>(
+                std::move(converting), ExpressionActionsSettings::fromContext(local_context, CompileExpressions::yes))));
+    }
+
+    /// Materializing const columns
+    background_pipeline.addTransform(std::make_shared<MaterializingTransform>(background_pipeline.getHeader()));
+
+    /// Sink to target table
+    InterpreterInsertQuery interpreter(nullptr, local_context, false, false, false);
+    /// FIXME, thread status
+    auto out_chain = interpreter.buildChain(target_table, target_metadata_snapshot, insert_columns, nullptr, nullptr);
+    out_chain.addStorageHolder(target_table);
+
+    background_pipeline.addChain(std::move(out_chain));
+
+    background_pipeline.setSinks([&](const Block & cur_header, QueryPipelineBuilder::StreamType) -> ProcessorPtr {
+        return std::make_shared<EmptySink>(cur_header);
+    });
+
+    local_context->setInsertionTable(target_table->getStorageID());
+    local_context->setupQueryStatusPollId(target_table->as<StorageStream &>().nextBlockId()); /// Async insert requried
+
+    if (process_list_entry)
+    {
+        /// Query was killed before execution
+        if ((*process_list_entry)->isKilled())
+            throw Exception(
+                "Query '" + (*process_list_entry)->getInfo().client_info.current_query_id + "' is killed in pending state",
+                ErrorCodes::QUERY_WAS_CANCELLED);
+    }
+
+    background_pipeline.setProcessListElement(local_context->getProcessListElement());
+
+    background_executor = background_pipeline.execute();
+}
+
+void StorageMaterializedView::executeBackgroundPipeline()
+{
+    background_thread = ThreadFromGlobalPool{[this]() {
+        try
+        {
+            /// NOTE: If it's an Attach request, we should wait for success to build background pipeline
+            if (is_attach)
+            {
+                if (build_pipeline_thread.joinable())
+                    build_pipeline_thread.join();
+
+                if (unlikely(background_status.has_exception))
+                {
+                    LOG_ERROR(log, "Skip to execute background pipeline for materialized view {}", getStorageID().getFullTableName());
+                    return;
+                }
+            }
+
+            LOG_INFO(log, "Executing background pipeline for materialized view {}", getStorageID().getFullTableName());
+            assert(background_executor);
+            background_executor->execute(background_pipeline.getNumThreads());
+        }
+        catch (...)
+        {
+            /// FIXME: checkpointing
+            background_status.exception = std::current_exception();
+            background_status.has_exception = true;
+
+            LOG_ERROR(log, "Background runtime error: {}", getExceptionMessage(background_status.exception, false));
+        }
+    }};
+}
+
 StorageSnapshotPtr StorageMaterializedView::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const
 {
     return getTargetTable()->getStorageSnapshot(metadata_snapshot, query_context);
@@ -807,4 +683,5 @@ void registerStorageMaterializedView(StorageFactory & factory)
             args.table_id, args.getLocalContext(), args.query, args.columns, args.attach, args.is_virtual);
     });
 }
+
 }
