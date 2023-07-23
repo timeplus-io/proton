@@ -10,7 +10,7 @@ class CheckpointCoordinator;
 
 struct CheckpointContext
 {
-    CheckpointContext(int64_t epoch_, const std::string & qid_, CheckpointCoordinator * coordinator_)
+    CheckpointContext(int64_t epoch_, std::string_view qid_, CheckpointCoordinator * coordinator_)
         : epoch(epoch_), qid(qid_), coordinator(coordinator_)
     {
         assert(epoch >= 0);

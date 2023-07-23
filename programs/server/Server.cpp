@@ -1697,6 +1697,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             else
                 LOG_INFO(log, "Closed all listening sockets.");
 
+            /// proton: starts. Trigger last checkpoint and flush before kill all queries
+            DB::CheckpointCoordinator::instance(global_context).triggerLastCheckpointAndFlush();
+            /// proton: ends.
+
             /// Killing remaining queries.
             if (!config().getBool("shutdown_wait_unfinished_queries", false))
                 global_context->getProcessList().killAllQueries();

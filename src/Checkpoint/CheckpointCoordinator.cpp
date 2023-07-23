@@ -25,6 +25,7 @@ const String QUERY_CKPT_FILE = "query";
 const UInt64 DEFAULT_CKPT_LAST_ACCESS_TTL = 7 * 81400; /// in seconds
 const UInt64 DEFAULT_CKPT_LAST_ACCESS_CHECK_INTERVAL = 7200; /// in seconds
 const UInt64 DEFAULT_CKPT_DELETE_GRACE_INTERVAL = 60; /// in seconds
+const UInt64 DEFAULT_CKPT_TEARDOWN_FLUSH_TIMEOUT = 60; /// in seconds
 
 String formatNodeDescriptions(const std::vector<ExecutingGraph::NodeDescription> & node_descs)
 {
@@ -118,6 +119,7 @@ CheckpointCoordinator::CheckpointCoordinator(DB::ContextPtr global_context) : lo
     last_access_ttl = config.getUInt64("checkpoint.last_access_ttl", DEFAULT_CKPT_LAST_ACCESS_TTL);
     last_access_check_interval = config.getUInt64("checkpoint.last_access_check_interval", DEFAULT_CKPT_LAST_ACCESS_CHECK_INTERVAL);
     grace_interval = config.getUInt64("checkpoint.delete_grace_interval", DEFAULT_CKPT_DELETE_GRACE_INTERVAL);
+    teardown_flush_timeout = config.getUInt64("checkpoint.teardown_flush_timeout", DEFAULT_CKPT_TEARDOWN_FLUSH_TIMEOUT);
 }
 
 CheckpointCoordinator::~CheckpointCoordinator()
@@ -251,7 +253,6 @@ void CheckpointCoordinator::triggerCheckpoint(const String & qid, UInt64 checkpo
 
     String node_desc;
     std::optional<std::weak_ptr<PipelineExecutor>> executor;
-    std::vector<std::pair<Int32, String>> outstanding_ckpt_nodes;
     {
         std::scoped_lock lock(mutex);
 
@@ -273,56 +274,11 @@ void CheckpointCoordinator::triggerCheckpoint(const String & qid, UInt64 checkpo
         }
     }
 
-    if (executor.has_value())
-    {
-        /// Create directory before hand. Then all other processors don't need
-        /// check and create target epoch ckpt directory.
-        auto ckpt_ctx = std::make_shared<CheckpointContext>(next_epoch, qid, this);
-        try
-        {
-            preCheckpoint(ckpt_ctx);
-
-            {
-                auto exec = executor.value().lock();
-                if (!exec)
-                {
-                    LOG_ERROR(logger, "Failed to trigger checkpointing state for query={} epoch={}, since it's already cancelled", qid, next_epoch);
-                    return;
-                }
-
-                exec->triggerCheckpoint(std::move(ckpt_ctx));
-            }
-
-            LOG_INFO(logger, "Triggered checkpointing state for query={} epoch={}", qid, next_epoch);
-        }
-        catch (const Exception & e)
-        {
-            LOG_ERROR(logger, "Failed to trigger checkpointing state for query={} epoch={} error={}", qid, next_epoch, e.message());
-        }
-        catch (const std::exception & ex)
-        {
-            LOG_ERROR(logger, "Failed to trigger checkpointing state for query={} epoch={} error={}", qid, next_epoch, ex.what());
-        }
-        catch (...)
-        {
-            tryLogCurrentException(logger, fmt::format("Failed to trigger checkpointing state for query={} epoch={}", qid, next_epoch));
-        }
-
+    if (doTriggerCheckpoint(executor, qid, next_epoch, node_desc))
         timer_service.runAfter(
             checkpoint_interval, [query_id = qid, interval = checkpoint_interval, this]() { triggerCheckpoint(query_id, interval); });
-    }
     else
-    {
-        /// prev ckpt is still in progress, reschedule to check later
-        LOG_INFO(
-            logger,
-            "Prev checkpoint for query={} epoch={} is still in-progress, outstanding_ack_node_descriptions={}",
-            qid,
-            next_epoch,
-            node_desc);
-
         timer_service.runAfter(15, [query_id = qid, interval = checkpoint_interval, this]() { triggerCheckpoint(query_id, interval); });
-    }
 }
 
 void CheckpointCoordinator::preCheckpoint(DB::CheckpointContextPtr ckpt_ctx)
@@ -430,5 +386,132 @@ void CheckpointCoordinator::removeExpiredCheckpoints(bool delete_marked)
 
     /// Every last_access_check_interval seconds, check if there are any expired checkpoints to delete
     timer_service.runAfter(last_access_check_interval, [this]() { removeExpiredCheckpoints(false); });
+}
+
+bool CheckpointCoordinator::doTriggerCheckpoint(
+    const std::optional<std::weak_ptr<PipelineExecutor>> & executor, std::string_view qid, Int64 next_epoch, std::string_view node_desc)
+{
+    if (executor.has_value())
+    {
+        /// Create directory before hand. Then all other processors don't need
+        /// check and create target epoch ckpt directory.
+        try
+        {
+            auto ckpt_ctx = std::make_shared<CheckpointContext>(next_epoch, qid, this);
+            preCheckpoint(ckpt_ctx);
+
+            {
+                auto exec = executor.value().lock();
+                if (!exec)
+                {
+                    LOG_ERROR(
+                        logger,
+                        "Failed to trigger checkpointing state for query={} epoch={}, since it's already cancelled",
+                        qid,
+                        next_epoch);
+                    return false;
+                }
+
+                exec->triggerCheckpoint(std::move(ckpt_ctx));
+            }
+
+            LOG_INFO(logger, "Triggered checkpointing state for query={} epoch={}", qid, next_epoch);
+            return true;
+        }
+        catch (const Exception & e)
+        {
+            LOG_ERROR(logger, "Failed to trigger checkpointing state for query={} epoch={} error={}", qid, next_epoch, e.message());
+        }
+        catch (const std::exception & ex)
+        {
+            LOG_ERROR(logger, "Failed to trigger checkpointing state for query={} epoch={} error={}", qid, next_epoch, ex.what());
+        }
+        catch (...)
+        {
+            tryLogCurrentException(logger, fmt::format("Failed to trigger checkpointing state for query={} epoch={}", qid, next_epoch));
+        }
+    }
+    else
+    {
+        /// prev ckpt is still in progress, reschedule to check later
+        LOG_INFO(
+            logger,
+            "Prev checkpoint for query={} epoch={} is still in-progress, outstanding_ack_node_descriptions={}",
+            qid,
+            next_epoch,
+            node_desc);
+    }
+    return false;
+}
+
+void CheckpointCoordinator::triggerLastCheckpointAndFlush()
+{
+    LOG_INFO(logger, "Trigger last checkpoint and flush begin");
+    Stopwatch stopwatch;
+
+    Strings qids;
+    std::vector<Int64> next_epochs;
+    Strings node_desces;
+    std::vector<std::optional<std::weak_ptr<PipelineExecutor>>> executors;
+
+    {
+        std::scoped_lock lock(mutex);
+        for (auto & [qid, query] : queries)
+        {
+            qids.emplace_back(qid);
+
+            if (query->current_epoch != 0)
+            {
+                next_epochs.emplace_back(query->current_epoch);
+                node_desces.emplace_back(query->outstandingAckNodeDescriptions());
+                executors.emplace_back();
+            }
+            else
+            {
+                /// Notify the source processor to start checkpoint in a new epoch
+                next_epochs.emplace_back(query->last_epoch + 1);
+                node_desces.emplace_back();
+                executors.emplace_back(query->executor);
+            }
+        }
+    }
+
+    /// <query_id, triggered_epoch>
+    std::vector<std::pair<std::string_view, Int64>> triggered_queries;
+    triggered_queries.reserve(qids.size());
+    for (size_t i = 0; i < qids.size(); ++i)
+    {
+        /// FIXME: So far we've only enforced a simple flush strategy by triggering new checkpoint once (regardless of success)
+        if (doTriggerCheckpoint(executors[i], qids[i], next_epochs[i], node_desces[i]))
+            triggered_queries.emplace_back(qids[i], next_epochs[i]);
+    }
+
+    // Wait for last checkpoint flush completed
+    while (stopwatch.elapsedSeconds() < teardown_flush_timeout)
+    {
+        for (auto qid_iter = triggered_queries.begin(); qid_iter != triggered_queries.end();)
+        {
+            std::scoped_lock lock(mutex);
+            auto iter = queries.find(qid_iter->first);
+            if (iter == queries.end())
+                /// Unregistered
+                return;
+
+            /// Remove when triggerd epoch is commited
+            /// NOTE: `commited epoch > triggerd epoch` is possible, if there is new checkpoint triggered after triggered last checkpoint flush
+            if (iter->second->last_epoch >= qid_iter->second)
+                qid_iter = triggered_queries.erase(qid_iter);
+            else
+                ++qid_iter;
+        }
+
+        if (triggered_queries.empty())
+            break;
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    stopwatch.stop();
+    LOG_INFO(logger, "Trigger last checkpoint and flush end (elapsed {} milliseconds)", stopwatch.elapsedMilliseconds());
 }
 }

@@ -67,10 +67,17 @@ public:
     void recover(UInt32 node_id, CheckpointContextPtr ckpt_ctx, std::function<void(VersionType version, ReadBuffer &)> do_recover);
     void recovered(CheckpointContextPtr ckpt_ctx, UInt64 ckpt_interval, std::shared_ptr<PipelineExecutor> executor);
 
+    void triggerLastCheckpointAndFlush();
 
 private:
     void triggerCheckpoint(const String & qid, UInt64 checkpoint_interval);
     void removeExpiredCheckpoints(bool delete_marked);
+
+    bool doTriggerCheckpoint(
+        const std::optional<std::weak_ptr<PipelineExecutor>> & executor,
+        std::string_view qid,
+        Int64 next_epoch,
+        std::string_view node_desc);
 
 private:
     std::unique_ptr<CheckpointStorage> ckpt;
@@ -78,6 +85,7 @@ private:
     UInt64 last_access_ttl;
     UInt64 last_access_check_interval;
     UInt64 grace_interval;
+    UInt64 teardown_flush_timeout;
 
     /// Query UUID -> QueryContext mapping
     mutable std::mutex mutex;

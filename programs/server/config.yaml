@@ -306,6 +306,8 @@ checkpoint:
     last_access_check_interval: 7200
     # When unsubscribe a query, wait grace interval to delete its checkpoints
     delete_grace_interval: 60
+    # When server teardown, last checkpoint flush timeout in seconds
+    teardown_flush_timeout: 60
 
 # Policy from the <storage_configuration> for the temporary files.
 # If not set <tmp_path> is used, otherwise <tmp_path> is ignored.
