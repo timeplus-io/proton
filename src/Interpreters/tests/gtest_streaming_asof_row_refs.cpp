@@ -1,19 +1,19 @@
 #include <Columns/ColumnDecimal.h>
 #include <Core/Block.h>
 #include <DataTypes/DataTypeDateTime64.h>
+#include <Interpreters/Streaming/CachedBlockMetrics.h>
+#include <Interpreters/Streaming/RefCountBlockList.h>
 #include <Interpreters/Streaming/RowRefs.h>
-#include <Interpreters/Streaming/joinBlockList.h>
-#include <Interpreters/Streaming/joinMetrics.h>
 
 #include <gtest/gtest.h>
 
 namespace
 {
 /// TODO, other types
-std::shared_ptr<DB::Streaming::JoinBlockList>
-forEachRightBlock(DB::Streaming::JoinMetrics & join_metrics, std::function<void(DB::Streaming::JoinBlockList *)> callback = {})
+std::shared_ptr<DB::Streaming::RefCountBlockList<DB::Block>>
+forEachRightBlock(DB::Streaming::CachedBlockMetrics & join_metrics, std::function<void(DB::Streaming::RefCountBlockList<DB::Block>*)> callback = {})
 {
-    auto blocks = std::make_shared<DB::Streaming::JoinBlockList>(join_metrics);
+    auto blocks = std::make_shared<DB::Streaming::RefCountBlockList<DB::Block>>(join_metrics);
     {
         auto type = std::make_shared<DB::DataTypeDateTime64>(3);
         auto mutable_col = type->createColumn();
@@ -63,7 +63,7 @@ forEachRightBlock(DB::Streaming::JoinMetrics & join_metrics, std::function<void(
     return blocks;
 }
 
-DB::Block prepareLeftBlock(DB::Streaming::JoinMetrics & join_metrics)
+DB::Block prepareLeftBlock(DB::Streaming::CachedBlockMetrics & join_metrics)
 {
     auto blocks{forEachRightBlock(join_metrics)};
     DB::Block block;
@@ -100,20 +100,20 @@ struct Case
 
 void commonTest(const std::vector<Case> & cases)
 {
-    DB::Streaming::JoinMetrics join_metrics;
+    DB::Streaming::CachedBlockMetrics join_metrics;
 
     for (const auto & test_case : cases)
     {
-        std::shared_ptr<DB::Streaming::JoinBlockList> ret_right_blocks;
+        std::shared_ptr<DB::Streaming::RefCountBlockList<DB::Block>> ret_right_blocks;
         auto left_block{prepareLeftBlock(join_metrics)};
 
         auto & asof_col = left_block.getByPosition(0);
         DB::Streaming::AsofRowRefs row_refs(asof_col.type->getTypeId());
 
         ret_right_blocks = forEachRightBlock(join_metrics, [&](auto * right_blocks) {
-            auto * last_block = right_blocks->lastBlock();
-            auto & right_asof_col = last_block->getByPosition(0);
-            for (size_t i = 0, rows = last_block->rows(); i < rows; ++i)
+            auto & last_block = right_blocks->lastBlock();
+            auto & right_asof_col = last_block.getByPosition(0);
+            for (size_t i = 0, rows = last_block.rows(); i < rows; ++i)
                 row_refs.insert(
                     asof_col.type->getTypeId(), *right_asof_col.column, right_blocks, i, test_case.inequality, test_case.keep_versions);
         });

@@ -1,14 +1,14 @@
-#include "StorageStream.h"
-#include "StreamShard.h"
-#include "StreamSink.h"
-#include "StreamingBlockReaderNativeLog.h"
-#include "StreamingStoreSource.h"
-#include "parseHostShards.h"
-#include "storageUtil.h"
+#include <Storages/Streaming/StorageStream.h>
+#include <Storages/Streaming/StreamShard.h>
+#include <Storages/Streaming/StreamSink.h>
+#include <Storages/Streaming/StreamingBlockReaderNativeLog.h>
+#include <Storages/Streaming/StreamingStoreSource.h>
+#include <Storages/Streaming/parseHostShards.h>
 
 #include <Interpreters/DiskUtilChecker.h>
 
 #include <Columns/ColumnConst.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ClusterProxy/DistributedSelectStreamFactory.h>
@@ -26,14 +26,14 @@
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <Processors/QueryPlan/Streaming/ChangelogTransformStep.h>
 #include <Processors/QueryPlan/UnionStep.h>
 #include <Processors/Sources/NullSource.h>
 #include <QueryPipeline/Pipe.h>
 #include <Storages/StorageMergeTree.h>
-#include <Common/logger_useful.h>
 #include <Common/ProtonCommon.h>
+#include <Common/logger_useful.h>
 #include <Common/randomSeed.h>
-#include <DataTypes/DataTypeFactory.h>
 
 
 namespace DB
@@ -291,8 +291,6 @@ StorageStream::StorageStream(
     , rng(randomSeed())
     , max_outstanding_blocks(context_->getSettingsRef().aysnc_ingest_max_outstanding_blocks)
 {
-    cacheVirtualColumnNamesAndTypes();
-
     /// Init StreamShard
     {
         auto ssettings = storage_settings.get();
@@ -449,6 +447,53 @@ void StorageStream::readConcat(
     auto description = makeFormattedNameOfConcatShards(shards_to_read);
     LOG_INFO(log, "Read local streaming concat {}", description);
 
+    Names original_required_columns = column_names;
+
+    if (query_info.trackingChanges())
+    {
+        auto add_version_column = [&] {
+            assert(!merging_params.version_column.empty());
+
+            if (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows)
+            {
+                /// Add version column
+                if (std::find(column_names.begin(), column_names.end(), merging_params.version_column) == column_names.end())
+                    column_names.push_back(merging_params.version_column);
+            }
+        };
+
+        /// For changelog-kv, we always read back _tp_delta column always
+        if (Streaming::isChangelogKeyedDataStream(dataStreamSemantic()) && query_info.changelog_tracking_changes)
+        {
+            assert(!merging_params.sign_column.empty());
+
+            /// Add _tp_delta column if it is necessary
+            if (std::find(column_names.begin(), column_names.end(), ProtonConsts::RESERVED_DELTA_FLAG) == column_names.end())
+                column_names.push_back(merging_params.sign_column);
+
+            add_version_column();
+        }
+        else if (Streaming::isVersionedKeyedDataStream(dataStreamSemantic()) && query_info.versioned_kv_tracking_changes)
+        {
+            /// Drop _tp_delta since we will generate that on the fly
+            if (auto iter = std::find(column_names.begin(), column_names.end(), ProtonConsts::RESERVED_DELTA_FLAG); iter != column_names.end())
+                column_names.erase(iter);
+
+            if (auto iter = std::find(original_required_columns.begin(), original_required_columns.end(), ProtonConsts::RESERVED_DELTA_FLAG); iter != original_required_columns.end())
+                original_required_columns.erase(iter);
+
+            /// For versioned-kv, we always read back primary key columns and version column
+            auto primary_key_columns = storage_snapshot->metadata->getPrimaryKeyColumns();
+            for (auto & primary_key_column : primary_key_columns)
+            {
+                if (std::find(column_names.begin(), column_names.end(), primary_key_column) == column_names.end())
+                    column_names.emplace_back(std::move(primary_key_column));
+            }
+
+            add_version_column();
+        }
+    }
+
     /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
     /// We will need add one
     Block header;
@@ -545,18 +590,33 @@ void StorageStream::readConcat(
     {
         query_plan = std::move(*plans.front());
         query_plan.setMaxThreads(1);
-        return;
+    }
+    else
+    {
+        DataStreams input_streams;
+        input_streams.reserve(plans.size());
+        for (auto & plan : plans)
+            input_streams.emplace_back(plan->getCurrentDataStream());
+
+        auto union_step = std::make_unique<UnionStep>(std::move(input_streams));
+        union_step->setStepDescription(description);
+        query_plan.unitePlans(std::move(union_step), std::move(plans));
+        query_plan.setMaxThreads(plans.size());
     }
 
-    DataStreams input_streams;
-    input_streams.reserve(plans.size());
-    for (auto & plan : plans)
-        input_streams.emplace_back(plan->getCurrentDataStream());
+    if (query_info.versioned_kv_tracking_changes && Streaming::isVersionedKeyedDataStream(dataStreamSemantic()))
+    {
+        auto output_header
+            = storage_snapshot->getSampleBlockForColumns(original_required_columns.empty() ? column_names : original_required_columns);
 
-    auto union_step = std::make_unique<UnionStep>(std::move(input_streams));
-    union_step->setStepDescription(description);
-    query_plan.unitePlans(std::move(union_step), std::move(plans));
-    query_plan.setMaxThreads(plans.size());
+        /// FIXME, resize
+        query_plan.addStep(std::make_unique<Streaming::ChangelogTransformStep>(
+            query_plan.getCurrentDataStream(),
+            std::move(output_header),
+            storage_snapshot->metadata->getPrimaryKeyColumns(),
+            (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column : "",
+            plans.size()));
+    }
 }
 
 void StorageStream::readStreaming(
@@ -586,7 +646,8 @@ void StorageStream::readStreaming(
         for (auto stream_shard : shards_to_read)
         {
             if (!column_names.empty())
-                pipes.emplace_back(stream_shard->source_multiplexers->createChannel(stream_shard->shard, column_names, storage_snapshot, context_));
+                pipes.emplace_back(
+                    stream_shard->source_multiplexers->createChannel(stream_shard->shard, column_names, storage_snapshot, context_));
             else
                 pipes.emplace_back(stream_shard->source_multiplexers->createChannel(
                     stream_shard->shard, {ProtonConsts::RESERVED_EVENT_TIME}, storage_snapshot, context_));
@@ -604,8 +665,8 @@ void StorageStream::readStreaming(
 
         auto offsets = stream_shards.back()->getOffsets(query_info.seek_to_info);
         for (auto stream_shard : shards_to_read)
-            pipes.emplace_back(
-                std::make_shared<StreamingStoreSource>(stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log));
+            pipes.emplace_back(std::make_shared<StreamingStoreSource>(
+                stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log));
     }
 
     LOG_INFO(
@@ -649,7 +710,7 @@ void StorageStream::read(
         /// For now, we only support read remote source
         if (processed_stage != QueryProcessingStage::FetchColumns)
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for distributed query");
- 
+
         return readRemote(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage);
     }
 
@@ -658,8 +719,7 @@ void StorageStream::read(
     switch (shards_to_read.mode)
     {
         case QueryMode::STREAMING: {
-            return readStreaming(
-                shards_to_read.local_shards, query_plan, query_info, column_names, storage_snapshot, std::move(context_));
+            return readStreaming(shards_to_read.local_shards, query_plan, query_info, column_names, storage_snapshot, std::move(context_));
         }
         case QueryMode::STREAMING_CONCAT: {
             return readConcat(
@@ -762,6 +822,8 @@ void StorageStream::startup()
 
     LOG_INFO(log, "Starting");
 
+    cacheVirtualColumnNamesAndTypes();
+
     for (auto & stream_shard : stream_shards)
         stream_shard->startup();
 
@@ -834,8 +896,9 @@ StorageStream::ShardsToRead StorageStream::getRequiredShardsToRead(ContextPtr co
     {
         assert(query_info.seek_to_info);
         const auto & settings_ref = context_->getSettingsRef();
-        bool require_back_fill_from_historical = !isInmemory() && (isChangelogKvMode() || isVersionedKvMode()
-            || (query_info.seek_to_info->getSeekTo() == "earliest" && settings_ref.enable_backfill_from_historical_store.value));
+        bool require_back_fill_from_historical = !isInmemory()
+            && (Streaming::isChangelogKeyedDataStream(dataStreamSemantic()) || Streaming::isVersionedKeyedDataStream(dataStreamSemantic())
+                || (query_info.seek_to_info->getSeekTo() == "earliest" && settings_ref.enable_backfill_from_historical_store.value));
         result.mode = require_back_fill_from_historical ? QueryMode::STREAMING_CONCAT : QueryMode::STREAMING;
     }
     else
@@ -1699,6 +1762,10 @@ void StorageStream::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, type_factory.get("int64")));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, type_factory.get("int64")));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_SHARD, type_factory.get("int32")));
+
+    /// We may emit _tp_delta on the fly
+    if (Streaming::isVersionedKeyedDataStream(dataStreamSemantic()))
+        virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_DELTA_FLAG, type_factory.get("int8")));
 }
 
 void StorageStream::updateLogStoreCodec(const String & settings_codec)

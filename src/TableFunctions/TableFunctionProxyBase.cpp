@@ -1,4 +1,4 @@
-#include "TableFunctionProxyBase.h"
+#include <TableFunctions/TableFunctionProxyBase.h>
 
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
@@ -71,11 +71,13 @@ StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr contex
     {
         auto interpreter_subquery
             = std::make_unique<InterpreterSelectWithUnionQuery>(subquery->children[0], context, SelectQueryOptions().subquery().analyze());
+
         auto source_header = interpreter_subquery->getSampleBlock();
         columns = ColumnsDescription(source_header.getNamesAndTypesList());
 
         /// determine whether it is a streaming query
         streaming = interpreter_subquery->isStreaming();
+        data_stream_semantic = interpreter_subquery->getDataStreamSemantic();
     }
     else
     {
@@ -87,21 +89,20 @@ StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr contex
         {
             underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
             auto select = underlying_storage_snapshot->getMetadataForQuery()->getSelectQuery().inner_query;
-            SelectQueryOptions options;
-            auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(select, context, options);
-            if (interpreter_subquery)
-            {
-                auto source_header = interpreter_subquery->getSampleBlock();
-                columns = ColumnsDescription(source_header.getNamesAndTypesList());
 
-                /// determine whether it is a streaming query
-                streaming = interpreter_subquery->isStreaming();
-            }
+            auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(select, context, SelectQueryOptions{}.analyze());
+            auto source_header = interpreter_subquery->getSampleBlock();
+            columns = ColumnsDescription(source_header.getNamesAndTypesList());
+
+            /// determine whether it is a streaming query
+            streaming = interpreter_subquery->isStreaming();
+            data_stream_semantic = interpreter_subquery->getDataStreamSemantic();
         }
         else
         {
             underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
             columns = underlying_storage_snapshot->metadata->getColumns();
+            data_stream_semantic = storage->dataStreamSemantic();
         }
     }
 
@@ -138,6 +139,7 @@ TableFunctionDescriptionPtr TableFunctionProxyBase::createStreamingTableFunction
     auto & func = ast->as<ASTFunction &>();
     auto syntax_analyzer_result
         = TreeRewriter(context).analyze(func.arguments, columns.getAll(), storage, storage ? underlying_storage_snapshot : nullptr);
+
     ExpressionAnalyzer func_expr_analyzer(func.arguments, syntax_analyzer_result, context);
     auto expr_before_table_function = func_expr_analyzer.getActions(true);
 

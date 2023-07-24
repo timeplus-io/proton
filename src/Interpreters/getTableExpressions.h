@@ -7,6 +7,11 @@
 namespace DB
 {
 
+namespace Streaming
+{
+struct GetSampleBlockContext;
+}
+
 struct ASTTableExpression;
 class ASTSelectQuery;
 
@@ -21,6 +26,7 @@ const ASTTableExpression * getTableExpression(const ASTSelectQuery & select, siz
 ASTPtr extractTableExpression(const ASTSelectQuery & select, size_t table_number);
 
 TablesWithColumns getDatabaseAndTablesWithColumns(
-    const ASTTableExprConstPtrs & table_expressions, ContextPtr context, bool include_alias_cols, bool include_materialized_cols);
+    const ASTTableExprConstPtrs & table_expressions, ContextPtr context, bool include_alias_cols, bool include_materialized_cols,
+    Streaming::GetSampleBlockContext * get_sample_block_ctx);
 
 }

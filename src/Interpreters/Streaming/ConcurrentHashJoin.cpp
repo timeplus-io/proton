@@ -181,7 +181,7 @@ void ConcurrentHashJoin::joinLeftBlock(Block & left_block)
 template <bool is_left_block>
 Block ConcurrentHashJoin::insertBlockAndJoin(Block & block)
 {
-    std::vector<size_t> * key_column_positions;
+    const std::vector<size_t> * key_column_positions;
     if constexpr (is_left_block)
         key_column_positions = &left_key_column_positions;
     else
@@ -261,7 +261,7 @@ Block ConcurrentHashJoin::insertRightBlockAndJoin(Block & right_block)
 template <bool is_left_block>
 std::vector<Block> ConcurrentHashJoin::insertBlockToRangeBucketAndJoin(Block block)
 {
-    std::vector<size_t> * key_column_positions;
+    const std::vector<size_t> * key_column_positions;
     if constexpr (is_left_block)
         key_column_positions = &left_key_column_positions;
     else

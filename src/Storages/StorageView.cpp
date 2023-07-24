@@ -268,6 +268,22 @@ bool StorageView::isReady() const
     }
     return true;
 }
+
+Streaming::DataStreamSemantic StorageView::dataStreamSemantic() const
+{
+    if (data_stream_semantic_resolved)
+        return data_stream_semantic;
+
+    auto select = getInMemoryMetadataPtr()->getSelectQuery().inner_query;
+    auto ctx = Context::createCopy(local_context);
+    ctx->setCollectRequiredColumns(false);
+
+    data_stream_semantic = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().analyze()).getDataStreamSemantic();
+
+    data_stream_semantic_resolved = true;
+
+    return data_stream_semantic;
+}
 /// proton: ends.
 
 void registerStorageView(StorageFactory & factory)

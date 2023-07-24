@@ -273,16 +273,17 @@
                 "statements": [
                     {"client":"python","query_id":"601-1", "query_type": "stream", "query_end_timer":8, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test6_stream_only1) select id, max(value) from transformed group by id limit 6 emit periodic 5s"}]},
                 {"inputs": [
-                    {"table_name":"test6_stream_only1", "depends_on":"601-1","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
+                    {"table_name":"test6_stream_only1", "depends_on":"601-1","data": [
+                    ["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
-                    ["dev2", "ca", 58.3, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2020-02-02 20:01:03"]]},
-                    {"table_name":"test6_stream_only1", "data": [["dev1", "ca", 59, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2020-02-02 20:01:06"],
+                    ["dev2", "ca", 58.3, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2020-02-02 20:01:03"],
+                    ["dev1", "ca", 59, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2020-02-02 20:01:06"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2020-02-02 20:01:07"],
-                    ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2020-02-02 20:01:10"]]},
-                    {"table_name":"test6_stream_only1", "data": [["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:11"],
+                    ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2020-02-02 20:01:10"],
+                    ["dev3", "ca", 57.3, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:11"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2020-02-02 20:01:14"],
-                    ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2020-02-02 20:01:11"]]},
-                    {"table_name":"test6_stream_only1", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:13"],
+                    ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2020-02-02 20:01:11"],
+                    ["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:13"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:12"],
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2020-02-02 20:01:15"]]}
                 ]}
@@ -752,7 +753,7 @@
                 ["dev2", 2,  "2021-11-02 20:00:02", "2021-11-02 20:00:07"]
                 ]}]
         },
-        
+
         {
             "id": 47,
             "tags": ["view"],
@@ -797,7 +798,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table","wait":2,"query":"drop view if exists test6_stream_only1_join_v"},
-                    {"client":"python", "query_type": "table","wait":2,"query":"create view if not exists test6_stream_only1_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time from test6_stream_only1 as a join table(test6_stream_only1_d) as b on a.id =b.id"},                    
+                    {"client":"python", "query_type": "table","wait":2,"query":"create view if not exists test6_stream_only1_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time from test6_stream_only1 as a join table(test6_stream_only1_d) as b on a.id =b.id"},
                     {"client":"python","query_id":"601-1", "query_type": "stream", "query_end_timer":7,"drop_view":"test6_stream_only1_join_v", "drop_view_wait":2, "query":"select type, count(value) from test6_stream_only1_join_v group by type limit 5 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test6_stream_only1","depends_on":"601-1", "data": [
@@ -814,7 +815,7 @@
                       ["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                       ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"],
                       ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
-                ]}                               
+                ]}
             ],
             "expected_results": [{"query_id":"601-1", "expected_results":
                 [["roof", 2],
@@ -823,7 +824,7 @@
                 ["window", 3],
                 ["wall", 2]
                 ]}]
-        },        
+        },
 
         {
             "id": 49,

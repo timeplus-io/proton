@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/QueryProcessingStage.h>
+#include <Core/Joins.h>
 #include <optional>
 
 namespace DB
@@ -51,8 +52,11 @@ struct SelectQueryOptions
     bool settings_limit_offset_done = false;
     bool is_explain = false; /// The value is true if it's explain statement.
 
-    /// proton : starts
-    bool is_join_subquery = false; /// If the `select` is part of the right stream of the subquery in a join
+    /// proton : starts. Since SQL is interpreted recursively and deep first,
+    /// we may not have join semantic yet, which we will fix later in the analyzing
+    /// phase
+    std::optional<JoinStrictness> parent_select_join_strictness;
+    bool parent_select_has_aggregates = false;
     /// proton : ends
 
     /// These two fields are used to evaluate shardNum() and shardCount() function when
@@ -163,11 +167,29 @@ struct SelectQueryOptions
     }
 
     /// proton : starts
-    SelectQueryOptions & setJoinSubquery(bool value = true)
+    SelectQueryOptions & setParentSelectHasAggregates(bool value)
     {
-        is_join_subquery = value;
+        parent_select_has_aggregates |= value;
         return *this;
     }
+
+    SelectQueryOptions & setParentSelectJoinStrictness(std::optional<JoinStrictness> strictness)
+    {
+        if (strictness)
+            parent_select_join_strictness = strictness;
+
+        return *this;
+    }
+
+    /// set subquery in place
+    SelectQueryOptions & setSubquery()
+    {
+        to_stage = QueryProcessingStage::Complete;
+        ++subquery_depth;
+        is_subquery = true;
+        return *this;
+    }
+
     /// proton : ends
 };
 

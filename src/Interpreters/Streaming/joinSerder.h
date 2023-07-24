@@ -37,5 +37,9 @@ void deserialize(HashJoin::JoinResults & join_results, const HashJoin & join, Re
 /// For JoinData
 void serialize(const HashJoin::JoinData & join_data, WriteBuffer & wb);
 void deserialize(HashJoin::JoinData & join_data, ReadBuffer & rb);
+
+/// For JoinGlobalMetrics
+void serialize(const HashJoin::JoinGlobalMetrics & join_metrics, WriteBuffer & wb);
+void deserialize(HashJoin::JoinGlobalMetrics & join_metrics, ReadBuffer & rb);
 }
 }

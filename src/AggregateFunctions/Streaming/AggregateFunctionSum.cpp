@@ -56,7 +56,7 @@ AggregateFunctionPtr
 createAggregateFunctionSum(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     assertNoParameters(name, parameters);
-    assertUnary(name, argument_types);
+    assertBinary(name, argument_types);
 
     AggregateFunctionPtr res;
     DataTypePtr data_type = argument_types[0];
@@ -76,7 +76,7 @@ AggregateFunctionPtr
 createAggregateFunctionSumKahan(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     assertNoParameters(name, parameters);
-    assertUnary(name, argument_types);
+    assertBinary(name, argument_types);
 
     DataTypePtr data_type = argument_types[0];
     WhichDataType which(data_type);

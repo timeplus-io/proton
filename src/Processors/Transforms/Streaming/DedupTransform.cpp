@@ -3,7 +3,6 @@
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
 #include <Columns/ColumnConst.h>
-#include <Columns/ColumnsNumber.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 

@@ -1,4 +1,4 @@
-#include "WindowAssignmentStep.h"
+#include <Processors/QueryPlan/Streaming/WindowAssignmentStep.h>
 
 #include <Processors/Transforms/Streaming/HopWindowAssignmentTransform.h>
 #include <Processors/Transforms/Streaming/SessionWindowAssignmentTransform.h>
@@ -35,7 +35,7 @@ void WindowAssignmentStep::transformPipeline(QueryPipelineBuilder & pipeline, co
 {
     assert(window_params);
 
-    pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+    pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
         if (window_params->type == WindowType::TUMBLE)
             return std::make_shared<TumbleWindowAssignmentTransform>(header, getOutputStream().header, window_params);
         else if (window_params->type == WindowType::HOP)

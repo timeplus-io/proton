@@ -35,11 +35,6 @@
 #include <boost/multi_index/global_fun.hpp>
 #include <boost/range/iterator_range_core.hpp>
 
-
-/// proton : starts
-#include <Common/ProtonCommon.h>
-/// proton : ends
-
 namespace DB
 {
 
@@ -976,10 +971,6 @@ public:
     scope_guard getTemporaryPartDirectoryHolder(const String & part_dir_name);
 
     /// proton: starts
-    bool isAppendOnlyMode() const override { return storage_settings.get()->mode.value == ProtonConsts::APPEND_MODE; }
-    bool isChangelogMode() const override { return storage_settings.get()->mode.value == ProtonConsts::CHANGELOG_MODE; }
-    bool isChangelogKvMode() const override { return storage_settings.get()->mode.value == ProtonConsts::CHANGELOG_KV_MODE; }
-    bool isVersionedKvMode() const override { return storage_settings.get()->mode.value == ProtonConsts::VERSIONED_KV_MODE; }
     bool isInmemory() const { return inmemory; }
     bool isVirtual() const { return relative_data_path.empty(); }
     Int64 committedSN() const { return committed_sn; }
@@ -992,8 +983,6 @@ public:
 protected:
     friend class IMergeTreeDataPart;
     friend class MergeTreeDataMergerMutator;
-    friend struct ReplicatedMergeTreeTableMetadata;
-    friend class StorageReplicatedMergeTree;
     friend class MergeTreeDataWriter;
     friend class MergeTask;
     friend class IPartMetadataManager;

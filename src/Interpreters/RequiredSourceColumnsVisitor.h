@@ -6,10 +6,6 @@
 namespace DB
 {
 
-namespace ErrorCodes
-{
-}
-
 class ASTIdentifier;
 class ASTFunction;
 class ASTSelectQuery;

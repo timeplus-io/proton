@@ -1064,7 +1064,7 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
     const auto & settings = context->getSettingsRef();
     const auto & input_order_info = query_info.getInputOrderInfo();
 
-    if (select.final() || ((data.isChangelogKvMode() || data.isVersionedKvMode()) && settings.compact_kv_stream.value)) /// proton : for changelog_kv or versioned_kv, we always enforce final
+    if (select.final() || (Streaming::isKeyedDataStream(data.dataStreamSemantic()) && settings.compact_kv_stream.value)) /// proton : for changelog_kv or versioned_kv, we always enforce final
     {
         /// Add columns needed to calculate the sorting expression and the sign.
         std::vector<String> add_columns = metadata_for_reading->getColumnsRequiredForSortingKey();

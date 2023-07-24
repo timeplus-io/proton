@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ITableFunction.h"
+#include <TableFunctions/ITableFunction.h>
 
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/StorageID.h>
@@ -8,6 +8,7 @@
 #include <Interpreters/Streaming/TimestampFunctionDescription.h>
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/StorageSnapshot.h>
+#include <Core/Streaming/DataStreamSemantic.h>
 
 namespace DB
 {
@@ -54,6 +55,7 @@ protected:
     StoragePtr nested_proxy_storage;
 
     bool streaming = true;
+    DataStreamSemantic data_stream_semantic = DataStreamSemantic::Append;
 };
 }
 }

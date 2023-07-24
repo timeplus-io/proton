@@ -124,6 +124,7 @@ StorageMergeTree::StorageMergeTree(
     loadMutations();
 
     loadDeduplicationLog();
+
     /// proton: starts
     locateSNFile();
     populateCommittedSNFromParts();

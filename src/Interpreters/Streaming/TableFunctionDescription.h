@@ -1,12 +1,13 @@
 #pragma once
 
-#include "WindowCommon.h"
-
 #include <Core/Names.h>
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 #include <Parsers/IAST_fwd.h>
+
+#include <any>
 
 namespace DB
 {
@@ -35,6 +36,8 @@ struct TableFunctionDescription
     WindowType type;
     Names argument_names;
     DataTypes argument_types;
+
+    std::any func_ctx;
 
     ExpressionActionsPtr expr_before_table_function;
 

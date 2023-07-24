@@ -1,12 +1,14 @@
 #include <Interpreters/getTableExpressions.h>
+
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Storages/IStorage.h>
 
 /// proton: starts.
 #include <Common/ProtonCommon.h>
+#include <Interpreters/Streaming/GetSampleBlockContext.h>
 /// proton: ends.
 
 namespace DB
@@ -83,13 +85,18 @@ static NamesAndTypesList getColumnsFromTableExpression(
     NamesAndTypesList & materialized,
     NamesAndTypesList & aliases,
     NamesAndTypesList & virtuals,
-    Streaming::DataStreamSemantic & data_stream_semantic) /// proton : data_stream_semantic
+    Streaming::GetSampleBlockContext * get_sample_block_ctx)
 {
     NamesAndTypesList names_and_type_list;
     if (table_expression.subquery)
     {
         const auto & subquery = table_expression.subquery->children.at(0);
-        names_and_type_list = InterpreterSelectWithUnionQuery::getSampleBlock(subquery, context, true, &data_stream_semantic).getNamesAndTypesList();
+        names_and_type_list = InterpreterSelectWithUnionQuery::getSampleBlock(subquery, context, true, get_sample_block_ctx).getNamesAndTypesList();
+
+        /// proton : starts. Rewrite table_expression
+        if (get_sample_block_ctx && get_sample_block_ctx->rewritten_query)
+            table_expression.subquery->children[0] = get_sample_block_ctx->rewritten_query;
+        /// proton : ends
     }
     else if (table_expression.table_function)
     {
@@ -103,7 +110,8 @@ static NamesAndTypesList getColumnsFromTableExpression(
         virtuals = function_storage->getVirtuals();
 
         /// proton : starts. Calculate hash semantic
-        data_stream_semantic = Streaming::getDataStreamSemantic(function_storage);
+        if (get_sample_block_ctx)
+            get_sample_block_ctx->output_data_stream_semantic = Streaming::getDataStreamSemantic(function_storage);
         /// proton : ends
     }
     else if (table_expression.database_and_table_name)
@@ -118,7 +126,8 @@ static NamesAndTypesList getColumnsFromTableExpression(
         virtuals = table->getVirtuals();
 
         /// proton : starts. Calculate hash semantic
-        data_stream_semantic = Streaming::getDataStreamSemantic(table);
+        if (get_sample_block_ctx)
+            get_sample_block_ctx->output_data_stream_semantic = Streaming::getDataStreamSemantic(table);
         /// proton : ends
     }
 
@@ -130,7 +139,8 @@ static void removeReservedColumns(NamesAndTypesList & columns)
 {
     for (auto it = columns.begin(); it != columns.end();)
     {
-        if (std::find(ProtonConsts::RESERVED_COLUMN_NAMES.begin(), ProtonConsts::RESERVED_COLUMN_NAMES.end(), it->name) != ProtonConsts::RESERVED_COLUMN_NAMES.end())
+        if (std::find(ProtonConsts::RESERVED_COLUMN_NAMES.begin(), ProtonConsts::RESERVED_COLUMN_NAMES.end(), it->name)
+            != ProtonConsts::RESERVED_COLUMN_NAMES.end())
             it = columns.erase(it);
         else
             ++it;
@@ -139,10 +149,11 @@ static void removeReservedColumns(NamesAndTypesList & columns)
 /// proton: ends.
 
 TablesWithColumns getDatabaseAndTablesWithColumns(
-        const ASTTableExprConstPtrs & table_expressions,
-        ContextPtr context,
-        bool include_alias_cols,
-        bool include_materialized_cols)
+    const ASTTableExprConstPtrs & table_expressions,
+    ContextPtr context,
+    bool include_alias_cols,
+    bool include_materialized_cols,
+    Streaming::GetSampleBlockContext * get_sample_block_ctx)
 {
     TablesWithColumns tables_with_columns;
 
@@ -153,9 +164,9 @@ TablesWithColumns getDatabaseAndTablesWithColumns(
         NamesAndTypesList materialized;
         NamesAndTypesList aliases;
         NamesAndTypesList virtuals;
-        Streaming::DataStreamSemantic data_stream_semantic = Streaming::DataStreamSemantic::Append;
         NamesAndTypesList names_and_types = getColumnsFromTableExpression(
-            *table_expression, context, materialized, aliases, virtuals, data_stream_semantic);
+            *table_expression, context, materialized, aliases, virtuals,
+            get_sample_block_ctx);
 
         removeDuplicateColumns(names_and_types);
 
@@ -164,8 +175,7 @@ TablesWithColumns getDatabaseAndTablesWithColumns(
             removeReservedColumns(names_and_types);
         /// proton: ends.
 
-        tables_with_columns.emplace_back(
-            DatabaseAndTableWithAlias(*table_expression, current_database), names_and_types);
+        tables_with_columns.emplace_back(DatabaseAndTableWithAlias(*table_expression, current_database), names_and_types);
 
         auto & table = tables_with_columns.back();
         table.addHiddenColumns(materialized);
@@ -179,11 +189,11 @@ TablesWithColumns getDatabaseAndTablesWithColumns(
             table.addMaterializedColumns(materialized);
 
         /// proton : starts
-        table.setDataStreamSemantic(data_stream_semantic);
+        if (get_sample_block_ctx)
+            table.setOutputDataStreamSemantic(get_sample_block_ctx->output_data_stream_semantic);
         /// proton : ends
     }
 
     return tables_with_columns;
 }
-
 }

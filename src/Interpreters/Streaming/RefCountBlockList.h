@@ -1,22 +1,24 @@
 #pragma once
 
-#include <Interpreters/Streaming/joinMetrics.h>
+#include <Interpreters/Streaming/CachedBlockMetrics.h>
 #include <Interpreters/Streaming/joinSerder_fwd.h>
-
-#include <Core/Block.h>
 #include <base/SerdeTag.h>
+#include <base/defines.h>
+
+#include <list>
 
 namespace DB
 {
 namespace Streaming
 {
+template <typename DataBlock>
 struct RefCountBlock
 {
     /// init ref count to row count for RowRefsWithCount case
     /// When refcount drops to zero, which means nobody is referencing any row
     /// in the block so the block will be GCed
-    RefCountBlock(Block && block_) : block(std::move(block_)), refcnt(static_cast<uint32_t>(block.rows())) { }
-    RefCountBlock(const Block & block_) : block(block_), refcnt(static_cast<uint32_t>(block.rows())) { }
+    explicit RefCountBlock(DataBlock && block_) : block(std::move(block_)), refcnt(static_cast<uint32_t>(block.rows())) { }
+    explicit RefCountBlock(const DataBlock & block_) : block(block_), refcnt(static_cast<uint32_t>(block.rows())) { }
 
     RefCountBlock(RefCountBlock && other) noexcept : block(std::move(other.block)), refcnt(other.refcnt) { }
 
@@ -37,15 +39,16 @@ struct RefCountBlock
 
     UInt32 refCount() const { return refcnt; }
 
-    Block block;
+    DataBlock block;
     UInt32 refcnt;
 };
 
-struct JoinBlockList
+template <typename DataBlock>
+struct RefCountBlockList
 {
-    explicit JoinBlockList(JoinMetrics & metrics_) : metrics(metrics_) { }
+    explicit RefCountBlockList(CachedBlockMetrics & metrics_) : metrics(metrics_) { }
 
-    ~JoinBlockList()
+    ~RefCountBlockList()
     {
         metrics.current_total_blocks -= blocks.size();
         metrics.current_total_bytes -= total_bytes;
@@ -54,10 +57,10 @@ struct JoinBlockList
         metrics.gced_blocks += blocks.size();
     }
 
-    void ALWAYS_INLINE updateMetrics(const Block & block)
+    void ALWAYS_INLINE updateMetrics(const DataBlock & block)
     {
-        min_ts = std::min(block.info.watermark_lower_bound, min_ts);
-        max_ts = std::max(block.info.watermark, max_ts);
+        min_ts = std::min(block.minTimestamp(), min_ts);
+        max_ts = std::max(block.maxTimestamp(), max_ts);
 
         /// Update metrics
         auto bytes = block.allocatedBytes();
@@ -68,7 +71,7 @@ struct JoinBlockList
         metrics.total_bytes += bytes;
     }
 
-    void ALWAYS_INLINE negateMetrics(const Block & block)
+    void ALWAYS_INLINE negateMetrics(const DataBlock & block)
     {
         /// Update metrics
         auto bytes = block.allocatedBytes();
@@ -80,7 +83,7 @@ struct JoinBlockList
         ++metrics.gced_blocks;
     }
 
-    void erase(std::list<RefCountBlock>::iterator iter)
+    void erase(typename std::list<RefCountBlock<DataBlock>>::iterator iter)
     {
         assert(iter->refCount() == 0);
         negateMetrics(iter->block);
@@ -96,37 +99,37 @@ struct JoinBlockList
         return --blocks.end();
     }
 
-    const Block * lastBlock() const
+    const DataBlock & lastBlock() const
     {
         assert(!blocks.empty());
-        return &blocks.back().block;
+        return blocks.back().block;
     }
 
-    using iterator = std::list<RefCountBlock>::iterator;
-    using const_iterator = std::list<RefCountBlock>::const_iterator;
+    using iterator = typename std::list<RefCountBlock<DataBlock>>::iterator;
+    using const_iterator = typename std::list<RefCountBlock<DataBlock>>::const_iterator;
 
-    iterator begin() { return blocks.begin(); }
-    iterator end() { return blocks.end(); }
+    auto begin() { return blocks.begin(); }
+    auto end() { return blocks.end(); }
 
     size_t size() const { return blocks.size(); }
 
-    const_iterator begin() const { return blocks.begin(); }
-    const_iterator end() const { return blocks.end(); }
+    auto begin() const { return blocks.begin(); }
+    auto end() const { return blocks.end(); }
 
-    void push_back(Block && block)
+    void push_back(DataBlock && block)
     {
         updateMetrics(block);
-        blocks.push_back(std::move(block));
+        blocks.emplace_back(std::move(block));
     }
 
-    void push_back(const Block & block)
+    void push_back(const DataBlock & block)
     {
         updateMetrics(block);
-        blocks.push_back(block);
+        blocks.emplace_back(block);
     }
 
-    Int64 minTimestamp() const { return min_ts; }
-    Int64 maxTimestamp() const { return max_ts; }
+    Int64 minTimestamp() const noexcept { return min_ts; }
+    Int64 maxTimestamp() const noexcept { return max_ts; }
 
     void serialize(WriteBuffer & wb, SerializedBlocksToIndices * serialized_blocks_to_indices = nullptr) const;
     void deserialize(ReadBuffer & rb, DeserializedIndicesToBlocks * deserialized_indices_with_block = nullptr);
@@ -136,10 +139,11 @@ private:
     SERDE Int64 max_ts = std::numeric_limits<Int64>::min();
     SERDE size_t total_bytes = 0;
 
-    SERDE std::list<RefCountBlock> blocks;
+    SERDE std::list<RefCountBlock<DataBlock>> blocks;
 
-    JoinMetrics & metrics;
+    CachedBlockMetrics & metrics;
 };
 
+extern template struct RefCountBlockList<Block>;
 }
 }

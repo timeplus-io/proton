@@ -89,13 +89,13 @@ private:
         auto result{std::minmax_element(col->getData().begin(), col->getData().end())};
         if constexpr (std::is_same_v<IntegralColumnType, DB::ColumnDecimal<DB::DateTime64>>)
         {
-            block.info.watermark_lower_bound = result.first->value;
-            block.info.watermark = result.second->value;
+            block.setMinTimestamp(result.first->value);
+            block.setMaxTimestamp(result.second->value);
         }
         else
         {
-            block.info.watermark_lower_bound = *result.first;
-            block.info.watermark = *result.second;
+            block.setMinTimestamp(*result.first);
+            block.setMaxTimestamp(*result.second);
         }
     }
 

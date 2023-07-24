@@ -84,7 +84,7 @@ void normalizeColumns(ASTCreateQuery & create, ContextPtr context)
     else if (create.select)
     {
         /// Case: `create stream t1 as select * from test`
-        Block as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), context);
+        Block as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), context, false, nullptr);
         create.columns_list->setOrReplace(
             create.columns_list->columns, InterpreterCreateQuery::formatColumns(as_select_sample.getNamesAndTypesList()));
     }
@@ -664,7 +664,7 @@ String getJSONFromSystemQuery(const ASTSystemQuery & system)
 TTLSettings parseTTLSettings(const String & payload)
 {
     std::vector<std::pair<String, String>> stream_settings;
-    String ttl_expr = "";
+    String ttl_expr;
     Poco::JSON::Parser parser;
     auto json = parser.parse(payload).extract<Poco::JSON::Object::Ptr>();
 
@@ -718,8 +718,8 @@ int extractErrorCodeFromMsg(const String & err_msg)
 {
     if (auto pos = err_msg.find("Code: "); pos != String::npos)
         return std::atoi(err_msg.c_str() + pos + 6);
-    else if(auto pos = err_msg.find("code:"); pos != String::npos)
-        return std::atoi(err_msg.c_str() + pos + 5);
+    else if(auto pos2 = err_msg.find("code:"); pos2 != String::npos)
+        return std::atoi(err_msg.c_str() + pos2 + 5);
     else
         return 0;
 }

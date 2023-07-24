@@ -23,6 +23,7 @@
 #include <Processors/QueryPlan/QueryExecuteMode.h>
 #include <Processors/QueryPlan/Streaming/LimitStep.h>
 #include <Processors/QueryPlan/Streaming/OffsetStep.h>
+#include <Interpreters/Streaming/GetSampleBlockContext.h>
 /// proton: ends.
 
 namespace DB
@@ -220,12 +221,12 @@ Block InterpreterSelectWithUnionQuery::getCommonHeaderForUnion(const Blocks & he
 Block InterpreterSelectWithUnionQuery::getCurrentChildResultHeader(const ASTPtr & ast_ptr_, const Names & required_result_column_names)
 {
     if (ast_ptr_->as<ASTSelectWithUnionQuery>())
-        return InterpreterSelectWithUnionQuery(ast_ptr_, context, options.copy().analyze().noModify(), required_result_column_names)
+        return InterpreterSelectWithUnionQuery(ast_ptr_, context, options.copy().analyze(), required_result_column_names)
             .getSampleBlock();
     else if (ast_ptr_->as<ASTSelectQuery>())
-        return InterpreterSelectQuery(ast_ptr_, context, options.copy().analyze().noModify()).getSampleBlock();
+        return InterpreterSelectQuery(ast_ptr_, context, options.copy().analyze()).getSampleBlock();
     else
-        return InterpreterSelectIntersectExceptQuery(ast_ptr_, context, options.copy().analyze().noModify()).getSampleBlock();
+        return InterpreterSelectIntersectExceptQuery(ast_ptr_, context, options.copy().analyze()).getSampleBlock();
 }
 
 std::unique_ptr<IInterpreterUnionOrSelectQuery>
@@ -241,32 +242,45 @@ InterpreterSelectWithUnionQuery::buildCurrentChildInterpreter(const ASTPtr & ast
 
 InterpreterSelectWithUnionQuery::~InterpreterSelectWithUnionQuery() = default;
 
-/// proton : starts. Calculate data stream semantic for the underlying subquery as well
-Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_, ContextPtr context_, bool is_subquery, Streaming::DataStreamSemantic * data_stream_semantic)
+Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_, ContextPtr context_, bool is_subquery, Streaming::GetSampleBlockContext * get_sample_block_ctx)
 {
+    /// proton : starts. Clone the query and work on the cloned query
+    /// since we may update the query in place during the evaluation of the sample block
+    auto updatable_query_ptr = query_ptr_->clone();
+
     SelectQueryOptions select_options;
     select_options.analyze();
+    select_options.modify(true);
 
     if (is_subquery)
-        select_options.subquery();
+        select_options.setSubquery();
+
+    if (get_sample_block_ctx)
+        get_sample_block_ctx->mergeSelectOptions(select_options);
 
     if (!context_->hasQueryContext())
     {
-        InterpreterSelectWithUnionQuery interpreter(query_ptr_, context_, select_options);
-        if (data_stream_semantic)
-            *data_stream_semantic = interpreter.getDataStreamSemantic();
+        InterpreterSelectWithUnionQuery interpreter(updatable_query_ptr, context_, select_options);
+        if (get_sample_block_ctx)
+        {
+            get_sample_block_ctx->output_data_stream_semantic = interpreter.getDataStreamSemantic();
+            get_sample_block_ctx->rewritten_query = updatable_query_ptr;
+        }
         return interpreter.getSampleBlock();
     }
 
     /// Using query string because query_ptr changes for every internal SELECT
-    auto key = queryToString(query_ptr_);
+    auto key = queryToString(updatable_query_ptr);
 
     auto & data_stream_semantic_cache = context_->getDataStreamSemanticCache();
-    if (data_stream_semantic)
+    if (get_sample_block_ctx)
     {
         auto semantic_iter = data_stream_semantic_cache.find(key);
         if (semantic_iter != data_stream_semantic_cache.end())
-            *data_stream_semantic = semantic_iter->second;
+        {
+            get_sample_block_ctx->output_data_stream_semantic = semantic_iter->second.data_stream_semantic;
+            get_sample_block_ctx->rewritten_query = semantic_iter->second.query;
+        }
     }
 
     auto & cache = context_->getSampleBlockCache();
@@ -274,10 +288,21 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
     if (cache_iter != cache.end())
         return cache_iter->second;
 
-    InterpreterSelectWithUnionQuery interpreter(query_ptr_, context_, select_options);
-    data_stream_semantic_cache[key] = interpreter.getDataStreamSemantic();
+    InterpreterSelectWithUnionQuery interpreter(updatable_query_ptr, context_, select_options);
+
+    auto & entry = data_stream_semantic_cache[key];
+    entry.query = updatable_query_ptr;
+    entry.data_stream_semantic = interpreter.getDataStreamSemantic();
+
+    if (get_sample_block_ctx)
+    {
+        get_sample_block_ctx->output_data_stream_semantic = entry.data_stream_semantic;
+        get_sample_block_ctx->rewritten_query = std::move(updatable_query_ptr);
+    }
 
     return cache[key] = interpreter.getSampleBlock();
+
+    /// proton : ends
 }
 /// proton : ends
 
@@ -462,14 +487,6 @@ Streaming::DataStreamSemantic InterpreterSelectWithUnionQuery::getDataStreamSema
     }
 
     return data_semantic;
-}
-
-std::optional<std::vector<std::string>> InterpreterSelectWithUnionQuery::primaryKeyColumns() const
-{
-    if (nested_interpreters.size() > 1)
-        return {};
-
-    return nested_interpreters.back()->primaryKeyColumns();
 }
 
 ColumnsDescriptionPtr InterpreterSelectWithUnionQuery::getExtendedObjects() const

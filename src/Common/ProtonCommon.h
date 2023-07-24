@@ -16,12 +16,13 @@ const std::vector<String> STREAMING_WINDOW_COLUMN_NAMES = {STREAMING_WINDOW_STAR
 const String STREAMING_TIMESTAMP_ALIAS = "__tp_ts";
 const String STREAMING_SESSION_START = "__tp_session_start";
 const String STREAMING_SESSION_END = "__tp_session_end";
+const String PRIMARY_KEY_COLUMN_PREFIX = "__tp_pk_";
+const String VERSION_COLUMN_PREFIX = "__tp_v_";
 
 /// Internal function names
 const String TUMBLE_FUNC_NAME = "__tumble";
 const String HOP_FUNC_NAME = "__hop";
 const String SESSION_FUNC_NAME = "__session";
-const String DEDUP_FUNC_NAME = "__dedup";
 
 const String RESERVED_EMIT_VERSION = "emit_version()";
 

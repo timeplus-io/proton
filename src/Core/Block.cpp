@@ -870,6 +870,17 @@ void Block::reorderColumnsInplace(const std::vector<UInt16> & positions)
     }
 }
 
+void Block::renameColumn(String new_name, size_t column_pos)
+{
+    assert(column_pos < data.size());
+    assert(!has(new_name));
+
+    auto & col_with_name = getByPosition(column_pos);
+    index_by_name.erase(col_with_name.name);
+    col_with_name.name = std::move(new_name);
+    index_by_name.emplace(col_with_name.name, column_pos);
+}
+
 Block Block::deepClone() const
 {
     Block result;
@@ -947,6 +958,25 @@ void Block::insertRow(size_t row_num, Block & target_block) const
 
     for (size_t col_pos = 0; const auto & col : data)
         target_block.getByPosition(col_pos++).column->assumeMutable()->insertFrom(*col.column, row_num);
+}
+
+int Block::compareAt(size_t lhs_row, size_t rhs_row, const Block & rhs_block, const std::vector<size_t> & skip_columns) const
+{
+    assert(columns() == rhs_block.columns());
+
+    for (size_t i = 0, num_columns = columns(); i < num_columns; ++i)
+    {
+        if (std::find(skip_columns.begin(), skip_columns.end(), i) != skip_columns.end())
+            continue;
+
+        const auto & lhs_col = getByPosition(i);
+        const auto & rhs_col = rhs_block.getByPosition(i);
+
+        if (auto r = lhs_col.column->compareAt(lhs_row, rhs_row, *rhs_col.column, -1); r != 0)
+            return r;
+    }
+
+    return 0;
 }
 /// proton: ends
 

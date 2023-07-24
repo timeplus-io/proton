@@ -437,7 +437,7 @@ void LimitTransform::work()
 void LimitTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
-        bool has_previous_row_chunk = previous_row_chunk;
+        bool has_previous_row_chunk = previous_row_chunk.operator bool();
         writeBoolText(has_previous_row_chunk, wb);
         if (has_previous_row_chunk)
         {

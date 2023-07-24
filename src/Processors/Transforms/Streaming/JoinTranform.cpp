@@ -49,8 +49,6 @@ IProcessor::Status JoinTransform::prepare()
     /// Check can output.
     if (output.isFinished())
     {
-        output.finish();
-
         for (auto & port_ctx : input_ports_with_data)
             port_ctx.input_port->close();
 
@@ -254,10 +252,8 @@ inline void JoinTransform::joinBidirectionally(Chunks chunks)
         auto block = input_ports_with_data[i].input_port->getHeader().cloneWithColumns(chunks[i].detachColumns());
         auto retracted_block = std::invoke(join_funcs[i], join.get(), block);
 
-        if (auto rows = block.rows(); rows > 0)
         {
             std::scoped_lock lock(mutex);
-
             /// First emit retracted block
             auto retracted_block_rows = retracted_block.rows();
             if (retracted_block_rows)
@@ -268,7 +264,8 @@ inline void JoinTransform::joinBidirectionally(Chunks chunks)
                 output_chunks.emplace_back(retracted_block.getColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
             }
 
-            output_chunks.emplace_back(block.getColumns(), rows);
+            if (block.rows())
+                output_chunks.emplace_back(block.getColumns(), block.rows());
         }
     }
 }

@@ -54,7 +54,7 @@ std::shared_ptr<T> addASTChildren(IAST & node)
     return children;
 }
 
-void replaceJoinedTable(const ASTSelectQuery & select_query)
+void replaceJoinedTable(const ASTSelectQuery & select_query, bool force_rewrite)
 {
     const ASTTablesInSelectQueryElement * join = select_query.join();
     if (!join || !join->table_expression)
@@ -81,20 +81,24 @@ void replaceJoinedTable(const ASTSelectQuery & select_query)
         String table_name = table_id.name();
         String table_short_name = table_id.shortName();
 
-        /// proton: starts
+        /// proton: starts. Do we still need this ?
         auto streaming = table_id.streaming;
         /// proton: ends
 
         // FIXME: since the expression "a as b" exposes both "a" and "b" names, which is not equivalent to "(select * from a) as b",
         //        we can't replace aliased tables.
         // FIXME: long table names include database name, which we can't save within alias.
-        if (table_id.alias.empty() && table_id.isShort())
+        if (force_rewrite || (table_id.alias.empty() && table_id.isShort()))
         {
+            /// proton : even when the table name is long name form : database.tablename, if we enforce
+            /// to rewrite it, we will do `(SELECT * FROM database.tablename) AS tablename`
+            auto alias = std::move(table_id.alias);
+
             /// Build query of form '(SELECT * FROM table_name) AS table_short_name'
             table_expr = ASTTableExpression();
 
             auto subquery = addASTChildrenTo<ASTSubquery>(table_expr, table_expr.subquery);
-            subquery->setAlias(table_short_name);
+            subquery->setAlias(alias.empty() ? table_short_name : alias);
 
             auto sub_select_with_union = addASTChildren<ASTSelectWithUnionQuery>(*subquery);
             auto list_of_selects = addASTChildrenTo<ASTExpressionList>(*sub_select_with_union, sub_select_with_union->list_of_selects);
@@ -107,12 +111,44 @@ void replaceJoinedTable(const ASTSelectQuery & select_query)
             auto tables_elem = addASTChildren<ASTTablesInSelectQueryElement>(*new_select->tables());
             auto sub_table_expr = addASTChildrenTo<ASTTableExpression>(*tables_elem, tables_elem->table_expression);
 
-            /// proton: starts. Propagate `streaming` tag
+            /// proton: starts. Propagate `streaming` tag, do we still need this ?
             auto new_table_id = addASTChildrenTo<ASTTableIdentifier>(*sub_table_expr, sub_table_expr->database_and_table_name, table_name);
             new_table_id->as<ASTTableIdentifier>()->streaming = streaming;
             /// proton: ends
         }
     }
+    /// proton : starts
+    else if (force_rewrite && table_expr.table_function)
+    {
+        auto & func = table_expr.table_function->as<ASTFunction &>();
+        if (func.alias.empty())
+            throw Exception(ErrorCodes::ALIAS_REQUIRED, "Table function requires an alias in this query in this scenario");
+
+        /// SELECT * FROM changelog(versioned_kv) AS changes JOIN changelog(versioned_kv2) as changes2 ON changes.k = changes2.k; =>
+        /// SELECT * FROM changelog(versioned_kv) AS changes JOIN (SELECT * FROM changelog(versioned_kv2)) as changes2 ON changes.k = changes2.k;
+
+        auto origin_table_function = table_expr.table_function;
+
+        table_expr = ASTTableExpression();
+        auto subquery = addASTChildrenTo<ASTSubquery>(table_expr, table_expr.subquery);
+        subquery->setAlias(func.alias);
+        func.alias.clear();
+
+        auto sub_select_with_union = addASTChildren<ASTSelectWithUnionQuery>(*subquery);
+        auto list_of_selects = addASTChildrenTo<ASTExpressionList>(*sub_select_with_union, sub_select_with_union->list_of_selects);
+
+        auto new_select = addASTChildren<ASTSelectQuery>(*list_of_selects);
+        new_select->setExpression(ASTSelectQuery::Expression::SELECT, std::make_shared<ASTExpressionList>());
+        addASTChildren<ASTAsterisk>(*new_select->select());
+        new_select->setExpression(ASTSelectQuery::Expression::TABLES, std::make_shared<ASTTablesInSelectQuery>());
+
+        auto tables_elem = addASTChildren<ASTTablesInSelectQueryElement>(*new_select->tables());
+        auto sub_table_expr = addASTChildrenTo<ASTTableExpression>(*tables_elem, tables_elem->table_expression);
+        /// Just point to original table_function
+        sub_table_expr->table_function = origin_table_function;
+        sub_table_expr->children.push_back(sub_table_expr->table_function);
+    }
+    /// proton : ends
 }
 
 class RenameQualifiedIdentifiersMatcher
@@ -242,12 +278,12 @@ StoragePtr JoinedTables::getLeftTableStorage()
     return DatabaseCatalog::instance().getTable(table_id, context);
 }
 
-bool JoinedTables::resolveTables()
+bool JoinedTables::resolveTables(Streaming::GetSampleBlockContext & get_sample_block_ctx)
 {
     const auto & settings = context->getSettingsRef();
     bool include_alias_cols = include_all_columns || settings.asterisk_include_alias_columns;
     bool include_materialized_cols = include_all_columns || settings.asterisk_include_materialized_columns;
-    tables_with_columns = getDatabaseAndTablesWithColumns(table_expressions, context, include_alias_cols, include_materialized_cols);
+    tables_with_columns = getDatabaseAndTablesWithColumns(table_expressions, context, include_alias_cols, include_materialized_cols, &get_sample_block_ctx);
     if (tables_with_columns.size() != table_expressions.size())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected tables count");
 
@@ -308,7 +344,7 @@ void JoinedTables::rewriteDistributedInAndJoins(ASTPtr & query)
     }
 }
 
-std::shared_ptr<TableJoin> JoinedTables::makeTableJoin(const ASTSelectQuery & select_query)
+std::shared_ptr<TableJoin> JoinedTables::makeTableJoin(const ASTSelectQuery & select_query, bool make_right_table_subquery)
 {
     if (tables_with_columns.size() < 2)
         return {};
@@ -357,9 +393,9 @@ std::shared_ptr<TableJoin> JoinedTables::makeTableJoin(const ASTSelectQuery & se
         }
     }
 
-    if (!table_join->isSpecialStorage() &&
-        settings.enable_optimize_predicate_expression)
-        replaceJoinedTable(select_query);
+    if ((!table_join->isSpecialStorage() &&
+        settings.enable_optimize_predicate_expression))
+        replaceJoinedTable(select_query, make_right_table_subquery);
 
     return table_join;
 }

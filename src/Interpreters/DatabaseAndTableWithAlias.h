@@ -57,11 +57,12 @@ struct TableWithColumnNamesAndTypes
     NamesAndTypesList materialized_columns;
 
     /// proton : starts. The data stream semantic bound to this storage or subquery
-    Streaming::DataStreamSemantic data_stream_semantic = Streaming::DataStreamSemantic::Append;
+    /// Physical storage only has output data stream semantic and doesn't have input data stream semantic
+    Streaming::DataStreamSemantic output_data_stream_semantic = Streaming::DataStreamSemantic::Append;
 
-    void setDataStreamSemantic(Streaming::DataStreamSemantic data_stream_semantic_)
+    void setOutputDataStreamSemantic(Streaming::DataStreamSemantic data_stream_semantic_)
     {
-        data_stream_semantic = data_stream_semantic_;
+        output_data_stream_semantic = data_stream_semantic_;
     }
     /// proton : ends
 

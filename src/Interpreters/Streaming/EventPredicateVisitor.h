@@ -29,6 +29,11 @@ public:
     private:
         /// Allow multiple streams: stream_pos - SeekToInfos
         SeekToInfosOfStreams seek_to_infos;
+        /// FIXME, the init of IdentifierMembershipCollector could be expensive since it needs walk
+        /// through the AST to resolve the table expression which will recursively call
+        /// InterpreterSelectWithUnionQuery::getSampleBlock(subquery, ...) to evaluate the sample header
+        /// if the table expression is a subquery (this is mostly true for join case)
+        /// Check the sample block cache hit rate
         const IdentifierMembershipCollector membership_collector;
 
     public:

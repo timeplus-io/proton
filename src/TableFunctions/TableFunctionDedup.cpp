@@ -1,8 +1,7 @@
-#include "TableFunctionDedup.h"
+#include <TableFunctions/TableFunctionDedup.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <TableFunctions/TableFunctionFactory.h>
@@ -45,16 +44,12 @@ void TableFunctionDedup::parseArguments(const ASTPtr & func_ast, ContextPtr cont
     /// First argument is expected to be table
     resolveStorageID(args[0], context);
 
-    /// Change the name to call the internal __dedup functions
-    node->name = "__" + node->name;
-
-    /// Prune the arguments to fit the internal window function
+    /// Prune the first stream argument
     args.erase(args.begin());
-
     node->arguments->children.swap(args);
 
     /// Calculate column description
-    auto storage = TableFunctionProxyBase::calculateColumnDescriptions(context);
+    TableFunctionProxyBase::calculateColumnDescriptions(context);
 
     /// Create table func desc
     streaming_func_desc = createStreamingTableFunctionDescription(dedup_func_ast, context);
@@ -69,7 +64,7 @@ ASTs TableFunctionDedup::checkAndExtractArguments(ASTFunction * node) const
 
     size_t end_pos = args.size();
 
-    auto check_timeout = [&](size_t pos) {
+    auto check_timeout = [&, this](size_t pos) {
         /// Check if last argument is interval literal
         if (auto * func = args[pos]->as<ASTFunction>(); func)
         {
@@ -84,7 +79,7 @@ ASTs TableFunctionDedup::checkAndExtractArguments(ASTFunction * node) const
         }
     };
 
-    auto check_limit = [&](size_t pos) {
+    auto check_limit = [&, this](size_t pos) {
         if (auto * lit = args[pos]->as<ASTLiteral>(); lit)
         {
             /// When last param is number limit, we requires at least 4 params

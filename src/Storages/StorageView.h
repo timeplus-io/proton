@@ -43,6 +43,7 @@ public:
     bool supportsSubcolumns() const override { return true; }
     bool supportsDynamicSubcolumns() const override { return true; }
     StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const override;
+    Streaming::DataStreamSemantic dataStreamSemantic() const override;
 
     void startup() override;
     void shutdown() override;
@@ -51,6 +52,7 @@ public:
 
 private:
     ContextMutablePtr local_context;
+    mutable bool data_stream_semantic_resolved = false;
     /// proton: ends.
 
 protected:

@@ -870,7 +870,7 @@ void ExpressionAnalyzer::makeWindowDescriptions(ActionsDAGPtr actions)
 
         // Requiring a constant reference to a shared pointer to non-const AST
         // doesn't really look sane, but the visitor does indeed require it.
-        // Hence we clone the node (not very sane either, I know).
+        // Hence, we clone the node (not very sane either, I know).
         getRootActionsNoMakeSet(window_function.function_node->clone(), actions);
 
         /// proton: starts. support non-aggregate-over function in streaming queries
@@ -1066,25 +1066,9 @@ JoinPtr SelectQueryExpressionAnalyzer::appendJoin(
         chain.addStep();
     }
 
-    /// proton : starts
-    /// We will need propagate `_tp_delta` to downstream for changelog query processing only
-    /// 1) `_tp_delta` was explicitly requested like `SELECT _tp_delta, i FROM left INNER JOIN right ON left.key = right.key`
-    /// 2) SELECT aggregation_functions FROM left INNER JOIN right ON left.key = right.key GROUP BY ..
-    bool delta_column_is_requested = syntax->unresolved_reserved_columns.contains(ProtonConsts::RESERVED_DELTA_FLAG);
-    bool project_delta_column = false;
-
-    if (auto * streaming_join = dynamic_cast<Streaming::IHashJoin *>(join.get()); streaming_join
-        && streaming_join->emitChangeLog())
-    {
-        project_delta_column = true;
-    }
-    else if (delta_column_is_requested)
-        throw Exception(ErrorCodes::UNKNOWN_IDENTIFIER, "'Unknown column '{}'", ProtonConsts::RESERVED_DELTA_FLAG);
-    /// proton : ends
-
     ExpressionActionsChain::Step & step = chain.lastStep(columns_after_array_join);
     chain.steps.push_back(std::make_unique<ExpressionActionsChain::JoinStep>(
-        syntax->analyzed_join, join, step.getResultColumns(), project_delta_column));
+        syntax->analyzed_join, join, step.getResultColumns()));
 
     chain.addStep();
     return join;
@@ -1149,8 +1133,7 @@ static std::unique_ptr<QueryPlan> buildJoinedPlan(
     const ASTTablesInSelectQueryElement & join_element,
     TableJoin & analyzed_join,
     SelectQueryOptions query_options,
-    SeekToInfoPtr seek_to_info, /// proton: added seek_to_info, primary_key_columns etc
-    std::optional<std::vector<std::string>> & primary_key_columns)
+    SeekToInfoPtr seek_to_info) /// proton: added seek_to_info
 {
     /// Actions which need to be calculated on joined block.
     auto joined_block_actions = createJoinedBlockActions(context, analyzed_join);
@@ -1171,10 +1154,12 @@ static std::unique_ptr<QueryPlan> buildJoinedPlan(
         join_element.table_expression,
         context,
         original_right_column_names,
-        query_options.copy().setWithAllColumns().ignoreProjections(false).ignoreAlias(false).setJoinSubquery(true),
+        query_options.copy().setWithAllColumns().ignoreProjections(false).ignoreAlias(false),
         seek_to_info); /// proton: added seek_to_info
 
-    primary_key_columns = interpreter->primaryKeyColumns();
+    assert(analyzed_join.getTablesWithColumns().size() == 2);
+    /// assert(interpreter->getDataStreamSemantic() == analyzed_join.getTablesWithColumns().back().output_data_stream_semantic);
+
     auto joined_plan = std::make_unique<QueryPlan>();
     interpreter->buildQueryPlan(*joined_plan);
     {
@@ -1271,8 +1256,7 @@ JoinPtr SelectQueryExpressionAnalyzer::makeJoin(
     }
 
     /// proton: starts. Support seek to joined table
-    std::optional<std::vector<std::string>> primary_key_columns;
-    joined_plan = buildJoinedPlan(getContext(), join_element, *analyzed_join, query_options, seek_to_info_of_joined_table, primary_key_columns);
+    joined_plan = buildJoinedPlan(getContext(), join_element, *analyzed_join, query_options, seek_to_info_of_joined_table);
     /// proton: ends.
 
     const ColumnsWithTypeAndName & right_columns = joined_plan->getCurrentDataStream().header.getColumnsWithTypeAndName();
@@ -1290,7 +1274,7 @@ JoinPtr SelectQueryExpressionAnalyzer::makeJoin(
 
     JoinPtr join;
     if (syntax->streaming && joined_plan->isStreaming())
-        join = chooseJoinAlgorithmStreaming(analyzed_join, std::move(primary_key_columns));
+        join = chooseJoinAlgorithmStreaming(analyzed_join);
     else
         join = chooseJoinAlgorithm(analyzed_join, joined_plan, getContext());
     /// proton : ends
@@ -1820,8 +1804,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
     bool only_types,
     const FilterDAGInfoPtr & filter_info_,
     const Block & source_header,
-    bool emit_version,
-    Streaming::DataStreamSemantic data_stream_semantic)
+    Streaming::ExpressionAnalysisContext analysis_ctx)
     : first_stage(first_stage_)
     , second_stage(second_stage_)
     , need_aggregate(query_analyzer.hasAggregation())
@@ -1908,43 +1891,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             before_join = chain.getLastActions();
             join = query_analyzer.appendJoin(chain, converting_join_columns);
             chain.addStep();
-
-            /// proton : starts
-            if (const auto * streaming_join = dynamic_cast<Streaming::IHashJoin *>(join.get()); streaming_join && streaming_join->emitChangeLog())
-                force_internal_changelog_emit = true;
-            /// proton : ends
         }
-
-        /// proton : starts
-        /// When InterpreterSelectQuery evaluates the sample result / output block header (Interpreter::getSampleBlockImpl()),
-        /// it will call `analysis_result = ExpressionAnalysisResult(...)`. In InterpreterSelectQuery::addRequiredColumns(...)`,
-        /// we already manually add primary key columns etc to the required_columns depending on if it is versioned kv
-        /// or changelog kv etc data stream semantic
-        /// We will need propagate `_tp_delta` to downstream for changelog query processing
-        auto add_special_required_output = [&]() {
-            if (!need_aggregate)
-                return;
-
-            /// We will need propagate the special columns when aggregate is defined
-            if (data_stream_semantic == Streaming::DataStreamSemantic::Changelog)
-            {
-                auto & step = chain.getLastStep();
-                step.addRequiredOutput(ProtonConsts::RESERVED_DELTA_FLAG);
-            }
-
-            /// we will need propagate the primary key for versioned kv to down stream
-            if (data_stream_semantic == Streaming::DataStreamSemantic::VersionedKV)
-            {
-                assert(metadata_snapshot);
-                const auto & primary_key_columns = metadata_snapshot->primary_key.column_names;
-                assert(!primary_key_columns.empty());
-
-                auto & step = chain.getLastStep();
-                for (const auto & key_col : primary_key_columns)
-                    step.addRequiredOutput(key_col);
-            }
-        };
-        /// proton : ends
 
         if (query_analyzer.appendWhere(chain, only_types || !first_stage))
         {
@@ -1969,8 +1916,6 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                 }
             }
             chain.addStep();
-
-            add_special_required_output();
         }
 
         /// proton: starts.
@@ -2006,20 +1951,6 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                 }
             }
 
-            /// Before finalize the chain, we will need add _tp_delta as required output
-            /// otherwise chain finalization will get rid of it.
-            /// For versioned_kv join versioned_kv case, we have patched up stream `JoinStep` to emit `_tp_delta`
-            /// and the `_tp_delta` column needs flow through the downstream pipe until aggregation.
-            /// Chain finalization will get rid of all unnecessary columns just before aggregation and only
-            /// keep around columns which are used for aggregation function and aggregated columns.
-            /// `_tp_delta` is neither a parameter to any aggregation functions nor aggregated columns, so it
-            /// will be erased of we don't explicitly require it.
-            if (force_internal_changelog_emit)
-            {
-                auto & step = chain.getLastStep();
-                step.addRequiredOutput(ProtonConsts::RESERVED_DELTA_FLAG);
-            }
-
             bool may_have_streaming_aggr_over = query_analyzer.syntax->streaming && has_window;
             if (may_have_streaming_aggr_over)
             {
@@ -2051,7 +1982,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             finalize_chain(chain);
 
             /// proton: starts.
-            if (emit_version)
+            if (analysis_ctx.emit_version)
             {
                 /// This is a very special case for `emit_version()` which is runtime calculated virtual column.
                 /// Here we are manually fixing the ActionsDAG to produce `emit_version()` column to downstream pipe.
@@ -2322,53 +2253,29 @@ std::string ExpressionAnalysisResult::dump() const
 }
 
 /// proton : starts
-std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreaming(
-    std::shared_ptr<TableJoin> analyzed_join, std::optional<std::vector<std::string>> && primary_key_columns)
+std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreaming(std::shared_ptr<TableJoin> analyzed_join)
 {
     const auto & tables = analyzed_join->getTablesWithColumns();
     assert(tables.size() == 2);
 
-    Streaming::DataStreamSemantic left_data_stream_semantic = tables[0].data_stream_semantic;
-    Streaming::DataStreamSemantic right_data_stream_semantic = tables[1].data_stream_semantic;
-
-    std::optional<std::vector<size_t>> primary_key_column_indexes;
-    if (isKeyValueDataStreamSemantic(right_data_stream_semantic))
-    {
-        if (!primary_key_columns.has_value() || primary_key_columns->empty())
-            throw Exception(ErrorCodes::UNSUPPORTED, "Primary key columns are missing for joined stream");
-
-        primary_key_column_indexes.emplace();
-        primary_key_column_indexes.value().reserve(primary_key_columns.value().size());
-
-        /// joined plan shall have selected the primary key columns
-        const auto & header = joined_plan->getCurrentDataStream().header;
-        for (const auto & key_col : primary_key_columns.value())
-        {
-            try
-            {
-                primary_key_column_indexes->push_back(header.getPositionByName(key_col));
-            }
-            catch (const Exception &)
-            {
-                throw Exception(
-                    ErrorCodes::UNSUPPORTED,
-                    "Not all primary key columns of the version kv stream are not selected in a join scenario: {} is not selected. Select "
-                    "all primary keys.",
-                    key_col);
-            }
-        }
-    }
+    Streaming::DataStreamSemantic left_input_data_stream_semantic = tables[0].output_data_stream_semantic;
+    Streaming::DataStreamSemantic right_input_data_stream_semantic = tables[1].output_data_stream_semantic;
 
     auto keep_versions = getContext()->getSettingsRef().keep_versions;
     auto max_threads = getContext()->getSettingsRef().max_threads;
 
     auto left_join_stream_desc = std::make_shared<Streaming::JoinStreamDescription>(
         Block{},
-        left_data_stream_semantic,
+        left_input_data_stream_semantic,
         keep_versions); /// We don't know the header of the left stream yet since it is not finalized
 
     auto right_join_stream_desc = std::make_shared<Streaming::JoinStreamDescription>(
-        joined_plan->getCurrentDataStream().header, right_data_stream_semantic, keep_versions, std::move(primary_key_column_indexes));
+        joined_plan->getCurrentDataStream().header,
+        right_input_data_stream_semantic,
+        keep_versions);
+
+    /// Right join stream desc has stream semantic and header set, can evaluate the primary key etc column positions
+    right_join_stream_desc->calculateColumnPositions(analyzed_join->strictness());
 
     if (analyzed_join->allowParallelHashJoin())
         return std::make_shared<Streaming::ConcurrentHashJoin>(

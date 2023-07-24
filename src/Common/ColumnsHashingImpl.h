@@ -166,6 +166,13 @@ public:
     }
 
     template <typename Data>
+    ALWAYS_INLINE bool eraseKey(Data & data, size_t row, Arena & pool)
+    {
+        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, pool);
+        return data.erase(keyHolderGetKey(key_holder));
+    }
+
+    template <typename Data>
     ALWAYS_INLINE size_t getHash(const Data & data, size_t row, Arena & pool)
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, pool);

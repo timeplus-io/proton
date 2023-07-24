@@ -17,6 +17,8 @@
 #include <Columns/FilterDescription.h>
 
 /// proton: starts.
+#include <Interpreters/Streaming/CalculateDataStreamSemantic.h>
+#include <Interpreters/Streaming/GetSampleBlockContext.h>
 #include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 /// proton: ends.
@@ -33,6 +35,7 @@ class SubqueryForSet;
 class InterpreterSelectWithUnionQuery;
 class Context;
 class QueryPlan;
+class JoinedTables;
 
 struct GroupingSetsParams;
 using GroupingSetsParamsList = std::vector<GroupingSetsParams>;
@@ -116,12 +119,12 @@ public:
     /// proton: starts
     bool hasAggregation() const override { return query_analyzer->hasAggregation(); }
     bool isStreaming() const override;
-    Streaming::DataStreamSemantic getDataStreamSemantic() const override;
-    std::optional<std::vector<std::string>> primaryKeyColumns() const override;
+    Streaming::DataStreamSemantic getDataStreamSemantic() const override { return data_stream_semantic_pair.output_data_stream_semantic; }
     std::set<String> getGroupByColumns() const override;
     bool hasStreamingWindowFunc() const override;
     Streaming::WindowType windowType() const;
     bool hasGlobalAggregation() const override;
+    Streaming::GetSampleBlockContext getSampleBlockContext() const;
     /// proton: ends
 
     static void addEmptySourceToQueryPlan(
@@ -205,8 +208,7 @@ private:
     void checkUDA();
 
     ColumnsDescriptionPtr getExtendedObjects() const override;
-    bool isChangelog() const;
-    void addRequiredColumns();
+    void resolveDataStreamSemantic(const JoinedTables & joined_tables);
     /// proton: ends
 
     enum class Modificator
@@ -244,10 +246,18 @@ private:
 
     /// proton: starts
     /// A copy of required_columns before adding the additional ones for streaming processing
+    struct StreamingSelectAnalysisContext
+    {
+    };
+
     bool emit_version = false;
     bool has_user_defined_emit_strategy = false;
+    /// Bools to tell the query properties of the `current layer` of SELECT.
+    bool current_select_has_aggregates = false;
+    std::optional<JoinStrictness> current_select_join_strictness; /// Which implies having join if have value
     mutable std::optional<bool> is_streaming;
-    mutable std::optional<Streaming::DataStreamSemantic> data_stream_semantic;
+    /// Overall data stream semantic defines the output semantic of the current layer of SELECT
+    Streaming::DataStreamSemanticPair data_stream_semantic_pair;
     /// proton: ends
 
     /// Actions to calculate ALIAS if required.

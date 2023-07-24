@@ -137,7 +137,7 @@ void ParallelParsingInputFormat::onBackgroundException(size_t offset)
         if (ParsingException * e = exception_cast<ParsingException *>(background_exception))
         {
             if (e->getLineNumber() != -1)
-                e->setLineNumber(e->getLineNumber() + offset);
+                e->setLineNumber(static_cast<int>(e->getLineNumber() + offset));
 
             auto file_name = getFileNameFromReadBuffer(getReadBuffer());
             if (!file_name.empty())

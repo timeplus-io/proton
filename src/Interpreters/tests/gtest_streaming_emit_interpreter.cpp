@@ -1,4 +1,3 @@
-#include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <Interpreters/Streaming/EmitInterpreter.h>
 #include <Interpreters/Streaming/WindowCommon.h>
@@ -6,22 +5,16 @@
 #include <Parsers/ParserQuery.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
-#include <gtest/gtest.h>
+#include <Common/tests/gtest_global_register.h>
 
-/// Note gtest_graphite.cpp also need registers aggregation functions
-/// to avoid conflicts, register only once
-extern bool regAggregateFunctions;
+#include <gtest/gtest.h>
 
 class StreamingEmitInterpreterTest : public ::testing::Test
 {
 public:
     static void SetUpTestSuite()
     {
-        if (!regAggregateFunctions)
-        {
-            DB::registerAggregateFunctions();
-            regAggregateFunctions = true;
-        }
+        tryRegisterAggregateFunctions();
     }
 };
 

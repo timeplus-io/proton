@@ -78,6 +78,9 @@
 #include <optional>
 #include <cassert>
 
+/// proton : starts
+#include <Interpreters/Streaming/SyntaxAnalyzeUtils.h>
+/// proton : ends
 
 namespace fs = std::filesystem;
 
@@ -755,7 +758,7 @@ std::optional<QueryPipeline> StorageDistributed::distributedWrite(const ASTInser
     {
         if (auto * select_query = select.list_of_selects->children.at(0)->as<ASTSelectQuery>())
         {
-            JoinedTables joined_tables(Context::createCopy(local_context), *select_query);
+            JoinedTables joined_tables(Context::createCopy(local_context), *select_query, false);
 
             if (joined_tables.tablesCount() == 1)
             {

@@ -394,7 +394,14 @@ private:
 
     /// proton: starts. Parameters for time predicates of main table
     TimeParam time_param;
-    using DataStreamSemanticCache = std::unordered_map<std::string, Streaming::DataStreamSemantic>;
+
+    struct DataStreamSemanticEntry
+    {
+        Streaming::DataStreamSemantic data_stream_semantic;
+        ASTPtr query;
+    };
+
+    using DataStreamSemanticCache = std::unordered_map<std::string, DataStreamSemanticEntry>;
     mutable DataStreamSemanticCache data_stream_semantic_cache;
     /// proton: end.
 

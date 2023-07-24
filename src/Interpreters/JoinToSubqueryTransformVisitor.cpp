@@ -637,7 +637,7 @@ void JoinToSubqueryTransformMatcher::visit(ASTPtr & ast, Data & data)
 /// 2. Normalize column names and find name clashes
 /// 3. Rewrite multiple JOINs with subqueries:
 ///    SELECT ... FROM (SELECT `--.s`.*, ... FROM (...) AS `--.s` JOIN tableY ON ...) AS `--.s` JOIN tableZ ON ...'
-/// 4. Push down expressions of aliases used in ON section into expression list of first reletad subquery
+/// 4. Push down expressions of aliases used in ON section into expression list of first related subquery
 void JoinToSubqueryTransformMatcher::visit(ASTSelectQuery & select, ASTPtr & ast, Data & data)
 {
     std::vector<const ASTTableExpression *> table_expressions;

@@ -34,6 +34,7 @@ void registerTableFunctions()
     Streaming::registerTableFunctionHist(factory);
     Streaming::registerTableFunctionSession(factory);
     Streaming::registerTableFunctionDedup(factory);
+    Streaming::registerTableFunctionChangelog(factory);
     /// proton: ends
 }
 

@@ -1,4 +1,4 @@
-#include "ShufflingStep.h"
+#include <Processors/QueryPlan/Streaming/ShufflingStep.h>
 
 #include <Processors/Transforms/Streaming/ShufflingTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>

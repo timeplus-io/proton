@@ -168,7 +168,7 @@ public:
     enum class QueryMode : uint8_t
     {
         STREAMING,          /// streaming query
-        STREAMING_CONCAT,   /// streaming query with backfilled historical data
+        STREAMING_CONCAT,   /// streaming query with back filled historical data
         HISTORICAL          /// historical query
     };
     

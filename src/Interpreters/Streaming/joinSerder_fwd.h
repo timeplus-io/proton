@@ -12,13 +12,16 @@ class Arena;
 
 namespace Streaming
 {
+template<typename DataBlock>
 struct RefCountBlock;
-using JoinBlockListIter = std::list<RefCountBlock>::iterator;
+
+template<typename DataBlock>
+using RefCountBlockListIter = typename std::list<RefCountBlock<DataBlock>>::iterator;
 
 /// <Block *, serialized_index>
 using SerializedBlocksToIndices = std::unordered_map<std::uintptr_t, UInt32>;
-/// <deserialized_index, JoinBlockListIter>, here we use an iterator as mapped instaed of "Block *", which is required by `RowRefWithRefCount`
-using DeserializedIndicesToBlocks = std::unordered_map<UInt32, JoinBlockListIter>;
+/// <deserialized_index, RefCountBlockListIter>, here we use an iterator as mapped instaed of "Block *", which is required by `RowRefWithRefCount`
+using DeserializedIndicesToBlocks = std::unordered_map<UInt32, RefCountBlockListIter<Block>>;
 
 
 struct RowRefListMultipleRef;

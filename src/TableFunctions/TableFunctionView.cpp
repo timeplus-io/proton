@@ -26,9 +26,7 @@ void TableFunctionView::parseArguments(const ASTPtr & ast_function, ContextPtr /
             return;
         }
     }
-    /// proton: starts
-    throw Exception("Function '" + getName() + "' requires a query argument.", ErrorCodes::BAD_ARGUMENTS);
-    /// proton: ends
+    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Function '{}' requires a query argument.", getName());
 }
 
 ColumnsDescription TableFunctionView::getActualTableStructure(ContextPtr context) const
@@ -36,7 +34,7 @@ ColumnsDescription TableFunctionView::getActualTableStructure(ContextPtr context
     assert(create.select);
     assert(create.children.size() == 1);
     assert(create.children[0]->as<ASTSelectWithUnionQuery>());
-    auto sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.children[0], context);
+    auto sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.children[0], context, false, nullptr);
     return ColumnsDescription(sample.getNamesAndTypesList());
 }
 

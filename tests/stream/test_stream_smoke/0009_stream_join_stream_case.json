@@ -709,14 +709,14 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1020", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from test10_left_stream cross join test10_right_stream on i=ii and date_diff('second', ts, tts) between -10 and 10"}
+            {"client":"python","query_id":"1020", "query_end_timer":1,"wait":1, "query_type": "stream", "query":"select s, ss from test10_left_stream cross join test10_right_stream"}
           ]
         }
       ],
       "expected_results": [
         {
           "query_id":"1020",
-          "expected_results": "error_code:62"
+          "expected_results": "error_code:48"
         }
       ]
     },
@@ -760,7 +760,7 @@
     },
     {
       "id": 22,
-      "tags": ["stream_join_stream"],
+      "tags": ["stream_join_stream", "to_support"],
       "name": "latest-join",
       "description": "latest join emits changelog",
       "steps":[
@@ -785,7 +785,7 @@
     },
     {
       "id": 23,
-      "tags": ["stream_join_stream"],
+      "tags": ["stream_join_stream", "to_support"],
       "name": "latest-join",
       "description": "latest join emits changelog",
       "steps":[

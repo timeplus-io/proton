@@ -675,6 +675,11 @@ MergeTreeSettingsPtr StorageMaterializedView::getSettings() const
     return nullptr;
 }
 
+Streaming::DataStreamSemantic StorageMaterializedView::dataStreamSemantic() const
+{
+    return getTargetTable()->dataStreamSemantic();
+}
+
 void registerStorageMaterializedView(StorageFactory & factory)
 {
     factory.registerStorage("MaterializedView", [](const StorageFactory::Arguments & args) {

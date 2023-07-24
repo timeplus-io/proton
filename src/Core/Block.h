@@ -163,6 +163,8 @@ public:
     /// in-place sort columns according to header
     void reorderColumnsInplace(const Block & header);
 
+    void renameColumn(String new_name, size_t column_pos);
+
     /// Deep clone, use cautiously. Most of time, we don't need deepClone
     Block deepClone() const;
 
@@ -172,6 +174,15 @@ public:
 
     /// Copy row to target_block
     void insertRow(size_t row_num, Block & target_block) const;
+    int compareAt(size_t lhs_row, size_t rhs_row, const Block & rhs_block, const std::vector<size_t> & skip_columns) const;
+    /// Reuse BlockInfo.watermark for min/max timestamp
+    Int64 minTimestamp() const noexcept { return info.watermark_lower_bound; }
+    Int64 maxTimestamp() const noexcept { return info.watermark; }
+    Int64 watermark() const noexcept { return info.watermark; }
+    void setMinTimestamp(Int64 min_ts) noexcept { info.watermark_lower_bound = min_ts; }
+    void setMaxTimestamp(Int64 max_ts) noexcept { info.watermark = max_ts; }
+    void setBlockID(Int64 block_id) noexcept { info.setBlockID(block_id); }
+    Int64 blockID() const noexcept { return info.blockID(); }
     /// proton: ends
 
 private:

@@ -1,5 +1,5 @@
-#include "ProxyStream.h"
-#include "StorageStream.h"
+#include <Storages/Streaming/ProxyStream.h>
+#include <Storages/Streaming/StorageStream.h>
 
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
@@ -7,9 +7,9 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
+#include <Processors/QueryPlan/Streaming/ChangelogTransformStep.h>
 #include <Processors/QueryPlan/Streaming/DedupTransformStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WindowAssignmentStep.h>
@@ -102,9 +102,12 @@ ProxyStream::ProxyStream(
     if (subquery)
     {
         /// Whether has GlobalAggregation in subquery
+        /// FIXME, we interpreting subquery quite a few times already like in ProxyBase
         SelectQueryOptions options;
-        auto interpreter_subquery
-            = std::make_unique<InterpreterSelectWithUnionQuery>(subquery->children[0], context_, options.subquery().analyze());
+        options.setSubquery().analyze();
+
+        auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(subquery->children[0], context_, options);
+
         has_global_aggr = interpreter_subquery->hasGlobalAggregation();
     }
 
@@ -136,15 +139,31 @@ void ProxyStream::read(
     size_t max_block_size,
     size_t num_streams)
 {
-    auto reuired_column_names_for_proxy_storage = getRequiredColumnsForProxyStorage(column_names);
-    doRead(query_plan, reuired_column_names_for_proxy_storage, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+    if (internal_name == "changelog")
+    {
+        query_info.versioned_kv_tracking_changes = true;
+        query_info.changelog_tracking_changes = true;
+        query_info.changelog_query_drop_late_rows = std::any_cast<std::optional<bool>>(table_func_desc->func_ctx);
+    }
+
+    auto required_column_names_for_proxy_storage = getRequiredColumnsForProxyStorage(column_names);
+
+    doRead(
+        query_plan,
+        required_column_names_for_proxy_storage,
+        storage_snapshot,
+        query_info,
+        context_,
+        processed_stage,
+        max_block_size,
+        num_streams);
 
     /// Create step which reads from empty source if storage has no data.
     if (!query_plan.isInitialized())
     {
         /// Only in case when read from historical proxy storage
         assert(!isStreaming());
-        auto header = storage_snapshot->getSampleBlockForColumns(reuired_column_names_for_proxy_storage);
+        auto header = storage_snapshot->getSampleBlockForColumns(required_column_names_for_proxy_storage);
         InterpreterSelectQuery::addEmptySourceToQueryPlan(query_plan, header, query_info, context_);
     }
 
@@ -162,7 +181,6 @@ void ProxyStream::doRead(
     size_t num_streams)
 {
     /// If this storage is built from subquery
-    assert(!(storage && subquery));
     if (query_info.proxy_stream_query)
     {
         if (!query_info.proxy_stream_query->as<ASTSelectWithUnionQuery>())
@@ -193,8 +211,7 @@ void ProxyStream::doRead(
     if (auto * view = storage->as<StorageView>())
     {
         auto view_context = createProxySubqueryContext(context_, query_info, isStreaming());
-        view->read(
-            query_plan, column_names, storage_snapshot, query_info, view_context, processed_stage, max_block_size, num_streams);
+        view->read(query_plan, column_names, storage_snapshot, query_info, view_context, processed_stage, max_block_size, num_streams);
         query_plan.addInterpreterContext(view_context);
         return;
     }
@@ -213,8 +230,7 @@ void ProxyStream::doRead(
 
     auto * distributed = storage->as<StorageStream>();
     assert(distributed);
-    distributed->read(
-        query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+    distributed->read(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 }
 
 Names ProxyStream::getRequiredColumnsForProxyStorage(const Names & column_names) const
@@ -286,13 +302,14 @@ Names ProxyStream::mergeAdditionalRequiredColumnsAfterFunc(Names required, const
 
 void ProxyStream::validateProxyChain() const
 {
-    /// We only support this sequence tumble(dedup(table(...), ...), ...)
+    /// We only support this sequence changelog(tumble(dedup(table(...), ...), ...), ...)
     static const std::unordered_map<String, UInt8> func_name_order_map = {
         {"table", 1},
         {"dedup", 2},
         {"tumble", 3},
         {"hop", 3},
         {"session", 3},
+        {"changelog", 4},
     };
 
     auto prev_name = internal_name;
@@ -305,7 +322,7 @@ void ProxyStream::validateProxyChain() const
         if (cur >= prev)
             throw Exception(
                 ErrorCodes::NOT_IMPLEMENTED,
-                "Wrap `{}` over `{}` is not supported. Use this wrap sequence: tumble/hop/session -> dedup -> table",
+                "Wrap `{}` over `{}` is not supported. Use this wrap sequence: changelog -> tumble/hop/session -> dedup -> table",
                 prev_name,
                 next_proxy->internal_name);
 
@@ -326,9 +343,15 @@ void ProxyStream::buildStreamingFunctionQueryPlan(
         nested_proxy_storage->as<ProxyStream>()->buildStreamingFunctionQueryPlan(
             query_plan, required_columns_after_streaming_window, query_info, storage_snapshot);
 
-    /// dedup(table(stream), columns...)
-    if (internal_name == "dedup")
+    /// changelog(dedup(table(stream), columns...), ...)
+    if (internal_name == "changelog")
+    {
+        processChangelogStep(query_plan, required_columns_after_streaming_window);
+    }
+    else if (internal_name == "dedup")
+    {
         processDedupStep(query_plan, required_columns_after_streaming_window);
+    }
     else
     {
         if (timestamp_func_desc)
@@ -338,6 +361,47 @@ void ProxyStream::buildStreamingFunctionQueryPlan(
         if (table_func_desc && table_func_desc->type != WindowType::NONE)
             processWindowAssignmentStep(query_plan, query_info, required_columns_after_streaming_window, storage_snapshot);
     }
+}
+
+void ProxyStream::processChangelogStep(QueryPlan & query_plan, const Names & required_columns_after_streaming_window) const
+{
+    assert(table_func_desc);
+
+    /// Everything shall be in-place already since versioned_vk.read(...) will take care of adding
+    /// ChangelogTransform step
+    if (storage && (storage->as<StorageStream>() || storage->as<StorageMaterializedView>())
+        && isVersionedKeyedDataStream(storage->dataStreamSemantic()))
+        return;
+
+    auto required_columns_after_changelog = mergeAdditionalRequiredColumnsAfterFunc(required_columns_after_streaming_window, internal_name);
+
+    const auto & input_header = query_plan.getCurrentDataStream().header;
+    Block output_header;
+    output_header.reserve(required_columns_after_changelog.size());
+
+    for (const auto & name : required_columns_after_changelog)
+        output_header.insert(input_header.getByName(name));
+
+    /// Get key columns
+    auto drop_late_rows = std::any_cast<std::optional<bool>>(table_func_desc->func_ctx);
+    std::string version_column;
+    if (drop_late_rows.has_value() && *drop_late_rows)
+    {
+        assert(table_func_desc->argument_names.size() >= 2);
+
+        version_column.swap(table_func_desc->argument_names.back());
+
+        /// Pop back the version column
+        table_func_desc->argument_names.pop_back();
+    }
+
+    /// Insert Changelog step
+    query_plan.addStep(std::make_unique<ChangelogTransformStep>(
+        query_plan.getCurrentDataStream(),
+        std::move(output_header),
+        std::move(table_func_desc->argument_names),
+        version_column,
+        /*max_thread = */ 1));
 }
 
 void ProxyStream::processDedupStep(QueryPlan & query_plan, const Names & required_columns_after_streaming_window) const
@@ -520,6 +584,14 @@ ASTPtr ProxyStream::restoreProxyStreamName(ASTSelectQuery & outer_query, const A
         if (child.get() == subquery.get())
             child = saved_proxy_stream;
     return subquery->children[0];
+}
+
+DataStreamSemantic ProxyStream::dataStreamSemantic() const
+{
+    if (internal_name == "changelog")
+        return DataStreamSemantic::Changelog;
+
+    return DataStreamSemantic::Append;
 }
 }
 }

@@ -3,7 +3,6 @@
 #include <QueryPipeline/BlockIO.h>
 #include <DataTypes/DataTypeString.h>
 #include <Parsers/queryToString.h>
-#include <Common/typeid_cast.h>
 #include <TableFunctions/ITableFunction.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
@@ -73,7 +72,7 @@ BlockIO InterpreterDescribeQuery::execute()
     if (table_expression.subquery)
     {
         auto names_and_types = InterpreterSelectWithUnionQuery::getSampleBlock(
-            table_expression.subquery->children.at(0), getContext()).getNamesAndTypesList();
+            table_expression.subquery->children.at(0), getContext(), false, nullptr).getNamesAndTypesList();
         columns = ColumnsDescription(std::move(names_and_types));
     }
     else if (table_expression.table_function)

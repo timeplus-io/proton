@@ -62,6 +62,9 @@ struct HashMethodOneNumber
     /// Find key into HashTable or HashMap. If Data is HashMap and key was found, returns ptr to value, otherwise nullptr.
     using Base::findKey;  /// (Data & data, size_t row, Arena & pool) -> FindResult
 
+    /// Erase key
+    using Base::eraseKey;  /// (Data & data, size_t row, Arena & pool) -> bool
+
     /// Get hash value of row.
     using Base::getHash; /// (const Data & data, size_t row, Arena & pool) -> size_t
 

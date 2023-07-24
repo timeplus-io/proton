@@ -6,7 +6,6 @@
 
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/LogicalExpressionsOptimizer.h>
-#include <Interpreters/QueryAliasesVisitor.h>
 #include <Interpreters/ArrayJoinedColumnsVisitor.h>
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
 #include <Interpreters/Context.h>
@@ -49,6 +48,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
 /// proton: starts.
+#include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/Streaming/OptimizeJsonValueVisitor.h>
 #include <Interpreters/Streaming/WindowCommon.h>
@@ -959,17 +959,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     /// We calculate required_source_columns with source_columns modifications and swap them on exit
     required_source_columns = source_columns;
 
-    /// proton: starts
-    bool has_reserved_time = false;
-    if (storage)
-    {
-        auto time_col = source_columns.tryGetByName(ProtonConsts::RESERVED_EVENT_TIME);
-        if (time_col && (isDateTime64(time_col->type) || isDateTime(time_col->type)))
-            has_reserved_time = true;
-    }
-    /// proton: ends
-
-    RequiredSourceColumnsVisitor::Data columns_context{has_reserved_time};
+    RequiredSourceColumnsVisitor::Data columns_context;
     RequiredSourceColumnsVisitor(columns_context).visit(query);
 
     NameSet source_column_names;
@@ -1149,21 +1139,6 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
             }
         }
     }
-
-    /// proton : starts. If there is un-resolved reserved name, save them first
-    /// and try to resolve them later when we have more information since some
-    /// reserved columns like `_tp_delta` can be generated in runtime (in ExpressionAnalyzer)
-    /// `_tp_delta` under streaming join only for now
-    if (columns_context.has_table_join)
-    {
-        auto iter = unknown_required_source_columns.find(ProtonConsts::RESERVED_DELTA_FLAG);
-        if (iter != unknown_required_source_columns.end())
-        {
-            unresolved_reserved_columns.insert(*iter);
-            unknown_required_source_columns.erase(iter);
-        }
-    }
-    /// proton : ends
 
     if (!unknown_required_source_columns.empty())
     {

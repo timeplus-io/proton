@@ -68,7 +68,6 @@
 #include <base/sort.h>
 
 #include <algorithm>
-#include <iomanip>
 #include <optional>
 #include <set>
 #include <thread>
@@ -76,6 +75,10 @@
 #include <typeindex>
 #include <unordered_set>
 #include <filesystem>
+
+/// proton : starts
+#include <Common/ProtonCommon.h>
+/// proton : ends
 
 
 namespace fs = std::filesystem;
@@ -181,6 +184,18 @@ inline UInt64 time_in_seconds(std::chrono::time_point<std::chrono::system_clock>
     return std::chrono::duration_cast<std::chrono::seconds>(timepoint.time_since_epoch()).count();
 }
 
+static Streaming::DataStreamSemantic toDataStreamSemantic(const std::string & storage_mode)
+{
+    if (storage_mode == ProtonConsts::CHANGELOG_MODE)
+        return Streaming::DataStreamSemantic::Changelog;
+    else if (storage_mode == ProtonConsts::CHANGELOG_KV_MODE)
+        return Streaming::DataStreamSemantic::ChangelogKV;
+    else if (storage_mode == ProtonConsts::VERSIONED_KV_MODE)
+        return Streaming::DataStreamSemantic::VersionedKV;
+    else
+        return Streaming::DataStreamSemantic::Append;
+}
+
 MergeTreeData::MergeTreeData(
     const StorageID & table_id_,
     const String & relative_data_path_,
@@ -213,8 +228,10 @@ MergeTreeData::MergeTreeData(
     , use_metadata_cache(getSettings()->use_metadata_cache)
     /// proton: starts.
     , shard_num(shard_num_)
-    /// proton: ends.
 {
+    data_stream_semantic = toDataStreamSemantic(storage_settings.get()->mode.value);
+    /// proton : ends
+
     context_->getGlobalContext()->initializeBackgroundExecutorsIfNeeded();
 
     const auto settings = getSettings();

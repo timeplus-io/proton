@@ -17,6 +17,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/JoinUtils.h>
 #include <Interpreters/NullableUtils.h>
+#include <Interpreters/Streaming/CalculateDataStreamSemantic.h>
 #include <Interpreters/TableJoin.h>
 #include <Common/ColumnsHashing.h>
 #include <Common/ProtonCommon.h>
@@ -42,6 +43,8 @@ extern const int SET_SIZE_LIMIT_EXCEEDED;
 extern const int TYPE_MISMATCH;
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 extern const int RECOVER_CHECKPOINT_FAILED;
+extern const int INTERNAL_ERROR;
+extern const int UNSUPPORTED;
 }
 
 namespace Streaming
@@ -181,7 +184,7 @@ public:
 
     AddedColumns(
         const Block & block_with_columns_to_add,
-        const Block & block,
+        Block & block,
         const Block & saved_block_sample,
         const HashJoin & join,
         std::vector<JoinOnKeyColumns> && join_on_keys_,
@@ -228,11 +231,22 @@ public:
         }
         else
         {
+            /// This is a right block which means it is bi-directional hash join and
+            /// it is right block join left hash table, we don't need rename column name.
+            /// So add left column directly
+            /// Actually this may not be the case, right block may have same column name as in
+            /// left block, we need rename source right block
+            for (size_t pos = 0; auto & col : block)
+            {
+                auto qualified_name = join.getTableJoin().renamedRightColumnName(col.name);
+                if (qualified_name != col.name)
+                    block.renameColumn(qualified_name, pos);
+
+                ++pos;
+            }
+
             for (const auto & src_column : block_with_columns_to_add)
             {
-                /// This is a right block which means it is bi-directional hash join and
-                /// it is right block join left hash table, we don't need rename column name.
-                /// So add left column directly
                 if (!block.has(src_column.name))
                     addColumn(src_column, src_column.name);
             }
@@ -585,7 +599,7 @@ struct Inserter
     }
 
     static ALWAYS_INLINE void
-    insertOne(const HashJoin & join, Map & map, KeyGetter & key_getter, JoinBlockList * blocks, size_t i, Arena & pool)
+    insertOne(const HashJoin & join, Map & map, KeyGetter & key_getter, RefCountBlockList<Block> * blocks, size_t i, Arena & pool)
     {
         auto emplace_result = key_getter.emplaceKey(map, i, pool);
 
@@ -610,12 +624,12 @@ struct Inserter
         const HashJoin & join,
         Map & map,
         KeyGetter & key_getter,
-        JoinBlockList * blocks,
+        RefCountBlockList<Block> * blocks,
         size_t i,
         Arena & pool,
         RowRefListMultipleRef * multiple_ref)
     {
-        assert(multiple_ref->row_ref_list == nullptr);
+        assert(!multiple_ref || (multiple_ref && multiple_ref->row_ref_list == nullptr));
 
         auto emplace_result = key_getter.emplaceKey(map, i, pool);
         auto * mapped = &emplace_result.getMapped();
@@ -624,8 +638,12 @@ struct Inserter
             mapped = new (mapped) typename Map::mapped_type(std::make_unique<RowRefListMultiple>());
 
         auto iter = (*mapped)->insert(blocks, i);
-        multiple_ref->iterator = iter;
-        multiple_ref->row_ref_list = mapped->get();
+
+        if (multiple_ref)
+        {
+            multiple_ref->iterator = iter;
+            multiple_ref->row_ref_list = mapped->get();
+        }
     }
 
     static ALWAYS_INLINE void insertRangeAsof(
@@ -644,7 +662,7 @@ struct Inserter
         HashJoin & join,
         Map & map,
         KeyGetter & key_getter,
-        JoinBlockList * blocks,
+        RefCountBlockList<Block> * blocks,
         size_t i,
         Arena & pool,
         const IColumn & asof_column,
@@ -668,12 +686,12 @@ size_t NO_INLINE insertFromBlockImplTypeCase(
     size_t rows,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
-    JoinBlockList * blocks,
+    RefCountBlockList<Block> * blocks,
     ConstNullMapPtr null_map,
     Arena & pool,
     std::vector<RowRefListMultipleRef *> & row_refs)
 {
-    [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<typename Map::mapped_type, RowRefWithRefCount>;
+    [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<typename Map::mapped_type, RowRefWithRefCount<Block>>;
     [[maybe_unused]] constexpr bool mapped_multiple = std::is_same_v<typename Map::mapped_type, RowRefListMultiplePtr>;
 
     constexpr bool is_range_asof_join = (STRICTNESS == Strictness::Range);
@@ -683,7 +701,7 @@ size_t NO_INLINE insertFromBlockImplTypeCase(
     if constexpr (is_range_asof_join || is_asof_join)
         asof_column = key_columns.back();
 
-    auto key_getter = createKeyGetter < KeyGetter, is_range_asof_join || is_asof_join > (key_columns, key_sizes);
+    auto key_getter = createKeyGetter<KeyGetter, is_range_asof_join || is_asof_join>(key_columns, key_sizes);
 
     for (size_t i = 0; i < rows; ++i)
     {
@@ -691,18 +709,20 @@ size_t NO_INLINE insertFromBlockImplTypeCase(
             continue;
 
         if constexpr (is_range_asof_join)
-            Inserter<Map, KeyGetter>::insertRangeAsof(join, map, key_getter, blocks->lastBlock(), i, pool, *asof_column);
+            Inserter<Map, KeyGetter>::insertRangeAsof(join, map, key_getter, &blocks->lastBlock(), i, pool, *asof_column);
         else if constexpr (is_asof_join)
             Inserter<Map, KeyGetter>::insertAsof(join, map, key_getter, blocks, i, pool, *asof_column, join.keepVersions());
         else if constexpr (mapped_one)
             Inserter<Map, KeyGetter>::insertOne(join, map, key_getter, blocks, i, pool);
         else if constexpr (mapped_multiple)
         {
-            if (row_refs[i])
+            if (row_refs.empty())
+                Inserter<Map, KeyGetter>::insertMultiple(join, map, key_getter, blocks, i, pool, nullptr);
+            else if (row_refs[i])
                 Inserter<Map, KeyGetter>::insertMultiple(join, map, key_getter, blocks, i, pool, row_refs[i]);
         }
         else
-            Inserter<Map, KeyGetter>::insertAll(join, map, key_getter, blocks->lastBlock(), i, pool);
+            Inserter<Map, KeyGetter>::insertAll(join, map, key_getter, &blocks->lastBlock(), i, pool);
     }
     return map.getBufferSizeInCells();
 }
@@ -714,7 +734,7 @@ size_t insertFromBlockImplType(
     size_t rows,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
-    JoinBlockList * blocks,
+    RefCountBlockList<Block> * blocks,
     ConstNullMapPtr null_map,
     Arena & pool,
     std::vector<RowRefListMultipleRef *> & row_refs)
@@ -735,7 +755,7 @@ size_t insertFromBlockImpl(
     size_t rows,
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
-    JoinBlockList * blocks,
+    RefCountBlockList<Block> * blocks,
     ConstNullMapPtr null_map,
     Arena & pool,
     std::vector<RowRefListMultipleRef *> & row_refs)
@@ -760,7 +780,7 @@ inline void addDeltaColumn(Block & block, size_t rows)
     auto delta_type = DataTypeFactory::instance().get("int8");
     auto delta_col = delta_type->createColumn();
     delta_col->insertMany(1, rows);
-    block.insert({std::move(delta_col), std::move(delta_type), ProtonConsts::RESERVED_DELTA_FLAG});
+    block.insert({std::move(delta_col), delta_type, ProtonConsts::RESERVED_DELTA_FLAG});
 }
 }
 
@@ -800,36 +820,21 @@ const HashJoin::SupportMatrix HashJoin::support_matrix = {
       {
           /// Append
           JoinKind::Inner,
-          {{JoinStrictness::All, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}},
+          {{JoinStrictness::All, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}, {DataStreamSemantic::ChangelogKV, true}}},
            {JoinStrictness::Asof, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}},
            {JoinStrictness::Any, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}}},
-      },
-      {
-          /// Append
-          JoinKind::Right,
-          {{JoinStrictness::All, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Any,
-            {{DataStreamSemantic::Append, false}, {DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, false}}}},
-      },
-      {
-          /// Append
-          JoinKind::Full,
-          {{JoinStrictness::All, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}}},
       }}},
     {DataStreamSemantic::Changelog,
      {{
           JoinKind::Left,
-          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
+          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, true}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, true}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, true}}}},
       },
       {
           /// Changelog
           JoinKind::Inner,
-          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, true}}},
+          {{JoinStrictness::All, {{DataStreamSemantic::Changelog, true}, {DataStreamSemantic::VersionedKV, true}}},
            {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, true}}},
            {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, true}}}},
       }}},
@@ -843,16 +848,9 @@ const HashJoin::SupportMatrix HashJoin::support_matrix = {
       {
           /// ChangelogKV
           JoinKind::Inner,
-          {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, true}}},
+          {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, true}, {DataStreamSemantic::VersionedKV, true}}},
            {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, true}}},
            {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, true}}}},
-      },
-      {
-          /// ChangelogKV
-          JoinKind::Right,
-          {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}}}},
       },
       {
           /// ChangelogKV
@@ -873,7 +871,7 @@ const HashJoin::SupportMatrix HashJoin::support_matrix = {
           JoinKind::Inner,
           {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, true}}},
            {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, true}}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
       },
       {
           /// VersionedKV
@@ -920,7 +918,7 @@ HashJoin::HashJoin(
         toString(kind),
         toString(strictness),
         TableJoin::formatClauses(table_join->getClauses(), true),
-        right_data.join_stream_desc->sample_block.dumpStructure());
+        right_data.join_stream_desc->input_header.dumpStructure());
 
     if (streaming_strictness == Strictness::Range)
         LOG_INFO(
@@ -949,27 +947,35 @@ void HashJoin::init()
     streaming_kind = Streaming::toJoinKind(kind);
     streaming_strictness = Streaming::toJoinStrictness(strictness, table_join->isRangeJoin());
 
-    /// There are only 2 case so far we will need emit changelog
-    /// 1. append-only [inner] latest join append-only
-    /// 2. versioned-kv [inner] join versioned-kv
-    /// 3. changelog-kv [inner] join changelog-kv
-    emit_changelog = (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV
-                      && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV)
-        || (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::ChangelogKV
-            && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::ChangelogKV)
-        || (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
-            && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
-            && streaming_strictness == Strictness::Latest);
+    emit_changelog
+        = isJoinResultChangelog(left_data.join_stream_desc->data_stream_semantic, right_data.join_stream_desc->data_stream_semantic);
 
-    /// So far there are 3 cases which doesn't require bidirectional join
-    /// SELECT * FROM append_only JOIN versioned_kv ON append_only.key = versioned_kv.key;
-    /// SELECT * FROM append_only ASOF JOIN versioned_kv ON append_only.key = versioned_kv.key AND append_only.timestamp < versioned_kv.timestamp;
-    /// SELECT * FROM left_append_only ASOF JOIN right_append_only ON left_append_only.key = right_append_only.key AND left_append_only.timestamp < right_append_only.timestamp;
+    retract_push_down
+        = (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV
+           && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV
+           && right_data.join_stream_desc->hasPrimaryKey());
+
+    retract_push_down
+        |= (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::ChangelogKV
+            && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::ChangelogKV
+            && right_data.join_stream_desc->hasPrimaryKey());
+
+    /// So far there are following cases which doesn't require bidirectional join
+    /// SELECT * FROM append_only INNER ALL JOIN versioned_kv ON append_only.key = versioned_kv.key;
+    /// SELECT * FROM append_only INNER LATEST JOIN versioned_kv ON append_only.key = versioned_kv.key;
+    /// SELECT * FROM append_only INNER ASOF JOIN versioned_kv ON append_only.key = versioned_kv.key AND append_only.timestamp < versioned_kv.timestamp SETTINGS keep_versions=3;
+    /// SELECT * FROM left_append_only INNER ASOF JOIN right_append_only ON left_append_only.key = right_append_only.key AND left_append_only.timestamp < right_append_only.timestamp SETTINGS keep_versions=3;
+    /// SELECT * FROM left_append_only INNER LATEST JOIN right_append_only ON left_append_only.key = right_append_only.key;
+    /// `ASOF` keeps multiple versions and `LATEST` only keeps the latest version for the join key
     auto data_enrichment_join = ((left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
                                   || left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Changelog
                                   || left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::ChangelogKV)
                                  && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV)
-        || strictness == JoinStrictness::Asof;
+        || streaming_strictness == Strictness::Asof || streaming_strictness == Strictness::Latest;
+
+    data_enrichment_join
+        |= (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
+            && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::ChangelogKV);
 
     bidirectional_hash_join = !data_enrichment_join;
 
@@ -982,19 +988,12 @@ void HashJoin::init()
 
     range_bidirectional_hash_join = bidirectional_hash_join && (streaming_strictness == Strictness::Range);
 
-    /// If right stream is key-value data stream semantic, init extra data structure
-    initPrimaryKeyHashTable();
+    reviseJoinStrictness();
+
+    /// If right stream is key-value data stream semantic and our query plan pushes down the changelog transform
+    /// initRightPrimaryKeyHashTable();
 
     initBufferedData();
-
-    /// Strictness::Any in streaming join means take the latest row to join
-    any_take_last_row = (streaming_strictness == Strictness::Latest)
-        || (right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV && streaming_strictness == Strictness::All)
-        || emitChangeLog();
-
-    if (any_take_last_row)
-        /// Rewrite strictness to choose `HashJoin::MapsOne` hash table : left, inner + any => MapsOne
-        streaming_strictness = Strictness::Latest;
 
     /// Cache condition column names
     const auto & on_exprs = table_join->getClauses();
@@ -1006,25 +1005,33 @@ void HashJoin::init()
     {
         const auto & key_names_right = table_join->getOnlyClause().key_names_right;
         JoinCommon::splitAdditionalColumns(
-            key_names_right, right_data.join_stream_desc->sample_block, right_data.table_keys, right_data.sample_block_with_columns_to_add);
+            key_names_right, right_data.join_stream_desc->input_header, right_data.table_keys, right_data.sample_block_with_columns_to_add);
         right_data.required_keys = table_join->getRequiredRightKeys(right_data.table_keys, right_data.required_keys_sources);
     }
     else
     {
         /// required right keys concept does not work well if multiple disjuncts, we need all keys
         /// SELECT * FROM left JOIN right ON left.key = right.key OR left.value = right.value
-        right_data.sample_block_with_columns_to_add = right_data.table_keys = materializeBlock(right_data.join_stream_desc->sample_block);
+        right_data.sample_block_with_columns_to_add = right_data.table_keys = materializeBlock(right_data.join_stream_desc->input_header);
     }
 }
 
-void HashJoin::initPrimaryKeyHashTable()
+void HashJoin::initLeftPrimaryKeyHashTable()
 {
-    /// FIXME, for version kv join version kv, changelog kv join changelog kv
-    /// we shall support join on non-primary key. For now for bidirectional hash join, do nothing
-    if (bidirectional_hash_join || streaming_strictness == Streaming::Strictness::Asof)
+    /// If left stream is key-value data stream semantic and our query plan pushes down the changelog transform
+    /// versioned_kv join versioned_kv and chaneglog_kv join changelog_kv
+}
+
+void HashJoin::initRightPrimaryKeyHashTable()
+{
+    if (!right_data.join_stream_desc->hasPrimaryKey())
         return;
 
-    assert(isKeyValueDataStreamSemantic(right_data.join_stream_desc->data_stream_semantic));
+    if (streaming_strictness == Streaming::Strictness::Asof || streaming_strictness == Streaming::Strictness::Range
+        || streaming_strictness == Streaming::Strictness::Latest)
+        return;
+
+    /// versioned_kv join versioned_kv and chaneglog_kv join changelog_kv
 
     /// When `append-only` stream join `versioned-kv`, if we didn't join on primary key columns fully
     /// We will need maintain extra data structures to figure out if a row is one with a new primary key
@@ -1033,12 +1040,12 @@ void HashJoin::initPrimaryKeyHashTable()
     const auto & key_names_right = clause.key_names_right;
 
     ColumnRawPtrs primary_key_columns;
-    primary_key_columns.reserve(right_data.join_stream_desc->primary_key_columns->size());
+    primary_key_columns.reserve(right_data.join_stream_desc->primary_key_column_positions->size());
 
     bool join_on_partial_primary_key_columns = false;
-    for (const auto & key_col_pos : right_data.join_stream_desc->primary_key_columns.value())
+    for (const auto & key_col_pos : right_data.join_stream_desc->primary_key_column_positions.value())
     {
-        const auto & key_col = right_data.join_stream_desc->sample_block.getByPosition(key_col_pos);
+        const auto & key_col = right_data.join_stream_desc->input_header.getByPosition(key_col_pos);
         primary_key_columns.push_back(key_col.column.get());
 
         if (std::find(key_names_right.begin(), key_names_right.end(), key_col.name) == key_names_right.end())
@@ -1054,11 +1061,7 @@ void HashJoin::initPrimaryKeyHashTable()
 
     right_data.primary_key_hash_table = std::make_shared<PrimaryKeyHashTable>(primary_key_hash_method_type, std::move(primary_key_size));
 
-    /// Correct strictness from `latest` to `multiple` since we will need buffer multiple elements
-    /// for partial primary key columns
-    streaming_strictness = Streaming::Strictness::Multiple;
-
-    LOG_INFO(logger, "Partial primary key join case");
+    LOG_INFO(logger, "Partial primary key join push down case");
 }
 
 /// Left stream header is only known at late stage after HashJoin is created
@@ -1068,8 +1071,13 @@ void HashJoin::postInit(const Block & left_header, const Block & output_header_,
         return;
 
     join_max_cached_bytes = join_max_cached_bytes_;
-    left_data.join_stream_desc->sample_block = left_header;
+    left_data.join_stream_desc->input_header = left_header;
     output_header = output_header_;
+
+    /// Now, we can evaluate the primary key column positions for left join stream desc since left header is ready
+    left_data.join_stream_desc->calculateColumnPositions(strictness);
+
+    /// initLeftPrimaryKeyHashTable();
 
     validateAsofJoinKey();
 
@@ -1077,28 +1085,32 @@ void HashJoin::postInit(const Block & left_header, const Block & output_header_,
     if (bidirectional_hash_join)
     {
         /// left stream sample block's column may be not inited yet
-        JoinCommon::createMissedColumns(left_data.join_stream_desc->sample_block);
+        JoinCommon::createMissedColumns(left_data.join_stream_desc->input_header);
         if (table_join->oneDisjunct())
         {
             const auto & key_names_left = table_join->getOnlyClause().key_names_left;
             JoinCommon::splitAdditionalColumns(
-                key_names_left, left_data.join_stream_desc->sample_block, left_data.table_keys, left_data.sample_block_with_columns_to_add);
+                key_names_left, left_data.join_stream_desc->input_header, left_data.table_keys, left_data.sample_block_with_columns_to_add);
             left_data.required_keys = table_join->getRequiredLeftKeys(left_data.table_keys, left_data.required_keys_sources);
         }
         else
         {
-            left_data.sample_block_with_columns_to_add = left_data.table_keys = materializeBlock(left_data.join_stream_desc->sample_block);
+            left_data.sample_block_with_columns_to_add = left_data.table_keys = materializeBlock(left_data.join_stream_desc->input_header);
         }
 
         initLeftBlockStructure();
 
         initHashMaps(left_data.buffered_data->getCurrentMapsVariants().map_variants);
 
-        if (emit_changelog)
+        if (retract_push_down && emit_changelog)
         {
             join_results.emplace();
             initHashMaps(join_results->maps->map_variants);
         }
+
+        /// We'd like to compute some reserved column positions for `the right block join left block` case
+        /// since we will need swap them before project the join results
+        /// TODO...
     }
 }
 
@@ -1271,7 +1283,7 @@ void HashJoin::initLeftBlockStructure()
 
     JoinCommon::convertToFullColumnsInplace(left_data.table_keys);
 
-    initBlockStructure(left_data.buffered_data->sample_block, left_data.table_keys, left_data.sample_block_with_columns_to_add);
+    initBlockStructure(left_data, left_data.table_keys, left_data.sample_block_with_columns_to_add);
 
     /// Remove un-needed left `key` columns
     /// SELECT left.key FROM left INNER / LEFT / RIGHT JOIN right ON left.key = right.key
@@ -1297,7 +1309,7 @@ void HashJoin::initRightBlockStructure()
 {
     JoinCommon::convertToFullColumnsInplace(right_data.table_keys);
 
-    initBlockStructure(right_data.buffered_data->sample_block, right_data.table_keys, right_data.sample_block_with_columns_to_add);
+    initBlockStructure(right_data, right_data.table_keys, right_data.sample_block_with_columns_to_add);
 
     JoinCommon::createMissedColumns(right_data.sample_block_with_columns_to_add);
 
@@ -1307,8 +1319,10 @@ void HashJoin::initRightBlockStructure()
 }
 
 void HashJoin::initBlockStructure(
-    Block & saved_block_sample, const Block & table_keys, const Block & sample_block_with_columns_to_add) const
+    JoinData & join_data, const Block & table_keys, const Block & sample_block_with_columns_to_add) const
 {
+    Block & saved_block_sample = join_data.buffered_data->sample_block;
+
     bool multiple_disjuncts = !table_join->oneDisjunct();
     /// We could remove key columns for LEFT | INNER HashJoin but we should keep them for JoinSwitcher (if any).
     bool save_key_columns = !table_join->isEnabledAlgorithm(JoinAlgorithm::AUTO) || isRightOrFull(kind) || multiple_disjuncts;
@@ -1319,13 +1333,39 @@ void HashJoin::initBlockStructure(
         saved_block_sample.insert(table_keys.safeGetByPosition(table_keys.columns() - 1));
 
     /// Save non key columns
-    for (auto & column : sample_block_with_columns_to_add)
+    for (const auto & column : sample_block_with_columns_to_add)
     {
         if (auto * col = saved_block_sample.findByName(column.name))
             *col = column;
         else
             saved_block_sample.insert(column);
     }
+
+    /// Cache delta position in saved block for future use
+    std::vector<size_t> reserved_column_positions;
+    if (join_data.join_stream_desc->hasDeltaColumn())
+    {
+        const auto & delta_column_name = join_data.join_stream_desc->deltaColumnName();
+
+        if (saved_block_sample.has(delta_column_name))
+            reserved_column_positions.push_back(saved_block_sample.getPositionByName(delta_column_name));
+    }
+
+    for (size_t pos = 0; const auto & col : saved_block_sample)
+    {
+        if (col.name == ProtonConsts::RESERVED_EVENT_TIME || col.name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID
+            || col.name == ProtonConsts::RESERVED_APPEND_TIME || col.name == ProtonConsts::RESERVED_INDEX_TIME)
+            reserved_column_positions.push_back(pos);
+        else if (
+            col.name.ends_with(ProtonConsts::RESERVED_EVENT_TIME) || col.name.ends_with(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID)
+            || col.name.ends_with(ProtonConsts::RESERVED_APPEND_TIME) || col.name.ends_with(ProtonConsts::RESERVED_INDEX_TIME))
+            reserved_column_positions.push_back(pos);
+
+        ++pos;
+    }
+
+    if (!reserved_column_positions.empty())
+        join_data.buffered_data->reserved_column_positions.emplace(std::move(reserved_column_positions));
 }
 
 Block HashJoin::prepareBlockToSave(const Block & block, const Block & sample_block)
@@ -1393,6 +1433,7 @@ Int64 HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std
     else
         key_names = &on_expr.key_names_right;
 
+    key_columns.reserve(key_names->size());
     for (const auto & name : *key_names)
         key_columns.push_back(all_key_columns[name]);
 
@@ -1426,12 +1467,10 @@ Int64 HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std
     else
         join_data = &right_data;
 
-    std::scoped_lock lock(join_data->buffered_data->mutex);
-
     auto block_id = join_data->buffered_data->addBlockWithoutLock(std::move(block_to_save), target_hash_blocks);
 
     joinDispatch(
-        streaming_kind, streaming_strictness, target_hash_blocks->maps->map_variants[0], [&](auto /*kind_*/, auto strictness_, auto & map) {
+        streaming_kind, streaming_strictness, target_hash_blocks->maps->map_variants[0], [&, this](auto /*kind_*/, auto strictness_, auto & map) {
             [[maybe_unused]] size_t size = insertFromBlockImpl<strictness_>(
                 *this,
                 hash_method_type,
@@ -1447,7 +1486,7 @@ Int64 HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std
 
     if (save_nullmap)
         /// FIXME, we will need account the allocated bytes for null_map_holder / not_joined_map as well
-        target_hash_blocks->blocks_nullmaps.emplace_back(target_hash_blocks->lastBlock(), null_map_holder);
+        target_hash_blocks->blocks_nullmaps.emplace_back(&target_hash_blocks->lastBlock(), null_map_holder);
 
     checkLimits();
 
@@ -1650,7 +1689,7 @@ void HashJoin::doJoinBlockWithHashTable(Block & block, HashBlocksPtr target_hash
                 block,
                 is_left_block ? onexpr.key_names_left : onexpr.key_names_right,
                 is_left_block ? cond_column_name.first : cond_column_name.second,
-                joined_data->join_stream_desc->sample_block,
+                joined_data->join_stream_desc->input_header,
                 is_left_block ? onexpr.key_names_right : onexpr.key_names_left,
                 is_left_block ? cond_column_name.second : cond_column_name.first);
         }
@@ -1698,7 +1737,7 @@ Block HashJoin::joinBlockWithHashTable(Block & block, HashBlocksPtr target_hash_
     doJoinBlockWithHashTable<is_left_block>(block, std::move(target_hash_blocks));
 
     auto rows = block.rows();
-    if (emit_changelog)
+    if (retract_push_down && emit_changelog)
     {
         if (rows)
         {
@@ -1803,19 +1842,33 @@ void HashJoin::initHashMaps(std::vector<MapsVariant> & all_maps)
 
 void HashJoin::insertRightBlock(Block right_block)
 {
-    assert(!range_bidirectional_hash_join);
+    assert(!range_bidirectional_hash_join && !bidirectional_hash_join);
 
-    auto row_refs = eraseOrAppendForPartialPrimaryKeyJoin(right_block);
-    doInsertBlock<false>(std::move(right_block), right_data.buffered_data->getCurrentHashBlocksPtr(), std::move(row_refs));
+    std::scoped_lock lock(right_data.buffered_data->mutex);
+
+    if (isRetractBlock(right_block, *right_data.join_stream_desc))
+    {
+        eraseExistingKeys<false>(right_block, right_data);
+        return;
+    }
+
+    /// TODO... changelog transform push down optimization is not implemented yet
+    /// auto row_refs = eraseOrAppendForPartialPrimaryKeyJoin(right_block);
+    doInsertBlock<false>(std::move(right_block), right_data.buffered_data->getCurrentHashBlocksPtr(), {});
 }
 
 Block HashJoin::insertLeftBlockAndJoin(Block & left_block)
 {
     assert(bidirectional_hash_join && !range_bidirectional_hash_join);
 
-    left_block.info.setBlockID(doInsertBlock<true>(left_block, left_data.buffered_data->getCurrentHashBlocksPtr()));
+    /// For bidirectional join, process one stream at a time
+    std::scoped_lock lock(left_data.buffered_data->mutex, right_data.buffered_data->mutex);
 
-    std::scoped_lock lock(right_data.buffered_data->mutex);
+    /// If this is a retract block which contains _tp_delta with -1 as it value
+    if (auto joined_retracted_block = eraseExistingKeysAndRetractJoin<true>(left_block); joined_retracted_block)
+        return std::move(*joined_retracted_block);
+
+    left_block.info.setBlockID(doInsertBlock<true>(left_block, left_data.buffered_data->getCurrentHashBlocksPtr()));
 
     return joinBlockWithHashTable<true>(left_block, right_data.buffered_data->getCurrentHashBlocksPtr());
 }
@@ -1825,9 +1878,13 @@ Block HashJoin::insertRightBlockAndJoin(Block & right_block)
     assert(output_header);
     assert(bidirectional_hash_join && !range_bidirectional_hash_join);
 
-    right_block.info.setBlockID(doInsertBlock<false>(right_block, right_data.buffered_data->getCurrentHashBlocksPtr()));
+    std::scoped_lock lock(left_data.buffered_data->mutex, right_data.buffered_data->mutex);
 
-    std::scoped_lock lock(left_data.buffered_data->mutex);
+    /// If this is a retract block which contains _tp_delta with -1 as it value
+    if (auto joined_retracted_block = eraseExistingKeysAndRetractJoin<false>(right_block); joined_retracted_block)
+        return std::move(*joined_retracted_block);
+
+    right_block.info.setBlockID(doInsertBlock<false>(right_block, right_data.buffered_data->getCurrentHashBlocksPtr()));
 
     return joinBlockWithHashTable<false>(right_block, left_data.buffered_data->getCurrentHashBlocksPtr());
 }
@@ -1838,16 +1895,19 @@ std::vector<Block> HashJoin::insertBlockToRangeBucketsAndJoin(Block block)
     assert(block.rows());
     assert(range_bidirectional_hash_join);
 
-    auto joining_data = left_data.buffered_data.get();
-    auto joined_data = right_data.buffered_data.get();
+    auto * joining_data = left_data.buffered_data.get();
+    auto * joined_data = right_data.buffered_data.get();
     if constexpr (!is_left_block)
         std::swap(joining_data, joined_data);
+
+    /// Here we explicitly order the lock of the mutex to avoid deadlock
+    std::scoped_lock lock(left_data.buffered_data->mutex, right_data.buffered_data->mutex);
 
     /// Insert
     auto bucket_blocks = joining_data->assignBlockToRangeBuckets(std::move(block));
     for (auto & bucket_block : bucket_blocks)
         /// Here we copy over the block since the block will be used to join which will modify the columns in-place
-        bucket_block.block.info.setBlockID(doInsertBlock<is_left_block>(bucket_block.block, std::move(bucket_block.hash_blocks)));
+        bucket_block.block.setBlockID(doInsertBlock<is_left_block>(bucket_block.block, std::move(bucket_block.hash_blocks)));
 
     std::vector<Block> joined_blocks;
     joined_blocks.reserve(bucket_blocks.size());
@@ -1856,9 +1916,6 @@ std::vector<Block> HashJoin::insertBlockToRangeBucketsAndJoin(Block block)
     for (auto & bucket_block : bucket_blocks)
     {
         auto joining_bucket = static_cast<Int64>(bucket_block.bucket);
-
-        /// Here we explicitly order the lock of the mutex to avoid deadlock
-        std::scoped_lock lock(left_data.buffered_data->mutex, right_data.buffered_data->mutex);
 
         /// Find the range buckets to join
         auto & joined_range_bucket_hash_blocks = joined_data->getRangeBucketHashBlocks();
@@ -1893,16 +1950,16 @@ std::vector<Block> HashJoin::insertBlockToRangeBucketsAndJoin(Block block)
             bool has_intersect = false;
             if constexpr (is_left_block)
                 has_intersect = joining_data->intersect(
-                    bucket_block.block.info.watermark_lower_bound,
-                    bucket_block.block.info.watermark,
+                    bucket_block.block.minTimestamp(),
+                    bucket_block.block.maxTimestamp(),
                     joined_bucket_blocks->blocks.minTimestamp(),
                     joined_bucket_blocks->blocks.maxTimestamp());
             else
                 has_intersect = joining_data->intersect(
                     joined_bucket_blocks->blocks.minTimestamp(),
                     joined_bucket_blocks->blocks.maxTimestamp(),
-                    bucket_block.block.info.watermark_lower_bound,
-                    bucket_block.block.info.watermark);
+                    bucket_block.block.minTimestamp(),
+                    bucket_block.block.maxTimestamp());
 
             if (!has_intersect)
             {
@@ -1938,9 +1995,180 @@ std::vector<Block> HashJoin::insertRightBlockToRangeBucketsAndJoin(Block right_b
     auto joined_blocks = insertBlockToRangeBucketsAndJoin<false>(std::move(right_block));
 
     for (auto & block : joined_blocks)
-        block.reorderColumnsInplace(output_header);
+    {
+        if (block.rows())
+            block.reorderColumnsInplace(output_header);
+    }
 
     return joined_blocks;
+}
+
+bool HashJoin::isRetractBlock(const Block & block, const JoinStreamDescription & join_stream_desc)
+{
+    if (!join_stream_desc.hasDeltaColumn())
+        return false;
+
+    assert(Streaming::isKeyedDataStream(join_stream_desc.data_stream_semantic));
+    const auto & delta_column = block.getByPosition(*join_stream_desc.delta_column_position);
+    return delta_column.column->getInt(0) < 0;
+}
+
+template <bool is_left_block>
+std::optional<Block> HashJoin::eraseExistingKeysAndRetractJoin(Block & block)
+{
+    assert(bidirectional_hash_join);
+
+    JoinData * joining_data = &left_data;
+    JoinData * joined_data = &right_data;
+
+    if constexpr (!is_left_block)
+        std::swap(joining_data, joined_data);
+
+    if (!isRetractBlock(block, *joining_data->join_stream_desc))
+        return {};
+
+    /// First erase the keys
+    /// FIXME, avoid the copy
+    Block copy_block = block;
+    eraseExistingKeys<is_left_block>(copy_block, *joining_data);
+
+    /// Then do retract join
+    doJoinBlockWithHashTable<is_left_block>(block, joined_data->buffered_data->getCurrentHashBlocksPtr());
+
+    if constexpr (!is_left_block)
+    {
+        /// If we keep retracting on single stream, there may no join results
+        /// Please note we didn't reorder columns according to output header if block is empty to save some cpu cycles
+        /// Caller shall check if the retracted block is empty and avoid pushing this empty block downstream since
+        /// this empty block's structure probably doesn't match the output header
+        if (block.rows() > 0)
+        {
+            /// Fix the delta column by swapping since the right block has the retract value but got renamed
+            /// FIXME, calculate reserved delta flag col position to avoid string lookup
+//            auto & retract_delta_col = block.getByName(ProtonConsts::RESERVED_DELTA_FLAG);
+//            for (auto & col : block)
+//            {
+//                if (col.name.size() > ProtonConsts::RESERVED_DELTA_FLAG.size() && col.type->getTypeId() == TypeIndex::Int8
+//                    && col.name.ends_with(ProtonConsts::RESERVED_DELTA_FLAG))
+//                {
+//                    std::swap(retract_delta_col.column, col.column);
+//                    break;
+//                }
+//            }
+            block.reorderColumnsInplace(output_header);
+        }
+    }
+
+    /// Even empty block, we will need move back to indicate this is a retract block and we have processed it
+    return std::move(block);
+}
+
+template <bool is_left_block>
+void HashJoin::eraseExistingKeys(Block & block, JoinData & join_data)
+{
+    /// For LATEST / ASOF join, we don't need retract, just drop the retract block on the floor
+    /// Actually, it is better to avoid the ChangelogTransform entirely for versioned-kv case.
+    /// One challenge to drop the ChangelogTransform for versioned-kv is we will need first
+    /// evaluate the whole join semantic first in InterpreterSelectQuery. For multiple join,
+    /// it would be a bit difficult
+    if (streaming_strictness == Strictness::Asof || streaming_strictness == Strictness::Latest)
+        return;
+
+    /// Find previous key / values on join columns
+    ColumnRawPtrMap all_key_columns = JoinCommon::materializeColumnsInplaceMap(block, table_join->getAllNames(is_left_block ? JoinTableSide::Left : JoinTableSide::Right));
+
+    /// FIXME, multiple disjunct OR clause
+    const auto & on_expr = table_join->getClauses().front();
+
+    ColumnRawPtrs key_columns;
+
+    const Names * key_names = nullptr;
+    if constexpr (is_left_block)
+        key_names = &on_expr.key_names_left;
+    else
+        key_names = &on_expr.key_names_right;
+
+    key_columns.reserve(key_names->size());
+    for (const auto & name : *key_names)
+        key_columns.push_back(all_key_columns[name]);
+
+    /// FIXME, null map
+
+    Block saved_block = prepareBlock<is_left_block>(block);
+    assert(join_data.buffered_data->reserved_column_positions);
+
+    auto & map_variant = join_data.buffered_data->getCurrentHashBlocksPtr()->maps->map_variants[0];
+    const auto & key_size = key_sizes[0];
+    auto delete_key = isChangelogKeyedDataStream(join_data.join_stream_desc->data_stream_semantic);
+
+    joinDispatch(streaming_kind, streaming_strictness, map_variant, [&, this] (auto, auto, auto & maps) {
+        switch (hash_method_type)
+        {
+#define M(TYPE) \
+    case HashJoin::Type::TYPE: { \
+        using KeyGetter = typename KeyGetterForType<HashJoin::Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type; \
+        doEraseExistingKeys<KeyGetter>(*maps.TYPE, saved_block, std::move(key_columns), key_size, *join_data.buffered_data->reserved_column_positions, delete_key);                             \
+        break; \
+    }
+            APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+        }
+    });
+}
+
+template <typename KeyGetter, typename Map>
+void HashJoin::doEraseExistingKeys(Map & map, const DB::Block & saved_block, ColumnRawPtrs && key_columns, const Sizes & key_size, const std::vector<size_t> & skip_columns, bool delete_key)
+{
+    [[maybe_unused]] constexpr bool mapped_multiple = std::is_same_v<typename Map::mapped_type, RowRefListMultiplePtr>;
+
+    KeyGetter key_getter(std::move(key_columns), key_size, nullptr);
+
+    Arena pool;
+
+    for (size_t i = 0, rows = saved_block.rows(); i < rows; ++i)
+    {
+        if constexpr (mapped_multiple)
+        {
+            auto find_result = key_getter.findKey(map, i, pool);
+            if (find_result.isFound())
+            {
+                /// Loop the value list to find a match on other values
+                bool found = false;
+                auto & mapped = find_result.getMapped();
+
+                for (auto iter = mapped->rows.begin(), iter_end = mapped->rows.end(); iter != iter_end; ++iter)
+                {
+                    const auto & indexed_block = iter->block_iter->block;
+                    /// Compare each column except the delta column in the indexed block with retract block
+                    if (saved_block.compareAt(i, iter->row_num, indexed_block, skip_columns) == 0)
+                    {
+                        mapped->rows.erase(iter);
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found)
+                    /// Key not exist. Out of order
+                    throw Exception(ErrorCodes::INTERNAL_ERROR, "Existing value is not found in joined hash table");
+
+                if (mapped->rows.empty() && delete_key)
+                {
+                    using T = typename Map::mapped_type;
+                    /// Release the unique_ptr
+                    mapped = T();
+
+                    /// FIXME, erase can be pretty expensive
+                    key_getter.eraseKey(map, i, pool);
+                }
+            }
+            else
+                /// Key not exist. Out of order
+                throw Exception(ErrorCodes::INTERNAL_ERROR, "Existing key is not found in joined hash table");
+        }
+        else
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Internal error. Expecting hash value to point to multiple values");
+    }
 }
 
 std::vector<RowRefListMultipleRef *> HashJoin::eraseOrAppendForPartialPrimaryKeyJoin(const Block & block)
@@ -1949,31 +2177,29 @@ std::vector<RowRefListMultipleRef *> HashJoin::eraseOrAppendForPartialPrimaryKey
         return {};
 
     ColumnRawPtrs primary_key_columns;
-    primary_key_columns.reserve(right_data.join_stream_desc->primary_key_columns->size());
+    primary_key_columns.reserve(right_data.join_stream_desc->primary_key_column_positions->size());
 
-    for (auto col_pos : right_data.join_stream_desc->primary_key_columns.value())
+    for (auto col_pos : right_data.join_stream_desc->primary_key_column_positions.value())
         primary_key_columns.push_back(block.getByPosition(col_pos).column.get());
 
     switch (right_data.primary_key_hash_table->hash_method_type)
     {
 #define M(TYPE) \
-    case HashJoin::Type::TYPE: \
-        return eraseOrAppendForPartialPrimaryKeyJoin<typename KeyGetterForType< \
-            HashJoin::Type::TYPE, \
-            std::remove_reference_t<decltype(*right_data.primary_key_hash_table->map.TYPE)>>::Type>( \
-            *right_data.primary_key_hash_table->map.TYPE, primary_key_columns); \
-        break;
+    case HashJoin::Type::TYPE: { \
+        using KeyGetter = typename KeyGetterForType<HashJoin::Type::TYPE, std::remove_reference_t<decltype(*right_data.primary_key_hash_table->map.TYPE)>>::Type; \
+        return eraseOrAppendForPartialPrimaryKeyJoin<KeyGetter>( \
+            *right_data.primary_key_hash_table->map.TYPE, std::move(primary_key_columns)); \
+    }
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
     }
 }
 
 template <typename KeyGetter, typename Map>
-std::vector<RowRefListMultipleRef *> HashJoin::eraseOrAppendForPartialPrimaryKeyJoin(Map & map, const ColumnRawPtrs & primary_key_columns)
+std::vector<RowRefListMultipleRef *> HashJoin::eraseOrAppendForPartialPrimaryKeyJoin(Map & map, ColumnRawPtrs && primary_key_columns)
 {
-    auto key_getter = createKeyGetter<KeyGetter, false>(primary_key_columns, right_data.primary_key_hash_table->key_size);
-
     auto rows = primary_key_columns[0]->size();
+    auto key_getter = KeyGetter(std::move(primary_key_columns), right_data.primary_key_hash_table->key_size, nullptr);
 
     std::vector<RowRefListMultipleRef *> multi_refs;
     multi_refs.reserve(rows);
@@ -2047,7 +2273,7 @@ void doRetract(
     HashJoin::JoinResults & join_results,
     Block & retracted_block)
 {
-    [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<typename Map::mapped_type, RowRefWithRefCount>;
+    [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<typename Map::mapped_type, RowRefWithRefCount<Block>>;
 
     auto disjuncts = mapv.size();
     for (size_t i = 0, rows = result_block.rows(); i < rows; ++i)
@@ -2128,11 +2354,12 @@ Block HashJoin::retract(const Block & result_block)
         using KeyGetter = typename KeyGetterForType<HashJoin::Type::TYPE, MapTypeVal>::Type; \
         std::vector<MapTypeVal *> a_map_type_vector(mapv.size()); \
         std::vector<KeyGetter> key_getter_vector; \
+        key_getter_vector.reserve(disjuncts);  \
         for (size_t d = 0; d < disjuncts; ++d) \
         { \
-            const auto & join_on_key = join_on_keys[d]; \
+            auto & join_on_key = join_on_keys[d]; \
             a_map_type_vector[d] = mapv[d]->TYPE.get(); \
-            key_getter_vector.push_back(std::move(createKeyGetter<KeyGetter, false>(join_on_key.key_columns, join_on_key.key_sizes))); \
+            key_getter_vector.emplace_back(std::move(join_on_key.key_columns), join_on_key.key_sizes, nullptr); \
         } \
         doRetract(result_block, std::move(key_getter_vector), a_map_type_vector, *join_results, retracted_block); \
         break; \
@@ -2145,6 +2372,7 @@ Block HashJoin::retract(const Block & result_block)
     if (retracted_block.rows())
     {
         /// Update _tp_delta from 1 => -1
+        /// FIXME, calculate _tp_delta position in retracted block
         auto & col = retracted_block.getByName(ProtonConsts::RESERVED_DELTA_FLAG);
         auto & data = assert_cast<ColumnInt8 &>(col.column->assumeMutableRef()).getData();
         std::fill(data.begin(), data.end(), -1);
@@ -2152,6 +2380,30 @@ Block HashJoin::retract(const Block & result_block)
         /// col.column = col.type->createColumnConst(retracted_block.rows(), -1);
     }
     return retracted_block;
+}
+
+void HashJoin::reviseJoinStrictness()
+{
+    /// Strictness::Any in streaming join means take the latest row to join
+    any_take_last_row = (streaming_strictness == Strictness::Latest);
+
+    /// For explicit asof / latest join, we honor what end users like to have
+    if (streaming_strictness == Strictness::Asof || streaming_strictness == Strictness::Latest)
+        return;
+
+    if (streaming_strictness == Strictness::Range)
+    {
+        if (isKeyedDataStream(right_data.join_stream_desc->data_stream_semantic)
+            || right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Changelog)
+            throw Exception(ErrorCodes::UNSUPPORTED, "Range join keyed stream or changelog stream is not supported");
+
+        return;
+    }
+
+    /// We don't even care the left stream semantic since if right stream is versioned-kv or changelog-kv
+    /// we will use `Multiple` list to hold the values since users may use partial primary key to join
+    if (isKeyedDataStream(right_data.join_stream_desc->data_stream_semantic))
+        streaming_strictness = Streaming::Strictness::Multiple;
 }
 
 void HashJoin::checkLimits() const
@@ -2188,14 +2440,14 @@ void HashJoin::validateAsofJoinKey()
                 ErrorCodes::NOT_IMPLEMENTED, "The range column in stream to stream join only supports datetime64 or datetime column types");
     };
 
-    auto left_asof_col_pos = left_data.join_stream_desc->sample_block.getPositionByName(join_clause.key_names_left.back());
-    auto right_asof_col_pos = right_data.join_stream_desc->sample_block.getPositionByName(join_clause.key_names_right.back());
+    auto left_asof_col_pos = left_data.join_stream_desc->input_header.getPositionByName(join_clause.key_names_left.back());
+    auto right_asof_col_pos = right_data.join_stream_desc->input_header.getPositionByName(join_clause.key_names_right.back());
 
-    check_type(left_data.join_stream_desc->sample_block, left_asof_col_pos);
-    check_type(right_data.join_stream_desc->sample_block, right_asof_col_pos);
+    check_type(left_data.join_stream_desc->input_header, left_asof_col_pos);
+    check_type(right_data.join_stream_desc->input_header, right_asof_col_pos);
 
-    const auto & left_asof_col_with_type = left_data.join_stream_desc->sample_block.getByPosition(left_asof_col_pos);
-    const auto & right_asof_col_with_type = right_data.join_stream_desc->sample_block.getByPosition(right_asof_col_pos);
+    const auto & left_asof_col_with_type = left_data.join_stream_desc->input_header.getByPosition(left_asof_col_pos);
+    const auto & right_asof_col_with_type = right_data.join_stream_desc->input_header.getByPosition(right_asof_col_pos);
 
     if (left_asof_col_with_type.type->getTypeId() != right_asof_col_with_type.type->getTypeId())
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "The columns in stream to stream range join have different column types");
@@ -2204,10 +2456,10 @@ void HashJoin::validateAsofJoinKey()
     if (isDateTime64(left_asof_col_with_type.type))
     {
         /// Check scale
-        auto * left_datetime64_type = checkAndGetDataType<DataTypeDateTime64>(left_asof_col_with_type.type.get());
+        const auto * left_datetime64_type = checkAndGetDataType<DataTypeDateTime64>(left_asof_col_with_type.type.get());
         assert(left_datetime64_type);
 
-        auto * right_datetime64_type = checkAndGetDataType<DataTypeDateTime64>(right_asof_col_with_type.type.get());
+        const auto * right_datetime64_type = checkAndGetDataType<DataTypeDateTime64>(right_asof_col_with_type.type.get());
         assert(right_datetime64_type);
 
         if (left_datetime64_type->getScale() != right_datetime64_type->getScale())
@@ -2268,7 +2520,7 @@ void HashJoin::checkJoinSemantic() const
 size_t HashJoin::sizeOfMapsVariant(const MapsVariant & maps_variant) const
 {
     size_t size = 0;
-    joinDispatch(streaming_kind, streaming_strictness, maps_variant, [&](auto /*kind_*/, auto /*strictness_*/, auto & maps) {
+    joinDispatch(streaming_kind, streaming_strictness, maps_variant, [&, this](auto /*kind_*/, auto /*strictness_*/, auto & maps) {
         switch (hash_method_type)
         {
 #define M(TYPE) \
@@ -2341,11 +2593,11 @@ void HashJoin::serialize(WriteBuffer & wb) const
     DB::writeStringBinary(TableJoin::formatClauses(table_join->getClauses(), true), wb);
 
     /// Part-2: Description of left/right join stream
-    DB::writeStringBinary(left_data.join_stream_desc->sample_block.dumpStructure(), wb);
+    DB::writeStringBinary(left_data.join_stream_desc->input_header.dumpStructure(), wb);
     DB::writeIntBinary<UInt16>(static_cast<UInt16>(left_data.join_stream_desc->data_stream_semantic), wb);
     DB::writeIntBinary(left_data.join_stream_desc->keep_versions, wb);
 
-    DB::writeStringBinary(right_data.join_stream_desc->sample_block.dumpStructure(), wb);
+    DB::writeStringBinary(right_data.join_stream_desc->input_header.dumpStructure(), wb);
     DB::writeIntBinary<UInt16>(static_cast<UInt16>(right_data.join_stream_desc->data_stream_semantic), wb);
     DB::writeIntBinary(right_data.join_stream_desc->keep_versions, wb);
 
@@ -2371,17 +2623,16 @@ void HashJoin::serialize(WriteBuffer & wb) const
     }
 
     /// Part-6: Emit changelog (Optional)
-    DB::writeBoolText(emit_changelog, wb);
-    if (emit_changelog)
+    DB::writeBoolText(join_results.has_value(), wb);
+    if (join_results.has_value())
     {
-        assert(bidirectional_hash_join);
-        assert(join_results.has_value());
+        assert(retract_push_down && emit_changelog);
         Streaming::serialize(*join_results, *this, wb);
     }
 
     /// Part-7: Others
     DB::writeIntBinary(combined_watermark.load(), wb);
-    join_metrics.serialize(wb);
+    Streaming::serialize(join_metrics, wb);
 }
 
 void HashJoin::deserialize(ReadBuffer & rb)
@@ -2406,7 +2657,7 @@ void HashJoin::deserialize(ReadBuffer & rb)
         DB::readIntBinary<UInt16>(recovered_left_stream_semantic, rb);
         DB::readIntBinary(recovered_left_keep_versions, rb);
 
-        auto left_header_str = left_data.join_stream_desc->sample_block.dumpStructure();
+        auto left_header_str = left_data.join_stream_desc->input_header.dumpStructure();
         if (recovered_left_header_str != left_header_str
             || static_cast<DataStreamSemantic>(recovered_left_stream_semantic) != left_data.join_stream_desc->data_stream_semantic
             || recovered_left_keep_versions != left_data.join_stream_desc->keep_versions)
@@ -2428,7 +2679,7 @@ void HashJoin::deserialize(ReadBuffer & rb)
         DB::readIntBinary<UInt16>(recovered_right_stream_semantic, rb);
         DB::readIntBinary(recovered_right_keep_versions, rb);
 
-        auto right_header_str = right_data.join_stream_desc->sample_block.dumpStructure();
+        auto right_header_str = right_data.join_stream_desc->input_header.dumpStructure();
         if (recovered_right_header_str != right_header_str
             || static_cast<DataStreamSemantic>(recovered_right_stream_semantic) != right_data.join_stream_desc->data_stream_semantic
             || recovered_right_keep_versions != right_data.join_stream_desc->keep_versions)
@@ -2504,11 +2755,18 @@ void HashJoin::deserialize(ReadBuffer & rb)
     }
 
     /// Part-6: Emit changelog (Optional)
-    DB::readBoolText(emit_changelog, rb);
-    if (emit_changelog)
+    bool need_emit_changelog;
+    DB::readBoolText(need_emit_changelog, rb);
+    if (need_emit_changelog)
     {
-        assert(bidirectional_hash_join);
-        assert(join_results.has_value());
+        if (!join_results.has_value())
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Failed to recover hash join checkpoint. The emit changelog strategy of join are not the same, checkpointed={}, current={}",
+                need_emit_changelog,
+                join_results.has_value());
+
+        assert(retract_push_down && emit_changelog);
         Streaming::deserialize(*join_results, *this, rb);
     }
 
@@ -2517,7 +2775,7 @@ void HashJoin::deserialize(ReadBuffer & rb)
     DB::readIntBinary(recovered_combined_watermark, rb);
     combined_watermark = recovered_combined_watermark;
 
-    join_metrics.deserialize(rb);
+    Streaming::deserialize(join_metrics, rb);
 }
 
 }

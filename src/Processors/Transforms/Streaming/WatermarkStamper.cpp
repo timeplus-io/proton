@@ -1,4 +1,4 @@
-#include "WatermarkStamper.h"
+#include <Processors/Transforms/Streaming/WatermarkTransform.h>
 
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -274,7 +274,7 @@ void WatermarkStamper::processWatermark(Chunk & chunk)
 
     /// FIXME, use simple FilterTransform to do this ?
     auto rows = time_vec.size();
-    IColumn::Filter filt(rows, 1);
+    IColumn::Filter filter(rows, 1);
 
     UInt64 late_events_in_chunk = 0;
     for (size_t i = 0; i < rows; ++i)
@@ -290,7 +290,7 @@ void WatermarkStamper::processWatermark(Chunk & chunk)
 
         if (unlikely(event_ts < event_ts_watermark))
         {
-            filt[i] = 0;
+            filter[i] = 0;
             ++late_events_in_chunk;
         }
     }
@@ -302,7 +302,7 @@ void WatermarkStamper::processWatermark(Chunk & chunk)
     {
         late_events += late_events_in_chunk;
         for (auto & column : columns)
-            column = column->filter(filt, rows - late_events_in_chunk);
+            column = column->filter(filter, rows - late_events_in_chunk);
     }
 
     chunk.setColumns(columns, columns[0]->size());

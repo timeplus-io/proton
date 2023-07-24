@@ -9,6 +9,11 @@ namespace DB
 class InterpreterSelectQuery;
 class QueryPlan;
 
+namespace Streaming
+{
+struct GetSampleBlockContext;
+}
+
 /** Interprets one or multiple SELECT queries inside UNION/UNION ALL/UNION DISTINCT chain.
   */
 class InterpreterSelectWithUnionQuery : public IInterpreterUnionOrSelectQuery
@@ -41,8 +46,8 @@ public:
     static Block getSampleBlock(
         const ASTPtr & query_ptr_,
         ContextPtr context_,
-        bool is_subquery = false,
-        Streaming::DataStreamSemantic * hash_semantic = nullptr);
+        bool is_subquery,
+        Streaming::GetSampleBlockContext * get_sample_block_ctx);
 
     virtual void ignoreWithTotals() override;
 
@@ -54,7 +59,6 @@ public:
     bool hasGlobalAggregation() const override;
     bool hasStreamingWindowFunc() const override;
     Streaming::DataStreamSemantic getDataStreamSemantic() const override;
-    std::optional<std::vector<std::string>> primaryKeyColumns() const override;
 
     ColumnsDescriptionPtr getExtendedObjects() const override;
     std::set<String> getGroupByColumns() const override;

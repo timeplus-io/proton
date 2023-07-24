@@ -31,7 +31,6 @@
 #include <Interpreters/TableJoin.h>
 #include <Interpreters/JoinedTables.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
-#include <Interpreters/QueryAliasesVisitor.h>
 #include <Interpreters/replaceAliasColumnsInQuery.h>
 #include <Interpreters/UnnestSubqueryVisitor.h>
 
@@ -88,14 +87,17 @@
 #include <DataTypes/ObjectUtils.h>
 #include <Interpreters/GetAggregatesVisitor.h>
 #include <Interpreters/Streaming/Aggregator.h>
+#include <Interpreters/Streaming/ChangelogQueryVisitor.h>
 #include <Interpreters/Streaming/EmitInterpreter.h>
-#include <Interpreters/Streaming/PartitionByVisitor.h>
 #include <Interpreters/Streaming/EventPredicateVisitor.h>
+#include <Interpreters/Streaming/PartitionByVisitor.h>
+#include <Interpreters/Streaming/SubstituteStreamingFunction.h>
+#include <Interpreters/Streaming/SyntaxAnalyzeUtils.h>
 #include <Parsers/ASTWindowDefinition.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStepWithSubstream.h>
-#include <Processors/QueryPlan/Streaming/LimitStep.h>
 #include <Processors/QueryPlan/Streaming/JoinStep.h>
+#include <Processors/QueryPlan/Streaming/LimitStep.h>
 #include <Processors/QueryPlan/Streaming/OffsetStep.h>
 #include <Processors/QueryPlan/Streaming/ShufflingStep.h>
 #include <Processors/QueryPlan/Streaming/SortingStep.h>
@@ -106,10 +108,9 @@
 #include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Storages/Streaming/ProxyStream.h>
 #include <Storages/Streaming/StorageMaterializedView.h>
-#include <Storages/Streaming/StorageStream.h>
-#include <Storages/Streaming/storageUtil.h>
-#include <Common/ProtonCommon.h>
 #include <Storages/Streaming/StorageRandom.h>
+#include <Storages/Streaming/StorageStream.h>
+#include <Common/ProtonCommon.h>
 /// proton: ends
 
 namespace DB
@@ -143,151 +144,32 @@ namespace ErrorCodes
 /// proton: starts.
 namespace
 {
-    struct StreamingFunctionData
-    {
-        using TypeToVisit = ASTFunction;
+/// Add where expression: <event_time> >= to_datetime64(utc_ms/1000, 3, 'UTC')
+void addEventTimePredicate(ASTSelectQuery & select, Int64 utc_ms)
+{
+    auto greater = makeASTFunction(
+        "greater_or_equals",
+        std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME),
+        makeASTFunction(
+            "to_datetime64",
+            makeASTFunction("divide", std::make_shared<ASTLiteral>(utc_ms), std::make_shared<ASTLiteral>(1000)),
+            std::make_shared<ASTLiteral>(UInt64(3)),
+            std::make_shared<ASTLiteral>("UTC")));
 
-        StreamingFunctionData(bool streaming_, bool is_changelog_) : streaming(streaming_), is_changelog(is_changelog_) { }
+    if (auto where = select.where())
+        select.setExpression(ASTSelectQuery::Expression::WHERE, makeASTFunction("and", greater, where));
+    else
+        select.setExpression(ASTSelectQuery::Expression::WHERE, greater);
+}
 
-        void visit(ASTFunction & func, ASTPtr)
-        {
-            if (func.name == "emit_version")
-            {
-                emit_version = true;
-                return;
-            }
-
-            if (streaming)
-            {
-                auto iter = func_map.find(func.name);
-                if (iter != func_map.end())
-                {
-                    func.name = iter->second;
-                    return;
-                }
-
-                if (is_changelog)
-                {
-                    iter = changelog_func_map.find(func.name);
-                    if (iter != changelog_func_map.end())
-                    {
-                        if (!iter->second.empty())
-                            func.name = iter->second;
-                        else
-                            throw Exception(
-                                ErrorCodes::NOT_IMPLEMENTED,
-                                "{} aggregation function is not supported in changelog query processing",
-                                func.name);
-
-                        return;
-                    }
-                }
-            }
-            else if (streaming_only_func.contains(func.name))
-                throw Exception(ErrorCodes::FUNCTION_NOT_ALLOWED, "{} function is private and is not supposed to be used directly in a query", func.name);
-        }
-
-        bool emit_version = false;
-
-        static bool ignoreSubquery(const ASTPtr & /*node*/, const ASTPtr & child)
-        {
-            /// Don't go to FROM, JOIN, UNION since they are already handled recursively
-            if (child->as<ASTTableExpression>() || child->as<ASTSelectQuery>())
-                return false;
-
-            return true;
-        }
-
-    private:
-        bool streaming;
-        bool is_changelog;
-
-        static std::unordered_map<String, String> func_map;
-        static std::unordered_map<String, String> changelog_func_map;
-        /// only streaming query can use these functions
-        static std::set<String> streaming_only_func;
-    };
-
-    std::unordered_map<String, String> StreamingFunctionData::func_map =  {
-        {"neighbor", "__streaming_neighbor"},
-        {"row_number", "__streaming_row_number"},
-        {"now64", "__streaming_now64"},
-        {"now", "__streaming_now"},
-    };
-
-    std::set<String> StreamingFunctionData::streaming_only_func
-        = {"__streaming_neighbor",
-           "__streaming_row_number",
-           "__streaming_now64",
-           "__streaming_now",
-           "__dedup",
-           /// changelog_only
-           "__count_retract",
-           "__sum_retract",
-           "__sum_kahan_retract",
-           "__sum_with_overflow_retract",
-           "__avg_retract",
-           "__max_retract",
-           "__min_retract",
-           "__arg_min_retract",
-           "__arg_max_retract"};
-
-    std::unordered_map<String, String> StreamingFunctionData::changelog_func_map =  {
-        {"count", "__count_retract"},
-        {"sum", "__sum_retract"},
-        {"sum_kahan", "__sum_kahan_retract"},
-        {"sum_with_overflow", "__sum_with_overflow_retract"},
-        {"avg", "__avg_retract"},
-        {"max", "__max_retract"},
-        {"min", "__min_retract"},
-        {"arg_min", "__arg_min_retract"},
-        {"arg_max", "__arg_max_retract"},
-        {"latest", ""},
-        {"earliest", ""},
-        {"first_value", ""},
-        {"last_value", ""},
-        {"top_k", ""},
-        {"min_k", ""},
-        {"max_k", ""},
-        {"unique", ""},
-        {"unique_exact", ""},
-        {"unique_exact_if", ""},
-        {"median", ""},
-        {"quantile", ""},
-        {"p90", ""},
-        {"p95", ""},
-        {"p99", ""},
-        {"moving_sum", ""},
-    };
-
-    using StreamingFunctionVisitor = InDepthNodeVisitor<OneTypeMatcher<StreamingFunctionData, StreamingFunctionData::ignoreSubquery>, false>;
-
-    /// Add where expression: <event_time> >= to_datetime64(utc_ms/1000, 3, 'UTC')
-    void addEventTimePredicate(ASTSelectQuery & select, Int64 utc_ms)
-    {
-        auto greater = makeASTFunction(
-            "greater_or_equals",
-            std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME),
-            makeASTFunction(
-                "to_datetime64",
-                makeASTFunction("divide", std::make_shared<ASTLiteral>(utc_ms), std::make_shared<ASTLiteral>(1000)),
-                std::make_shared<ASTLiteral>(UInt64(3)),
-                std::make_shared<ASTLiteral>("UTC")));
-
-        if (auto where = select.where())
-            select.setExpression(ASTSelectQuery::Expression::WHERE, makeASTFunction("and", greater, where));
-        else
-            select.setExpression(ASTSelectQuery::Expression::WHERE, greater);
-    }
-
-    std::vector<size_t> keyPositionsForSubstreams(const Block & header, const SelectQueryInfo & query_info)
-    {
-        std::vector<size_t> substream_key_positions;
-        substream_key_positions.reserve(query_info.partition_by_keys.size());
-        for (const auto & key : query_info.partition_by_keys)
-            substream_key_positions.emplace_back(header.getPositionByName(key));
-        return substream_key_positions;
-    }
+std::vector<size_t> keyPositionsForSubstreams(const Block & header, const SelectQueryInfo & query_info)
+{
+    std::vector<size_t> substream_key_positions;
+    substream_key_positions.reserve(query_info.partition_by_keys.size());
+    for (const auto & key : query_info.partition_by_keys)
+        substream_key_positions.emplace_back(header.getPositionByName(key));
+    return substream_key_positions;
+}
 }
 /// proton: ends.
 
@@ -507,6 +389,19 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     query_info.is_projection_query = options.is_projection_query;
     query_info.original_query = query_ptr->clone();
 
+    /// proton : starts.  Merge some options
+    bool current_select_has_join = false;
+    std::tie(current_select_has_join, current_select_has_aggregates) = Streaming::analyzeSelectQueryForJoinOrAggregates(query_ptr);
+
+    if (current_select_has_join)
+    {
+        current_select_join_strictness
+            = Streaming::analyzeJoinStrictness(getSelectQuery(), context->getSettingsRef().join_default_strictness);
+
+        assert(current_select_join_strictness);
+    }
+    /// proton : ends
+
     initSettings();
     const Settings & settings = context->getSettingsRef();
 
@@ -514,7 +409,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         throw Exception("Too deep subqueries. Maximum: " + settings.max_subquery_depth.toString(),
             ErrorCodes::TOO_DEEP_SUBQUERIES);
 
-    bool has_input = input_pipe != std::nullopt;
+    bool has_input = input_pipe.has_value();
     if (input_pipe)
     {
         /// Read from prepared input.
@@ -526,16 +421,16 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     {
         if (settings.enable_global_with_statement)
             ApplyWithAliasVisitor().visit(query_ptr);
+
         ApplyWithSubqueryVisitor().visit(query_ptr);
     }
 
-    /// proton: starts. Try to eliminate subquery
+    /// Try to eliminate subquery
     if (settings.unnest_subqueries)
     {
         UnnestSubqueryVisitorData data;
         UnnestSubqueryVisitor(data).visit(query_ptr);
     }
-    /// proton: ends.
 
     /// proton: starts. Try to process the streaming query extension grammar.
     /// we need to process before table storage generation (maybe has table function)
@@ -553,100 +448,176 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     /// proton: ends.
 
     JoinedTables joined_tables(getSubqueryContext(context), getSelectQuery(), options.with_all_cols);
-
     bool got_storage_from_query = false;
-    if (!has_input && !storage)
-    {
-        storage = joined_tables.getLeftTableStorage();
-        got_storage_from_query = true;
-    }
 
-    if (storage)
-    {
-        table_lock = storage->lockForShare(context->getInitialQueryId(), context->getSettingsRef().lock_acquire_timeout);
-        table_id = storage->getStorageID();
-        /// proton: starts
-        if (!metadata_snapshot)
+    auto clear_inits = [this]() {
+        storage = nullptr;
+        table_lock.reset();
+        table_id = StorageID::createEmpty();
+        metadata_snapshot = nullptr;
+        storage_snapshot = nullptr;
+    };
+
+    auto resolve_tables_and_rewrite_join = [&got_storage_from_query, &has_input, this, &joined_tables, &clear_inits]() {
+        got_storage_from_query = false;
+        if (!has_input && !storage)
         {
-            if (storage->getName() == "Distributed")
-            {
-                const StorageDistributed * storage_distributed = static_cast<const StorageDistributed *>(storage.get());
-                StoragePtr storage_replicated = DatabaseCatalog::instance().getTable(
-                    StorageID(storage_distributed->getRemoteDatabaseName(), storage_distributed->getRemoteTableName()), context);
-                if (storage_replicated)
-                    metadata_snapshot = storage_replicated->getInMemoryMetadataPtr();
-                else
-                    metadata_snapshot = storage->getInMemoryMetadataPtr();
-            }
-            else
-            {
-                metadata_snapshot = storage->getInMemoryMetadataPtr();
-            }
+            storage = joined_tables.getLeftTableStorage();
+            got_storage_from_query = true;
         }
-        /// proton: ends
 
-        storage_snapshot = storage->getStorageSnapshotForQuery(metadata_snapshot, query_ptr, context);
-    }
-
-    if (has_input || !joined_tables.resolveTables())
-        joined_tables.makeFakeTable(storage, metadata_snapshot, source_header);
-
-    if (context->getCurrentTransaction() && context->getSettingsRef().throw_on_unsupported_query_inside_transaction)
-    {
         if (storage)
-            checkStorageSupportsTransactionsIfNeeded(storage, context);
-
-        for (const auto & table : joined_tables.tablesWithColumns())
         {
-            if (table.table.table.empty())
-                continue;
-            auto maybe_storage = DatabaseCatalog::instance().tryGetTable({table.table.database, table.table.table}, context);
-            if (!maybe_storage)
-                continue;
+            table_lock = storage->lockForShare(context->getInitialQueryId(), context->getSettingsRef().lock_acquire_timeout);
+            table_id = storage->getStorageID();
+            /// proton: starts
+            if (!metadata_snapshot)
+            {
+                if (storage->getName() == "Distributed")
+                {
+                    const StorageDistributed * storage_distributed = static_cast<const StorageDistributed *>(storage.get());
+                    StoragePtr storage_replicated = DatabaseCatalog::instance().getTable(
+                        StorageID(storage_distributed->getRemoteDatabaseName(), storage_distributed->getRemoteTableName()), context);
+                    if (storage_replicated)
+                        metadata_snapshot = storage_replicated->getInMemoryMetadataPtr();
+                    else
+                        metadata_snapshot = storage->getInMemoryMetadataPtr();
+                }
+                else
+                {
+                    metadata_snapshot = storage->getInMemoryMetadataPtr();
+                }
+            }
+            /// proton: ends
 
-            checkStorageSupportsTransactionsIfNeeded(storage, context);
+            storage_snapshot = storage->getStorageSnapshotForQuery(metadata_snapshot, query_ptr, context);
         }
-    }
 
-    /// Rewrite JOINs
-    if (!has_input && joined_tables.tablesCount() > 1)
-    {
-        rewriteMultipleJoins(query_ptr, joined_tables.tablesWithColumns(), context->getCurrentDatabase(), context->getSettingsRef());
+        auto get_sample_block_ctx = getSampleBlockContext();
+        if (has_input || !joined_tables.resolveTables(get_sample_block_ctx))
+            joined_tables.makeFakeTable(storage, metadata_snapshot, source_header);
 
-        joined_tables.reset(getSelectQuery());
-        joined_tables.resolveTables();
-
-        if (storage && joined_tables.isLeftTableSubquery())
+        if (context->getCurrentTransaction() && context->getSettingsRef().throw_on_unsupported_query_inside_transaction)
         {
-            /// Rewritten with subquery. Free storage locks here.
-            storage = nullptr;
-            table_lock.reset();
-            table_id = StorageID::createEmpty();
-            metadata_snapshot = nullptr;
-        }
-    }
+            if (storage)
+                checkStorageSupportsTransactionsIfNeeded(storage, context);
 
+            for (const auto & table : joined_tables.tablesWithColumns())
+            {
+                if (table.table.table.empty())
+                    continue;
+                auto maybe_storage = DatabaseCatalog::instance().tryGetTable({table.table.database, table.table.table}, context);
+                if (!maybe_storage)
+                    continue;
+
+                checkStorageSupportsTransactionsIfNeeded(storage, context);
+            }
+        }
+
+        /// Rewrite JOINs
+        if (!has_input && joined_tables.tablesCount() > 1)
+        {
+            rewriteMultipleJoins(query_ptr, joined_tables.tablesWithColumns(), context->getCurrentDatabase(), context->getSettingsRef());
+
+            joined_tables.reset(getSelectQuery());
+
+            /// proton : starts
+            auto rewrite_get_sample_block_ctx = getSampleBlockContext();
+            joined_tables.resolveTables(rewrite_get_sample_block_ctx);
+            /// proton : ends
+
+            if (storage && joined_tables.isLeftTableSubquery())
+            {
+                /// Rewritten with subquery. Free storage locks here.
+                clear_inits();
+            }
+        }
+
+        if (!has_input)
+        {
+
+            /// proton : propagate the aggregates / join
+            auto subquery_options = options.subquery()
+                .setParentSelectJoinStrictness(current_select_join_strictness)
+                .setParentSelectHasAggregates(current_select_has_aggregates);
+
+            interpreter_subquery = joined_tables.makeLeftTableSubquery(subquery_options);
+            if (interpreter_subquery)
+            {
+                source_header = interpreter_subquery->getSampleBlock();
+
+                /// proton: starts. Add subcolumns of the extended dynamic objects for subquery
+                auto object_names = getNamesOfObjectColumns(source_header.getNamesAndTypesList());
+                auto extended_objects = interpreter_subquery->getExtendedObjects();
+                for (const auto & object_name : object_names)
+                {
+                    auto subcolumns = extended_objects->getSubcolumns(object_name);
+                    for (const auto & [name, type] : subcolumns)
+                        source_header.insert({nullptr, type, name});
+                }
+                /// proton: ends.
+            }
+        }
+
+        /// proton : starts. After resolving the tables and rewrite multiple joins
+        /// we will have at most 2 tables : left table (or subquery) and right table (or subquery)
+        /// It is a good time to resolve the data stream semantic of the whole query
+        resolveDataStreamSemantic(joined_tables);
+        /// proton : ends
+    };
+
+    resolve_tables_and_rewrite_join();
+
+    /// proton : starts
+    /// both isStreaming depends on `storage / interpreterSubquery` to calculate
+    /// Do this only after resolving storage since both `isStreaming` depends on it
+    const auto * required_result_column_names_p = &required_result_column_names;
+    std::unique_ptr<Names> new_required_result_column_names;
     if (!has_input)
     {
-        interpreter_subquery = joined_tables.makeLeftTableSubquery(options.subquery());
-        if (interpreter_subquery)
+        if (isStreaming() && data_stream_semantic_pair.isChangelogInput())
         {
-            source_header = interpreter_subquery->getSampleBlock();
+            /// Rewrite select query to add back _tp_delta if it is not present
+            const auto & tables = joined_tables.tablesWithColumns();
+            assert (tables.size() <= 2);
 
-            /// proton: starts. Add subcolumns of the extended dynamic objects for subquery
-            auto object_names = getNamesOfObjectColumns(source_header.getNamesAndTypesList());
-            auto extended_objects = interpreter_subquery->getExtendedObjects();
-            for (const auto & object_name : object_names)
+            auto left_input_data_stream_semantic = tables.front().output_data_stream_semantic;
+            std::optional<Streaming::DataStreamSemantic> right_input_data_stream_semantic;
+            if (tables.size() == 2)
+                right_input_data_stream_semantic = tables.back().output_data_stream_semantic;
+
+            Streaming::ChangelogQueryVisitorMatcher data(
+                left_input_data_stream_semantic,
+                right_input_data_stream_semantic,
+                current_select_join_strictness,
+                current_select_has_aggregates,
+                !required_result_column_names.empty(),
+                query_info);
+
+            Streaming::ChangelogQueryVisitor(data).visit(query_ptr);
+            if (data.queryIsHardRewritten())
             {
-                auto subcolumns = extended_objects->getSubcolumns(object_name);
-                for (const auto & [name, type] : subcolumns)
-                    source_header.insert({nullptr, type, name});
+                clear_inits();
+
+                joined_tables.reset(getSelectQuery());
+                resolve_tables_and_rewrite_join();
             }
-            /// proton: ends.
+
+            if (auto && new_required_columns = data.newRequiredResultColumnNames(); !new_required_columns.empty())
+            {
+                /// Make a copy of existing required result column names and add the new ones
+                new_required_result_column_names = std::make_unique<Names>(required_result_column_names);
+                for (auto & new_required_column : new_required_columns)
+                {
+                    if (std::find(new_required_result_column_names->begin(), new_required_result_column_names->end(), new_required_column) == new_required_result_column_names->end())
+                        new_required_result_column_names->emplace_back(std::move(new_required_column));
+                }
+
+                required_result_column_names_p = new_required_result_column_names.get();
+            }
         }
     }
 
-    /// proton: starts.
     /// Before analyzing, handle settings seek_to
     handleSeekToSetting();
     /// proton: ends.
@@ -655,7 +626,19 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
     max_streams = settings.max_threads;
     ASTSelectQuery & query = getSelectQuery();
-    std::shared_ptr<TableJoin> table_join = joined_tables.makeTableJoin(query);
+
+    /// proton : force rewrite right stream as subquery if necessary
+    auto force_make_right_table_subquery = [&]() {
+        if (!isStreaming())
+            return false;
+
+        const auto & tables = joined_tables.tablesWithColumns();
+        if (tables.size() < 2)
+            return false;
+
+        return Streaming::isKeyedDataStream(tables.back().output_data_stream_semantic);
+    };
+    std::shared_ptr<TableJoin> table_join = joined_tables.makeTableJoin(query, force_make_right_table_subquery());
 
     /// proton : starts, only allow system.* access under a special setting
     if (storage)
@@ -707,7 +690,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             std::move(tree_rewriter_result),
             options,
             joined_tables.tablesWithColumns(),
-            required_result_column_names,
+            *required_result_column_names_p,
             table_join);
 
         checkEmitVersion();
@@ -773,14 +756,19 @@ InterpreterSelectQuery::InterpreterSelectQuery(
                 ASTSelectQuery::Expression::WHERE, makeASTFunction("and", query.prewhere()->clone(), query.where()->clone()));
         }
 
+        /// proton : propagate the aggregates / join
+        auto analyzer_option = options.copy()
+                                   .setParentSelectHasAggregates(current_select_has_aggregates)
+                                   .setParentSelectJoinStrictness(current_select_join_strictness);
+
         query_analyzer = std::make_unique<SelectQueryExpressionAnalyzer>(
             query_ptr,
             syntax_analyzer_result,
             context,
             metadata_snapshot,
-            NameSet(required_result_column_names.begin(), required_result_column_names.end()),
+            NameSet(required_result_column_names_p->begin(), required_result_column_names_p->end()),
             !options.only_analyze,
-            options,
+            analyzer_option,
             prepared_sets);
 
         if (!options.only_analyze)
@@ -823,10 +811,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         required_columns = syntax_analyzer_result->requiredSourceColumns();
         if (storage)
         {
-            /// proton: starts
-            addRequiredColumns();
-            /// proton: ends
-
             /// Fix source_header for filter actions.
             if (row_policy_filter)
             {
@@ -895,15 +879,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             query.setExpression(ASTSelectQuery::Expression::WHERE, std::make_shared<ASTLiteral>(false));
         need_analyze_again = true;
     }
-
-    /// proton : starts. If versioned_kv join versioned_kv mode, we will force changelog emit internally
-    if (analysis_result.force_internal_changelog_emit)
-    {
-        /// Replace changelog aggregation function
-        checkAndPrepareStreamingFunctions();
-        need_analyze_again = true;
-    }
-    /// proton : ends
 
     if (need_analyze_again)
     {
@@ -1037,7 +1012,14 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
         && options.to_stage > QueryProcessingStage::WithMergeableState;
 
     analysis_result = ExpressionAnalysisResult(
-        *query_analyzer, metadata_snapshot, first_stage, second_stage, options.only_analyze, filter_info, source_header, emit_version, getDataStreamSemantic());
+        *query_analyzer,
+        metadata_snapshot,
+        first_stage,
+        second_stage,
+        options.only_analyze,
+        filter_info,
+        source_header,
+        Streaming::ExpressionAnalysisContext{.emit_version = emit_version, .data_stream_semantic = getDataStreamSemantic()});
 
     if (options.to_stage == QueryProcessingStage::Enum::FetchColumns)
     {
@@ -2298,9 +2280,14 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         if (!subquery)
             throw Exception("Subquery expected", ErrorCodes::LOGICAL_ERROR);
 
+        auto subquery_options = options.subquery()
+                                    .noModify()
+                                    .setParentSelectHasAggregates(current_select_has_aggregates)
+                                    .setParentSelectJoinStrictness(current_select_join_strictness);
+
         interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(
             subquery, getSubqueryContext(context),
-            options.copy().subquery().noModify(), required_columns);
+            subquery_options, required_columns);
 
         interpreter_subquery->addStorageLimits(storage_limits);
 
@@ -3118,7 +3105,9 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     const auto & header_before_aggregation = query_plan.getCurrentDataStream().header;
     ColumnNumbers keys;
 
-    ssize_t delta_col_pos = isChangelog() ? header_before_aggregation.getPositionByName(ProtonConsts::RESERVED_DELTA_FLAG) : -1;
+    ssize_t delta_col_pos = data_stream_semantic_pair.isChangelogInput()
+        ? header_before_aggregation.getPositionByName(ProtonConsts::RESERVED_DELTA_FLAG)
+        : -1;
 
     size_t window_keys_num = 0;
 
@@ -3233,63 +3222,49 @@ void InterpreterSelectQuery::executeStreamingAggregation(
             query_plan.getCurrentDataStream(), params, final, merge_threads, temporary_data_merge_threads, emit_version));
 }
 
-Streaming::DataStreamSemantic InterpreterSelectQuery::getDataStreamSemantic() const
+Streaming::GetSampleBlockContext InterpreterSelectQuery::getSampleBlockContext() const
 {
-    if (data_stream_semantic.has_value())
-        return *data_stream_semantic;
-
-    if (!isStreaming() || context->getSettingsRef().enforce_append_only.value)
-        data_stream_semantic = Streaming::DataStreamSemantic::Append;
-
-    if (storage)
-    {
-        if (storage->as<StorageView>())
-        {
-            auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
-            auto ctx = Context::createCopy(context);
-            ctx->setCollectRequiredColumns(false);
-            data_stream_semantic = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().analyze()).getDataStreamSemantic();
-        }
-        else
-        {
-            if (storage->isChangelogKvMode())
-                 data_stream_semantic = Streaming::DataStreamSemantic::ChangelogKV;
-            else if (storage->isVersionedKvMode())
-                data_stream_semantic = Streaming::DataStreamSemantic::VersionedKV;
-            else if (storage->isChangelogMode())
-                data_stream_semantic = Streaming::DataStreamSemantic::Changelog;
-            else
-                data_stream_semantic = Streaming::DataStreamSemantic::Append;
-        }
-    }
-    else if (interpreter_subquery)
-        data_stream_semantic = interpreter_subquery->getDataStreamSemantic();
-    else
-        data_stream_semantic = Streaming::DataStreamSemantic::Append;
-
-    return *data_stream_semantic;
+    return Streaming::GetSampleBlockContext{
+        .parent_select_has_aggregates = (current_select_has_aggregates || options.parent_select_has_aggregates),
+        .parent_select_join_strictness
+        = (current_select_join_strictness ? current_select_join_strictness : options.parent_select_join_strictness),
+    };
 }
 
-std::optional<std::vector<std::string>> InterpreterSelectQuery::primaryKeyColumns() const
+/// Resolve input / output data stream semantic.
+/// Output data stream semantic depends on the current layer of query (its inputs) as well as the parent's SELECT query
+/// Basically parent SELECT pushes `has_aggregates / has_join` down to subquery, and subquery then decides its
+/// output semantic according its SELECT and the data inputs
+void InterpreterSelectQuery::resolveDataStreamSemantic(const JoinedTables & joined_tables)
 {
-    if (storage)
-    {
-        if (storage->as<StorageView>())
-        {
-            auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
-            auto ctx = Context::createCopy(context);
-            ctx->setCollectRequiredColumns(false);
-            return InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().analyze()).primaryKeyColumns();
-        }
-        else
-        {
-            return storage->getInMemoryMetadataPtr()->primary_key.column_names;
-        }
-    }
-    else if (interpreter_subquery)
-        return interpreter_subquery->primaryKeyColumns();
+    if (!isStreaming() || context->getSettingsRef().enforce_append_only.value)
+        /// Default append
+        return;
 
-    return {};
+    /// Resolve right data stream semantic
+    const auto & tables_with_columns = joined_tables.tablesWithColumns();
+    assert(tables_with_columns.size() <= 2);
+    if (tables_with_columns.size() == 1)
+    {
+        data_stream_semantic_pair = Streaming::calculateDataStreamSemantic(
+            tables_with_columns[0].output_data_stream_semantic, {}, {}, current_select_has_aggregates, options, query_info);
+    }
+    else if (tables_with_columns.size() == 2)
+    {
+        /// auto join_strictness = Streaming::analyzeJoinStrictness(getSelectQuery(), context->getSettingsRef().join_default_strictness);
+        data_stream_semantic_pair = Streaming::calculateDataStreamSemantic(
+            tables_with_columns[0].output_data_stream_semantic,
+            tables_with_columns[1].output_data_stream_semantic,
+            current_select_join_strictness,
+            current_select_has_aggregates,
+            options,
+            query_info);
+    }
+    else
+    {
+        assert(tables_with_columns.empty());
+        /// Default append
+    }
 }
 
 std::set<String> InterpreterSelectQuery::getGroupByColumns() const
@@ -3558,6 +3533,8 @@ bool InterpreterSelectQuery::isStreaming() const
 
     /// We can simple determine the query type (stream or not) by the type of storage or subquery.
     /// Although `TreeRewriter` optimization may rewrite the subquery, it does not affect whether it is streaming
+    /// And for now, we only look at the left stream even in a join case since we don't support
+    /// `table join stream` case yet. When the left stream is streaming, then the whole query will be streaming.
     bool streaming = false;
     if (context->getSettingsRef().query_mode.value == "table")
     {
@@ -3608,8 +3585,8 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
 {
     /// Prepare streaming version of the functions
     bool streaming = isStreaming();
-    StreamingFunctionVisitor::Data func_data(streaming, isChangelog());
-    StreamingFunctionVisitor(func_data).visit(query_ptr);
+    Streaming::SubstituteStreamingFunctionVisitor::Data func_data(streaming, data_stream_semantic_pair.isChangelogInput());
+    Streaming::SubstituteStreamingFunctionVisitor(func_data).visit(query_ptr);
     emit_version = func_data.emit_version;
 
     /// Prepare streaming window params
@@ -3744,11 +3721,6 @@ void InterpreterSelectQuery::checkUDA()
             ErrorCodes::UDA_NOT_APPLICABLE, "User Defined Aggregate function with own emit strategy cannot be used in non-streaming query");
 }
 
-bool InterpreterSelectQuery::isChangelog() const
-{
-    return getDataStreamSemantic() == Streaming::DataStreamSemantic::Changelog || getDataStreamSemantic() == Streaming::DataStreamSemantic::ChangelogKV || analysis_result.force_internal_changelog_emit;
-}
-
 /// Preliminary LIMIT - is used in every source, if there are several sources, before they are combined.
 void InterpreterSelectQuery::executeStreamingPreLimit(QueryPlan & query_plan, bool do_not_skip_offset)
 {
@@ -3835,57 +3807,6 @@ void InterpreterSelectQuery::executeStreamingOffset(QueryPlan & query_plan)
 
         auto offsets_step = std::make_unique<Streaming::OffsetStep>(query_plan.getCurrentDataStream(), limit_offset);
         query_plan.addStep(std::move(offsets_step));
-    }
-}
-
-void InterpreterSelectQuery::addRequiredColumns()
-{
-    bool check_or_add_special_required_columns = syntax_analyzer_result->hasAggregation() || syntax_analyzer_result->analyzed_join;
-    if (!check_or_add_special_required_columns)
-        return;
-
-    assert(storage);
-
-    /// FIXME, instead of hacking the internal pipeline, syntax analyzer etc, could we just rewrite the SQL to
-    /// simplify everything for join / aggregation cases ?
-    /// For example, for changelog_kv stream which has primary key as (k, k1)
-    /// select count() from changelog_kv => select count() from (select _tp_delta from changelog_kv);
-    /// For left changelog_kv stream which has primary key as (k, k1), right changelog_kv which has primary key as (kk, kk1)
-    /// select k, kk from left_changelog inner join right_changelog on left_changelog.k == right_changelog.kk =>
-    /// select k, kk from (select k, k1 from left_changelog) as l inner join (select kk, kk1 from right_changelog) as r on l.k == r.kk
-    /// For version_kv stream which has primary key as (k, k1):
-    /// select a, k from append inner join version_kv on append.k = version_kv.k =>
-    /// select a, k from append inner join (select k, k1 from version_kv) as vk on append.k = vk.k
-    /// Actually, the logic will be far simpler if we enforce users to select primary key column at least for
-    /// versioned kv or select _tp_delta at least for changelog storage, but this may have slightly bad user experience
-    auto data_semantic = getDataStreamSemantic();
-
-    if (options.is_join_subquery
-        && (data_semantic == Streaming::DataStreamSemantic::VersionedKV || data_semantic == Streaming::DataStreamSemantic::ChangelogKV))
-    {
-        /// We will need always select all primary key columns for versioned  / changelog kv data stream
-        /// for aggregation / join cases
-        auto storage_metadata = storage->getInMemoryMetadataPtr();
-        assert(storage_metadata);
-
-        const auto & primary_key_columns = storage_metadata->primary_key.column_names;
-        assert(!primary_key_columns.empty());
-
-        for (const auto & key_col : primary_key_columns)
-            if (std::find(required_columns.begin(), required_columns.end(), key_col) == required_columns.end())
-                throw Exception(
-                    ErrorCodes::UNSUPPORTED,
-                    "Not all primary key columns of the version kv stream are not selected in a join scenario: {} is not selected. Select "
-                    "all primary keys.",
-                    key_col);
-    }
-
-    if (isChangelog() && !analysis_result.force_internal_changelog_emit)
-    {
-        /// For changelog semantic, we actually should always select primary key + _tp_delta columns
-        /// The `primary key` is used for join, the `_tp_delta` is used for retraction
-        if (std::find(required_columns.begin(), required_columns.end(), ProtonConsts::RESERVED_DELTA_FLAG) == required_columns.end())
-            required_columns.push_back(ProtonConsts::RESERVED_DELTA_FLAG);
     }
 }
 /// proton: ends

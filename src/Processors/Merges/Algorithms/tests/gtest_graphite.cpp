@@ -6,24 +6,12 @@
 #include <gtest/gtest.h>
 
 #include <Common/tests/gtest_global_context.h>
+#include <Common/tests/gtest_global_register.h>
 
-#include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Processors/Merges/Algorithms/Graphite.h>
 #include <Common/Config/ConfigProcessor.h>
 
 using namespace DB;
-
-bool regAggregateFunctions = false;
-
-/// note: the registerAggregateFunctions will have conflict with gtest_streaming_emit_interpreter.cpp:14
-void tryRegisterAggregateFunctions()
-{
-    if (!regAggregateFunctions)
-    {
-        registerAggregateFunctions();
-        regAggregateFunctions = true;
-    }
-}
 
 static ConfigProcessor::LoadedConfig loadConfiguration(const std::string & config_path)
 {

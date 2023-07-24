@@ -1,4 +1,4 @@
-#include <Interpreters/Streaming/joinBlockList.h>
+#include <Interpreters/Streaming/RefCountBlockList.h>
 
 #include <Formats/SimpleNativeReader.h>
 #include <Formats/SimpleNativeWriter.h>
@@ -10,7 +10,8 @@ namespace DB
 {
 namespace Streaming
 {
-void JoinBlockList::serialize(WriteBuffer & wb, SerializedBlocksToIndices * serialized_blocks_to_indices) const
+template <typename DataBlock>
+void RefCountBlockList<DataBlock>::serialize(WriteBuffer & wb, SerializedBlocksToIndices * serialized_blocks_to_indices) const
 {
     DB::writeIntBinary(min_ts, wb);
     DB::writeIntBinary(max_ts, wb);
@@ -21,7 +22,12 @@ void JoinBlockList::serialize(WriteBuffer & wb, SerializedBlocksToIndices * seri
     SimpleNativeWriter writer(wb, ProtonRevision::getVersionRevision());
     for (UInt32 i = 0; const auto & block_with_ref : blocks)
     {
-        writer.write(block_with_ref.block);
+        if constexpr (std::is_same_v<DataBlock, Block>)
+            writer.write(block_with_ref.block);
+        else
+            /// FIXME: support chunk
+            assert(false);
+
         DB::writeIntBinary(block_with_ref.refcnt, wb);
 
         if (serialized_blocks_to_indices)
@@ -31,7 +37,8 @@ void JoinBlockList::serialize(WriteBuffer & wb, SerializedBlocksToIndices * seri
     }
 }
 
-void JoinBlockList::deserialize(ReadBuffer & rb, DeserializedIndicesToBlocks * deserialized_indices_with_block)
+template <typename DataBlock>
+void RefCountBlockList<DataBlock>::deserialize(ReadBuffer & rb, DeserializedIndicesToBlocks * deserialized_indices_with_block)
 {
     DB::readIntBinary(min_ts, rb);
     DB::readIntBinary(max_ts, rb);
@@ -43,17 +50,26 @@ void JoinBlockList::deserialize(ReadBuffer & rb, DeserializedIndicesToBlocks * d
     SimpleNativeReader reader(rb, ProtonRevision::getVersionRevision());
     for (UInt32 i = 0; i < block_size; ++i)
     {
-        Block block = reader.read();
-        RefCountBlock elem{std::move(block)};
-        DB::readIntBinary(elem.refcnt, rb);
-        assert(elem.refcnt > 0);
+        if constexpr (std::is_same_v<DataBlock, Block>)
+        {
+            Block block = reader.read();
+            RefCountBlock<Block> elem{std::move(block)};
+            DB::readIntBinary(elem.refcnt, rb);
+            assert(elem.refcnt > 0);
 
-        blocks.push_back(std::move(elem));
+            blocks.push_back(std::move(elem));
+        }
+        else
+        {
+            /// FIXME: support chunk
+            assert(false);
+        }
 
         if (deserialized_indices_with_block)
             deserialized_indices_with_block->emplace(i, lastBlockIter());
     }
 }
 
+template struct RefCountBlockList<Block>;
 }
 }

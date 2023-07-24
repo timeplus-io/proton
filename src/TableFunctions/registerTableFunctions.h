@@ -34,6 +34,7 @@ void registerTableFunctionTumble(TableFunctionFactory & factory);
 void registerTableFunctionHist(TableFunctionFactory & factory);
 void registerTableFunctionSession(TableFunctionFactory & factory);
 void registerTableFunctionDedup(TableFunctionFactory & factory);
+void registerTableFunctionChangelog(TableFunctionFactory & factory);
 }
 /// proton: ends
 

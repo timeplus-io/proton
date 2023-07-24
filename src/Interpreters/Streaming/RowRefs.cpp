@@ -1,11 +1,11 @@
 #include <Interpreters/Streaming/RowRefs.h>
 
-#include <Columns/ColumnDecimal.h>
 #include <Columns/IColumn.h>
 #include <Interpreters/Streaming/joinSerder.h>
 #include <base/types.h>
 #include <Common/ColumnsHashing.h>
 #include <Common/typeid_cast.h>
+#include <Core/Block.h>
 
 
 namespace DB
@@ -61,14 +61,16 @@ void callWithType(TypeIndex which, F && f)
 }
 }
 
-void RowRefWithRefCount::serialize(const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const
+template <typename DataBlock>
+void RowRefWithRefCount<DataBlock>::serialize(const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const
 {
     DB::writeIntBinary<UInt32>(serialized_blocks_to_indices.at(reinterpret_cast<std::uintptr_t>(&(block_iter->block))), wb);
     DB::writeBinary(row_num, wb);
 }
 
-void RowRefWithRefCount::deserialize(
-    JoinBlockList * block_list, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb)
+template <typename DataBlock>
+void RowRefWithRefCount<DataBlock>::deserialize(
+    RefCountBlockList<DataBlock> * block_list, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb)
 {
     blocks = block_list;
     UInt32 block_index;
@@ -91,7 +93,7 @@ AsofRowRefs::AsofRowRefs(TypeIndex type)
 void AsofRowRefs::insert(
     TypeIndex type,
     const IColumn & asof_column,
-    JoinBlockList * blocks,
+    RefCountBlockList<Block> * blocks,
     size_t row_num,
     ASOFJoinInequality inequality,
     size_t keep_versions)
@@ -107,17 +109,17 @@ void AsofRowRefs::insert(
 
         T key = column.getElement(row_num);
         bool ascending = (inequality == ASOFJoinInequality::Less) || (inequality == ASOFJoinInequality::LessOrEquals);
-        container->insert(Entry<T>(key, RowRefWithRefCount(blocks, row_num)), ascending);
+        container->insert(Entry<T>(key, RowRefWithRefCount<Block>(blocks, row_num)), ascending);
         container->truncateTo(keep_versions, ascending);
     };
 
     callWithType(type, call);
 }
 
-const RowRefWithRefCount *
+const RowRefWithRefCount<Block> *
 AsofRowRefs::findAsof(TypeIndex type, ASOFJoinInequality inequality, const IColumn & asof_column, size_t row_num) const
 {
-    const RowRefWithRefCount * out = nullptr;
+    const RowRefWithRefCount<Block> * out = nullptr;
 
     bool ascending = (inequality == ASOFJoinInequality::Less) || (inequality == ASOFJoinInequality::LessOrEquals);
     bool is_strict = (inequality == ASOFJoinInequality::Less) || (inequality == ASOFJoinInequality::Greater);
@@ -217,7 +219,10 @@ void AsofRowRefs::serialize(TypeIndex type, const SerializedBlocksToIndices & se
 }
 
 void AsofRowRefs::deserialize(
-    TypeIndex type, JoinBlockList * block_list, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb)
+    TypeIndex type,
+    RefCountBlockList<Block> * block_list,
+    const DeserializedIndicesToBlocks & deserialized_indices_to_blocks,
+    ReadBuffer & rb)
 {
     auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
@@ -541,7 +546,7 @@ void RowRefListMultiple::serialize(
 }
 
 void RowRefListMultiple::deserialize(
-    JoinBlockList * block_list,
+    RefCountBlockList<Block> * block_list,
     const DeserializedIndicesToBlocks & deserialized_indices_to_blocks,
     ReadBuffer & rb,
     DeserializedIndicesToRowRefListMultiple * deserialized_indices_to_row_ref_list_multiple)

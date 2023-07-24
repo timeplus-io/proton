@@ -33,7 +33,7 @@ struct ChunkContext
 
     ALWAYS_INLINE void setMark(UInt64 mark) { flags |= mark; }
 
-    ALWAYS_INLINE operator bool () const { return flags != 0 || id != Streaming::INVALID_SUBSTREAM_ID || ckpt_ctx != nullptr; }
+    ALWAYS_INLINE explicit operator bool () const { return flags != 0 || id != Streaming::INVALID_SUBSTREAM_ID || ckpt_ctx != nullptr; }
 
     ALWAYS_INLINE bool hasWatermark() const { return flags & WATERMARK_FLAG; }
 
@@ -66,7 +66,7 @@ struct ChunkContext
 
     ALWAYS_INLINE void setAvoidWatermark() { flags |= AVOID_WATERMARK_FLAG; }
 
-    ALWAYS_INLINE bool avoidWatermark() const { return flags & AVOID_WATERMARK_FLAG; }
+    ALWAYS_INLINE bool avoidWatermark() const { return ckpt_ctx || (flags & AVOID_WATERMARK_FLAG); }
 
     ALWAYS_INLINE bool hasAppendTime() const { return flags & APPEND_TIME_FLAG; }
     ALWAYS_INLINE void setAppendTime(Int64 append_time)
@@ -172,6 +172,7 @@ public:
     bool hasChunkInfo() const { return chunk_info != nullptr; }
     void setChunkInfo(ChunkInfoPtr chunk_info_) { chunk_info = std::move(chunk_info_); }
 
+    UInt64 rows() const { return num_rows; }
     UInt64 getNumRows() const { return num_rows; }
     UInt64 getNumColumns() const { return columns.size(); }
     bool hasRows() const { return num_rows > 0; }
@@ -256,6 +257,10 @@ public:
         if (chunk_ctx)
             chunk_ctx->setCheckpointContext(nullptr);
     }
+
+    /// Dummy interface to make RefCountBlockList happy
+    Int64 minTimestamp() const { return 0; }
+    Int64 maxTimestamp() const { return 0;}
     /// proton : ends
 
 private:

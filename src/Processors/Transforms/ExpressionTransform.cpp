@@ -29,7 +29,7 @@ ExpressionTransform::ExpressionTransform(const Block & header_, ExpressionAction
     : ISimpleTransform(header_, transformHeader(header_, expression_->getActionsDAG()), false, ProcessorID::ExpressionTransformID)
     , expression(std::move(expression_))
     /// proton: starts.
-    , stateful_functions(expression->getStatulFunctions())
+    , stateful_functions(expression->getStatefulFunctions())
     /// proton ends.
 {
 }

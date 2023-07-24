@@ -375,6 +375,13 @@ public:
         return const_cast<std::decay_t<decltype(*this)> *>(this)->find(key, hash_value);
     }
 
+    bool erase(const Key & x)
+    {
+        auto exists = !buf[x].isZero(*this);
+        buf[x].setZero();
+        return exists;
+    }
+
     bool ALWAYS_INLINE has(const Key & x) const { return !buf[x].isZero(*this); }
     bool ALWAYS_INLINE has(const Key &, size_t hash_value) const { return !buf[hash_value].isZero(*this); }
 

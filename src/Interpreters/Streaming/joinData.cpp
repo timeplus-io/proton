@@ -8,7 +8,7 @@ namespace DB
 {
 namespace Streaming
 {
-HashBlocks::HashBlocks(JoinMetrics & metrics) : blocks(metrics), maps(std::make_unique<HashJoinMapsVariants>())
+HashBlocks::HashBlocks(CachedBlockMetrics & metrics) : blocks(metrics), maps(std::make_unique<HashJoinMapsVariants>())
 {
     /// FIXME, in some cases, `maps` is not needed
 }
@@ -39,7 +39,7 @@ size_t BufferedStreamData::removeOldBuckets(std::string_view stream)
 
     std::vector<Int64> buckets_to_remove;
     {
-        std::scoped_lock lock(mutex);
+        /// std::scoped_lock lock(mutex);
 
         for (auto iter = range_bucket_hash_blocks.begin(); iter != range_bucket_hash_blocks.end(); ++iter)
         {
@@ -159,14 +159,14 @@ Int64 BufferedStreamData::addBlock(Block && block)
 {
     assert(current_hash_blocks);
 
-    std::scoped_lock lock(mutex);
+    /// std::scoped_lock lock(mutex);
     return addBlockWithoutLock(std::move(block), current_hash_blocks);
 }
 
 Int64 BufferedStreamData::addBlockWithoutLock(Block && block, HashBlocksPtr & target_hash_blocks)
 {
-    block.info.setBlockID(block_id++);
-    auto allocated_block_id = block.info.blockID();
+    block.setBlockID(block_id++);
+    auto allocated_block_id = block.blockID();
 
     target_hash_blocks->addBlock(std::move(block));
 
@@ -176,7 +176,7 @@ Int64 BufferedStreamData::addBlockWithoutLock(Block && block, HashBlocksPtr & ta
 std::vector<BufferedStreamData::BucketBlock> BufferedStreamData::assignBlockToRangeBuckets(Block && block)
 {
     /// Categorize block according to range bucket, then we can prune the range bucketed blocks
-    /// when `watermark` passed its time
+    /// when `watermark` passed its time. RangeSplitter assign min/max timestamp for each split block
     auto bucket_blocks = range_splitter->split(std::move(block));
 
     std::vector<std::pair<UInt64, size_t>> late_blocks;
@@ -195,7 +195,7 @@ std::vector<BufferedStreamData::BucketBlock> BufferedStreamData::assignBlockToRa
 
             HashBlocksPtr target_hash_bucket = nullptr;
             {
-                std::scoped_lock lock(mutex);
+                /// std::scoped_lock lock(mutex);
 
                 auto iter = range_bucket_hash_blocks.find(bucket_block.first);
                 if (iter == range_bucket_hash_blocks.end())

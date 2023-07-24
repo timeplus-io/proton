@@ -26,7 +26,7 @@ AggregateFunctionPtr
 createAggregateFunctionAvg(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     assertNoParameters(name, parameters);
-    assertUnary(name, argument_types);
+    assertBinary(name, argument_types);
 
     const DataTypePtr & data_type = argument_types[0];
 

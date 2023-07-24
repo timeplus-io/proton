@@ -1,16 +1,16 @@
 #pragma once
 
+#include <Interpreters/Streaming/IHashJoin.h>
 #include <Interpreters/Streaming/JoinStreamDescription.h>
 #include <Interpreters/Streaming/RowRefs.h>
 #include <Interpreters/Streaming/joinData.h>
 #include <Interpreters/Streaming/joinKind.h>
-#include <Interpreters/Streaming/IHashJoin.h>
 
-#include <Common/HashTable/HashMap.h>
-#include <Common/HashTable/FixedHashMap.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/TableJoin.h>
 #include <Common/ColumnUtils.h>
+#include <Common/HashTable/FixedHashMap.h>
+#include <Common/HashTable/HashMap.h>
 #include <Common/ProtonCommon.h>
 #include <base/SerdeTag.h>
 
@@ -83,12 +83,9 @@ namespace Streaming
 ///
 ///     Note, this is a very special join with very special changelog semantic.
 ///
-///  7) append-only `INNER LATEST JOIN` append-only: SELECT * FROM left_stream INNER LATEST JOIN right_versioned_kv_stream ON left_stream.key = right_versioned_kv_stream.key;
+///  7) append-only `INNER LATEST JOIN` append-only: SELECT * FROM left_stream INNER LATEST JOIN right_stream ON left_stream.key = right_stream.key;
 ///    i. Continuously reading data from left stream, build hashtable for right stream continuously and only keep the latest key / value
-///    ii. Continuously reading data from right stream, build hashtable for right stream continuously and only keep the latest key / value.
-///    iii. For every new incoming left block or right block, execute bidirectional hash join and emit joined results just like `versioned-kv join versioned-kv`
-///
-///    Note this is a processing time version-kv join version-kv
+///    ii. Continuously reading data from left stream and in the meanwhile continuously join the left data with the right side hashtable.
 
 struct HashJoinMapsVariants;
 
@@ -162,7 +159,10 @@ public:
 
     bool alwaysReturnsEmptySet() const final;
 
-    void getKeyColumnPositions(std::vector<size_t> & left_key_column_positions, std::vector<size_t> & right_key_column_positions, bool include_asof_key_column) const override
+    void getKeyColumnPositions(
+        std::vector<size_t> & left_key_column_positions,
+        std::vector<size_t> & right_key_column_positions,
+        bool include_asof_key_column) const override
     {
         auto calc_key_positions = [](const auto & key_column_names, const auto & header, auto & key_column_positions) {
             key_column_positions.reserve(key_column_names.size());
@@ -170,8 +170,9 @@ public:
                 key_column_positions.push_back(header.getPositionByName(name));
         };
 
-        calc_key_positions(table_join->getOnlyClause().key_names_left, left_data.join_stream_desc->sample_block, left_key_column_positions);
-        calc_key_positions(table_join->getOnlyClause().key_names_right, right_data.join_stream_desc->sample_block, right_key_column_positions);
+        calc_key_positions(table_join->getOnlyClause().key_names_left, left_data.join_stream_desc->input_header, left_key_column_positions);
+        calc_key_positions(
+            table_join->getOnlyClause().key_names_right, right_data.join_stream_desc->input_header, right_key_column_positions);
 
         if (!include_asof_key_column && (streaming_strictness == Strictness::Range || streaming_strictness == Strictness::Asof))
         {
@@ -302,7 +303,7 @@ public:
         }
     };
 
-    using MapsOne = MapsTemplate<RowRefWithRefCount>;
+    using MapsOne = MapsTemplate<RowRefWithRefCount<Block>>;
     using MapsMultiple = MapsTemplate<RowRefListMultiplePtr>;
     using MapsAll = MapsTemplate<RowRefList>;
     using MapsAsof = MapsTemplate<AsofRowRefs>;
@@ -332,8 +333,8 @@ public:
 
         mutable std::mutex mutex;
 
-        JoinMetrics metrics;
-        JoinBlockList blocks;
+        CachedBlockMetrics metrics;
+        RefCountBlockList<Block> blocks;
 
         UInt64 block_id = 0;
 
@@ -351,11 +352,16 @@ private:
     void initBufferedData();
     void initHashMaps(std::vector<MapsVariant> & all_maps);
     void dataMapInit(MapsVariant &);
-    void initPrimaryKeyHashTable();
+
+    /// For versioned kv / changelog kv
+    void initLeftPrimaryKeyHashTable();
+    void initRightPrimaryKeyHashTable();
+    void reviseJoinStrictness();
 
     void initLeftBlockStructure();
     void initRightBlockStructure();
-    void initBlockStructure(Block & saved_block_sample, const Block & table_keys, const Block & sample_block_with_columns_to_add) const;
+    struct JoinData;
+    void initBlockStructure(JoinData & join_data, const Block & table_keys, const Block & sample_block_with_columns_to_add) const;
 
     void chooseHashMethod();
     static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
@@ -403,12 +409,34 @@ private:
     /// Secondly, `combined_watermark` is calculated periodically according the watermarks in the left and right streams
     void calculateWatermark();
 
+    /// For versioned-kv / changelog-kv join
     /// Check if this ia row with a new primary key or an existing primary key
     /// For the later, erase the element in the target join linked list
     std::vector<RowRefListMultipleRef *> eraseOrAppendForPartialPrimaryKeyJoin(const Block & block);
 
-    template<typename KeyGetter, typename Map>
-    std::vector<RowRefListMultipleRef *> eraseOrAppendForPartialPrimaryKeyJoin(Map & map, const ColumnRawPtrs & primary_key_columns);
+    template <typename KeyGetter, typename Map>
+    std::vector<RowRefListMultipleRef *> eraseOrAppendForPartialPrimaryKeyJoin(Map & map, ColumnRawPtrs && primary_key_columns);
+
+    /// If the left / right_block is a retraction block : rows in `_tp_delta` column all have `-1`
+    /// We erase the previous key / values from hash table
+    /// Use for append JOIN changelog_kv / versioned_kv case
+    /// @return true if keys are erased, otherwise false
+    template <bool is_left_block>
+    void eraseExistingKeys(Block & block, JoinData & join_data);
+    inline bool isRetractBlock(const Block & block, const JoinStreamDescription & join_stream_desc);
+
+    template <typename KeyGetter, typename Map>
+    void doEraseExistingKeys(
+        Map & map,
+        const DB::Block & right_block,
+        ColumnRawPtrs && key_columns,
+        const Sizes & key_size,
+        const std::vector<size_t> & skip_columns,
+        bool delete_key);
+
+    /// For bidirectional join, the input is a retract block
+    template <bool is_left_block>
+    std::optional<Block> eraseExistingKeysAndRetractJoin(Block & left_block);
 
 private:
     /// Only SERDE the clauses of join
@@ -453,8 +481,6 @@ private:
         explicit JoinData(JoinStreamDescriptionPtr join_stream_desc_) : join_stream_desc(std::move(join_stream_desc_))
         {
             assert(join_stream_desc);
-            /// [[maybe_unused]] auto kv_semantic = isKeyValueDataStreamSemantic(join_stream_desc->data_stream_semantic);
-            /// assert(!kv_semantic || (kv_semantic && join_stream_desc->primary_key_columns && !join_stream_desc->primary_key_columns.value().empty()));
         }
 
         JoinStreamDescriptionPtr join_stream_desc;
@@ -498,9 +524,10 @@ private:
     /// Only SERDE when emit_changelog is true
     SERDE std::optional<JoinResults> join_results;
 
-    SERDE bool emit_changelog = false;
-    SERDE bool bidirectional_hash_join = true;
-    SERDE bool range_bidirectional_hash_join = true;
+    bool retract_push_down = false;
+    bool emit_changelog = false;
+    bool bidirectional_hash_join = true;
+    bool range_bidirectional_hash_join = true;
 
     UInt64 join_max_cached_bytes = 0;
 
@@ -508,6 +535,25 @@ private:
 
     /// Combined timestamp watermark progression of left stream and right stream
     SERDE std::atomic_int64_t combined_watermark = 0;
+
+    struct JoinGlobalMetrics
+    {
+        size_t total_join = 0;
+        size_t left_block_and_right_range_bucket_no_intersection_skip = 0;
+        size_t right_block_and_left_range_bucket_no_intersection_skip = 0;
+
+        std::string string() const
+        {
+            return fmt::format(
+                "total_join={} "
+                "left_block_and_right_range_bucket_no_intersection_skip={} right_block_and_left_range_bucket_no_intersection_skip={}",
+                total_join,
+                left_block_and_right_range_bucket_no_intersection_skip,
+                right_block_and_left_range_bucket_no_intersection_skip);
+        }
+    };
+    friend void serialize(const JoinGlobalMetrics & join_metrics, WriteBuffer & wb);
+    friend void deserialize(JoinGlobalMetrics & join_metrics, ReadBuffer & rb);
 
     SERDE JoinGlobalMetrics join_metrics;
 

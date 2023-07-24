@@ -22,6 +22,9 @@
 #include <shared_mutex>
 #include <compare>
 
+/// proton : starts
+#include <Core/Streaming/DataStreamSemantic.h>
+/// proton : ends
 
 namespace DB
 {
@@ -263,6 +266,8 @@ private:
 protected:
     /// proton: starts.
     MultiVersionStorageCreateQueryPtr create_query;
+    /// When storage is inited, init this data member
+    mutable Streaming::DataStreamSemantic data_stream_semantic = Streaming::DataStreamSemantic::Append;
     /// proton: ends.
 
     RWLockImpl::LockHolder tryLockTimed(
@@ -649,10 +654,7 @@ public:
 
     virtual void preRename(const StorageID & /*new_table_id*/) { }
 
-    virtual bool isAppendOnlyMode() const { return false; }
-    virtual bool isChangelogMode() const { return false; }
-    virtual bool isChangelogKvMode() const { return false; }
-    virtual bool isVersionedKvMode() const { return false; }
+    virtual Streaming::DataStreamSemantic dataStreamSemantic() const { return data_stream_semantic; }
     /// proton: ends
 
     /// Creates a storage snapshot from given metadata.

@@ -61,6 +61,7 @@ public:
     bool supportsSubcolumns() const override { return true; }
     bool supportsDynamicSubcolumns() const override { return true; }
     StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const override;
+    Streaming::DataStreamSemantic dataStreamSemantic() const override;
 
     /// Get constant pointer to storage settings.
     MergeTreeSettingsPtr getSettings() const;

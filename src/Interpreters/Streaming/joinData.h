@@ -1,8 +1,8 @@
 #pragma once
 
+#include <Interpreters/Streaming/CachedBlockMetrics.h>
 #include <Interpreters/Streaming/RangeAsofJoinContext.h>
-#include <Interpreters/Streaming/joinBlockList.h>
-#include <Interpreters/Streaming/joinMetrics.h>
+#include <Interpreters/Streaming/RefCountBlockList.h>
 #include <Interpreters/Streaming/joinSerder_fwd.h>
 #include <Interpreters/Streaming/joinTuple.h>
 
@@ -28,16 +28,16 @@ struct HashJoinMapsVariants;
 
 struct HashBlocks
 {
-    HashBlocks(JoinMetrics & metrics);
+    HashBlocks(CachedBlockMetrics & metrics);
 
     ~HashBlocks();
 
     void addBlock(Block && block) { blocks.push_back(std::move(block)); }
 
-    const Block * lastBlock() const { return blocks.lastBlock(); }
+    const Block & lastBlock() const { return blocks.lastBlock(); }
 
     /// Buffered data
-    JoinBlockList blocks;
+    RefCountBlockList<Block> blocks;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arena pool;
@@ -113,7 +113,7 @@ SERDE struct BufferedStreamData
         return *current_hash_blocks->maps;
     }
 
-    const JoinMetrics & getJoinMetrics() const { return metrics; }
+    const CachedBlockMetrics & getJoinMetrics() const { return metrics; }
 
     String joinMetricsString() const;
 
@@ -157,6 +157,7 @@ SERDE struct BufferedStreamData
     std::atomic_int64_t current_watermark = 0;
 
     NO_SERDE Block sample_block; /// Block as it would appear in the BlockList
+    NO_SERDE std::optional<std::vector<size_t>> reserved_column_positions; /// `_tp_delta` etc column positions in sample block if they exist
 
     NO_SERDE mutable std::mutex mutex;
 
@@ -164,7 +165,7 @@ private:
     /// Global block id for left or right stream data
     UInt64 block_id = 0;
 
-    JoinMetrics metrics;
+    CachedBlockMetrics metrics;
 
     /// `current_hash_blocks` serves 3 purposes
     /// 1) During query plan phase, we will need it to evaluate the header

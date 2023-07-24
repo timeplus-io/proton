@@ -201,6 +201,17 @@ protected:
 
 class SelectQueryExpressionAnalyzer;
 
+/// proton : starts
+namespace Streaming
+{
+struct ExpressionAnalysisContext
+{
+    bool emit_version;
+    DataStreamSemantic data_stream_semantic;
+};
+}
+/// proton : ends
+
 /// Result of SelectQueryExpressionAnalyzer: expressions for InterpreterSelectQuery
 struct ExpressionAnalysisResult
 {
@@ -256,10 +267,6 @@ struct ExpressionAnalysisResult
     ManyExpressionActions order_by_elements_actions;
     ManyExpressionActions group_by_elements_actions;
 
-    /// proton : starts
-    bool force_internal_changelog_emit = false;
-    /// proton : ends
-
     ExpressionAnalysisResult() = default;
 
     ExpressionAnalysisResult(
@@ -270,8 +277,7 @@ struct ExpressionAnalysisResult
         bool only_types,
         const FilterDAGInfoPtr & filter_info,
         const Block & source_header,
-        bool emit_version,
-        Streaming::DataStreamSemantic data_stream_semantic);
+        Streaming::ExpressionAnalysisContext analysis_ctx);
 
     /// Filter for row-level security.
     bool hasFilter() const { return filter_info.get(); }
@@ -405,7 +411,7 @@ private:
     ///  appendProjectResult
 
     /// proton : starts
-    std::shared_ptr<IJoin> chooseJoinAlgorithmStreaming(std::shared_ptr<TableJoin> analyzed_join, std::optional<std::vector<std::string>> && primary_key_columns);
+    std::shared_ptr<IJoin> chooseJoinAlgorithmStreaming(std::shared_ptr<TableJoin> analyzed_join);
     /// proton : ends
 };
 

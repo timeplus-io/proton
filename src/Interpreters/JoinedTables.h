@@ -16,22 +16,29 @@ struct SelectQueryOptions;
 struct StorageInMemoryMetadata;
 using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 
+/// proton : starts
+namespace Streaming
+{
+struct GetSampleBlockContext;
+}
+/// proton : ends
+
 /// Joined tables' columns resolver.
 /// We want to get each table structure at most once per table occurrence. Or even better once per table.
 /// TODO: joins tree with costs to change joins order by CBO.
 class JoinedTables
 {
 public:
-    JoinedTables(ContextPtr context, const ASTSelectQuery & select_query, bool include_all_columns_ = false);
+    JoinedTables(ContextPtr context, const ASTSelectQuery & select_query, bool include_all_columns_ /*= false*/);
 
     void reset(const ASTSelectQuery & select_query);
 
     StoragePtr getLeftTableStorage();
-    bool resolveTables();
+    bool resolveTables(Streaming::GetSampleBlockContext & get_sample_block_ctx);
 
     /// Make fake tables_with_columns[0] in case we have predefined input in InterpreterSelectQuery
     void makeFakeTable(StoragePtr storage, const StorageMetadataPtr & metadata_snapshot, const Block & source_header);
-    std::shared_ptr<TableJoin> makeTableJoin(const ASTSelectQuery & select_query);
+    std::shared_ptr<TableJoin> makeTableJoin(const ASTSelectQuery & select_query, bool make_right_table_subquery);
 
     const TablesWithColumns & tablesWithColumns() const { return tables_with_columns; }
 

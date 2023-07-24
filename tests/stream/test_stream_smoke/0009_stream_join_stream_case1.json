@@ -390,7 +390,7 @@
     },
     {
       "id": 37,
-      "tags": ["stream_join_stream"],
+      "tags": ["stream_join_stream", "bug"],
       "name": "multiple-streams",
       "description": "multiple stream to stream join",
       "steps":[
@@ -524,7 +524,7 @@
     },
     {
       "id": 41,
-      "tags": ["stream_join_stream"],
+      "tags": ["stream_join_stream", "bug"],
       "name": "multiple-streams-global",
       "description": "multiple stream to stream join globally",
       "steps":[

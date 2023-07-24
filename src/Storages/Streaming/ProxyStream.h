@@ -67,6 +67,7 @@ public:
     bool supportsParallelInsert() const override;
     bool supportsIndexForIn() const override;
     bool supportsSubcolumns() const override;
+    DataStreamSemantic dataStreamSemantic() const override;
 
     std::variant<StoragePtr, ASTPtr> getProxyStorageOrSubquery() const;
 
@@ -92,6 +93,8 @@ private:
         const Names & required_columns_after_streaming_window,
         const SelectQueryInfo & query_info,
         const StorageSnapshotPtr & storage_snapshot) const;
+
+    void processChangelogStep(QueryPlan & query_plan, const Names & required_columns_after_streaming_window) const;
 
     void processDedupStep(QueryPlan & query_plan, const Names & required_columns_after_streaming_window) const;
 

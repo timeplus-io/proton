@@ -45,14 +45,14 @@ void serializeHashJoinMap(
                 assert(asof_type.has_value() && serialized_blocks_to_indices); \
                 mapped.serialize(*asof_type, *serialized_blocks_to_indices, wb); \
             } \
-            else if constexpr (std::is_same_v<Mapped, RowRefWithRefCount>) \
+            else if constexpr (std::is_same_v<Mapped, RowRefWithRefCount<Block>>) \
             { \
                 assert(serialized_blocks_to_indices); \
                 mapped.serialize(*serialized_blocks_to_indices, wb); \
             } \
             else if constexpr (std::is_same_v<Mapped, RowRefListMultiplePtr>) \
             { \
-                assert(serialized_blocks_to_indices && serialized_row_ref_list_multiple_to_indices); \
+                assert(serialized_blocks_to_indices); \
                 mapped->serialize(*serialized_blocks_to_indices, wb, serialized_row_ref_list_multiple_to_indices); \
             } \
             else if constexpr (std::is_same_v<Mapped, RowRefListMultipleRefPtr>) \
@@ -81,7 +81,7 @@ void deserializeHashJoinMap(
     const std::optional<TypeIndex> & asof_type,
     Arena & pool,
     ReadBuffer & rb,
-    [[maybe_unused]] JoinBlockList * blocks,
+    [[maybe_unused]] RefCountBlockList<Block> * blocks,
     [[maybe_unused]] const DeserializedIndicesToBlocks * deserialized_indices_to_blocks,
     [[maybe_unused]] DeserializedIndicesToRowRefListMultiple * deserialized_indices_with_multiple_ref)
 {
@@ -124,14 +124,14 @@ void deserializeHashJoinMap(
                 assert(asof_type.has_value() && blocks && deserialized_indices_to_blocks); \
                 mapped.deserialize(*asof_type, blocks, *deserialized_indices_to_blocks, rb); \
             } \
-            else if constexpr (std::is_same_v<Mapped, RowRefWithRefCount>) \
+            else if constexpr (std::is_same_v<Mapped, RowRefWithRefCount<Block>>) \
             { \
                 assert(blocks && deserialized_indices_to_blocks); \
                 mapped.deserialize(blocks, *deserialized_indices_to_blocks, rb); \
             } \
             else if constexpr (std::is_same_v<Mapped, RowRefListMultiplePtr>) \
             { \
-                assert(blocks && deserialized_indices_to_blocks && deserialized_indices_with_multiple_ref); \
+                assert(blocks && deserialized_indices_to_blocks); \
                 mapped = std::make_unique<RowRefListMultiple>(); \
                 mapped->deserialize(blocks, *deserialized_indices_to_blocks, rb, deserialized_indices_with_multiple_ref); \
             } \
@@ -156,7 +156,7 @@ void deserializeHashJoinMap(
 }
 
 void serializeHashJoinMapsVariants(
-    const JoinBlockList & blocks,
+    const RefCountBlockList<Block> & blocks,
     const HashJoinMapsVariants & maps,
     const HashJoin & join,
     WriteBuffer & wb,
@@ -186,7 +186,7 @@ void serializeHashJoinMapsVariants(
 }
 
 void deserializeHashJoinMapsVariants(
-    JoinBlockList & blocks,
+    RefCountBlockList<Block> & blocks,
     HashJoinMapsVariants & maps,
     Arena & pool,
     const HashJoin & join,
@@ -384,12 +384,26 @@ void deserialize(HashJoin::JoinData & join_data, ReadBuffer & rb)
             /* asof type */ std::nullopt,
             join_data.primary_key_hash_table->pool,
             rb,
-            /* JoinBlockList* */ nullptr,
+            /* RefCountBlockList<Block>* */ nullptr,
             /* DeserializedIndicesToBlocks* */ nullptr,
             &deserialized_indices_to_multiple_ref);
     }
     else
         join_data.buffered_data->deserialize(rb);
+}
+
+void serialize(const HashJoin::JoinGlobalMetrics & join_metrics, WriteBuffer & wb)
+{
+    DB::writeBinary(join_metrics.total_join, wb);
+    DB::writeBinary(join_metrics.left_block_and_right_range_bucket_no_intersection_skip, wb);
+    DB::writeBinary(join_metrics.right_block_and_left_range_bucket_no_intersection_skip, wb);
+}
+
+void deserialize(HashJoin::JoinGlobalMetrics & join_metrics, ReadBuffer & rb)
+{
+    DB::readBinary(join_metrics.total_join, rb);
+    DB::readBinary(join_metrics.left_block_and_right_range_bucket_no_intersection_skip, rb);
+    DB::readBinary(join_metrics.right_block_and_left_range_bucket_no_intersection_skip, rb);
 }
 
 }

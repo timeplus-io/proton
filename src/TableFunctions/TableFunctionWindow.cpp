@@ -1,4 +1,4 @@
-#include "TableFunctionWindow.h"
+#include <TableFunctions/TableFunctionWindow.h>
 
 #include <DataTypes/DataTypeTuple.h>
 #include <Functions/FunctionHelpers.h>

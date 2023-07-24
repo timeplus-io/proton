@@ -143,7 +143,6 @@ struct ProjectionCandidate
   */
 struct SelectQueryInfo
 {
-
     SelectQueryInfo()
         : prepared_sets(std::make_shared<PreparedSets>())
     {}
@@ -186,12 +185,17 @@ struct SelectQueryInfo
 
     Streaming::WindowParamsPtr streaming_window_params;
 
+    bool changelog_tracking_changes = false;
+    bool versioned_kv_tracking_changes = false;
+    std::optional<bool> changelog_query_drop_late_rows = true;
+
     bool has_aggregate_over = false;
     bool has_non_aggregate_over = false;
     bool has_javascript_uda = false; /// Used to guide query concurrency
     Names partition_by_keys;
 
-    bool hasPartitionByKeys() const { return !partition_by_keys.empty(); }
+    bool hasPartitionByKeys() const noexcept { return !partition_by_keys.empty(); }
+    bool trackingChanges() const noexcept { return changelog_tracking_changes || versioned_kv_tracking_changes; }
     /// proton: ends.
 
     ClusterPtr getCluster() const { return !optimized_cluster ? cluster : optimized_cluster; }
