@@ -4,8 +4,7 @@
 #include <Core/DecimalFunctions.h>
 #include <Functions/FunctionsConversion.h>
 
-#define FOR_BASIC_NUMERIC_TYPES(M) \
-    M(UInt8) \
+#define FOR_V8_BASIC_NUMERIC_TYPES(M) \
     M(UInt16) \
     M(UInt32) \
     M(UInt64) \
@@ -79,9 +78,17 @@ fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableCo
 
     switch (arg_type_id)
     {
-        case TypeIndex::Bool: {
-            for (int i = 0; i < size; i++)
-                result->Set(context, i, to_v8(isolate, column->getBool(offset + i))).FromJust();
+        case TypeIndex::UInt8: {
+            if (arg_type->getName() == "bool")
+            {
+                for (int i = 0; i < size; i++)
+                    result->Set(context, i, to_v8<bool>(isolate, column->getBool(offset + i))).FromJust();
+            }
+            else
+            {
+                const auto & internal_data = assert_cast<const ColumnVector<UInt8> &>(*column).getData();
+                result = to_v8(isolate, internal_data.begin() + offset, internal_data.begin() + offset + size);
+            }
             break;
         }
         case TypeIndex::String:
@@ -135,7 +142,7 @@ fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableCo
         result = to_v8(isolate, internal_data.begin() + offset, internal_data.begin() + offset + size); \
         break; \
     }
-            FOR_BASIC_NUMERIC_TYPES(DISPATCH)
+            FOR_V8_BASIC_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
 
         default:
@@ -170,11 +177,8 @@ void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & resul
     {
         switch (result_type->getTypeId())
         {
-            case TypeIndex::Bool:
-                to.insert(from_v8<bool>(isolate, result));
-                break;
             case TypeIndex::UInt8:
-                if (result_type->getName() == "bool")
+                if (result_type->getName() == "bool" && result->IsBoolean())
                     /// Internally we stores bool as UIn8
                     to.insert(from_v8<bool>(isolate, result));
                 else

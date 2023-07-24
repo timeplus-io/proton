@@ -99,11 +99,6 @@ String UDA1 = R"###(
     }
 })###";
 
-String ARGS_NESTED_ARRAY = R"###([{ "name": "value","type": "array(array(int64))"}])###";
-String ARGS_INT_ARRAY = R"###([{ "name": "value","type": "array(int64)"}])###";
-String ARGS_BOOL_ARRAY = R"###([{ "name": "value","type": "array(bool)"}])###";
-String ARGS_STR_ARRAY = R"###([{ "name": "value","type": "array(string)"}])###";
-
 void initV8()
 {
     v8::V8::SetFlagsFromString("--single-threaded");
@@ -323,14 +318,16 @@ TEST_F(UDATestCase, Merge)
     ASSERT_EQ(out.str(), "\x11{\"max\":8,\"sec\":5}");
 }
 
-TEST_F(UDATestCase, IntArray)
+using CREATE_V8_DATA_FUNC = std::function<v8::Local<v8::Value>(v8::Isolate *)>;
+using CHECK_COL_FUNC = std::function<void(MutableColumnPtr &)>;
+
+void checkV8ReturnResult(String type, bool is_result_array, CREATE_V8_DATA_FUNC create_fn, CHECK_COL_FUNC check_fn)
 {
     v8::Isolate::CreateParams isolate_params;
     isolate_params.array_buffer_allocator_shared
         = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
     v8::Isolate * isolate = v8::Isolate::New(isolate_params);
     SCOPE_EXIT({ isolate->Dispose(); });
-
     v8::Locker locker(isolate);
     v8::Isolate::Scope isolate_scope(isolate);
     v8::HandleScope handle_scope(isolate);
@@ -341,117 +338,177 @@ TEST_F(UDATestCase, IntArray)
     v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
     v8::Context::Scope context_scope(local_ctx);
 
-    auto array_type_ptr = DataTypeFactory::instance().get("array(int64)");
+    auto array_type_ptr = DataTypeFactory::instance().get(type);
     auto col_ptr = array_type_ptr->createColumn();
 
+    auto result = create_fn(isolate);
+    V8::insertResult(isolate, *col_ptr, array_type_ptr, result, is_result_array);
+
+    check_fn(col_ptr);
+}
+
+TEST_F(UDATestCase, IntArray)
+{
     /// prepare v8 data
-    v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
-    result.As<v8::Array>()->Set(local_ctx, 0, V8::to_v8(isolate, 3)).FromJust();
-    result.As<v8::Array>()->Set(local_ctx, 1, V8::to_v8(isolate, 4)).FromJust();
-    result.As<v8::Array>()->Set(local_ctx, 2, V8::to_v8(isolate, 5)).FromJust();
+    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        v8::EscapableHandleScope scope(isolate);
+        v8::Local<v8::Context> context = isolate->GetCurrentContext();
+        v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
+        result.As<v8::Array>()->Set(context, 0, V8::to_v8(isolate, 3)).FromJust();
+        result.As<v8::Array>()->Set(context, 1, V8::to_v8(isolate, 4)).FromJust();
+        result.As<v8::Array>()->Set(context, 2, V8::to_v8(isolate, 5)).FromJust();
+        return scope.Escape(result);
+    };
 
-    V8::insertResult(isolate, *col_ptr, array_type_ptr, result, false);
+    auto check_fn = [](MutableColumnPtr & col_ptr)
+    {
+        ASSERT_EQ(col_ptr->size(), 1);
+        Field result_elem1;
+        col_ptr->get(0, result_elem1);
+        ASSERT_EQ(result_elem1.get<Array &>().size(), 3);
+    };
 
-    ASSERT_EQ(col_ptr->size(), 1);
-    Field result_elem1;
-    col_ptr->get(0, result_elem1);
-    ASSERT_EQ(result_elem1.get<Array &>().size(), 3);
+    checkV8ReturnResult("array(int64)", false, create_fn, check_fn);
 }
 
 TEST_F(UDATestCase, ArrayInArray)
 {
-    v8::Isolate::CreateParams isolate_params;
-    isolate_params.array_buffer_allocator_shared
-        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
-    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
-    SCOPE_EXIT({ isolate->Dispose(); });
-    v8::Locker locker(isolate);
-    v8::Isolate::Scope isolate_scope(isolate);
-    v8::HandleScope handle_scope(isolate);
-    v8::TryCatch try_catch(isolate);
-    /// try_catch.SetVerbose(true);
-    try_catch.SetCaptureMessage(true);
-
-    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
-    v8::Context::Scope context_scope(local_ctx);
-
-    auto array_type_ptr = DataTypeFactory::instance().get("array(int64)");
-    auto col_ptr = array_type_ptr->createColumn();
-
     /// prepare v8 data
-    auto result = createV8Array(isolate, false);
-    V8::insertResult(isolate, *col_ptr, array_type_ptr, result, true);
+    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        return createV8Array(isolate, false);
+    };
 
-    ASSERT_EQ(col_ptr->size(), 2);
-    Field result_elem1;
-    Field result_elem2;
-    col_ptr->get(0, result_elem1);
-    col_ptr->get(1, result_elem2);
-    ASSERT_EQ(result_elem1.get<Array &>().size(), 2);
-    ASSERT_EQ(result_elem2.get<Array &>().size(), 3);
+    auto check_fn = [](MutableColumnPtr & col_ptr)
+    {
+        ASSERT_EQ(col_ptr->size(), 2);
+        Field result_elem1;
+        Field result_elem2;
+        col_ptr->get(0, result_elem1);
+        col_ptr->get(1, result_elem2);
+        ASSERT_EQ(result_elem1.get<Array &>().size(), 2);
+        ASSERT_EQ(result_elem2.get<Array &>().size(), 3);
+    };
+
+    checkV8ReturnResult("array(int64)", true, create_fn, check_fn);
 }
 
 TEST_F(UDATestCase, EmptyArray)
 {
-    v8::Isolate::CreateParams isolate_params;
-    isolate_params.array_buffer_allocator_shared
-        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
-    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
-    SCOPE_EXIT({ isolate->Dispose(); });
-    v8::Locker locker(isolate);
-    v8::Isolate::Scope isolate_scope(isolate);
-    v8::HandleScope handle_scope(isolate);
-    v8::TryCatch try_catch(isolate);
-    /// try_catch.SetVerbose(true);
-    try_catch.SetCaptureMessage(true);
-
-    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
-    v8::Context::Scope context_scope(local_ctx);
-
-    auto array_type_ptr = DataTypeFactory::instance().get("array(int64)");
-    auto col_ptr = array_type_ptr->createColumn();
-
     /// prepare v8 data
-    auto result = createV8Array(isolate, true);
-    V8::insertResult(isolate, *col_ptr, array_type_ptr, result, true);
+    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        return createV8Array(isolate, true);
+    };
 
-    ASSERT_EQ(col_ptr->size(), 2);
-    Field result_elem1;
-    Field result_elem2;
-    col_ptr->get(0, result_elem1);
-    col_ptr->get(1, result_elem2);
-    ASSERT_EQ(result_elem1.get<Array &>().size(), 0);
-    ASSERT_EQ(result_elem2.get<Array &>().size(), 3);
+    auto check_fn = [](MutableColumnPtr & col_ptr)
+    {
+        ASSERT_EQ(col_ptr->size(), 2);
+        Field result_elem1;
+        Field result_elem2;
+        col_ptr->get(0, result_elem1);
+        col_ptr->get(1, result_elem2);
+        ASSERT_EQ(result_elem1.get<Array &>().size(), 0);
+        ASSERT_EQ(result_elem2.get<Array &>().size(), 3);
+    };
+
+    checkV8ReturnResult("array(int64)", true, create_fn, check_fn);
 }
 
 TEST_F(UDATestCase, NestedArray)
 {
-    v8::Isolate::CreateParams isolate_params;
-    isolate_params.array_buffer_allocator_shared
-        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
-    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
-    SCOPE_EXIT({ isolate->Dispose(); });
-    v8::Locker locker(isolate);
-    v8::Isolate::Scope isolate_scope(isolate);
-    v8::HandleScope handle_scope(isolate);
-    v8::TryCatch try_catch(isolate);
-    /// try_catch.SetVerbose(true);
-    try_catch.SetCaptureMessage(true);
-
-    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
-    v8::Context::Scope context_scope(local_ctx);
-
-    auto array_type_ptr = DataTypeFactory::instance().get("array(array(int64))");
-    auto col_ptr = array_type_ptr->createColumn();
-
     /// prepare v8 data
-    auto result = createV8Array(isolate, true);
-    V8::insertResult(isolate, *col_ptr, array_type_ptr, result, false);
+    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        return createV8Array(isolate, true);
+    };
 
-    ASSERT_EQ(col_ptr->size(), 1);
-    Field result_elem1;
-    col_ptr->get(0, result_elem1);
-    ASSERT_EQ(result_elem1.get<Array &>().size(), 2);
+    auto check_fn = [](MutableColumnPtr & col_ptr)
+    {
+        ASSERT_EQ(col_ptr->size(), 1);
+        Field result_elem1;
+        col_ptr->get(0, result_elem1);
+        ASSERT_EQ(result_elem1.get<Array &>().size(), 2);
+    };
+
+    checkV8ReturnResult("array(array(int64))", false, create_fn, check_fn);
+}
+
+TEST_F(UDATestCase, Bool)
+{
+    /// prepare v8 data
+    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        return V8::to_v8(isolate, true);
+    };
+
+    auto check_fn = [](MutableColumnPtr & col_ptr)
+    {
+        ASSERT_EQ(col_ptr->size(), 1);
+        ASSERT_EQ(col_ptr->getBool(0), true);
+    };
+
+    checkV8ReturnResult("bool", false, create_fn, check_fn);
+}
+
+TEST_F(UDATestCase, BoolArray)
+{
+    /// prepare v8 data
+    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        v8::EscapableHandleScope scope(isolate);
+        v8::Local<v8::Context> context = isolate->GetCurrentContext();
+        v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
+        result.As<v8::Array>()->Set(context, 0, V8::to_v8(isolate, true)).FromJust();
+        result.As<v8::Array>()->Set(context, 1, V8::to_v8(isolate, false)).FromJust();
+        result.As<v8::Array>()->Set(context, 2, V8::to_v8(isolate, true)).FromJust();
+        return scope.Escape(result);
+    };
+
+    auto check_fn = [](MutableColumnPtr & col_ptr)
+    {
+        ASSERT_EQ(col_ptr->size(), 3);
+        ASSERT_EQ(col_ptr->getBool(0), true);
+        ASSERT_EQ(col_ptr->getBool(1), false);
+        ASSERT_EQ(col_ptr->getBool(2), true);
+    };
+
+    checkV8ReturnResult("bool", true, create_fn, check_fn);
+}
+
+TEST_F(UDATestCase, returnNumberForBool)
+{
+    /// prepare v8 data
+    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        return V8::to_v8(isolate, 0);
+    };
+
+    auto check_fn = [](MutableColumnPtr & col_ptr)
+    {
+        ASSERT_EQ(col_ptr->size(), 1);
+        ASSERT_EQ(col_ptr->getBool(0), false);
+    };
+
+    checkV8ReturnResult("bool", false, create_fn, check_fn);
+}
+
+TEST_F(UDATestCase, returnNumberForBoolArray)
+{
+    /// prepare v8 data
+    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        v8::EscapableHandleScope scope(isolate);
+        v8::Local<v8::Context> context = isolate->GetCurrentContext();
+        v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
+        result.As<v8::Array>()->Set(context, 0, V8::to_v8(isolate, 2)).FromJust();
+        result.As<v8::Array>()->Set(context, 1, V8::to_v8(isolate, 0)).FromJust();
+        result.As<v8::Array>()->Set(context, 2, V8::to_v8(isolate, 1)).FromJust();
+        return scope.Escape(result);
+    };
+
+    auto check_fn = [](MutableColumnPtr & col_ptr)
+    {
+        ASSERT_EQ(col_ptr->size(), 3);
+        ASSERT_EQ(col_ptr->getBool(0), true);
+        ASSERT_EQ(col_ptr->getBool(1), false);
+        ASSERT_EQ(col_ptr->getBool(2), true);
+    };
+
+    checkV8ReturnResult("bool", true, create_fn, check_fn);
 }
 
 void dumpArray(ColumnArray & col)
@@ -465,14 +522,17 @@ void dumpArray(ColumnArray & col)
     std::cout << std::endl;
 
     std::cout << "offsets: ";
-    for (int i = 0; i < col.getOffsets().size(); i++)
+    for (uint64_t i : col.getOffsets())
     {
-        std::cout << col.getOffsets()[i] << ",";
+        std::cout << i << ",";
     }
     std::cout << std::endl;
 }
 
-TEST_F(UDATestCase, prepareArguments_IntArray)
+using CREATE_DATA_FUNC = std::function<void(MutableColumnPtr &)>;
+using CHECK_V8_DATA_FUNC = std::function<void(v8::Isolate *, v8::Local<v8::Context> &, v8::Local<v8::Array> &)>;
+
+void checkPrepareArguments(String type, CREATE_DATA_FUNC create_fn, CHECK_V8_DATA_FUNC check_fn)
 {
     v8::Isolate::CreateParams isolate_params;
     isolate_params.array_buffer_allocator_shared
@@ -486,17 +546,17 @@ TEST_F(UDATestCase, prepareArguments_IntArray)
     /// try_catch.SetVerbose(true);
     try_catch.SetCaptureMessage(true);
 
-    auto config = createUDFConfig("int_array", ARGS_INT_ARRAY, RETURN_UDA1, UDA1);
+    String arg_str = R"([{ "name": "value","type": ")" + type + "\"}]";
+
+    auto config = createUDFConfig(type, arg_str, RETURN_UDA1, UDA1);
 
     v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
     v8::Context::Scope context_scope(local_ctx);
 
-    auto array_type_ptr = DataTypeFactory::instance().get("array(int64)");
+    auto array_type_ptr = DataTypeFactory::instance().get(type);
     auto col_ptr = array_type_ptr->createColumn();
-    /// prepare input column
-    auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
-    column_array.insert(Array{1, 2});
-    column_array.insert(Array{3, 4, 5});
+
+    create_fn(col_ptr);
 
     MutableColumns columns;
     columns.emplace_back(std::move(col_ptr));
@@ -504,176 +564,171 @@ TEST_F(UDATestCase, prepareArguments_IntArray)
 
     ASSERT_EQ(argv.size(), 1);
     v8::Local<v8::Array> v8_arr = argv[0].As<v8::Array>();
-    ASSERT_EQ(v8_arr->Length(), 2);
-    v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
-    v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
-    ASSERT_EQ(elem1.As<v8::Array>()->Length(), 2);
-    ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
+
+    check_fn(isolate, local_ctx, v8_arr);
 }
 
-TEST_F(UDATestCase, prepareArguments_BoolArray)
+TEST_F(UDATestCase, prepareArgumentsIntArray)
 {
-    v8::Isolate::CreateParams isolate_params;
-    isolate_params.array_buffer_allocator_shared
-        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
-    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
-    SCOPE_EXIT({ isolate->Dispose(); });
-    v8::Locker locker(isolate);
-    v8::Isolate::Scope isolate_scope(isolate);
-    v8::HandleScope handle_scope(isolate);
-    v8::TryCatch try_catch(isolate);
-    /// try_catch.SetVerbose(true);
-    try_catch.SetCaptureMessage(true);
-
-    auto config = createUDFConfig("bool_array", ARGS_BOOL_ARRAY, RETURN_UDA1, UDA1);
-
-    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
-    v8::Context::Scope context_scope(local_ctx);
-
-    auto array_type_ptr = DataTypeFactory::instance().get("array(bool)");
-    auto col_ptr = array_type_ptr->createColumn();
     /// prepare input column
-    auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
-    column_array.insert(Array{true, false});
-    column_array.insert(Array{true, true, true});
+    auto create_int_arr = [](MutableColumnPtr & col_ptr) {
+        auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
+        column_array.insert(Array{1, 2});
+        column_array.insert(Array{3, 4, 5});
+    };
 
-    MutableColumns columns;
-    columns.emplace_back(std::move(col_ptr));
-    auto argv = V8::prepareArguments(isolate, config.arguments, columns);
+    auto check_int_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
+    {
+        ASSERT_EQ(v8_arr->Length(), 2);
+        v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
+        v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
+        ASSERT_EQ(elem1.As<v8::Array>()->Length(), 2);
+        ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
+    };
 
-    ASSERT_EQ(argv.size(), 1);
-    v8::Local<v8::Array> v8_arr = argv[0].As<v8::Array>();
-    ASSERT_EQ(v8_arr->Length(), 2);
-    v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
-    v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
-    ASSERT_EQ(elem1.As<v8::Array>()->Length(), 2);
-    ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
+    checkPrepareArguments("array(int64)", create_int_arr, check_int_arr);
 }
 
-TEST_F(UDATestCase, prepareArguments_StrArray)
+TEST_F(UDATestCase, prepareArgumentsBoolArray)
 {
-    v8::Isolate::CreateParams isolate_params;
-    isolate_params.array_buffer_allocator_shared
-        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
-    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
-    SCOPE_EXIT({ isolate->Dispose(); });
-    v8::Locker locker(isolate);
-    v8::Isolate::Scope isolate_scope(isolate);
-    v8::HandleScope handle_scope(isolate);
-    v8::TryCatch try_catch(isolate);
-    /// try_catch.SetVerbose(true);
-    try_catch.SetCaptureMessage(true);
-
-    auto config = createUDFConfig("str_array", ARGS_STR_ARRAY, RETURN_UDA1, UDA1);
-
-    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
-    v8::Context::Scope context_scope(local_ctx);
-
-    auto array_type_ptr = DataTypeFactory::instance().get("array(string)");
-    auto col_ptr = array_type_ptr->createColumn();
     /// prepare input column
-    auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
-    column_array.insert(Array{"aaa", "bbb"});
-    column_array.insert(Array{"ccc", "ddd", "eee"});
+    auto create_bool_arr = [](MutableColumnPtr & col_ptr) {
+        auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
+        column_array.insert(Array{true, false});
+        column_array.insert(Array{true, true, true});
+    };
 
-    MutableColumns columns;
-    columns.emplace_back(std::move(col_ptr));
-    auto argv = V8::prepareArguments(isolate, config.arguments, columns);
+    auto check_bool_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
+    {
+        ASSERT_EQ(v8_arr->Length(), 2);
+        v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
+        v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
+        ASSERT_EQ(elem1.As<v8::Array>()->Length(), 2);
+        ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
+    };
 
-    ASSERT_EQ(argv.size(), 1);
-    v8::Local<v8::Array> v8_arr = argv[0].As<v8::Array>();
-    ASSERT_EQ(v8_arr->Length(), 2);
-    v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
-    v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
-    ASSERT_EQ(elem1.As<v8::Array>()->Length(), 2);
-    ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
+    checkPrepareArguments("array(bool)", create_bool_arr, check_bool_arr);
 }
 
-TEST_F(UDATestCase, prepareArguments_EmptyArray)
+TEST_F(UDATestCase, prepareArgumentsStrArray)
 {
-    v8::Isolate::CreateParams isolate_params;
-    isolate_params.array_buffer_allocator_shared
-        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
-    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
-    SCOPE_EXIT({ isolate->Dispose(); });
-    v8::Locker locker(isolate);
-    v8::Isolate::Scope isolate_scope(isolate);
-    v8::HandleScope handle_scope(isolate);
-    v8::TryCatch try_catch(isolate);
-    /// try_catch.SetVerbose(true);
-    try_catch.SetCaptureMessage(true);
-
-    auto config = createUDFConfig("int_array", ARGS_INT_ARRAY, RETURN_UDA1, UDA1);
-
-    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
-    v8::Context::Scope context_scope(local_ctx);
-
-    auto array_type_ptr = DataTypeFactory::instance().get("array(int64)");
-    auto col_ptr = array_type_ptr->createColumn();
     /// prepare input column
-    auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
-    column_array.insert(Array{});
-    column_array.insert(Array{3, 4, 5});
+    auto create_str_arr = [](MutableColumnPtr & col_ptr) {
+        auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
+        column_array.insert(Array{"aaa", "bbb"});
+        column_array.insert(Array{"ccc", "ddd", "eee"});
+    };
 
-    MutableColumns columns;
-    columns.emplace_back(std::move(col_ptr));
-    auto argv = V8::prepareArguments(isolate, config.arguments, columns);
+    auto check_str_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
+    {
+        ASSERT_EQ(v8_arr->Length(), 2);
+        v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
+        v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
+        ASSERT_EQ(elem1.As<v8::Array>()->Length(), 2);
+        ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
+    };
 
-    ASSERT_EQ(argv.size(), 1);
-    v8::Local<v8::Array> v8_arr = argv[0].As<v8::Array>();
-    ASSERT_EQ(v8_arr->Length(), 2);
-    v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
-    v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
-    ASSERT_EQ(elem1.As<v8::Array>()->Length(), 0);
-    ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
+    checkPrepareArguments("array(string)", create_str_arr, check_str_arr);
 }
 
-TEST_F(UDATestCase, prepareArguments_NestedArray)
+TEST_F(UDATestCase, prepareArgumentsEmptyArray)
 {
-    v8::Isolate::CreateParams isolate_params;
-    isolate_params.array_buffer_allocator_shared
-        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
-    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
-    SCOPE_EXIT({ isolate->Dispose(); });
-    v8::Locker locker(isolate);
-    v8::Isolate::Scope isolate_scope(isolate);
-    v8::HandleScope handle_scope(isolate);
-    v8::TryCatch try_catch(isolate);
-    /// try_catch.SetVerbose(true);
-    try_catch.SetCaptureMessage(true);
-
-    auto config = createUDFConfig("nested_array", ARGS_NESTED_ARRAY, RETURN_UDA1, UDA1);
-
-    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
-    v8::Context::Scope context_scope(local_ctx);
-
-    auto array_type_ptr = DataTypeFactory::instance().get("array(array(int64))");
-    auto col_ptr = array_type_ptr->createColumn();
-
     /// prepare input column
-    auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
-    Array nested1 = Array{Array{1, 2}, Array{3, 4, 5}};
-    column_array.insert(nested1);
-    Array nested2 = Array{Array{6}, Array{7}};
-    column_array.insert(nested2);
-    /// dumpArray(column_array);
+    auto create_int_arr = [](MutableColumnPtr & col_ptr) {
+        auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
+        column_array.insert(Array{});
+        column_array.insert(Array{3, 4, 5});
+    };
 
-    MutableColumns columns;
-    columns.emplace_back(std::move(col_ptr));
-    auto argv = V8::prepareArguments(isolate, config.arguments, columns);
+    auto check_int_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
+    {
+        ASSERT_EQ(v8_arr->Length(), 2);
+        v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
+        v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
+        ASSERT_EQ(elem1.As<v8::Array>()->Length(), 0);
+        ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
+    };
 
-    ASSERT_EQ(argv.size(), 1);
-    v8::Local<v8::Array> v8_arr = argv[0].As<v8::Array>();
-    ASSERT_EQ(v8_arr->Length(), 2);
-    v8::Local<v8::Array> v8_nested1 = v8_arr->Get(local_ctx, 0).ToLocalChecked().As<v8::Array>();
-    v8::Local<v8::Array> v8_nested2 = v8_arr->Get(local_ctx, 1).ToLocalChecked().As<v8::Array>();
-    ASSERT_EQ(v8_nested1->Length(), 2);
-    v8::Local<v8::Value> elem1 = v8_nested1->Get(local_ctx, 0).ToLocalChecked();
-    v8::Local<v8::Value> elem2 = v8_nested1->Get(local_ctx, 1).ToLocalChecked();
-    ASSERT_EQ(elem1.As<v8::Array>()->Length(), 2);
-    ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
-    elem1 = v8_nested2->Get(local_ctx, 0).ToLocalChecked();
-    elem2 = v8_nested2->Get(local_ctx, 1).ToLocalChecked();
-    ASSERT_EQ(elem1.As<v8::Array>()->Length(), 1);
-    ASSERT_EQ(elem2.As<v8::Array>()->Length(), 1);
+    checkPrepareArguments("array(int64)", create_int_arr, check_int_arr);
+}
+
+TEST_F(UDATestCase, prepareArgumentsNestedArray)
+{
+    /// prepare input column
+    auto create_nested_arr = [](MutableColumnPtr & col_ptr) {
+        auto & column_array = assert_cast<ColumnArray &>(*col_ptr);
+        Array nested1 = Array{Array{1, 2}, Array{3, 4, 5}};
+        column_array.insert(nested1);
+        Array nested2 = Array{Array{6}, Array{7}};
+        column_array.insert(nested2);
+        /// dumpArray(column_array);
+    };
+
+    auto check_nested_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
+    {
+        ASSERT_EQ(v8_arr->Length(), 2);
+        v8::Local<v8::Array> v8_nested1 = v8_arr->Get(local_ctx, 0).ToLocalChecked().As<v8::Array>();
+        v8::Local<v8::Array> v8_nested2 = v8_arr->Get(local_ctx, 1).ToLocalChecked().As<v8::Array>();
+        ASSERT_EQ(v8_nested1->Length(), 2);
+        v8::Local<v8::Value> elem1 = v8_nested1->Get(local_ctx, 0).ToLocalChecked();
+        v8::Local<v8::Value> elem2 = v8_nested1->Get(local_ctx, 1).ToLocalChecked();
+        ASSERT_EQ(elem1.As<v8::Array>()->Length(), 2);
+        ASSERT_EQ(elem2.As<v8::Array>()->Length(), 3);
+        elem1 = v8_nested2->Get(local_ctx, 0).ToLocalChecked();
+        elem2 = v8_nested2->Get(local_ctx, 1).ToLocalChecked();
+        ASSERT_EQ(elem1.As<v8::Array>()->Length(), 1);
+        ASSERT_EQ(elem2.As<v8::Array>()->Length(), 1);
+    };
+
+    checkPrepareArguments("array(array(int64))", create_nested_arr, check_nested_arr);
+}
+
+TEST_F(UDATestCase, prepareArgumentsBool)
+{
+    /// prepare input column
+    auto create_bool_arr = [](MutableColumnPtr & col_ptr) {
+        col_ptr->insert(true);
+        col_ptr->insert(false);
+        col_ptr->insert(1);
+        col_ptr->insert(3);
+        col_ptr->insert(0);
+    };
+
+    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
+    {
+        ASSERT_EQ(v8_arr->Length(), 5);
+        std::vector<bool> expect = {true, false, true, true, false};
+        for (int i = 0; i < v8_arr->Length(); i++)
+        {
+            v8::Local<v8::Value> elem = v8_arr->Get(local_ctx, i).ToLocalChecked();
+            ASSERT_EQ(elem->IsBoolean(), true);
+            ASSERT_EQ(V8::from_v8<bool>(isolate, elem), expect[i]);
+        }
+    };
+
+    checkPrepareArguments("bool", create_bool_arr, check_bool);
+}
+
+TEST_F(UDATestCase, prepareArgumentsUInt8)
+{
+    /// prepare input column
+    auto create_uint8_arr = [](MutableColumnPtr & col_ptr) {
+        col_ptr->insert(0);
+        col_ptr->insert(1);
+        col_ptr->insert(2);
+        col_ptr->insert(3);
+        col_ptr->insert(4);
+    };
+
+    auto check_uint8 = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
+    {
+        ASSERT_EQ(v8_arr->Length(), 5);
+        for (uint i = 0; i < v8_arr->Length(); i++)
+        {
+            v8::Local<v8::Value> elem = v8_arr->Get(local_ctx, i).ToLocalChecked();
+            ASSERT_EQ(V8::from_v8<uint8_t>(isolate, elem), i);
+        }
+    };
+
+    checkPrepareArguments("uint8", create_uint8_arr, check_uint8);
 }
