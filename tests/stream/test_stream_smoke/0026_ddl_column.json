@@ -1,0 +1,499 @@
+{
+    "test_suite_name": "ddl_column",
+    "tag": "smoke",
+    "test_suite_config":{
+        "setup": {
+            "statements": [
+            ]
+        },
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "native_not_support"],"cluster": ["view", "cluster_table_bug"]}}
+    }, 
+    "comments": "add test case about ddl column",
+    "tests": [
+        {
+            "id": 0,
+            "tags": ["ddl-column", "bug"],
+            "name": "adding_new_column",
+            "description": "streaming query after add a column",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists add_new_column_stream"},
+                        {"client":"python", "query_type": "table", "exist":"add_new_column_stream", "exist_wait":2, "wait":1, "query":"create stream add_new_column_stream (id int, name string, val float, ts datetime)"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"2700", "wait":1, "query": "select id, name, val, ts from add_new_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2700", "wait":1, "query": "insert into add_new_column_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into add_new_column_stream (id, name, val, ts) values (2, 's2', 22.2, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into add_new_column_stream (id, name, val, ts) values (3, 's3', 33.3, '2020-02-02 20:00:03')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM add_new_column_stream ADD COLUMN IF NOT EXISTS add_int int FIRST"},
+                        {"client":"python", "query_type": "stream", "query_id":"2700-1", "wait":1, "query": "select id, name, val, ts from add_new_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2700-1", "wait":1, "query":"insert into add_new_column_stream (* expect _tp_time) values (1, 4, 'add_int', 44.4, '2020-02-02 20:00:04')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM add_new_column_stream ADD COLUMN IF NOT EXISTS add_float float AFTER val"},
+                        {"client":"python", "query_type": "stream", "query_id":"2700-2", "wait":1, "query": "select id, name, val, ts from add_new_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2700-2", "wait":1, "query":"insert into add_new_column_stream (* expect _tp_time) values (2, 5, 'add_float', 55.5, 11.1 ,'2020-02-02 20:00:05')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM add_new_column_stream ADD COLUMN IF NOT EXISTS add_bool bool"},
+                        {"client":"python", "query_type": "stream", "query_id":"2700-3", "wait":1, "query": "select id, name, val, ts from add_new_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2700-3", "wait":1, "query":"insert into add_new_column_stream (* expect _tp_time) values (3, 6, 'add_bool', 66.6, 22.2 ,'2020-02-02 20:00:06', true)"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM add_new_column_stream ADD COLUMN IF NOT EXISTS add_str string"},
+                        {"client":"python", "query_type": "stream", "query_id":"2700-4", "wait":1, "query": "select id, name, val, ts from add_new_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2700-4", "wait":1, "query":"insert into add_new_column_stream (* expect _tp_time) values (4, 7, 'add_str', 77.7, 33.3 ,'2020-02-02 20:00:07', false, 'add_str')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM add_new_column_stream ADD COLUMN IF NOT EXISTS add_date date AFTER ts"},
+                        {"client":"python", "query_type": "stream", "query_id":"2700-5", "wait":1, "query": "select id, name, val, ts from add_new_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2700-5", "wait":1, "query":"insert into add_new_column_stream (* expect _tp_time) values (5, 8, 'add_date', 88.8, 44.4 ,'2020-02-02 20:00:08', '2020-02-03', true, 'add_date')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM add_new_column_stream ADD COLUMN IF NOT EXISTS add_datetime datetime AFTER add_date"},
+                        {"client":"python", "query_type": "stream", "query_id":"2700-6", "wait":1, "query": "select id, name, val, ts from add_new_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2700-6", "wait":1, "query":"insert into add_new_column_stream (* expect _tp_time) values (6, 9, 'add_datetime', 99.9, 55.5 ,'2020-02-02 20:00:09', '2020-02-04', '2020-02-05 20:00:05', false, 'add_datetime')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM add_new_column_stream ADD COLUMN IF NOT EXISTS add_json json"},
+                        {"client":"python", "query_type": "stream", "query_id":"2700-7", "wait":1, "query": "select id, name, val, ts from add_new_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2700-7", "wait":1, "query":"insert into add_new_column_stream (* expect _tp_time) values (7, 10, 'add_json', 111, 66.6 ,'2020-02-02 20:00:10', '2020-02-05', '2020-02-06 20:00:06', true, 'add_json', '{\"a\":1}')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "kill query where query_id='2700' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "kill query where query_id='2700-1' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "kill query where query_id='2700-2' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "kill query where query_id='2700-3' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "kill query where query_id='2700-4' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "kill query where query_id='2700-5' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "kill query where query_id='2700-6' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "kill query where query_id='2700-7' sync"}
+                    
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"2700",
+                    "expected_results":[
+                        [1, "s1", 11.1, "2020-02-02 20:00:01"],
+                        [2, "s2", 22.2, "2020-02-02 20:00:02"],
+                        [3, "s3", 33.3, "2020-02-02 20:00:03"],
+                        [4, "add_int", 44.4, "2020-02-02 20:00:04"],
+                        [5, "add_float", 55.5, "2020-02-02 20:00:05"],
+                        [6, "add_bool", 66.6, "2020-02-02 20:00:06"],
+                        [7, "add_str", 77.7, "2020-02-02 20:00:07"],
+                        [8, "add_date", 88.8, "2020-02-02 20:00:08"],
+                        [9, "add_datetime", 99.9, "2020-02-02 20:00:09"],
+                        [10, "add_json", 111, "2020-02-02 20:00:10"]
+                    ]
+                },
+                {
+                    "query_id":"2700-1",
+                    "expected_results":[
+                        [1, 4, "add_int", 44.4, "2020-02-02 20:00:04"],
+                        [2, 5, "add_float", 55.5, "2020-02-02 20:00:05"],
+                        [3, 6, "add_bool", 66.6, "2020-02-02 20:00:06"],
+                        [4, 7, "add_str", 77.7, "2020-02-02 20:00:07"],
+                        [5, 8, "add_date", 88.8, "2020-02-02 20:00:08"],
+                        [6, 9, "add_datetime", 99.9, "2020-02-02 20:00:09"],
+                        [7, 10, "add_json", 111, "2020-02-02 20:00:10"]
+                    ]
+                },
+                {
+                    "query_id":"2700-2",
+                    "expected_results":[
+                        [2, 5, "add_float", 55.5, 11.1, "2020-02-02 20:00:05"],
+                        [3, 6, "add_bool", 66.6, 22.2, "2020-02-02 20:00:06"],
+                        [4, 7, "add_str", 77.7, 33.3, "2020-02-02 20:00:07"],
+                        [5, 8, "add_date", 88.8, 44.4, "2020-02-02 20:00:08"],
+                        [6, 9, "add_datetime", 99.9, 55.5, "2020-02-02 20:00:09"],
+                        [7, 10, "add_json", 111, 66.6, "2020-02-02 20:00:10"]
+                    ]
+                },
+                {
+                    "query_id":"2700-3",
+                    "expected_results":[
+                        [3, 6, "add_bool", 66.6, 22.2, "2020-02-02 20:00:06", true],
+                        [4, 7, "add_str", 77.7, 33.3, "2020-02-02 20:00:07", false],
+                        [5, 8, "add_date", 88.8, 44.4, "2020-02-02 20:00:08", true],
+                        [6, 9, "add_datetime", 99.9, 55.5, "2020-02-02 20:00:09", false],
+                        [7, 10, "add_json", 111, 66.6, "2020-02-02 20:00:10", true]
+                    ]
+                },
+                {
+                    "query_id":"2700-4",
+                    "expected_results":[
+                        [4, 7, "add_str", 77.7, 33.3, "2020-02-02 20:00:07", false, "add_str"],
+                        [5, 8, "add_date", 88.8, 44.4, "2020-02-02 20:00:08", true, "add_date"],
+                        [6, 9, "add_datetime", 99.9, 55.5, "2020-02-02 20:00:09", false, "add_datetime"],
+                        [7, 10, "add_json", 111, 66.6, "2020-02-02 20:00:10", true, "add_json"]
+                    ]
+                },
+                {
+                    "query_id":"2700-5",
+                    "expected_results":[
+                        [5, 8, "add_date", 88.8, 44.4, "2020-02-02 20:00:08", "2020-02-03", true, "add_date"],
+                        [6, 9, "add_datetime", 99.9, 55.5, "2020-02-02 20:00:09", "2020-02-04", false, "add_datetime"],
+                        [7, 10, "add_json", 111, 66.6, "2020-02-02 20:00:10", "2020-02-05", true, "add_json"]
+                    ]
+                },
+                {
+                    "query_id":"2700-6",
+                    "expected_results":[
+                        [6, 9, "add_datetime", 99.9, 55.5, "2020-02-02 20:00:09", "2020-02-04", "2020-02-05 20:00:05", false, "add_datetime"],
+                        [7, 10, "add_json", 111, 66.6, "2020-02-02 20:00:10", "2020-02-05", "2020-02-06 20:00:06", true, "add_json"]
+                    ]
+                },
+                {
+                    "query_id":"2700-6",
+                    "expected_results":[
+                        [7, 10, "add_json", 111, 66.6, "2020-02-02 20:00:10", "2020-02-05", "2020-02-06 20:00:06", true, "{\"a\":1}"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 1,
+            "tags": ["adding-new-column", "bug"],
+            "name": "adding_new_column",
+            "description": "streaming query after add a column",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists add_new_column_stream"},
+                        {"client":"python", "query_type": "table", "exist":"add_new_column_stream", "exist_wait":2, "wait":1, "query":"create stream add_new_column_stream (id int, name string, val float, ts datetime)"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"2701", "wait":1, "query": "select id, name, val, ts from add_new_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2701", "wait":1, "query": "insert into add_new_column_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into add_new_column_stream (id, name, val, ts) values (2, 's2', 22.2, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into add_new_column_stream (id, name, val, ts) values (3, 's3', 33.3, '2020-02-02 20:00:03')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM add_new_column_stream ADD COLUMN IF NOT EXISTS add_array array"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM add_new_column_stream ADD COLUMN IF NOT EXISTS add_map map"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM add_new_column_stream ADD COLUMN IF NOT EXISTS add_tuple tuple"},
+                        {"client":"python", "query_type": "stream", "query_id":"2701-1", "wait":1, "query": "select id, name, val, ts, add_array[1], add_map['k1'], add_tuple.1 from add_new_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2701-1", "wait":1, "query":"insert into add_new_column_stream (* expect _tp_time) values (4, 'add_array', 44.4, '2020-02-02 20:00:04', [1, 2], map_cast('k1','v1','k2','v2'), (1,2))"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "kill query where query_id='2701' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "kill query where query_id='2701-1' sync"}
+                    
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"2701",
+                    "expected_results":[
+                        [1, "s1", 11.1, "2020-02-02 20:00:01"],
+                        [2, "s2", 22.2, "2020-02-02 20:00:02"],
+                        [3, "s3", 33.3, "2020-02-02 20:00:03"]
+                    ]
+                },
+                {
+                    "query_id":"2701-1",
+                    "expected_results":[
+                        [4, "add_int", 44.4, "2020-02-02 20:00:04", 1, "v1", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 2,
+            "tags": ["ddl-column", "bug"],
+            "name": "adding_new_column",
+            "description": "streaming query after add a column",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists add_new_column_stream"},
+                        {"client":"python", "query_type": "table", "exist":"add_new_column_stream", "exist_wait":2, "wait":1, "query":"create stream add_new_column_stream (id int, name string, val float, ts datetime)"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"2702", "wait":1, "query": "select id, count(*), min(val), max(val), sum(val), avg(val) from add_new_column_stream  group by id  emit periodic 2s"},
+                        {"client":"python", "query_type": "table", "depends_on":"2702", "wait":1, "query": "insert into add_new_column_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01') (2, 's2', 22.2, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into add_new_column_stream (id, name, val, ts) values (1, 's3', 33.3, '2020-02-02 20:00:03') (2, 's4', 44.4, '2020-02-02 20:00:04')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM add_new_column_stream ADD COLUMN IF NOT EXISTS add_float float"},
+                        {"client":"python", "query_type": "stream", "query_id":"2702-1", "wait":1, "query": "select id, count(*), min(add_float), max(add_float), sum(add_float), avg(add_float) from add_new_column_stream  group by id  emit periodic 2s"},
+                        {"client":"python", "query_type": "table", "depends_on":"2702-1", "wait":1, "query":"insert into add_new_column_stream (* expect _tp_time) values (1, 's5', 55.5, '2020-02-02 20:00:05', 44.4, 'add_float')"},
+                        {"client":"python", "query_type": "table", "depends_on":"2702-1", "wait":1, "query":"insert into add_new_column_stream (* expect _tp_time) values (1, 's6', 66.6, '2020-02-02 20:00:06', 22.2, 'add_float')"},
+                        {"client":"python", "query_type": "table", "depends_on":"2702-1", "wait":1, "query":"insert into add_new_column_stream (* expect _tp_time) values (1, 's7', 77.7, '2020-02-02 20:00:07', 66.6, 'add_float')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "kill query where query_id='2702' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "kill query where query_id='2702-1' sync"}
+                    
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"2702",
+                    "expected_results":[
+                        [1, 4, 11.1, 66.6, 166.5, 41.6],
+                        [2, 3, 22.2, 77.7, 144.3, 48.1],
+                        [1, 5, 11.1, 66.6, 177.6, 35.5],
+                        [2, 2, 22.2, 44.4, 66.6, 33.3]
+                    ]
+                },
+                {
+                    "query_id":"2702-1",
+                    "expected_results":[
+                        [1, 3, 22.2, 66.6, 133.2, 44.4]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 3,
+            "tags": ["ddl-column", "bug"],
+            "name": "del_a_column",
+            "description": "streaming query after delete a column",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists del_column_stream"},
+                        {"client":"python", "query_type": "table", "exist":"del_column_stream", "exist_wait":2, "wait":1, "query":"create stream del_column_stream (id int, name string, val float, ts datetime)"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"2703", "wait":1, "query": "select id, name, val, ts from del_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2703", "wait":1, "query": "insert into del_column_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM del_column_stream DROP COLUMN IF EXISTS ts"},
+                        {"client":"python", "query_type": "table", "kill":"2703", "kill_wait":3, "wait":1, "query": "insert into del_column_stream (id, name, val) values (2, 's2', 22.2)"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"2703-1", "wait":1, "query": "select id, name, val, ts from del_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2703-1", "kill":"2703-1", "kill_wait":3, "wait":1, "query": "insert into del_column_stream (id, name, val) values (3, 's3', 33.3)"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"2703",
+                    "expected_results":[
+                        [1, "s1", 11.1, "2020-02-02 20:00:01"],
+                        [2, "s2", 22.2, "1970-01-01 00:00:00"]
+                    ]
+                },
+                {
+                    "query_id":"2703-1",
+                    "expected_results":[
+                        [3, "s3", 33.3]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 4,
+            "tags": ["ddl-column", "bug"],
+            "name": "add_after_del_a_column",
+            "description": "streaming query after add after del a column",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists del_column_stream"},
+                        {"client":"python", "query_type": "table", "exist":"del_column_stream", "exist_wait":2, "wait":1, "query":"create stream del_column_stream (id int, name string, val float, ts datetime)"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"2704", "wait":1, "query": "select id, name, val, ts from del_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2704", "wait":1, "query": "insert into del_column_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM del_column_stream DROP COLUMN IF EXISTS ts"},
+                        {"client":"python", "query_type": "table", "kill":"2704", "kill_wait":3, "wait":1, "query": "insert into del_column_stream (id, name, val) values (2, 's2', 22.2)"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"2704-1", "wait":1, "query": "select id, name, val from del_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2704-1", "wait":1, "query": "insert into del_column_stream (id, name, val) values (3, 's3', 33.3)"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM del_column_stream ADD COLUMN IF NOT EXISTS ts datetime"},
+                        {"client":"python", "query_type": "table", "kill":"2704-1", "kill_wait":3, "wait":1, "query": "insert into del_column_stream (id, name, val, ts) values (4, 's4', 44.4, '2020-02-02 20:00:04')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"2704-2", "wait":1, "query": "select id, name, val, ts from del_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2704-2", "kill":"2703-2", "kill_wait":3, "wait":1, "query": "insert into del_column_stream (id, name, val, ts) values (5, 's5', 55.5, '2020-02-02 20:00:05')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"2704",
+                    "expected_results":[
+                        [1, "s1", 11.1, "2020-02-02 20:00:01"],
+                        [2, "s2", 22.2, "1970-01-01 00:00:00"]
+                    ]
+                },
+                {
+                    "query_id":"2704-1",
+                    "expected_results":[
+                        [3, "s3", 33.3],
+                        [4, "s4", 44.4]
+                    ]
+                },
+                {
+                    "query_id":"2704-2",
+                    "expected_results":[
+                        [5, "s5", 55.5, "2020-02-02 20:00:05"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 5,
+            "tags": ["ddl-column", "bug"],
+            "name": "rename_a_column",
+            "description": "streaming query after rename a column",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists rename_column_stream"},
+                        {"client":"python", "query_type": "table", "exist":"rename_column_stream", "exist_wait":2, "wait":1, "query":"create stream rename_column_stream (id int, name string, val float, ts datetime)"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"2705", "wait":1, "query": "select id, name, val, ts from rename_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2705", "wait":1, "query": "insert into rename_column_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM rename_column_stream RENAME COLUMN IF EXISTS ts to timestamp"},
+                        {"client":"python", "query_type": "table", "kill":"2705", "kill_wait":3, "wait":1, "query": "insert into rename_column_stream (id, name, val, timestamp) values (2, 's2', 22.2, '2020-02-02 20:00:02')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"2705-1", "wait":1, "query": "select id, name, val, timestamp from rename_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2705-1", "kill":"2705-1", "kill_wait":3, "wait":1, "query": "insert into rename_column_stream (id, name, val, timestamp) values (3, 's3', 33.3, '2020-02-02 20:00:03')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"2705",
+                    "expected_results":[
+                        [1, "s1", 11.1, "2020-02-02 20:00:01"],
+                        [2, "s2", 22.2, "1970-01-01 00:00:00"]
+                    ]
+                },
+                {
+                    "query_id":"2705-1",
+                    "expected_results":[
+                        [3, "s3", 33.3, "2020-02-02 20:00:03"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 6,
+            "tags": ["ddl-column", "bug"],
+            "name": "del_after_rename_column",
+            "description": "delete new column again afrer rename column",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists rename_column_stream"},
+                        {"client":"python", "query_type": "table", "exist":"rename_column_stream", "exist_wait":2, "wait":1, "query":"create stream rename_column_stream (id int, name string, val float, ts datetime)"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"2706", "wait":1, "query": "select id, name, val, ts from rename_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2706", "wait":1, "query": "insert into del_column_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM rename_column_stream RENAME COLUMN IF EXISTS ts to timestamp"},
+                        {"client":"python", "query_type": "table", "kill":"2706", "kill_wait":3, "wait":1, "query": "insert into rename_column_stream (id, name, val, timestamp) values (2, 's2', 22.2, '2020-02-02 20:00:02')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"2706-1", "wait":1, "query": "select id, name, val, timestamp from rename_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2706-1", "kill":"2706-1", "kill_wait":3, "wait":1, "query": "insert into rename_column_stream (id, name, val, timestamp) values (3, 's3', 33.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM rename_column_stream DROP COLUMN IF EXISTS timestamp"},
+                        {"client":"python", "query_type": "table", "kill":"2706-1", "kill_wait":3, "wait":1, "query": "insert into rename_column_stream (id, name, val, timestamp) values (4, 's4', 44.4, '2020-02-02 20:00:04')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"2706-2", "wait":1, "query": "select id, name, val, from rename_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2706-2", "kill":"2706-2", "kill_wait":3, "wait":1, "query": "insert into rename_column_stream (id, name, val ) values (5, 's5', 55.5"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"2706",
+                    "expected_results":[
+                        [1, "s1", 11.1, "2020-02-02 20:00:01"],
+                        [2, "s2", 22.2, "1970-01-01 00:00:00"]
+                    ]
+                },
+                {
+                    "query_id":"2706-1",
+                    "expected_results":[
+                        [3, "s3", 33.3, "2020-02-02 20:00:03"],
+                        [4, "s4", 44.4, "1970-01-01 00:00:00"]
+                    ]
+                },
+                {
+                    "query_id":"2706-1",
+                    "expected_results":[
+                        [5, "s5", 55.5]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 7,
+            "tags": ["ddl-column", "bug"],
+            "name": "modify_a_column",
+            "description": "streaming query after modify a column type",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists modify_column_stream"},
+                        {"client":"python", "query_type": "table", "exist":"modify_column_stream", "exist_wait":2, "wait":1, "query":"create stream modify_column_stream (id int, name string, val float, ts datetime)"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"2707", "wait":1, "query": "select id, name, val, ts from modify_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2707", "wait":1, "query": "insert into modify_column_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "ALTER STREAM modify_column_stream MODIFY COLUMN val int"},
+                        {"client":"python", "query_type": "table", "kill":"2707", "kill_wait":3, "wait":1, "query": "insert into modify_column_stream (id, name, val, ts) values (2, 's2', 22.2, '2020-02-02 20:00:02')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "stream", "query_id":"2707-1", "wait":1, "query": "select id, name, val, timestamp from rename_column_stream"},
+                        {"client":"python", "query_type": "table", "depends_on":"2707-1", "kill":"2707-1", "kill_wait":3, "wait":1, "query": "insert into rename_column_stream (id, name, val, timestamp) values (3, 's3', 33.3, '2020-02-02 20:00:03')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"2707",
+                    "expected_results":[
+                        [1, "s1", 11.1, "2020-02-02 20:00:01"],
+                        [2, "s2", 22, "1970-01-01 00:00:00"]
+                    ]
+                },
+                {
+                    "query_id":"2707-1",
+                    "expected_results":[
+                        [3, "s3", 33, "2020-02-02 20:00:03"]
+                    ]
+                }
+            ]
+        }
+    ]
+}
