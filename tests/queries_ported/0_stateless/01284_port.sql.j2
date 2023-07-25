@@ -1,4 +1,4 @@
-{% for suffix in ['', 'RFC'] -%}
+{% for suffix in ['', 'rfc'] -%}
 
 select 'ipv4';
 select port{{ suffix }}('http://127.0.0.1/');

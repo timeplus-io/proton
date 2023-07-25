@@ -1,0 +1,172 @@
+SELECT '====SCHEMA====';
+SELECT protocol('http://example.com') AS Scheme;
+SELECT protocol('https://example.com/') AS Scheme;
+SELECT protocol('svn+ssh://example.com?q=hello%20world') AS Scheme;
+SELECT protocol('ftp!://example.com/') AS Scheme;
+SELECT protocol('http://127.0.0.1:443/') AS Scheme;
+SELECT protocol('//127.0.0.1:443/') AS Scheme;
+
+SELECT '====HOST====';
+{% for suffix in ['', 'rfc'] -%}
+
+SELECT domain{{ suffix }}('http://paul@www.example.com:80/') AS Host;
+SELECT domain{{ suffix }}('user:password@example.com:8080') AS Host;
+SELECT domain{{ suffix }}('http://user:password@example.com:8080') AS Host;
+SELECT domain{{ suffix }}('http://user:password@example.com:8080/path?query=value#fragment') AS Host;
+SELECT domain{{ suffix }}('newuser:@example.com') AS Host;
+SELECT domain{{ suffix }}('http://:pass@example.com') AS Host;
+SELECT domain{{ suffix }}(':newpass@example.com') AS Host;
+SELECT domain{{ suffix }}('http://user:pass@example@.com') AS Host;
+SELECT domain{{ suffix }}('http://user:pass:example.com') AS Host;
+SELECT domain{{ suffix }}('http:/paul/example/com') AS Host;
+SELECT domain{{ suffix }}('http://www.example.com?q=4') AS Host;
+SELECT domain{{ suffix }}('http://127.0.0.1:443/') AS Host;
+SELECT domain{{ suffix }}('//www.example.com') AS Host;
+SELECT domain{{ suffix }}('//paul@www.example.com') AS Host;
+SELECT domain{{ suffix }}('www.example.com') as Host;
+SELECT domain{{ suffix }}('example.com') as Host;
+SELECT domain_without_www{{ suffix }}('//paul@www.example.com') AS Host;
+SELECT domain_without_www{{ suffix }}('http://paul@www.example.com:80/') AS Host;
+
+{% endfor %}
+
+SELECT '====NETLOC====';
+SELECT netloc('http://paul@www.example.com:80/') AS Netloc;
+SELECT netloc('http://127.0.0.1:443/') AS Netloc;
+SELECT netloc('http://127.0.0.1:443') AS Netloc;
+SELECT netloc('svn+ssh://example.ru/?q=hello%20world') AS Netloc;
+SELECT netloc('svn+ssh://example.ru/?q=hello%20world') AS Netloc;
+SELECT netloc('svn+ssh://paul:zozo@example.ru/?q=hello%20world') AS Netloc;
+SELECT netloc('svn+ssh://paul:zozo@example.ru/?q=hello%20world') AS Netloc;
+SELECT netloc('//www.example.com') AS Netloc;
+SELECT netloc('www.example.com') as Netloc;
+SELECT netloc('example.com') as Netloc;
+
+SELECT '====DOMAIN====';
+SELECT top_level_domain('http://paul@www.example.com:80/') AS Domain;
+SELECT top_level_domain('http://127.0.0.1:443/') AS Domain;
+SELECT top_level_domain('svn+ssh://example.ru?q=hello%20world') AS Domain;
+SELECT top_level_domain('svn+ssh://example.ru.?q=hello%20world') AS Domain;
+SELECT top_level_domain('//www.example.com') AS Domain;
+SELECT top_level_domain('www.example.com') as Domain;
+SELECT top_level_domain('example.com') as Domain;
+SELECT top_level_domain('example.рф') as Domain;
+SELECT top_level_domain('example.') as Domain;
+SELECT top_level_domain('example') as Domain;
+
+SELECT '====PATH====';
+SELECT decode_url_component('%D0%9F');
+SELECT decode_url_component('%D%9');
+SELECT decode_url_component(path_full('//127.0.0.1/?query=hello%20world+foo%2Bbar')) AS Path;
+SELECT decode_url_component(path_full('http://127.0.0.1/?query=hello%20world+foo%2Bbar')) AS Path;
+SELECT decode_url_component(materialize(path_full('http://127.0.0.1/?query=hello%20world+foo%2Bbar'))) AS Path;
+SELECT decode_url_component(materialize(path_full('//127.0.0.1/?query=hello%20world+foo%2Bbar'))) AS Path;
+SELECT decode_url_form_component(materialize(path_ull('//127.0.0.1/?query=hello%20world+foo%2Bbar'))) AS Path;
+SELECT path('http://127.0.0.1') AS Path;
+SELECT path('http://127.0.0.1/a/b/c') AS Path;
+SELECT path('http://127.0.0.1:443/a/b/c') AS Path;
+SELECT path('http://paul@127.0.0.1:443/a/b/c') AS Path;
+SELECT path('//paul@127.0.0.1:443/a/b/c') AS Path;
+
+SELECT '====QUERY STRING====';
+SELECT decode_url_component(query_string('http://127.0.0.1/'));
+SELECT decode_url_component(query_string('http://127.0.0.1/?'));
+SELECT decode_url_component(query_string('http://127.0.0.1/?query=hello%20world+foo%2Bbar'));
+SELECT decode_url_component(query_string('http://127.0.0.1:443/?query=hello%20world+foo%2Bbar'));
+SELECT decode_url_component(query_string('http://paul@127.0.0.1:443/?query=hello%20world+foo%2Bbar'));
+SELECT decode_url_component(query_string('//paul@127.0.0.1:443/?query=hello%20world+foo%2Bbar'));
+SELECT decode_url_form_component(query_string('//paul@127.0.0.1:443/?query=hello%20world+foo%2Bbar'));
+SELECT encode_url_component('');
+SELECT encode_url_form_component('');
+SELECT encode_url_component(NULL);
+SELECT encode_url_form_component(NULL);
+SELECT encode_url_component('hello world foo+bar');
+SELECT encode_url_form_component('hello world foo+bar');
+SELECT decode_url_component(encode_url_component('http://paul@127.0.0.1/?query=hello world foo+bar'));
+SELECT decode_url_form_component(encode_url_form_component('http://paul@127.0.0.1/?query=hello world foo+bar'));
+
+SELECT '====FRAGMENT====';
+SELECT decode_url_component(fragment('http://127.0.0.1/?query=hello%20world+foo%2Bbar'));
+SELECT decode_url_component(fragment('http://127.0.0.1/?query=hello%20world+foo%2Bbar#'));
+SELECT decode_url_component(fragment('http://127.0.0.1/?query=hello%20world+foo%2Bbar#a=b'));
+SELECT decode_url_component(fragment('http://paul@127.0.0.1/?query=hello%20world+foo%2Bbar#a=b'));
+SELECT decode_url_component(fragment('//paul@127.0.0.1/?query=hello%20world+foo%2Bbar#a=b'));
+
+SELECT '====QUERY STRING AND FRAGMENT====';
+SELECT decode_url_component(query_string_and_fragment('http://127.0.0.1/'));
+SELECT decode_url_component(query_string_and_fragment('http://127.0.0.1/?'));
+SELECT decode_url_component(query_string_and_fragment('http://127.0.0.1/?query=hello%20world+foo%2Bbar'));
+SELECT decode_url_component(query_string_and_fragment('http://127.0.0.1/?query=hello%20world+foo%2Bbar#a=b'));
+SELECT decode_url_component(query_string_and_fragment('http://paul@127.0.0.1/?query=hello%20world+foo%2Bbar#a=b'));
+SELECT decode_url_component(query_string_and_fragment('//paul@127.0.0.1/?query=hello%20world+foo%2Bbar#a=b'));
+SELECT decode_url_component(query_string_and_fragment('//paul@127.0.0.1/#a=b'));
+SELECT decode_url_form_component(query_string_and_fragment('//paul@127.0.0.1/?query=hello%20world+foo%2Bbar#a=b'));
+SELECT encode_url_component('hello world foo+bar#a=b');
+SELECT encode_url_form_component('hello world foo+bar#a=b');
+SELECT decode_url_component(encode_url_component('http://paul@127.0.0.1/?query=hello world foo+bar#a=b'));
+SELECT decode_url_form_component(encode_url_form_component('http://paul@127.0.0.1/?query=hello world foo+bar#a=b'));
+
+SELECT '====CUT TO FIRST SIGNIFICANT SUBDOMAIN====';
+
+{% for suffix in ['', 'rfc'] -%}
+SELECT cut_to_first_significant_subdomain{{ suffix }}('http://www.example.com');
+SELECT cut_to_first_significant_subdomain{{ suffix }}('http://www.example.com:1234');
+SELECT cut_to_first_significant_subdomain{{ suffix }}('http://www.example.com/a/b/c');
+SELECT cut_to_first_significant_subdomain{{ suffix }}('http://www.example.com/a/b/c?a=b');
+SELECT cut_to_first_significant_subdomain{{ suffix }}('http://www.example.com/a/b/c?a=b#d=f');
+SELECT cut_to_first_significant_subdomain{{ suffix }}('http://paul@www.example.com/a/b/c?a=b#d=f');
+SELECT cut_to_first_significant_subdomain{{ suffix }}('//paul@www.example.com/a/b/c?a=b#d=f');
+SELECT cut_to_first_significant_subdomain{{ suffix }}('www.example.com');
+SELECT cut_to_first_significant_subdomain{{ suffix }}('example.com');
+SELECT cut_to_first_significant_subdomain{{ suffix }}('www.com');
+SELECT cut_to_first_significant_subdomain{{ suffix }}('com');
+{% endfor %}
+
+SELECT '====CUT TO FIRST SIGNIFICANT SUBDOMAIN WITH WWW====';
+
+{% for suffix in ['', 'rfc'] -%}
+SELECT cut_to_first_significant_subdomain_with_www{{ suffix }}('http://com');
+SELECT cut_to_first_significant_subdomain_with_www{{ suffix }}('http://www.com');
+SELECT cut_to_first_significant_subdomain_with_www{{ suffix }}('http://www.example.com');
+SELECT cut_to_first_significant_subdomain_with_www{{ suffix }}('http://www.foo.example.com');
+SELECT cut_to_first_significant_subdomain_with_www{{ suffix }}('http://www.example.com:1');
+SELECT cut_to_first_significant_subdomain_with_www{{ suffix }}('http://www.example.com/');
+{% endfor %}
+
+SELECT '====CUT WWW====';
+SELECT cut_www('http://www.example.com');
+SELECT cut_www('http://www.example.com:1234');
+SELECT cut_www('http://www.example.com/a/b/c');
+SELECT cut_www('http://www.example.com/a/b/c?a=b');
+SELECT cut_www('http://www.example.com/a/b/c?a=b#d=f');
+SELECT cut_www('http://paul@www.example.com/a/b/c?a=b#d=f');
+SELECT cut_www('//paul@www.example.com/a/b/c?a=b#d=f');
+
+SELECT '====CUT QUERY STRING====';
+SELECT cut_query_string('http://www.example.com');
+SELECT cut_query_string('http://www.example.com:1234');
+SELECT cut_query_string('http://www.example.com/a/b/c');
+SELECT cut_query_string('http://www.example.com/a/b/c?a=b');
+SELECT cut_query_string('http://www.example.com/a/b/c?a=b#d=f');
+SELECT cut_query_string('http://paul@www.example.com/a/b/c?a=b#d=f');
+SELECT cut_query_string('//paul@www.example.com/a/b/c?a=b#d=f');
+
+SELECT '====CUT FRAGMENT====';
+SELECT cut_fragment('http://www.example.com');
+SELECT cut_fragment('http://www.example.com:1234');
+SELECT cut_fragment('http://www.example.com/a/b/c');
+SELECT cut_fragment('http://www.example.com/a/b/c?a=b');
+SELECT cut_fragment('http://www.example.com/a/b/c?a=b#d=f');
+SELECT cut_fragment('http://paul@www.example.com/a/b/c?a=b#d=f');
+SELECT cut_fragment('//paul@www.example.com/a/b/c?a=b#d=f');
+
+SELECT '====CUT QUERY STRING AND FRAGMENT====';
+SELECT cut_query_string_and_fragment('http://www.example.com');
+SELECT cut_query_string_and_fragment('http://www.example.com:1234');
+SELECT cut_query_string_and_fragment('http://www.example.com/a/b/c');
+SELECT cut_query_string_and_fragment('http://www.example.com/a/b/c?a=b');
+SELECT cut_query_string_and_fragment('http://www.example.com/a/b/c?a=b#d=f');
+SELECT cut_query_string_and_fragment('http://paul@www.example.com/a/b/c?a=b#d=f');
+SELECT cut_query_string_and_fragment('//paul@www.example.com/a/b/c?a=b#d=f');
+SELECT cut_query_string_and_fragment('//paul@www.example.com/a/b/c#d=f');
+

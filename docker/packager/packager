@@ -231,6 +231,7 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_INTROSPECTION_FUNCS=ON')
         cmake_flags.append('-DENABLE_BROTLI=ON')
         cmake_flags.append('-DENABLE_S3=ON')
+        cmake_flags.append('-DENABLE_URL_FUNCS=ON')
 
     if build_type == "release":
         cmake_flags.append('-DENABLE_TESTS=OFF')
