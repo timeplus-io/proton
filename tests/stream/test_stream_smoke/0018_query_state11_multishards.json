@@ -1,0 +1,471 @@
+{
+    "test_suite_name": "query_state11",
+    "tag": "smoke",
+    "test_suite_config":{
+        "setup": {
+            "statements": [
+                {"client":"python", "query_type": "table", "query":"drop stream if exists multishard_join"},
+                {"client":"python", "query_type": "table", "wait":1, "query":"create stream multishard_join (name string, type string)"},
+                {"client":"python", "query_type": "table", "depends_on_stream":"multishard_join", "wait":1, "query": "insert into multishard_join(name, type) values ('s1', 'roof'), ('s2', 'field'), ('s3', 'window'), ('s4', 'wall') ('s5', 'roof'), ('s6', 'window'), ('s7', 'wall'), ('s8', 'floor')"}
+            ]
+        },
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "native_not_support"],"cluster": ["view", "cluster_table_bug"]}}
+    }, 
+    "comments": "Tests covering query state checkpointing smoke test cases",
+    "tests": [
+        {
+            "id": 300,
+            "tags": ["checkpoint", "multishards", "bug"],
+            "name": "tail_query_state_checkpoint",
+            "description": "tail query from multishards state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists multishards_stream"},
+                        {"client":"python", "query_type": "table", "exist":"multishards_stream", "exist_wait":2, "wait":1, "query":"create stream multishards_stream (id int, name string, val float, ts datetime) settings shards=3"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19300", "wait":1, "query": "subscribe to select id, name, val, ts from multishards_stream settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19300", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "kill":"19300", "kill_wait":3, "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's2', 22.2, '2020-02-02 20:00:02')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (3, 's3', 33.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (4, 's4', 44.4, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "stream","query_id":"19300-1", "terminate": "manual","wait":3, "query":"recover from '19300'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19300", "wait":2, "query": "kill query where query_id='19300' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19300'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19300",
+                    "expected_results":[
+                        [1, "s1", 11.1, "2020-02-02 20:00:01"],
+                        [2, "s2", 22.2, "2020-02-02 20:00:02"]
+                    ]
+                },
+                {
+                    "query_id":"19300-1",
+                    "expected_results":[
+                        [3, "s3", 33.3, "2020-02-02 20:00:01"], 
+                        [4, "s4", 44.4, "2020-02-02 20:00:02"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 301,
+            "tags": ["checkpoint", "multishards"],
+            "name": "tail_query_state_checkpoint",
+            "description": "tail query from multishards state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists multishards_stream"},
+                        {"client":"python", "query_type": "table", "exist":"multishards_stream", "exist_wait":2, "wait":1, "query":"create stream multishards_stream (id int, name string, val float, ts datetime) settings shards=3"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19301", "wait":1, "query": "subscribe to select id, name, val, ts from multishards_stream settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19301", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "depends_on":"19301", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's2', 22.2, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "depends_on":"19301", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (3, 's3', 33.3, '2020-02-02 20:00:03')"},
+                        {"client":"python", "query_type": "table", "kill":"19301", "kill_wait":3, "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (4, 's4', 44.4, '2020-02-02 20:00:04')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (5, 's5', 55.5, '2020-02-02 20:00:05')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (6, 's6', 66.6, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "stream","query_id":"19301-1", "terminate": "manual","wait":3, "query":"recover from '19301'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19301", "wait":2, "query": "kill query where query_id='19301' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19301'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19301",
+                    "expected_results":[
+                        [1, "s1", 11.1, "2020-02-02 20:00:01"],
+                        [2, "s2", 22.2, "2020-02-02 20:00:02"],
+                        [3, "s3", 33.3, "2020-02-02 20:00:03"], 
+                        [4, "s4", 44.4, "2020-02-02 20:00:04"]
+                    ]
+                },
+                {
+                    "query_id":"19301-1",
+                    "expected_results":[
+                        [5, "s5", 55.5, "2020-02-02 20:00:05"], 
+                        [6, "s6", 66.6, "2020-02-02 20:00:06"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 302,
+            "tags": ["checkpoint", "multishards"],
+            "name": "global_aggr_query_state_checkpoint",
+            "description": "global aggr query from multishards state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists multishards_stream"},
+                        {"client":"python", "query_type": "table", "exist":"multishards_stream", "exist_wait":2, "wait":1, "query":"create stream multishards_stream (id int, name string, val float, ts datetime) settings shards=3"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19302", "wait":1, "query": "subscribe to select id, count(*), min(val), max(val), sum(val), avg(val) from multishards_stream group by id emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19302", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01') (1, 's4', 44.4, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's2', 22.2, '2020-02-02 20:00:02') (2, 's5', 55.5, '2020-02-02 20:00:05')"},
+                        {"client":"python", "query_type": "table", "kill":"19302", "kill_wait":3, "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (3, 's3', 33.3, '2020-02-02 20:00:03') (3, 's6', 66.6, '2020-02-02 20:00:06')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's7', 77.7, '2020-02-02 20:00:07')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's8', 88.8, '2020-02-02 20:00:08')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (3, 's9', 99.9, '2020-02-02 20:00:09')"},
+                        {"client":"python", "query_type": "stream","query_id":"19302-1", "terminate": "manual","wait":3, "query":"recover from '19302'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19302", "wait":2, "query": "kill query where query_id='19302' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19302'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19302",
+                    "expected_results":[
+                        [1, 2, 11.1, 44.4, 55.5, 27.7],
+                        [1, 2, 11.1, 44.4, 55.5, 27.7],
+                        [2, 2, 22.2, 55.5, 77.7, 38.8],
+                        [1, 2, 11.1, 44.4, 55.5, 27.7],
+                        [2, 2, 22.2, 55.5, 77.7, 38.8],
+                        [3, 2, 33.3, 66.6, 99.9, 49.9]
+                    ]
+                },
+                {
+                    "query_id":"19302-1",
+                    "expected_results":[
+                        [1, 3, 11.1, 77.7, 133.2, 44.4],
+                        [2, 3, 22.2, 88.8, 166.5, 55.5],
+                        [3, 3, 33.3, 99.9, 199.8, 66.6]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 303,
+            "tags": ["checkpoint", "multishards"],
+            "name": "global_aggr_func_state_checkpoint",
+            "description": "global aggr func from multishards state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists multishards_stream"},
+                        {"client":"python", "query_type": "table", "exist":"multishards_stream", "exist_wait":2, "wait":1, "query":"create stream multishards_stream (id int, name string, val float, ts datetime) settings shards=3"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19303", "wait":1, "query": "subscribe to select count(*), count_distinct(val), count_if(val > 30), unique(id), unique_exact(id), unique_exact_if(id, val > 30) from multishards_stream emit periodic 2s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19303", "wait":2, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01') (1, 's4', 44.4, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's2', 22.2, '2020-02-02 20:00:02') (2, 's5', 55.5, '2020-02-02 20:00:05')"},
+                        {"client":"python", "query_type": "table", "kill":"19303", "kill_wait":3, "wait":2, "query": "insert into multishards_stream (id, name, val, ts) values (3, 's3', 33.3, '2020-02-02 20:00:03') (3, 's6', 66.6, '2020-02-02 20:00:06')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's7', 77.7, '2020-02-02 20:00:07') (2, 's8', 88.8, '2020-02-02 20:00:08') (3, 's9', 99.9, '2020-02-02 20:00:09')"},
+                        {"client":"python", "query_type": "stream","query_id":"19303-1", "terminate": "manual","wait":3, "query":"recover from '19303'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19303", "wait":2, "query": "kill query where query_id='19303' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19303'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19303",
+                    "expected_results":[
+                        [2, 2, 1, 1, 1, 1],
+                        [4, 4, 2, 2, 2, 2],
+                        [6, 6, 4, 3, 3, 3]
+                    ]
+                },
+                {
+                    "query_id":"19303-1",
+                    "expected_results":[
+                        [9, 9, 7, 3, 3, 3]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 304,
+            "tags": ["checkpoint", "multishards", "bug"],
+            "name": "tumble_window_state_checkpoint",
+            "description": "tumble window query from multishards state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists multishards_stream"},
+                        {"client":"python", "query_type": "table", "exist":"multishards_stream", "exist_wait":2, "wait":1, "query":"create stream multishards_stream (id int, name string, val float, ts datetime) settings shards=3"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19304", "wait":1, "query": "subscribe to select id, count(*), min(val), max(val), sum(val), avg(val), window_start, window_end from tumble(multishards_stream, ts, 5s) group by id, window_start, window_end emit stream settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "table", "depends_on":"19304", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01') (2, 's2', 22.2, '2020-02-02 20:00:02') "},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's3', 33.3, '2020-02-02 20:00:03') (2, 's4', 44.4, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "table", "kill":"19304", "kill_wait":3, "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's5', 55.5, '2020-02-02 20:00:05')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's6', 66.6, '2020-02-02 20:00:06') (1, 's7', 77.7, '2020-02-02 20:00:07')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's8', 88.8, '2020-02-02 20:00:08') (2, 's9', 99.9, '2020-02-02 20:00:11')"},
+                        {"client":"python", "query_type": "stream","query_id":"19304-1", "terminate": "manual","wait":3, "query":"recover from '19304'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19304", "wait":2, "query": "kill query where query_id='19304' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19304'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19304",
+                    "expected_results":[
+                        [1, 2, 11.1, 33.3, 44.4, 22.2, "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        [2, 2, 22.2, 44.4, 66.6, 33.3, "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                    ]
+                },
+                {
+                    "query_id":"19304-1",
+                    "expected_results":[
+                        [1, 3, 55.5, 77.7, 199.8, 66.6, "2020-02-02 20:00:05", "2020-02-02 20:00:10"],
+                        [2, 1, 88.8, 88.8, 88.8, 88.8, "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 305,
+            "tags": ["checkpoint", "multishards"],
+            "name": "tumble_window_state_checkpoint",
+            "description": "tumble window query from multishards state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists multishards_stream"},
+                        {"client":"python", "query_type": "table", "exist":"multishards_stream", "exist_wait":2, "wait":1, "query":"create stream multishards_stream (id int, name string, val float, ts datetime) settings shards=3"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19305", "wait":1, "query": "subscribe to select id, count(*), min(val), max(val), sum(val), avg(val), window_start, window_end from tumble(multishards_stream, ts, 5s) group by id, window_start, window_end emit stream settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19305", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01') (2, 's2', 22.2, '2020-02-02 20:00:02') "},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (3, 's3', 33.3, '2020-02-02 20:00:03') (1, 's4', 44.4, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's5', 55.5, '2020-02-02 20:00:05') (3, 's6', 66.6, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's7', 77.7, '2020-02-02 20:00:07')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's8', 88.8, '2020-02-02 20:00:08')"},
+                        {"client":"python", "query_type": "table", "kill":"19305", "kill_wait":3, "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (3, 's9', 99.9, '2020-02-02 20:00:09')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's10', 111.1, '2020-02-02 20:00:10')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's11', 222.2, '2020-02-02 20:00:11')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (3, 's12', 333.3, '2020-02-02 20:00:12')"},
+                        {"client":"python", "query_type": "stream","query_id":"19305-1", "terminate": "manual","wait":3, "query":"recover from '19305'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19305", "wait":2, "query": "kill query where query_id='19305' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19305'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19305",
+                    "expected_results":[
+                        [1, 2, 11.1, 44.4, 55.5, 27.7, "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        [2, 1, 22.2, 22.2, 22.2, 22.2, "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        [3, 1, 33.3, 33.3, 33.3, 33.3, "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                    ]
+                },
+                {
+                    "query_id":"19305-1",
+                    "expected_results":[
+                        [1, 1, 77.7, 77.7, 77.7, 77.7, "2020-02-02 20:00:05", "2020-02-02 20:00:10"],
+                        [2, 2, 55.5, 88.8, 144.3, 72.1, "2020-02-02 20:00:05", "2020-02-02 20:00:10"],
+                        [3, 2, 66.6, 99.9, 166.5, 83.2, "2020-02-02 20:00:05", "2020-02-02 20:00:10"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 306,
+            "tags": ["checkpoint", "multishards", "bug"],
+            "name": "hop_window_with_state_checkpoint",
+            "description": "hop window from multishards state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists multishards_stream"},
+                        {"client":"python", "query_type": "table", "exist":"multishards_stream", "exist_wait":2, "wait":1, "query":"create stream multishards_stream (id int, name string, val float, ts datetime) settings shards=3"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19306", "wait":1, "query": "subscribe to select id, count(*), min(val), max(val), sum(val), avg(val), window_start, window_end from hop(multishards_stream, ts, 2s, 5s) group by id, window_start, window_end emit stream settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19306", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01') (2, 's2', 22.2, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's3', 33.3, '2020-02-02 20:00:03') (2, 's4', 44.4, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "table", "kill":"19306", "kill_wait":5, "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's5', 55.5, '2020-02-02 20:00:05')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's6', 66.6, '2020-02-02 20:00:06') (1, 's7', 77.7, '2020-02-02 20:00:07')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's8', 88.8, '2020-02-02 20:00:08')"},
+                        {"client":"python", "query_type": "stream","query_id":"19306-1", "terminate": "manual","wait":3, "query":"recover from '19306'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19306", "wait":2, "query": "kill query where query_id='19306' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19306'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19306",
+                    "expected_results":[
+                        [1, 1, 11.1, 11.1, 11.1, 11.1, "2020-02-02 19:59:58", "2020-02-02 20:00:03"],
+                        [2, 1, 22.2, 22.2, 22.2, 22.2, "2020-02-02 19:59:58", "2020-02-02 20:00:03"],
+                        [1, 2, 11.1, 33.3, 44.4, 22.2, "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        [2, 2, 22.2, 44.4, 66.6, 33.3, "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                    ]
+                },
+                {
+                    "query_id":"19306-1",
+                    "expected_results":[
+                        [1, 3, 33.3, 66.6, 155.4, 51.8, "2020-02-02 20:00:02", "2020-02-02 20:00:07"],
+                        [2, 2, 22.2, 44.4, 66.6, 33.3, "2020-02-02 20:00:02", "2020-02-02 20:00:07"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 307,
+            "tags": ["checkpoint", "multishards"],
+            "name": "hop_window_with_state_checkpoint",
+            "description": "hop window from multishards state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists multishards_stream"},
+                        {"client":"python", "query_type": "table", "exist":"multishards_stream", "exist_wait":2, "wait":1, "query":"create stream multishards_stream (id int, name string, val float, ts datetime) settings shards=3"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19307", "wait":1, "query": "subscribe to select id, count(*), min(val), max(val), sum(val), avg(val), window_start, window_end from hop(multishards_stream, ts, 3s, 5s) group by id, window_start, window_end emit stream settings checkpoint_interval=1                        "},
+                        {"client":"python", "query_type": "table", "depends_on":"19307", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01') (2, 's2', 22.2, '2020-02-02 20:00:02') "},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (3, 's3', 33.3, '2020-02-02 20:00:03') (1, 's4', 44.4, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's5', 55.5, '2020-02-02 20:00:05') (3, 's6', 66.6, '2020-02-02 20:00:06')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's7', 77.7, '2020-02-02 20:00:07')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's8', 88.8, '2020-02-02 20:00:08')"},
+                        {"client":"python", "query_type": "table", "kill":"19307", "kill_wait":3, "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (3, 's9', 99.9, '2020-02-02 20:00:09')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's10', 111.1, '2020-02-02 20:00:10')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's11', 222.2, '2020-02-02 20:00:11')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (3, 's12', 333.3, '2020-02-02 20:00:12')"},
+                        {"client":"python", "query_type": "stream","query_id":"19307-1", "terminate": "manual","wait":3, "query":"recover from '19307'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19307", "wait":2, "query": "kill query where query_id='19307' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19307'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19307",
+                    "expected_results":[
+                        [1, 1, 11.1, 11.1, 11.1, 11.1, "2020-02-02 19:59:57", "2020-02-02 20:00:02"],
+                        [1, 2, 11.1, 44.4, 55.5, 27.7, "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        [2, 1, 22.2, 22.2, 22.2, 22.2, "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                        [3, 1, 33.3, 33.3, 33.3, 33.3, "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
+                    ]
+                },
+                {
+                    "query_id":"19307-1",
+                    "expected_results":[
+                        [1, 2, 44.4, 77.7, 122.1, 61.0, "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                        [2, 1, 55.5, 55.5, 55.5, 55.5, "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                        [3, 2, 33.3, 66.6, 99.9, 49.9, "2020-02-02 20:00:03", "2020-02-02 20:00:08"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 308,
+            "tags": ["checkpoint", "multishards"],
+            "name": "subquery_state_checkpoint",
+            "description": "subquery query from multishards state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists multishards_stream"},
+                        {"client":"python", "query_type": "table", "exist":"multishards_stream", "exist_wait":2, "wait":1, "query":"create stream multishards_stream (id int, name string, val float, ts datetime) settings shards=3"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19308", "wait":1, "query": "subscribe to with transformed as (select id, count(*) as cnt, min(val) as minVal, max(val) as maxVal from multishards_stream group by id emit periodic 1s) select count(*), min(minVal), max(maxVal) from transformed emit periodic 2s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19308", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01') (2, 's2', 22.2, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's3', 33.3, '2020-02-02 20:00:03') (2, 's4', 44.4, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "table", "kill":"19308", "kill_wait":3, "wait":2, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's5', 55.5, '2020-02-02 20:00:05') (2, 's6', 66.6, '2020-02-02 20:00:06')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's7', 10, '2020-02-02 20:00:07')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's8', 88.8, '2020-02-02 20:00:08')"},
+                        {"client":"python", "query_type": "stream","query_id":"19308-1", "terminate": "manual","wait":3, "query":"recover from '19308'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19308", "wait":2, "query": "kill query where query_id='19308' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19308'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19308",
+                    "expected_results":[
+                        [2, 11.1, 22.2],
+                        [2, 11.1, 44.4],
+                        [2, 11.1, 66.6]
+                    ]
+                },
+                {
+                    "query_id":"19308-1",
+                    "expected_results":[
+                        [2, 10.0, 88.8]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 309,
+            "tags": ["join", "multishards"],
+            "name": "append-only_join_table",
+            "description": "append-only_join_table with multishards state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists multishards_stream"},
+                        {"client":"python", "query_type": "table", "exist":"multishards_stream", "exist_wait":2, "wait":1, "query":"create stream multishards_stream (id int, name string, val float, ts datetime) settings shards=3"}, 
+                        {"client":"python", "query_type": "stream", "query_id":"19309", "wait":1, "query": "subscribe to select a.id, b.name, a.val, a.ts, b.type from multishards_stream as a join table(multishard_join) as b on a.name = b.name settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19309", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (2, 's2', 22.2, '2020-02-02 20:00:02')"},
+                        {"client":"python", "query_type": "table", "kill":"19309", "kill_wait":3, "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (3, 's3', 33.3, '2020-02-02 20:00:03')"}
+                    ]
+                },    
+                {    
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (4, 's4', 44.4, '2020-02-02 20:00:04')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into multishards_stream (id, name, val, ts) values (5, 's5', 55.5, '2020-02-02 20:00:05')"},
+                        {"client":"python", "query_type": "stream","query_id":"19309-1", "terminate": "manual","wait":3, "query":"recover from '19309'"},
+                        {"client":"python", "query_type": "table", "depends_on":"19309", "wait":2, "query": "kill query where query_id='19309' sync"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '19309'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19309",
+                    "expected_results":[
+                        [1, "s1", 11.1, "2020-02-02 20:00:01", "roof"],
+                        [2, "s2", 22.2, "2020-02-02 20:00:02", "field"],
+                        [3, "s3", 33.3, "2020-02-02 20:00:03", "window"]
+
+                    ]
+                },
+                {
+                    "query_id":"19309-1",
+                    "expected_results":[
+                        [4, "s4", 44.4, "2020-02-02 20:00:04", "wall"],
+                        [5, "s5", 55.5, "2020-02-02 20:00:05", "roof"]
+                    ]
+                }
+            ]
+        }
+    ]
+}
