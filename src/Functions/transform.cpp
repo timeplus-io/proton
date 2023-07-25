@@ -1175,11 +1175,11 @@ private:
                     /// Field may be of Float type, but for the purpose of bitwise equality we can treat them as UInt64
                     if (to[0].getType() == Field::Types::Decimal32)
                     {
-                        table[key.get<Decimal32>().getValue()] = (*used_to)[i].get<Decimal32>().getValue();
+                        table[bitCastToUInt64(key)] = (*used_to)[i].get<Decimal32>().getValue();
                     }
                     else if (to[0].getType() == Field::Types::Decimal64)
                     {
-                        table[key.get<Decimal64>().getValue()] = (*used_to)[i].get<Decimal64>().getValue();
+                        table[bitCastToUInt64(key)] = (*used_to)[i].get<Decimal64>().getValue();
                     }
                     else
                     {
