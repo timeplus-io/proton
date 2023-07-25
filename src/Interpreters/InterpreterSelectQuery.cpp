@@ -394,12 +394,8 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     std::tie(current_select_has_join, current_select_has_aggregates) = Streaming::analyzeSelectQueryForJoinOrAggregates(query_ptr);
 
     if (current_select_has_join)
-    {
         current_select_join_strictness
             = Streaming::analyzeJoinStrictness(getSelectQuery(), context->getSettingsRef().join_default_strictness);
-
-        assert(current_select_join_strictness);
-    }
     /// proton : ends
 
     initSettings();
@@ -522,6 +518,19 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             joined_tables.reset(getSelectQuery());
 
             /// proton : starts
+            if (!current_select_join_strictness)
+            {
+                current_select_join_strictness
+                    = Streaming::analyzeJoinStrictness(getSelectQuery(), context->getSettingsRef().join_default_strictness);
+
+                if (!current_select_join_strictness)
+                    /// We still don't know the strictness, guess it is `All`
+                    /// FIXME, if we are wrong about this, we will need interpret
+                    /// can we split TreeRewriter to make it modular to have join strictness
+                    /// correctly analyzed ?
+                    current_select_join_strictness = JoinStrictness::All;
+            }
+
             auto rewrite_get_sample_block_ctx = getSampleBlockContext();
             joined_tables.resolveTables(rewrite_get_sample_block_ctx);
             /// proton : ends
@@ -627,18 +636,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     max_streams = settings.max_threads;
     ASTSelectQuery & query = getSelectQuery();
 
-    /// proton : force rewrite right stream as subquery if necessary
-    auto force_make_right_table_subquery = [&]() {
-        if (!isStreaming())
-            return false;
-
-        const auto & tables = joined_tables.tablesWithColumns();
-        if (tables.size() < 2)
-            return false;
-
-        return Streaming::isKeyedDataStream(tables.back().output_data_stream_semantic);
-    };
-    std::shared_ptr<TableJoin> table_join = joined_tables.makeTableJoin(query, force_make_right_table_subquery());
+    std::shared_ptr<TableJoin> table_join = joined_tables.makeTableJoin(query);
 
     /// proton : starts, only allow system.* access under a special setting
     if (storage)

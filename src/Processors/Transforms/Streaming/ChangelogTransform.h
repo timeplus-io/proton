@@ -14,7 +14,7 @@ namespace DB
 {
 namespace Streaming
 {
-/// ChangelogTransform builds a hashtable tracking the primary key / value changes and emit changelog
+/// ChangelogTransform builds a hashtable tracking the key columns / value changes and emit changelog
 /// rows to down stream. It assumes the key columns are unique for data sources. For now, it is used to
 /// tracking the changes for versioned-kv stream in real-time.
 /// For example, assume stream `kv` has primary key `k`, here is one example for emit process

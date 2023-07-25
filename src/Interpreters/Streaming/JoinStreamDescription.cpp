@@ -17,7 +17,7 @@ void JoinStreamDescription::calculateColumnPositions(JoinStrictness strictness)
 {
     assert(input_header);
 
-    if (!Streaming::isKeyedDataStream(data_stream_semantic) || (strictness == JoinStrictness::Any || strictness == JoinStrictness::Asof))
+    if (Streaming::isAppendDataStream(data_stream_semantic) || (strictness == JoinStrictness::Any || strictness == JoinStrictness::Asof))
         return;
 
     if (hasPrimaryKey() || hasDeltaColumn())
@@ -60,8 +60,8 @@ void JoinStreamDescription::assertValid() const
     /// If it is a keyed data stream, we are expecting `delta` column or `primary key + version column`
     /// are there in the input
     assert(
-        !Streaming::isKeyedDataStream(data_stream_semantic)
-        || (Streaming::isKeyedDataStream(data_stream_semantic)
+        Streaming::isAppendDataStream(data_stream_semantic)
+        || (!Streaming::isAppendDataStream(data_stream_semantic)
             && (hasDeltaColumn() || (hasPrimaryKey() && hasVersionColumn()))));
 }
 }

@@ -529,6 +529,11 @@ private:
     bool bidirectional_hash_join = true;
     bool range_bidirectional_hash_join = true;
 
+    /// Delta column in right-left-join
+    /// `rlj` -> right-left-join
+    std::optional<size_t> left_delta_column_position_rlj;
+    std::optional<size_t> right_delta_column_position_rlj;
+
     UInt64 join_max_cached_bytes = 0;
 
     Block output_header;

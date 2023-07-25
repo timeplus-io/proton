@@ -30,4 +30,9 @@ inline bool isChangelogDataStream(DataStreamSemantic data_stream_semantic)
     return data_stream_semantic == DataStreamSemantic::Changelog;
 }
 
+inline bool isAppendDataStream(DataStreamSemantic data_stream_semantic)
+{
+    return data_stream_semantic == DataStreamSemantic::Append;
+}
+
 }

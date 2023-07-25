@@ -330,6 +330,9 @@ void ChangelogTransform::retractAndIndex(size_t rows, const ColumnRawPtrs & key_
 
 Block ChangelogTransform::transformOutputHeader(const DB::Block & output_header)
 {
+    if (output_header.has(ProtonConsts::RESERVED_DELTA_FLAG))
+        return output_header;
+
     Block transformed_output{output_header};
     auto delta_column_type = DataTypeFactory::instance().get(TypeIndex::Int8);
     transformed_output.insert(

@@ -777,7 +777,7 @@ size_t insertFromBlockImpl(
 inline void addDeltaColumn(Block & block, size_t rows)
 {
     /// Add _tp_delta = 1 column to result block
-    auto delta_type = DataTypeFactory::instance().get("int8");
+    auto delta_type = DataTypeFactory::instance().get(TypeIndex::Int8);
     auto delta_col = delta_type->createColumn();
     delta_col->insertMany(1, rows);
     block.insert({std::move(delta_col), delta_type, ProtonConsts::RESERVED_DELTA_FLAG});
@@ -1110,7 +1110,24 @@ void HashJoin::postInit(const Block & left_header, const Block & output_header_,
 
         /// We'd like to compute some reserved column positions for `the right block join left block` case
         /// since we will need swap them before project the join results
-        /// TODO...
+        if (emitChangeLog())
+        {
+            if (left_data.join_stream_desc->hasDeltaColumn() && right_data.join_stream_desc->hasDeltaColumn())
+            {
+                Block right_join_left_header = right_data.join_stream_desc->input_header;
+                joinBlockWithHashTable<false>(right_join_left_header, left_data.buffered_data->getCurrentHashBlocksPtr());
+
+                for (size_t i = 0; const auto & col : right_join_left_header)
+                {
+                    if (col.name == ProtonConsts::RESERVED_DELTA_FLAG)
+                        left_delta_column_position_rlj = i;
+                    else if (col.name.ends_with(ProtonConsts::RESERVED_DELTA_FLAG))
+                        right_delta_column_position_rlj = i;
+
+                    ++i;
+                }
+            }
+        }
     }
 }
 
@@ -1126,7 +1143,7 @@ void HashJoin::transformHeader(Block & header)
 
         /// Fix the emit changelog header
         if (emitChangeLog() && !header.has(ProtonConsts::RESERVED_DELTA_FLAG))
-            header.insert({DataTypeFactory::instance().get("int8"), ProtonConsts::RESERVED_DELTA_FLAG});
+            header.insert({DataTypeFactory::instance().get(TypeIndex::Int8), ProtonConsts::RESERVED_DELTA_FLAG});
     }
     else
     {
@@ -2008,7 +2025,7 @@ bool HashJoin::isRetractBlock(const Block & block, const JoinStreamDescription &
     if (!join_stream_desc.hasDeltaColumn())
         return false;
 
-    assert(Streaming::isKeyedDataStream(join_stream_desc.data_stream_semantic));
+    assert(!Streaming::isAppendDataStream(join_stream_desc.data_stream_semantic));
     const auto & delta_column = block.getByPosition(*join_stream_desc.delta_column_position);
     return delta_column.column->getInt(0) < 0;
 }
@@ -2044,17 +2061,15 @@ std::optional<Block> HashJoin::eraseExistingKeysAndRetractJoin(Block & block)
         if (block.rows() > 0)
         {
             /// Fix the delta column by swapping since the right block has the retract value but got renamed
-            /// FIXME, calculate reserved delta flag col position to avoid string lookup
-//            auto & retract_delta_col = block.getByName(ProtonConsts::RESERVED_DELTA_FLAG);
-//            for (auto & col : block)
-//            {
-//                if (col.name.size() > ProtonConsts::RESERVED_DELTA_FLAG.size() && col.type->getTypeId() == TypeIndex::Int8
-//                    && col.name.ends_with(ProtonConsts::RESERVED_DELTA_FLAG))
-//                {
-//                    std::swap(retract_delta_col.column, col.column);
-//                    break;
-//                }
-//            }
+            if (right_delta_column_position_rlj)
+            {
+                assert(left_delta_column_position_rlj);
+
+                auto & right_retract_delta_col = block.getByPosition(*right_delta_column_position_rlj);
+                auto & left_delta_col = block.getByPosition(*left_delta_column_position_rlj);
+                std::swap(right_retract_delta_col.column, left_delta_col.column);
+            }
+
             block.reorderColumnsInplace(output_header);
         }
     }
@@ -2393,8 +2408,7 @@ void HashJoin::reviseJoinStrictness()
 
     if (streaming_strictness == Strictness::Range)
     {
-        if (isKeyedDataStream(right_data.join_stream_desc->data_stream_semantic)
-            || right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Changelog)
+        if (!isAppendDataStream(right_data.join_stream_desc->data_stream_semantic))
             throw Exception(ErrorCodes::UNSUPPORTED, "Range join keyed stream or changelog stream is not supported");
 
         return;
@@ -2402,7 +2416,7 @@ void HashJoin::reviseJoinStrictness()
 
     /// We don't even care the left stream semantic since if right stream is versioned-kv or changelog-kv
     /// we will use `Multiple` list to hold the values since users may use partial primary key to join
-    if (isKeyedDataStream(right_data.join_stream_desc->data_stream_semantic))
+    if (!isAppendDataStream(right_data.join_stream_desc->data_stream_semantic))
         streaming_strictness = Streaming::Strictness::Multiple;
 }
 

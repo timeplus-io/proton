@@ -322,7 +322,7 @@
         {
           "statements": [
             {"client":"python", "query_id":"35_test10_left_stream1_count_0", "query_type": "table","depends_on_stream":"test10_left_stream1","wait":1,"query": "select count() from table(test10_left_stream1)"},
-            {"client":"python", "query_id":"35_test10_right_stream1_count_0", "query_type": "table","depends_on_stream":"test10_right_stream1","wait":1,"query": "select count() from table(test10_right_stream1)"},               
+            {"client":"python", "query_id":"35_test10_right_stream1_count_0", "query_type": "table","depends_on_stream":"test10_right_stream1","wait":1,"query": "select count() from table(test10_right_stream1)"},
             {"client":"python","query_id":"1036-1", "terminate":"manual", "wait":1,"query_type": "stream", "query":"select s, ss from test10_left_stream1 inner join test10_right_stream1 on i=ii and date_diff_within(10s, ts, date_add(tts, 1s))"},
             {"client":"python", "query_type": "table", "wait":2,"depends_on":"1036-1", "query": "insert into test10_left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
@@ -338,7 +338,7 @@
             },
             {"client":"python", "wait": 8, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1036-1'"},
             {"client":"python","query_id":"35_test10_left_stream1_count_1", "query_type": "table","query": "select count() from table(test10_left_stream1)"},
-            {"client":"python","query_id":"35_test10_right_stream1_count_1", "query_type": "table","query": "select count() from table(test10_right_stream1)"}           
+            {"client":"python","query_id":"35_test10_right_stream1_count_1", "query_type": "table","query": "select count() from table(test10_right_stream1)"}
           ]
         }
       ],
@@ -390,7 +390,7 @@
     },
     {
       "id": 37,
-      "tags": ["stream_join_stream", "bug"],
+      "tags": ["stream_join_stream"],
       "name": "multiple-streams",
       "description": "multiple stream to stream join",
       "steps":[

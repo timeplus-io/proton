@@ -340,7 +340,7 @@
     },
     {
       "id": 8,
-      "tags": ["seek_to", "bug"],
+      "tags": ["seek_to"],
       "name": "seek_to",
       "description": "event time predicates for multiple streams in join query",
       "steps":[
@@ -502,7 +502,7 @@
     },
     {
       "id": 13,
-      "tags": ["seek_to", "bug"],
+      "tags": ["seek_to"],
       "name": "seek_to",
       "description": "seek to earliest",
       "steps":[

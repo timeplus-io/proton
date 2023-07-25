@@ -47,6 +47,15 @@ bool selectQueryHasJoinOrAggregates(const ASTPtr & select_query)
 
 std::optional<JoinStrictness> analyzeJoinStrictness(const ASTSelectQuery & select_query, JoinStrictness default_strictness)
 {
+    const auto & tables = select_query.tables();
+    if (!tables)
+        return {};
+
+    if (tables->children.size() > 2)
+        /// When there are multiple join, we don't know the strictness
+        /// After rewrite, we will evaluate this.
+        return {};
+
     const ASTTablesInSelectQueryElement * node = select_query.join();
     if (!node)
         return {};

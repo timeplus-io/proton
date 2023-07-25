@@ -1,6 +1,7 @@
 #include <Storages/Streaming/ProxyStream.h>
 #include <Storages/Streaming/StorageStream.h>
 
+#include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/TreeRewriter.h>
@@ -252,6 +253,9 @@ Names ProxyStream::getRequiredColumnsForProxyStorage(const Names & column_names)
         });
     }
 
+    if (internal_name == "changelog")
+        std::erase_if(required_columns, [](const auto & name) { return name == ProtonConsts::RESERVED_DELTA_FLAG; });
+
     return required_columns;
 }
 
@@ -378,9 +382,21 @@ void ProxyStream::processChangelogStep(QueryPlan & query_plan, const Names & req
     const auto & input_header = query_plan.getCurrentDataStream().header;
     Block output_header;
     output_header.reserve(required_columns_after_changelog.size());
-
     for (const auto & name : required_columns_after_changelog)
-        output_header.insert(input_header.getByName(name));
+    {
+        if (auto * col = input_header.findByName(name))
+        {
+            output_header.insert(*col);
+        }
+        else if (name == ProtonConsts::RESERVED_DELTA_FLAG)
+        {
+            /// changelog step adds _tp_delta column
+            auto delta_type = DataTypeFactory::instance().get(TypeIndex::Int8);
+            output_header.insert(ColumnWithTypeAndName{delta_type->createColumn(), delta_type, ProtonConsts::RESERVED_DELTA_FLAG});
+        }
+        else
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown input column '{}' of changelog step", name);
+    }
 
     /// Get key columns
     auto drop_late_rows = std::any_cast<std::optional<bool>>(table_func_desc->func_ctx);
