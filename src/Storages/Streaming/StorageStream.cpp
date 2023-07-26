@@ -27,6 +27,7 @@
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/QueryPlan/Streaming/ChangelogTransformStep.h>
+#include <Processors/QueryPlan/Streaming/ChangelogConvertTransformStep.h>
 #include <Processors/QueryPlan/UnionStep.h>
 #include <Processors/Sources/NullSource.h>
 #include <QueryPipeline/Pipe.h>
@@ -463,17 +464,18 @@ void StorageStream::readConcat(
         };
 
         /// For changelog-kv, we always read back _tp_delta column always
-        if (Streaming::isChangelogKeyedDataStream(dataStreamSemantic()) && query_info.changelog_tracking_changes)
+        if (query_info.changelog_tracking_changes
+            && (Streaming::isChangelogKeyedDataStream(dataStreamSemantic()) || Streaming::isChangelogDataStream(dataStreamSemantic())))
         {
-            assert(!merging_params.sign_column.empty());
+            assert(!merging_params.sign_column.empty() && merging_params.sign_column == ProtonConsts::RESERVED_DELTA_FLAG);
 
             /// Add _tp_delta column if it is necessary
             if (std::find(column_names.begin(), column_names.end(), ProtonConsts::RESERVED_DELTA_FLAG) == column_names.end())
-                column_names.push_back(merging_params.sign_column);
+                column_names.push_back(ProtonConsts::RESERVED_DELTA_FLAG);
 
             add_version_column();
         }
-        else if (Streaming::isVersionedKeyedDataStream(dataStreamSemantic()) && query_info.versioned_kv_tracking_changes)
+        else if (query_info.versioned_kv_tracking_changes && Streaming::isVersionedKeyedDataStream(dataStreamSemantic()))
         {
             /// Drop _tp_delta since we will generate that on the fly
             if (auto iter = std::find(column_names.begin(), column_names.end(), ProtonConsts::RESERVED_DELTA_FLAG); iter != column_names.end())
@@ -604,13 +606,26 @@ void StorageStream::readConcat(
         query_plan.setMaxThreads(plans.size());
     }
 
-    if (query_info.versioned_kv_tracking_changes && Streaming::isVersionedKeyedDataStream(dataStreamSemantic()))
+    if (query_info.changelog_tracking_changes
+        && (Streaming::isChangelogKeyedDataStream(dataStreamSemantic()) || Streaming::isChangelogDataStream(dataStreamSemantic())))
+    {
+        auto output_header
+            = storage_snapshot->getSampleBlockForColumns(original_required_columns.empty() ? column_names : original_required_columns);
+
+        query_plan.addStep(std::make_unique<Streaming::ChangelogTransformStep>(
+            query_plan.getCurrentDataStream(),
+            output_header,
+            storage_snapshot->metadata->getPrimaryKeyColumns(),
+            (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column : "",
+            plans.size()));
+    }
+    else if (query_info.versioned_kv_tracking_changes && Streaming::isVersionedKeyedDataStream(dataStreamSemantic()))
     {
         auto output_header
             = storage_snapshot->getSampleBlockForColumns(original_required_columns.empty() ? column_names : original_required_columns);
 
         /// FIXME, resize
-        query_plan.addStep(std::make_unique<Streaming::ChangelogTransformStep>(
+        query_plan.addStep(std::make_unique<Streaming::ChangelogConvertTransformStep>(
             query_plan.getCurrentDataStream(),
             std::move(output_header),
             storage_snapshot->metadata->getPrimaryKeyColumns(),

@@ -10,7 +10,7 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/Streaming/ChangelogTransformStep.h>
+#include <Processors/QueryPlan/Streaming/ChangelogConvertTransformStep.h>
 #include <Processors/QueryPlan/Streaming/DedupTransformStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WindowAssignmentStep.h>
@@ -412,7 +412,7 @@ void ProxyStream::processChangelogStep(QueryPlan & query_plan, const Names & req
     }
 
     /// Insert Changelog step
-    query_plan.addStep(std::make_unique<ChangelogTransformStep>(
+    query_plan.addStep(std::make_unique<ChangelogConvertTransformStep>(
         query_plan.getCurrentDataStream(),
         std::move(output_header),
         std::move(table_func_desc->argument_names),

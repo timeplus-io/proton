@@ -1,4 +1,4 @@
-#include "ChunkSplitter.h"
+#include <Processors/Streaming/ChunkSplitter.h>
 
 #include <Common/HashTable/HashMap.h>
 #include <Common/SipHash.h>

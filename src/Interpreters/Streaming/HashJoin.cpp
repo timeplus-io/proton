@@ -2224,21 +2224,31 @@ std::vector<RowRefListMultipleRef *> HashJoin::eraseOrAppendForPartialPrimaryKey
     std::unordered_map<RowRefListMultipleRef *, size_t> compacted_multi_refs;
     compacted_multi_refs.reserve(rows);
 
+    Arena lookup_pool;
+
     for (size_t i = 0; i < rows; ++i)
     {
         /// FIXME, null column
-        auto emplace_result = key_getter.emplaceKey(map, i, right_data.primary_key_hash_table->pool);
-        auto * mapped = &emplace_result.getMapped();
+        auto find_result = key_getter.findKey(map, i, lookup_pool);
+        std::remove_reference_t<decltype(find_result.getMapped())> * mapped;
 
-        if (emplace_result.isInserted())
-            /// This row contains a new primary key,
-            /// init it with empty ref
-            mapped = new (mapped) typename Map::mapped_type(std::make_unique<RowRefListMultipleRef>());
-        else
+        if (find_result.isFound())
+        {
+            mapped = &find_result.getMapped();
+
             /// We have seen this primary key before
             /// Erase it from the target linked list since we will append this element soon
             /// Erase followed by append acts like override
             (*mapped)->erase();
+        }
+        else
+        {
+            /// This row contains a new primary key,
+            /// init it with empty ref
+            auto emplace_result = key_getter.emplaceKey(map, i, right_data.primary_key_hash_table->pool);
+            mapped = &emplace_result.getMapped();
+            mapped = new (mapped) typename Map::mapped_type(std::make_unique<RowRefListMultipleRef>());
+        }
 
         auto iter = compacted_multi_refs.find(mapped->get());
         if (iter != compacted_multi_refs.end())

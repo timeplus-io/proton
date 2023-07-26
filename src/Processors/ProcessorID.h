@@ -109,7 +109,8 @@ enum class ProcessorID : UInt32
     StreamingStrictResizeProcessorID = 90,
     StreamingLimitTransformID = 91,
     StreamingOffsetTransformID = 92,
-    ChangelogTransformID = 93,
+    ChangelogConvertTransformID = 93,
+    ChangelogTransformID = 94,
 
     /// Aggregating transform
     AggregatingInOrderTransformID = 1'000,

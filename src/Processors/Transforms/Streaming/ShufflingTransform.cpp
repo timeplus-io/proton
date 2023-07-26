@@ -1,4 +1,4 @@
-#include "ShufflingTransform.h"
+#include <Processors/Transforms/Streaming/ShufflingTransform.h>
 
 #include <base/ClockUtils.h>
 

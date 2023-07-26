@@ -8,8 +8,8 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Common/ProtonCommon.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Common/ProtonCommon.h>
 
 namespace DB
 {
@@ -124,7 +124,7 @@ void ChangelogQueryVisitorMatcher::visit(ASTSelectQuery & select_query, ASTPtr &
             }
         };
 
-        std::array<DataStreamSemantic, 2> semantics {left_input_data_stream_semantic, *right_input_data_stream_semantic};
+        std::array<DataStreamSemantic, 2> semantics{left_input_data_stream_semantic, *right_input_data_stream_semantic};
         for (size_t i = 0; auto & query_element : tables->children)
             rewrite(query_element, semantics[i++]);
     }
@@ -133,7 +133,9 @@ void ChangelogQueryVisitorMatcher::visit(ASTSelectQuery & select_query, ASTPtr &
         /// Single stream
         assert(tables->children.size() == 1);
 
-        bool need_rewrite = isChangelogDataStream(left_input_data_stream_semantic) && query_info.changelog_tracking_changes;
+        bool need_rewrite
+            = (isChangelogDataStream(left_input_data_stream_semantic) || isChangelogKeyedDataStream(left_input_data_stream_semantic))
+            && query_info.changelog_tracking_changes;
         need_rewrite |= isVersionedKeyedDataStream(left_input_data_stream_semantic) && query_info.versioned_kv_tracking_changes;
 
         if (!need_rewrite || current_select_has_aggregates)
