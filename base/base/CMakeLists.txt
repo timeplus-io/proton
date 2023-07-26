@@ -10,6 +10,7 @@ set (SRCS
     argsToConfig.cpp
     coverage.cpp
     demangle.cpp
+    getAvailableMemoryAmount.cpp
     getFQDNOrHostName.cpp
     getMemoryAmount.cpp
     getPageSize.cpp

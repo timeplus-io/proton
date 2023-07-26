@@ -30,6 +30,7 @@
     M(OpenFileForRead, "Number of files open for reading") \
     M(OpenFileForWrite, "Number of files open for writing") \
     M(Read, "Number of read (read, pread, io_getevents, etc.) syscalls in fly") \
+    M(RemoteRead, "Number of read with remote reader in fly") \
     M(Write, "Number of write (write, pwrite, io_getevents, etc.) syscalls in fly") \
     M(NetworkReceive, "Number of threads receiving data from network. Only proton-related network interaction is included, not by 3rd party libraries.") \
     M(NetworkSend, "Number of threads sending data to network. Only proton-related network interaction is included, not by 3rd party libraries.") \

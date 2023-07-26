@@ -50,6 +50,7 @@ private:
     String compression_method;
     NamesAndTypesList virtual_columns;
     Block virtual_block;
+    bool add_columns_structure_to_query = false;
 };
 
 

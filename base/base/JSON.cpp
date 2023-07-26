@@ -12,7 +12,7 @@
 #define JSON_MAX_DEPTH 100
 
 
-POCO_IMPLEMENT_EXCEPTION(JSONException, Poco::Exception, "JSONException")
+POCO_IMPLEMENT_EXCEPTION(JSONException, Poco::Exception, "JSONException") // NOLINT(cert-err60-cpp, modernize-use-noexcept, hicpp-use-noexcept)
 
 
 /// Read unsigned integer in a simple form from a non-0-terminated string.

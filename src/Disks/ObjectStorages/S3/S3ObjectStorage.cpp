@@ -28,7 +28,7 @@
 #include <aws/s3/model/AbortMultipartUploadRequest.h>
 
 #include <Common/getRandomASCIIString.h>
-
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/logger_useful.h>
 #include <Common/MultiVersion.h>
 
@@ -66,12 +66,6 @@ namespace ErrorCodes
 namespace
 {
 
-bool isNotFoundError(Aws::S3::S3Errors error)
-{
-    return error == Aws::S3::S3Errors::RESOURCE_NOT_FOUND
-        || error == Aws::S3::S3Errors::NO_SUCH_KEY;
-}
-
 template <typename Result, typename Error>
 void throwIfError(const Aws::Utils::Outcome<Result, Error> & response)
 {
@@ -89,7 +83,7 @@ void throwIfUnexpectedError(const Aws::Utils::Outcome<Result, Error> & response,
     /// the log will be polluted with error messages from aws sdk.
     /// Looks like there is no way to suppress them.
 
-    if (!response.IsSuccess() && (!if_exists || !isNotFoundError(response.GetError().GetErrorType())))
+    if (!response.IsSuccess() && (!if_exists || !S3::isNotFoundError(response.GetError().GetErrorType())))
     {
         const auto & err = response.GetError();
         throw S3Exception(err.GetErrorType(), "{} (Code: {})", err.GetMessage(), static_cast<size_t>(err.GetErrorType()));
@@ -130,28 +124,12 @@ std::string S3ObjectStorage::generateBlobNameForPath(const std::string & /* path
 
 Aws::S3::Model::HeadObjectOutcome S3ObjectStorage::requestObjectHeadData(const std::string & bucket_from, const std::string & key) const
 {
-    auto client_ptr = client.get();
-
-    ProfileEvents::increment(ProfileEvents::S3HeadObject);
-    ProfileEvents::increment(ProfileEvents::DiskS3HeadObject);
-    Aws::S3::Model::HeadObjectRequest request;
-    request.SetBucket(bucket_from);
-    request.SetKey(key);
-
-    return client_ptr->HeadObject(request);
+    return S3::headObject(*client.get(), bucket_from, key, "", true);
 }
 
 bool S3ObjectStorage::exists(const StoredObject & object) const
 {
-    auto object_head = requestObjectHeadData(bucket, object.absolute_path);
-    if (!object_head.IsSuccess())
-    {
-        if (object_head.GetError().GetErrorType() == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
-            return false;
-
-        throwIfError(object_head);
-    }
-    return true;
+    return S3::objectExists(*client.get(), bucket, object.absolute_path, "", true);
 }
 
 std::unique_ptr<ReadBufferFromFileBase> S3ObjectStorage::readObjects( /// NOLINT
@@ -247,7 +225,7 @@ std::unique_ptr<WriteBufferFromFileBase> S3ObjectStorage::writeObject( /// NOLIN
         std::move(s3_buffer), std::move(finalize_callback), object.absolute_path);
 }
 
-void S3ObjectStorage::listPrefix(const std::string & path, RelativePathsWithSize & children) const
+void S3ObjectStorage::findAllFiles(const std::string & path, RelativePathsWithSize & children) const
 {
     auto settings_ptr = s3_settings.get();
     auto client_ptr = client.get();
@@ -273,6 +251,49 @@ void S3ObjectStorage::listPrefix(const std::string & path, RelativePathsWithSize
 
         for (const auto & object : objects)
             children.emplace_back(object.GetKey(), object.GetSize());
+
+        request.SetContinuationToken(outcome.GetResult().GetNextContinuationToken());
+    } while (outcome.GetResult().GetIsTruncated());
+}
+
+void S3ObjectStorage::getDirectoryContents(const std::string & path,
+                                           RelativePathsWithSize & files,
+                                           std::vector<std::string> & directories) const
+{
+    auto settings_ptr = s3_settings.get();
+    auto client_ptr = client.get();
+
+    Aws::S3::Model::ListObjectsV2Request request;
+    request.SetBucket(bucket);
+    request.SetPrefix(path);
+    request.SetMaxKeys(settings_ptr->list_object_keys_size);
+    request.SetDelimiter("/");
+
+    Aws::S3::Model::ListObjectsV2Outcome outcome;
+    do
+    {
+        ProfileEvents::increment(ProfileEvents::S3ListObjects);
+        ProfileEvents::increment(ProfileEvents::DiskS3ListObjects);
+        outcome = client_ptr->ListObjectsV2(request);
+        throwIfError(outcome);
+
+        auto result = outcome.GetResult();
+        auto result_objects = result.GetContents();
+        auto result_common_prefixes = result.GetCommonPrefixes();
+
+        if (result_objects.empty() && result_common_prefixes.empty())
+            break;
+
+        for (const auto & object : result_objects)
+            files.emplace_back(object.GetKey(), object.GetSize());
+
+        for (const auto & common_prefix : result_common_prefixes)
+        {
+            std::string directory = common_prefix.GetPrefix();
+            /// Make it compatible with std::filesystem::path::filename()
+            trimRight(directory, '/');
+            directories.emplace_back(directory);
+        }
 
         request.SetContinuationToken(outcome.GetResult().GetNextContinuationToken());
     } while (outcome.GetResult().GetIsTruncated());
@@ -416,7 +437,8 @@ void S3ObjectStorage::copyObjectImpl(
 
     auto outcome = client_ptr->CopyObject(request);
 
-    if (!outcome.IsSuccess() && outcome.GetError().GetExceptionName() == "EntityTooLarge")
+    if (!outcome.IsSuccess() && (outcome.GetError().GetExceptionName() == "EntityTooLarge"
+            || outcome.GetError().GetExceptionName() == "InvalidRequest"))
     { // Can't come here with MinIO, MinIO allows single part upload for large objects.
         copyObjectMultipartImpl(src_bucket, src_key, dst_bucket, dst_key, head, metadata);
         return;
@@ -479,7 +501,7 @@ void S3ObjectStorage::copyObjectMultipartImpl(
         part_request.SetBucket(dst_bucket);
         part_request.SetKey(dst_key);
         part_request.SetUploadId(multipart_upload_id);
-        part_request.SetPartNumber(part_number);
+        part_request.SetPartNumber(static_cast<int>(part_number));
         part_request.SetCopySourceRange(fmt::format("bytes={}-{}", position, std::min(size, position + upload_part_size) - 1));
 
         auto outcome = client_ptr->UploadPartCopy(part_request);
@@ -512,7 +534,7 @@ void S3ObjectStorage::copyObjectMultipartImpl(
         for (size_t i = 0; i < part_tags.size(); ++i)
         {
             Aws::S3::Model::CompletedPart part;
-            multipart_upload.AddParts(part.WithETag(part_tags[i]).WithPartNumber(i + 1));
+            multipart_upload.AddParts(part.WithETag(part_tags[i]).WithPartNumber(static_cast<int>(i) + 1));
         }
 
         req.SetMultipartUpload(multipart_upload);
@@ -594,7 +616,7 @@ std::unique_ptr<IObjectStorage> S3ObjectStorage::cloneObjectStorage(
     return std::make_unique<S3ObjectStorage>(
         std::move(new_client), std::move(new_s3_settings),
         version_id, s3_capabilities, new_namespace,
-        S3::URI(Poco::URI(config.getString(config_prefix + ".endpoint"))).endpoint);
+        config.getString(config_prefix + ".endpoint"));
 }
 
 }

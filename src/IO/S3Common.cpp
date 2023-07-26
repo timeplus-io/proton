@@ -163,7 +163,7 @@ public:
     AWSEC2MetadataClient& operator =(const AWSEC2MetadataClient && rhs) = delete;
     AWSEC2MetadataClient(const AWSEC2MetadataClient && rhs) = delete;
 
-    virtual ~AWSEC2MetadataClient() override = default;
+    ~AWSEC2MetadataClient() override = default;
 
     using Aws::Internal::AWSHttpResourceClient::GetResource;
 
@@ -176,7 +176,7 @@ public:
     {
         String credentials_string;
         {
-            std::unique_lock<std::recursive_mutex> locker(token_mutex);
+            std::lock_guard locker(token_mutex);
 
             LOG_TRACE(logger, "Getting default credentials for EC2 instance.");
             auto result = GetResourceWithAWSWebServiceResult(endpoint.c_str(), EC2_SECURITY_CREDENTIALS_RESOURCE, nullptr);
@@ -222,7 +222,7 @@ public:
         String new_token;
 
         {
-            std::unique_lock<std::recursive_mutex> locker(token_mutex);
+            std::lock_guard locker(token_mutex);
 
             Aws::StringStream ss;
             ss << endpoint << EC2_IMDS_TOKEN_RESOURCE;
@@ -300,10 +300,10 @@ public:
     {
     }
 
-    virtual ~AWSEC2InstanceProfileConfigLoader() override = default;
+    ~AWSEC2InstanceProfileConfigLoader() override = default;
 
 protected:
-    virtual bool LoadInternal() override
+    bool LoadInternal() override
     {
         auto credentials_str = use_secure_pull ? client->getDefaultCredentialsSecurely() : client->getDefaultCredentials();
 
@@ -757,7 +757,7 @@ namespace S3
             put_request_throttler);
     }
 
-    URI::URI(const Poco::URI & uri_)
+    URI::URI(const std::string & uri_)
     {
         /// Case when bucket name represented in domain name of S3 URL.
         /// E.g. (https://bucket-name.s3.Region.amazonaws.com/key)
@@ -775,25 +775,31 @@ namespace S3
         static constexpr auto OBS = "OBS";
         static constexpr auto OSS = "OSS";
 
-        uri = uri_;
+        uri = Poco::URI(uri_);
+
         storage_name = S3;
 
         if (uri.getHost().empty())
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Host is empty in S3 URI.");
 
         /// Extract object version ID from query string.
-        {
-            version_id = "";
-            const String version_key = "versionId=";
-            const auto query_string = uri.getQuery();
-
-            auto start = query_string.rfind(version_key);
-            if (start != std::string::npos)
+        bool has_version_id = false;
+        for (const auto & [query_key, query_value] : uri.getQueryParameters())
+            if (query_key == "versionId")
             {
-            start += version_key.length();
-            auto end = query_string.find_first_of('&', start);
-            version_id = query_string.substr(start, end == std::string::npos ? std::string::npos : end - start);
+                version_id = query_value;
+                has_version_id = true;
             }
+
+        /// Poco::URI will ignore '?' when parsing the path, but if there is a vestionId in the http parameter,
+        /// '?' can not be used as a wildcard, otherwise it will be ambiguous.
+        /// If no "vertionId" in the http parameter, '?' can be used as a wildcard.
+        /// It is necessary to encode '?' to avoid deletion during parsing path.
+        if (!has_version_id && uri_.find('?') != String::npos)
+        {
+            String uri_with_question_mark_encode;
+            Poco::URI::encode(uri_, "?", uri_with_question_mark_encode);
+            uri = Poco::URI(uri_with_question_mark_encode);
         }
 
         String name;
@@ -843,8 +849,12 @@ namespace S3
                             quoteString(bucket), !uri.empty() ? " (" + uri.toString() + ")" : "");
     }
 
+    bool isNotFoundError(Aws::S3::S3Errors error)
+    {
+        return error == Aws::S3::S3Errors::RESOURCE_NOT_FOUND || error == Aws::S3::S3Errors::NO_SUCH_KEY;
+    }
 
-    S3::ObjectInfo getObjectInfo(std::shared_ptr<const Aws::S3::S3Client> client_ptr, const String & bucket, const String & key, const String & version_id, bool throw_on_error, bool for_disk_s3)
+    Aws::S3::Model::HeadObjectOutcome headObject(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id, bool for_disk_s3)
     {
         ProfileEvents::increment(ProfileEvents::S3HeadObject);
         if (for_disk_s3)
@@ -857,7 +867,12 @@ namespace S3
         if (!version_id.empty())
             req.SetVersionId(version_id);
 
-        Aws::S3::Model::HeadObjectOutcome outcome = client_ptr->HeadObject(req);
+        return client.HeadObject(req);
+    }
+
+    S3::ObjectInfo getObjectInfo(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id, bool throw_on_error, bool for_disk_s3)
+    {
+        auto outcome = headObject(client, bucket, key, version_id, for_disk_s3);
 
         if (outcome.IsSuccess())
         {
@@ -866,16 +881,34 @@ namespace S3
         }
         else if (throw_on_error)
         {
-            throw DB::Exception(outcome.GetError().GetMessage(), ErrorCodes::S3_ERROR);
+            const auto & error = outcome.GetError();
+            throw DB::Exception(ErrorCodes::S3_ERROR,
+                "Failed to HEAD object: {}. HTTP response code: {}",
+                error.GetMessage(), static_cast<size_t>(error.GetResponseCode()));
         }
         return {};
     }
 
-    size_t getObjectSize(std::shared_ptr<const Aws::S3::S3Client> client_ptr, const String & bucket, const String & key, const String & version_id, bool throw_on_error, bool for_disk_s3)
+    size_t getObjectSize(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id, bool throw_on_error, bool for_disk_s3)
     {
-        return getObjectInfo(client_ptr, bucket, key, version_id, throw_on_error, for_disk_s3).size;
+        return getObjectInfo(client, bucket, key, version_id, throw_on_error, for_disk_s3).size;
     }
 
+    bool objectExists(const Aws::S3::S3Client & client, const String & bucket, const String & key, const String & version_id, bool for_disk_s3)
+    {
+        auto outcome = headObject(client, bucket, key, version_id, for_disk_s3);
+
+        if (outcome.IsSuccess())
+            return true;
+
+        const auto & error = outcome.GetError();
+        if (isNotFoundError(error.GetErrorType()))
+            return false;
+
+        throw S3Exception(error.GetErrorType(),
+            "Failed to check existence of key {} in bucket {}: {}",
+            key, bucket, error.GetMessage());
+    }
 }
 
 }

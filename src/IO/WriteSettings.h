@@ -15,6 +15,7 @@ struct WriteSettings
     bool enable_filesystem_cache_on_write_operations = false;
     bool enable_filesystem_cache_log = false;
     bool is_file_cache_persistent = false;
+    bool throw_on_error_from_cache = false;
 
     /// Monitoring
     bool for_object_storage = false; // to choose which profile events should be incremented

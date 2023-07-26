@@ -148,7 +148,7 @@ namespace ErrorCodes
 /** Set of known objects (environment), that could be used in query.
   * Shared (global) part. Order of members (especially, order of destruction) is very important.
   */
-struct ContextSharedPart
+struct ContextSharedPart : boost::noncopyable
 {
     Poco::Logger * log = &Poco::Logger::get("Context");
 
@@ -231,6 +231,7 @@ struct ContextSharedPart
     std::unique_ptr<AccessControl> access_control;
     mutable UncompressedCachePtr uncompressed_cache;        /// The cache of decompressed blocks.
     mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
+    mutable std::unique_ptr<ThreadPool> load_marks_threadpool; /// Threadpool for loading marks cache.
     mutable UncompressedCachePtr index_uncompressed_cache;  /// The cache of decompressed blocks for MergeTree indices.
     mutable MarkCachePtr index_mark_cache;                  /// Cache of marks in compressed files of MergeTree indices.
     mutable MMappedFileCachePtr mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
@@ -381,6 +382,20 @@ struct ContextSharedPart
                 LOG_DEBUG(log, "Desctructing threadpool writer");
                 threadpool_writer->wait();
                 threadpool_writer.reset();
+            }
+            catch (...)
+            {
+                tryLogCurrentException(__PRETTY_FUNCTION__);
+            }
+        }
+
+        if (load_marks_threadpool)
+        {
+            try
+            {
+                LOG_DEBUG(log, "Destructing marks loader");
+                load_marks_threadpool->wait();
+                load_marks_threadpool.reset();
             }
             catch (...)
             {
@@ -1779,6 +1794,19 @@ void Context::dropMarkCache() const
         shared->mark_cache->reset();
 }
 
+ThreadPool & Context::getLoadMarksThreadpool() const
+{
+    const auto & config = getConfigRef();
+
+    auto lock = getLock();
+    if (!shared->load_marks_threadpool)
+    {
+        auto pool_size = config.getUInt(".load_marks_threadpool_pool_size", 50);
+        auto queue_size = config.getUInt(".load_marks_threadpool_queue_size", 1000000);
+        shared->load_marks_threadpool = std::make_unique<ThreadPool>(pool_size, pool_size, queue_size);
+    }
+    return *shared->load_marks_threadpool;
+}
 
 void Context::setIndexUncompressedCache(size_t max_size_in_bytes)
 {
@@ -3309,6 +3337,8 @@ ReadSettings Context::getReadSettings() const
     res.local_fs_prefetch = settings.local_filesystem_read_prefetch;
     res.remote_fs_prefetch = settings.remote_filesystem_read_prefetch;
 
+    res.load_marks_asynchronously = settings.load_marks_asynchronously;
+
     res.remote_fs_read_max_backoff_ms = settings.remote_fs_read_max_backoff_ms;
     res.remote_fs_read_backoff_max_tries = settings.remote_fs_read_backoff_max_tries;
     res.enable_filesystem_cache = settings.enable_filesystem_cache;
@@ -3351,6 +3381,7 @@ WriteSettings Context::getWriteSettings() const
 
     res.enable_filesystem_cache_on_write_operations = settings.enable_filesystem_cache_on_write_operations;
     res.enable_filesystem_cache_log = settings.enable_filesystem_cache_log;
+    res.throw_on_error_from_cache = settings.throw_on_error_from_cache_on_write_operations;
 
     res.remote_throttler = getRemoteWriteThrottler();
 

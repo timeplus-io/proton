@@ -285,6 +285,7 @@ then
 
     # Avoid "Setting s3_check_objects_after_upload is neither a builtin setting..."
     rm -f /etc/clickhouse-server/users.d/enable_blobs_check.xml ||:
+    rm -f /etc/clickhouse-server/users.d/marks.xml ||:
 
     # Remove s3 related configs to avoid "there is no disk type `cache`"
     rm -f /etc/clickhouse-server/config.d/storage_conf.xml ||:

@@ -78,15 +78,6 @@ static int compareValuesWithOffset(const IColumn * _compared_column,
     else
         is_overflow = common::addOverflow(reference_value, offset, reference_value);
 
-//    fmt::print(stderr,
-//        "compared [{}] = {}, old ref {}, shifted ref [{}] = {}, offset {} preceding {} overflow {} to negative {}\n",
-//        compared_row, toString(compared_value),
-//        // fmt doesn't like char8_t.
-//        static_cast<Int64>(unalignedLoad<typename ColumnType::ValueType>(reference_value_data.data)),
-//        reference_row, toString(reference_value),
-//        toString(offset), offset_is_preceding,
-//        is_overflow, offset_is_preceding);
-
     if (is_overflow)
     {
         if (offset_is_preceding)

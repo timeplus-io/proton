@@ -126,6 +126,9 @@
     M(SelectedRows, "Number of rows SELECTed from all tables.") \
     M(SelectedBytes, "Number of bytes (uncompressed; for columns as they stored in memory) SELECTed from all tables.") \
     \
+    M(WaitMarksLoadMicroseconds, "Time spent loading marks") \
+    M(BackgroundLoadingMarksTasks, "Number of background tasks for loading marks") \
+    \
     M(Merge, "Number of launched background merges.") \
     M(MergedRows, "Rows read for background merges. This is the number of rows before merge.") \
     M(MergedUncompressedBytes, "Uncompressed bytes (for columns as they stored in memory) that was read for background merges. This is the number before merge.") \
@@ -306,7 +309,9 @@
     M(RemoteFSCancelledPrefetches, "Number of cancelled prefecthes (because of seek)") \
     M(RemoteFSUnusedPrefetches, "Number of prefetches pending at buffer destruction") \
     M(RemoteFSPrefetchedReads, "Number of reads from prefecthed buffer") \
+    M(RemoteFSPrefetchedBytes, "Number of bytes from prefecthed buffer") \
     M(RemoteFSUnprefetchedReads, "Number of reads from unprefetched buffer") \
+    M(RemoteFSUnprefetchedBytes, "Number of bytes from unprefetched buffer") \
     M(RemoteFSLazySeeks, "Number of lazy seeks") \
     M(RemoteFSSeeksWithReset, "Number of seeks which lead to a new connection") \
     M(RemoteFSBuffers, "Number of buffers created for asynchronous reading from remote filesystem") \
@@ -336,6 +341,7 @@
     \
     M(AsynchronousReadWaitMicroseconds, "Time spent in waiting for asynchronous reads.") \
     M(AsynchronousRemoteReadWaitMicroseconds, "Time spent in waiting for asynchronous remote reads.") \
+    M(SynchronousRemoteReadWaitMicroseconds, "Time spent in waiting for synchronous remote reads.") \
     \
     M(ExternalDataSourceLocalCacheReadBytes, "Bytes read from local cache buffer in RemoteReadBufferCache")\
     \

@@ -64,7 +64,7 @@ void TableFunctionS3::parseArgumentsImpl(const String & error_message, ASTs & ar
         if (args.size() == 4)
         {
             auto second_arg = checkAndGetLiteralArgument<String>(args[1], "format/access_key_id");
-            if (FormatFactory::instance().getAllFormats().contains(second_arg))
+            if (second_arg == "auto" || FormatFactory::instance().getAllFormats().contains(second_arg))
                 args_to_idx = {{"format", 1}, {"structure", 2}, {"compression_method", 3}};
 
             else
@@ -76,7 +76,7 @@ void TableFunctionS3::parseArgumentsImpl(const String & error_message, ASTs & ar
         else if (args.size() == 3)
         {
             auto second_arg = checkAndGetLiteralArgument<String>(args[1], "format/access_key_id");
-            if (FormatFactory::instance().getAllFormats().contains(second_arg))
+            if (second_arg == "auto" || FormatFactory::instance().getAllFormats().contains(second_arg))
                 args_to_idx = {{"format", 1}, {"structure", 2}};
             else
                 args_to_idx = {{"access_key_id", 1}, {"secret_access_key", 2}};
@@ -147,8 +147,7 @@ ColumnsDescription TableFunctionS3::getActualTableStructure(ContextPtr context) 
 
 StoragePtr TableFunctionS3::executeImpl(const ASTPtr & /*ast_function*/, ContextPtr context, const std::string & table_name, ColumnsDescription /*cached_columns*/) const
 {
-    Poco::URI uri (configuration.url);
-    S3::URI s3_uri (uri);
+    S3::URI s3_uri (configuration.url);
 
     ColumnsDescription columns;
     if (configuration.structure != "auto")

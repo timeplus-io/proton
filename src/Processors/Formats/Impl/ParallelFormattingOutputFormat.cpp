@@ -21,7 +21,7 @@ namespace DB
         }
 
         {
-            std::unique_lock<std::mutex> lock(mutex);
+            std::lock_guard lock(mutex);
 
             if (background_exception)
                 std::rethrow_exception(background_exception);
@@ -31,7 +31,7 @@ namespace DB
     void ParallelFormattingOutputFormat::addChunk(Chunk chunk, ProcessingUnitType type, bool can_throw_exception)
     {
         {
-            std::unique_lock<std::mutex> lock(mutex);
+            std::lock_guard lock(mutex);
             if (background_exception && can_throw_exception)
                 std::rethrow_exception(background_exception);
         }

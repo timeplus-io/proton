@@ -597,8 +597,10 @@ void HTTPHandler::processQuery(
 
     /// Request body can be compressed using algorithm specified in the Content-Encoding header.
     String http_request_compression_method_str = request.get("Content-Encoding", "");
+    int zstd_window_log_max = static_cast<int>(context->getSettingsRef().zstd_window_log_max);
     auto in_post = wrapReadBufferWithCompressionMethod(
-        wrapReadBufferReference(request.getStream()), chooseCompressionMethod({}, http_request_compression_method_str));
+        wrapReadBufferReference(request.getStream()),
+        chooseCompressionMethod({}, http_request_compression_method_str), zstd_window_log_max);
 
     /// The data can also be compressed using incompatible internal algorithm. This is indicated by
     /// 'decompress' query parameter.

@@ -11,7 +11,7 @@
 
 namespace CurrentMetrics
 {
-extern const Metric CacheDetachedFileSegments;
+    extern const Metric CacheDetachedFileSegments;
 }
 
 namespace DB
@@ -19,7 +19,6 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int REMOTE_FS_OBJECT_CACHE_ERROR;
     extern const int LOGICAL_ERROR;
 }
 
@@ -66,7 +65,7 @@ FileSegment::FileSegment(
         default:
         {
             throw Exception(
-                ErrorCodes::REMOTE_FS_OBJECT_CACHE_ERROR,
+                ErrorCodes::LOGICAL_ERROR,
                 "Can create cell with either EMPTY, DOWNLOADED, DOWNLOADING state");
         }
     }
@@ -124,12 +123,6 @@ size_t FileSegment::getDownloadedSizeUnlocked(std::unique_lock<std::mutex> & /* 
 
     std::unique_lock download_lock(download_mutex);
     return downloaded_size;
-}
-
-size_t FileSegment::getRemainingSizeToDownload() const
-{
-    std::unique_lock segment_lock(mutex);
-    return range().size() - getDownloadedSizeUnlocked(segment_lock);
 }
 
 bool FileSegment::isDownloaded() const
@@ -256,7 +249,6 @@ FileSegment::RemoteFileReaderPtr FileSegment::extractRemoteFileReader()
             return nullptr;
     }
 
-    LOG_TRACE(log, "Extracted reader from file segment");
     return std::move(remote_file_reader);
 }
 
@@ -285,7 +277,7 @@ void FileSegment::resetRemoteFileReader()
 void FileSegment::write(const char * from, size_t size, size_t offset)
 {
     if (!size)
-        throw Exception(ErrorCodes::REMOTE_FS_OBJECT_CACHE_ERROR, "Writing zero size is not allowed");
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Writing zero size is not allowed");
 
     {
         std::unique_lock segment_lock(mutex);
@@ -301,7 +293,7 @@ void FileSegment::write(const char * from, size_t size, size_t offset)
         size_t first_non_downloaded_offset = getFirstNonDownloadedOffsetUnlocked(segment_lock);
         if (offset != first_non_downloaded_offset)
             throw Exception(
-                ErrorCodes::REMOTE_FS_OBJECT_CACHE_ERROR,
+                ErrorCodes::LOGICAL_ERROR,
                 "Attempt to write {} bytes to offset: {}, but current write offset is {}",
                 size, offset, first_non_downloaded_offset);
 
@@ -311,7 +303,7 @@ void FileSegment::write(const char * from, size_t size, size_t offset)
 
         if (free_reserved_size < size)
             throw Exception(
-                ErrorCodes::REMOTE_FS_OBJECT_CACHE_ERROR,
+                ErrorCodes::LOGICAL_ERROR,
                 "Not enough space is reserved. Available: {}, expected: {}", free_reserved_size, size);
 
         if (current_downloaded_size == range().size())
@@ -371,7 +363,7 @@ FileSegment::State FileSegment::wait()
         return download_state;
 
     if (download_state == State::EMPTY)
-        throw Exception(ErrorCodes::REMOTE_FS_OBJECT_CACHE_ERROR, "Cannot wait on a file segment with empty state");
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot wait on a file segment with empty state");
 
     if (download_state == State::DOWNLOADING)
     {
@@ -389,7 +381,7 @@ FileSegment::State FileSegment::wait()
 bool FileSegment::reserve(size_t size_to_reserve)
 {
     if (!size_to_reserve)
-        throw Exception(ErrorCodes::REMOTE_FS_OBJECT_CACHE_ERROR, "Zero space reservation is not allowed");
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Zero space reservation is not allowed");
 
     size_t expected_downloaded_size;
 
@@ -403,7 +395,7 @@ bool FileSegment::reserve(size_t size_to_reserve)
 
         if (expected_downloaded_size + size_to_reserve > range().size())
             throw Exception(
-                ErrorCodes::REMOTE_FS_OBJECT_CACHE_ERROR,
+                ErrorCodes::LOGICAL_ERROR,
                 "Attempt to reserve space too much space ({}) for file segment with range: {} (downloaded size: {})",
                 size_to_reserve, range().toString(), downloaded_size);
 
@@ -440,9 +432,6 @@ void FileSegment::setDownloadedUnlocked([[maybe_unused]] std::unique_lock<std::m
 {
     if (is_downloaded)
         return;
-
-    setDownloadState(State::DOWNLOADED);
-    is_downloaded = true;
 
     if (cache_writer)
     {
@@ -505,7 +494,7 @@ void FileSegment::completeWithState(State state)
     {
         cv.notify_all();
         throw Exception(
-            ErrorCodes::REMOTE_FS_OBJECT_CACHE_ERROR,
+            ErrorCodes::LOGICAL_ERROR,
             "Cannot complete file segment with state: {}", stateToString(state));
     }
 
@@ -566,8 +555,7 @@ void FileSegment::completeBasedOnCurrentState(std::lock_guard<std::mutex> & cach
         {
             if (is_last_holder)
                 cache->remove(key(), offset(), cache_lock, segment_lock);
-
-            return;
+            break;
         }
         case State::DOWNLOADED:
         {
@@ -620,6 +608,7 @@ void FileSegment::completeBasedOnCurrentState(std::lock_guard<std::mutex> & cach
         }
     }
 
+    is_completed = true;
     LOG_TEST(log, "Completed file segment: {}", getInfoForLogUnlocked(segment_lock));
 }
 
@@ -755,6 +744,12 @@ bool FileSegment::isDetached() const
     return is_detached;
 }
 
+bool FileSegment::isCompleted() const
+{
+    std::unique_lock segment_lock(mutex);
+    return is_completed;
+}
+
 void FileSegment::detach(std::lock_guard<std::mutex> & /* cache_lock */, std::unique_lock<std::mutex> & segment_lock)
 {
     if (is_detached)
@@ -843,188 +838,6 @@ String FileSegmentsHolder::toString()
         ranges += file_segment->range().toString();
     }
     return ranges;
-}
-
-FileSegmentRangeWriter::FileSegmentRangeWriter(
-    FileCache * cache_,
-    const FileSegment::Key & key_,
-    OnCompleteFileSegmentCallback && on_complete_file_segment_func_)
-    : cache(cache_)
-    , key(key_)
-    , current_file_segment_it(file_segments_holder.file_segments.end())
-    , on_complete_file_segment_func(on_complete_file_segment_func_)
-{
-}
-
-FileSegments::iterator FileSegmentRangeWriter::allocateFileSegment(size_t offset, bool is_persistent)
-{
-    /**
-     * Allocate a new file segment starting `offset`.
-     * File segment capacity will equal `max_file_segment_size`, but actual size is 0.
-     */
-
-    std::lock_guard cache_lock(cache->mutex);
-
-    CreateFileSegmentSettings create_settings
-        {
-            .is_persistent = is_persistent,
-        };
-
-    /// We set max_file_segment_size to be downloaded,
-    /// if we have less size to write, file segment will be resized in complete() method.
-    auto file_segment = cache->createFileSegmentForDownload(
-        key, offset, cache->max_file_segment_size, create_settings, cache_lock);
-
-    return file_segments_holder.add(std::move(file_segment));
-}
-
-void FileSegmentRangeWriter::completeFileSegment(FileSegment & file_segment)
-{
-    /**
-     * Complete file segment based on downaloaded size.
-     */
-
-    /// File segment can be detached if space reservation failed.
-    if (file_segment.isDetached())
-        return;
-
-    size_t current_downloaded_size = file_segment.getDownloadedSize();
-
-    /// file_segment->complete(DOWNLOADED) is not enough, because file segment capacity
-    /// was initially set with a margin as `max_file_segment_size`. => We need to always
-    /// resize to actual size after download finished.
-    if (current_downloaded_size != file_segment.range().size())
-    {
-        /// Current file segment is downloaded as a part of write-through cache
-        /// and therefore cannot be concurrently accessed. Nevertheless, it can be
-        /// accessed by cache system tables if someone read from them,
-        /// therefore we need a mutex.
-        std::unique_lock segment_lock(file_segment.mutex);
-
-        assert(current_downloaded_size <= file_segment.range().size());
-        file_segment.segment_range = FileSegment::Range(
-            file_segment.segment_range.left,
-            file_segment.segment_range.left + current_downloaded_size - 1);
-        file_segment.reserved_size = current_downloaded_size;
-
-        file_segment.setDownloadedUnlocked(segment_lock);
-    }
-
-    file_segment.completeWithoutState();
-
-    on_complete_file_segment_func(file_segment);
-}
-
-bool FileSegmentRangeWriter::write(const char * data, size_t size, size_t offset, bool is_persistent)
-{
-    /**
-     * Write a range of file segments. Allocate file segment of `max_file_segment_size` and write to
-     * it until it is full and then allocate next file segment.
-     */
-
-    if (finalized)
-        return false;
-
-    auto & file_segments = file_segments_holder.file_segments;
-
-    if (current_file_segment_it == file_segments.end())
-    {
-        current_file_segment_it = allocateFileSegment(current_file_segment_write_offset, is_persistent);
-    }
-    else
-    {
-        if (current_file_segment_write_offset != offset)
-        {
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Cannot write file segment at offset {}, because current write offset is: {}",
-                offset, current_file_segment_write_offset);
-        }
-
-        size_t current_write_offset = (*current_file_segment_it)->getCurrentWriteOffset();
-
-        auto current_file_segment = *current_file_segment_it;
-        if (current_file_segment->getRemainingSizeToDownload() == 0)
-        {
-            completeFileSegment(*current_file_segment);
-            current_file_segment_it = allocateFileSegment(current_file_segment_write_offset, is_persistent);
-        }
-        else if (current_write_offset != offset)
-        {
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Cannot file segment download offset {} does not match current write offset {}",
-                current_write_offset, offset);
-        }
-    }
-
-    auto & file_segment = *current_file_segment_it;
-
-    auto downloader = file_segment->getOrSetDownloader();
-    if (downloader != FileSegment::getCallerId())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Failed to set a downloader. ({})", file_segment->getInfoForLog());
-
-    SCOPE_EXIT({
-        if (file_segment->isDownloader())
-        {
-            file_segment->completePartAndResetDownloader();
-        }
-    });
-
-    bool reserved = file_segment->reserve(size);
-    if (!reserved)
-    {
-        file_segment->completeWithState(FileSegment::State::PARTIALLY_DOWNLOADED_NO_CONTINUATION);
-        on_complete_file_segment_func(*file_segment);
-
-        LOG_DEBUG(
-            &Poco::Logger::get("FileSegmentRangeWriter"),
-            "Unsuccessful space reservation attempt (size: {}, file segment info: {}",
-            size, file_segment->getInfoForLog());
-
-        return false;
-    }
-
-    try
-    {
-        file_segment->write(data, size, offset);
-    }
-    catch (...)
-    {
-        file_segment->completePartAndResetDownloader();
-        throw;
-    }
-
-    file_segment->completePartAndResetDownloader();
-    current_file_segment_write_offset += size;
-
-    return true;
-}
-
-void FileSegmentRangeWriter::finalize()
-{
-    if (finalized)
-        return;
-
-    auto & file_segments = file_segments_holder.file_segments;
-    if (file_segments.empty() || current_file_segment_it == file_segments.end())
-        return;
-
-    completeFileSegment(**current_file_segment_it);
-    finalized = true;
-}
-
-FileSegmentRangeWriter::~FileSegmentRangeWriter()
-{
-    try
-    {
-        if (!finalized)
-            finalize();
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-    }
 }
 
 }

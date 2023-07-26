@@ -18,6 +18,31 @@ using TemporaryFile = Poco::TemporaryFile;
 bool enoughSpaceInDirectory(const std::string & path, size_t data_size);
 std::unique_ptr<TemporaryFile> createTemporaryFile(const std::string & path);
 
+// Determine what block device is responsible for specified path
+#if !defined(__linux__)
+[[noreturn]]
+#endif
+String getBlockDeviceId([[maybe_unused]] const String & path);
+
+enum class BlockDeviceType
+{
+    UNKNOWN = 0, // we were unable to determine device type
+    NONROT = 1, // not a rotational device (SSD, NVME, etc)
+    ROT = 2 // rotational device (HDD)
+};
+
+// Try to determine block device type
+#if !defined(__linux__)
+[[noreturn]]
+#endif
+BlockDeviceType getBlockDeviceType([[maybe_unused]] const String & device_id);
+
+// Get size of read-ahead in bytes for specified block device
+#if !defined(__linux__)
+[[noreturn]]
+#endif
+UInt64 getBlockDeviceReadAheadBytes([[maybe_unused]] const String & device_id);
+
 /// Returns mount point of filesystem where absolute_path (must exist) is located
 std::filesystem::path getMountPoint(std::filesystem::path absolute_path);
 
@@ -47,7 +72,7 @@ std::optional<size_t> tryGetSizeFromFilePath(const String & path);
 
 /// Get inode number for a file path.
 /// Will not work correctly if filesystem does not support inodes.
-int getINodeNumberFromPath(const String & path);
+Int64 getINodeNumberFromPath(const String & path);
 
 }
 

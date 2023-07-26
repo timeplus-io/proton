@@ -181,6 +181,8 @@ public:
 
     bool isDetached() const;
 
+    bool isCompleted() const;
+
     void assertCorrectness() const;
 
     /**
@@ -216,8 +218,6 @@ public:
     void setRemoteFileReader(RemoteFileReaderPtr remote_file_reader_);
 
     void resetRemoteFileReader();
-
-    size_t getRemainingSizeToDownload() const;
 
 private:
     size_t getFirstNonDownloadedOffsetUnlocked(std::unique_lock<std::mutex> & segment_lock) const;
@@ -296,6 +296,7 @@ private:
     /// "detached" file segment means that it is not owned by cache ("detached" from cache).
     /// In general case, all file segments are owned by cache.
     bool is_detached = false;
+    bool is_completed = false;
 
     bool is_downloaded{false};
 
@@ -319,55 +320,7 @@ struct FileSegmentsHolder : private boost::noncopyable
 
     String toString();
 
-    FileSegments::iterator add(FileSegmentPtr && file_segment)
-    {
-        return file_segments.insert(file_segments.end(), file_segment);
-    }
-
     FileSegments file_segments{};
-};
-
-/**
-  * We want to write eventually some size, which is not known until the very end.
-  * Therefore we allocate file segments lazily. Each file segment is assigned capacity
-  * of max_file_segment_size, but reserved_size remains 0, until call to tryReserve().
-  * Once current file segment is full (reached max_file_segment_size), we allocate a
-  * new file segment. All allocated file segments resize in file segments holder.
-  * If at the end of all writes, the last file segment is not full, then it is resized.
-  */
-class FileSegmentRangeWriter
-{
-public:
-    using OnCompleteFileSegmentCallback = std::function<void(const FileSegment & file_segment)>;
-
-    FileSegmentRangeWriter(
-        FileCache * cache_,
-        const FileSegment::Key & key_,
-        /// A callback which is called right after each file segment is completed.
-        /// It is used to write into filesystem cache log.
-        OnCompleteFileSegmentCallback && on_complete_file_segment_func_);
-
-    ~FileSegmentRangeWriter();
-
-    bool write(const char * data, size_t size, size_t offset, bool is_persistent);
-
-    void finalize();
-
-private:
-    FileSegments::iterator allocateFileSegment(size_t offset, bool is_persistent);
-    void completeFileSegment(FileSegment & file_segment);
-
-    FileCache * cache;
-    FileSegment::Key key;
-
-    FileSegmentsHolder file_segments_holder;
-    FileSegments::iterator current_file_segment_it;
-
-    size_t current_file_segment_write_offset = 0;
-
-    bool finalized = false;
-
-    OnCompleteFileSegmentCallback on_complete_file_segment_func;
 };
 
 }

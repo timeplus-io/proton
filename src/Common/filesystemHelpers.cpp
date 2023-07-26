@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <utime.h>
+#include <IO/ReadBufferFromFile.h>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 #include <Common/Exception.h>
@@ -77,6 +78,68 @@ std::optional<String> tryGetBlockDeviceId([[maybe_unused]] const String & path)
 
 }
 
+#if !defined(__linux__)
+[[noreturn]]
+#endif
+String getBlockDeviceId([[maybe_unused]] const String & path)
+{
+#if defined(__linux__)
+    struct stat sb;
+    if (lstat(path.c_str(), &sb))
+        throwFromErrnoWithPath("Cannot lstat " + path, path, ErrorCodes::CANNOT_STAT);
+    WriteBufferFromOwnString ss;
+    ss << major(sb.st_dev) << ":" << minor(sb.st_dev);
+    return ss.str();
+#else
+    throw DB::Exception("The function getDeviceId is supported on Linux only", ErrorCodes::NOT_IMPLEMENTED);
+#endif
+}
+
+#if !defined(__linux__)
+[[noreturn]]
+#endif
+BlockDeviceType getBlockDeviceType([[maybe_unused]] const String & device_id)
+{
+#if defined(__linux__)
+    try
+    {
+        ReadBufferFromFile in("/sys/dev/block/" + device_id + "/queue/rotational");
+        int rotational;
+        readText(rotational, in);
+        return rotational ? BlockDeviceType::ROT : BlockDeviceType::NONROT;
+    }
+    catch (...)
+    {
+        return BlockDeviceType::UNKNOWN;
+    }
+#else
+    throw DB::Exception("The function getDeviceType is supported on Linux only", ErrorCodes::NOT_IMPLEMENTED);
+#endif
+}
+
+#if !defined(__linux__)
+[[noreturn]]
+#endif
+UInt64 getBlockDeviceReadAheadBytes([[maybe_unused]] const String & device_id)
+{
+#if defined(__linux__)
+    try
+    {
+        ReadBufferFromFile in("/sys/dev/block/" + device_id + "/queue/read_ahead_kb");
+        int read_ahead_kb;
+        readText(read_ahead_kb, in);
+        return read_ahead_kb * 1024;
+    }
+    catch (...)
+    {
+        return static_cast<UInt64>(-1);
+    }
+#else
+    throw DB::Exception("The function getDeviceType is supported on Linux only", ErrorCodes::NOT_IMPLEMENTED);
+#endif
+}
+
+/// Returns name of filesystem mounted to mount_point
 std::filesystem::path getMountPoint(std::filesystem::path absolute_path)
 {
     if (absolute_path.is_relative())
@@ -182,7 +245,7 @@ size_t getSizeFromFileDescriptor(int fd, const String & file_name)
     return buf.st_size;
 }
 
-int getINodeNumberFromPath(const String & path)
+Int64 getINodeNumberFromPath(const String & path)
 {
     struct stat file_stat;
     if (stat(path.data(), &file_stat))

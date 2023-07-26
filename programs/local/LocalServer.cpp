@@ -295,6 +295,8 @@ void LocalServer::cleanup()
             global_context.reset();
         }
 
+        /// thread status should be destructed before shared context because it relies on process list.
+
         status.reset();
 
         // Delete the temporary directory if needed.

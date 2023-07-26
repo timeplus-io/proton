@@ -5,6 +5,7 @@
 #include <Storages/PartitionedSink.h>
 #include <Storages/Distributed/DirectoryMonitor.h>
 #include <Storages/checkAndGetLiteralArgument.h>
+#include <Storages/ReadFromStorageProgress.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/evaluateConstantExpression.h>
@@ -77,7 +78,12 @@ namespace
 /* Recursive directory listing with matched paths as a result.
  * Have the same method in StorageHDFS.
  */
-std::vector<std::string> listFilesWithRegexpMatching(const std::string & path_for_ls, const std::string & for_match, size_t & total_bytes_to_read)
+void listFilesWithRegexpMatchingImpl(
+    const std::string & path_for_ls,
+    const std::string & for_match,
+    size_t & total_bytes_to_read,
+    std::vector<std::string> & result,
+    bool recursive = false)
 {
     const size_t first_glob = for_match.find_first_of("*?{");
 
@@ -85,13 +91,19 @@ std::vector<std::string> listFilesWithRegexpMatching(const std::string & path_fo
     const std::string suffix_with_globs = for_match.substr(end_of_path_without_globs);   /// begin with '/'
 
     const size_t next_slash = suffix_with_globs.find('/', 1);
-    auto regexp = makeRegexpPatternFromGlobs(suffix_with_globs.substr(0, next_slash));
+    const std::string current_glob = suffix_with_globs.substr(0, next_slash);
+    auto regexp = makeRegexpPatternFromGlobs(current_glob);
+
     re2::RE2 matcher(regexp);
 
-    std::vector<std::string> result;
+    bool skip_regex = current_glob == "/*" ? true : false;
+    if (!recursive)
+        recursive = current_glob == "/**" ;
+
     const std::string prefix_without_globs = path_for_ls + for_match.substr(1, end_of_path_without_globs);
+
     if (!fs::exists(prefix_without_globs))
-        return result;
+        return;
 
     const fs::directory_iterator end;
     for (fs::directory_iterator it(prefix_without_globs); it != end; ++it)
@@ -100,25 +112,40 @@ std::vector<std::string> listFilesWithRegexpMatching(const std::string & path_fo
         const size_t last_slash = full_path.rfind('/');
         const String file_name = full_path.substr(last_slash);
         const bool looking_for_directory = next_slash != std::string::npos;
+
         /// Condition is_directory means what kind of path is it in current iteration of ls
-        if (!fs::is_directory(it->path()) && !looking_for_directory)
+        if (!it->is_directory() && !looking_for_directory)
         {
-            if (re2::RE2::FullMatch(file_name, matcher))
+            if (skip_regex || re2::RE2::FullMatch(file_name, matcher))
             {
-                total_bytes_to_read += fs::file_size(it->path());
+                total_bytes_to_read += it->file_size();
                 result.push_back(it->path().string());
             }
         }
-        else if (fs::is_directory(it->path()) && looking_for_directory)
+        else if (it->is_directory())
         {
-            if (re2::RE2::FullMatch(file_name, matcher))
+            if (recursive)
+            {
+                listFilesWithRegexpMatchingImpl(fs::path(full_path).append(it->path().string()) / "" ,
+                                                looking_for_directory ? suffix_with_globs.substr(next_slash) : current_glob ,
+                                                total_bytes_to_read, result, recursive);
+            }
+            else if (looking_for_directory && re2::RE2::FullMatch(file_name, matcher))
             {
                 /// Recursion depth is limited by pattern. '*' works only for depth = 1, for depth = 2 pattern path is '*/*'. So we do not need additional check.
-                Strings result_part = listFilesWithRegexpMatching(fs::path(full_path) / "", suffix_with_globs.substr(next_slash), total_bytes_to_read);
-                std::move(result_part.begin(), result_part.end(), std::back_inserter(result));
+                listFilesWithRegexpMatchingImpl(fs::path(full_path) / "", suffix_with_globs.substr(next_slash), total_bytes_to_read, result);
             }
         }
     }
+}
+
+std::vector<std::string> listFilesWithRegexpMatching(
+    const std::string & path_for_ls,
+    const std::string & for_match,
+    size_t & total_bytes_to_read)
+{
+    std::vector<std::string> result;
+    listFilesWithRegexpMatchingImpl(path_for_ls, for_match, total_bytes_to_read, result);
     return result;
 }
 
@@ -128,7 +155,11 @@ std::string getTablePath(const std::string & table_dir_path, const std::string &
 }
 
 /// Both db_dir_path and table_path must be converted to absolute paths (in particular, path cannot contain '..').
-void checkCreationIsAllowed(ContextPtr context_global, const std::string & db_dir_path, const std::string & table_path)
+void checkCreationIsAllowed(
+    ContextPtr context_global,
+    const std::string & db_dir_path,
+    const std::string & table_path,
+    bool can_be_directory)
 {
     if (context_global->getApplicationType() != Context::ApplicationType::SERVER)
         return;
@@ -137,8 +168,12 @@ void checkCreationIsAllowed(ContextPtr context_global, const std::string & db_di
     if (!fileOrSymlinkPathStartsWith(table_path, db_dir_path) && table_path != "/dev/null")
         throw Exception(ErrorCodes::DATABASE_ACCESS_DENIED, "File `{}` is not inside `{}`", table_path, db_dir_path);
 
-    if (fs::exists(table_path) && fs::is_directory(table_path))
-        throw Exception("File must not be a directory", ErrorCodes::INCORRECT_FILE_NAME);
+    if (can_be_directory)
+    {
+        auto table_path_stat = fs::status(table_path);
+        if (fs::exists(table_path_stat) && fs::is_directory(table_path_stat))
+            throw Exception("File must not be a directory", ErrorCodes::INCORRECT_FILE_NAME);
+    }
 }
 
 std::unique_ptr<ReadBuffer> createReadBuffer(
@@ -190,7 +225,8 @@ std::unique_ptr<ReadBuffer> createReadBuffer(
         in.setProgressCallback(context);
     }
 
-    return wrapReadBufferWithCompressionMethod(std::move(nested_buffer), method);
+    int zstd_window_log_max = static_cast<int>(context->getSettingsRef().zstd_window_log_max);
+    return wrapReadBufferWithCompressionMethod(std::move(nested_buffer), method, zstd_window_log_max);
 }
 
 }
@@ -206,18 +242,26 @@ Strings StorageFile::getPathsList(const String & table_path, const String & user
     /// Do not use fs::canonical or fs::weakly_canonical.
     /// Otherwise it will not allow to work with symlinks in `user_files_path` directory.
     String path = fs::absolute(fs_table_path).lexically_normal(); /// Normalize path.
+    bool can_be_directory = true;
+
     if (path.find_first_of("*?{") == std::string::npos)
     {
         std::error_code error;
-        if (fs::exists(path))
-            total_bytes_to_read += fs::file_size(path, error);
+        size_t size = fs::file_size(path, error);
+        if (!error)
+            total_bytes_to_read += size;
+
         paths.push_back(path);
     }
     else
+    {
+        /// We list only non-directory files.
         paths = listFilesWithRegexpMatching("/", path, total_bytes_to_read);
+        can_be_directory = false;
+    }
 
     for (const auto & cur_path : paths)
-        checkCreationIsAllowed(context, user_files_absolute_path, cur_path);
+        checkCreationIsAllowed(context, user_files_absolute_path, cur_path, can_be_directory);
 
     return paths;
 }
@@ -347,8 +391,11 @@ StorageFile::StorageFile(const std::string & relative_table_dir_path, CommonArgu
     String table_dir_path = fs::path(base_path) / relative_table_dir_path / "";
     fs::create_directories(table_dir_path);
     paths = {getTablePath(table_dir_path, format_name)};
-    if (fs::exists(paths[0]))
-        total_bytes_to_read = fs::file_size(paths[0]);
+
+    std::error_code error;
+    size_t size = fs::file_size(paths[0], error);
+    if (!error)
+        total_bytes_to_read = size;
 
     setStorageMetadata(args);
 }
@@ -555,24 +602,8 @@ public:
 
                 if (num_rows)
                 {
-                    /// Maybe encounter overflow
-                    auto bytes_per_row = (chunk.bytes() + num_rows - 1) / num_rows;
-                    size_t total_rows_approx = (files_info->total_bytes_to_read + bytes_per_row - 1) / bytes_per_row;
-
-                    total_rows_approx_accumulated += total_rows_approx;
-                    ++total_rows_count_times;
-                    total_rows_approx = total_rows_approx_accumulated / total_rows_count_times;
-
-                    /// We need to add diff, because total_rows_approx is incremental value.
-                    /// It would be more correct to send total_rows_approx as is (not a diff),
-                    /// but incrementation of total_rows_to_read does not allow that.
-                    /// A new field can be introduces for that to be sent to client, but it does not worth it.
-                    if (total_rows_approx > total_rows_approx_prev)
-                    {
-                        size_t diff = total_rows_approx - total_rows_approx_prev;
-                        addTotalRowsApprox(diff);
-                        total_rows_approx_prev = total_rows_approx;
-                    }
+                    updateRowsProgressApprox(
+                        *this, chunk, files_info->total_bytes_to_read, total_rows_approx_accumulated, total_rows_count_times, total_rows_approx_max);
                 }
                 return chunk;
             }
@@ -612,7 +643,7 @@ private:
 
     UInt64 total_rows_approx_accumulated = 0;
     size_t total_rows_count_times = 0;
-    UInt64 total_rows_approx_prev = 0;
+    UInt64 total_rows_approx_max = 0;
 };
 
 
@@ -847,7 +878,7 @@ public:
     {
         auto partition_path = PartitionedSink::replaceWildcards(path, partition_id);
         PartitionedSink::validatePartitionKey(partition_path, true);
-        checkCreationIsAllowed(context, context->getUserFilesPath(), partition_path);
+        checkCreationIsAllowed(context, context->getUserFilesPath(), partition_path, /*can_be_directory=*/ true);
         return std::make_shared<StorageFileSink>(
             metadata_snapshot,
             table_name_for_log,
@@ -928,7 +959,7 @@ SinkToStoragePtr StorageFile::write(
             fs::create_directories(fs::path(path).parent_path());
 
             if (!context->getSettingsRef().engine_file_truncate_on_insert && !is_path_with_globs
-                && !FormatFactory::instance().checkIfFormatSupportAppend(format_name, context, format_settings) && fs::exists(paths.back())
+                && !FormatFactory::instance().checkIfFormatSupportAppend(format_name, context, format_settings)
                 && fs::file_size(paths.back()) != 0)
             {
                 if (context->getSettingsRef().engine_file_allow_create_multiple_files)

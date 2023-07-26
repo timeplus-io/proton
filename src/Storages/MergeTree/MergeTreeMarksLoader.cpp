@@ -2,9 +2,20 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Common/MemoryTrackerBlockerInThread.h>
 #include <IO/ReadBufferFromFile.h>
+#include <Interpreters/threadPoolCallbackRunner.h>
+#include <Common/setThreadName.h>
+#include <Common/scope_guard_safe.h>
+#include <Common/CurrentMetrics.h>
+#include <Common/ThreadPool.h>
 #include <Compression/CompressedReadBufferFromFile.h>
 
 #include <utility>
+
+namespace ProfileEvents
+{
+    extern const Event WaitMarksLoadMicroseconds;
+    extern const Event BackgroundLoadingMarksTasks;
+}
 
 namespace DB
 {
@@ -24,6 +35,7 @@ MergeTreeMarksLoader::MergeTreeMarksLoader(
     const MergeTreeIndexGranularityInfo & index_granularity_info_,
     bool save_marks_in_cache_,
     const ReadSettings & read_settings_,
+    ThreadPool * load_marks_threadpool_,
     size_t columns_in_mark_)
     : data_part_storage(std::move(data_part_storage_))
     , mark_cache(mark_cache_)
@@ -33,13 +45,41 @@ MergeTreeMarksLoader::MergeTreeMarksLoader(
     , save_marks_in_cache(save_marks_in_cache_)
     , columns_in_mark(columns_in_mark_)
     , read_settings(read_settings_)
+    , load_marks_threadpool(load_marks_threadpool_)
 {
+    if (load_marks_threadpool)
+    {
+        future = loadMarksAsync();
+    }
+}
+
+MergeTreeMarksLoader::~MergeTreeMarksLoader()
+{
+    if (future.valid())
+    {
+        future.wait();
+    }
 }
 
 const MarkInCompressedFile & MergeTreeMarksLoader::getMark(size_t row_index, size_t column_index)
 {
     if (!marks)
-        loadMarks();
+    {
+        Stopwatch watch(CLOCK_MONOTONIC);
+
+        if (future.valid())
+        {
+            marks = future.get();
+            future = {};
+        }
+        else
+        {
+            marks = loadMarks();
+        }
+
+        watch.stop();
+        ProfileEvents::increment(ProfileEvents::WaitMarksLoadMicroseconds, watch.elapsedMicroseconds());
+    }
 
 #ifndef NDEBUG
     if (column_index >= columns_in_mark)
@@ -104,28 +144,45 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
     return res;
 }
 
-void MergeTreeMarksLoader::loadMarks()
+MarkCache::MappedPtr MergeTreeMarksLoader::loadMarks()
 {
+    MarkCache::MappedPtr loaded_marks;
+
     if (mark_cache)
     {
         auto key = mark_cache->hash(fs::path(data_part_storage->getFullPath()) / mrk_path);
         if (save_marks_in_cache)
         {
             auto callback = [this]{ return loadMarksImpl(); };
-            marks = mark_cache->getOrSet(key, callback);
+            loaded_marks = mark_cache->getOrSet(key, callback);
         }
         else
         {
-            marks = mark_cache->get(key);
-            if (!marks)
-                marks = loadMarksImpl();
+            loaded_marks = mark_cache->get(key);
+            if (!loaded_marks)
+                loaded_marks = loadMarksImpl();
         }
     }
     else
-        marks = loadMarksImpl();
+        loaded_marks = loadMarksImpl();
 
-    if (!marks)
-        throw Exception("Failed to load marks: " + std::string(fs::path(data_part_storage->getFullPath()) / mrk_path), ErrorCodes::LOGICAL_ERROR);
+    if (!loaded_marks)
+    {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR, "Failed to load marks: {}",
+            (fs::path(data_part_storage->getFullPath()) / mrk_path).string());
+    }
+
+    return loaded_marks;
+}
+
+std::future<MarkCache::MappedPtr> MergeTreeMarksLoader::loadMarksAsync()
+{
+    return scheduleFromThreadPool<MarkCache::MappedPtr>([this]() -> MarkCache::MappedPtr
+    {
+        ProfileEvents::increment(ProfileEvents::BackgroundLoadingMarksTasks);
+        return loadMarks();
+    }, *load_marks_threadpool, "LoadMarksThread");
 }
 
 }

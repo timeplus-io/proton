@@ -268,6 +268,7 @@ namespace
                 setCredentials(credentials, request_uri);
 
                 const auto settings = context->getSettings();
+                int zstd_window_log_max = static_cast<int>(settings.zstd_window_log_max);
                 try
                 {
                     if (download_threads > 1)
@@ -355,7 +356,8 @@ namespace
                                         std::move(read_buffer_factory),
                                         threadPoolCallbackRunner<void>(IOThreadPool::get(), "URLParallelRead"),
                                         download_threads),
-                                    chooseCompressionMethod(request_uri.getPath(), compression_method));
+                                    chooseCompressionMethod(request_uri.getPath(), compression_method),
+                                    zstd_window_log_max);
                             }
                         }
                         catch (const Poco::Exception & e)
@@ -386,7 +388,8 @@ namespace
                             delay_initialization,
                             /* use_external_buffer */ false,
                             /* skip_url_not_found_error */ skip_url_not_found_error),
-                        chooseCompressionMethod(request_uri.getPath(), compression_method));
+                        chooseCompressionMethod(request_uri.getPath(), compression_method),
+                        zstd_window_log_max);
                 }
                 catch (...)
                 {
