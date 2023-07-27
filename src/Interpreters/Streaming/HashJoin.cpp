@@ -813,9 +813,9 @@ const HashJoin::SupportMatrix HashJoin::support_matrix = {
     {DataStreamSemantic::Append,
      {{
           JoinKind::Left,
-          {{JoinStrictness::All, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::Append, false}, {DataStreamSemantic::VersionedKV, false}}}},
+          {{JoinStrictness::All, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}}},
       },
       {
           /// Append
@@ -827,16 +827,16 @@ const HashJoin::SupportMatrix HashJoin::support_matrix = {
     {DataStreamSemantic::Changelog,
      {{
           JoinKind::Left,
-          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, true}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, true}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, true}}}},
+          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
       },
       {
           /// Changelog
           JoinKind::Inner,
-          {{JoinStrictness::All, {{DataStreamSemantic::Changelog, true}, {DataStreamSemantic::VersionedKV, true}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, true}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, true}}}},
+          {{JoinStrictness::All, {{DataStreamSemantic::Changelog, true}, {DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
       }}},
     {DataStreamSemantic::ChangelogKV,
      {{
@@ -848,9 +848,9 @@ const HashJoin::SupportMatrix HashJoin::support_matrix = {
       {
           /// ChangelogKV
           JoinKind::Inner,
-          {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, true}, {DataStreamSemantic::VersionedKV, true}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, true}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, true}}}},
+          {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, true}, {DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, false}}},
+           {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, false}}}},
       },
       {
           /// ChangelogKV
