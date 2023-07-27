@@ -43,7 +43,9 @@ class JSONCompactEachRowFormatReader : public FormatWithNamesAndTypesReader
 public:
     JSONCompactEachRowFormatReader(ReadBuffer & in_, bool yield_strings_, const FormatSettings & format_settings_);
 
-
+    /// proton: starts. reset 'with_bucket' before rollback in buffer to parse fields again.
+    void beforeRollbackInputBuffer() override;
+    /// proton: ends
     bool parseRowStartWithDiagnosticInfo(WriteBuffer & out) override;
     bool parseFieldDelimiterWithDiagnosticInfo(WriteBuffer & out) override;
     bool parseRowEndWithDiagnosticInfo(WriteBuffer & out) override;

@@ -49,6 +49,9 @@ private:
     bool readRow(MutableColumns & columns, RowReadExtension & ext) override;
     void readPrefix() override;
 
+    /// proton: starts.
+    void beforeRollbackInputBuffer() override;
+    /// proton: ends
     bool parseRowAndPrintDiagnosticInfo(MutableColumns & columns, WriteBuffer & out) override;
     void tryDeserializeField(const DataTypePtr & type, IColumn & column, size_t file_column) override;
 
@@ -74,6 +77,9 @@ public:
 
     /// Methods for parsing with diagnostic info.
     virtual void checkNullValueForNonNullable(DataTypePtr) {}
+    /// proton: starts. reset internal state before rollback 'in' buffer to parse fields again for diagnose.
+    virtual void beforeRollbackInputBuffer() { }
+    /// proton: ends
     virtual bool parseRowStartWithDiagnosticInfo(WriteBuffer &) { return true; }
     virtual bool parseFieldDelimiterWithDiagnosticInfo(WriteBuffer &) { return true; }
     virtual bool parseRowEndWithDiagnosticInfo(WriteBuffer &) { return true;}

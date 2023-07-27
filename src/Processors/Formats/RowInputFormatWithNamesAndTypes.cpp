@@ -236,6 +236,11 @@ void RowInputFormatWithNamesAndTypes::tryDeserializeField(const DataTypePtr & ty
     }
 }
 
+void RowInputFormatWithNamesAndTypes::beforeRollbackInputBuffer()
+{
+    format_reader->beforeRollbackInputBuffer();
+}
+
 bool RowInputFormatWithNamesAndTypes::parseRowAndPrintDiagnosticInfo(MutableColumns & columns, WriteBuffer & out)
 {
     if (in->eof())

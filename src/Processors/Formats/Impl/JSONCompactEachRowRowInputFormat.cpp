@@ -132,6 +132,11 @@ bool JSONCompactEachRowFormatReader::readField(IColumn & column, const DataTypeP
     return JSONUtils::readField(*in, column, type, serialization, column_name, format_settings, yield_strings);
 }
 
+void JSONCompactEachRowFormatReader::beforeRollbackInputBuffer()
+{
+    with_bracket = false;
+}
+
 bool JSONCompactEachRowFormatReader::parseRowStartWithDiagnosticInfo(WriteBuffer & out)
 {
     skipWhitespaceIfAny(*in);
@@ -140,7 +145,14 @@ bool JSONCompactEachRowFormatReader::parseRowStartWithDiagnosticInfo(WriteBuffer
         out << "ERROR: There is no '[' before the row.\n";
         return false;
     }
-
+    /// proton: starts
+    skipWhitespaceIfAny(*in);
+    if (*in->position() == '[' && !with_bracket)
+    {
+        with_bracket = true;
+        ++in->position();
+    }
+    /// proton: ends
     return true;
 }
 

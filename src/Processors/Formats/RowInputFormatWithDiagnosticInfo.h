@@ -23,6 +23,9 @@ protected:
     bool deserializeFieldAndPrintDiagnosticInfo(const String & col_name, const DataTypePtr & type, IColumn & column,
                                                 WriteBuffer & out, size_t file_column);
 
+    /// proton: starts. reinit or reset internal state before rollback in buffer to parse fields for diagnose
+    virtual void beforeRollbackInputBuffer() { }
+    /// proton: ends
     virtual bool parseRowAndPrintDiagnosticInfo(MutableColumns & columns, WriteBuffer & out) = 0;
     virtual void tryDeserializeField(const DataTypePtr & type, IColumn & column, size_t file_column) = 0;
     virtual bool isGarbageAfterField(size_t after_input_pos_idx, ReadBuffer::Position pos) = 0;

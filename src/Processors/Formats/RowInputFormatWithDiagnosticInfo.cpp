@@ -64,7 +64,9 @@ String RowInputFormatWithDiagnosticInfo::getDiagnosticInfo()
             max_length_of_data_type_name = header.safeGetByPosition(i).type->getName().size();
 
     /// Roll back the cursor to the beginning of the previous or current row and parse all over again. But now we derive detailed information.
-
+    /// proton: starts. Reset internal state before roll back
+    beforeRollbackInputBuffer();
+    /// proton: ends.
     if (offset_of_prev_row <= in->buffer().size())
     {
         in->position() = in->buffer().begin() + offset_of_prev_row;
