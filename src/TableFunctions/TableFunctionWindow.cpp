@@ -4,6 +4,8 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
+#include <Interpreters/Streaming/TimestampFunctionDescription.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -122,7 +124,7 @@ void TableFunctionWindow::handleResultType(const ColumnsWithTypeAndName & argume
     columns.add(ColumnDescription(ProtonConsts::STREAMING_WINDOW_END, arguments[0].type));
 }
 
-TimestampFunctionDescriptionPtr TableFunctionWindow::createTimestampFunctionDescription(ASTPtr timestamp_expr_ast, ContextPtr context)
+TimestampFunctionDescriptionMutablePtr TableFunctionWindow::createTimestampFunctionDescription(ASTPtr timestamp_expr_ast, ContextPtr context)
 {
     auto & timestamp_expr_func = timestamp_expr_ast->as<ASTFunction &>();
     bool is_now_func = false;

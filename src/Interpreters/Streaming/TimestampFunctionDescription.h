@@ -27,9 +27,5 @@ struct TimestampFunctionDescription
     bool is_now_func;
 };
 
-/// FIXME, move this to forward header file
-using TimestampFunctionDescriptionPtr = std::shared_ptr<TimestampFunctionDescription>;
-using TimestampFunctionDescriptionPtrs = std::vector<TimestampFunctionDescriptionPtr>;
-
 }
 }

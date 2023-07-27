@@ -1,9 +1,10 @@
 #pragma once
 
-#include "TableFunctionProxyBase.h"
+#include <TableFunctions/TableFunctionProxyBase.h>
 
 namespace DB
 {
+class ASTFunction;
 class DataTypeTuple;
 
 namespace Streaming
@@ -24,7 +25,7 @@ protected:
 
 protected:
     void init(ContextPtr context, ASTPtr streaming_func_ast, ASTPtr timestamp_expr_ast);
-    TimestampFunctionDescriptionPtr createTimestampFunctionDescription(ASTPtr timestamp_expr_ast, ContextPtr context);
+    TimestampFunctionDescriptionMutablePtr createTimestampFunctionDescription(ASTPtr timestamp_expr_ast, ContextPtr context);
 };
 }
 }

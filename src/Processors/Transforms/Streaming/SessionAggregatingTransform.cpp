@@ -1,6 +1,8 @@
 #include <Processors/Transforms/Streaming/SessionAggregatingTransform.h>
 
+#include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Processors/Transforms/Streaming/SessionHelper.h>
+
 namespace DB
 {
 namespace Streaming

@@ -1,4 +1,4 @@
-#include "TimestampTransformStep.h"
+#include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 
 #include <Processors/Transforms/Streaming/TimestampTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>

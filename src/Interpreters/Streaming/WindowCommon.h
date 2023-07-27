@@ -2,6 +2,7 @@
 
 #include <Columns/ColumnsDateTime.h>
 #include <Interpreters/Streaming/SessionInfo.h>
+#include <Interpreters/Streaming/TableFunctionDescription_fwd.h>
 #include <Parsers/IAST_fwd.h>
 #include <base/types.h>
 #include <Common/DateLUTImpl.h>
@@ -219,8 +220,6 @@ void convertToSameKindIntervalAST(const BaseScaleInterval & bs1, const BaseScale
 UInt32 getAutoScaleByInterval(Int64 num_units, IntervalKind kind);
 
 /// Window Params
-struct TableFunctionDescription;
-using TableFunctionDescriptionPtr = std::shared_ptr<TableFunctionDescription>;
 struct WindowParams;
 using WindowParamsPtr = std::shared_ptr<WindowParams>;
 struct WindowParams : public TypePromotion<WindowParams>

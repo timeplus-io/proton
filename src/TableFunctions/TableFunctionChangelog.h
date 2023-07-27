@@ -6,6 +6,8 @@
 
 namespace DB
 {
+class ASTFunction;
+
 namespace Streaming
 {
 class TableFunctionChangelog final : public TableFunctionProxyBase

@@ -56,6 +56,7 @@ std::unordered_map<String, String> StreamingFunctionData::changelog_func_map = {
     {"top_k", ""},
     {"min_k", ""},
     {"max_k", ""},
+    {"count_distinct", ""},
     {"unique", ""},
     {"unique_exact", ""},
     {"unique_exact_if", ""},

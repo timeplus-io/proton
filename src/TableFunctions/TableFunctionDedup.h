@@ -1,11 +1,13 @@
 #pragma once
 
-#include "TableFunctionProxyBase.h"
+#include <TableFunctions/TableFunctionProxyBase.h>
 
 #include <Parsers/IAST_fwd.h>
 
 namespace DB
 {
+class ASTFunction;
+
 namespace Streaming
 {
 class TableFunctionDedup final : public TableFunctionProxyBase

@@ -2,7 +2,7 @@
 
 #include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
-#include <Interpreters/Streaming/TableFunctionDescription.h>
+#include <Interpreters/Streaming/TableFunctionDescription_fwd.h>
 #include <Processors/ISimpleTransform.h>
 #include <base/SerdeTag.h>
 #include <Common/HashTable/HashSet.h>

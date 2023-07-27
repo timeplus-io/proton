@@ -62,8 +62,9 @@
 
 /// proton: starts
 #include <Functions/FunctionFactory.h>
-#include <Interpreters/Streaming/HashJoin.h>
 #include <Interpreters/Streaming/ConcurrentHashJoin.h>
+#include <Interpreters/Streaming/HashJoin.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 #include <Storages/Streaming/ProxyStream.h>
 #include <Common/ProtonCommon.h>

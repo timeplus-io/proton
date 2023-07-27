@@ -1,8 +1,9 @@
 #pragma once
 
 #include <Interpreters/Context.h>
-#include <Interpreters/Streaming/TableFunctionDescription.h>
-#include <Interpreters/Streaming/TimestampFunctionDescription.h>
+#include <Interpreters/Streaming/TableFunctionDescription_fwd.h>
+#include <Interpreters/Streaming/TimestampFunctionDescription_fwd.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 #include <Storages/IStorage.h>
 #include <base/shared_ptr_helper.h>
 
@@ -54,7 +55,7 @@ public:
     bool isStreaming() const { return streaming; }
 
     /// Return WindowType::NONE, if it has no window func
-    WindowType windowType() const { return table_func_desc != nullptr ? table_func_desc->type : WindowType::NONE; }
+    WindowType windowType() const;
 
     /// Whether has GlobalAggregation in subquery
     bool hasGlobalAggregation() const { return has_global_aggr; }

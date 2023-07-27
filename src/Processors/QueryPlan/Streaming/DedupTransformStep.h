@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Interpreters/Streaming/TableFunctionDescription.h>
+#include <Interpreters/Streaming/TableFunctionDescription_fwd.h>
 /// #include <Interpreters/TreeRewriter.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 

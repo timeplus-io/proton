@@ -4,6 +4,8 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
+#include <Interpreters/Streaming/TimestampFunctionDescription.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSubquery.h>
@@ -399,24 +401,30 @@ void ProxyStream::processChangelogStep(QueryPlan & query_plan, const Names & req
     }
 
     /// Get key columns
+    String version_column;
+    Strings key_column_names;
     auto drop_late_rows = std::any_cast<std::optional<bool>>(table_func_desc->func_ctx);
-    std::string version_column;
     if (drop_late_rows.has_value() && *drop_late_rows)
     {
         assert(table_func_desc->argument_names.size() >= 2);
 
-        version_column.swap(table_func_desc->argument_names.back());
+        version_column = table_func_desc->argument_names.back();
 
-        /// Pop back the version column
-        table_func_desc->argument_names.pop_back();
+        /// NOTE: we cannot modify `table_func_desc`, because this operation may be performed twice
+        /// When a select query with joined table needs to be analyzed again, the storage is cached and reused in `Context::executeTableFunction(...)`
+        // /// Pop back the version column
+        // table_func_desc->argument_names.pop_back();
+        key_column_names.assign(table_func_desc->argument_names.begin(), --table_func_desc->argument_names.end());
     }
+    else
+        key_column_names.assign(table_func_desc->argument_names.begin(), table_func_desc->argument_names.end());
 
     /// Insert Changelog step
     query_plan.addStep(std::make_unique<ChangelogConvertTransformStep>(
         query_plan.getCurrentDataStream(),
         std::move(output_header),
-        std::move(table_func_desc->argument_names),
-        version_column,
+        std::move(key_column_names),
+        std::move(version_column),
         /*max_thread = */ 1));
 }
 
@@ -475,6 +483,11 @@ StorageSnapshotPtr ProxyStream::getStorageSnapshot(const StorageMetadataPtr & me
         return storage->getStorageSnapshot(metadata_snapshot, std::move(query_context));
 
     return IStorage::getStorageSnapshot(metadata_snapshot, std::move(query_context));
+}
+
+WindowType ProxyStream::windowType() const
+{
+    return table_func_desc != nullptr ? table_func_desc->type : WindowType::NONE;
 }
 
 bool ProxyStream::isRemote() const

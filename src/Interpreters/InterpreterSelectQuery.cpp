@@ -93,6 +93,7 @@
 #include <Interpreters/Streaming/PartitionByVisitor.h>
 #include <Interpreters/Streaming/SubstituteStreamingFunction.h>
 #include <Interpreters/Streaming/SyntaxAnalyzeUtils.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Parsers/ASTWindowDefinition.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStepWithSubstream.h>

@@ -1,8 +1,9 @@
-#include "TableFunctionTumble.h"
+#include <TableFunctions/TableFunctionTumble.h>
 
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <Functions/FunctionHelpers.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 #include <Parsers/ASTFunction.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/ProtonCommon.h>

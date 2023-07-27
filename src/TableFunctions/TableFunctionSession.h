@@ -1,6 +1,6 @@
 #pragma once
 
-#include "TableFunctionWindow.h"
+#include <TableFunctions/TableFunctionWindow.h>
 
 namespace DB
 {

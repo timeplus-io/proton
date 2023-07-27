@@ -19,7 +19,6 @@
 /// proton: starts.
 #include <Interpreters/Streaming/CalculateDataStreamSemantic.h>
 #include <Interpreters/Streaming/GetSampleBlockContext.h>
-#include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 /// proton: ends.
 

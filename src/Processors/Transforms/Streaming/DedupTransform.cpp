@@ -5,6 +5,7 @@
 #include <Columns/ColumnConst.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
 
 namespace DB
 {

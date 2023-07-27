@@ -1,7 +1,8 @@
-#include "TimestampTransform.h"
+#include <Processors/Transforms/Streaming/TimestampTransform.h>
 
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
+#include <Interpreters/Streaming/TimestampFunctionDescription.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <base/ClockUtils.h>

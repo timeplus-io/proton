@@ -51,6 +51,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/Streaming/OptimizeJsonValueVisitor.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 #include <Storages/Streaming/ProxyStream.h>
 #include <Common/ProtonCommon.h>

@@ -2,6 +2,7 @@
 
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -134,7 +135,7 @@ ColumnsDescription TableFunctionProxyBase::getActualTableStructure(ContextPtr /*
     return columns;
 }
 
-TableFunctionDescriptionPtr TableFunctionProxyBase::createStreamingTableFunctionDescription(ASTPtr ast, ContextPtr context) const
+TableFunctionDescriptionMutablePtr TableFunctionProxyBase::createStreamingTableFunctionDescription(ASTPtr ast, ContextPtr context) const
 {
     auto & func = ast->as<ASTFunction &>();
     auto syntax_analyzer_result

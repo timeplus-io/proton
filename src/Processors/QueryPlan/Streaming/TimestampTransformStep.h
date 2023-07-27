@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Interpreters/Streaming/TimestampFunctionDescription.h>
+#include <Interpreters/Streaming/TimestampFunctionDescription_fwd.h>
 /// #include <Interpreters/TreeRewriter.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 

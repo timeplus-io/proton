@@ -4,8 +4,8 @@
 
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/StorageID.h>
-#include <Interpreters/Streaming/TableFunctionDescription.h>
-#include <Interpreters/Streaming/TimestampFunctionDescription.h>
+#include <Interpreters/Streaming/TableFunctionDescription_fwd.h>
+#include <Interpreters/Streaming/TimestampFunctionDescription_fwd.h>
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/StorageSnapshot.h>
 #include <Core/Streaming/DataStreamSemantic.h>
@@ -32,7 +32,7 @@ protected:
     StoragePtr
     executeImpl(const ASTPtr & func_ast, ContextPtr context, const String & table_name, ColumnsDescription cached_columns) const override;
 
-    TableFunctionDescriptionPtr createStreamingTableFunctionDescription(ASTPtr ast, ContextPtr context) const;
+    TableFunctionDescriptionMutablePtr createStreamingTableFunctionDescription(ASTPtr ast, ContextPtr context) const;
 
 private:
     void validateProxyChain() const;
@@ -40,10 +40,10 @@ private:
 protected:
     String name;
 
-    TableFunctionDescriptionPtr streaming_func_desc;
+    TableFunctionDescriptionMutablePtr streaming_func_desc;
 
     /// Timestamp column expression
-    TimestampFunctionDescriptionPtr timestamp_func_desc;
+    TimestampFunctionDescriptionMutablePtr timestamp_func_desc;
 
     StoragePtr storage;
     ASTPtr subquery;

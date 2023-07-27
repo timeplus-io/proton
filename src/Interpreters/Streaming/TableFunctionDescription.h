@@ -44,9 +44,5 @@ struct TableFunctionDescription
     Names input_columns;
 };
 
-/// FIXME, move this to forward header file
-using TableFunctionDescriptionPtr = std::shared_ptr<TableFunctionDescription>;
-using FunctionDescriptionPtrs = std::vector<TableFunctionDescriptionPtr>;
-
 }
 }

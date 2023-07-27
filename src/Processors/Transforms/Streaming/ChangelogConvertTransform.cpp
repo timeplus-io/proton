@@ -300,7 +300,7 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
     /// If we don't have late rows and we don't have duplicate primary key rows in the same chunk,
     /// we can just reuse the chunk columns (we assume nobody will modify source chunk in-place), otherwise make a copy
 
-    UInt8 resulting_rows = 0;
+    size_t resulting_rows = 0;
     for (auto v : filter)
         resulting_rows += v;
 

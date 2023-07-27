@@ -1,10 +1,11 @@
-#include "TableFunctionSession.h"
+#include <TableFunctions/TableFunctionSession.h>
 
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <TableFunctions/TableFunctionFactory.h>

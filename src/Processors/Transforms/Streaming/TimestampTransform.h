@@ -3,7 +3,7 @@
 #include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Interpreters/Streaming/TimestampFunctionDescription.h>
+#include <Interpreters/Streaming/TimestampFunctionDescription_fwd.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/ISimpleTransform.h>
 
