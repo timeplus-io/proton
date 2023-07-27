@@ -2265,11 +2265,13 @@ std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreami
     auto max_threads = getContext()->getSettingsRef().max_threads;
 
     auto left_join_stream_desc = std::make_shared<Streaming::JoinStreamDescription>(
+        tables[1].table.table,
         Block{},
         left_input_data_stream_semantic,
         keep_versions); /// We don't know the header of the left stream yet since it is not finalized
 
     auto right_join_stream_desc = std::make_shared<Streaming::JoinStreamDescription>(
+        tables[1].table.table,
         joined_plan->getCurrentDataStream().header,
         right_input_data_stream_semantic,
         keep_versions);

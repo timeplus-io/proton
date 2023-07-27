@@ -108,7 +108,7 @@
     },
     {
         "id": 4,
-        "tags": ["changelog_kv_aggr", "bug"],
+        "tags": ["changelog_kv_aggr"],
         "name": "aggr_func_count_and_sum_changelog_kv",
         "description": "aggregation function count and sum changelog_kv",
         "steps":[
@@ -119,9 +119,9 @@
                     {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_kv_stream(id, val) values (1, 1.1), (2, 2.2), (3, 3.3)"},
                     {"client":"python", "query_type": "stream", "query_id":"1404", "depends_on_stream":"test14_changelog_kv_stream", "wait":1, "terminate":"manual", "query":"select count(val), min(val), max(val), sum(val), avg(val) from test14_changelog_kv_stream emit periodic 1s"},
                     {"client":"python", "query_type": "table", "depends_on":"1404", "wait":1, "query": "insert into test14_changelog_kv_stream(id, val) values (4, 4.4), (5, 5.5)"},
-                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_kv_stream(id, _tp_delta) values (3, -1)"},
-                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_kv_stream(id, _tp_delta) values (1, -1)"},
-                    {"client":"python", "query_type": "table", "kill":"1404", "kill_wait":3, "wait":1, "query": "insert into test14_changelog_kv_stream(id, _tp_delta) values (5, -1)"}
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_kv_stream(id, val, _tp_delta) values (3, 3.3, -1)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_kv_stream(id, val, _tp_delta) values (1, 1.1, -1)"},
+                    {"client":"python", "query_type": "table", "kill":"1404", "kill_wait":3, "wait":1, "query": "insert into test14_changelog_kv_stream(id, val, _tp_delta) values (5, 5.5, -1)"}
                 ]
             }
         ],
@@ -132,7 +132,7 @@
                     ["3", "1.1", "3.3", "6.6", "2.2"],
                     ["5", "1.1", "5.5", "16.5", "3.3"],
                     ["4", "1.1", "5.5", "13.2", "3.3"],
-                    ["3", "2.2", "5.5", "12.1", "4.1"],
+                    ["3", "2.2", "5.5", "12.1", "4.0333333"],
                     ["2", "2.2", "4.4", "6.6", "3.3"]
                 ]
             }

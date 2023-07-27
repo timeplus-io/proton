@@ -58,6 +58,7 @@ struct FixedHashTableStoredSize
     bool isEmpty(const Cell *, const typename Cell::State &, size_t) const { return m_size == 0; }
 
     void increaseSize() { ++m_size; }
+    void decreaseSize() { --m_size; }
     void clearSize() { m_size = 0; }
     void setSize(size_t to) { m_size = to; }
 };
@@ -89,6 +90,7 @@ struct FixedHashTableCalculatedSize
     }
 
     void increaseSize() {}
+    void decreaseSize() {}
     void clearSize() {}
     void setSize(size_t) {}
 };
@@ -378,7 +380,11 @@ public:
     bool erase(const Key & x)
     {
         auto exists = !buf[x].isZero(*this);
-        buf[x].setZero();
+        if (exists)
+        {
+            buf[x].setZero();
+            this->decreaseSize();
+        }
         return exists;
     }
 

@@ -468,20 +468,26 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
                 }
                 else if constexpr (jf.is_multi_join)
                 {
-                    setUsed<need_filter>(filter, i);
-
-                    assert(!mapped->rows.empty());
-                    for (const auto & row_ref : mapped->rows)
+                    if (!mapped->rows.empty())
                     {
-                        added_columns.appendFromBlock<jf.add_missing>(row_ref.block_iter->block, row_ref.row_num);
-                        ++current_offset;
+                        setUsed<need_filter>(filter, i);
+                        for (const auto & row_ref : mapped->rows)
+                        {
+                            added_columns.appendFromBlock<jf.add_missing>(row_ref.block_iter->block, row_ref.row_num);
+                            ++current_offset;
+                        }
+                    }
+                    else
+                    {
+                        /// In case when all rows were removed (by _tp_delta = -1)
+                        addNotFoundRow<jf.add_missing, jf.need_replication>(added_columns, current_offset);
                     }
                 }
                 else if constexpr ((jf.is_latest_join) && jf.right)
                 {
                     /// FIXME
                 }
-                else if constexpr (jf.is_latest_join && KIND == Kind::Inner)
+                else if constexpr (jf.is_latest_join && (jf.inner || jf.left))
                 {
                     setUsed<need_filter>(filter, i);
                     added_columns.appendFromBlock<jf.add_missing>(mapped.block_iter->block, mapped.row_num);

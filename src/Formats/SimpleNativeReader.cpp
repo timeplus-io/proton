@@ -5,6 +5,7 @@
 #include <DataTypes/Serializations/SerializationInfo.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
+#include <Processors/Chunk.h>
 
 
 namespace DB
@@ -12,18 +13,15 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int INCORRECT_INDEX;
-    extern const int LOGICAL_ERROR;
-    extern const int CANNOT_READ_ALL_DATA;
+extern const int INCORRECT_INDEX;
+extern const int LOGICAL_ERROR;
+extern const int CANNOT_READ_ALL_DATA;
 }
 
 
-SimpleNativeReader::SimpleNativeReader(ReadBuffer & istr_, UInt64 server_revision_)
-    : istr(istr_), server_revision(server_revision_)
+namespace
 {
-}
-
-void SimpleNativeReader::readData(const ISerialization & serialization, ColumnPtr & column, ReadBuffer & istr, size_t rows, double avg_value_size_hint)
+void readData(const ISerialization & serialization, ColumnPtr & column, ReadBuffer & istr, size_t rows, double avg_value_size_hint)
 {
     ISerialization::DeserializeBinaryBulkSettings settings;
     settings.getter = [&](ISerialization::SubstreamPath) -> ReadBuffer * { return &istr; };
@@ -37,11 +35,15 @@ void SimpleNativeReader::readData(const ISerialization & serialization, ColumnPt
     serialization.deserializeBinaryBulkWithMultipleStreams(column, rows, settings, state, nullptr);
 
     if (column->size() != rows)
-        throw Exception(ErrorCodes::CANNOT_READ_ALL_DATA,
-            "Cannot read all data in NativeBlockInputStream. Rows read: {}. Rows expected: {}", column->size(), rows);
+        throw Exception(
+            ErrorCodes::CANNOT_READ_ALL_DATA,
+            "Cannot read all data in NativeBlockInputStream. Rows read: {}. Rows expected: {}",
+            column->size(),
+            rows);
+}
 }
 
-Block SimpleNativeReader::read()
+Block readBlock(UInt64 server_revision, ReadBuffer & istr)
 {
     Block res;
 
@@ -87,7 +89,7 @@ Block SimpleNativeReader::read()
         /// Data
         ColumnPtr read_column = column.type->createColumn(*serialization);
 
-        if (rows)    /// If no rows, nothing to read.
+        if (rows) /// If no rows, nothing to read.
             readData(*serialization, read_column, istr, rows, 0);
 
         column.column = std::move(read_column);
@@ -97,4 +99,62 @@ Block SimpleNativeReader::read()
 
     return res;
 }
+
+Chunk readChunk(const Block & header, UInt64 server_revision, ReadBuffer & istr)
+{
+    Chunk res;
+
+    if (istr.eof())
+        return res;
+
+    /// Dimensions
+    size_t columns = 0;
+    size_t rows = 0;
+
+    readVarUInt(columns, istr);
+    readVarUInt(rows, istr);
+
+    if (rows == 0)
+        return res;
+
+    for (size_t i = 0; i < columns; ++i)
+    {
+        auto type = header.getByPosition(i).type;
+
+        setVersionToAggregateFunctions(type, true, server_revision);
+
+        auto info = type->createSerializationInfo({});
+
+        UInt8 has_custom;
+        readBinary(has_custom, istr);
+        if (has_custom)
+            info->deserializeFromKindsBinary(istr);
+
+        SerializationPtr serialization = type->getSerialization(*info);
+
+        /// Data
+        ColumnPtr read_column = type->createColumn(*serialization);
+
+        readData(*serialization, read_column, istr, rows, 0);
+
+        res.addColumn(std::move(read_column));
+    }
+
+    return res;
+}
+
+template <typename DataBlock>
+requires(std::is_same_v<DataBlock, Block> || std::is_same_v<DataBlock, Chunk>)
+DataBlock SimpleNativeReader<DataBlock>::read()
+{
+    if constexpr (std::is_same_v<DataBlock, Block>)
+        return readBlock(server_revision, istr);
+    else if constexpr (std::is_same_v<DataBlock, Chunk>)
+        return readChunk(header, server_revision, istr);
+
+    UNREACHABLE();
+}
+
+template class SimpleNativeReader<Block>;
+template class SimpleNativeReader<Chunk>;
 }

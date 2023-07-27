@@ -129,7 +129,7 @@
         },
         {
             "id": 4,
-            "tags": ["materialized view", "bug"],
+            "tags": ["materialized view"],
             "name": "union multiple versioned_kv_join_mv",
             "description": "union multiple materialied view with versioned_kv join query",
             "steps":[

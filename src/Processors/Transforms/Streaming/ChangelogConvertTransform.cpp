@@ -1,6 +1,10 @@
 #include <Processors/Transforms/Streaming/ChangelogConvertTransform.h>
 
+#include <Checkpoint/CheckpointContext.h>
+#include <Checkpoint/CheckpointCoordinator.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Streaming/ChooseHashMethod.h>
 #include <base/ClockUtils.h>
 #include <Common/ProtonCommon.h>
@@ -128,8 +132,8 @@ void ChangelogConvertTransform::work()
     const auto & chunk = input_data.chunk;
     if (auto ckpt_ctx = chunk.getCheckpointContext(); ckpt_ctx)
     {
-        /// FIXME, ckpt
         assert(chunk.rows() == 0);
+        checkpoint(ckpt_ctx);
         transformEmptyChunk();
         return;
     }
@@ -360,6 +364,46 @@ void ChangelogConvertTransform::transformEmptyChunk()
 
     output_chunks.push_back(std::move(input_data.chunk));
     assert(!input_data.chunk);
+}
+
+
+void ChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+{
+    ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
+        SerializedBlocksToIndices serialized_blocks_to_indices;
+        source_chunks.serialize(getInputs().front().getHeader(), wb, &serialized_blocks_to_indices);
+
+        index.serialize(
+            /*MappedSerializer*/
+            [&](const std::unique_ptr<RowRefWithRefCount<Chunk>> & mapped_, WriteBuffer & wb_) {
+                assert(mapped_);
+                mapped_->serialize(serialized_blocks_to_indices, wb_);
+            },
+            wb);
+
+        DB::writeIntBinary(late_rows, wb);
+        metrics.serialize(wb);
+    });
+}
+
+void ChangelogConvertTransform::recover(CheckpointContextPtr ckpt_ctx)
+{
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
+        DeserializedIndicesToBlocks<Chunk> deserialized_indices_to_blocks;
+        source_chunks.deserialize(getInputs().front().getHeader(), rb, &deserialized_indices_to_blocks);
+
+        index.deserialize(
+            /*MappedDeserializer*/
+            [&](std::unique_ptr<RowRefWithRefCount<Chunk>> & mapped_, Arena &, ReadBuffer & rb_) {
+                mapped_ = std::make_unique<RowRefWithRefCount<Chunk>>();
+                mapped_->deserialize(&source_chunks, deserialized_indices_to_blocks, rb_);
+            },
+            pool,
+            rb);
+
+        DB::readIntBinary(late_rows, rb);
+        metrics.deserialize(rb);
+    });
 }
 }
 }

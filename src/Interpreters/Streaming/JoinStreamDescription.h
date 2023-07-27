@@ -14,13 +14,17 @@ DataStreamSemantic getDataStreamSemantic(StoragePtr storage);
 
 struct JoinStreamDescription
 {
-    JoinStreamDescription(Block input_header_, DataStreamSemantic data_stream_semantic_, UInt64 keep_versions_)
-        : input_header(std::move(input_header_)), data_stream_semantic(data_stream_semantic_), keep_versions(keep_versions_)
+    JoinStreamDescription(std::string_view table_, Block input_header_, DataStreamSemantic data_stream_semantic_, UInt64 keep_versions_)
+        : table_prefix(fmt::format("{}.", table_))
+        , input_header(std::move(input_header_))
+        , data_stream_semantic(data_stream_semantic_)
+        , keep_versions(keep_versions_)
     {
     }
 
     JoinStreamDescription(JoinStreamDescription && other) noexcept
-        : input_header(std::move(other.input_header))
+        : table_prefix(std::move(other.table_prefix))
+        , input_header(std::move(other.input_header))
         , data_stream_semantic(other.data_stream_semantic)
         , keep_versions(other.keep_versions)
         , primary_key_column_positions(std::move(other.primary_key_column_positions))
@@ -34,6 +38,8 @@ struct JoinStreamDescription
     const String & deltaColumnName() const;
 
     void calculateColumnPositions(JoinStrictness strictness);
+
+    String table_prefix;
 
     Block input_header;
 

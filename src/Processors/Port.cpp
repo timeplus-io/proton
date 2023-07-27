@@ -64,7 +64,7 @@ void Port::doMarshal(DB::WriteBuffer & wb) const
     writeIntBinary(getVersion(), wb);
     writeIntBinary(reinterpret_cast<uintptr_t>(processor), wb);
 
-    SimpleNativeWriter writer(wb, 0);
+    SimpleNativeWriter<Block> writer(wb, header, 0);
     writer.write(header);
     writer.flush();
 }
@@ -81,7 +81,7 @@ void Port::doUnmarshal(DB::ReadBuffer & rb)
     /// new processor addr
     processor = reinterpret_cast<IProcessor*>(processor_addr);
 
-    SimpleNativeReader reader(rb, 0);
+    SimpleNativeReader<Block> reader(rb, /*no use*/header, 0);
     header = reader.read();
 }
 

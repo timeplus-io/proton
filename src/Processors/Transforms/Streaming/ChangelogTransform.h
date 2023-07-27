@@ -6,11 +6,6 @@
 
 /// #include <absl/container/flat_hash_map.h>
 
-namespace Poco
-{
-class Logger;
-}
-
 namespace DB
 {
 namespace Streaming

@@ -1,6 +1,7 @@
 #include <Formats/SimpleNativeReader.h>
 #include <Formats/SimpleNativeWriter.h>
 #include <IO/ReadBufferFromMemory.h>
+#include <Processors/Chunk.h>
 
 #include <gtest/gtest.h>
 
@@ -30,14 +31,15 @@ bool sameBlocks(const DB::Block & lhs, const DB::Block & rhs)
     return true;
 }
 
-TEST(SimpleNative, ReadWrite)
+TEST(SimpleNative, ReadWriteBlock)
 {
     auto block = createBlockBig(10);
+    auto header = block.cloneEmpty();
 
     std::vector<char> data;
     DB::WriteBufferFromVector wb{data};
 
-    DB::SimpleNativeWriter writer(wb, 0);
+    DB::SimpleNativeWriter<DB::Block> writer(wb, header, 0);
 
     writer.write(block);
 
@@ -45,22 +47,23 @@ TEST(SimpleNative, ReadWrite)
     wb.finalize();
 
     DB::ReadBufferFromMemory rb(data.data(), data.size());
-    DB::SimpleNativeReader reader(rb, 0);
+    DB::SimpleNativeReader<DB::Block> reader(rb, header, 0);
 
     auto recovered_block = reader.read();
     ASSERT_TRUE(sameBlocks(block, recovered_block));
 }
 
-TEST(SimpleNative, ReadWriteInfo)
+TEST(SimpleNative, ReadWriteBlockInfo)
 {
     auto block = createBlockBig(10);
+    auto header = block.cloneEmpty();
     block.info.bucket_num = 100;
     block.info.is_overflows = true;
 
     std::vector<char> data;
     DB::WriteBufferFromVector wb{data};
 
-    DB::SimpleNativeWriter writer(wb, 1);
+    DB::SimpleNativeWriter<DB::Block> writer(wb, header, 1);
 
     writer.write(block);
 
@@ -68,8 +71,32 @@ TEST(SimpleNative, ReadWriteInfo)
     wb.finalize();
 
     DB::ReadBufferFromMemory rb(data.data(), data.size());
-    DB::SimpleNativeReader reader(rb, 1);
+    DB::SimpleNativeReader<DB::Block> reader(rb, header, 1);
 
     auto recovered_block = reader.read();
+    ASSERT_TRUE(sameBlocks(block, recovered_block));
+}
+
+TEST(SimpleNative, ReadWriteChunk)
+{
+    auto block = createBlockBig(10);
+    auto header = block.cloneEmpty();
+
+    std::vector<char> data;
+    DB::WriteBufferFromVector wb{data};
+
+    DB::SimpleNativeWriter<DB::Chunk> writer(wb, header, 0);
+
+    writer.write(DB::Chunk{block.getColumns(), block.rows()});
+
+    wb.next();
+    wb.finalize();
+
+    DB::ReadBufferFromMemory rb(data.data(), data.size());
+    DB::SimpleNativeReader<DB::Chunk> reader(rb, header, 0);
+
+    auto recovered_chunk = reader.read();
+    auto recovered_block = header.cloneWithColumns(recovered_chunk.detachColumns());
+
     ASSERT_TRUE(sameBlocks(block, recovered_block));
 }

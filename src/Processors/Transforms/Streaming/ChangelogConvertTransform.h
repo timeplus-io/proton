@@ -61,6 +61,9 @@ public:
     Status prepare() override;
     void work() override;
 
+    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
+    void recover(CheckpointContextPtr ckpt_ctx) override;
+
     static Block transformOutputHeader(const Block & output_header);
 
 private:
@@ -79,15 +82,15 @@ private:
 
     /// std::mutex mutex;
 
-    size_t late_rows = 0;
-    CachedBlockMetrics metrics;
-    RefCountBlockList<Chunk> source_chunks;
+    SERDE size_t late_rows = 0;
+    SERDE CachedBlockMetrics metrics;
+    SERDE RefCountBlockList<Chunk> source_chunks;
 
     Port::Data input_data;
     std::list<Chunk> output_chunks;
 
     /// Index blocks by key columns
-    HashMapsTemplate<std::unique_ptr<RowRefWithRefCount<Chunk>>> index;
+    SERDE HashMapsTemplate<std::unique_ptr<RowRefWithRefCount<Chunk>>> index;
     Arena pool;
 
     int64_t last_log_ts = 0;

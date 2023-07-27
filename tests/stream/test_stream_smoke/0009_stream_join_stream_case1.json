@@ -524,7 +524,7 @@
     },
     {
       "id": 41,
-      "tags": ["stream_join_stream", "bug"],
+      "tags": ["stream_join_stream"],
       "name": "multiple-streams-global",
       "description": "multiple stream to stream join globally",
       "steps":[

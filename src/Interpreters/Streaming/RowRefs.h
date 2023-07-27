@@ -83,7 +83,10 @@ struct RowRefWithRefCount
     Int64 blockID() const
     {
         assert(blocks);
-        return block_iter->block.blockID();
+        if constexpr (std::is_same_v<DataBlock, Block>)
+            return block_iter->block.blockID();
+        else
+            return 0;
     }
 
     const DataBlock & block() const
@@ -96,7 +99,9 @@ struct RowRefWithRefCount
 
     void serialize(const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const;
     void deserialize(
-        RefCountBlockList<DataBlock> * block_list, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb);
+        RefCountBlockList<DataBlock> * block_list,
+        const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
+        ReadBuffer & rb);
 
 private:
     void ALWAYS_INLINE deref()
@@ -129,7 +134,7 @@ struct RowRefListMultiple
         SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices = nullptr) const;
     void deserialize(
         RefCountBlockList<Block> * block_list,
-        const DeserializedIndicesToBlocks & deserialized_indices_to_blocks,
+        const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks,
         ReadBuffer & rb,
         DeserializedIndicesToRowRefListMultiple * deserialized_indices_to_row_ref_list_multiple = nullptr);
 };
@@ -275,7 +280,7 @@ public:
     void deserialize(
         TypeIndex type,
         RefCountBlockList<Block> * block_list,
-        const DeserializedIndicesToBlocks & deserialized_indices_to_blocks,
+        const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks,
         ReadBuffer & rb);
 
 private:
@@ -338,7 +343,7 @@ public:
         const;
 
     void serialize(TypeIndex type, const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const;
-    void deserialize(TypeIndex type, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb);
+    void deserialize(TypeIndex type, const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks, ReadBuffer & rb);
 
 private:
     // Lookups can be stored in a HashTable because it is memmovable

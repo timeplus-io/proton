@@ -116,7 +116,6 @@ void ChangelogTransform::work()
     const auto & chunk = input_data.chunk;
     if (auto ckpt_ctx = chunk.getCheckpointContext(); ckpt_ctx)
     {
-        /// FIXME, ckpt
         assert(chunk.rows() == 0);
         transformChunk(input_data.chunk);
         return;

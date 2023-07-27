@@ -12,11 +12,12 @@ namespace Streaming
 {
 /// For RowRef
 void serialize(const RowRef & row_ref, const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb);
-void deserialize(RowRef & row_ref, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb);
+void deserialize(RowRef & row_ref, const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks, ReadBuffer & rb);
 
 /// For RowRefList
 void serialize(const RowRefList & row_ref, const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb);
-void deserialize(RowRefList & row_ref, Arena & pool, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb);
+void deserialize(
+    RowRefList & row_ref, Arena & pool, const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks, ReadBuffer & rb);
 
 /// For HashBlocks
 void serialize(

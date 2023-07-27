@@ -844,30 +844,42 @@ void Block::reorderColumnsInplace(const std::vector<UInt16> & positions)
     auto num_columns = columns();
     assert (positions.size() == num_columns);
 
-    size_t exchanged = 0;
-    for (size_t i = 0; exchanged < num_columns - 1 && i < num_columns;)
+    /// FIXME: a better algorithm
+    // size_t exchanged = 0;
+    // for (size_t i = 0; exchanged < num_columns - 1 && i < num_columns;)
+    // {
+    //     auto target_pos = positions[i];
+    //     if (i != target_pos)
+    //     {
+    //         /// Move column at positions[pos] to pos
+    //         assert(target_pos < num_columns);
+    //         data[i].swap(data[target_pos]);
+    //         ++exchanged;
+    //     }
+    //     else
+    //         ++i;
+    // }
+
+    // if (exchanged)
+    // {
+    //     /// Correct index_by_name
+    //     for (size_t i = 0; const auto & col : data)
+    //     {
+    //         index_by_name[col.name] = i;
+    //         ++i;
+    //     }
+    // }
+
+    Block result;
+    result.reserve(num_columns);
+
+    for (auto target_pos : positions)
     {
-        auto target_pos = positions[i];
-        if (i != target_pos)
-        {
-            /// Move column at positions[pos] to pos
-            assert(target_pos < num_columns);
-            data[i].swap(data[target_pos]);
-            ++exchanged;
-        }
-        else
-            ++i;
+        auto & target_col = getByPosition(target_pos);
+        result.insert(std::move(target_col));
     }
 
-    if (exchanged)
-    {
-        /// Correct index_by_name
-        for (size_t i = 0; const auto & col : data)
-        {
-            index_by_name[col.name] = i;
-            ++i;
-        }
-    }
+    swap(result);
 }
 
 void Block::renameColumn(String new_name, size_t column_pos)
@@ -910,34 +922,35 @@ void Block::reorderColumnsInplace(const Block & header)
 
     assert(num_columns >= header.columns());
 
-    if (num_columns == header.columns())
-    {
-        /// Fast
-        size_t exchanged = 0;
-        for (size_t i = 0; exchanged < num_columns - 1 && i < num_columns;)
-        {
-            auto target_pos = header.getPositionByName(data[i].name);
-            if (i != target_pos)
-            {
-                data[i].swap(data[target_pos]);
-                ++exchanged;
-            }
-            else
-                ++i;
-        }
+    /// FIXME: a better algorithm
+    // if (num_columns == header.columns())
+    // {
+    //     /// Fast
+    //     size_t exchanged = 0;
+    //     for (size_t i = 0; exchanged < num_columns - 1 && i < num_columns;)
+    //     {
+    //         auto target_pos = header.getPositionByName(data[i].name);
+    //         if (i != target_pos)
+    //         {
+    //             data[i].swap(data[target_pos]);
+    //             ++exchanged;
+    //         }
+    //         else
+    //             ++i;
+    //     }
 
-        /// Correct index_by_name
-        if (exchanged)
-        {
-            for (size_t i = 0; const auto & col : data)
-            {
-                index_by_name[col.name] = i;
-                ++i;
-            }
-        }
-    }
-    else
-    {
+    //     /// Correct index_by_name
+    //     if (exchanged)
+    //     {
+    //         for (size_t i = 0; const auto & col : data)
+    //         {
+    //             index_by_name[col.name] = i;
+    //             ++i;
+    //         }
+    //     }
+    // }
+    // else
+    // {
         Block result;
         result.reserve(header.columns());
 
@@ -948,7 +961,7 @@ void Block::reorderColumnsInplace(const Block & header)
         }
 
         swap(result);
-    }
+    // }
 }
 
 void Block::insertRow(size_t row_num, Block & target_block) const

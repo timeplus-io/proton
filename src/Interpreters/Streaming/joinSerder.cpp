@@ -30,7 +30,7 @@ void serializeHashJoinMap(
         using Map = std::decay_t<decltype(*(maps_template.TYPE))>; \
         using Mapped = typename Map::mapped_type; \
         Map & map = *(maps_template.TYPE); \
-        DB::writeIntBinary(map.size(), wb); \
+        DB::writeIntBinary<size_t>(map.size(), wb); \
         map.forEachValue([&](const auto & key, auto & mapped) { \
             /* Key */ \
             DB::writeBinary(key, wb); \
@@ -82,7 +82,7 @@ void deserializeHashJoinMap(
     Arena & pool,
     ReadBuffer & rb,
     [[maybe_unused]] RefCountBlockList<Block> * blocks,
-    [[maybe_unused]] const DeserializedIndicesToBlocks * deserialized_indices_to_blocks,
+    [[maybe_unused]] const DeserializedIndicesToBlocks<Block> * deserialized_indices_to_blocks,
     [[maybe_unused]] DeserializedIndicesToRowRefListMultiple * deserialized_indices_with_multiple_ref)
 {
     switch (hash_method_type)
@@ -97,7 +97,7 @@ void deserializeHashJoinMap(
         typename Map::LookupResult lookup_result; \
         bool inserted; \
         size_t map_size; \
-        DB::readIntBinary(map_size, rb); \
+        DB::readIntBinary<size_t>(map_size, rb); \
         for (size_t i = 0; i < map_size; ++i) \
         { \
             /* Key */ \
@@ -163,7 +163,7 @@ void serializeHashJoinMapsVariants(
     SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices)
 {
     SerializedBlocksToIndices serialized_blocks_to_indices;
-    blocks.serialize(wb, &serialized_blocks_to_indices);
+    blocks.serialize(/*no use*/Block{}, wb, &serialized_blocks_to_indices);
 
     assert(maps.map_variants.size() >= 1);
     DB::writeIntBinary<UInt16>(static_cast<UInt16>(maps.map_variants.size()), wb);
@@ -193,8 +193,8 @@ void deserializeHashJoinMapsVariants(
     ReadBuffer & rb,
     DeserializedIndicesToRowRefListMultiple * deserialized_indices_with_row_ref_list_multiple)
 {
-    DeserializedIndicesToBlocks deserialized_indices_to_blocks;
-    blocks.deserialize(rb, &deserialized_indices_to_blocks);
+    DeserializedIndicesToBlocks<Block> deserialized_indices_to_blocks;
+    blocks.deserialize(/*no use*/Block{}, rb, &deserialized_indices_to_blocks);
 
     UInt16 maps_size;
     DB::readIntBinary<UInt16>(maps_size, rb);
@@ -232,7 +232,7 @@ void serialize(const RowRef & row_ref, const SerializedBlocksToIndices & seriali
     DB::writeBinary(row_ref.row_num, wb);
 }
 
-void deserialize(RowRef & row_ref, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb)
+void deserialize(RowRef & row_ref, const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks, ReadBuffer & rb)
 {
     UInt32 block_index;
     DB::readIntBinary<UInt32>(block_index, rb);
@@ -256,7 +256,8 @@ void serialize(const RowRefList & row_ref, const SerializedBlocksToIndices & ser
         serialize(**it, serialized_blocks_to_indices, wb);
 }
 
-void deserialize(RowRefList & row_ref, Arena & pool, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb)
+void deserialize(
+    RowRefList & row_ref, Arena & pool, const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks, ReadBuffer & rb)
 {
     UInt32 size;
     DB::readIntBinary<UInt32>(size, rb);
@@ -385,7 +386,7 @@ void deserialize(HashJoin::JoinData & join_data, ReadBuffer & rb)
             join_data.primary_key_hash_table->pool,
             rb,
             /* RefCountBlockList<Block>* */ nullptr,
-            /* DeserializedIndicesToBlocks* */ nullptr,
+            /* DeserializedIndicesToBlocks<Block>* */ nullptr,
             &deserialized_indices_to_multiple_ref);
     }
     else

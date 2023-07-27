@@ -1,11 +1,11 @@
 #include <Interpreters/Streaming/RowRefs.h>
 
 #include <Columns/IColumn.h>
+#include <Core/Block.h>
 #include <Interpreters/Streaming/joinSerder.h>
 #include <base/types.h>
 #include <Common/ColumnsHashing.h>
 #include <Common/typeid_cast.h>
-#include <Core/Block.h>
 
 
 namespace DB
@@ -70,7 +70,9 @@ void RowRefWithRefCount<DataBlock>::serialize(const SerializedBlocksToIndices & 
 
 template <typename DataBlock>
 void RowRefWithRefCount<DataBlock>::deserialize(
-    RefCountBlockList<DataBlock> * block_list, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb)
+    RefCountBlockList<DataBlock> * block_list,
+    const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
+    ReadBuffer & rb)
 {
     blocks = block_list;
     UInt32 block_index;
@@ -221,7 +223,7 @@ void AsofRowRefs::serialize(TypeIndex type, const SerializedBlocksToIndices & se
 void AsofRowRefs::deserialize(
     TypeIndex type,
     RefCountBlockList<Block> * block_list,
-    const DeserializedIndicesToBlocks & deserialized_indices_to_blocks,
+    const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks,
     ReadBuffer & rb)
 {
     auto call = [&](const auto & t) {
@@ -500,7 +502,8 @@ void RangeAsofRowRefs::serialize(TypeIndex type, const SerializedBlocksToIndices
     callWithType(type, call);
 }
 
-void RangeAsofRowRefs::deserialize(TypeIndex type, const DeserializedIndicesToBlocks & deserialized_indices_to_blocks, ReadBuffer & rb)
+void RangeAsofRowRefs::deserialize(
+    TypeIndex type, const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks, ReadBuffer & rb)
 {
     auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
@@ -515,7 +518,7 @@ void RangeAsofRowRefs::deserialize(TypeIndex type, const DeserializedIndicesToBl
         {
             /// Key
             DB::readBinary(key, rb);
-            assert(!map.contains(key));
+            // assert(!map.contains(key)); // multimap allows multiple same keys
             auto iter = map.emplace(key, RowRef{});
 
             /// Mapped: RowRef
@@ -547,7 +550,7 @@ void RowRefListMultiple::serialize(
 
 void RowRefListMultiple::deserialize(
     RefCountBlockList<Block> * block_list,
-    const DeserializedIndicesToBlocks & deserialized_indices_to_blocks,
+    const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks,
     ReadBuffer & rb,
     DeserializedIndicesToRowRefListMultiple * deserialized_indices_to_row_ref_list_multiple)
 {
@@ -581,5 +584,7 @@ void RowRefListMultipleRef::deserialize(
     *this = deserialized_indices_to_row_ref_list_multiple.at(ref_index);
 }
 
+template struct RowRefWithRefCount<Block>;
+template struct RowRefWithRefCount<Chunk>;
 }
 }

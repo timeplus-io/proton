@@ -53,7 +53,6 @@ namespace DB
 {
 class CompiledAggregateFunctionsHolder;
 class NativeWriter;
-class SimpleNativeWriter;
 
 namespace Streaming
 {

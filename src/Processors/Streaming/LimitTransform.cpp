@@ -442,8 +442,8 @@ void LimitTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
         if (has_previous_row_chunk)
         {
             writeBoolText(true, wb);
-            SimpleNativeWriter writer(wb, ProtonRevision::getVersionRevision());
-            writer.write(getOutputPort().getHeader().cloneWithColumns(previous_row_chunk.detachColumns()));
+            SimpleNativeWriter<Chunk> writer(wb, getOutputPort().getHeader(), ProtonRevision::getVersionRevision());
+            writer.write(previous_row_chunk);
         }
 
         writeIntBinary(rows_read, wb);
@@ -465,9 +465,8 @@ void LimitTransform::recover(CheckpointContextPtr ckpt_ctx)
         readBoolText(has_previous_row_chunk, rb);
         if (has_previous_row_chunk)
         {
-            SimpleNativeReader reader(rb, ProtonRevision::getVersionRevision());
-            auto block = reader.read();
-            previous_row_chunk.setColumns(block.getColumns(), block.rows());
+            SimpleNativeReader<Chunk> reader(rb, getOutputPort().getHeader(), ProtonRevision::getVersionRevision());
+            previous_row_chunk = reader.read();
         }
 
         readIntBinary(rows_read, rb);

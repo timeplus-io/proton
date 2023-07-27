@@ -3363,7 +3363,7 @@ void Aggregator::checkpoint(const AggregatedDataVariants & data_variants, WriteB
 
     UInt32 num_blocks = static_cast<UInt32>(blocks.size());
     writeIntBinary(num_blocks, wb);
-    SimpleNativeWriter writer(wb, ProtonRevision::getVersionRevision());
+    SimpleNativeWriter<Block> writer(wb, getHeader(false), ProtonRevision::getVersionRevision());
     for (const auto & block : blocks)
         writer.write(block);
 }
@@ -3393,7 +3393,7 @@ void Aggregator::recover(AggregatedDataVariants & data_variants, ReadBuffer & rb
     UInt32 num_blocks = 0;
     readIntBinary(num_blocks, rb);
     BlocksList blocks;
-    SimpleNativeReader reader(rb, ProtonRevision::getVersionRevision());
+    SimpleNativeReader<Block> reader(rb, getHeader(false), ProtonRevision::getVersionRevision());
     for (size_t i = 0; i < num_blocks; ++i)
         blocks.emplace_back(reader.read());
 

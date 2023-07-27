@@ -9,6 +9,8 @@
 
 namespace DB
 {
+class Chunk;
+
 namespace Streaming
 {
 template <typename DataBlock>
@@ -116,23 +118,18 @@ struct RefCountBlockList
     auto begin() const { return blocks.begin(); }
     auto end() const { return blocks.end(); }
 
-    void push_back(DataBlock && block)
+    void push_back(DataBlock block)
     {
         updateMetrics(block);
         blocks.emplace_back(std::move(block));
     }
 
-    void push_back(const DataBlock & block)
-    {
-        updateMetrics(block);
-        blocks.emplace_back(block);
-    }
-
     Int64 minTimestamp() const noexcept { return min_ts; }
     Int64 maxTimestamp() const noexcept { return max_ts; }
 
-    void serialize(WriteBuffer & wb, SerializedBlocksToIndices * serialized_blocks_to_indices = nullptr) const;
-    void deserialize(ReadBuffer & rb, DeserializedIndicesToBlocks * deserialized_indices_with_block = nullptr);
+    void serialize(const Block & header, WriteBuffer & wb, SerializedBlocksToIndices * serialized_blocks_to_indices = nullptr) const;
+    void
+    deserialize(const Block & header, ReadBuffer & rb, DeserializedIndicesToBlocks<DataBlock> * deserialized_indices_with_block = nullptr);
 
 private:
     SERDE Int64 min_ts = std::numeric_limits<Int64>::max();
@@ -145,5 +142,6 @@ private:
 };
 
 extern template struct RefCountBlockList<Block>;
+extern template struct RefCountBlockList<Chunk>;
 }
 }

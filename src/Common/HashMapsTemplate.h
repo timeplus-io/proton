@@ -7,6 +7,9 @@
 
 namespace DB
 {
+class WriteBuffer;
+class ReadBuffer;
+
 /// HashMapsTemplate is a taken from HashJoin class and make it standalone
 /// and could be shared among different components
 
@@ -98,6 +101,68 @@ struct HashMapsTemplate
         }
 
         UNREACHABLE();
+    }
+
+    template <typename MappedSerializer>
+    void serialize(MappedSerializer && mapped_serializer, WriteBuffer & wb)
+    {
+        switch (type)
+        {
+#define M(NAME) \
+    case HashType::NAME: { \
+        assert(NAME); \
+        using Map = std::decay_t<decltype(*NAME)>; \
+        Map & map = *NAME; \
+        DB::writeIntBinary(map.size(), wb); \
+        map.forEachValue([&](const auto & key, auto & mapped) { \
+            /* Key */ DB::writeBinary(key, wb); \
+            /* Mapped */ mapped_serializer(mapped, wb); \
+        }); \
+        break; \
+    }
+            APPLY_FOR_HASH_KEY_VARIANTS(M)
+#undef M
+        }
+    }
+
+    template <typename MappedDeserializer>
+    void deserialize(MappedDeserializer && mapped_deserializer, Arena & pool, ReadBuffer & rb)
+    {
+        switch (type)
+        {
+#define M(NAME) \
+    case HashType::NAME: { \
+        assert(NAME); \
+        using Map = std::decay_t<decltype(*NAME)>; \
+        Map & map = *NAME; \
+        typename Map::key_type key; \
+        typename Map::LookupResult lookup_result; \
+        bool inserted; \
+        size_t map_size; \
+        DB::readIntBinary(map_size, rb); \
+        for (size_t i = 0; i < map_size; ++i) \
+        { \
+            /* Key */ \
+            if constexpr (std::is_same_v<typename Map::key_type, StringRef>) \
+            { \
+                key = DB::readStringBinaryInto(pool, rb); \
+                map.emplace(SerializedKeyHolder{key, pool}, lookup_result, inserted); \
+            } \
+            else \
+            { \
+                DB::readBinary(key, rb); \
+                map.emplace(key, lookup_result, inserted); \
+            } \
+            assert(inserted); \
+            /* Mapped */ \
+            Mapped & mapped = lookup_result->getMapped(); \
+            mapped_deserializer(mapped, pool, rb); \
+        } \
+        break; \
+    }
+            APPLY_FOR_HASH_KEY_VARIANTS(M)
+#undef M
+        }
     }
 
     HashType type;
