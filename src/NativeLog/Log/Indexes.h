@@ -25,13 +25,13 @@ public:
     Indexes(fs::path index_dir_, int64_t base_sn_, Poco::Logger * logger_);
     ~Indexes();
 
-    TimestampSequence lastIndexedAppendTimeSequence() const;
+    std::optional<TimestampSequence> lastIndexedAppendTimeSequence() const;
 
-    TimestampSequence lastIndexedEventTimeSequence() const;
+    std::optional<TimestampSequence> lastIndexedEventTimeSequence() const;
 
-    SequencePosition lastIndexedSequencePosition() const;
+    std::optional<SequencePosition> lastIndexedSequencePosition() const;
 
-    PositionSequence lastIndexedPositionSequence() const;
+    std::optional<PositionSequence> lastIndexedPositionSequence() const;
 
     /// Find the largest sn less than or equal to the given sn
     /// @param sn The sn to lookup
@@ -42,14 +42,14 @@ public:
 
     /// Find the largest sn which has position great or equal to the given position
     /// @param position The physical position to lookup
-    /// @return The position found. If the given position pass the end of segment, {-1, -1} will be returned
-    PositionSequence upperBoundSequenceForPosition(int64_t position) const;
+    /// @return The position found. If the given position pass the end of segment, {} will be returned
+    std::optional<PositionSequence> upperBoundSequenceForPosition(int64_t position) const;
 
     /// Find the largest sn less than or equal to the given sn
     /// @param ts The timestamp to lookup
     /// @param append_time ts is append time if true otherwise event time
     /// @return The sn found and the corresponding timestamp for this ts.
-    TimestampSequence lowerBoundSequenceForTimestamp(int64_t ts, bool append_time) const;
+    std::optional<TimestampSequence> lowerBoundSequenceForTimestamp(int64_t ts, bool append_time) const;
 
     /// Index the logical sn to physical sn mapping, append timestamp to logical sn mapping and
     /// event timestamp to logical sn mapping in one go atomically
@@ -86,9 +86,9 @@ public:
     }
 
 private:
-    inline IndexEntry lastIndexedEntry(rocksdb::ColumnFamilyHandle * cf_handle) const;
-    inline IndexEntry lowerBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_handle) const;
-    inline IndexEntry upperBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_handle) const;
+    inline std::optional<IndexEntry> lastIndexedEntry(rocksdb::ColumnFamilyHandle * cf_handle) const;
+    inline std::optional<IndexEntry> lowerBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_handle) const;
+    inline std::optional<IndexEntry> upperBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_handle) const;
     inline void index(const TimestampSequence & max_etimestamp_sn, const TimestampSequence & max_atimestamp_sn, rocksdb::WriteBatch & batch);
 
 private:
@@ -101,8 +101,8 @@ private:
     fs::path index_dir;
     int64_t base_sn;
 
-    TimestampSequence last_indexed_etimestamp;
-    TimestampSequence last_indexed_atimestamp;
+    std::optional<TimestampSequence> last_indexed_etimestamp;
+    std::optional<TimestampSequence> last_indexed_atimestamp;
 
     std::atomic_flag closed;
 

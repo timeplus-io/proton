@@ -66,7 +66,7 @@ public:
     /// @param position File position for sn if set
     /// @return The fetched data and the sn metadata of the first message whose sn is >= start_sn
     /// or empty if the start_sn is larger than the largest sn in this log
-    FetchDataDescription read(int64_t start_sn, uint64_t max_size, uint64_t max_position, std::optional<uint64_t> position);
+    FetchDataDescription read(int64_t start_sn, uint64_t max_size, uint64_t max_position, std::optional<uint64_t> position) const;
 
     /// Trim to sn, returns bytes trimmed
     int64_t trim(int64_t sn);
@@ -93,7 +93,7 @@ public:
     /// segment. It is expensive as it needs replay from the last sn checkpoint
     /// and it is usually called during system startup
     /// This method is multi-thread safe
-    int64_t readNextSequence();
+    int64_t readNextSequence() const;
 
     /// Run recovery. This will rebuild the index from the log file and lop off
     /// any invalid bytes from the end of the log and index
@@ -118,6 +118,10 @@ public:
     TimestampSequence maxEventTimestampSequence() const { return max_etimestamp_and_sn_so_far; }
     TimestampSequence maxAppendTimestampSequence() const { return max_atimestamp_and_sn_so_far; }
 
+    /// @return the sequence number of the first record in the segment, which has timestamp >= ts.
+    ///         If there is no such record, LATEST_SN is returned
+    int64_t sequenceForTimestamp(int64_t, bool append_time) const;
+
 private:
     /// Find the physical file position for the first message with sn >= the request sn
     /// The starting_file_position argument is an optimization that can be used if we already know a
@@ -126,9 +130,11 @@ private:
     /// @param starting_file_position A lower bound on the file position from which to begin the search
     /// @return The physical position in the log storing the record with the least sn >= the requested sn and the size
     ///         of the record
-    FileRecords::LogSequencePosition translateSequence(int64_t sn, int64_t starting_file_position = 0);
+    FileRecords::LogSequencePosition translateSequence(int64_t sn, int64_t starting_file_position = 0) const;
 
     void index(int64_t largest_sn, int64_t physical_position);
+
+    void loadMaxTimestamps();
 
 private:
     int64_t base_sn;

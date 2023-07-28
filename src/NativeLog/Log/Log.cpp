@@ -276,7 +276,7 @@ LogSequenceMetadata Log::waitForMoreDataIfNeeded(int64_t & sn, int64_t max_wait_
 
     assert(sn >= 0);
 
-    if (sn != max_sn_metadata.record_sn)
+    if (sn < max_sn_metadata.record_sn)
         return max_sn_metadata;
 
     auto wait_for_sn_change = [&max_sn_metadata, max_wait_ms, isolation, this](std::mutex & m, std::condition_variable & cv) {

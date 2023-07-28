@@ -116,62 +116,22 @@ void Loglet::append(const ByteVector & record, const LogAppendDescription & appe
 
 int64_t Loglet::sequenceForTimestamp(int64_t ts, bool append_time) const
 {
-    LogSegmentPtr prev_segment;
+    assert(ts > 0);
     LogSegmentPtr target_segment;
-    TimestampSequence ts_seq_res{-1, -1};
 
-    segments->apply([ts, append_time, &ts_seq_res, &prev_segment, &target_segment](LogSegmentPtr & segment) {
-        auto ts_seq{segment->getIndexes().lowerBoundSequenceForTimestamp(ts, append_time)};
-        if (!ts_seq.isValid())
+    /// Search the first segment whose largest timestamp >= ts
+    segments->apply([ts, append_time, &target_segment](LogSegmentPtr & segment) {
+        auto max_ts_sn = append_time ? segment->maxAppendTimestampSequence() : segment->maxEventTimestampSequence();
+        if (max_ts_sn.key > ts)
         {
-            /// All timestamps in index are smaller than ts
-            /// or index is empty. Remember this segment
-            prev_segment = segment;
-            return false;
+            target_segment = segment;
+            return true;
         }
-        else
-        {
-            TimestampSequence max_etime_sn{segment->maxEventTimestampSequence()};
-            TimestampSequence max_atime_sn{segment->maxAppendTimestampSequence()};
-            if ((append_time && max_atime_sn.key < ts) || max_etime_sn.key < ts)
-            {
-                prev_segment = segment;
-                return false;
-            }
-            else
-            {
-                /// We find a low bound sn
-                target_segment = segment;
-                ts_seq_res = ts_seq;
-                return true;
-            }
-        }
+        return false;
     });
 
-    if (!ts_seq_res.isValid())
-    {
-        if (prev_segment)
-        {
-            if (append_time)
-            {
-                TimestampSequence max_atime_sn{prev_segment->maxAppendTimestampSequence()};
-                if (max_atime_sn.key < ts)
-                    return max_atime_sn.value + 1;
-                else
-                    return prev_segment->baseSequence();
-            }
-            else
-            {
-                TimestampSequence max_etime_sn{prev_segment->maxEventTimestampSequence()};
-                if (max_etime_sn.key < ts)
-                    return max_etime_sn.value + 1;
-                else
-                    return prev_segment->baseSequence();
-            }
-        }
-    }
-    else
-        return ts_seq_res.value;
+    if (target_segment)
+        return target_segment->sequenceForTimestamp(ts, append_time);
 
     return LATEST_SN;
 }

@@ -23,8 +23,16 @@ LogSegment::LogSegment(
     , indexes(Loglet::indexFileDir(log_dir, base_sn, file_suffix), base_sn_, logger_)
     , logger(logger_)
 {
-    max_etimestamp_and_sn_so_far = indexes.lastIndexedEventTimeSequence();
-    max_atimestamp_and_sn_so_far = indexes.lastIndexedAppendTimeSequence();
+    loadMaxTimestamps();
+}
+
+void LogSegment::loadMaxTimestamps()
+{
+    if (auto last_indexed_ets = indexes.lastIndexedEventTimeSequence(); last_indexed_ets)
+        max_etimestamp_and_sn_so_far = *last_indexed_ets;
+
+    if (auto last_indexed_ats = indexes.lastIndexedAppendTimeSequence(); last_indexed_ats)
+        max_atimestamp_and_sn_so_far = *last_indexed_ats;
 }
 
 int64_t LogSegment::append(const ByteVector & record, const LogAppendDescription & append_info)
@@ -61,7 +69,7 @@ int64_t LogSegment::append(const ByteVector & record, const LogAppendDescription
     if (append_info.append_timestamp > max_atimestamp_and_sn_so_far.key)
         max_atimestamp_and_sn_so_far = TimestampSequence(append_info.append_timestamp, append_info.seq_metadata.record_sn);
 
-    if (bytes_since_last_index_entry > index_interval_bytes)
+    if (bytes_since_last_index_entry > index_interval_bytes || physical_position == 0)
     {
         indexes.index(append_info.seq_metadata.record_sn, physical_position, max_etimestamp_and_sn_so_far, max_atimestamp_and_sn_so_far);
         bytes_since_last_index_entry = 0;
@@ -71,7 +79,7 @@ int64_t LogSegment::append(const ByteVector & record, const LogAppendDescription
     return physical_position;
 }
 
-FetchDataDescription LogSegment::read(int64_t start_sn, uint64_t max_size, uint64_t max_position, std::optional<uint64_t> position)
+FetchDataDescription LogSegment::read(int64_t start_sn, uint64_t max_size, uint64_t max_position, std::optional<uint64_t> position) const
 {
     FileRecords::LogSequencePosition lsn{start_sn, 0, 1};
     if (!position || log->size() < *position)
@@ -110,10 +118,10 @@ FetchDataDescription LogSegment::read(int64_t start_sn, uint64_t max_size, uint6
         /// Within the max position
         /// We like to slice the log at record boundary
         auto pos_seq{indexes.upperBoundSequenceForPosition(lsn.position + adjusted_max_size)};
-        if (pos_seq.key > 0)
+        if (pos_seq)
         {
-            assert(static_cast<uint64_t>(pos_seq.key) >= lsn.position + adjusted_max_size);
-            return {sn_metadata, log->slice(lsn.position, pos_seq.key - lsn.position)};
+            assert(static_cast<uint64_t>(pos_seq->key) >= lsn.position + adjusted_max_size);
+            return {sn_metadata, log->slice(lsn.position, pos_seq->key - lsn.position)};
         }
     }
 
@@ -128,14 +136,22 @@ int64_t LogSegment::trim(int64_t sn) /// NOLINT(readability-convert-member-funct
     return 0;
 }
 
-int64_t LogSegment::readNextSequence()
+int64_t LogSegment::readNextSequence() const
 {
-    auto last_indexed_sn_position = indexes.lastIndexedSequencePosition();
-    auto last_sn = last_indexed_sn_position.key;
-    if (last_sn < 1)
-        last_sn = 0;
+    int64_t last_sn = 0;
+    std::optional<uint64_t> position;
 
-    auto fetched_data = read(last_sn, log->size(), log->size(), last_indexed_sn_position.value);
+    if (auto last_indexed_sn_position = indexes.lastIndexedSequencePosition(); last_indexed_sn_position)
+    {
+        last_sn = last_indexed_sn_position->key;
+        position = last_indexed_sn_position->value;
+    }
+
+    auto log_size = log->size();
+    if (log_size == 0)
+        return base_sn;
+
+    auto fetched_data = read(last_sn, log_size, log_size, position);
     if (!fetched_data.isValid() || fetched_data.records == nullptr)
         return base_sn;
 
@@ -260,7 +276,16 @@ void LogSegment::updateParentDir(const fs::path & parent_dir)
     indexes.updateParentDir(parent_dir);
 }
 
-FileRecords::LogSequencePosition LogSegment::translateSequence(int64_t sn, int64_t starting_file_position)
+int64_t LogSegment::sequenceForTimestamp(int64_t ts, bool append_time) const
+{
+    auto ts_sn = indexes.lowerBoundSequenceForTimestamp(ts, append_time);
+    if (ts_sn)
+        return ts_sn->value;
+    else
+        return base_sn;
+}
+
+FileRecords::LogSequencePosition LogSegment::translateSequence(int64_t sn, int64_t starting_file_position) const
 {
     auto entry = indexes.lowerBoundPositionForSequence(sn);
     if (entry.key == sn)

@@ -190,6 +190,7 @@ void WatermarkStamper::processPeriodic(Chunk & chunk)
     next_periodic_emit_ts = now + periodic_interval;
 
     chunk.getOrCreateChunkContext()->setWatermark(now);
+
     LOG_DEBUG(log, "Periodic emit time={}, rows={}", now, chunk.getNumRows());
 }
 

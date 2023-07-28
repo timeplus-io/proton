@@ -667,6 +667,8 @@ void StorageStream::readStreaming(
                 pipes.emplace_back(stream_shard->source_multiplexers->createChannel(
                     stream_shard->shard, {ProtonConsts::RESERVED_EVENT_TIME}, storage_snapshot, context_));
         }
+
+        LOG_INFO(log, "Starting reading {} streams in shared resource group", pipes.size());
     }
     else
     {
@@ -682,14 +684,14 @@ void StorageStream::readStreaming(
         for (auto stream_shard : shards_to_read)
             pipes.emplace_back(std::make_shared<StreamingStoreSource>(
                 stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log));
-    }
 
-    LOG_INFO(
-        log,
-        "Starting reading {} streams by seeking to '{}' in {} resource group",
-        pipes.size(),
-        query_info.seek_to_info->getSeekTo(),
-        share_resource_group ? "shared" : "dedicated");
+        LOG_INFO(
+            log,
+            "Starting reading {} streams by seeking to '{}' with corresponding offsets='{}' in dedicated resource group",
+            pipes.size(),
+            query_info.seek_to_info->getSeekTo(),
+            fmt::join(offsets, ","));
+    }
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
 

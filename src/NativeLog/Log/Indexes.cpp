@@ -15,7 +15,7 @@ namespace ErrorCodes
 namespace nlog
 {
 Indexes::Indexes(fs::path index_dir_, int64_t base_sn_, Poco::Logger * logger_)
-    : index_dir(std::move(index_dir_)), base_sn(base_sn_), last_indexed_etimestamp(-1, -1), last_indexed_atimestamp(-1, -1), logger(logger_)
+    : index_dir(std::move(index_dir_)), base_sn(base_sn_), logger(logger_)
 {
     /// We are expecting `index_dir` doesn't end with `/`
     assert(index_dir.has_filename());
@@ -33,6 +33,8 @@ Indexes::Indexes(fs::path index_dir_, int64_t base_sn_, Poco::Logger * logger_)
     cf_options.comparator = integerComparator<int64_t>();
 
     std::vector<rocksdb::ColumnFamilyDescriptor> column_families;
+    column_families.reserve(4);
+
     /// default cf : sn to physical position mapping
     column_families.push_back(rocksdb::ColumnFamilyDescriptor(ROCKSDB_NAMESPACE::kDefaultColumnFamilyName, cf_options));
     /// position_sn cf : physical position to sn mapping
@@ -43,6 +45,7 @@ Indexes::Indexes(fs::path index_dir_, int64_t base_sn_, Poco::Logger * logger_)
     column_families.push_back(rocksdb::ColumnFamilyDescriptor("etime_sn", cf_options));
 
     std::vector<rocksdb::ColumnFamilyHandle *> cf_handles;
+    cf_handles.reserve(4);
 
     rocksdb::DB * db;
     /// Opening rocksdb can be very expensive: around 1 second
@@ -71,6 +74,9 @@ void Indexes::close()
         /// Already closed
         return;
 
+    if (!indexes)
+        return;
+
     sync();
 
     for (auto * cf_handle : {sn_position_cf_handle, position_sn_cf_handle, etime_sn_cf_handle, atime_sn_cf_handle})
@@ -90,27 +96,27 @@ void Indexes::close()
     LOG_INFO(logger, "Closed indexes successfully");
 }
 
-TimestampSequence Indexes::lastIndexedAppendTimeSequence() const
+std::optional<TimestampSequence> Indexes::lastIndexedAppendTimeSequence() const
 {
     return lastIndexedEntry(atime_sn_cf_handle);
 }
 
-TimestampSequence Indexes::lastIndexedEventTimeSequence() const
+std::optional<TimestampSequence> Indexes::lastIndexedEventTimeSequence() const
 {
     return lastIndexedEntry(etime_sn_cf_handle);
 }
 
-SequencePosition Indexes::lastIndexedSequencePosition() const
+std::optional<SequencePosition> Indexes::lastIndexedSequencePosition() const
 {
     return lastIndexedEntry(sn_position_cf_handle);
 }
 
-PositionSequence Indexes::lastIndexedPositionSequence() const
+std::optional<PositionSequence> Indexes::lastIndexedPositionSequence() const
 {
     return lastIndexedEntry(position_sn_cf_handle);
 }
 
-IndexEntry Indexes::lastIndexedEntry(rocksdb::ColumnFamilyHandle * cf_handle) const
+std::optional<IndexEntry> Indexes::lastIndexedEntry(rocksdb::ColumnFamilyHandle * cf_handle) const
 {
     std::unique_ptr<rocksdb::Iterator> iter{indexes->NewIterator(rocksdb::ReadOptions{}, cf_handle)};
     iter->SeekToLast();
@@ -123,19 +129,19 @@ IndexEntry Indexes::lastIndexedEntry(rocksdb::ColumnFamilyHandle * cf_handle) co
 
         return IndexEntry{key, value};
     }
-    return {-1, -1};
+    return {};
 }
 
 SequencePosition Indexes::lowerBoundPositionForSequence(int64_t sn) const
 {
     auto entry = lowerBound(sn, sn_position_cf_handle);
-    if (entry.isValid())
-        return entry;
+    if (entry)
+        return *entry;
 
     return {base_sn, 0};
 }
 
-TimestampSequence Indexes::lowerBoundSequenceForTimestamp(int64_t ts, bool append_time) const
+std::optional<TimestampSequence> Indexes::lowerBoundSequenceForTimestamp(int64_t ts, bool append_time) const
 {
     if (append_time)
         return lowerBound(ts, atime_sn_cf_handle);
@@ -145,11 +151,11 @@ TimestampSequence Indexes::lowerBoundSequenceForTimestamp(int64_t ts, bool appen
 
 /// IndexEntry.key <= key
 /// @return IndexEntry which has key less or equal to key specified in the parameter if found such entry
-/// Otherwise return IndexEntry{-1, -1}
-IndexEntry Indexes::lowerBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_handle) const
+/// Otherwise return {}
+std::optional<IndexEntry> Indexes::lowerBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_handle) const
 {
     std::unique_ptr<rocksdb::Iterator> iter{indexes->NewIterator(rocksdb::ReadOptions{}, cf_handle)};
-    rocksdb::Slice key_s{reinterpret_cast<char *>(&key), sizeof(key)};
+    rocksdb::Slice key_s{reinterpret_cast<const char *>(&key), sizeof(key)};
     iter->SeekForPrev(key_s);
     if (iter->Valid())
     {
@@ -158,23 +164,23 @@ IndexEntry Indexes::lowerBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_han
         assert(iter->value().size() == sizeof(int64_t));
         auto v = *reinterpret_cast<const int64_t *>(iter->value().data());
         assert(k <= key);
-        return {k, v};
+        return IndexEntry{k, v};
     }
-    return {-1, -1};
+    return {};
 }
 
-PositionSequence Indexes::upperBoundSequenceForPosition(int64_t position) const
+std::optional<PositionSequence> Indexes::upperBoundSequenceForPosition(int64_t position) const
 {
     return upperBound(position, position_sn_cf_handle);
 }
 
 /// IndexEntry.key >= key
 /// @return IndexEntry which has key great or equal to key specified in the parameter if found such entry
-/// Otherwise return IndexEntry{-1, -1}
-IndexEntry Indexes::upperBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_handle) const
+/// Otherwise return {}
+std::optional<IndexEntry> Indexes::upperBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_handle) const
 {
     std::unique_ptr<rocksdb::Iterator> iter{indexes->NewIterator(rocksdb::ReadOptions{}, cf_handle)};
-    rocksdb::Slice key_s{reinterpret_cast<char *>(&key), sizeof(key)};
+    rocksdb::Slice key_s{reinterpret_cast<const char *>(&key), sizeof(key)};
     iter->Seek(key_s);
     if (iter->Valid())
     {
@@ -183,9 +189,9 @@ IndexEntry Indexes::upperBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_han
         assert(iter->value().size() == sizeof(int64_t));
         auto v = *reinterpret_cast<const int64_t *>(iter->value().data());
         assert(k >= key);
-        return {k, v};
+        return IndexEntry{k, v};
     }
-    return {-1, -1};
+    return {};
 }
 
 void Indexes::index(
@@ -194,8 +200,8 @@ void Indexes::index(
     const TimestampSequence & max_etimestamp_sn,
     const TimestampSequence & max_atimestamp_sn)
 {
-    rocksdb::Slice sn_s{reinterpret_cast<char *>(&largest_sn), sizeof(largest_sn)};
-    rocksdb::Slice position_s{reinterpret_cast<char *>(&physical_position), sizeof(physical_position)};
+    rocksdb::Slice sn_s{reinterpret_cast<const char *>(&largest_sn), sizeof(largest_sn)};
+    rocksdb::Slice position_s{reinterpret_cast<const char *>(&physical_position), sizeof(physical_position)};
 
     rocksdb::WriteBatch batch;
 
@@ -232,6 +238,9 @@ void Indexes::index(
         rocksdb::Slice event_sn_s{reinterpret_cast<const char *>(&max_atimestamp_sn.value), sizeof(max_atimestamp_sn.value)};
         batch.Put(atime_sn_cf_handle, append_time_s, event_sn_s);
     }
+
+    if (!batch.HasPut())
+        return;
 
     rocksdb::WriteOptions write_options;
     /// write_options.disableWAL = true;
