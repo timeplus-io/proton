@@ -79,7 +79,7 @@ if (NOT ENABLE_MISC_FUNCS)
             ignore.cpp
             indexHint.cpp
             # identity.cpp
-            bar.cpp
+            # bar.cpp
             hasColumnInTable.cpp
             # isFinite.cpp
             # isInfinite.cpp
