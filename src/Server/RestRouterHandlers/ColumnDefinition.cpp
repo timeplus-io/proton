@@ -20,10 +20,13 @@ String getCreateColumnDefinition(const Poco::JSON::Object::Ptr & column)
     {
         String default_str = column->get("default").toString();
 
-        if (column->get("type").toString() == "string")
-            default_str = fmt::format("'{}'", default_str);
+        if (!default_str.empty())
+        {
+            if (column->get("type").toString() == "string")
+                default_str = fmt::format("'{}'", default_str);
 
-        column_definition.push_back(fmt::format(" DEFAULT {}", default_str));
+            column_definition.push_back(fmt::format(" DEFAULT {}", default_str));
+        }
     }
     else if (column->has("alias"))
         column_definition.push_back(fmt::format(" ALIAS `{}`", column->get("alias").toString()));
