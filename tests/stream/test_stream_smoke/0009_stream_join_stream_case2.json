@@ -1,0 +1,382 @@
+{
+    "test_suite_name": "stream_join_stream2",
+    "tag":"smoke",
+    "test_suite_config":{
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
+    },
+    "comments": "Tests covering the stream query smoke cases.",
+    "tests": [
+        {
+            "id": 50,
+            "tags": ["data_enrichment_join", "inner-join"],
+            "name": "append-only_inner_all_join_versioned-kv",
+            "description": "append-only inner all join versioned-kv",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_append_left_stream"},
+                        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_vk_right_stream"},
+                        {"client":"python", "query_type": "table", "wait":2,"exist":"test10_append_left_stream","exist_wait":1, "query":"create stream if not exists test10_append_left_stream(i int, k string)"},
+                        {"client":"python", "query_type": "table", "wait":2,"exist":"test10_vk_right_stream","exist_wait":1, "query":"create stream if not exists test10_vk_right_stream(ii int, kk string) primary key kk settings mode='versioned_kv'"},
+                        {"client":"python", "query_type": "stream", "query_id":"1050", "wait":1, "terminate":"manuel", "query":"select i, k, ii, kk from test10_append_left_stream inner join test10_vk_right_stream on i == ii"},
+                        {"client":"python", "query_type": "table", "depends_on":"1050", "wait":1, "query": "insert into test10_vk_right_stream (ii, kk) values (1, 'kk1') (1, 'kk2')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_left_stream (i, k) values (1, 'k1')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_vk_right_stream (ii, kk) values (2, 'kk1')"},
+                        {"client":"python", "query_type": "table", "kill":"1050", "kill_wait":3, "wait":1, "query": "insert into test10_append_left_stream (i, k) values (1, 'k1') (2, 'k2')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1050",
+                    "expected_results":[
+                        [1, "k1", 1, "kk1"],
+                        [1, "k1", 1, "kk2"], 
+                        [1, "k1", 1, "kk2"], 
+                        [2, "k2", 2, "kk1"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 51,
+            "tags": ["data_enrichment_join", "inner-join"],
+            "name": "append-only_inner_all_join_changelog-kv",
+            "description": "append-only inner all join changelog-kv",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_append_left_stream"},
+                        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_changelog_kv_stream"},
+                        {"client":"python", "query_type": "table", "wait":2,"exist":"test10_append_left_stream","exist_wait":1, "query":"create stream if not exists test10_append_left_stream(i int, k string)"},
+                        {"client":"python", "query_type": "table", "wait":2,"exist":"test10_changelog_kv_stream","exist_wait":1, "query":"create stream if not exists test10_changelog_kv_stream(ii int, kk string) primary key kk settings mode='changelog_kv'"},
+                        {"client":"python", "query_type": "stream", "query_id":"1051", "wait":1, "terminate":"manuel", "query":"select i, k, ii, kk, _tp_delta from test10_append_left_stream inner join test10_changelog_kv_stream on i == ii"},
+                        {"client":"python", "query_type": "table", "depends_on":"1051", "wait":1, "query": "insert into test10_changelog_kv_stream (ii, kk) values (1, 'k1')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_left_stream (i, k) values (1, 'k1') (2, 'k2')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_changelog_kv_stream (ii, kk) values (1, 'k2')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_changelog_kv_stream (ii, kk, _tp_delta) values (1, 'k1', -1)"},
+                        {"client":"python", "query_type": "table", "kill":"1051", "kill_wait":3, "wait":1, "query": "insert into test10_append_left_stream (i, k) values (1, 'k1')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1051",
+                    "expected_results":[
+                        [1, "k1", 1, "k1", 1],
+                        [1, "k1", 1, "k2", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 52,
+            "tags": ["data_enrichment_join", "inner-join"],
+            "name": "append-only_inner_asof_join_append-only",
+            "description": "append-only inner all join append-only",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_append_left_stream"},
+                        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_append_right_stream"},
+                        {"client":"python", "query_type": "table", "wait":2,"exist":"test10_append_left_stream","exist_wait":1, "query":"create stream test10_append_left_stream(i int, k string)"},
+                        {"client":"python", "query_type": "table", "wait":2,"exist":"test10_append_right_stream","exist_wait":1, "query":"create stream test10_append_right_stream(j int, kk string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1052", "wait":1, "terminate":"manuel", "query":"SELECT i, k, j, kk FROM test10_append_left_stream asof join test10_append_right_stream ON k = kk AND i <= j"},
+                        {"client":"python", "query_type": "table", "depends_on":"1052", "wait":1, "query": "INSERT INTO test10_append_right_stream(j, kk) VALUES (1, 'a'), (2, 'a'), (3, 'a'), (4, 'a')"},
+                        {"client":"python", "query_type": "table", "kill":"1052", "kill_wait":3, "wait":1, "query": "INSERT INTO test10_append_left_stream(i, k) VALUES (1, 'a')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1052",
+                    "expected_results":[
+                        [1, "a", 2, "a"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 53,
+            "tags": ["data_enrichment_join", "inner-join"],
+            "name": "append-only_inner_asof_join_versioned-kv",
+            "description": "append-only inner asof join versioned-kv",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_append_left_stream"},
+                        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_vk_right_stream"},
+                        {"client":"python", "query_type": "table", "wait":2,"exist":"test10_append_left_stream","exist_wait":1, "query":"create stream if not exists test10_append_left_stream(i int, k string)"},
+                        {"client":"python", "query_type": "table", "wait":2,"exist":"test10_vk_right_stream","exist_wait":1, "query":"CREATE STREAM if not exists test10_vk_right_stream(j int, k string, kk string) PRIMARY KEY (k, kk) SETTINGS mode='versioned_kv'"},
+                        {"client":"python", "query_type": "stream", "query_id":"1053", "wait":1, "terminate":"manuel", "query":"SELECT i, test10_append_left_stream.k, j, test10_vk_right_stream.k, kk FROM test10_append_left_stream ASOF JOIN test10_vk_right_stream ON test10_append_left_stream.k = test10_vk_right_stream.k AND i <= j SETTINGS keep_versions = 3"},
+                        {"client":"python", "query_type": "table", "depends_on":"1053", "wait":1, "query": "insert into test10_vk_right_stream(j, k, kk) VALUES (100, 'a', 'bb'), (102, 'a', 'cc'), (104, 'a', 'dd'), (106, 'a', 'ee')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_left_stream(i, k) VALUES (101, 'a')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_vk_right_stream(j, k, kk) VALUES (108, 'a', 'cc')"},
+                        {"client":"python", "query_type": "table", "kill":"1053", "kill_wait":3, "wait":1, "query": "insert into test10_append_left_stream(i, k) VALUES (101, 'a')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1053",
+                    "expected_results":[
+                        [101, "a", 102, "a", "cc"],
+                        [101, "a", 104, "a", "dd"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 54,
+            "tags": ["data_enrichment_join", "inner-join"],
+            "name": "append-only_inner_latest_join_versioned-kv",
+            "description": "append-only INNER LATEST JOIN versioned-kv",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists left_stream"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test10_vk_right_stream"},
+                        {"client":"python", "query_type": "table", "exist":"left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists left_stream (i int, s string)"},
+                        {"client":"python", "query_type": "table", "exist":"test10_vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test10_vk_right_stream (ii int, ss string) primary key (ii) settings mode='versioned_kv'"},
+                        {"client":"python", "query_type": "stream", "query_id":"1054", "wait":1, "terminate":"manuel", "query":"select i, s, ii, ss from left_stream inner latest join test10_vk_right_stream on i=ii"},
+                        {"client":"python", "query_type": "table", "depends_on":"1054", "wait":1, "query": "insert into test10_vk_right_stream(ii, ss) values (1, 'ss1')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_vk_right_stream(ii, ss) values (1, 'ss2')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i, s) values (1, 's1')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_vk_right_stream(ii, ss) values (1, 'ss3')"},
+                        {"client":"python", "query_type": "table", "kill":"1054", "kill_wait":3, "wait":1, "query": "insert into left_stream(i, s) values (1, 's2')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1054",
+                    "expected_results":[
+                        [1, "s1", 1, "ss2"],
+                        [1, "s2", 1, "ss3"]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 55,
+            "tags": ["data_enrichment_join", "inner-join"],
+            "name": "append-only_inner_latest_join_versioned-kv",
+            "description": "append-only INNER LATEST JOIN versioned-kv",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists left_stream"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test10_vk_right_stream"},
+                        {"client":"python", "query_type": "table", "exist":"left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists left_stream (i int, s string)"},
+                        {"client":"python", "query_type": "table", "exist":"test10_vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test10_vk_right_stream (ii int, ss string, value float) primary key (ii, ss) settings mode='versioned_kv'"},
+                        {"client":"python", "query_type": "stream", "query_id":"1055", "wait":1, "terminate":"manuel", "query":"select i, s, ii, ss, value from left_stream inner latest join test10_vk_right_stream on i=ii"},
+                        {"client":"python", "query_type": "table", "depends_on":"1055", "wait":1, "query": "insert into test10_vk_right_stream(ii, ss, value) values (1, 'ss1', 11.1)"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_vk_right_stream(ii, ss, value) values (1, 'ss2', 22.2)"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i, s) values (1, 's1')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_vk_right_stream(ii, ss, value) values (1, 'ss2', 33.3)"},
+                        {"client":"python", "query_type": "table", "kill":"1055", "kill_wait":3, "wait":1, "query": "insert into left_stream(i, s) values (1, 's2')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1055",
+                    "expected_results":[
+                        [1, "s1", 1, "ss2", 22.2],
+                        [1, "s2", 1, "ss2", 33.3]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 56,
+            "tags": ["data_enrichment_join", "left-join"],
+            "name": "append-only_left_all_join_append-only",
+            "description": "append-only left all join append-only",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test10_append_left_stream;"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test10_append_right_stream;"},
+                        {"client":"python", "query_type": "table", "exist":"test10_append_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test10_append_left_stream(i int, k string);"},
+                        {"client":"python", "query_type": "table", "exist":"test10_append_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test10_append_right_stream(j int, kk string);"},
+                        {"client":"python", "query_type": "stream", "query_id":"1056", "wait":1, "terminate":"manuel", "query":"select i, k, j, kk from test10_append_left_stream left join test10_append_right_stream on k == kk;"},
+                        {"client":"python", "query_type": "table", "depends_on":"1056", "wait":1, "query": "insert into test10_append_right_stream (j, kk) values (1, 'a') (1, 'b');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_left_stream (i, k) values (2, 'a');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_left_stream (i, k) values (2, 'b');"},
+                        {"client":"python", "query_type": "table", "kill":"1056", "kill_wait":3, "wait":1, "query": "insert into test10_append_left_stream (i, k) values (2, 'c');"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1056",
+                    "expected_results":[
+                        [2, "a", 1, "a"],
+                        [2, "b", 1, "b"],
+                        [2, "c", 0, ""]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 57,
+            "tags": ["data_enrichment_join", "left-join"],
+            "name": "append-only_left_all_join_versioned-kv",
+            "description": "append-only left all join versioned-kv",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test10_append_left_stream;"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test10_vk_right_stream;"},
+                        {"client":"python", "query_type": "table", "exist":"test10_append_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test10_append_left_stream(i int, k string);"},
+                        {"client":"python", "query_type": "table", "exist":"test10_vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test10_vk_right_stream(j int, k string, kk string) primary key (k, kk) settings mode='versioned_kv';"},
+                        {"client":"python", "query_type": "stream", "query_id":"1057", "wait":1, "terminate":"manuel", "query":"select i, test10_append_left_stream.k, j, test10_vk_right_stream.k, kk from test10_append_left_stream left join test10_vk_right_stream on test10_append_left_stream.k == test10_vk_right_stream.k;"},
+                        {"client":"python", "query_type": "table", "depends_on":"1057", "wait":1, "query": "insert into test10_vk_right_stream (j, k, kk) values (1, 'a', 'bb') (1, 'a', 'cc');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_left_stream (i, k) values (1, 'a');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_vk_right_stream (j, k, kk) values (2, 'a', 'cc');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_left_stream (i, k) values (2, 'a');"},
+                        {"client":"python", "query_type": "table", "kill":"1057", "kill_wait":3, "wait":1, "query": "insert into test10_append_left_stream (i, k) values (2, 'b');"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1057",
+                    "expected_results":[
+                        [1, "a", 1, "a", "bb"],
+                        [1, "a", 1, "a", "cc"],
+                        [2, "a", 1, "a", "bb"],
+                        [2, "a", 2, "a", "cc"],
+                        [2, "b", 0, "", ""]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 58,
+            "tags": ["data_enrichment_join", "left-join"],
+            "name": "append-only_left_asof_join_append-only",
+            "description": "append-only left asof join append-only",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test10_append_left_stream;"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test10_append_right_stream;"},
+                        {"client":"python", "query_type": "table", "exist":"test10_append_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test10_append_left_stream(i int, k string);"},
+                        {"client":"python", "query_type": "table", "exist":"test10_append_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test10_append_right_stream(j int, kk string);"},
+                        {"client":"python", "query_type": "stream", "query_id":"1058", "wait":1, "terminate":"manuel", "query":"SELECT i, k, j, kk FROM test10_append_left_stream left asof join test10_append_right_stream ON k = kk AND i <= j"},
+                        {"client":"python", "query_type": "table", "depends_on":"1058", "wait":1, "query": "insert into test10_append_right_stream(j, kk) VALUES (1, 'a'), (3, 'a'), (2, 'b'), (4, 'c');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_left_stream(i, k) VALUES (2, 'a');"},
+                        {"client":"python", "query_type": "table", "kill":"1058", "kill_wait":3, "wait":1, "query": "insert into test10_append_left_stream(i, k) VALUES (3, 'b');"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1058",
+                    "expected_results":[
+                        [2, "a", 3, "a"],
+                        [3, "b", 0, ""]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 59,
+            "tags": ["data_enrichment_join", "left-join"],
+            "name": "append-only_left_asof_join_versioned-kv",
+            "description": "append-only left asof join versioned-kv",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test10_append_left_stream;"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test10_vk_right_stream;"},
+                        {"client":"python", "query_type": "table", "exist":"test10_append_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test10_append_left_stream(i int, k string);"},
+                        {"client":"python", "query_type": "table", "exist":"test10_vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test10_vk_right_stream(j int, k string, kk string) primary key (k, kk) settings mode='versioned_kv';"},
+                        {"client":"python", "query_type": "stream", "query_id":"1059", "wait":1, "terminate":"manuel", "query":"SELECT i, test10_append_left_stream.k, j, test10_vk_right_stream.k, kk FROM test10_append_left_stream left asof JOIN test10_vk_right_stream ON test10_append_left_stream.k = test10_vk_right_stream.k AND i <= j SETTINGS keep_versions = 3"},
+                        {"client":"python", "query_type": "table", "depends_on":"1059", "wait":1, "query": "INSERT INTO test10_vk_right_stream(j, k, kk) VALUES (100, 'a', 'bb'), (102, 'a', 'cc'), (103, 'a', 'dd'), (104, 'a', 'ee');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "INSERT INTO test10_append_left_stream(i, k) VALUES (101, 'a');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "INSERT INTO test10_vk_right_stream(j, k, kk) VALUES (105, 'a', 'cc');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "INSERT INTO test10_append_left_stream(i, k) VALUES (101, 'a');"},
+                        {"client":"python", "query_type": "table", "kill":"1059", "kill_wait":3, "wait":1, "query": "INSERT INTO test10_append_left_stream(i, k) VALUES (106, 'a');"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1059",
+                    "expected_results":[
+                        [101, "a", 102, "a", "cc"],
+                        [101, "a", 103, "a", "dd"],
+                        [106, "a", 0, "", ""]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 60,
+            "tags": ["data_enrichment_join", "left-join"],
+            "name": "append-only_left_latest_join_append-only",
+            "description": "append-only left latest join append-only",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test10_append_left_stream;"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test10_append_right_stream;"},
+                        {"client":"python", "query_type": "table", "exist":"test10_append_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test10_append_left_stream (i int, s string);"},
+                        {"client":"python", "query_type": "table", "exist":"test10_append_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test10_append_right_stream (ii int, ss string);"},
+                        {"client":"python", "query_type": "stream", "query_id":"1060", "wait":1, "terminate":"manuel", "query":"select i, s, ii, ss from test10_append_left_stream left latest join test10_append_right_stream on i=ii"},
+                        {"client":"python", "query_type": "table", "depends_on":"1060", "wait":1, "query": "insert into test10_append_right_stream(ii, ss) values (1, 'ss1')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_left_stream(i, s) values (1, 's1');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_right_stream(ii, ss) values (1, 'ss3');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_left_stream(i, s) values (1, 's2');"},
+                        {"client":"python", "query_type": "table", "kill":"1060", "kill_wait":3, "wait":1, "query": "insert into test10_append_left_stream(i, s) values (2, 's3');"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1060",
+                    "expected_results":[
+                        [1, "s1", 1, "ss1"],
+                        [1, "s2", 1, "ss3"],
+                        [2, "s3", 0, ""]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 61,
+            "tags": ["data_enrichment_join", "left-join"],
+            "name": "append-only_left_latest_join_versioned-kv",
+            "description": "append-only left latest join versioned-kv",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test10_append_left_stream;"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test10_vk_right_stream;"},
+                        {"client":"python", "query_type": "table", "exist":"test10_append_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test10_append_left_stream (i int, s string);"},
+                        {"client":"python", "query_type": "table", "exist":"test10_vk_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test10_vk_right_stream (ii int, ss string) primary key ss settings mode='versioned_kv';"},
+                        {"client":"python", "query_type": "stream", "query_id":"1061", "wait":1, "terminate":"manuel", "query":"select i, s, ii, ss from test10_append_left_stream left latest join test10_vk_right_stream on i=ii;"},
+                        {"client":"python", "query_type": "table", "depends_on":"1061", "wait":1, "query": "insert into test10_vk_right_stream(ii, ss) values (1, 'ss1') (1, 'ss2');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_left_stream(i, s) values (1, 's1');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_vk_right_stream(ii, ss) values (2, 'ss2');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_left_stream(i, s) values (2, 's2');"},
+                        {"client":"python", "query_type": "table", "kill":"1061", "kill_wait":3, "wait":1, "query": "insert into test10_append_left_stream(i, s) values (3, 's3');"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1061",
+                    "expected_results":[
+                        [1, "s1", 1, "ss2"],
+                        [2, "s2", 2, "ss2"],
+                        [3, "s3", 0, ""]
+                    ]
+                }
+            ]
+        }
+    ]
+}
