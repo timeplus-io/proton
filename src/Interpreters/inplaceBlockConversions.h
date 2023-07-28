@@ -34,7 +34,8 @@ ActionsDAGPtr evaluateMissingDefaults(
     const ColumnsDescription & columns,
     ContextPtr context,
     bool save_unneeded_columns = true,
-    bool null_as_default = false);
+    bool null_as_default = false,
+    bool use_streaming_func = false);
 
 /// Tries to convert columns in block to required_columns
 void performRequiredConversions(Block & block, const NamesAndTypesList & required_columns, ContextPtr context);

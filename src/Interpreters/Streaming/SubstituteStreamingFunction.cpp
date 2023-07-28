@@ -127,5 +127,10 @@ bool StreamingFunctionData::ignoreSubquery(const DB::ASTPtr &, const DB::ASTPtr 
     return true;
 }
 
+void StreamingNowFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
+{
+    if (func.name == "now" || func.name == "now64")
+        func.name = "__streaming_" + func.name;
+}
 }
 }

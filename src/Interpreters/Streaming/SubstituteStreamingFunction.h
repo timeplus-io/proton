@@ -32,5 +32,13 @@ private:
 
 using SubstituteStreamingFunctionVisitor = InDepthNodeVisitor<OneTypeMatcher<StreamingFunctionData, StreamingFunctionData::ignoreSubquery>, false>;
 
+struct StreamingNowFunctionData
+{
+    using TypeToVisit = ASTFunction;
+
+    void visit(ASTFunction & func, ASTPtr);
+};
+
+using SubstituteStreamingNowFunctionVisitor = InDepthNodeVisitor<OneTypeMatcher<StreamingNowFunctionData>, false>;
 }
 }

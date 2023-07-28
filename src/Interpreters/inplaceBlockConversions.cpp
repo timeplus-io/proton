@@ -20,6 +20,9 @@
 #include <DataTypes/DataTypeArray.h>
 #include <Storages/StorageInMemoryMetadata.h>
 
+/// proton: starts.
+#include <Interpreters/Streaming/SubstituteStreamingFunction.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -185,12 +188,21 @@ ActionsDAGPtr evaluateMissingDefaults(
     const ColumnsDescription & columns,
     ContextPtr context,
     bool save_unneeded_columns,
-    bool null_as_default)
+    bool null_as_default,
+    bool is_streaming)
 {
     if (!columns.hasDefaults())
         return nullptr;
 
     ASTPtr expr_list = defaultRequiredExpressions(header, required_columns, columns, null_as_default);
+    /// proton: starts.
+    /// For streaming `insert select`, we should use `__streaming_now/__streaming_now64` to avoid generate same time for each block
+    if (expr_list && is_streaming)
+    {
+        Streaming::SubstituteStreamingNowFunctionVisitor::Data data;
+        Streaming::SubstituteStreamingNowFunctionVisitor(data).visit(expr_list);
+    }
+    /// proton: ends.
     return createExpressions(header, expr_list, save_unneeded_columns, required_columns, context);
 }
 

@@ -26,7 +26,7 @@ using ActionsDAGPtr = std::shared_ptr<ActionsDAG>;
   */
 ActionsDAGPtr addMissingDefaults(
     const Block & header, const NamesAndTypesList & required_columns,
-    const ColumnsDescription & columns, ContextPtr context, bool null_as_default = false);
+    const ColumnsDescription & columns, ContextPtr context, bool null_as_default = false, bool is_streaming = false);
 
 /// proton: make insert as light as possible. After tailing from streaming store, we will add other missing columns
 /** Adds 2 types of columns into block
@@ -37,5 +37,5 @@ ActionsDAGPtr addMissingDefaults(
   */
 ActionsDAGPtr addMissingDefaultsWithDefaults(
     const Block & header, const NamesAndTypesList & required_columns,
-    const ColumnsDescription & columns, ContextPtr context, bool null_as_default = false);
+    const ColumnsDescription & columns, ContextPtr context, bool null_as_default = false, bool is_streaming = false);
 }

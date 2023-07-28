@@ -38,14 +38,16 @@ public:
         const StorageMetadataPtr & metadata_snapshot,
         const Names & columns,
         ThreadStatus * thread_status = nullptr,
-        std::atomic_uint64_t * elapsed_counter_ms = nullptr);
+        std::atomic_uint64_t * elapsed_counter_ms = nullptr,
+        bool is_streaming = false);
 
     Chain buildChainLightImpl(
         const StoragePtr & table,
         const StorageMetadataPtr & metadata_snapshot,
         const Block & query_sample_block,
         ThreadStatus * thread_status,
-        std::atomic_uint64_t * elapsed_counter_ms);
+        std::atomic_uint64_t * elapsed_counter_ms,
+        bool is_streaming = false);
 
     static void extendQueryLogElemImpl(QueryLogElement & elem, ContextPtr context_);
     void extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr & ast, ContextPtr context_) const override;
@@ -69,7 +71,8 @@ private:
         const StorageMetadataPtr & metadata_snapshot,
         const Block & query_sample_block,
         ThreadStatus * thread_status,
-        std::atomic_uint64_t * elapsed_counter_ms);
+        std::atomic_uint64_t * elapsed_counter_ms,
+        bool is_streaming);
 };
 
 

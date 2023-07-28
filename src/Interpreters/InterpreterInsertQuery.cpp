@@ -189,10 +189,11 @@ Chain InterpreterInsertQuery::buildChain(
     const StorageMetadataPtr & metadata_snapshot,
     const Names & columns,
     ThreadStatus * thread_status,
-    std::atomic_uint64_t * elapsed_counter_ms)
+    std::atomic_uint64_t * elapsed_counter_ms,
+    bool is_streaming)
 {
     auto sample = getSampleBlock(columns, table, metadata_snapshot);
-    return buildChainImpl(table, metadata_snapshot, sample , thread_status, elapsed_counter_ms);
+    return buildChainImpl(table, metadata_snapshot, sample , thread_status, elapsed_counter_ms, is_streaming);
 }
 
 Chain InterpreterInsertQuery::buildChainImpl(
@@ -200,12 +201,13 @@ Chain InterpreterInsertQuery::buildChainImpl(
     const StorageMetadataPtr & metadata_snapshot,
     const Block & query_sample_block,
     ThreadStatus * thread_status,
-    std::atomic_uint64_t * elapsed_counter_ms)
+    std::atomic_uint64_t * elapsed_counter_ms,
+    bool is_streaming)
 {
     auto context_ptr = getContext();
     const Settings & settings = context_ptr->getSettingsRef();
     if (table->getName() == "Stream" && settings.enable_light_ingest)
-        return buildChainLightImpl(table, metadata_snapshot, query_sample_block, thread_status, elapsed_counter_ms);
+        return buildChainLightImpl(table, metadata_snapshot, query_sample_block, thread_status, elapsed_counter_ms, is_streaming);
 
     /// The only case is system tables inserts. System tables are still merge tree
     /// we don't support in-memory table
@@ -240,7 +242,8 @@ Chain InterpreterInsertQuery::buildChainImpl(
         out.getInputHeader().getNamesAndTypesList(),
         metadata_snapshot->getColumns(),
         context_ptr,
-        null_as_default);
+        null_as_default,
+        is_streaming);
 
     auto adding_missing_defaults_actions = std::make_shared<ExpressionActions>(adding_missing_defaults_dag);
 
@@ -279,7 +282,8 @@ Chain InterpreterInsertQuery::buildChainLightImpl(
     const StorageMetadataPtr & metadata_snapshot,
     const Block & query_sample_block,
     ThreadStatus * thread_status,
-    std::atomic_uint64_t * elapsed_counter_ms)
+    std::atomic_uint64_t * elapsed_counter_ms,
+    bool is_streaming)
 {
     auto context_ptr = getContext();
     const ASTInsertQuery * query = nullptr;
@@ -348,7 +352,8 @@ Chain InterpreterInsertQuery::buildChainLightImpl(
         required_columns,
         metadata_snapshot->getColumns(),
         context_ptr,
-        null_as_default);
+        null_as_default,
+        is_streaming);
     auto final_header = ExpressionTransform::transformHeader(query_sample_block, *adding_missing_defaults_dag);
 
     /// Compare final_header with metadata_snapshot. If final_header doesn't contain all columns in metadata_snapshot
@@ -512,7 +517,7 @@ BlockIO InterpreterInsertQuery::execute()
 
         for (size_t i = 0; i < out_streams_size; ++i)
         {
-            auto out = buildChainImpl(table, metadata_snapshot, query_sample_block, nullptr, nullptr);
+            auto out = buildChainImpl(table, metadata_snapshot, query_sample_block, nullptr, nullptr, pipeline.isStreaming());
             out_chains.emplace_back(std::move(out));
         }
     }

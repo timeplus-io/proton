@@ -603,7 +603,7 @@ void StorageMaterializedView::doBuildBackgroundPipeline()
     /// Sink to target table
     InterpreterInsertQuery interpreter(nullptr, local_context, false, false, false);
     /// FIXME, thread status
-    auto out_chain = interpreter.buildChain(target_table, target_metadata_snapshot, insert_columns, nullptr, nullptr);
+    auto out_chain = interpreter.buildChain(target_table, target_metadata_snapshot, insert_columns, nullptr, nullptr, background_pipeline.isStreaming());
     out_chain.addStorageHolder(target_table);
 
     background_pipeline.addChain(std::move(out_chain));

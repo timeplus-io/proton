@@ -20,7 +20,8 @@ ActionsDAGPtr addMissingDefaults(
     const NamesAndTypesList & required_columns,
     const ColumnsDescription & columns,
     ContextPtr context,
-    bool null_as_default)
+    bool null_as_default,
+    bool is_streaming)
 {
     auto actions = std::make_shared<ActionsDAG>(header.getColumnsWithTypeAndName());
     auto & index = actions->getOutputs();
@@ -81,7 +82,7 @@ ActionsDAGPtr addMissingDefaults(
     }
 
     /// Computes explicitly specified values by default and materialized columns.
-    if (auto dag = evaluateMissingDefaults(actions->getResultColumns(), required_columns, columns, context, true, null_as_default))
+    if (auto dag = evaluateMissingDefaults(actions->getResultColumns(), required_columns, columns, context, true, null_as_default, is_streaming))
         actions = ActionsDAG::merge(std::move(*actions), std::move(*dag));
     else
         /// Removes unused columns and reorders result.
@@ -97,11 +98,12 @@ ActionsDAGPtr addMissingDefaultsWithDefaults(
     const NamesAndTypesList & required_columns,
     const ColumnsDescription & columns,
     ContextPtr context,
-    bool null_as_default)
+    bool null_as_default,
+    bool is_streaming)
 {
     auto actions = std::make_shared<ActionsDAG>(header.getColumnsWithTypeAndName());
     /// Computes explicitly specified values by default and materialized columns.
-    if (auto dag = evaluateMissingDefaults(actions->getResultColumns(), required_columns, columns, context, true, null_as_default))
+    if (auto dag = evaluateMissingDefaults(actions->getResultColumns(), required_columns, columns, context, true, null_as_default, is_streaming))
         actions = ActionsDAG::merge(std::move(*actions), std::move(*dag));
     else
         /// Removes unused columns and reorders result.
