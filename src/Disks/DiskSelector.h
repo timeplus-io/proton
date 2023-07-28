@@ -19,7 +19,7 @@ class DiskSelector
 {
 public:
     DiskSelector() = default;
-    DiskSelector(const DiskSelector & from) : disks(from.disks) { }
+    DiskSelector(const DiskSelector & from) = default;
 
     void initialize(const Poco::Util::AbstractConfiguration & config, const String & config_prefix, ContextPtr context);
 
