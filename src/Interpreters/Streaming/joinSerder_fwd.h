@@ -6,9 +6,7 @@
 
 namespace DB
 {
-class WriteBuffer;
-class ReadBuffer;
-class Arena;
+struct LightChunk;
 
 namespace Streaming
 {
@@ -25,11 +23,13 @@ template <typename DataBlock>
 using DeserializedIndicesToBlocks = std::unordered_map<UInt32, RefCountBlockListIter<DataBlock>>;
 
 
+template <typename DataBlock>
 struct RowRefListMultipleRef;
 
 /// <RowRefWithRefCount *, serialized_index>
 using SerializedRowRefListMultipleToIndices = std::unordered_map<std::uintptr_t, UInt32>;
 /// <deserialized_index, RowRefListMultipleRef>
-using DeserializedIndicesToRowRefListMultiple = std::unordered_map<UInt32, RowRefListMultipleRef>;
+template <typename DataBlock>
+using DeserializedIndicesToRowRefListMultiple = std::unordered_map<UInt32, RowRefListMultipleRef<DataBlock>>;
 }
 }

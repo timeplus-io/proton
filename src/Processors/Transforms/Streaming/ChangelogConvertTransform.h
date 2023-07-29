@@ -84,13 +84,13 @@ private:
 
     SERDE size_t late_rows = 0;
     SERDE CachedBlockMetrics metrics;
-    SERDE RefCountBlockList<Chunk> source_chunks;
+    SERDE RefCountBlockList<LightChunk> source_chunks;
 
     Port::Data input_data;
     std::list<Chunk> output_chunks;
 
     /// Index blocks by key columns
-    SERDE HashMapsTemplate<std::unique_ptr<RowRefWithRefCount<Chunk>>> index;
+    SERDE HashMapsTemplate<std::unique_ptr<RowRefWithRefCount<LightChunk>>> index;
     Arena pool;
 
     int64_t last_log_ts = 0;

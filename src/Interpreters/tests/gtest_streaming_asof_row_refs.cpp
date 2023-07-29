@@ -108,7 +108,7 @@ void commonTest(const std::vector<Case> & cases)
         auto left_block{prepareLeftBlock(join_metrics)};
 
         auto & asof_col = left_block.getByPosition(0);
-        DB::Streaming::AsofRowRefs row_refs(asof_col.type->getTypeId());
+        DB::Streaming::AsofRowRefs<DB::Block> row_refs(asof_col.type->getTypeId());
 
         ret_right_blocks = forEachRightBlock(join_metrics, [&](auto * right_blocks) {
             auto & last_block = right_blocks->lastBlock();

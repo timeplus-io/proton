@@ -1,5 +1,6 @@
-#include "SimpleNativeReader.h"
+#include <Formats/SimpleNativeReader.h>
 
+#include <Core/LightChunk.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/Serializations/SerializationInfo.h>
@@ -40,6 +41,48 @@ void readData(const ISerialization & serialization, ColumnPtr & column, ReadBuff
             "Cannot read all data in NativeBlockInputStream. Rows read: {}. Rows expected: {}",
             column->size(),
             rows);
+}
+
+void readColumns(Columns & res, const Block & header, UInt64 server_revision, ReadBuffer & istr)
+{
+    assert(res.empty());
+
+    if (istr.eof())
+        return;
+
+    /// Dimensions
+    size_t columns = 0;
+    size_t rows = 0;
+
+    readVarUInt(columns, istr);
+    readVarUInt(rows, istr);
+
+    if (rows == 0)
+        return;
+
+    res.reserve(columns);
+    for (size_t i = 0; i < columns; ++i)
+    {
+        auto type = header.getByPosition(i).type;
+
+        setVersionToAggregateFunctions(type, true, server_revision);
+
+        auto info = type->createSerializationInfo({});
+
+        UInt8 has_custom;
+        readBinary(has_custom, istr);
+        if (has_custom)
+            info->deserializeFromKindsBinary(istr);
+
+        SerializationPtr serialization = type->getSerialization(*info);
+
+        /// Data
+        ColumnPtr read_column = type->createColumn(*serialization);
+
+        readData(*serialization, read_column, istr, rows, 0);
+
+        res.emplace_back(std::move(read_column));
+    }
 }
 }
 
@@ -102,59 +145,47 @@ Block readBlock(UInt64 server_revision, ReadBuffer & istr)
 
 Chunk readChunk(const Block & header, UInt64 server_revision, ReadBuffer & istr)
 {
-    Chunk res;
+    Columns columns;
 
-    if (istr.eof())
-        return res;
+    readColumns(columns, header, server_revision, istr);
 
-    /// Dimensions
-    size_t columns = 0;
-    size_t rows = 0;
+    auto rows = columns.empty() ? 0 : columns[0]->size();
+    return Chunk{std::move(columns), rows};
+}
 
-    readVarUInt(columns, istr);
-    readVarUInt(rows, istr);
+LightChunk readLightChunk(const Block & header, UInt64 server_revision, ReadBuffer & istr)
+{
+    LightChunk res;
+    readColumns(res.data, header, server_revision, istr);
+    return res;
+}
 
-    if (rows == 0)
-        return res;
-
-    for (size_t i = 0; i < columns; ++i)
-    {
-        auto type = header.getByPosition(i).type;
-
-        setVersionToAggregateFunctions(type, true, server_revision);
-
-        auto info = type->createSerializationInfo({});
-
-        UInt8 has_custom;
-        readBinary(has_custom, istr);
-        if (has_custom)
-            info->deserializeFromKindsBinary(istr);
-
-        SerializationPtr serialization = type->getSerialization(*info);
-
-        /// Data
-        ColumnPtr read_column = type->createColumn(*serialization);
-
-        readData(*serialization, read_column, istr, rows, 0);
-
-        res.addColumn(std::move(read_column));
-    }
-
+LightChunkWithTimestamp readLightChunkWithTimestamp(const Block & header, UInt64 server_revision, ReadBuffer & istr)
+{
+    LightChunkWithTimestamp res;
+    readIntBinary(res.min_timestamp, istr);
+    readIntBinary(res.max_timestamp, istr);
+    readColumns(res.data, header, server_revision, istr);
     return res;
 }
 
 template <typename DataBlock>
-requires(std::is_same_v<DataBlock, Block> || std::is_same_v<DataBlock, Chunk>)
 DataBlock SimpleNativeReader<DataBlock>::read()
 {
     if constexpr (std::is_same_v<DataBlock, Block>)
         return readBlock(server_revision, istr);
     else if constexpr (std::is_same_v<DataBlock, Chunk>)
         return readChunk(header, server_revision, istr);
+    else if constexpr (std::is_same_v<DataBlock, LightChunk>)
+        return readLightChunk(header, server_revision, istr);
+    else if constexpr (std::is_same_v<DataBlock, LightChunkWithTimestamp>)
+        return readLightChunkWithTimestamp(header, server_revision, istr);
 
     UNREACHABLE();
 }
 
 template class SimpleNativeReader<Block>;
 template class SimpleNativeReader<Chunk>;
+template class SimpleNativeReader<LightChunk>;
+template class SimpleNativeReader<LightChunkWithTimestamp>;
 }

@@ -8,11 +8,12 @@
 
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/TableJoin.h>
+#include <base/SerdeTag.h>
 #include <Common/ColumnUtils.h>
+#include <Common/HashMapsTemplate.h>
 #include <Common/HashTable/FixedHashMap.h>
 #include <Common/HashTable/HashMap.h>
 #include <Common/ProtonCommon.h>
-#include <base/SerdeTag.h>
 
 namespace DB
 {
@@ -202,116 +203,19 @@ public:
 
     void cancel() override { }
 
-/// Different types of keys for maps.
-#define APPLY_FOR_JOIN_VARIANTS(M) \
-    M(key8) \
-    M(key16) \
-    M(key32) \
-    M(key64) \
-    M(key_string) \
-    M(key_fixed_string) \
-    M(keys128) \
-    M(keys256) \
-    M(hashed)
+    using RefListMultiple = RowRefListMultiple<JoinDataBlock>;
+    using RefListMultipleRef = RowRefListMultipleRef<JoinDataBlock>;
+    using RefListMultipleRefPtr = RowRefListMultipleRefPtr<JoinDataBlock>;
 
-
-/// Used for reading from StorageJoin and applying joinGet function
-#define APPLY_FOR_JOIN_VARIANTS_LIMITED(M) \
-    M(key8) \
-    M(key16) \
-    M(key32) \
-    M(key64) \
-    M(key_string) \
-    M(key_fixed_string)
-
-    enum class Type
-    {
-#define M(NAME) NAME,
-        APPLY_FOR_JOIN_VARIANTS(M)
-#undef M
-    };
-
-    /** Different data structures, that are used to perform JOIN.
-      */
-    template <typename Mapped>
-    struct MapsTemplate
-    {
-        using MappedType = Mapped;
-        std::unique_ptr<FixedHashMap<UInt8, Mapped>> key8;
-        std::unique_ptr<FixedHashMap<UInt16, Mapped>> key16;
-        std::unique_ptr<HashMap<UInt32, Mapped, HashCRC32<UInt32>>> key32;
-        std::unique_ptr<HashMap<UInt64, Mapped, HashCRC32<UInt64>>> key64;
-        std::unique_ptr<HashMapWithSavedHash<StringRef, Mapped>> key_string;
-        std::unique_ptr<HashMapWithSavedHash<StringRef, Mapped>> key_fixed_string;
-        std::unique_ptr<HashMap<UInt128, Mapped, UInt128HashCRC32>> keys128;
-        std::unique_ptr<HashMap<UInt256, Mapped, UInt256HashCRC32>> keys256;
-        std::unique_ptr<HashMap<UInt128, Mapped, UInt128TrivialHash>> hashed;
-
-        void create(Type which)
-        {
-            switch (which)
-            {
-#define M(NAME) \
-    case Type::NAME: \
-        NAME = std::make_unique<typename decltype(NAME)::element_type>(); \
-        break;
-                APPLY_FOR_JOIN_VARIANTS(M)
-#undef M
-            }
-        }
-
-        size_t getTotalRowCount(Type which) const
-        {
-            switch (which)
-            {
-#define M(NAME) \
-    case Type::NAME: \
-        return NAME ? NAME->size() : 0;
-                APPLY_FOR_JOIN_VARIANTS(M)
-#undef M
-            }
-
-            UNREACHABLE();
-        }
-
-        size_t getTotalByteCountImpl(Type which) const
-        {
-            switch (which)
-            {
-#define M(NAME) \
-    case Type::NAME: \
-        return NAME ? NAME->getBufferSizeInBytes() : 0;
-                APPLY_FOR_JOIN_VARIANTS(M)
-#undef M
-            }
-
-            UNREACHABLE();
-        }
-
-        size_t getBufferSizeInCells(Type which) const
-        {
-            switch (which)
-            {
-#define M(NAME) \
-    case Type::NAME: \
-        return NAME ? NAME->getBufferSizeInCells() : 0;
-                APPLY_FOR_JOIN_VARIANTS(M)
-#undef M
-            }
-
-            UNREACHABLE();
-        }
-    };
-
-    using MapsOne = MapsTemplate<RowRefWithRefCount<Block>>;
-    using MapsMultiple = MapsTemplate<RowRefListMultiplePtr>;
-    using MapsAll = MapsTemplate<RowRefList>;
-    using MapsAsof = MapsTemplate<AsofRowRefs>;
-    using MapsRangeAsof = MapsTemplate<RangeAsofRowRefs>;
+    using MapsOne = HashMapsTemplate<RowRefWithRefCount<JoinDataBlock>>;
+    using MapsMultiple = HashMapsTemplate<RowRefListMultiplePtr<JoinDataBlock>>;
+    using MapsAll = HashMapsTemplate<RowRefList<JoinDataBlock>>;
+    using MapsAsof = HashMapsTemplate<AsofRowRefs<JoinDataBlock>>;
+    using MapsRangeAsof = HashMapsTemplate<RangeAsofRowRefs<JoinDataBlock>>;
     using MapsVariant = std::variant<MapsOne, MapsAll, MapsAsof, MapsRangeAsof, MapsMultiple>;
 
     size_t sizeOfMapsVariant(const MapsVariant & maps_variant) const;
-    Type getHashMethodType() const { return hash_method_type; }
+    HashType getHashMethodType() const { return hash_method_type; }
 
     /// bool isUsed(size_t off) const { return used_flags.getUsedSafe(off); }
     /// bool isUsed(const Block * block_ptr, size_t row_idx) const { return used_flags.getUsedSafe(block_ptr, row_idx); }
@@ -321,29 +225,23 @@ public:
     /// For changelog emit
     struct JoinResults
     {
-        JoinResults() : blocks(metrics), maps(std::make_unique<HashJoinMapsVariants>()) { }
-
-        void addBlockWithoutLock(Block && block)
-        {
-            block.info.setBlockID(block_id++);
-            blocks.updateMetrics(block);
-        }
+        JoinResults(const Block & header_) : sample_block(header_), blocks(metrics), maps(std::make_unique<HashJoinMapsVariants>()) { }
 
         String joinMetricsString(const HashJoin * join) const;
 
         mutable std::mutex mutex;
 
-        CachedBlockMetrics metrics;
-        RefCountBlockList<Block> blocks;
+        Block sample_block;
 
-        UInt64 block_id = 0;
+        SERDE CachedBlockMetrics metrics;
+        SERDE JoinDataBlockList blocks;
 
         /// Arena pool to hold the (string) keys
         Arena pool;
 
         /// Building hash map for joined blocks, then we can find previous
         /// join blocks quickly by using joined keys
-        std::unique_ptr<HashJoinMapsVariants> maps;
+        SERDE std::unique_ptr<HashJoinMapsVariants> maps;
     };
 
 private:
@@ -364,7 +262,6 @@ private:
     void initBlockStructure(JoinData & join_data, const Block & table_keys, const Block & sample_block_with_columns_to_add) const;
 
     void chooseHashMethod();
-    static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
 
     void validateAsofJoinKey();
 
@@ -385,7 +282,7 @@ private:
     std::vector<Block> insertBlockToRangeBucketsAndJoin(Block block);
 
     template <bool is_left_block>
-    Int64 doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std::vector<RowRefListMultipleRef *> row_refs = {});
+    void doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std::vector<RefListMultipleRef *> row_refs = {});
 
     /// For bidirectional hash join
     /// Return retracted block if needs emit changelog, otherwise empty block
@@ -412,10 +309,10 @@ private:
     /// For versioned-kv / changelog-kv join
     /// Check if this ia row with a new primary key or an existing primary key
     /// For the later, erase the element in the target join linked list
-    std::vector<RowRefListMultipleRef *> eraseOrAppendForPartialPrimaryKeyJoin(const Block & block);
+    std::vector<RefListMultipleRef *> eraseOrAppendForPartialPrimaryKeyJoin(const Block & block);
 
     template <typename KeyGetter, typename Map>
-    std::vector<RowRefListMultipleRef *> eraseOrAppendForPartialPrimaryKeyJoin(Map & map, ColumnRawPtrs && primary_key_columns);
+    std::vector<RefListMultipleRef *> eraseOrAppendForPartialPrimaryKeyJoin(Map & map, ColumnRawPtrs && primary_key_columns);
 
     /// If the left / right_block is a retraction block : rows in `_tp_delta` column all have `-1`
     /// We erase the previous key / values from hash table
@@ -462,9 +359,9 @@ private:
     /// init this data structure
     struct PrimaryKeyHashTable
     {
-        PrimaryKeyHashTable(Type hash_method_type_, Sizes && key_size_);
+        PrimaryKeyHashTable(HashType hash_method_type_, Sizes && key_size_);
 
-        Type hash_method_type;
+        HashType hash_method_type;
 
         Sizes key_size;
 
@@ -472,7 +369,7 @@ private:
         Arena pool;
 
         /// Hash maps variants indexed by primary key columns
-        MapsTemplate<RowRefListMultipleRefPtr> map;
+        SERDE HashMapsTemplate<RefListMultipleRefPtr> map;
     };
     using PrimaryKeyHashTablePtr = std::shared_ptr<PrimaryKeyHashTable>;
 
@@ -490,7 +387,7 @@ private:
         /// Only for kv join. Used to maintain all unique keys
         PrimaryKeyHashTablePtr primary_key_hash_table;
 
-        BufferedStreamDataPtr buffered_data;
+        SERDE BufferedStreamDataPtr buffered_data;
 
         /// Block with columns from the (left or) right-side table except key columns.
         Block sample_block_with_columns_to_add;
@@ -519,7 +416,7 @@ private:
     /// Changes in hash table broke correspondence,
     /// mutable JoinStuff::JoinUsedFlags used_flags;
 
-    SERDE Type hash_method_type;
+    SERDE HashType hash_method_type;
 
     /// Only SERDE when emit_changelog is true
     SERDE std::optional<JoinResults> join_results;

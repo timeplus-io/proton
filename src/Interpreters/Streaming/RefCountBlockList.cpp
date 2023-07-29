@@ -67,7 +67,7 @@ void RefCountBlockList<DataBlock>::deserialize(
     }
 }
 
-template struct RefCountBlockList<Block>;
-template struct RefCountBlockList<Chunk>;
+template struct RefCountBlockList<LightChunk>;
+template struct RefCountBlockList<LightChunkWithTimestamp>;
 }
 }

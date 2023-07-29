@@ -46,19 +46,19 @@ struct Case
 
 void commonTest(const std::vector<Case> & cases, const DB::Streaming::RangeAsofJoinContext & range_ctx)
 {
-    auto right_block{prepareRightBlock()};
+    DB::LightChunkWithTimestamp right_block{prepareRightBlock()};
     auto left_block{prepareLeftBlock()};
 
     auto & asof_col = left_block.getByPosition(0);
 
-    DB::Streaming::RangeAsofRowRefs row_refs(asof_col.type->getTypeId());
+    DB::Streaming::RangeAsofRowRefs<DB::LightChunkWithTimestamp> row_refs(asof_col.type->getTypeId());
 
     for (size_t i = 0; i < right_block.rows(); ++i)
         row_refs.insert(asof_col.type->getTypeId(), *asof_col.column, &right_block, i);
 
     for (const auto & test_case : cases)
     {
-        auto results{row_refs.findRange(asof_col.type->getTypeId(), range_ctx, *asof_col.column, test_case.row_num, 0, true)};
+        auto results{row_refs.findRange(asof_col.type->getTypeId(), range_ctx, *asof_col.column, test_case.row_num, true)};
 
         /// expected matching rows: 0, 1, 2
         ASSERT_EQ(results.size(), test_case.expected_matching_rows.size());

@@ -181,8 +181,6 @@ public:
     Int64 watermark() const noexcept { return info.watermark; }
     void setMinTimestamp(Int64 min_ts) noexcept { info.watermark_lower_bound = min_ts; }
     void setMaxTimestamp(Int64 max_ts) noexcept { info.watermark = max_ts; }
-    void setBlockID(Int64 block_id) noexcept { info.setBlockID(block_id); }
-    Int64 blockID() const noexcept { return info.blockID(); }
     /// proton: ends
 
 private:

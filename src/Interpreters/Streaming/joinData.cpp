@@ -155,7 +155,7 @@ void BufferedStreamData::updateAsofJoinColumnPositionAndScale(UInt16 scale, size
 }
 
 
-Int64 BufferedStreamData::addBlock(Block && block)
+void BufferedStreamData::addBlock(JoinDataBlock && block)
 {
     assert(current_hash_blocks);
 
@@ -163,14 +163,9 @@ Int64 BufferedStreamData::addBlock(Block && block)
     return addBlockWithoutLock(std::move(block), current_hash_blocks);
 }
 
-Int64 BufferedStreamData::addBlockWithoutLock(Block && block, HashBlocksPtr & target_hash_blocks)
+void BufferedStreamData::addBlockWithoutLock(JoinDataBlock && block, HashBlocksPtr & target_hash_blocks)
 {
-    block.setBlockID(block_id++);
-    auto allocated_block_id = block.blockID();
-
     target_hash_blocks->addBlock(std::move(block));
-
-    return allocated_block_id;
 }
 
 std::vector<BufferedStreamData::BucketBlock> BufferedStreamData::assignBlockToRangeBuckets(Block && block)
@@ -302,21 +297,21 @@ void BufferedStreamData::serialize(
     DB::writeIntBinary(block_id, wb);
 
     assert(current_hash_blocks);
-    Streaming::serialize(*current_hash_blocks, *join, wb, serialized_row_ref_list_multiple_to_indices);
+    Streaming::serialize(*current_hash_blocks, sample_block, *join, wb, serialized_row_ref_list_multiple_to_indices);
 
     DB::writeIntBinary<UInt32>(static_cast<UInt32>(range_bucket_hash_blocks.size()), wb);
     for (const auto & [bucket, hash_blocks] : range_bucket_hash_blocks)
     {
         DB::writeIntBinary(bucket, wb);
         assert(hash_blocks);
-        Streaming::serialize(*hash_blocks, *join, wb, serialized_row_ref_list_multiple_to_indices);
+        Streaming::serialize(*hash_blocks, sample_block, *join, wb, serialized_row_ref_list_multiple_to_indices);
     }
 
     metrics.serialize(wb);
 }
 
 void BufferedStreamData::deserialize(
-    ReadBuffer & rb, DeserializedIndicesToRowRefListMultiple * deserialized_indices_to_row_ref_list_multiple)
+    ReadBuffer & rb, DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_row_ref_list_multiple)
 {
     std::scoped_lock lock(mutex);
 
@@ -334,7 +329,7 @@ void BufferedStreamData::deserialize(
     DB::readIntBinary(block_id, rb);
 
     assert(current_hash_blocks);
-    Streaming::deserialize(*current_hash_blocks, *join, rb, deserialized_indices_to_row_ref_list_multiple);
+    Streaming::deserialize(*current_hash_blocks, sample_block, *join, rb, deserialized_indices_to_row_ref_list_multiple);
 
     UInt32 size;
     Int64 bucket;
@@ -346,7 +341,7 @@ void BufferedStreamData::deserialize(
         assert(inserted);
         /// Init hash table
         join->initHashMaps(iter->second->maps->map_variants);
-        Streaming::deserialize(*iter->second, *join, rb, deserialized_indices_to_row_ref_list_multiple);
+        Streaming::deserialize(*iter->second, sample_block, *join, rb, deserialized_indices_to_row_ref_list_multiple);
     }
 
     metrics.deserialize(rb);

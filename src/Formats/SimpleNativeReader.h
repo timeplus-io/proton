@@ -8,13 +8,14 @@
 namespace DB
 {
 class Chunk;
+struct LightChunk;
+struct LightChunkWithTimestamp;
 class ReadBuffer;
 
 /** Deserializes the stream of blocks from the native binary format (with names and column types).
   * Designed for checkpointing
   */
 template <typename DataBlock>
-    requires(std::is_same_v<DataBlock, Block> || std::is_same_v<DataBlock, Chunk>)
 class SimpleNativeReader
 {
 public:
@@ -34,4 +35,11 @@ private:
 
 Block readBlock(UInt64 server_revision, ReadBuffer & istr);
 Chunk readChunk(const Block & header, UInt64 server_revision, ReadBuffer & istr);
+LightChunk readLightChunk(const Block & header, UInt64 server_revision, ReadBuffer & istr);
+LightChunkWithTimestamp readLightChunkWithTimestamp(const Block & header, UInt64 server_revision, ReadBuffer & istr);
+
+using NativeBlockReader = SimpleNativeReader<Block>;
+using NativeChunkReader = SimpleNativeReader<Chunk>;
+using NativeLightChunkReader = SimpleNativeReader<LightChunk>;
+using NativeLightChunkWithTimestampReader = SimpleNativeReader<LightChunkWithTimestamp>;
 }

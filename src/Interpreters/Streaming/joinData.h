@@ -11,6 +11,7 @@
 #include <Columns/IColumn.h>
 #include <Core/Block.h>
 #include <Core/BlockRangeSplitter.h>
+#include <Core/LightChunk.h>
 #include <base/SerdeTag.h>
 #include <Common/Arena.h>
 
@@ -19,12 +20,14 @@
 
 namespace DB
 {
-using RawBlockPtr = const Block *;
-using BlockNullmapList = std::deque<std::pair<RawBlockPtr, ColumnPtr>>;
-
 namespace Streaming
 {
 struct HashJoinMapsVariants;
+
+using JoinDataBlock = LightChunkWithTimestamp;
+using JoinDataBlockList = RefCountBlockList<JoinDataBlock>;
+using JoinDataBlockRawPtr = const JoinDataBlock *;
+using BlockNullmapList = std::deque<std::pair<JoinDataBlockRawPtr, ColumnPtr>>;
 
 struct HashBlocks
 {
@@ -32,12 +35,12 @@ struct HashBlocks
 
     ~HashBlocks();
 
-    void addBlock(Block && block) { blocks.push_back(std::move(block)); }
+    void addBlock(JoinDataBlock && block) { blocks.push_back(std::move(block)); }
 
-    const Block & lastBlock() const { return blocks.lastBlock(); }
+    const JoinDataBlock & lastBlock() const { return blocks.lastBlock(); }
 
     /// Buffered data
-    RefCountBlockList<Block> blocks;
+    JoinDataBlockList blocks;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arena pool;
@@ -58,8 +61,8 @@ SERDE struct BufferedStreamData
     BufferedStreamData(HashJoin * join_, const RangeAsofJoinContext & range_asof_join_ctx_, const String & asof_column_name_);
 
     /// Add block, assign block id and return block id
-    Int64 addBlock(Block && block);
-    Int64 addBlockWithoutLock(Block && block, HashBlocksPtr & target_hash_blocks);
+    void addBlock(JoinDataBlock && block);
+    void addBlockWithoutLock(JoinDataBlock && block, HashBlocksPtr & target_hash_blocks);
 
     struct BucketBlock
     {
@@ -143,7 +146,7 @@ SERDE struct BufferedStreamData
     HashBlocksPtr newHashBlocks() { return std::make_shared<HashBlocks>(metrics); }
 
     void serialize(WriteBuffer & wb, SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices = nullptr) const;
-    void deserialize(ReadBuffer & rb, DeserializedIndicesToRowRefListMultiple * deserialized_indices_to_row_ref_list_multiple = nullptr);
+    void deserialize(ReadBuffer & rb, DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_row_ref_list_multiple = nullptr);
 
     NO_SERDE HashJoin * join;
 

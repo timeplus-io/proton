@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/LightChunk.h>
 #include <Interpreters/Streaming/CachedBlockMetrics.h>
 #include <Interpreters/Streaming/joinSerder_fwd.h>
 #include <base/SerdeTag.h>
@@ -9,8 +10,6 @@
 
 namespace DB
 {
-class Chunk;
-
 namespace Streaming
 {
 template <typename DataBlock>
@@ -141,7 +140,5 @@ private:
     CachedBlockMetrics & metrics;
 };
 
-extern template struct RefCountBlockList<Block>;
-extern template struct RefCountBlockList<Chunk>;
 }
 }

@@ -104,7 +104,7 @@ struct HashMapsTemplate
     }
 
     template <typename MappedSerializer>
-    void serialize(MappedSerializer && mapped_serializer, WriteBuffer & wb)
+    void serialize(MappedSerializer && mapped_serializer, WriteBuffer & wb) const
     {
         switch (type)
         {
@@ -118,11 +118,13 @@ struct HashMapsTemplate
             /* Key */ DB::writeBinary(key, wb); \
             /* Mapped */ mapped_serializer(mapped, wb); \
         }); \
-        break; \
+        return; \
     }
             APPLY_FOR_HASH_KEY_VARIANTS(M)
 #undef M
         }
+
+        UNREACHABLE();
     }
 
     template <typename MappedDeserializer>
@@ -158,14 +160,35 @@ struct HashMapsTemplate
             Mapped & mapped = lookup_result->getMapped(); \
             mapped_deserializer(mapped, pool, rb); \
         } \
-        break; \
+        return; \
     }
             APPLY_FOR_HASH_KEY_VARIANTS(M)
 #undef M
+            UNREACHABLE();
         }
     }
 
     HashType type;
+};
+
+template <typename Mapped>
+using FindResultImpl = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped, true>;
+
+/// Dummy key getter, always find nothing, used for JOIN ON NULL
+template <typename Mapped>
+class KeyGetterEmpty
+{
+public:
+    struct MappedType
+    {
+        using mapped_type = Mapped;
+    };
+
+    using FindResult = ColumnsHashing::columns_hashing_impl::FindResultImpl<Mapped>;
+
+    KeyGetterEmpty() = default;
+
+    FindResult findKey(MappedType, size_t, const Arena &) { return FindResult(); }
 };
 
 template <HashType type, typename Value, typename Mapped>

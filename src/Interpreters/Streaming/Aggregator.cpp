@@ -26,14 +26,15 @@
 
 /// proton: starts
 #include <Columns/ColumnDecimal.h>
+#include <Core/LightChunk.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Formats/SimpleNativeReader.h>
 #include <Formats/SimpleNativeWriter.h>
 #include <Interpreters/CompiledAggregateFunctionsHolder.h>
-#include <Common/logger_useful.h>
 #include <Common/ProtonCommon.h>
 #include <Common/VersionRevision.h>
+#include <Common/logger_useful.h>
 /// proton: ends
 
 
@@ -3363,7 +3364,7 @@ void Aggregator::checkpoint(const AggregatedDataVariants & data_variants, WriteB
 
     UInt32 num_blocks = static_cast<UInt32>(blocks.size());
     writeIntBinary(num_blocks, wb);
-    SimpleNativeWriter<Block> writer(wb, getHeader(false), ProtonRevision::getVersionRevision());
+    NativeLightChunkWriter writer(wb, getHeader(false), ProtonRevision::getVersionRevision());
     for (const auto & block : blocks)
         writer.write(block);
 }
@@ -3393,9 +3394,13 @@ void Aggregator::recover(AggregatedDataVariants & data_variants, ReadBuffer & rb
     UInt32 num_blocks = 0;
     readIntBinary(num_blocks, rb);
     BlocksList blocks;
-    SimpleNativeReader<Block> reader(rb, getHeader(false), ProtonRevision::getVersionRevision());
+    const auto & header = getHeader(false);
+    NativeLightChunkReader reader(rb, header, ProtonRevision::getVersionRevision());
     for (size_t i = 0; i < num_blocks; ++i)
-        blocks.emplace_back(reader.read());
+    {
+        auto light_chunk = reader.read();
+        blocks.emplace_back(header.cloneWithColumns(light_chunk.detachColumns()));
+    }
 
     /// Restore data variants from blocks
     recoverStates(data_variants, blocks);

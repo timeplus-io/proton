@@ -375,7 +375,7 @@ void ChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 
         index.serialize(
             /*MappedSerializer*/
-            [&](const std::unique_ptr<RowRefWithRefCount<Chunk>> & mapped_, WriteBuffer & wb_) {
+            [&](const std::unique_ptr<RowRefWithRefCount<LightChunk>> & mapped_, WriteBuffer & wb_) {
                 assert(mapped_);
                 mapped_->serialize(serialized_blocks_to_indices, wb_);
             },
@@ -389,13 +389,13 @@ void ChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 void ChangelogConvertTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
-        DeserializedIndicesToBlocks<Chunk> deserialized_indices_to_blocks;
+        DeserializedIndicesToBlocks<LightChunk> deserialized_indices_to_blocks;
         source_chunks.deserialize(getInputs().front().getHeader(), rb, &deserialized_indices_to_blocks);
 
         index.deserialize(
             /*MappedDeserializer*/
-            [&](std::unique_ptr<RowRefWithRefCount<Chunk>> & mapped_, Arena &, ReadBuffer & rb_) {
-                mapped_ = std::make_unique<RowRefWithRefCount<Chunk>>();
+            [&](std::unique_ptr<RowRefWithRefCount<LightChunk>> & mapped_, Arena &, ReadBuffer & rb_) {
+                mapped_ = std::make_unique<RowRefWithRefCount<LightChunk>>();
                 mapped_->deserialize(&source_chunks, deserialized_indices_to_blocks, rb_);
             },
             pool,

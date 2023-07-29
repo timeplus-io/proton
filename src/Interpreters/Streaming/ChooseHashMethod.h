@@ -1,10 +1,11 @@
 #pragma once
 
-#include <Common/HashMapsTemplate.h>
 #include <Columns/IColumn.h>
 
 namespace DB
 {
+enum class HashType;
+
 namespace Streaming
 {
 /// Choose best hash method for key columns

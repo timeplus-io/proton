@@ -4,6 +4,7 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
 #include <Core/ColumnNumbers.h>
+#include <Common/HashMapsTemplate.h>
 
 namespace DB
 {

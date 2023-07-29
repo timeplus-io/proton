@@ -13,6 +13,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int BAD_TYPE_OF_FIELD;
+extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 namespace Streaming
@@ -62,6 +63,61 @@ void callWithType(TypeIndex which, F && f)
 }
 
 template <typename DataBlock>
+void RowRef<DataBlock>::serialize(const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const
+{
+    DB::writeIntBinary<UInt32>(serialized_blocks_to_indices.at(reinterpret_cast<std::uintptr_t>(block)), wb);
+    DB::writeBinary(row_num, wb);
+}
+
+template <typename DataBlock>
+void RowRef<DataBlock>::deserialize(const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks, ReadBuffer & rb)
+{
+    UInt32 block_index;
+    DB::readIntBinary<UInt32>(block_index, rb);
+    block = &(deserialized_indices_to_blocks.at(block_index)->block);
+    DB::readBinary(row_num, rb);
+}
+
+template <typename DataBlock>
+void RowRefList<DataBlock>::serialize(const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const
+{
+    /// Row list with same key.
+    UInt32 size = 0;
+    for (auto it = begin(); it.ok(); ++it)
+        ++size;
+
+    /// At least has current one, first one always is itself
+    assert(size > 0);
+
+    DB::writeIntBinary<UInt32>(size, wb);
+
+    for (auto it = begin(); it.ok(); ++it)
+        (*it)->serialize(serialized_blocks_to_indices, wb);
+}
+
+template <typename DataBlock>
+void RowRefList<DataBlock>::deserialize(
+    Arena & pool, const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks, ReadBuffer & rb)
+{
+    UInt32 size;
+    DB::readIntBinary<UInt32>(size, rb);
+    if (size == 0)
+        throw Exception(
+            ErrorCodes::RECOVER_CHECKPOINT_FAILED, "Failed to recover hash join checkpoint. Got an invalid count of row ref list");
+
+    /// First one always is itself.
+    RowRefDataBlock::deserialize(deserialized_indices_to_blocks, rb);
+
+    /// Other row list with same key.
+    RowRefDataBlock other_row_ref;
+    for (UInt32 i = 1; i < size; ++i)
+    {
+        other_row_ref.deserialize(deserialized_indices_to_blocks, rb);
+        insert(std::move(other_row_ref), pool);
+    }
+}
+
+template <typename DataBlock>
 void RowRefWithRefCount<DataBlock>::serialize(const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const
 {
     DB::writeIntBinary<UInt32>(serialized_blocks_to_indices.at(reinterpret_cast<std::uintptr_t>(&(block_iter->block))), wb);
@@ -81,7 +137,8 @@ void RowRefWithRefCount<DataBlock>::deserialize(
     DB::readBinary(row_num, rb);
 }
 
-AsofRowRefs::AsofRowRefs(TypeIndex type)
+template <typename DataBlock>
+AsofRowRefs<DataBlock>::AsofRowRefs(TypeIndex type)
 {
     auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
@@ -92,10 +149,11 @@ AsofRowRefs::AsofRowRefs(TypeIndex type)
     callWithType(type, call);
 }
 
-void AsofRowRefs::insert(
+template <typename DataBlock>
+void AsofRowRefs<DataBlock>::insert(
     TypeIndex type,
     const IColumn & asof_column,
-    RefCountBlockList<Block> * blocks,
+    RefCountBlockList<DataBlock> * blocks,
     size_t row_num,
     ASOFJoinInequality inequality,
     size_t keep_versions)
@@ -111,17 +169,18 @@ void AsofRowRefs::insert(
 
         T key = column.getElement(row_num);
         bool ascending = (inequality == ASOFJoinInequality::Less) || (inequality == ASOFJoinInequality::LessOrEquals);
-        container->insert(Entry<T>(key, RowRefWithRefCount<Block>(blocks, row_num)), ascending);
+        container->insert(Entry<T>(key, RowRefDataBlock(blocks, row_num)), ascending);
         container->truncateTo(keep_versions, ascending);
     };
 
     callWithType(type, call);
 }
 
-const RowRefWithRefCount<Block> *
-AsofRowRefs::findAsof(TypeIndex type, ASOFJoinInequality inequality, const IColumn & asof_column, size_t row_num) const
+template <typename DataBlock>
+const typename AsofRowRefs<DataBlock>::RowRefDataBlock *
+AsofRowRefs<DataBlock>::findAsof(TypeIndex type, ASOFJoinInequality inequality, const IColumn & asof_column, size_t row_num) const
 {
-    const RowRefWithRefCount<Block> * out = nullptr;
+    const RowRefDataBlock * out = nullptr;
 
     bool ascending = (inequality == ASOFJoinInequality::Less) || (inequality == ASOFJoinInequality::LessOrEquals);
     bool is_strict = (inequality == ASOFJoinInequality::Less) || (inequality == ASOFJoinInequality::Greater);
@@ -146,7 +205,7 @@ AsofRowRefs::findAsof(TypeIndex type, ASOFJoinInequality inequality, const IColu
     return out;
 }
 
-std::optional<TypeIndex> AsofRowRefs::getTypeSize(const IColumn & asof_column, size_t & size)
+std::optional<TypeIndex> getAsofTypeSize(const IColumn & asof_column, size_t & size)
 {
     TypeIndex idx = asof_column.getDataType();
 
@@ -202,7 +261,9 @@ std::optional<TypeIndex> AsofRowRefs::getTypeSize(const IColumn & asof_column, s
     throw Exception(ErrorCodes::BAD_TYPE_OF_FIELD, "ASOF join not supported for type: {}", asof_column.getFamilyName());
 }
 
-void AsofRowRefs::serialize(TypeIndex type, const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const
+template <typename DataBlock>
+void AsofRowRefs<DataBlock>::serialize(
+    TypeIndex type, const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const
 {
     auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
@@ -220,10 +281,11 @@ void AsofRowRefs::serialize(TypeIndex type, const SerializedBlocksToIndices & se
     callWithType(type, call);
 }
 
-void AsofRowRefs::deserialize(
+template <typename DataBlock>
+void AsofRowRefs<DataBlock>::deserialize(
     TypeIndex type,
-    RefCountBlockList<Block> * block_list,
-    const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks,
+    RefCountBlockList<DataBlock> * block_list,
+    const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
     ReadBuffer & rb)
 {
     auto call = [&](const auto & t) {
@@ -238,7 +300,7 @@ void AsofRowRefs::deserialize(
         {
             /// Key
             DB::readBinary(asof_value, rb);
-            /// Mapped: RowRefWithRefCount
+            /// Mapped: RowRefWithRefCount<DataBlock>
             row_ref.deserialize(block_list, deserialized_indices_to_blocks, rb);
         }
     };
@@ -246,7 +308,8 @@ void AsofRowRefs::deserialize(
     callWithType(type, call);
 }
 
-RangeAsofRowRefs::RangeAsofRowRefs(TypeIndex type)
+template <typename DataBlock>
+RangeAsofRowRefs<DataBlock>::RangeAsofRowRefs(TypeIndex type)
 {
     auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
@@ -256,7 +319,8 @@ RangeAsofRowRefs::RangeAsofRowRefs(TypeIndex type)
     callWithType(type, call);
 }
 
-void RangeAsofRowRefs::insert(TypeIndex type, const IColumn & asof_column, const Block * block, size_t row_num)
+template <typename DataBlock>
+void RangeAsofRowRefs<DataBlock>::insert(TypeIndex type, const IColumn & asof_column, const DataBlock * block, size_t row_num)
 {
     auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
@@ -264,21 +328,17 @@ void RangeAsofRowRefs::insert(TypeIndex type, const IColumn & asof_column, const
         const auto & column = typeid_cast<const ColumnType &>(asof_column);
 
         T key = column.getElement(row_num);
-        std::get<LookupPtr<T>>(lookups)->emplace(key, RowRef(block, row_num));
+        std::get<LookupPtr<T>>(lookups)->emplace(key, RowRefDataBlock(block, row_num));
     };
 
     callWithType(type, call);
 }
 
-std::vector<RowRef> RangeAsofRowRefs::findRange(
-    TypeIndex type,
-    const RangeAsofJoinContext & range_join_ctx,
-    const IColumn & asof_column,
-    size_t row_num,
-    UInt64 src_block_id,
-    bool is_left_block) const
+template <typename DataBlock>
+std::vector<typename RangeAsofRowRefs<DataBlock>::RowRefDataBlock> RangeAsofRowRefs<DataBlock>::findRange(
+    TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num, bool is_left_block) const
 {
-    std::vector<RowRef> results;
+    std::vector<RowRefDataBlock> results;
 
     auto call_for_left_block = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
@@ -414,10 +474,11 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(
     return results;
 }
 
-const RowRef * RangeAsofRowRefs::findAsof(
-    TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num, UInt64 src_block_id) const
+template <typename DataBlock>
+const typename RangeAsofRowRefs<DataBlock>::RowRefDataBlock * RangeAsofRowRefs<DataBlock>::findAsof(
+    TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num) const
 {
-    RowRef * result = nullptr;
+    RowRefDataBlock * result = nullptr;
 
     auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
@@ -484,7 +545,9 @@ const RowRef * RangeAsofRowRefs::findAsof(
     return result;
 }
 
-void RangeAsofRowRefs::serialize(TypeIndex type, const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const
+template <typename DataBlock>
+void RangeAsofRowRefs<DataBlock>::serialize(
+    TypeIndex type, const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const
 {
     auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
@@ -494,16 +557,17 @@ void RangeAsofRowRefs::serialize(TypeIndex type, const SerializedBlocksToIndices
         {
             /// Key
             DB::writeBinary(key, wb);
-            /// Mapped: RowRef
-            Streaming::serialize(mapped, serialized_blocks_to_indices, wb);
+            /// Mapped: RowRef<DataBlock>
+            mapped.serialize(serialized_blocks_to_indices, wb);
         }
     };
 
     callWithType(type, call);
 }
 
-void RangeAsofRowRefs::deserialize(
-    TypeIndex type, const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks, ReadBuffer & rb)
+template <typename DataBlock>
+void RangeAsofRowRefs<DataBlock>::deserialize(
+    TypeIndex type, const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks, ReadBuffer & rb)
 {
     auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
@@ -519,17 +583,18 @@ void RangeAsofRowRefs::deserialize(
             /// Key
             DB::readBinary(key, rb);
             // assert(!map.contains(key)); // multimap allows multiple same keys
-            auto iter = map.emplace(key, RowRef{});
+            auto iter = map.emplace(key, RowRefDataBlock{});
 
-            /// Mapped: RowRef
-            Streaming::deserialize(iter->second, deserialized_indices_to_blocks, rb);
+            /// Mapped: RowRef<DataBlock>
+            iter->second.deserialize(deserialized_indices_to_blocks, rb);
         }
     };
 
     callWithType(type, call);
 }
 
-void RowRefListMultiple::serialize(
+template <typename DataBlock>
+void RowRefListMultiple<DataBlock>::serialize(
     const SerializedBlocksToIndices & serialized_blocks_to_indices,
     WriteBuffer & wb,
     SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices) const
@@ -548,11 +613,12 @@ void RowRefListMultiple::serialize(
     }
 }
 
-void RowRefListMultiple::deserialize(
-    RefCountBlockList<Block> * block_list,
-    const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks,
+template <typename DataBlock>
+void RowRefListMultiple<DataBlock>::deserialize(
+    RefCountBlockList<DataBlock> * block_list,
+    const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
     ReadBuffer & rb,
-    DeserializedIndicesToRowRefListMultiple * deserialized_indices_to_row_ref_list_multiple)
+    DeserializedIndicesToRowRefListMultiple<DataBlock> * deserialized_indices_to_row_ref_list_multiple)
 {
     UInt32 rows_size;
     readIntBinary<UInt32>(rows_size, rb);
@@ -564,27 +630,41 @@ void RowRefListMultiple::deserialize(
         if (deserialized_indices_to_row_ref_list_multiple)
         {
             [[maybe_unused]] auto [_, inserted] = deserialized_indices_to_row_ref_list_multiple->emplace(
-                deserialized_indices_to_row_ref_list_multiple->size(), RowRefListMultipleRef{this, iter});
+                deserialized_indices_to_row_ref_list_multiple->size(), RowRefListMultipleRef<DataBlock>{this, iter});
             assert(inserted);
         }
     }
 }
 
-void RowRefListMultipleRef::serialize(
+template <typename DataBlock>
+void RowRefListMultipleRef<DataBlock>::serialize(
     const SerializedRowRefListMultipleToIndices & serialized_row_ref_list_multiple_to_indices, WriteBuffer & wb) const
 {
     writeIntBinary<UInt32>(serialized_row_ref_list_multiple_to_indices.at(reinterpret_cast<std::uintptr_t>(&*iterator)), wb);
 }
 
-void RowRefListMultipleRef::deserialize(
-    const DeserializedIndicesToRowRefListMultiple & deserialized_indices_to_row_ref_list_multiple, ReadBuffer & rb)
+template <typename DataBlock>
+void RowRefListMultipleRef<DataBlock>::deserialize(
+    const DeserializedIndicesToRowRefListMultiple<DataBlock> & deserialized_indices_to_row_ref_list_multiple, ReadBuffer & rb)
 {
     UInt32 ref_index;
     readIntBinary<UInt32>(ref_index, rb);
     *this = deserialized_indices_to_row_ref_list_multiple.at(ref_index);
 }
 
-template struct RowRefWithRefCount<Block>;
-template struct RowRefWithRefCount<Chunk>;
+/// For HashJoin
+template struct RowRef<LightChunkWithTimestamp>;
+template struct RowRefList<LightChunkWithTimestamp>;
+template struct RowRefWithRefCount<LightChunkWithTimestamp>;
+template struct RowRefListMultiple<LightChunkWithTimestamp>;
+template struct RowRefListMultipleRef<LightChunkWithTimestamp>;
+template class AsofRowRefs<LightChunkWithTimestamp>;
+template class RangeAsofRowRefs<LightChunkWithTimestamp>;
+
+/// For ChangelogCovertTransform
+template struct RowRefWithRefCount<LightChunk>;
+
+/// For gests
+template class AsofRowRefs<Block>;
 }
 }

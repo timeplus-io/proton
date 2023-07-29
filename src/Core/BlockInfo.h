@@ -54,7 +54,6 @@ struct BlockInfo
 
     /// any_field is reused for different non-conflicting / non-overlapped purposes / scenarios
     /// 1. act as append_time
-    /// 2. act as block id
     Int64 any_field = 0;
 
     /// Here we try to reuse existing data members for different purposes
@@ -64,10 +63,6 @@ struct BlockInfo
     void setAppendTime(Int64 append_time) { any_field = append_time; }
 
     Int64 appendTime() const { return any_field; }
-
-    void setBlockID(Int64 block_id) { any_field = block_id; }
-
-    Int64 blockID() const { return any_field; }
 
     bool hasWatermark() const { return watermark != Streaming::INVALID_WATERMARK || watermark_lower_bound != Streaming::INVALID_WATERMARK; }
     /// proton: ends

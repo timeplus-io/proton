@@ -27,6 +27,125 @@ namespace Streaming
  * When looking up values the container ensures that it is sorted for log(N) lookup
  * The StreamingHashJoin will ensure the synchronization access to the data structure
  */
+/// Reference to the row in block.
+template <typename DataBlock>
+struct RowRef
+{
+    using SizeT = uint32_t; /// Do not use size_t cause of memory economy
+
+    const DataBlock * block = nullptr;
+    SizeT row_num = 0;
+
+    RowRef() = default;
+    RowRef(const DataBlock * block_, size_t row_num_) : block(block_), row_num(static_cast<SizeT>(row_num_)) { }
+
+    void serialize(const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const;
+    void deserialize(const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks, ReadBuffer & rb);
+};
+
+/// Single linked list of references to rows. Used for ALL JOINs (non-unique JOINs)
+template <typename DataBlock>
+struct RowRefList : RowRef<DataBlock>
+{
+    using RowRefDataBlock = RowRef<DataBlock>;
+    using SizeT = typename RowRefDataBlock::SizeT;
+    /// Portion of RowRefs, 16 * (MAX_SIZE + 1) bytes sized.
+    struct Batch
+    {
+        static constexpr size_t MAX_SIZE = 7; /// Adequate values are 3, 7, 15, 31.
+
+        SizeT size = 0; /// It's smaller than size_t but keeps align in Arena.
+        Batch * next;
+        RowRefDataBlock row_refs[MAX_SIZE];
+
+        explicit Batch(Batch * parent) : next(parent) { }
+
+        bool full() const { return size == MAX_SIZE; }
+
+        Batch * insert(RowRefDataBlock && row_ref, Arena & pool)
+        {
+            if (full())
+            {
+                auto * batch = pool.alloc<Batch>();
+                *batch = Batch(this);
+                batch->insert(std::move(row_ref), pool);
+                return batch;
+            }
+
+            row_refs[size++] = std::move(row_ref);
+            return this;
+        }
+    };
+
+    class ForwardIterator
+    {
+    public:
+        explicit ForwardIterator(const RowRefList * begin) : root(begin), first(true), batch(root->next), position(0) { }
+
+        const RowRefDataBlock * operator->() const
+        {
+            if (first)
+                return root;
+            return &batch->row_refs[position];
+        }
+
+        const RowRefDataBlock * operator*() const
+        {
+            if (first)
+                return root;
+            return &batch->row_refs[position];
+        }
+
+        void operator++()
+        {
+            if (first)
+            {
+                first = false;
+                return;
+            }
+
+            if (batch)
+            {
+                ++position;
+                if (position >= batch->size)
+                {
+                    batch = batch->next;
+                    position = 0;
+                }
+            }
+        }
+
+        bool ok() const { return first || batch; }
+
+    private:
+        const RowRefList * root;
+        bool first;
+        Batch * batch;
+        size_t position;
+    };
+
+    RowRefList() { } /// NOLINT
+    RowRefList(const DataBlock * block_, size_t row_num_) : RowRefDataBlock(block_, row_num_) { }
+
+    ForwardIterator begin() const { return ForwardIterator(this); }
+
+    /// insert element after current one
+    void insert(RowRefDataBlock && row_ref, Arena & pool)
+    {
+        if (!next)
+        {
+            next = pool.alloc<Batch>();
+            *next = Batch(nullptr);
+        }
+        next = next->insert(std::move(row_ref), pool);
+    }
+
+    void serialize(const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const;
+    void deserialize(Arena & pool, const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks, ReadBuffer & rb);
+
+private:
+    Batch * next = nullptr;
+};
 
 /// Reference to the row in block with reference count
 template <typename DataBlock>
@@ -80,15 +199,6 @@ struct RowRefWithRefCount
         return block_iter == blocks->begin() && block_iter->refCount() == 1;
     }
 
-    Int64 blockID() const
-    {
-        assert(blocks);
-        if constexpr (std::is_same_v<DataBlock, Block>)
-            return block_iter->block.blockID();
-        else
-            return 0;
-    }
-
     const DataBlock & block() const
     {
         assert(blocks);
@@ -118,13 +228,15 @@ private:
 /// Use linked list to maintain the row refs
 /// since we may delete some of the row refs when there is override
 /// Used for partial primary key join scenarios
+template <typename DataBlock>
 struct RowRefListMultiple
 {
-    using Iterator = typename std::list<RowRefWithRefCount<Block>>::iterator;
+    using RowRefDataBlock = RowRefWithRefCount<DataBlock>;
+    using Iterator = typename std::list<RowRefDataBlock>::iterator;
 
-    std::list<RowRefWithRefCount<Block>> rows;
+    std::list<RowRefDataBlock> rows;
 
-    Iterator insert(RefCountBlockList<Block> * blocks, size_t row_num) { return rows.emplace(rows.end(), blocks, row_num); }
+    Iterator insert(RefCountBlockList<DataBlock> * blocks, size_t row_num) { return rows.emplace(rows.end(), blocks, row_num); }
 
     void erase(Iterator iterator) { rows.erase(iterator); }
 
@@ -133,18 +245,20 @@ struct RowRefListMultiple
         WriteBuffer & wb,
         SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices = nullptr) const;
     void deserialize(
-        RefCountBlockList<Block> * block_list,
-        const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks,
+        RefCountBlockList<DataBlock> * block_list,
+        const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
         ReadBuffer & rb,
-        DeserializedIndicesToRowRefListMultiple * deserialized_indices_to_row_ref_list_multiple = nullptr);
+        DeserializedIndicesToRowRefListMultiple<DataBlock> * deserialized_indices_to_row_ref_list_multiple = nullptr);
 };
 
-using RowRefListMultiplePtr = std::unique_ptr<RowRefListMultiple>;
+template <typename DataBlock>
+using RowRefListMultiplePtr = std::unique_ptr<RowRefListMultiple<DataBlock>>;
 
+template <typename DataBlock>
 struct RowRefListMultipleRef
 {
-    RowRefListMultiple * row_ref_list = nullptr;
-    RowRefListMultiple::Iterator iterator;
+    RowRefListMultiple<DataBlock> * row_ref_list = nullptr;
+    typename RowRefListMultiple<DataBlock>::Iterator iterator;
 
     void erase()
     {
@@ -155,16 +269,18 @@ struct RowRefListMultipleRef
         row_ref_list->erase(iterator);
 
         row_ref_list = nullptr;
-        iterator = RowRefListMultiple::Iterator{};
+        iterator = typename RowRefListMultiple<DataBlock>::Iterator{};
     }
 
     void serialize(const SerializedRowRefListMultipleToIndices & serialized_row_ref_list_multiple_to_indices, WriteBuffer & wb) const;
-    void deserialize(const DeserializedIndicesToRowRefListMultiple & deserialized_indices_to_row_ref_list_multiple, ReadBuffer & rb);
+    void
+    deserialize(const DeserializedIndicesToRowRefListMultiple<DataBlock> & deserialized_indices_to_row_ref_list_multiple, ReadBuffer & rb);
 };
 
-using RowRefListMultipleRefPtr = std::unique_ptr<RowRefListMultipleRef>;
+template <typename DataBlock>
+using RowRefListMultipleRefPtr = std::unique_ptr<RowRefListMultipleRef<DataBlock>>;
 
-template <typename TEntry>
+template <typename RowRefDataBlock, typename TEntry>
 class SortedLookupVector
 {
 public:
@@ -176,7 +292,7 @@ public:
         array.insert(it, entry);
     }
 
-    const RowRefWithRefCount<Block> * upperBound(const TEntry & k, bool ascending)
+    const RowRefDataBlock * upperBound(const TEntry & k, bool ascending)
     {
         auto it = std::upper_bound(array.cbegin(), array.cend(), k, (ascending ? less : greater));
         if (it != array.cend())
@@ -184,7 +300,7 @@ public:
         return nullptr;
     }
 
-    const RowRefWithRefCount<Block> * lowerBound(const TEntry & k, bool ascending)
+    const RowRefDataBlock * lowerBound(const TEntry & k, bool ascending)
     {
         auto it = std::lower_bound(array.cbegin(), array.cend(), k, (ascending ? less : greater));
         if (it != array.cend())
@@ -225,62 +341,61 @@ private:
     static bool greater(const TEntry & a, const TEntry & b) { return a.asof_value > b.asof_value; }
 };
 
+template <typename DataBlock>
 class AsofRowRefs
 {
 public:
+    using RowRefDataBlock = RowRefWithRefCount<DataBlock>;
     template <typename T>
     struct Entry
     {
-        using LookupType = SortedLookupVector<Entry<T>>;
+        using LookupType = SortedLookupVector<RowRefDataBlock, Entry<T>>;
         using LookupPtr = std::unique_ptr<LookupType>;
         T asof_value;
-        RowRefWithRefCount<Block> row_ref;
+        RowRefDataBlock row_ref;
 
         Entry() = default;
         Entry(T v) : asof_value(v) { }
-        Entry(T v, RowRefWithRefCount<Block> rr) : asof_value(v), row_ref(rr) { }
+        Entry(T v, RowRefDataBlock rr) : asof_value(v), row_ref(rr) { }
     };
 
     using Lookups = std::variant<
-        Entry<UInt8>::LookupPtr,
-        Entry<UInt16>::LookupPtr,
-        Entry<UInt32>::LookupPtr,
-        Entry<UInt64>::LookupPtr,
-        Entry<Int8>::LookupPtr,
-        Entry<Int16>::LookupPtr,
-        Entry<Int32>::LookupPtr,
-        Entry<Int64>::LookupPtr,
-        Entry<Float32>::LookupPtr,
-        Entry<Float64>::LookupPtr,
-        Entry<Decimal32>::LookupPtr,
-        Entry<Decimal64>::LookupPtr,
-        Entry<Decimal128>::LookupPtr,
-        Entry<DateTime64>::LookupPtr>;
+        typename Entry<UInt8>::LookupPtr,
+        typename Entry<UInt16>::LookupPtr,
+        typename Entry<UInt32>::LookupPtr,
+        typename Entry<UInt64>::LookupPtr,
+        typename Entry<Int8>::LookupPtr,
+        typename Entry<Int16>::LookupPtr,
+        typename Entry<Int32>::LookupPtr,
+        typename Entry<Int64>::LookupPtr,
+        typename Entry<Float32>::LookupPtr,
+        typename Entry<Float64>::LookupPtr,
+        typename Entry<Decimal32>::LookupPtr,
+        typename Entry<Decimal64>::LookupPtr,
+        typename Entry<Decimal128>::LookupPtr,
+        typename Entry<DateTime64>::LookupPtr>;
 
     AsofRowRefs() { }
 
     AsofRowRefs(TypeIndex t);
 
-    static std::optional<TypeIndex> getTypeSize(const IColumn & asof_column, size_t & type_size);
-
     /// This will be synchronized by the rwlock mutex in StreamingHashJoin.h
     void insert(
         TypeIndex type,
         const IColumn & asof_column,
-        RefCountBlockList<Block> * blocks,
+        RefCountBlockList<DataBlock> * blocks,
         size_t row_num,
         ASOFJoinInequality inequality,
         size_t keep_versions);
 
     /// This will be synchronized by the rwlock mutex in StreamingHashJoin.h
-    const RowRefWithRefCount<Block> *
-    findAsof(TypeIndex type, ASOFJoinInequality inequality, const IColumn & asof_column, size_t row_num) const;
+    const RowRefDataBlock * findAsof(TypeIndex type, ASOFJoinInequality inequality, const IColumn & asof_column, size_t row_num) const;
 
     void serialize(TypeIndex type, const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const;
     void deserialize(
         TypeIndex type,
-        RefCountBlockList<Block> * block_list,
-        const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks,
+        RefCountBlockList<DataBlock> * block_list,
+        const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
         ReadBuffer & rb);
 
 private:
@@ -291,12 +406,16 @@ private:
     Lookups lookups;
 };
 
+std::optional<TypeIndex> getAsofTypeSize(const IColumn & asof_column, size_t & type_size);
+
+template <typename DataBlock>
 class RangeAsofRowRefs
 {
 public:
+    using RowRefDataBlock = RowRef<DataBlock>;
     /// FIXME, multimap data structure
     template <typename KeyT>
-    using LookupType = std::multimap<KeyT, RowRef>;
+    using LookupType = std::multimap<KeyT, RowRefDataBlock>;
 
     template <typename KeyT>
     using LookupPtr = std::unique_ptr<LookupType<KeyT>>;
@@ -321,29 +440,18 @@ public:
 
     explicit RangeAsofRowRefs(TypeIndex t);
 
-    static std::optional<TypeIndex> getTypeSize(const IColumn & asof_column, size_t & size)
-    {
-        return AsofRowRefs::getTypeSize(asof_column, size);
-    }
-
-    void insert(TypeIndex type, const IColumn & asof_column, const Block * block, size_t row_num);
+    void insert(TypeIndex type, const IColumn & asof_column, const DataBlock * block, size_t row_num);
 
     /// Find a range of rows which can be joined
-    std::vector<RowRef> findRange(
-        TypeIndex type,
-        const RangeAsofJoinContext & range_join_ctx,
-        const IColumn & asof_column,
-        size_t row_num,
-        UInt64 src_block_id,
-        bool is_left_block) const;
+    std::vector<RowRefDataBlock> findRange(
+        TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num, bool is_left_block) const;
 
     /// Find the last one
-    const RowRef *
-    findAsof(TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num, UInt64 src_block_id)
-        const;
+    const RowRefDataBlock *
+    findAsof(TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num) const;
 
     void serialize(TypeIndex type, const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const;
-    void deserialize(TypeIndex type, const DeserializedIndicesToBlocks<Block> & deserialized_indices_to_blocks, ReadBuffer & rb);
+    void deserialize(TypeIndex type, const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks, ReadBuffer & rb);
 
 private:
     // Lookups can be stored in a HashTable because it is memmovable

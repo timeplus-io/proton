@@ -7,13 +7,14 @@
 namespace DB
 {
 class Chunk;
+struct LightChunk;
+struct LightChunkWithTimestamp;
 class WriteBuffer;
 
 /** Serializes the stream of blocks in their native binary format (with names and column types).
   * Designed for checkpointing
   */
 template <typename DataBlock>
-requires(std::is_same_v<DataBlock, Block> || std::is_same_v<DataBlock, Chunk>)
 class SimpleNativeWriter
 {
 public:
@@ -34,4 +35,11 @@ private:
 
 void writeBlock(const Block & block, UInt64 client_revision, WriteBuffer & ostr);
 void writeChunk(const Chunk & chunk, const Block & header, UInt64 client_revision, WriteBuffer & ostr);
+void writeLightChunk(const LightChunk & data, const Block & header, UInt64 client_revision, WriteBuffer & ostr);
+void writeLightChunkWithTimestamp(const LightChunkWithTimestamp & data, const Block & header, UInt64 client_revision, WriteBuffer & ostr);
+
+using NativeBlockWriter = SimpleNativeWriter<Block>;
+using NativeChunkWriter = SimpleNativeWriter<Chunk>;
+using NativeLightChunkWriter = SimpleNativeWriter<LightChunk>;
+using NativeLightChunkWithTimestampWriter = SimpleNativeWriter<LightChunkWithTimestamp>;
 }
