@@ -1,0 +1,303 @@
+{
+    "test_suite_name": "query_state13",
+    "tag": "smoke",
+    "test_suite_config":{
+        "setup": {
+            "statements": [
+            ]
+        },
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "native_not_support"],"cluster": ["view", "cluster_table_bug"]}}
+    },
+    "comments": "Tests covering query state checkpointing smoke test cases",
+    "tests": [
+        {
+            "id": 400,
+            "tags": ["table_func_changelog"],
+            "name": "table_func_changelog_append-only",
+            "description": "table func changelog append-only state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream4;"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream4", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream4 (i int, k string);"},
+                        {"client":"python", "query_type": "stream", "query_id":"19400", "wait":1, "terminate":"manuel", "query":"subscribe to select i, k, _tp_delta from changelog(test19_left_stream4, k) settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "table", "depends_on":"19400", "kill":"19400", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream4(i, k) values (1, 'k1');"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query": "insert into test19_left_stream4(i, k) values (2, 'k1');"},
+                        {"client":"python", "query_type": "stream","query_id":"19400-1", "terminate": "manual","query":"recover from '19400'"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19400' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19400'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19400",
+                    "expected_results":[
+                        [1, "k1", 1]
+                    ]
+                },
+                {
+                    "query_id":"19400-1",
+                    "expected_results":[
+                        [1, "k1", -1], 
+                        [2, "k1", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 401,
+            "tags": ["table_func_changelog"],
+            "name": "table_func_changelog_versioned_kv",
+            "description": "table func changelog versioned_kv state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_version_kv_stream4;"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream4", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_version_kv_stream4(i int, k string) primary key k settings mode='versioned_kv';"},
+                        {"client":"python", "query_type": "stream", "query_id":"19401", "wait":1, "terminate":"manuel", "query":"subscribe to select i, k, _tp_delta from changelog(test19_version_kv_stream4, true) settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "table", "depends_on":"19401", "kill":"19401", "kill_wait":3, "wait":1, "query": "insert into test19_version_kv_stream4(i, k) values (1, 'k1');"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query": "insert into test19_version_kv_stream4(i, k) values (2, 'k1');"},
+                        {"client":"python", "query_type": "stream","query_id":"19401-1", "terminate": "manual","query":"recover from '19401'"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19401' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19401'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19401",
+                    "expected_results":[
+                        [1, "k1", 1]
+                    ]
+                },
+                {
+                    "query_id":"19401-1",
+                    "expected_results":[
+                        [1, "k1", -1], 
+                        [2, "k1", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 402,
+            "tags": ["table_func_changelog"],
+            "name": "table_func_changelog_subquery",
+            "description": "table func changelog subquery state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream4;"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream4", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream4 (i int, k string);"},
+                        {"client":"python", "query_type": "stream", "query_id":"19402", "wait":1, "terminate":"manuel", "query":"subscribe to with cte as (select i, k from test19_left_stream4) select i, k, _tp_delta from changelog(cte, k) settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "table", "depends_on":"19402", "kill":"19402", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream4(i, k) values (1, 'k1');"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query": "insert into test19_left_stream4(i, k) values (2, 'k1');"},
+                        {"client":"python", "query_type": "stream","query_id":"19402-1", "terminate": "manual","query":"recover from '19402'"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19402' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19402'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19402",
+                    "expected_results":[
+                        [1, "k1", 1]
+                    ]
+                },
+                {
+                    "query_id":"19402-1",
+                    "expected_results":[
+                        [1, "k1", -1], 
+                        [2, "k1", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 403,
+            "tags": ["table_func_changelog", "inner-join"],
+            "name": "changelog(t1)_inner_all_join_changelog(t2)",
+            "description": "changelog(t1) inner all join changelog(t2) state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream4;"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream4;"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream4", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream4 (i int, k string);"},
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream4", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream4 (j int, kk string);"},
+                        {"client":"python", "query_type": "stream", "query_id":"19403", "wait":1, "terminate":"manuel", "query":"subscribe to select i, k, j, kk, _tp_delta from changelog(test19_left_stream4, k) as a inner join changelog(test19_right_stream4, kk) as b on a.i == b.j settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "table", "depends_on":"19403", "wait":1, "query": "insert into test19_left_stream4(i, k) values (1, 'k1');"},
+                        {"client":"python", "query_type": "table", "kill":"19403", "kill_wait":3, "wait":1, "query": "insert into test19_right_stream4 (j, kk) values (1, 'kk1');"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query": "insert into test19_left_stream4(i, k) values (2, 'k1');"},
+                        {"client":"python", "query_type": "table", "query": "insert into test19_right_stream4 (j, kk) values (2, 'kk1');"},
+                        {"client":"python", "query_type": "stream","query_id":"19403-1", "terminate": "manual","query":"recover from '19403'"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19403' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19403'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19403",
+                    "expected_results":[
+                        [1, "k1", 1, "kk1", 1]
+                    ]
+                },
+                {
+                    "query_id":"19403-1",
+                    "expected_results":[
+                        [1, "k1", 1, "kk1", -1],
+                        [2, "k1", 2, "kk1", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 404,
+            "tags": ["table_func_changelog", "inner-join"],
+            "name": "append-only_inner_all_join_changelog(t2)",
+            "description": "append-only inner all join changelog(t2) state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream4;"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream4;"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream4", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream4 (i int, k string);"},
+                        {"client":"python", "query_type": "table", "exist":"test19_right_stream4", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream4 (j int, kk string);"},
+                        {"client":"python", "query_type": "stream", "query_id":"19404", "wait":1, "terminate":"manuel", "query":"subscribe to select i, k, j, kk, _tp_delta from test19_left_stream4 as a inner join changelog(test19_right_stream4, kk) as b on a.i == b.j settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "table", "depends_on":"19404", "wait":1, "query": "insert into test19_right_stream4 (j, kk) values (1, 'kk1');"},
+                        {"client":"python", "query_type": "table", "kill":"19404", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream4 (i, k) values (1, 'k1');"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query": "insert into test19_right_stream4 (j, kk) values (2, 'kk1');"},
+                        {"client":"python", "query_type": "table", "query": "insert into test19_left_stream4 (i, k) values (2, 'k1');"},
+                        {"client":"python", "query_type": "stream","query_id":"19404-1", "terminate": "manual","query":"recover from '19404'"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19404' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19404'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19404",
+                    "expected_results":[
+                        [1, "k1", 1, "kk1", 1]
+                    ]
+                },
+                {
+                    "query_id":"19404-1",
+                    "expected_results":[
+                        [1, "k1", 1, "kk1", -1],
+                        [2, "k1", 2, "kk1", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 405,
+            "tags": ["table_func_changelog", "inner-join", "bug"],
+            "name": "append-only_inner_all_join_changelog(vk)",
+            "description": "append-only inner all join changelog(vk) state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream4;"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_version_kv_stream4;"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream4", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream4 (i int, k string);"},
+                        {"client":"python", "query_type": "table", "exist":"test19_version_kv_stream4", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_version_kv_stream4(j int, kk string) primary key kk settings mode='versioned_kv';"},
+                        {"client":"python", "query_type": "stream", "query_id":"19405", "wait":1, "terminate":"manuel", "query":"subscribe to select i, k, j, kk, _tp_delta from test19_left_stream4 as a inner join changelog(test19_version_kv_stream4, true) as b on a.i == b.j settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "table", "depends_on":"19405", "wait":1, "query": "insert into test19_version_kv_stream4 (j, kk) values (1, 'kk1')"},
+                        {"client":"python", "query_type": "table", "kill":"19405", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream4 (i, k) values (1, 'k1');"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query": "insert into test19_version_kv_stream4 (j, kk) values (2, 'kk1');"},
+                        {"client":"python", "query_type": "stream","query_id":"19405-1", "terminate": "manual","query":"recover from '19405'"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_left_stream4 (i, k) values (2, 'k1');"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19405' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19405'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19405",
+                    "expected_results":[
+                        [1, "k1", 1, "kk1", 1]
+                    ]
+                },
+                {
+                    "query_id":"19405-1",
+                    "expected_results":[
+                        [1, "k1", 1, "kk1", -1],
+                        [2, "k1", 2, "kk1", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 406,
+            "tags": ["table_func_changelog", "inner-join"],
+            "name": "append-only_inner_all_join_changelog(subquery)",
+            "description": "append-only inner all join changelog(subquery) state checkpoint",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_left_stream4;"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream4;"},
+                        {"client":"python", "query_type": "table", "exist":"test19_left_stream4", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream4 (i int, k string);"},
+                        {"client":"python", "query_type": "table", "exist":"test19_version_kv_stream4", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream4 (j int, kk string);"},
+                        {"client":"python", "query_type": "stream", "query_id":"19406", "wait":1, "terminate":"manuel", "query":"subscribe to with cte as (select j, kk from test19_right_stream4) select i, k, j, kk, _tp_delta from test19_left_stream4 as a inner join changelog(cte, kk) as b on a.i == b.j settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "table", "depends_on":"19406", "wait":1, "query": "insert into test19_right_stream4 (j, kk) values (1, 'kk1')"},
+                        {"client":"python", "query_type": "table", "kill":"19406", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream4 (i, k) values (1, 'k1');"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query": "insert into test19_right_stream4 (j, kk) values (2, 'kk1');"},
+                        {"client":"python", "query_type": "table", "query": "insert into test19_left_stream4 (i, k) values (2, 'k1');"},
+                        {"client":"python", "query_type": "stream","query_id":"19406-1", "terminate": "manual","query":"recover from '19406'"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19406' sync"},
+                        {"client":"python", "query_type": "table", "query":"unsubscribe to '19406'"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"19406",
+                    "expected_results":[
+                        [1, "k1", 1, "kk1", 1]
+                    ]
+                },
+                {
+                    "query_id":"19406-1",
+                    "expected_results":[
+                        [1, "k1", 1, "kk1", -1],
+                        [2, "k1", 2, "kk1", 1]
+                    ]
+                }
+            ]
+        }
+    ]
+}
