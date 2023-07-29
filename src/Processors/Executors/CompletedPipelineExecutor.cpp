@@ -22,6 +22,7 @@ struct CompletedPipelineExecutor::Data
     std::exception_ptr exception;
     std::atomic_bool is_finished = false;
     std::atomic_bool has_exception = false;
+    ExecuteMode exec_mode = ExecuteMode::NORMAL;
     ThreadFromGlobalPool thread;
     Poco::Event finish_event;
 
@@ -45,7 +46,7 @@ static void threadFunction(CompletedPipelineExecutor::Data & data, ThreadGroupSt
         if (thread_group)
             CurrentThread::attachTo(thread_group);
 
-        data.executor->execute(num_threads);
+        data.executor->execute(num_threads, data.exec_mode);
     }
     catch (...)
     {
@@ -76,6 +77,7 @@ void CompletedPipelineExecutor::execute()
         data = std::make_unique<Data>();
         data->executor = std::make_shared<PipelineExecutor>(pipeline.processors, pipeline.process_list_element);
         data->executor->setReadProgressCallback(pipeline.getReadProgressCallback());
+        data->exec_mode = pipeline.exec_mode;
 
         auto func = [&, thread_group = CurrentThread::getGroup()]()
         {
@@ -101,7 +103,7 @@ void CompletedPipelineExecutor::execute()
         /// proton: starts. use shared_ptr
         auto executor = std::make_shared<PipelineExecutor>(pipeline.processors, pipeline.process_list_element);
         executor->setReadProgressCallback(pipeline.getReadProgressCallback());
-        executor->execute(pipeline.getNumThreads());
+        executor->execute(pipeline.getNumThreads(), pipeline.exec_mode);
         /// proton: ends.
     }
 }

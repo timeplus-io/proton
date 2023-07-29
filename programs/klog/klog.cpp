@@ -593,8 +593,8 @@ struct Data : public klog::ConsumeCallbackData
 
 void ingestAsync(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex, const BenchmarkSettings & bench_settings)
 {
-    auto callback = [](const AppendResult & result, void * data) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        Data * d = static_cast<Data *>(data);
+    auto callback = [](const auto & result, const auto & data) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+        Data * d = static_cast<Data *>(data.get());
 
         TimePoint start;
         {
@@ -641,7 +641,7 @@ void ingestAsync(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_m
         record->setShard(i % result.partitions);
         record->addHeader("_idem", to_string(i));
 
-        unique_ptr<Data> data{new Data(cmutex, inflights, result_queue, total, failed, i)};
+        shared_ptr<Data> data{new Data(cmutex, inflights, result_queue, total, failed, i)};
 
         auto item = make_pair(record, chrono::steady_clock::now());
         {
@@ -649,13 +649,8 @@ void ingestAsync(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_m
             inflights.emplace(i, item);
         }
 
-        Int32 err = wal->append(*record.get(), callback, data.get(), ctx);
-        if (!err)
-        {
-            /// ownership has been moved
-            data.release();
-        }
-        else
+        Int32 err = wal->append(*record.get(), std::move(callback), std::move(data), ctx);
+        if (err)
         {
             lock_guard<mutex> lock(cmutex);
             inflights.erase(i);

@@ -63,7 +63,7 @@ public:
     /// Async append, we don't poll result but rely on callback to deliver the append result back
     /// The AppendCallback can be called in a different thread, so caller need make sure its
     /// multi-thread safety and lifetime validity. Same for the `data` passed in.
-    int32_t append(nlog::Record & record, AppendCallback callback, void * data, const KafkaWALContext & ctx) const;
+    int32_t append(nlog::Record & record, AppendCallback callback, CallbackData data, const KafkaWALContext & ctx) const;
 
     /// Poll the async `append` status
     void poll(int32_t timeout_ms, const KafkaWALContext & ctx) const;
@@ -112,11 +112,11 @@ private:
         std::atomic_int64_t offset = -1;
         std::atomic_int32_t err = 0;
         AppendCallback callback = nullptr;
-        void * data = nullptr;
+        CallbackData data = nullptr;
         bool delete_self = false;
 
-        explicit DeliveryReport(AppendCallback callback_ = nullptr, void * data_ = nullptr, bool delete_self_ = false)
-            : callback(callback_), data(data_), delete_self(delete_self_)
+        explicit DeliveryReport(AppendCallback callback_ = nullptr, CallbackData data_ = nullptr, bool delete_self_ = false)
+            : callback(std::move(callback_)), data(std::move(data_)), delete_self(delete_self_)
         {
         }
     };

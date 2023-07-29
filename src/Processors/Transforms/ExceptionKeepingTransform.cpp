@@ -148,7 +148,9 @@ void ExceptionKeepingTransform::work()
         {
             ready_input = false;
 
-            if (auto exception = runStep([this] { onConsume(std::move(data.chunk)); }, thread_status, elapsed_counter_ms))
+            /// proton: starts. Wrap `onConsume()` with default checkpoint routine
+            if (auto exception = runStep([this] { consumeForCheckpoint(std::move(data.chunk)); }, thread_status, elapsed_counter_ms))
+            /// proton: ends.
             {
                 stage = Stage::Exception;
                 ready_output = true;

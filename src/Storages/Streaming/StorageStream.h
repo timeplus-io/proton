@@ -167,16 +167,16 @@ private:
 public:
     enum class QueryMode : uint8_t
     {
-        STREAMING,          /// streaming query
-        STREAMING_CONCAT,   /// streaming query with back filled historical data
-        HISTORICAL          /// historical query
+        STREAMING, /// streaming query
+        STREAMING_CONCAT, /// streaming query with backfilled historical data
+        HISTORICAL /// historical query
     };
-    
+
     using StreamShardPtrs = std::vector<std::shared_ptr<StreamShard>>;
     struct ShardsToRead
     {
         QueryMode mode;
-        StreamShardPtrs local_shards;  /// Also as streaming shards when mode is STREAMING || STREAMING_CONCAT
+        StreamShardPtrs local_shards; /// Also as streaming shards when mode is STREAMING || STREAMING_CONCAT
         StreamShardPtrs remote_shards;
 
         bool requireDistributed() const { return !remote_shards.empty(); }
@@ -246,7 +246,8 @@ public:
 
     /// Used for validity check before background ingestion of materialized view
     /// @native_log or @kafka_log become not nullptr only if StorageStream::startup completes.
-    bool isReady() const override { return native_log || kafka_log; }
+    /// Need to ensure thread safety, since `isReady()` can be called by other threads
+    bool isReady() const override { return log_initialized.test(); }
 
     bool isInmemory() const { return getSettings()->storage_type.value == "memory"; }
 
@@ -272,48 +273,27 @@ private:
     std::vector<Int64> getOffsets(const String & seek_to) const;
 
 private:
-    struct WriteCallbackData
-    {
-        UInt64 block_id;
-        UInt64 sub_block_id;
-
-        StorageStream * storage;
-
-        WriteCallbackData(UInt64 block_id_, UInt64 sub_block_id_, StorageStream * storage_)
-            : block_id(block_id_), sub_block_id(sub_block_id_), storage(storage_)
-        {
-            ++storage_->outstanding_blocks;
-        }
-
-        ~WriteCallbackData() { --storage->outstanding_blocks; }
-    };
-
     /// FIXME, move ingest APIs to StreamShard
     void append(
         nlog::RecordPtr & record,
         IngestMode ingest_mode,
         klog::AppendCallback callback,
-        void * data,
+        klog::CallbackData data,
         UInt64 base_block_id,
         UInt64 sub_block_id);
 
-    void appendToNativeLog(nlog::RecordPtr & record, IngestMode /*ingest_mode*/);
-
-    void appendAsync(nlog::Record & record, UInt64 block_id, UInt64 sub_block_id);
+    void
+    appendToNativeLog(nlog::RecordPtr & record, IngestMode /*ingest_mode*/, klog::AppendCallback callback, klog::CallbackData data);
 
     void appendToKafka(
         nlog::RecordPtr & record,
         IngestMode ingest_mode,
         klog::AppendCallback callback,
-        void * data,
+        klog::CallbackData data,
         UInt64 base_block_id,
         UInt64 sub_block_id);
 
     void poll(Int32 timeout_ms);
-
-    void writeCallback(const klog::AppendResult & result, UInt64 base_block_id, UInt64 sub_block_id);
-
-    static void writeCallback(const klog::AppendResult & result, void * data);
 
     void cacheVirtualColumnNamesAndTypes();
 
@@ -328,9 +308,9 @@ private:
     bool rand_sharding_key = false;
 
     /// Ascending order based on shard id
-    StreamShardPtrs stream_shards;    /// All shards
-    StreamShardPtrs local_shards;     /// Only local shards
-    StreamShardPtrs remote_shards;    /// Only remote virtual shards
+    StreamShardPtrs stream_shards; /// All shards
+    StreamShardPtrs local_shards; /// Only local shards
+    StreamShardPtrs remote_shards; /// Only remote virtual shards
 
     /// For sharding
     bool sharding_key_is_deterministic = false;
@@ -352,6 +332,7 @@ private:
 
     nlog::NativeLog * native_log = nullptr;
     KafkaLogContext * kafka_log = nullptr;
+    std::atomic_flag log_initialized;
 
     CompressionMethodByte logstore_codec = CompressionMethodByte::NONE;
 

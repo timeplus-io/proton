@@ -11,10 +11,10 @@
 
 namespace DB
 {
+struct BlockIO;
 class CompletedPipelineExecutor;
 class InterpreterSelectWithUnionQuery;
 struct ExtraBlock;
-class ProcessListEntry;
 
 class StorageMaterializedView final : public shared_ptr_helper<StorageMaterializedView>, public IStorage, WithMutableContext
 {
@@ -27,6 +27,7 @@ public:
 
     bool isView() const override { return true; }
 
+    void preDrop() override;
     void drop() override;
     void dropInnerTableIfAny(bool no_delay, ContextPtr local_context) override;
 
@@ -73,20 +74,15 @@ private:
     void createInnerTable();
     void doCreateInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
 
-    void executeSelectPipeline();
-
-    void buildBackgroundPipeline();
-    void doBuildBackgroundPipeline();
-    
-    void executeBackgroundPipeline();
-
-    void cancelBackgroundPipeline();
+    void initBackgroundState();
+    BlockIO buildBackgroundPipeline(ContextMutablePtr local_context);
+    void executeBackgroundPipeline(BlockIO & io, ContextMutablePtr local_context);
 
     void updateStorageSettingsAndTTLs();
 
     void validateInnerQuery(const StorageInMemoryMetadata & storage_metadata, const ContextPtr & local_context) const;
 
-    void waitForDependencies() const;
+    void checkDependencies() const;
 
 private:
     Poco::Logger * log;
@@ -99,20 +95,35 @@ private:
 
     std::atomic_flag shutdown_called;
 
-    /// Background update pipeline
-    struct
+    /// Background state
+    struct State
     {
-        std::atomic_bool resource_initialized = false;
-        std::atomic_bool has_exception = false;
-        std::exception_ptr exception;
-    } background_status;
+        Poco::Logger * log;
+        ThreadFromGlobalPool thread;
+        enum ThreadStatus
+        {
+            UNKNOWN = 0,
+            CHECKING_DEPENDENCIES,
+            BUILDING_PIPELINE,
+            EXECUTING_PIPELINE,
+            FATAL /// Always last one
+        };
+        std::atomic<ThreadStatus> thread_status;
 
-    PipelineExecutorPtr background_executor;
-    QueryPipelineBuilder background_pipeline;
-    ThreadFromGlobalPool build_pipeline_thread;
-    ThreadFromGlobalPool background_thread;
+        String err_msg;
+        std::atomic_int32_t err; /// != 0, background thread has exception
+        std::atomic_bool is_cancelled;
 
-    std::shared_ptr<ProcessListEntry> process_list_entry;
+        ~State();
+        void terminate();
+        void setException(int code, const String & msg, bool log_error = true);
+        void checkException(const String & msg_prefix = "") const;
+        void updateStatus(State::ThreadStatus status);
+        void waitStatusUntil(State::ThreadStatus target_status) const;
+    } background_state;
+
+    static constexpr auto recheck_dependencies_interval = std::chrono::milliseconds(200);
+    static constexpr auto recover_interval = std::chrono::seconds(5);
 
 protected:
     StorageMaterializedView(
