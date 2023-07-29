@@ -45,7 +45,12 @@ void TableFunctionTumble::postArgs(ASTs & args) const
 
 void registerTableFunctionTumble(TableFunctionFactory & factory)
 {
-    factory.registerFunction("tumble", []() -> TableFunctionPtr { return std::make_shared<TableFunctionTumble>("tumble"); });
+    factory.registerFunction(
+        "tumble",
+        []() -> TableFunctionPtr { return std::make_shared<TableFunctionTumble>("tumble"); },
+        {},
+        TableFunctionFactory::CaseSensitive,
+        /*support subquery*/ true);
 }
 }
 }

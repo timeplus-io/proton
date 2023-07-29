@@ -10,6 +10,10 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTWithElement.h>
 
+/// proton: starts.
+#include <TableFunctions/TableFunctionFactory.h>
+/// proton: ends.
+
 namespace DB
 {
 void ApplyWithSubqueryVisitor::visit(ASTPtr & ast, const Data & data)
@@ -115,7 +119,7 @@ void ApplyWithSubqueryVisitor::visit(ASTFunction & func, const Data & data)
     /// GROUP BY ..."
     /// it will find 'transformed' argument in tumble function and replace with the subquery
     /// defined by WITH and set its cte_name to 'transformed'
-    if (func.name == "hop" || func.name == "tumble" || func.name == "session" || func.name == "dedup" || func.name == "table")
+    if (TableFunctionFactory::instance().isSupportSubqueryTableFunctionName(func.name))
     {
         auto & ast = func.arguments->children.at(0);
         if (const auto * identifier = ast->as<ASTIdentifier>())

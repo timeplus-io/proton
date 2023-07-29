@@ -18,20 +18,23 @@ namespace ErrorCodes
 
 
 void TableFunctionFactory::registerFunction(
-    const std::string & name, TableFunctionCreator creator, Documentation doc, CaseSensitiveness case_sensitiveness)
+    const std::string & name, TableFunctionCreator creator, Documentation doc, CaseSensitiveness case_sensitiveness, bool support_subquery)
 {
     if (!table_functions.emplace(name, TableFunctionFactoryData{creator, doc}).second)
-        /// proton: starts
         throw Exception("TableFunctionFactory: the function name '" + name + "' is not unique",
             ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
 
     if (case_sensitiveness == CaseInsensitive
         && !case_insensitive_table_functions.emplace(Poco::toLower(name), TableFunctionFactoryData{creator, doc}).second)
-        /// proton: starts
         throw Exception("TableFunctionFactory: the case insensitive function name '" + name + "' is not unique",
                         ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
+
+    /// proton: starts.
+    if (support_subquery)
+        if (!support_subquery_table_functions.emplace(name, TableFunctionFactoryData{creator, doc}).second)
+            throw Exception("TableFunctionFactory: the support subquery function name '" + name + "' is not unique",
+                        ErrorCodes::LOGICAL_ERROR);
+    /// proton: ends.
 }
 
 TableFunctionPtr TableFunctionFactory::get(
@@ -92,6 +95,13 @@ bool TableFunctionFactory::isTableFunctionName(const std::string & name) const
 {
     return table_functions.contains(name);
 }
+
+/// proton: starts.
+bool TableFunctionFactory::isSupportSubqueryTableFunctionName(const std::string & name) const
+{
+    return support_subquery_table_functions.contains(name);
+}
+/// proton: ends.
 
 Documentation TableFunctionFactory::getDocumentation(const std::string & name) const
 {

@@ -53,7 +53,12 @@ void TableFunctionHop::postArgs(ASTs & args) const
 
 void registerTableFunctionHop(TableFunctionFactory & factory)
 {
-    factory.registerFunction("hop", []() -> TableFunctionPtr { return std::make_shared<TableFunctionHop>("hop"); });
+    factory.registerFunction(
+        "hop",
+        []() -> TableFunctionPtr { return std::make_shared<TableFunctionHop>("hop"); },
+        {},
+        TableFunctionFactory::CaseSensitive,
+        /*support subquery*/ true);
 }
 }
 }

@@ -82,7 +82,12 @@ StoragePtr TableFunctionHist::calculateColumnDescriptions(ContextPtr context)
 
 void registerTableFunctionHist(TableFunctionFactory & factory)
 {
-    factory.registerFunction("table", []() -> TableFunctionPtr { return std::make_shared<TableFunctionHist>("table"); });
+    factory.registerFunction(
+        "table",
+        []() -> TableFunctionPtr { return std::make_shared<TableFunctionHist>("table"); },
+        {},
+        TableFunctionFactory::CaseSensitive,
+        /*support subquery*/ true);
 }
 }
 }

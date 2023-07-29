@@ -33,7 +33,8 @@ public:
         const std::string & name,
         TableFunctionCreator creator,
         Documentation doc = {},
-        CaseSensitiveness case_sensitiveness = CaseSensitive);
+        CaseSensitiveness case_sensitiveness = CaseSensitive,
+        bool support_subquery = false);
 
     template <typename Function>
     void registerFunction(Documentation doc = {}, CaseSensitiveness case_sensitiveness = CaseSensitive)
@@ -52,6 +53,10 @@ public:
 
     bool isTableFunctionName(const std::string & name) const;
 
+    /// proton: starts.
+    bool isSupportSubqueryTableFunctionName(const std::string & name) const;
+    /// proton: ends.
+
 private:
     using TableFunctions = std::unordered_map<std::string, Value>;
 
@@ -63,6 +68,10 @@ private:
 
     TableFunctions table_functions;
     TableFunctions case_insensitive_table_functions;
+
+    /// proton: starts.
+    TableFunctions support_subquery_table_functions;
+    /// proton; ends.
 };
 
 }

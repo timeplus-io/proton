@@ -114,7 +114,12 @@ ASTs TableFunctionDedup::checkAndExtractArguments(ASTFunction * node) const
 
 void registerTableFunctionDedup(TableFunctionFactory & factory)
 {
-    factory.registerFunction("dedup", []() -> TableFunctionPtr { return std::make_shared<TableFunctionDedup>("dedup"); });
+    factory.registerFunction(
+        "dedup",
+        []() -> TableFunctionPtr { return std::make_shared<TableFunctionDedup>("dedup"); },
+        {},
+        TableFunctionFactory::CaseSensitive,
+        /*support subquery*/ true);
 }
 }
 }

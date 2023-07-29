@@ -50,7 +50,12 @@ void TableFunctionSession::handleResultType(const ColumnsWithTypeAndName & argum
 
 void registerTableFunctionSession(TableFunctionFactory & factory)
 {
-    factory.registerFunction("session", []() -> TableFunctionPtr { return std::make_shared<TableFunctionSession>("session"); });
+    factory.registerFunction(
+        "session",
+        []() -> TableFunctionPtr { return std::make_shared<TableFunctionSession>("session"); },
+        {},
+        TableFunctionFactory::CaseSensitive,
+        /*support subquery*/ true);
 }
 }
 }
