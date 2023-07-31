@@ -566,13 +566,6 @@ void StorageMaterializedView::executeBackgroundPipeline(BlockIO & io, ContextMut
     executor.setCancelCallback(
         [this] { return background_state.is_cancelled.load(); }, local_context->getSettingsRef().interactive_delay / 1000);
     executor.execute();
-
-    /// Normally, this background query is only canceled during shutdown and should not be killed
-    if ((*io.process_list_entry)->isKilled())
-        throw Exception(
-            ErrorCodes::QUERY_WAS_CANCELLED,
-            "The background pipeline for materialized view {} is killed, it's abnormal.",
-            getStorageID().getFullTableName());
 }
 
 void StorageMaterializedView::read(
