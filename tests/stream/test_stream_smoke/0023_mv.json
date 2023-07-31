@@ -12,20 +12,23 @@
             "name": "mv_with_target_stream",
             "description": "create a materialized view with target stream",
             "steps":[
-                {"statements": [
-                    {"client":"python", "query_type": "table","wait":2,"query":"drop view if exists mv_with_target_stream"},
-                    {"client":"python", "query_type": "table","wait":2,"query":"drop stream if exists source_mv_stream"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists target_mv_stream"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"create stream if not exists source_mv_stream (i int) settings distributed_flush_threshold_count=1"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"create stream if not exists target_mv_stream (ii int) settings distributed_flush_threshold_count=1"},
-                    {"client":"python","query_id":"2400", "wait":1, "query_type": "table", "query":"create materialized view mv_with_target_stream into target_mv_stream as select _tp_time, i + 1 as ii from source_mv_stream"},
-                    {"client":"python", "query_type": "table","depends_on_stream":"source_mv_stream", "wait":2, "query": "insert into source_mv_stream(i) values (1), (2), (3)"},
-                    {"client":"python", "wait":1, "query_id":"2401", "query_type": "table","depends_on_stream":"mv_with_target_stream", "query":"select ii from table(mv_with_target_stream)"},
-                    {"client":"python", "wait":1, "query_id":"2402", "query_type": "table","depends_on_stream":"target_mv_stream", "query":"select ii from table(target_mv_stream)"},
-                    {"client":"python", "query_type": "table","wait":2,"query":"drop view if exists mv_with_target_stream"},
-                    {"client":"python", "query_type": "table","wait":2,"query":"drop stream if exists source_mv_stream"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists target_mv_stream"}
-                  ]
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists source_mv_stream"},
+                        {"client":"python", "query_type": "table", "query":"drop stream if exists target_mv_stream"},
+                        {"client":"python", "query_type": "table", "exist":"source_mv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists source_mv_stream (i int) settings distributed_flush_threshold_count=1"},
+                        {"client":"python", "query_type": "table", "exist":"target_mv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists target_mv_stream (ii int) settings distributed_flush_threshold_count=1"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"source_mv_stream", "exist":"mv_with_target_stream", "exist_wait":2, "wait":1, "query":"create materialized view mv_with_target_stream into target_mv_stream as select _tp_time, i + 1 as ii from source_mv_stream"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into source_mv_stream(i) values (1), (2), (3)"},
+                        {"client":"python", "query_type": "table", "query_id":"2401", "wait":1, "query":"select ii from table(mv_with_target_stream)"},
+                        {"client":"python", "query_type": "table", "query_id":"2402", "wait":1, "query":"select ii from table(target_mv_stream)"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream"}
+                    ]
                 }
             ],
             "expected_results": [
@@ -39,24 +42,27 @@
             "name": "multi_mv_with_same_target_stream",
             "description": "create 2 materialized views with same target stream",
             "steps":[
-                {"statements": [
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop view if exists mv_with_target_stream_1"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop view if exists mv_with_target_stream_2"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists source_mv_stream"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists target_mv_stream"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"create stream if not exists source_mv_stream (i int) settings distributed_flush_threshold_count=1"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"create stream if not exists target_mv_stream (ii int) settings distributed_flush_threshold_count=1"},
-                    {"client":"python","query_id":"2403", "wait":1, "query_type": "table", "query":"create materialized view mv_with_target_stream_1 into target_mv_stream as select _tp_time, i + 1 as ii from source_mv_stream"},
-                    {"client":"python","query_id":"2404", "wait":1, "query_type": "table", "query":"create materialized view mv_with_target_stream_2 into target_mv_stream as select _tp_time, i + 10 as ii from source_mv_stream"},
-                    {"client":"python", "query_type": "table","depends_on_stream":"source_mv_stream", "wait":3, "query": "insert into source_mv_stream(i) values (1), (2), (3)"},
-                    {"client":"python", "wait":3, "query_id":"2405", "query_type": "table","depends_on_stream":"mv_with_target_stream_1", "query":"select ii from table(mv_with_target_stream_1) ORDER BY ii ASC"},
-                    {"client":"python", "wait":1, "query_id":"2406", "query_type": "table","depends_on_stream":"mv_with_target_stream_2", "query":"select ii from table(mv_with_target_stream_2) ORDER BY ii ASC"},
-                    {"client":"python", "wait":1, "query_id":"2407", "query_type": "table","depends_on_stream":"target_mv_stream", "query":"select ii from table(target_mv_stream) ORDER BY ii ASC"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop view if exists mv_with_target_stream_1"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop view if exists mv_with_target_stream_2"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists source_mv_stream"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists target_mv_stream"}
-                ]
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream_1"},
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream_2"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists source_mv_stream"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists target_mv_stream"},
+                        {"client":"python", "query_type": "table", "exist":"source_mv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists source_mv_stream (i int) settings distributed_flush_threshold_count=1"},
+                        {"client":"python", "query_type": "table", "exist":"target_mv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists target_mv_stream (ii int) settings distributed_flush_threshold_count=1"},
+                        {"client":"python", "query_type": "table", "exist":"mv_with_target_stream_1", "exist_wait":2, "wait":1, "query":"create materialized view mv_with_target_stream_1 into target_mv_stream as select _tp_time, i + 1 as ii from source_mv_stream"},
+                        {"client":"python", "query_type": "table", "exist":"mv_with_target_stream_2", "exist_wait":2, "wait":1, "query":"create materialized view mv_with_target_stream_2 into target_mv_stream as select _tp_time, i + 10 as ii from source_mv_stream"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into source_mv_stream(i) values (1), (2), (3)"},
+                        {"client":"python", "query_type": "table", "query_id":"2405", "wait":1, "query":"select ii from table(mv_with_target_stream_1) ORDER BY ii ASC"},
+                        {"client":"python", "query_type": "table", "query_id":"2406", "wait":1, "query":"select ii from table(mv_with_target_stream_2) ORDER BY ii ASC"},
+                        {"client":"python", "query_type": "table", "query_id":"2407", "wait":1, "query":"select ii from table(target_mv_stream) ORDER BY ii ASC"}
+                    ]
+                },
+                {   
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream_1"},
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream_2"}
+                    ]
                 }
             ],
             "expected_results": [
@@ -71,19 +77,22 @@
             "name": "mv_with_target_stream_partial_populate",
             "description": "create a materialized view with target stream and materialize partial columns of target table",
             "steps":[
-                {"statements": [
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop view if exists mv_with_target_stream"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists source_mv_stream"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists target_mv_stream"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"create stream if not exists source_mv_stream (i int) settings distributed_flush_threshold_count=1"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"create stream if not exists target_mv_stream (ii int, s string) settings distributed_flush_threshold_count=1"},
-                    {"client":"python","query_id":"2408", "wait":1, "query_type": "table", "query":"create materialized view mv_with_target_stream into target_mv_stream as select _tp_time, i + 1 as ii from source_mv_stream"},
-                    {"client":"python", "query_type": "table","depends_on_stream":"source_mv_stream", "wait":1, "query": "insert into source_mv_stream(i) values (1), (2), (3)"},
-                    {"client":"python", "wait":1, "query_id":"2409", "query_type": "table","depends_on_stream":"target_mv_stream", "query":"select ii, s from table(target_mv_stream)"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop view if exists mv_with_target_stream"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists source_mv_stream"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists target_mv_stream"}
-                  ]
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists source_mv_stream"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists target_mv_stream"},
+                        {"client":"python", "query_type": "table", "exist":"source_mv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists source_mv_stream (i int) settings distributed_flush_threshold_count=1"},
+                        {"client":"python", "query_type": "table", "exist":"target_mv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists target_mv_stream (ii int, s string) settings distributed_flush_threshold_count=1"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"source_mv_stream", "exist":"mv_with_target_stream", "exist_wait":2, "wait":1, "query":"create materialized view mv_with_target_stream into target_mv_stream as select _tp_time, i + 1 as ii from source_mv_stream"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into source_mv_stream(i) values (1), (2), (3)"},
+                        {"client":"python", "query_type": "table", "query_id":"2409", "wait":1, "query":"select ii, s from table(target_mv_stream)"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream"}
+                    ]
                 }
             ],
             "expected_results": [
@@ -96,26 +105,29 @@
             "name": "altering_mv",
             "description": "altering materialied view retention policy",
             "steps":[
-                {"statements": [
-                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists mv_with_inner_stream"},
-                    {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream"},
-                    {"client":"python", "query_type": "table", "query":"drop stream if exists source_mv_stream"},
-                    {"client":"python", "query_type": "table", "query":"drop stream if exists target_mv_stream"},
-                    {"client":"python", "query_type": "table","wait":2, "query":"create stream if not exists source_mv_stream (i int) settings distributed_flush_threshold_count=1"},
-                    {"client":"python", "query_type": "table", "query":"create stream if not exists target_mv_stream (ii int, s string) settings distributed_flush_threshold_count=1"},
-                    {"client":"python", "wait":1, "query_type": "table","depends_on_stream":"source_mv_stream", "query":"create materialized view mv_with_inner_stream as select _tp_time, i + 1 as ii from source_mv_stream"},
-                    {"client":"python", "wait":1, "query_type": "table","depends_on_stream":"target_mv_stream", "query":"create materialized view mv_with_target_stream into target_mv_stream as select _tp_time, i + 1 as ii from source_mv_stream"},
-                    {"client":"python", "wait":2, "query_id":"2400", "query_type": "table","depends_on_stream":"mv_with_inner_stream", "query":"alter stream mv_with_inner_stream modify setting logstore_retention_bytes=1000000"},
-                    {"client":"python", "query_id":"2401", "query_type": "table","depends_on_stream":"mv_with_target_stream", "query":"alter stream mv_with_target_stream modify setting logstore_retention_bytes=1000000"},
-                    {"client":"python", "query_id":"2402", "query_type": "table","depends_on_stream":"mv_with_inner_stream", "query":"alter stream mv_with_inner_stream modify ttl now()-1d"},
-                    {"client":"python", "query_id":"2403", "query_type": "table","depends_on_stream":"mv_with_inner_stream", "query":"alter stream mv_with_target_stream modify ttl now()-1d"},
-                    {"client":"python", "query_id":"2404", "query_type": "table","depends_on_stream":"mv_with_inner_stream", "query":"alter stream mv_with_inner_stream remove ttl"},
-                    {"client":"python", "query_id":"2405", "query_type": "table","depends_on_stream":"mv_with_inner_stream", "query":"alter stream mv_with_target_stream remove ttl"},
-                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists mv_with_inner_stream"},
-                    {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream"},
-                    {"client":"python", "query_type": "table", "query":"drop stream if exists source_mv_stream"},
-                    {"client":"python", "query_type": "table", "query":"drop stream if exists target_mv_stream"}
-                  ]
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_inner_stream"},
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists source_mv_stream"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists target_mv_stream"},
+                        {"client":"python", "query_type": "table", "exist":"source_mv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists source_mv_stream (i int) settings distributed_flush_threshold_count=1"},
+                        {"client":"python", "query_type": "table", "exist":"target_mv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists target_mv_stream (ii int, s string) settings distributed_flush_threshold_count=1"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"source_mv_stream", "exist":"mv_with_inner_stream", "exist_wait":2, "wait":1, "query":"create materialized view mv_with_inner_stream as select _tp_time, i + 1 as ii from source_mv_stream"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"target_mv_stream", "exist":"mv_with_target_stream", "exist_wait":2, "wait":1, "query":"create materialized view mv_with_target_stream into target_mv_stream as select _tp_time, i + 1 as ii from source_mv_stream"},
+                        {"client":"python", "query_type": "table", "query_id":"2400", "wait":2, "query":"alter stream mv_with_inner_stream modify setting logstore_retention_bytes=1000000"},
+                        {"client":"python", "query_type": "table", "query_id":"2401", "query":"alter stream mv_with_target_stream modify setting logstore_retention_bytes=1000000"},
+                        {"client":"python", "query_type": "table", "query_id":"2402", "query":"alter stream mv_with_inner_stream modify ttl now()-1d"},
+                        {"client":"python", "query_type": "table", "query_id":"2403", "query":"alter stream mv_with_target_stream modify ttl now()-1d"},
+                        {"client":"python", "query_type": "table", "query_id":"2404", "query":"alter stream mv_with_inner_stream remove ttl"},
+                        {"client":"python", "query_type": "table", "query_id":"2405", "query":"alter stream mv_with_target_stream remove ttl"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_inner_stream"},
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream"}
+                    ]
                 }
             ],
             "expected_results": [
@@ -133,37 +145,42 @@
             "name": "union multiple versioned_kv_join_mv",
             "description": "union multiple materialied view with versioned_kv join query",
             "steps":[
-                {"statements": [
-                    {"client":"python", "query_type": "table", "wait":1, "query":"drop view if exists mv_with_inner_stream"},
-                    {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream"},
-                    {"client":"python", "query_type": "table", "query":"drop stream if exists source_mv_stream"},
-                    {"client":"python", "query_type": "table", "query":"drop stream if exists source_mv_versioned_kv"},
-                    {"client":"python", "query_type": "table", "query":"drop stream if exists target_mv_stream"},
-                    {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists source_mv_stream(i int, v string, t datetime64(3, 'UTC')) settings distributed_flush_threshold_count=1"},
-                    {"client":"python", "query_type": "table", "query":"create stream if not exists source_mv_versioned_kv(id int, value string) primary key id settings mode='versioned_kv', distributed_flush_threshold_count=1"},
-                    {"client":"python", "query_type": "table", "query":"create stream if not exists target_mv_stream(customerId int, timestamp string, recordValue string, value string) settings distributed_flush_threshold_count=1"},
-                    {"client":"python", "query_type": "table", "depends_on_stream":"source_mv_versioned_kv", "wait":1, "query":"create materialized view mv_with_inner_stream as with results as (select i, format_datetime(window_end, '%FT%H:%M:%SZ', 'UTC') AS timestamp, to_string(max(v)) AS recordValue from tumble(source_mv_stream, t, 2s) group by i, window_end) select source_mv_versioned_kv.id as customerId, results.timestamp as timestamp, results.recordValue as recordValue, source_mv_versioned_kv.value as value from results inner join source_mv_versioned_kv on i = id"},
-                    {"client":"python", "query_type": "table", "depends_on_stream":"target_mv_stream", "query":"create materialized view mv_with_target_stream into target_mv_stream as with results as (select i, format_datetime(window_end, '%FT%H:%M:%SZ', 'UTC') AS timestamp, to_string(max(v)) AS recordValue from tumble(source_mv_stream, t, 2s) group by i, window_end) select source_mv_versioned_kv.id as customerId, results.timestamp as timestamp, results.recordValue as recordValue, source_mv_versioned_kv.value as value from results inner join source_mv_versioned_kv on i = id"},
-                    {"client":"python", "query_id":"2400", "terminate": "manual", "query_type": "stream", "depends_on_stream":"source_mv_versioned_kv", "wait":1, "query":"select (* except _tp_time) from mv_with_inner_stream union select (* except _tp_time) from mv_with_target_stream"},
-                    {"client":"python", "query_type": "table", "depends_on_stream":"source_mv_versioned_kv", "wait":1, "query":"insert into source_mv_versioned_kv(id, value) values(1, 'test')"},
-                    {"client":"python", "query_type": "table", "depends_on_stream":"source_mv_stream", "wait":1, "query":"insert into source_mv_stream(i, v, t) values(1, 't1', '2022-10-1 00:00:00')(2, 't2', '2022-10-1 00:00:01') (3, 't3', '2022-10-1 00:00:03')"},
-                    {"client":"python", "query_type": "table", "depends_on_stream":"source_mv_versioned_kv", "query":"insert into source_mv_versioned_kv(id, value) values(1, 'test2')(2, 'test3')"},
-                    {"client":"python", "query_type": "table", "depends_on_stream":"source_mv_stream", "kill":"2400", "kill_wait":3, "query":"insert into source_mv_stream(i, v, t) values(1, 't11', '2022-10-1 00:00:03')(2, 't22', '2022-10-1 00:00:03') (3, 't33', '2022-10-1 00:00:04')"},
-                    {"client":"python", "query_type": "table", "wait":1, "query":"drop view if exists mv_with_inner_stream"},
-                    {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream"},
-                    {"client":"python", "query_type": "table", "query":"drop stream if exists source_mv_stream"},
-                    {"client":"python", "query_type": "table", "query":"drop stream if exists source_mv_versioned_kv"},
-                    {"client":"python", "query_type": "table", "query":"drop stream if exists target_mv_stream"}
-                  ]
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_inner_stream"},
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists source_mv_stream"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists source_mv_versioned_kv"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists target_mv_stream"},
+                        {"client":"python", "query_type": "table", "exist":"source_mv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists source_mv_stream(i int, v string, t datetime64(3, 'UTC')) settings distributed_flush_threshold_count=1"},
+                        {"client":"python", "query_type": "table", "exist":"source_mv_versioned_kv", "exist_wait":2, "wait":1, "query":"create stream if not exists source_mv_versioned_kv(id int, value string) primary key id settings mode='versioned_kv', distributed_flush_threshold_count=1"},
+                        {"client":"python", "query_type": "table", "exist":"target_mv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists target_mv_stream(customerId int, timestamp string, recordValue string, value string) settings distributed_flush_threshold_count=1"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"source_mv_versioned_kv", "exist":"mv_with_inner_stream", "exist_wait":2, "wait":1, "query":"create materialized view mv_with_inner_stream as with results as (select i, format_datetime(window_end, '%FT%H:%M:%SZ', 'UTC') AS timestamp, to_string(max(v)) AS recordValue from tumble(source_mv_stream, t, 2s) group by i, window_end) select source_mv_versioned_kv.id as customerId, results.timestamp as timestamp, results.recordValue as recordValue, source_mv_versioned_kv.value as value from results inner join source_mv_versioned_kv on i = id"},
+                        {"client":"python", "query_type": "table", "depends_on_stream":"target_mv_stream", "exist":"mv_with_target_stream", "exist_wait":2, "wait":1, "query":"create materialized view mv_with_target_stream into target_mv_stream as with results as (select i, format_datetime(window_end, '%FT%H:%M:%SZ', 'UTC') AS timestamp, to_string(max(v)) AS recordValue from tumble(source_mv_stream, t, 2s) group by i, window_end) select source_mv_versioned_kv.id as customerId, results.timestamp as timestamp, results.recordValue as recordValue, source_mv_versioned_kv.value as value from results inner join source_mv_versioned_kv on i = id"},
+                        {"client":"python", "query_type": "stream", "query_id":"2400", "terminate": "manual", "wait":1, "query":"select (* except _tp_time) from mv_with_inner_stream union select (* except _tp_time) from mv_with_target_stream"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"insert into source_mv_versioned_kv(id, value) values(1, 'test')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"insert into source_mv_stream(i, v, t) values(1, 't1', '2022-10-1 00:00:00')(2, 't2', '2022-10-1 00:00:01') (3, 't3', '2022-10-1 00:00:03')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"insert into source_mv_versioned_kv(id, value) values(1, 'test2')(2, 'test3')"},
+                        {"client":"python", "query_type": "table", "kill":"2400", "kill_wait":3, "query":"insert into source_mv_stream(i, v, t) values(1, 't11', '2022-10-1 00:00:03')(2, 't22', '2022-10-1 00:00:03') (3, 't33', '2022-10-1 00:00:04')"}
+                    ]
+                },
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_inner_stream"},
+                        {"client":"python", "query_type": "table", "query":"drop view if exists mv_with_target_stream"}
+                    ]
                 }
             ],
             "expected_results": [
-                {"query_id":"2400", "expected_results":[
-                    [1, "2022-10-01T00:00:02Z", "t1", "test"],
-                    [1, "2022-10-01T00:00:02Z", "t1", "test"],
-                    [1, "2022-10-01T00:00:04Z", "t11", "test2"], [2, "2022-10-01T00:00:04Z", "t22", "test3"],
-                    [1, "2022-10-01T00:00:04Z", "t11", "test2"], [2, "2022-10-01T00:00:04Z", "t22", "test3"]
-                ]}
+                {
+                    "query_id":"2400", 
+                    "expected_results":[
+                        [1, "2022-10-01T00:00:02Z", "t1", "test"],
+                        [1, "2022-10-01T00:00:02Z", "t1", "test"],
+                        [1, "2022-10-01T00:00:04Z", "t11", "test2"], [2, "2022-10-01T00:00:04Z", "t22", "test3"],
+                        [1, "2022-10-01T00:00:04Z", "t11", "test2"], [2, "2022-10-01T00:00:04Z", "t22", "test3"]
+                    ]
+                }
             ]
         }
     ]
