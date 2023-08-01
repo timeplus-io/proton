@@ -57,10 +57,7 @@ namespace
                 {
                     /// Set keys/values
                     for (const auto & [capturing_index, capturing_name] : regex.CapturingGroupNames())
-                    {
-                        assert(!matches[capturing_index].empty());
                         row_map.emplace_back(capturing_name, matches[capturing_index].ToString());
-                    }
                 }
 
                 /// Not matched: empty map
@@ -163,7 +160,7 @@ namespace
 
         bool isStateful() const override { return false; }
 
-        bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
+        bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
         bool useDefaultImplementationForNulls() const override { return true; }
 
