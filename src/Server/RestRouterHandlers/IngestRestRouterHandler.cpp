@@ -142,6 +142,13 @@ inline bool IngestRestRouterHandler::parseColumns(JSONReadBuffers & buffers, Str
         return false;
     }
 
+    /// empty 'columns' field
+    if (end - begin < 2)
+    {
+        error = "Invalid Request: 'columns' is empty";
+        return false;
+    }
+
     cols.assign(begin, static_cast<size_t>(end - begin + 1));
     return true;
 }
