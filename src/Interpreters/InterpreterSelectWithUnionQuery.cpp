@@ -249,7 +249,13 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
     auto updatable_query_ptr = query_ptr_->clone();
 
     SelectQueryOptions select_options;
-    select_options.analyze();
+    /// NOTE: When get_sample_block_ctx exists, we shall save the rewritten_query to be used for subsequent processing.
+    /// If so, we can't set the only_anlayze flag to avoid incorrectly cached rewritten query
+    /// For example:
+    /// In `executeScalarSubqueries` of TreeRewriter, which shall optimize the scalar subquery to a function `identity` if only_analyze is set
+    /// e.g. "with (select count() from test limit 2) as max select * from (select * from test where to_uint8(name) < max)"
+    ///    ->"with identity(_cast(0, 'nullable(uint64)')) AS max as max select * from (select * from test where to_uint8(name) < max)"
+    select_options.analyze(!get_sample_block_ctx);
     select_options.modify(true);
 
     if (is_subquery)
@@ -264,7 +270,7 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
         if (get_sample_block_ctx)
         {
             get_sample_block_ctx->output_data_stream_semantic = interpreter.getDataStreamSemantic();
-            get_sample_block_ctx->rewritten_query = updatable_query_ptr;
+            get_sample_block_ctx->rewritten_query = std::move(updatable_query_ptr);
         }
         return interpreter.getSampleBlock();
     }
@@ -279,7 +285,7 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
         if (semantic_iter != data_stream_semantic_cache.end())
         {
             get_sample_block_ctx->output_data_stream_semantic = semantic_iter->second.data_stream_semantic;
-            get_sample_block_ctx->rewritten_query = semantic_iter->second.query;
+            get_sample_block_ctx->rewritten_query = semantic_iter->second.query->clone(); /// Cannot share with cached query
         }
     }
 
@@ -291,13 +297,13 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
     InterpreterSelectWithUnionQuery interpreter(updatable_query_ptr, context_, select_options);
 
     auto & entry = data_stream_semantic_cache[key];
-    entry.query = updatable_query_ptr;
+    entry.query = std::move(updatable_query_ptr);
     entry.data_stream_semantic = interpreter.getDataStreamSemantic();
 
     if (get_sample_block_ctx)
     {
         get_sample_block_ctx->output_data_stream_semantic = entry.data_stream_semantic;
-        get_sample_block_ctx->rewritten_query = std::move(updatable_query_ptr);
+        get_sample_block_ctx->rewritten_query = entry.query->clone(); /// Cannot share with cached query
     }
 
     return cache[key] = interpreter.getSampleBlock();

@@ -796,6 +796,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             if (syntax_analyzer_result->rewrite_subqueries)
             {
                 /// remake interpreter_subquery when PredicateOptimizer rewrites subqueries and main table is subquery
+                joined_tables.reset(getSelectQuery());
                 interpreter_subquery = joined_tables.makeLeftTableSubquery(options.subquery());
             }
         }

@@ -119,7 +119,7 @@
                         {"client":"python", "query_type": "table", "query_id":"2401", "query":"alter stream mv_with_target_stream modify setting logstore_retention_bytes=1000000"},
                         {"client":"python", "query_type": "table", "query_id":"2402", "query":"alter stream mv_with_inner_stream modify ttl now()-1d"},
                         {"client":"python", "query_type": "table", "query_id":"2403", "query":"alter stream mv_with_target_stream modify ttl now()-1d"},
-                        {"client":"python", "query_type": "table", "query_id":"2404", "query":"alter stream mv_with_inner_stream remove ttl"},
+                        {"client":"python", "query_type": "table", "query_id":"2404", "wait":3, "query":"alter stream mv_with_inner_stream remove ttl"},
                         {"client":"python", "query_type": "table", "query_id":"2405", "query":"alter stream mv_with_target_stream remove ttl"}
                     ]
                 },
