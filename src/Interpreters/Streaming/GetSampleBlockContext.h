@@ -19,6 +19,7 @@ struct GetSampleBlockContext
 
     void mergeSelectOptions(SelectQueryOptions & select_options);
 
+    bool rewrite_query_inplace = false;
     ASTPtr rewritten_query;
 };
 

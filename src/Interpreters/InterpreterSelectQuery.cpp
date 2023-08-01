@@ -797,7 +797,14 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             {
                 /// remake interpreter_subquery when PredicateOptimizer rewrites subqueries and main table is subquery
                 joined_tables.reset(getSelectQuery());
-                interpreter_subquery = joined_tables.makeLeftTableSubquery(options.subquery());
+                /// proton : propagate the aggregates / join
+                auto get_sample_block_ctx = getSampleBlockContext();
+                joined_tables.resolveTables(get_sample_block_ctx);
+
+                auto subquery_options = options.subquery()
+                                            .setParentSelectJoinStrictness(current_select_join_strictness)
+                                            .setParentSelectHasAggregates(current_select_has_aggregates);
+                interpreter_subquery = joined_tables.makeLeftTableSubquery(subquery_options);
             }
         }
 
@@ -3228,6 +3235,7 @@ Streaming::GetSampleBlockContext InterpreterSelectQuery::getSampleBlockContext()
         .parent_select_has_aggregates = (current_select_has_aggregates || options.parent_select_has_aggregates),
         .parent_select_join_strictness
         = (current_select_join_strictness ? current_select_join_strictness : options.parent_select_join_strictness),
+        .rewrite_query_inplace = options.modify_inplace,
     };
 }
 

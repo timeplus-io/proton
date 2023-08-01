@@ -94,7 +94,7 @@ static NamesAndTypesList getColumnsFromTableExpression(
         names_and_type_list = InterpreterSelectWithUnionQuery::getSampleBlock(subquery, context, true, get_sample_block_ctx).getNamesAndTypesList();
 
         /// proton : starts. Rewrite table_expression
-        if (get_sample_block_ctx && get_sample_block_ctx->rewritten_query)
+        if (get_sample_block_ctx && get_sample_block_ctx->rewrite_query_inplace && get_sample_block_ctx->rewritten_query)
             table_expression.subquery->children[0] = get_sample_block_ctx->rewritten_query;
         /// proton : ends
     }
