@@ -548,7 +548,9 @@ BlockIO StorageMaterializedView::buildBackgroundPipeline(ContextMutablePtr local
     io.pipeline.addResources(std::move(resources));
     io.pipeline.setProgressCallback(local_context->getProgressCallback());
     io.pipeline.setProcessListElement(local_context->getProcessListElement());
-    io.pipeline.setNumThreads(std::min<size_t>(io.pipeline.getNumThreads(), local_context->getSettingsRef().max_threads));
+
+    /// NOTE: We must use enough threads to process streaming query, otherwise, there is no idle thread to process Sink, all threads are used for select processing (Especially join queries)
+    // io.pipeline.setNumThreads(std::min<size_t>(io.pipeline.getNumThreads(), local_context->getSettingsRef().max_threads));
     return io;
 }
 
