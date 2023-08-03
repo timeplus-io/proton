@@ -149,12 +149,19 @@ void ChangelogConvertTransform::work()
     bool log_metrics = false;
     size_t total_row_count = 0, total_bytes_count = 0, total_buffer_size_in_cells = 0;
     {
+        /// Constant columns are not supported directly during hashing keys. To make them work anyway, we materialize them.
+        Columns materialized_columns;
+        materialized_columns.reserve(key_column_positions.size());
+
         ColumnRawPtrs key_columns;
         key_columns.reserve(key_column_positions.size());
 
         const auto & columns = chunk.getColumns();
         for (auto key_col_pos : key_column_positions)
-            key_columns.push_back(columns[key_col_pos].get());
+        {
+            materialized_columns.push_back(columns[key_col_pos]->convertToFullColumnIfConst());
+            key_columns.push_back(materialized_columns.back().get());
+        }
 
         switch (index.type)
         {

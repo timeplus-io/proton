@@ -313,6 +313,105 @@
                     ]
                 }
             ]
+        },
+        {
+            "id": 10,
+            "tags": ["table_func_changelog"],
+            "name": "table_func_changelog_view",
+            "description": "tail query from table function changelog(view)",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop view if exists v_compute_income;"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists hourly_cpu_usage;"},
+                        {"client":"python", "query_type": "table", "exist":"hourly_cpu_usage", "exist_wait":2, "wait":1, "query":"create stream hourly_cpu_usage (id int, max_cpu int, rate float);"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into hourly_cpu_usage (id, max_cpu, rate) values (1, 2, 0.24);"},
+                        {"client":"python", "query_type": "table", "exist":"v_compute_income", "exist_wait":2, "wait":1, "query":"create view v_compute_income as SELECT id, max_cpu * rate FROM hourly_cpu_usage WHERE _tp_time > earliest_ts();"},
+                        {"client":"python", "query_type": "stream", "query_id":"2810", "wait":1, "query": "SELECT * FROM changelog(v_compute_income, id);"},
+                        {"client":"python", "query_type": "table", "depends_on":"2810", "wait":1, "query": "insert into hourly_cpu_usage (id, max_cpu, rate) values (2, 4, 0.48);"},
+                        {"client":"python", "query_type": "table", "kill":"2810", "kill_wait":3, "wait":1, "query": "insert into hourly_cpu_usage (id, max_cpu, rate) values (1, 6, 0.72);"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"2810",
+                    "expected_results":[
+                        [1, 0.48, 1], 
+                        [2, 1.92, 1], 
+                        [1, 0.48, -1], 
+                        [1, 4.32, 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 11,
+            "tags": ["table_func_changelog", "issue-3018"],
+            "name": "table_func_changelog_view",
+            "description": "tail query from table function changelog(view)",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop view if exists v_compute_income;"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists hourly_cpu_usage;"},
+                        {"client":"python", "query_type": "table", "exist":"hourly_cpu_usage", "exist_wait":2, "wait":1, "query":"create stream hourly_cpu_usage (max_cpu int, rate float);"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into hourly_cpu_usage (max_cpu, rate) values (2, 0.24);"},
+                        {"client":"python", "query_type": "table", "exist":"v_compute_income", "exist_wait":2, "wait":1, "query":"create view v_compute_income as SELECT sum(max_cpu*rate) as compute_income, 'aug' as month FROM hourly_cpu_usage WHERE _tp_time > earliest_ts();"},
+                        {"client":"python", "query_type": "stream", "query_id":"2811", "wait":2, "query": "SELECT month, compute_income, _tp_delta FROM changelog(v_compute_income, month);"},
+                        {"client":"python", "query_type": "table", "depends_on":"2811", "wait":2, "query": "insert into hourly_cpu_usage (max_cpu, rate) values (4, 0.48);"},
+                        {"client":"python", "query_type": "table", "kill":"2811", "kill_wait":3, "wait":2, "query": "insert into hourly_cpu_usage (max_cpu, rate) values (6, 0.72);"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"2811",
+                    "expected_results":[
+                        ["aug", 0.48, 1], 
+                        ["aug", 0.48, -1], 
+                        ["aug", 2.4, 1], 
+                        ["aug", 2.4, -1], 
+                        ["aug", 6.72, 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 12,
+            "tags": ["table_func_changelog"],
+            "name": "table_func_changelog_view",
+            "description": "tail query from table function changelog(view)",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists test28_view;"},
+                        {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists test28_left_stream;"},
+                        {"client":"python", "query_type": "table", "exist":"test28_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_left_stream (k string, val float);"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_left_stream(k, val) values ('k1', 11.1) ('k2', 22.2) ('k3', 33.3);"},
+                        {"client":"python", "query_type": "table", "exist":"test28_view", "exist_wait":2, "wait":1, "query":"create view test28_view as select k, count(), min(val), max(val), sum(val), avg(val) from test28_left_stream where _tp_time > earliest_ts() group by k;"},
+                        {"client":"python", "query_type": "stream", "query_id":"2812", "wait":1, "query": "select * from changelog(test28_view, k);"},
+                        {"client":"python", "query_type": "table", "depends_on":"2812", "wait":1, "query": "insert into test28_left_stream(k, val) values ('k1', 44.4) ('k2', 55.5);"},
+                        {"client":"python", "query_type": "table", "kill":"2812", "kill_wait":3, "wait":1, "query": "insert into test28_left_stream(k, val) values ('k3', 66.6);"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"2812",
+                    "expected_results":[
+                        ["k1", 1, 11.1, 11.1, 11.1, 11.1, 1], 
+                        ["k2", 1, 22.2, 22.2, 22.2, 22.2, 1], 
+                        ["k3", 1, 33.3, 33.3, 33.3, 33.3, 1],
+                        ["k1", 1, 11.1, 11.1, 11.1, 11.1, -1], 
+                        ["k2", 1, 22.2, 22.2, 22.2, 22.2, -1], 
+                        ["k3", 1, 33.3, 33.3, 33.3, 33.3, -1],
+                        ["k1", 2, 11.1, 44.4, 55.5, 27.75, 1], 
+                        ["k2", 2, 22.2, 55.5, 77.7, 38.85, 1], 
+                        ["k3", 2, 33.3, 66.6, 99.9, 49.94, 1]
+                    ]
+                }
+            ]
         }
     ]
 }
