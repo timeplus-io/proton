@@ -175,6 +175,9 @@ private:
     /// Try propagate checkpoint to downstream
     bool propagateCheckpointAndReset();
 
+    /// Try propagate an empty rows chunk to downstream, act as a heart beat
+    bool propagateHeartbeatChunk();
+
 protected:
     void emitVersion(Block & block);
     /// return {should_abort, need_finalization} pair

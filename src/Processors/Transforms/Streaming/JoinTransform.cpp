@@ -1,4 +1,4 @@
-#include <Processors/Transforms/Streaming/JoinTranform.h>
+#include <Processors/Transforms/Streaming/JoinTransform.h>
 
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>

@@ -1625,6 +1625,10 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                 }
             }
 
+            /// proton: starts. Establish global aggregation periodic watermark after joined multiples streams.
+            buildGlobalPeriodicWatermarkQueryPlan(query_plan);
+            /// proton:ends.
+
             if (!query_info.projection && expressions.hasWhere())
                 executeWhere(query_plan, expressions.before_where, expressions.remove_where_filter);
 
@@ -2403,7 +2407,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
 
     /// proton : starts. If we only fetch columns, don't need add streaming processing step, e.g. `WatermarkStep` etc.
     if (options.to_stage != QueryProcessingStage::Enum::FetchColumns)
-        buildStreamingProcessingQueryPlan(query_plan);
+        buildWindowWatermarkQueryPlan(query_plan);
     /// proton: ends
 
     /// Aliases in table declaration.
@@ -3421,40 +3425,82 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
     }
 }
 
-void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const
+void InterpreterSelectQuery::executeShuffling(QueryPlan & query_plan) const
 {
     /// TODO: Support more shuffling rules
     /// 1) Group by keys
     /// 2) Sharding expr keys
+    ///
+    /// We like to limit the shuffling concurrency here
+    /// 1) No more than number of inputs concurrency
+    /// 2) If there is JavaScript UDA, limit the concurrency further
+    size_t shuffle_output_streams = context->getSettingsRef().max_threads.value;
+    size_t controlled_concurrency = context->getSettingsRef().javascript_uda_max_concurrency.value;
+    if (query_info.has_javascript_uda)
+    {
+        shuffle_output_streams = std::min(shuffle_output_streams, controlled_concurrency);
+        LOG_INFO(log, "Limit shuffling output stream to {} for JavaScript UDA", shuffle_output_streams);
+    }
+    shuffle_output_streams = shuffle_output_streams == 0 ? 1 : shuffle_output_streams;
+
+    auto substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
+    query_plan.addStep(std::make_unique<Streaming::ShufflingStep>(
+        query_plan.getCurrentDataStream(), std::move(substream_key_positions), shuffle_output_streams));
+}
+
+void InterpreterSelectQuery::buildWatermarkQueryPlan(QueryPlan & query_plan) const
+{
+    auto params = std::make_shared<Streaming::WatermarkStamperParams>(
+            query_info.query, query_info.syntax_analyzer_result, query_info.streaming_window_params);
     if (query_info.hasPartitionByKeys())
     {
-        /// We like to limit the shuffling concurrency here
-        /// 1) No more than number of inputs concurrency
-        /// 2) If there is JavaScript UDA, limit the concurrency further
-        size_t shuffle_output_streams = context->getSettingsRef().max_threads.value;
-        size_t controlled_concurrency = context->getSettingsRef().javascript_uda_max_concurrency.value;
-        if (query_info.has_javascript_uda)
-        {
-            shuffle_output_streams = std::min(shuffle_output_streams, controlled_concurrency);
-            LOG_INFO(log, "Limit shuffling output stream to {} for JavaScript UDA", shuffle_output_streams);
-        }
-        shuffle_output_streams = shuffle_output_streams == 0 ? 1 : shuffle_output_streams;
-
-        auto substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
-        query_plan.addStep(std::make_unique<Streaming::ShufflingStep>(
-            query_plan.getCurrentDataStream(), std::move(substream_key_positions), shuffle_output_streams));
+        executeShuffling(query_plan);
+        query_plan.addStep(
+            std::make_unique<Streaming::WatermarkStepWithSubstream>(query_plan.getCurrentDataStream(), std::move(params), log));
     }
+    else
+        query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(query_plan.getCurrentDataStream(), std::move(params), log));
+}
 
-    /// Build `WatermarkStep`
-    if (shouldApplyWatermark())
+void InterpreterSelectQuery::buildWindowWatermarkQueryPlan(QueryPlan & query_plan) const
+{
+    if (!isStreaming() || has_user_defined_emit_strategy)
+        return;
+
+    if (!hasStreamingWindowFunc())
+        return;
+
+    buildWatermarkQueryPlan(query_plan);
+}
+
+void InterpreterSelectQuery::buildGlobalPeriodicWatermarkQueryPlan(QueryPlan & query_plan) const
+{
+    if (!isStreaming() || has_user_defined_emit_strategy)
+        return;
+
+    if (!hasGlobalAggregation())
+        return;
+
+    /// An optimized path, skip duplicate periodic watermark.
+    /// If there is join query, we must establish new periodic watermark for joined data
+    if (!analysis_result.hasJoin())
     {
-        auto params = std::make_shared<Streaming::WatermarkStamperParams>(query_info.query, query_info.syntax_analyzer_result, query_info.streaming_window_params);
-        if (query_info.hasPartitionByKeys())
-            query_plan.addStep(
-                std::make_unique<Streaming::WatermarkStepWithSubstream>(query_plan.getCurrentDataStream(), std::move(params), log));
-        else
-            query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(query_plan.getCurrentDataStream(), std::move(params), log));
+        /// CTE subquery
+        if (storage)
+        {
+            if (auto * proxy = storage->as<Streaming::ProxyStream>())
+            {
+                if (proxy->hasGlobalAggregation())
+                    return;
+            }
+        }
+
+        /// nested global aggregation
+        if (interpreter_subquery && interpreter_subquery->hasGlobalAggregation())
+            return;
     }
+
+    buildWatermarkQueryPlan(query_plan);
 }
 
 void InterpreterSelectQuery::checkEmitVersion()

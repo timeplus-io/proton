@@ -30,8 +30,12 @@ void WindowAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     doFinalize(watermark, substream_ctx, chunk_ctx);
     auto end = MonotonicMilliseconds::now();
 
-    LOG_DEBUG(
-        log, "Took {} milliseconds to finalize aggregation in substream id={}. watermark={}", end - start, substream_ctx->id, watermark);
+    LOG_INFO(
+        log,
+        "Took {} milliseconds to finalize aggregation in substream id={}. finalized_watermark={}",
+        end - start,
+        substream_ctx->id,
+        substream_ctx->finalized_watermark);
 
     /// Do memory arena recycling by last finalized watermark
     removeBucketsImpl(substream_ctx->finalized_watermark, substream_ctx);
@@ -43,10 +47,6 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
     assert(substream_ctx);
 
     auto & data_variant = substream_ctx->variants;
-
-    if (data_variant.empty())
-        return;
-
     assert(data_variant.isTwoLevel());
 
     Block merged_block;

@@ -77,6 +77,7 @@ void AggregatingTransformWithSubstream::work()
     auto num_rows = current_chunk.getNumRows();
     if (num_rows == 0 && !current_chunk.hasChunkContext())
     {
+        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0}, nullptr);
         /// Remember to reset `read_current_chunk`
         read_current_chunk = false;
         return;
@@ -88,9 +89,8 @@ void AggregatingTransformWithSubstream::work()
 
     if (likely(!is_consume_finished))
     {
-        SubstreamContextPtr substream_ctx = nullptr;
-        if (const auto & substream_id = current_chunk.getSubstreamID(); substream_id != Streaming::INVALID_SUBSTREAM_ID)
-            substream_ctx = getOrCreateSubstreamContext(substream_id);
+        assert(current_chunk.getSubstreamID() != Streaming::INVALID_SUBSTREAM_ID);
+        SubstreamContextPtr substream_ctx = getOrCreateSubstreamContext(current_chunk.getSubstreamID());
 
         if (num_rows > 0)
         {

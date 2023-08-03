@@ -299,6 +299,34 @@
         {"query_id":"9900", "expected_results":"error_code:48"},
         {"query_id":"9901", "expected_results":"error_code:48"}
       ]
+    },
+    {
+      "id": 12,
+      "tags": ["global aggr"],
+      "name": "#3015",
+      "description": "global aggr over tumble (with substream, with timeout, with join)",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query": "drop stream if exists test_stream_3015_l"},
+            {"client":"python", "query_type": "table", "query": "drop stream if exists test_stream_3015_vk_r"},
+            {"client":"python", "query_type": "table", "exist": "test_stream_3015_l", "exist_wait":2, "wait":1, "query": "create stream test_stream_3015_l(i int64, s string, timestamp datetime64(3, 'UTC')) settings event_time_column='timestamp'"},
+            {"client":"python", "query_type": "table", "exist": "test_stream_3015_vk_r", "exist_wait":2, "wait":1, "query": "create stream test_stream_3015_vk_r(i int64, s string, timestamp datetime64(3, 'UTC')) primary key (i, s) settings mode='versioned_kv', event_time_column='timestamp'"},
+            {"client":"python", "query_type": "table", "depends_on_stream":"test_stream_3015_vk_r", "wait":1, "query": "insert into test_stream_3015_vk_r (i, s, timestamp) values(1, 'test', '2023-1-1 00:00:00')(1, 'test1', '2023-1-1 00:00:01')(2, 'test', '2023-1-1 00:00:01')(2, 'test1', '2023-1-1 00:00:02')"},
+            {"client":"python", "query_type": "stream", "query_id":"9900", "depends_on_stream":"test_stream_3015_l", "wait":1, "query":"WITH t1 AS ( SELECT _tp_time, i, s FROM test_stream_3015_l INNER JOIN test_stream_3015_vk_r AS wp ON test_stream_3015_l.i = test_stream_3015_vk_r.i WHERE (test_stream_3015_l._tp_time > '2023-01-01 00:00:00') AND (test_stream_3015_l.s = 'test') ), t2 AS ( SELECT window_start, i, s, (to_int(max(to_float(i))) + 1) AS max_v FROM tumble(t1, 2s) GROUP BY window_start, i, s ) SELECT sum(max_v) as income FROM t2 emit periodic 5s"},
+            {"client":"python", "query_type": "stream", "query_id":"9901", "depends_on_stream":"test_stream_3015_l", "wait":1, "query":"WITH t1 AS ( SELECT _tp_time, i, s FROM test_stream_3015_l INNER JOIN test_stream_3015_vk_r AS wp ON test_stream_3015_l.i = test_stream_3015_vk_r.i WHERE (test_stream_3015_l._tp_time > '2023-01-01 00:00:00') AND (test_stream_3015_l.s = 'test') ), t2 AS ( SELECT window_start, i, s, (to_int(max(to_float(i)) over(partition by i, s)) + 1) AS max_v FROM tumble(t1, 2s) GROUP BY window_start) SELECT sum(max_v) as income FROM t2 partition by i, s emit periodic 5s"},
+            {"client":"python", "query_type": "stream", "query_id":"9902", "depends_on_stream":"test_stream_3015_l", "wait":1, "query":"WITH t1 AS ( SELECT _tp_time, i, s FROM test_stream_3015_l INNER JOIN test_stream_3015_vk_r AS wp ON test_stream_3015_l.i = test_stream_3015_vk_r.i WHERE (test_stream_3015_l._tp_time > '2023-01-01 00:00:00') AND (test_stream_3015_l.s = 'test') ), t2 AS ( SELECT window_start, i, s, (to_int(max(to_float(i))) + 1) AS max_v FROM tumble(t1, 2s) GROUP BY window_start, i, s emit timeout 5s) SELECT sum(max_v) as income FROM t2 partition by s emit periodic 5s"},
+            {"client":"python", "query_type": "stream", "query_id":"9903", "depends_on_stream":"test_stream_3015_l", "wait":1, "query":"WITH t1 AS ( SELECT _tp_time, i, s FROM test_stream_3015_l INNER JOIN test_stream_3015_vk_r AS wp ON test_stream_3015_l.i = test_stream_3015_vk_r.i WHERE (test_stream_3015_l._tp_time > '2023-01-01 00:00:00') AND (test_stream_3015_l.s = 'test') ), t2 AS ( SELECT window_start, i, s, (to_int(max(to_float(i))) + 1) AS max_v FROM tumble(t1, 2s) GROUP BY window_start, i, s ) SELECT sum(max_v) as income FROM t2 as a join t2 as b using(i, s) emit periodic 5s"},
+            {"client":"python", "query_type": "table", "depends_on":"9903", "wait":1, "kill": "9900,9901,9902,9903", "kill_wait":10, "query": "insert into test_stream_3015_l (i, s, timestamp) values(1, 'test', '2023-1-1 00:00:00')(1, 'test1', '2023-1-1 00:00:00')(2, 'test', '2023-1-1 00:00:01')(2, 'test1', '2023-1-1 00:00:01')(1, 'test', '2023-1-1 00:00:02')(2, 'test', '2023-1-1 00:00:02')"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":[[3]]},
+        {"query_id":"9901", "expected_results":[[3]]},
+        {"query_id":"9902", "expected_results":[[3],[8]]},
+        {"query_id":"9903", "expected_results":[[3]]}
+      ]
     }
   ]
 }

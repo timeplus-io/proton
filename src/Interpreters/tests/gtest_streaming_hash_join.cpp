@@ -16,7 +16,7 @@
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
 #include <Processors/Formats/IRowInputFormat.h>
-#include <Processors/Transforms/Streaming/JoinTranform.h>
+#include <Processors/Transforms/Streaming/JoinTransform.h>
 #include <base/constexpr_helpers.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_global_register.h>

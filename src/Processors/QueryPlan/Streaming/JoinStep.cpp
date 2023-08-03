@@ -2,7 +2,7 @@
 
 #include <Interpreters/IJoin.h>
 #include <Interpreters/Streaming/IHashJoin.h>
-#include <Processors/Transforms/Streaming/JoinTranform.h>
+#include <Processors/Transforms/Streaming/JoinTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
 namespace DB

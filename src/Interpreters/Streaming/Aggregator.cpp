@@ -3301,7 +3301,7 @@ void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, Int64 max_
         "free_list_hits={}, free_list_missed={}",
         removed,
         params.group_by == Params::GroupBy::WINDOW_END ? "window_end" : "window_start",
-        last_removed_time_bukect,
+        max_bucket,
         params.streaming_window_count,
         remaining,
         stats.chunks,

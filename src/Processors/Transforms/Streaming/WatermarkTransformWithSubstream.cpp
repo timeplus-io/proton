@@ -128,6 +128,7 @@ void WatermarkTransformWithSubstream::work()
         else
         {
             /// FIXME, we shall establish timer only when necessary instead of blindly generating empty heartbeat chunk
+            bool propagated_heartbeat = false;
             output_chunks.reserve(substream_watermarks.size());
             for (auto & [id, watermark] : substream_watermarks)
             {
@@ -138,7 +139,14 @@ void WatermarkTransformWithSubstream::work()
                 {
                     chunk.getChunkContext()->setSubstreamID(id);
                     output_chunks.emplace_back(std::move(chunk));
+                    propagated_heartbeat = true;
                 }
+            }
+
+            if (!propagated_heartbeat)
+            {
+                process_chunk.setChunkContext(nullptr); /// clear context, act as a heart beat
+                output_chunks.emplace_back(std::move(process_chunk));
             }
         }
     }

@@ -28,8 +28,6 @@ private:
 
     void finalize(const ChunkContextPtr & chunk_ctx) override;
 
-    inline void doFinalize(const ChunkContextPtr & chunk_ctx);
-
     inline bool initialize(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx);
 
     void convertSingleLevel(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx);

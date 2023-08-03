@@ -21,7 +21,7 @@
 /// proton : starts
 #include <Interpreters/Streaming/IHashJoin.h>
 #include <Interpreters/Streaming/ConcurrentHashJoin.h>
-#include <Processors/Transforms/Streaming/JoinTranform.h>
+#include <Processors/Transforms/Streaming/JoinTransform.h>
 /// proton : ends
 
 namespace DB

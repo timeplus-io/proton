@@ -199,7 +199,10 @@ private:
     void checkForStreamingQuery() const;
     bool shouldApplyWatermark() const;
     bool shouldKeepState() const;
-    void buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const;
+    void executeShuffling(QueryPlan & query_plan) const;
+    void buildWatermarkQueryPlan(QueryPlan & query_plan) const;
+    void buildWindowWatermarkQueryPlan(QueryPlan & query_plan) const;
+    void buildGlobalPeriodicWatermarkQueryPlan(QueryPlan & query_plan) const;
     void checkEmitVersion();
     void handleSeekToSetting();
     void analyzeEventPredicateAsSeekTo();

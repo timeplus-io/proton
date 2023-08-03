@@ -137,7 +137,7 @@ void AggregatingTransform::work()
 
 void AggregatingTransform::consume(Chunk chunk)
 {
-    bool should_abort = false, need_finalization = false;
+    bool should_abort = false, need_finalization = false, need_propagate_heartbeat = false;
 
     auto num_rows = chunk.getNumRows();
     if (num_rows > 0)
@@ -148,6 +148,8 @@ void AggregatingTransform::consume(Chunk chunk)
         if (std::tie(should_abort, need_finalization) = executeOrMergeColumns(chunk, num_rows); should_abort)
             is_consume_finished = true;
     }
+    else
+        need_propagate_heartbeat = true;
 
     /// Watermark and need_finalization shall not be true at the same time
     /// since when UDA has user defined emit strategy, watermark is disabled
@@ -174,6 +176,10 @@ void AggregatingTransform::consume(Chunk chunk)
 
     /// Try propagate checkpoint to downstream
     propagateCheckpointAndReset();
+
+    /// Try propagate an empty rows chunk to downstream
+    if (need_propagate_heartbeat)
+        propagateHeartbeatChunk();
 }
 
 std::pair<bool, bool> AggregatingTransform::executeOrMergeColumns(Chunk & chunk, size_t num_rows)
@@ -247,6 +253,15 @@ IProcessor::Status AggregatingTransform::preparePushToOutput()
     has_input = false;
 
     return Status::PortFull;
+}
+
+bool AggregatingTransform::propagateHeartbeatChunk()
+{
+    if (has_input)
+        return false;
+
+    setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0}, nullptr);
+    return true;
 }
 
 Int64 AggregatingTransform::updateAndAlignWatermark(Int64 new_watermark)

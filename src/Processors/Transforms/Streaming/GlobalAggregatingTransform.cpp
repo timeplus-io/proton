@@ -50,7 +50,7 @@ bool GlobalAggregatingTransform::prepareFinalization(Int64 min_watermark)
         /// Reset all watermarks to INVALID,
         /// Next finalization will just be triggered when all transform watermarks are updated
         std::ranges::for_each(many_data->watermarks, [](auto & wm) { wm = INVALID_WATERMARK; });
-        return true;
+        return many_data->hasNewData(); /// If there is no new data, don't emit aggr result
     }
     return false;
 }
@@ -59,21 +59,15 @@ bool GlobalAggregatingTransform::prepareFinalization(Int64 min_watermark)
 /// and push the block to downstream pipe
 void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 {
-    /// If there is no new data, don't emit aggr result
-    if (!many_data->hasNewData())
-        return;
+    SCOPE_EXIT({
+        many_data->resetRowCounts();
+        many_data->finalized_watermark.store(chunk_ctx->getWatermark(), std::memory_order_relaxed);
+    });
 
-    doFinalize(chunk_ctx);
-}
-
-void GlobalAggregatingTransform::doFinalize(const ChunkContextPtr & chunk_ctx)
-{
     /// FIXME spill to disk, overflow_row etc cases
     auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(many_data->variants);
     if (prepared_data_ptr->empty())
         return;
-
-    SCOPE_EXIT({ many_data->resetRowCounts(); });
 
     if (initialize(prepared_data_ptr, chunk_ctx))
         /// Processed
@@ -133,8 +127,6 @@ void GlobalAggregatingTransform::convertSingleLevel(ManyAggregatedDataVariantsPt
 
     if (params->emit_version)
         emitVersion(block);
-
-    many_data->finalized_watermark.store(chunk_ctx->getWatermark(), std::memory_order_relaxed);
 
     setCurrentChunk(convertToChunk(block), chunk_ctx);
 }
