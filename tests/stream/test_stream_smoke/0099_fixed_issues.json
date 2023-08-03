@@ -279,6 +279,26 @@
       "expected_results": [
         {"query_id":"9900", "expected_results":[]}
       ]
+    },
+    {
+      "id": 11,
+      "tags": ["window function over table function query"],
+      "name": "#3004",
+      "description": "disable hop and session window function for historical data, tumble currently support table() style",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query": "drop stream if exists test_stream_3004"},
+            {"client":"python", "query_type": "table", "exist": "test_stream_3004", "exist_wait":2, "wait":1, "query": "create stream test_stream_3004 (id int)"},
+            {"client":"python", "query_type": "stream", "query_id":"9900", "depends_on_stream":"test_stream_3004", "wait":3, "query_end_timer":3, "query":"select * from hop(table(test_stream_3004), 1m, 2m)"},
+            {"client":"python", "query_type": "stream", "query_id":"9901", "depends_on_stream":"test_stream_3004", "wait":3, "query_end_timer":3, "query":"select * from session(table(test_stream_3004), 1m)"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":"error_code:48"},
+        {"query_id":"9901", "expected_results":"error_code:48"}
+      ]
     }
   ]
 }

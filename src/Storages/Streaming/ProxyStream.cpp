@@ -96,8 +96,13 @@ ProxyStream::ProxyStream(
 
     validateProxyChain();
 
-    if (windowType() == WindowType::SESSION && !isStreaming())
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "session window can only work with streaming query.");
+    if (!isStreaming())
+    {
+        if (windowType() == WindowType::SESSION || windowType() == WindowType::HOP)
+        {
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} window can only work with streaming query.", magic_enum::enum_name(windowType()));
+        }
+    }
 
     assert(storage || subquery);
     assert(!(storage && subquery));
