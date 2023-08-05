@@ -643,6 +643,8 @@ Aliases: `dateDiff`, `DATE_DIFF`.
 -   `unit` — The type of interval for result. [String](../../sql-reference/data-types/string.md).
     Possible values:
 
+    - `microsecond` (possible abbreviations: `us`, `u`)
+    - `millisecond` (possible abbreviations: `ms`)
     - `second`
     - `minute`
     - `hour`

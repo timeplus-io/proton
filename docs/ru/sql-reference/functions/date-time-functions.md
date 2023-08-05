@@ -692,6 +692,8 @@ date_diff('unit', startdate, enddate, [timezone])
 -   `unit` — единица измерения времени, в которой будет выражено возвращаемое значение функции. [String](../../sql-reference/data-types/string.md).
     Возможные значения:
 
+    - `microsecond` (возможные сокращения: `us`, `u`)
+    - `millisecond` (возможные сокращения: `ms`)
     - `second`
     - `minute`
     - `hour`

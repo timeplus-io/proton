@@ -553,8 +553,13 @@ dateDiff('unit', startdate, enddate, [timezone])
 **参数**
 
 -   `unit` — 返回结果的时间单位。 [String](../../sql-reference/syntax.md#syntax-string-literal).
+    可能的值：
 
-        支持的时间单位: second, minute, hour, day, week, month, quarter, year.
+    - `microsecond`
+    - `millisecond`
+    - `second`
+    - `minute`
+    - `hour`
 
 -   `startdate` — 第一个待比较值。 [Date](../../sql-reference/data-types/date.md) 或 [DateTime](../../sql-reference/data-types/datetime.md).
 
