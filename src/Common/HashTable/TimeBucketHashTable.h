@@ -65,10 +65,8 @@ public:
             assert(key.size > 4);
             return unalignedLoad<UInt32>(key.data);
         }
-        else
-        {
-            assert(false);
-        }
+
+        UNREACHABLE();
     }
 
     ALWAYS_INLINE Int64 windowKey(const DB::SerializedKeyHolder & key_holder) { return windowKey(key_holder.key); }

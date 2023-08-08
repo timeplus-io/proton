@@ -281,7 +281,7 @@ Block prepareBlockByHeader(const Block & header, std::string_view values_buf, Co
 
     ReadBufferFromString rb(values_buf);
     auto input_format = context->getInputFormat("Values", rb, header, DEFAULT_BLOCK_SIZE, /*FormatSettings*/ std::nullopt);
-    if (auto * row_fmt = static_cast<IRowInputFormat *>(input_format.get()))
+    if (auto * row_fmt = dynamic_cast<IRowInputFormat *>(input_format.get()))
         row_fmt->setMaxSize(DEFAULT_BLOCK_SIZE);
 
     return input_format->read(DEFAULT_BLOCK_SIZE, /*timeout_ms*/ 10000);
