@@ -7,7 +7,7 @@ on: # yamllint disable-line rule:truthy
 
 jobs:
   build_address_x64:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton-enterprise/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -65,7 +65,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton-enterprise/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -102,7 +102,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton-enterprise/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -149,7 +149,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton-enterprise/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -184,7 +184,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton-enterprise/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
