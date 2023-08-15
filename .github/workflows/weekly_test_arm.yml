@@ -20,7 +20,7 @@ on: # yamllint disable-line rule:truthy
 
 jobs:
   debug_on_x64:
-    uses: timeplus-io/proton-enterprise/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton-opensource/.github/workflows/run_command.yml@develop
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -56,7 +56,7 @@ jobs:
       TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   debug_on_arm:
-    uses: timeplus-io/proton-enterprise/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton-opensource/.github/workflows/run_command.yml@develop
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
