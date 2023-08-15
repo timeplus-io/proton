@@ -14,6 +14,15 @@ jobs:
       issues: write # for posting comments
     runs-on: ubuntu-latest
     steps:
+      - name: Report Started
+        run: |
+          curl --show-error --silent -X POST \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: token ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" \
+            -d '{"body": "github workflow triggered: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' \
+            ${{ github.event.issue.comments_url }}
+
       - name: Print Info
         run: |
           echo "github.event.issue.pull_request: ${{ github.event.issue.pull_request }}"
