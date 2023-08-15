@@ -14,9 +14,14 @@ jobs:
       issues: write # for posting comments
     runs-on: ubuntu-latest
     steps:
-      - name: Hello World
+      - name: Print Info
         run: |
-          echo ${{ github.event }}
+          echo "github.event.issue.pull_request: ${{ github.event.issue.pull_request }}"
+          echo "github.event_name: ${{ github.event_name }}"
+          echo "github.event.issue.state: ${{ github.event.issue.state }}"
+          echo "github.event.issue.user.id: ${{ github.event.issue.user.id }}"
+          echo "github.event.comment.body: ${{ github.event.comment.body }}"
+          echo "github.event.issue.comments_url: ${{ github.event.issue.comments_url }}"
   work:
     needs: verify
     runs-on: ubuntu-latest
