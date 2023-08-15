@@ -13,6 +13,13 @@ jobs:
       id-token: write # This is required for requesting the JWT (needed for assume AWS IAM role)
       issues: write # for posting comments
     runs-on: ubuntu-latest
+    # because `issue_comment` does not support filters other than `types`,
+    # here we need a bunch of checks to make sure that this comment is from a valid deployment issue.
+    #
+    # Note: 41898282 is the github-action[bot]
+    # TODO: figure out a way not to hard-code the approver list
+    if: >-
+      ${{ github.event.issue.pull_request && github.event_name == 'issue_comment' && github.event.issue.state == 'open' && startsWith(github.event.comment.body, '/') }}
     steps:
       - name: Report Started
         run: |
