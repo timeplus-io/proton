@@ -1,0 +1,138 @@
+name: UpdateKmsMessage
+
+on: # yamllint disable-line rule:truthy
+  pull_request:
+    branches:
+      - develop
+
+jobs:
+  show_github_context:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print Github Context
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        run: |
+          echo "$GITHUB_CONTEXT"
+  update:
+    name: Update KMS Message
+    permissions:
+      actions: read # for downloading artifact
+      id-token: write # This is required for requesting the JWT (needed for assume AWS IAM role)
+      issues: write # for posting comments
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Update KMS Message
+        shell: python
+        run: |
+          import urllib.request
+          import json
+          import uuid
+
+          def add_commit_status(url, state, description, context, target_url, github_token):
+              headers = {
+                  "Authorization": f"Bearer {github_token}",
+                  "Accept": "application/vnd.github.v3+json"
+              }
+              data = {
+                  "state": state,
+                  "description": description,
+                  "context": context,
+                  "target_url": target_url
+              }
+              data = json.dumps(data).encode("utf-8")
+
+              req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+
+              try:
+                  with urllib.request.urlopen(req) as response:
+                      if response.status == 201:
+                          print("Status added successfully.")
+                      else:
+                          print(f"Failed to add status: {response.read().decode()}")
+              except urllib.error.HTTPError as e:
+                  print(f"Error: {e.code} - {e.reason}")
+              except urllib.error.URLError as e:
+                  print(f"Error: {e.reason}")
+
+          def add_latest_commit_status(pulls_url, repository, state, description, context, target_url, github_token):
+              base_url = f"{pulls_url}/commits"
+              headers = {
+                  "Authorization": f"Bearer {github_token}",
+                  "Accept": "application/vnd.github.v3+json"
+              }
+
+              req = urllib.request.Request(base_url, headers=headers)
+
+              try:
+                  with urllib.request.urlopen(req) as response:
+                      commits = json.loads(response.read().decode())
+                      latest_commit_sha = commits[-1]["sha"]
+                      
+                      status_url = f"https://api.github.com/repos/{repository}/statuses/{latest_commit_sha}"
+                      add_commit_status(status_url, state, description, context, target_url, github_token)
+                      
+              except urllib.error.HTTPError as e:
+                  print(f"Error: {e.code} - {e.reason}")
+              except urllib.error.URLError as e:
+                  print(f"Error: {e.reason}")
+
+          def post_comments(message, github_token):
+            url = "${{ github.event.pull_request.comments_url }}"
+            headers = {
+                  "Authorization": f"Bearer {github_token}",
+                  "Accept": "application/vnd.github.v3+json"
+            }
+            data = {
+              "body": message
+            }
+            data = json.dumps(data).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+
+            try:
+                with urllib.request.urlopen(req) as response:
+                    if response.status == 201:
+                        print("Status added successfully.")
+                    else:
+                        print(f"Failed to add status: {response.read().decode()}")
+            except urllib.error.HTTPError as e:
+                print(f"Error: {e.code} - {e.reason}")
+            except urllib.error.URLError as e:
+                print(f"Error: {e.reason}")
+
+          # Replace these with your GitHub repository information, commit SHA, and personal access token
+          repository = "${{ github.repository }}"
+          pulls_url = "${{ github.event.pull_request.url }}"
+          state = "pending"
+          description = str(uuid.uuid4())
+          context = "kms message"
+          target_url = "${{ github.event.pull_request.url }}"
+          github_token = "${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}"
+
+          add_latest_commit_status(pulls_url, repository, state, description, context, target_url, github_token)
+
+          hint = f'''## Testing
+          To test this commit:
+
+          1. Use the AWS KMS key `alias/github-testing`(this key is in the `us-west-2` region of the `tp-dev` account) to generate the HMAC of the following message
+              ```
+              {description}
+              ```
+              You can copy and run the following command:
+              ```bash
+              aws kms generate-mac --key-id 'alias/github-testing' --mac-algorithm HMAC_SHA_256 --message '{description}' --query Mac --output text
+              ```
+
+          2. Then reply this issue with a comment with the following content:
+              ```
+              /test <the-generated-MAC-hash>
+              ```
+          '''
+
+          post_comments(hint, github_token)
