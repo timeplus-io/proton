@@ -1,4 +1,4 @@
-name: ProtonCI
+name: VerifyComment
 
 on:
   issue_comment:
@@ -19,7 +19,7 @@ jobs:
     # Note: 41898282 is the github-action[bot]
     # TODO: figure out a way not to hard-code the approver list
     if: >-
-      ${{ github.event.pull_request.draft == false && github.event.issue.pull_request && github.event_name == 'issue_comment' && github.event.issue.state == 'open' && startsWith(github.event.comment.body, '/TODO') }}
+      ${{ github.event.issue.pull_request && github.event_name == 'issue_comment' && github.event.issue.state == 'open' && startsWith(github.event.comment.body, '/') }}
     steps:
       - name: Report Started
         run: |
@@ -30,13 +30,69 @@ jobs:
             -d '{"body": "github workflow triggered: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' \
             ${{ github.event.issue.comments_url }}
 
+      - name: Print Info
+        run: |
+          echo "github.event.issue.pull_request: ${{ github.event.issue.pull_request }}"
+          echo "github.event_name: ${{ github.event_name }}"
+          echo "github.event.issue.state: ${{ github.event.issue.state }}"
+          echo "github.event.issue.user.id: ${{ github.event.issue.user.id }}"
+          echo "github.event.comment.body: ${{ github.event.comment.body }}"
+          echo "github.event.issue.comments_url: ${{ github.event.issue.comments_url }}"
+          echo "github.event.issue.pull_request.statuses_url: ${{ github.event.issue.pull_request.statuses_url }}"
+      - id: vars
+        shell: python
+        run: |
+          import urllib.request
+          import json
+          import os
+
+          def get_latest_commit_statuses(pulls_url, repository, github_token):
+              base_url = f"{pulls_url}/commits"
+              headers = {
+                  "Authorization": f"Bearer {github_token}",
+                  "Accept": "application/vnd.github.v3+json"
+              }
+
+              req = urllib.request.Request(base_url, headers=headers)
+
+              try:
+                  with urllib.request.urlopen(req) as response:
+                      commits = json.loads(response.read().decode())
+                      latest_commit_sha = commits[-1]["sha"]
+                      
+                      status_url = f"https://api.github.com/repos/{repository}/commits/{latest_commit_sha}/statuses"
+                      req = urllib.request.Request(status_url, headers=headers)
+                      
+                      with urllib.request.urlopen(req) as status_response:
+                          commit_statuses = json.loads(status_response.read().decode())
+                          return commit_statuses
+              except urllib.error.HTTPError as e:
+                  print(f"Error: {e.code} - {e.reason}")
+              except urllib.error.URLError as e:
+                  print(f"Error: {e.reason}")
+
+              return []
+
+          # Replace these with your GitHub repository information and personal access token
+          repository = "${{ github.repository }}"
+          pulls_url = "${{ github.event.issue.pull_request.url }}"
+          github_token = "${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}"
+
+          commit_statuses = get_latest_commit_statuses(pulls_url, repository, github_token)
+          commit_statuses = [s for s in commit_statuses if s['state'] == "pending" and s["context"] == "kms message"]
+          if len(commit_statuses) < 1:
+            exit(1)
+
+          latest_status = commit_statuses[0]
+
+          with open(os.environ.get('GITHUB_OUTPUT'), 'a') as out:
+            out.write(f"kms_message={latest_status['description']}\n")
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-
       - name: verify
         run: |
           echo verify started
@@ -58,15 +114,8 @@ jobs:
             exit 250
           fi
 
-          planfile='${{ steps.vars.outputs.environment }}_${{ steps.vars.outputs.gitsha }}.tfplan'
-          if [ ! -f $planfile ]; then
-            echo Plan file not found.
-            exit 251
-          fi
-
-          filehash=($(sha256sum $planfile))
-          echo aws kms verify-mac --key-id 'alias/github-deployment' --message "${filehash[0]}" --mac-algorithm HMAC_SHA_256 --mac "${parts[1]}"
-          if ! aws kms verify-mac --key-id 'alias/github-deployment' --message "${filehash[0]}" --mac-algorithm HMAC_SHA_256 --mac "${parts[1]}"; then
+          echo aws kms verify-mac --key-id 'alias/github-testing' --message "${{ steps.vars.outputs.kms_message }}" --mac-algorithm HMAC_SHA_256 --mac "${parts[1]}"
+          if ! aws kms verify-mac --key-id 'alias/github-testing' --message "${{ steps.vars.outputs.kms_message }}" --mac-algorithm HMAC_SHA_256 --mac "${parts[1]}"; then
             curl --show-error --silent -X POST \
               -H 'Content-Type: application/json' \
               -H 'Accept: application/vnd.github+json' \
@@ -81,8 +130,117 @@ jobs:
             -H 'Content-Type: application/json' \
             -H 'Accept: application/vnd.github+json' \
             -H 'Authorization: token ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}' \
-            -d '{"body": "MAC hash verified, start deployment, please wait."}' \
+            -d '{"body": "MAC hash verified, start testing, please wait."}' \
             ${{ github.event.issue.comments_url }}
+
+      - name: update kms message
+        shell: python
+        run: |
+          import urllib.request
+          import json
+          import uuid
+
+          def add_commit_status(url, state, description, context, target_url, github_token):
+              headers = {
+                  "Authorization": f"Bearer {github_token}",
+                  "Accept": "application/vnd.github.v3+json"
+              }
+              data = {
+                  "state": state,
+                  "description": description,
+                  "context": context,
+                  "target_url": target_url
+              }
+              data = json.dumps(data).encode("utf-8")
+
+              req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+
+              try:
+                  with urllib.request.urlopen(req) as response:
+                      if response.status == 201:
+                          print("Status added successfully.")
+                      else:
+                          print(f"Failed to add status: {response.read().decode()}")
+              except urllib.error.HTTPError as e:
+                  print(f"Error: {e.code} - {e.reason}")
+              except urllib.error.URLError as e:
+                  print(f"Error: {e.reason}")
+
+          def add_latest_commit_status(pulls_url, repository, state, description, context, target_url, github_token):
+              base_url = f"{pulls_url}/commits"
+              headers = {
+                  "Authorization": f"Bearer {github_token}",
+                  "Accept": "application/vnd.github.v3+json"
+              }
+
+              req = urllib.request.Request(base_url, headers=headers)
+
+              try:
+                  with urllib.request.urlopen(req) as response:
+                      commits = json.loads(response.read().decode())
+                      latest_commit_sha = commits[-1]["sha"]
+                      
+                      status_url = f"https://api.github.com/repos/{repository}/statuses/{latest_commit_sha}"
+                      add_commit_status(status_url, state, description, context, target_url, github_token)
+                      
+              except urllib.error.HTTPError as e:
+                  print(f"Error: {e.code} - {e.reason}")
+              except urllib.error.URLError as e:
+                  print(f"Error: {e.reason}")
+
+          def post_comments(message, github_token):
+            url = "${{ github.event.issue.comments_url }}"
+            headers = {
+                  "Authorization": f"Bearer {github_token}",
+                  "Accept": "application/vnd.github.v3+json"
+            }
+            data = {
+              "body": message
+            }
+            data = json.dumps(data).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+
+            try:
+                with urllib.request.urlopen(req) as response:
+                    if response.status == 201:
+                        print("Status added successfully.")
+                    else:
+                        print(f"Failed to add status: {response.read().decode()}")
+            except urllib.error.HTTPError as e:
+                print(f"Error: {e.code} - {e.reason}")
+            except urllib.error.URLError as e:
+                print(f"Error: {e.reason}")
+
+          # Replace these with your GitHub repository information, commit SHA, and personal access token
+          repository = "${{ github.repository }}"
+          pulls_url = "${{ github.event.issue.pull_request.url }}"
+          state = "pending"
+          description = str(uuid.uuid4())
+          context = "kms message"
+          target_url = "${{ github.event.issue.comments_url }}"
+          github_token = "${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}"
+
+          add_latest_commit_status(pulls_url, repository, state, description, context, target_url, github_token)
+
+          hint = f'''## Rerun Testing
+          To test this commit:
+
+          1. Use the AWS KMS key `alias/github-testing`(this key is in the `us-west-2` region of the `tp-dev` account) to generate the HMAC of the following message
+              ```
+              {description}
+              ```
+              You can copy and run the following command:
+              ```bash
+              aws kms generate-mac --key-id 'alias/github-testing' --mac-algorithm HMAC_SHA_256 --message '{description}' --query Mac --output text
+              ```
+
+          2. Then reply this issue with a comment with the following content:
+              ```
+              /test <the-generated-MAC-hash>
+              ```
+          '''
+
+          post_comments(hint, github_token)
 
   build_address_x64:
     needs: verify
@@ -108,7 +266,7 @@ jobs:
         rm cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-16 --sanitizer $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version cmake.3.26.4 --sanitizer $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
         # clear compiling footprint
         rm -rf $GITHUB_WORKSPACE/ccache
@@ -187,7 +345,7 @@ jobs:
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '60'
+      ec2-volume-size: '50'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
@@ -211,9 +369,8 @@ jobs:
         pip install pyyaml==5.3.1
 
         pip install -r helpers/requirements.txt
-        df -h
         python ci_runner.py --settings=redp,nativelog
-        df -h
+
         echo "check test result"
         cat $GITHUB_WORKSPACE/tests/stream/.status
         cat $GITHUB_WORKSPACE/tests/stream/.status | grep nativelog:ExitCode.OK | grep redp:ExitCode.OK
@@ -251,7 +408,6 @@ jobs:
         python -m venv env
         source env/bin/activate
         pip install -r requirements.txt
-
         export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
         python functional_tests_check.py stateless
     secrets:
@@ -301,12 +457,3 @@ jobs:
       TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
       TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
-
-  SkipDraft:
-    if: github.event.pull_request.draft == true
-    runs-on: ubuntu-latest
-    timeout-minutes: 1
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-    - name: Skip
-      run: echo "Skip"
