@@ -17,3 +17,10 @@ jobs:
       - name: Hello World
         run: |
           echo ${{ github.event }}
+  work:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hello World
+        run: |
+          echo 'Hello World'
