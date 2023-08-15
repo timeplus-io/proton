@@ -1,0 +1,19 @@
+name: VerifyComment
+
+on:
+  issue_comment:
+    types:
+      - created
+
+jobs:
+  verify:
+    name: Verify PR comment
+    permissions:
+      actions: read # for downloading artifact
+      id-token: write # This is required for requesting the JWT (needed for assume AWS IAM role)
+      issues: write # for posting comments
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hello World
+        run: |
+          echo ${{ github.event }}

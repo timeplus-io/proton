@@ -1,9 +1,6 @@
 name: ProtonCI
 
-on: # yamllint disable-line rule:truthy
-  pull_request:
-    branches:
-      - develop
+on: workflow_dispatch
 
 jobs:
   build_address_x64:
