@@ -197,12 +197,11 @@ private:
     void executeStreamingLimit(QueryPlan & query_plan);
     void executeStreamingOffset(QueryPlan & query_plan);
     void checkForStreamingQuery() const;
-    bool shouldApplyWatermark() const;
     bool shouldKeepState() const;
-    void executeShuffling(QueryPlan & query_plan) const;
+    void buildShufflingQueryPlan(QueryPlan & query_plan);
     void buildWatermarkQueryPlan(QueryPlan & query_plan) const;
-    void buildWindowWatermarkQueryPlan(QueryPlan & query_plan) const;
-    void buildGlobalPeriodicWatermarkQueryPlan(QueryPlan & query_plan) const;
+    void buildStreamingProcessingQueryPlanBeforeJoin(QueryPlan & query_plan);
+    void buildStreamingProcessingQueryPlanAfterJoin(QueryPlan & query_plan);
     void checkEmitVersion();
     void handleSeekToSetting();
     void analyzeEventPredicateAsSeekTo();
@@ -258,6 +257,7 @@ private:
     bool current_select_has_aggregates = false;
     std::optional<JoinStrictness> current_select_join_strictness; /// Which implies having join if have value
     mutable std::optional<bool> is_streaming;
+    bool shuffled_before_join = false;
     /// Overall data stream semantic defines the output semantic of the current layer of SELECT
     Streaming::DataStreamSemanticPair data_stream_semantic_pair;
     /// proton: ends

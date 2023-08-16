@@ -90,6 +90,7 @@
 #include <Interpreters/Streaming/ChangelogQueryVisitor.h>
 #include <Interpreters/Streaming/EmitInterpreter.h>
 #include <Interpreters/Streaming/EventPredicateVisitor.h>
+#include <Interpreters/Streaming/IHashJoin.h>
 #include <Interpreters/Streaming/PartitionByVisitor.h>
 #include <Interpreters/Streaming/SubstituteStreamingFunction.h>
 #include <Interpreters/Streaming/SyntaxAnalyzeUtils.h>
@@ -1492,6 +1493,10 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
 
         if (expressions.first_stage)
         {
+            /// proton : starts. If we only fetch columns, don't need add streaming processing step, e.g. `WatermarkStep` etc.
+            buildStreamingProcessingQueryPlanBeforeJoin(query_plan);
+            /// proton: ends
+
             // If there is a storage that supports prewhere, this will always be nullptr
             // Thus, we don't actually need to check if projection is active.
             if (!query_info.projection && expressions.filter_info)
@@ -1625,9 +1630,9 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                 }
             }
 
-            /// proton: starts. Establish global aggregation periodic watermark after joined multiples streams.
-            buildGlobalPeriodicWatermarkQueryPlan(query_plan);
-            /// proton:ends.
+            /// proton: starts. Build some streaming processing steps after joined multiples streams
+            buildStreamingProcessingQueryPlanAfterJoin(query_plan);
+            /// proton: ends.
 
             if (!query_info.projection && expressions.hasWhere())
                 executeWhere(query_plan, expressions.before_where, expressions.remove_where_filter);
@@ -2404,11 +2409,6 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
     /// query will not update it.
     if (!query_plan.getMaxThreads() || is_remote)
         query_plan.setMaxThreads(max_threads_execute_query);
-
-    /// proton : starts. If we only fetch columns, don't need add streaming processing step, e.g. `WatermarkStep` etc.
-    if (options.to_stage != QueryProcessingStage::Enum::FetchColumns)
-        buildWindowWatermarkQueryPlan(query_plan);
-    /// proton: ends
 
     /// Aliases in table declaration.
     if (processing_stage == QueryProcessingStage::FetchColumns && alias_actions)
@@ -3338,33 +3338,6 @@ bool InterpreterSelectQuery::hasGlobalAggregation() const
     return isStreaming() && hasAggregation() && !hasStreamingWindowFunc();
 }
 
-bool InterpreterSelectQuery::shouldApplyWatermark() const
-{
-    if (!isStreaming() || has_user_defined_emit_strategy)
-        return false;
-
-    if (hasStreamingWindowFunc())
-        return true;
-
-    if (hasGlobalAggregation())
-    {
-        /// CTE subquery
-        if (storage)
-        {
-            if (auto * proxy = storage->as<Streaming::ProxyStream>())
-            {
-                if (proxy->hasGlobalAggregation())
-                    return false;
-            }
-        }
-
-        /// nested global aggregation
-        return !(interpreter_subquery && interpreter_subquery->hasGlobalAggregation());
-    }
-
-    return false;
-}
-
 bool InterpreterSelectQuery::shouldKeepState() const
 {
     if (!isStreaming())
@@ -3425,8 +3398,12 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
     }
 }
 
-void InterpreterSelectQuery::executeShuffling(QueryPlan & query_plan) const
+void InterpreterSelectQuery::buildShufflingQueryPlan(QueryPlan & query_plan)
 {
+    assert(isStreaming());
+    if (!query_info.hasPartitionByKeys())
+        return;
+
     /// TODO: Support more shuffling rules
     /// 1) Group by keys
     /// 2) Sharding expr keys
@@ -3450,39 +3427,63 @@ void InterpreterSelectQuery::executeShuffling(QueryPlan & query_plan) const
 
 void InterpreterSelectQuery::buildWatermarkQueryPlan(QueryPlan & query_plan) const
 {
+    assert(isStreaming());
     auto params = std::make_shared<Streaming::WatermarkStamperParams>(
-            query_info.query, query_info.syntax_analyzer_result, query_info.streaming_window_params);
+                query_info.query, query_info.syntax_analyzer_result, query_info.streaming_window_params);
     if (query_info.hasPartitionByKeys())
-    {
-        executeShuffling(query_plan);
         query_plan.addStep(
             std::make_unique<Streaming::WatermarkStepWithSubstream>(query_plan.getCurrentDataStream(), std::move(params), log));
-    }
     else
         query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(query_plan.getCurrentDataStream(), std::move(params), log));
 }
 
-void InterpreterSelectQuery::buildWindowWatermarkQueryPlan(QueryPlan & query_plan) const
+void InterpreterSelectQuery::buildStreamingProcessingQueryPlanBeforeJoin(QueryPlan & query_plan)
 {
-    if (!isStreaming() || has_user_defined_emit_strategy)
+    if (!isStreaming() || has_user_defined_emit_strategy || !hasStreamingWindowFunc())
         return;
 
-    if (!hasStreamingWindowFunc())
-        return;
+    if (query_info.hasPartitionByKeys())
+    {
+        /// FIXME: Refactor watermark for substream
+        /// Normally, we should execute `partition by` after join, but current implementation of watermark 
+        /// over substream depends on shuffled data.
+        /// So we allow do shuffling ahead for some special cases:
+        /// 1) Non-join query
+        /// 2) Streaming join table, and all partition by key columns are from left stream
+        if (analysis_result.hasJoin())
+        {
+            bool is_stream_join_table = !typeid_cast<Streaming::IHashJoin *>(analysis_result.join.get());
+            /// If all `partition by` key columns are from left stream
+            const auto & header = query_plan.getCurrentDataStream().header;
+            bool only_shuffling_left_stream = std::ranges::all_of(query_info.partition_by_keys, [&](const auto & key) { return header.has(key); });
+            if (!(is_stream_join_table && only_shuffling_left_stream))
+                throw Exception(
+                    ErrorCodes::NOT_IMPLEMENTED,
+                    "The join query with partition by clause doesn't support to use '{}' window function",
+                    magic_enum::enum_name(query_info.streaming_window_params->type));
+        }
+
+        buildShufflingQueryPlan(query_plan);
+        shuffled_before_join = true;
+    }
 
     buildWatermarkQueryPlan(query_plan);
 }
 
-void InterpreterSelectQuery::buildGlobalPeriodicWatermarkQueryPlan(QueryPlan & query_plan) const
+void InterpreterSelectQuery::buildStreamingProcessingQueryPlanAfterJoin(QueryPlan & query_plan)
 {
-    if (!isStreaming() || has_user_defined_emit_strategy)
+    if (!isStreaming())
         return;
 
-    if (!hasGlobalAggregation())
+    /// If `Shuffle` step is already inserted in `buildStreamingProcessingQueryPlanBeforeJoin`, skip it
+    if (!shuffled_before_join)
+        buildShufflingQueryPlan(query_plan);
+
+    if (has_user_defined_emit_strategy || !hasGlobalAggregation())
         return;
 
-    /// An optimized path, skip duplicate periodic watermark.
-    /// If there is join query, we must establish new periodic watermark for joined data
+    /// An optimizing path, skip duplicate periodic watermark.
+    /// But if there is join query, we must establish new periodic watermark for joined data
     if (!analysis_result.hasJoin())
     {
         /// CTE subquery
@@ -3500,6 +3501,7 @@ void InterpreterSelectQuery::buildGlobalPeriodicWatermarkQueryPlan(QueryPlan & q
             return;
     }
 
+    /// Build global periodic watermark
     buildWatermarkQueryPlan(query_plan);
 }
 

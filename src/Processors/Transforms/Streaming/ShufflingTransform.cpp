@@ -136,6 +136,8 @@ void ShufflingTransform::consume(Chunk chunk)
     }
     else
     {
+        chunk.trySetSubstreamID(INVALID_SUBSTREAM_ID);
+
         /// Shuffling is very upstream, downstream substream watermark transform still
         /// depends on this empty timer chunk to calculate watermark for global aggregation
         /// When we fix the timer issue systematically, the pipeline system shall have minimum

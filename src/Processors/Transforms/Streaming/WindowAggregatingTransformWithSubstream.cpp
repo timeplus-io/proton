@@ -47,6 +47,9 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
     assert(substream_ctx);
 
     auto & data_variant = substream_ctx->variants;
+    if (data_variant.empty())
+        return;
+
     assert(data_variant.isTwoLevel());
 
     Block merged_block;

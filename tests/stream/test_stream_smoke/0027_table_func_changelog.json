@@ -329,7 +329,7 @@
                         {"client":"python", "query_type": "table", "exist":"v_compute_income", "exist_wait":2, "wait":1, "query":"create view v_compute_income as SELECT id, max_cpu * rate FROM hourly_cpu_usage WHERE _tp_time > earliest_ts();"},
                         {"client":"python", "query_type": "stream", "query_id":"2810", "wait":1, "query": "SELECT * FROM changelog(v_compute_income, id);"},
                         {"client":"python", "query_type": "table", "depends_on":"2810", "wait":1, "query": "insert into hourly_cpu_usage (id, max_cpu, rate) values (2, 4, 0.48);"},
-                        {"client":"python", "query_type": "table", "kill":"2810", "kill_wait":3, "wait":1, "query": "insert into hourly_cpu_usage (id, max_cpu, rate) values (1, 6, 0.72);"}
+                        {"client":"python", "query_type": "table", "kill":"2810", "kill_wait":3, "drop_view":"v_compute_income", "drop_view_wait":1, "wait":1, "query": "insert into hourly_cpu_usage (id, max_cpu, rate) values (1, 6, 0.72);"}
                     ]
                 }
             ],
@@ -360,7 +360,7 @@
                         {"client":"python", "query_type": "table", "exist":"v_compute_income", "exist_wait":2, "wait":1, "query":"create view v_compute_income as SELECT sum(max_cpu*rate) as compute_income, 'aug' as month FROM hourly_cpu_usage WHERE _tp_time > earliest_ts();"},
                         {"client":"python", "query_type": "stream", "query_id":"2811", "wait":2, "query": "SELECT month, compute_income, _tp_delta FROM changelog(v_compute_income, month);"},
                         {"client":"python", "query_type": "table", "depends_on":"2811", "wait":2, "query": "insert into hourly_cpu_usage (max_cpu, rate) values (4, 0.48);"},
-                        {"client":"python", "query_type": "table", "kill":"2811", "kill_wait":3, "wait":2, "query": "insert into hourly_cpu_usage (max_cpu, rate) values (6, 0.72);"}
+                        {"client":"python", "query_type": "table", "kill":"2811", "kill_wait":3, "drop_view":"v_compute_income", "drop_view_wait":1, "wait":2, "query": "insert into hourly_cpu_usage (max_cpu, rate) values (6, 0.72);"}
                     ]
                 }
             ],
@@ -392,7 +392,7 @@
                         {"client":"python", "query_type": "table", "exist":"test28_view", "exist_wait":2, "wait":1, "query":"create view test28_view as select k, count(), min(val), max(val), sum(val), avg(val) from test28_left_stream where _tp_time > earliest_ts() group by k;"},
                         {"client":"python", "query_type": "stream", "query_id":"2812", "wait":1, "query": "select * from changelog(test28_view, k);"},
                         {"client":"python", "query_type": "table", "depends_on":"2812", "wait":1, "query": "insert into test28_left_stream(k, val) values ('k1', 44.4) ('k2', 55.5);"},
-                        {"client":"python", "query_type": "table", "kill":"2812", "kill_wait":3, "wait":1, "query": "insert into test28_left_stream(k, val) values ('k3', 66.6);"}
+                        {"client":"python", "query_type": "table", "kill":"2812", "kill_wait":3, "drop_view":"test28_view", "drop_view_wait":1, "wait":1, "query": "insert into test28_left_stream(k, val) values ('k3', 66.6);"}
                     ]
                 }
             ],

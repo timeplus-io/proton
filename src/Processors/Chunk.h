@@ -230,6 +230,12 @@ public:
         return Streaming::INVALID_SUBSTREAM_ID;
     }
 
+    void trySetSubstreamID(Streaming::SubstreamID id)
+    {
+        if (chunk_ctx)
+            chunk_ctx->setSubstreamID(id);
+    }
+
     Int64 getWatermark() const
     {
         assert(chunk_ctx);

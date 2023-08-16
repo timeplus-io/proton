@@ -77,7 +77,7 @@ WindowsWithBuckets SessionAggregatingTransform::getLocalFinalizedWindowsWithBuck
     {
         if (session->id <= watermark)
         {
-            assert(!session->active);
+            assert(!session->active || watermark == TIMEOUT_WATERMARK);
             windows_with_buckets.emplace_back(WindowWithBuckets{{session->win_start, session->win_end}, {session->id}});
         }
     }

@@ -89,11 +89,13 @@ void AggregatingTransformWithSubstream::work()
 
     if (likely(!is_consume_finished))
     {
-        assert(current_chunk.getSubstreamID() != Streaming::INVALID_SUBSTREAM_ID);
-        SubstreamContextPtr substream_ctx = getOrCreateSubstreamContext(current_chunk.getSubstreamID());
+        SubstreamContextPtr substream_ctx = nullptr;
+        if (const auto & substream_id = current_chunk.getSubstreamID(); substream_id != Streaming::INVALID_SUBSTREAM_ID)
+            substream_ctx = getOrCreateSubstreamContext(substream_id);
 
         if (num_rows > 0)
         {
+            assert(substream_ctx);
             substream_ctx->addRowCount(num_rows);
             src_rows += num_rows;
             src_bytes += chunk_bytes;
