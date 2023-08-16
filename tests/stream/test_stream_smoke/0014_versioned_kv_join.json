@@ -559,6 +559,40 @@
                   ]
               }
           ]
+      },
+      {
+          "id": 19,
+          "tags": ["multiple_inner_joins", "bug"],
+          "name": "versioned_kv_multiple_inner_joins_versioned_kv",
+          "description": "versioned_kv multiple_inner_joins versioned_kv",
+          "steps":[
+              {
+                  "statements": [
+                    {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists test15_stream1;"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists test15_stream2;"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists test15_stream3;"},
+                    {"client":"python", "query_type": "table", "exist":"test15_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test15_stream1 (i int, k1 int, k2 string) primary key (k1, k2) settings mode='versioned_kv';"},
+                    {"client":"python", "query_type": "table", "exist":"test15_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test15_stream2 (j int, kk1 int, kk2 string) primary key (kk1, kk2) settings mode='versioned_kv';"},
+                    {"client":"python", "query_type": "table", "exist":"test15_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test15_stream3 (k int, kkk1 int, kkk2 string) primary key (kkk1, kkk2) settings mode='versioned_kv';"},
+                    {"client":"python", "query_type": "stream", "query_id":"1519", "wait":1, "query": "select a.i, a.k1, a.k2, a._tp_delta, b.j, b.kk1, b.kk2, b._tp_delta, c.k, c.kkk1, c.kkk2, c._tp_delta from test15_stream1 as a inner all join test15_stream2 as b on a.k1 = b.kk1 and a.k2 = b.kk2 inner all join test15_stream3 as c on b.kk1 = c.kkk1 and a.kk2 = c.kkk2;"},
+                    {"client":"python", "query_type": "table", "depends_on":"1519", "wait":1, "query": "insert into test15_stream3(k, kkk1, kkk2) values (3, 1, 'k'); "},
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into test15_stream2(j, kk1, kk2) values (2, 1, 'k'); "},
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into test15_stream1(i, k1, k2) values (1, 1, 'k'); "},
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into test15_stream2(j, kk1, kk2) values (4, 1, 'k'); "},
+                    {"client":"python", "query_type": "table", "kill":"1519", "kill_wait":3, "wait":1, "query": "insert into test15_stream1(i, k1, k2) values (5, 1, 'k'); "}
+                  ]
+              }
+          ],
+          "expected_results": [
+              {
+                  "query_id":"1519",
+                  "expected_results":[
+                        [1, "k1", 1, "k2", 1, "k3", 1],
+                        [1, "k1", 1, "k2", 1, "k3", -1],
+                        [2, "k1", 2, "k2", 2, "k3", 1]
+                  ]
+              }
+          ]
       }
     ]
   }
