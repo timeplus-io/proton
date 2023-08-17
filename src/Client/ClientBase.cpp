@@ -71,6 +71,10 @@
 
 #include <base/ReplxxLineReader.h>
 
+/// proton: starts
+#include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
+/// proton: ends
+
 namespace fs = std::filesystem;
 using namespace std::literals;
 
@@ -296,6 +300,13 @@ ASTPtr ClientBase::parseQuery(const char *& pos, const char * end, bool allow_mu
 
     if (is_interactive)
     {
+        /// proton: starts. Fix the select with union query has unspecified union mode which the formatted query string missing 'union'
+        {
+            NormalizeSelectWithUnionQueryVisitor::Data data{settings.union_default_mode};
+            NormalizeSelectWithUnionQueryVisitor{data}.visit(res);
+        }
+        /// proton: ends
+
         std::cout << std::endl;
         WriteBufferFromOStream res_buf(std::cout, 4096);
         formatAST(*res, res_buf);

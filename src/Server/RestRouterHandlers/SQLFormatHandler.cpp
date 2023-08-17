@@ -2,22 +2,22 @@
 
 #include "SchemaValidator.h"
 
+#include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/parseQueryPipe.h>
 
-
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int INCORRECT_QUERY;
+extern const int INCORRECT_QUERY;
 }
 
 namespace
 {
-    const std::map<String, std::map<String, String>> HIGHLIGHT_SCHEMA = {{"required", {{"query", "string"}}}};
+const std::map<String, std::map<String, String>> HIGHLIGHT_SCHEMA = {{"required", {{"query", "string"}}}};
 }
 
 bool SQLFormatHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
@@ -45,6 +45,13 @@ std::pair<String, Int32> SQLFormatHandler::executePost(const Poco::JSON::Object:
     }
 
     auto & [rewritten_query, ast] = res;
+
+    /// Fix the select with union query has unspecified union mode
+    {
+        NormalizeSelectWithUnionQueryVisitor::Data data{settings.union_default_mode};
+        NormalizeSelectWithUnionQueryVisitor{data}.visit(ast);
+    }
+
     LOG_DEBUG(log, "Query rewrite, query_id={} rewritten={}", query_context->getCurrentQueryId(), rewritten_query);
 
     Poco::JSON::Object resp;
