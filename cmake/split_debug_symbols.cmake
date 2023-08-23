@@ -1,4 +1,4 @@
-macro(proton_strip_binary)
+macro(proton_split_debug_symbols)
     set(oneValueArgs TARGET DESTINATION_DIR BINARY_PATH)
 
     cmake_parse_arguments(STRIP "" "${oneValueArgs}" "" ${ARGN})

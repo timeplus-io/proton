@@ -2,7 +2,7 @@ if (USE_CLANG_TIDY)
     set (CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_PATH}")
 endif ()
 
-include(${proton_SOURCE_DIR}/cmake/strip_binary.cmake)
+include(${proton_SOURCE_DIR}/cmake/split_debug_symbols.cmake)
 
 # The `proton` binary is a multi purpose tool that contains multiple execution modes (client, server, etc.),
 # each of them may be built and linked as a separate library.
@@ -383,10 +383,10 @@ else ()
         add_custom_command(TARGET clickhouse POST_BUILD COMMAND ./clickhouse hash-binary > hash && ${OBJCOPY_PATH} --add-section .clickhouse.hash=hash clickhouse COMMENT "Adding section '.clickhouse.hash' to clickhouse binary" VERBATIM)
     endif()
 
-    if (INSTALL_STRIPPED_BINARIES)
-        proton_strip_binary(TARGET proton DESTINATION_DIR ${CMAKE_CURRENT_BINARY_DIR}/${STRIPPED_BINARIES_OUTPUT} BINARY_PATH proton)
+    if (SPLIT_DEBUG_SYMBOLS)
+        proton_split_debug_symbols(TARGET proton DESTINATION_DIR ${CMAKE_CURRENT_BINARY_DIR}/${SPLITTED_DEBUG_SYMBOLS_DIR} BINARY_PATH proton)
     else()
-        proton_make_empty_debug_info_for_nfpm(TARGET proton DESTINATION_DIR ${CMAKE_CURRENT_BINARY_DIR}/${STRIPPED_BINARIES_OUTPUT})
+        proton_make_empty_debug_info_for_nfpm(TARGET proton DESTINATION_DIR ${CMAKE_CURRENT_BINARY_DIR}/${SPLITTED_DEBUG_SYMBOLS_DIR})
         install (TARGETS proton RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
     endif()
 endif ()
