@@ -60,40 +60,35 @@ endif ()
 if (NOT LINKER_NAME)
     if (COMPILER_GCC)
         find_program (LLD_PATH NAMES "ld.lld")
-        find_program (GOLD_PATH NAMES "ld.gold")
     elseif (COMPILER_CLANG)
-        find_program (LLD_PATH NAMES "ld.lld-${COMPILER_VERSION_MAJOR}" "lld-${COMPILER_VERSION_MAJOR}" "ld.lld" "lld")
-        find_program (GOLD_PATH NAMES "ld.gold" "gold")
-    endif ()
-endif()
-
-if (OS_LINUX AND NOT LINKER_NAME)
-    # prefer lld linker over gold or ld on linux
-    if (LLD_PATH)
-        if (COMPILER_GCC)
-            # GCC driver requires one of supported linker names like "lld".
-            set (LINKER_NAME "lld")
-        else ()
-            # Clang driver simply allows full linker path.
-            set (LINKER_NAME ${LLD_PATH})
+        # llvm lld is a generic driver.
+        # Invoke ld.lld (Unix), ld64.lld (macOS), lld-link (Windows), wasm-ld (WebAssembly) instead
+        if (OS_LINUX)
+            find_program (LLD_PATH NAMES "ld.lld-${COMPILER_VERSION_MAJOR}" "lld-${COMPILER_VERSION_MAJOR}" "ld.lld" "lld")
+        elseif (OS_DARWIN)
+            find_program (LLD_PATH NAMES "ld64.lld-${COMPILER_VERSION_MAJOR}" "ld64.lld")
         endif ()
     endif ()
-
-    if (NOT LINKER_NAME)
-        if (GOLD_PATH)
+    if (OS_LINUX OR OS_DARWIN)
+        if (LLD_PATH)
             if (COMPILER_GCC)
-                set (LINKER_NAME "gold")
+                # GCC driver requires one of supported linker names like "lld".
+                set (LINKER_NAME "lld")
             else ()
-                set (LINKER_NAME ${GOLD_PATH})
+                # Clang driver simply allows full linker path.
+                set (LINKER_NAME ${LLD_PATH})
             endif ()
         endif ()
     endif ()
-endif ()
-# TODO: allow different linker on != OS_LINUX
+endif()
 
 if (LINKER_NAME)
+    find_program (LLD_PATH NAMES ${LINKER_NAME})
+    if (NOT LLD_PATH)
+        message (FATAL_ERROR "Using linker ${LINKER_NAME} but can't find its path.")
+    endif ()
     if (COMPILER_CLANG)
-        # This a temporary quirk to emit .debug_aranges with ThinLTO
+        # This a temporary quirk to emit .debug_aranges with ThinLTO, can be removed after upgrade to clang-16
         set (LLD_WRAPPER "${CMAKE_CURRENT_BINARY_DIR}/ld.lld")
         configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/cmake/ld.lld.in" "${LLD_WRAPPER}" @ONLY)
 
