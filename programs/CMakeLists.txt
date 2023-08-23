@@ -373,10 +373,6 @@ else ()
         list(APPEND PROTON_BUNDLE proton-klog-benchmark)
     endif ()
 
-    if (NOT BUILD_STRIPPED_BINARIES_PREFIX)
-        install (TARGETS proton RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
-    endif()
-
     add_custom_target (proton-bundle ALL DEPENDS ${PROTON_BUNDLE})
 
     if (USE_GDB_ADD_INDEX)
@@ -387,10 +383,19 @@ else ()
         add_custom_command(TARGET proton POST_BUILD COMMAND ./proton hash-binary > hash && ${OBJCOPY_PATH} --add-section .note.proton .hash=hash proton COMMENT "Adding .note.proton.hash to proton" VERBATIM)
     endif()
 
-    if (BUILD_STRIPPED_BINARIES_PREFIX)
-        proton_strip_binary(TARGET proton DESTINATION_DIR ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_STRIPPED_BINARIES_PREFIX} BINARY_PATH proton)
+    if (INSTALL_STRIPPED_BINARIES)
+        proton_strip_binary(TARGET proton DESTINATION_DIR ${CMAKE_CURRENT_BINARY_DIR}/${STRIPPED_BINARIES_OUTPUT} BINARY_PATH proton)
+    else()
+        install (TARGETS proton RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
     endif()
 endif ()
+
+if (NOT INSTALL_STRIPPED_BINARIES)
+    # Install dunny debug directory
+    # TODO: move logic to every place where proton_strip_binary is used
+    add_custom_command(TARGET proton POST_BUILD COMMAND echo > .empty )
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/.empty" DESTINATION ${CMAKE_INSTALL_LIBDIR}/debug/.empty)
+endif()
 
 if (ENABLE_TESTS)
     set (CLICKHOUSE_UNIT_TESTS_TARGETS unit_tests_dbms)
