@@ -2,6 +2,8 @@ if (USE_CLANG_TIDY)
     set (CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_PATH}")
 endif ()
 
+include(${proton_SOURCE_DIR}/cmake/strip_binary.cmake)
+
 # The `proton` binary is a multi purpose tool that contains multiple execution modes (client, server, etc.),
 # each of them may be built and linked as a separate library.
 # If you do not know what modes you need, turn this option OFF and enable SERVER and CLIENT only.
@@ -371,7 +373,9 @@ else ()
         list(APPEND PROTON_BUNDLE proton-klog-benchmark)
     endif ()
 
-    install (TARGETS proton RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+    if (NOT BUILD_STRIPPED_BINARIES_PREFIX)
+        install (TARGETS proton RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+    endif()
 
     add_custom_target (proton-bundle ALL DEPENDS ${PROTON_BUNDLE})
 
@@ -381,6 +385,10 @@ else ()
 
     if (USE_BINARY_HASH)
         add_custom_command(TARGET proton POST_BUILD COMMAND ./proton hash-binary > hash && ${OBJCOPY_PATH} --add-section .note.proton .hash=hash proton COMMENT "Adding .note.proton.hash to proton" VERBATIM)
+    endif()
+
+    if (BUILD_STRIPPED_BINARIES_PREFIX)
+        proton_strip_binary(TARGET proton DESTINATION_DIR ${CMAKE_CURRENT_BINARY_DIR}/${BUILD_STRIPPED_BINARIES_PREFIX} BINARY_PATH proton)
     endif()
 endif ()
 
