@@ -50,8 +50,12 @@ endif ()
 string (REGEX MATCHALL "[0-9]+" COMPILER_VERSION_LIST ${CMAKE_CXX_COMPILER_VERSION})
 list (GET COMPILER_VERSION_LIST 0 COMPILER_VERSION_MAJOR)
 
-# Example values: `lld-10`, `gold`.
+# Example values: `lld-10`.
 option (LINKER_NAME "Linker name or full path")
+
+if (LINKER_NAME MATCHES "gold")
+    message (FATAL_ERROR "Linking with gold is unsupported. Please use lld.")
+endif ()
 
 if (NOT LINKER_NAME)
     if (COMPILER_GCC)
