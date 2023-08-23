@@ -21,11 +21,11 @@ set (APPLE_CLANG_MINIMUM_VERSION 12.0.0)
 set (GCC_MINIMUM_VERSION 11)
 
 if (COMPILER_GCC)
+    message (FATAL_ERROR "Compilation with GCC is unsupported. Please use Clang instead.")
+
     if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${GCC_MINIMUM_VERSION} AND NOT CMAKE_VERSION VERSION_LESS 2.8.9)
         message (FATAL_ERROR "Compilation with GCC version ${CMAKE_CXX_COMPILER_VERSION} is unsupported, the minimum required version is ${GCC_MINIMUM_VERSION}.")
     endif ()
-
-    message (WARNING "Compilation with GCC is unsupported. Please use Clang instead.")
 
 elseif (COMPILER_CLANG)
     if (CMAKE_CXX_COMPILER_ID MATCHES "AppleClang")
