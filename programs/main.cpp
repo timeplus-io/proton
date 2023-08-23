@@ -70,7 +70,7 @@ int mainRestart(int argc, char ** argv);
 int mainHashBinary(int, char **)
 {
     /// Intentionally without newline. So you can run:
-    /// objcopy --add-section .note.ClickHouse.hash=<(./clickhouse hash-binary) clickhouse
+    /// objcopy --add-section .clickhouse.hash=<(./clickhouse hash-binary) clickhouse
     std::cout << getHashOfLoadedBinaryHex();
     return 0;
 }
