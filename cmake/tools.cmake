@@ -61,15 +61,11 @@ if (NOT LINKER_NAME)
     if (COMPILER_GCC)
         find_program (LLD_PATH NAMES "ld.lld")
     elseif (COMPILER_CLANG)
-        # llvm lld is a generic driver.
-        # Invoke ld.lld (Unix), ld64.lld (macOS), lld-link (Windows), wasm-ld (WebAssembly) instead
         if (OS_LINUX)
             find_program (LLD_PATH NAMES "ld.lld-${COMPILER_VERSION_MAJOR}" "lld-${COMPILER_VERSION_MAJOR}" "ld.lld" "lld")
-        elseif (OS_DARWIN)
-            find_program (LLD_PATH NAMES "ld64.lld-${COMPILER_VERSION_MAJOR}" "ld64.lld")
         endif ()
     endif ()
-    if (OS_LINUX OR OS_DARWIN)
+    if (OS_LINUX)
         if (LLD_PATH)
             if (COMPILER_GCC)
                 # GCC driver requires one of supported linker names like "lld".
