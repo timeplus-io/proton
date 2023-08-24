@@ -20,7 +20,9 @@ if (NOT DEFINED ENV{CLION_IDE} AND NOT DEFINED ENV{XCODE_IDE})
 endif()
 
 # Check if environment is polluted.
-if (DEFINED ENV{CFLAGS} OR DEFINED ENV{CXXFLAGS} OR DEFINED ENV{LDFLAGS}
+if (NOT $ENV{CFLAGS} STREQUAL ""
+    OR NOT $ENV{CXXFLAGS} STREQUAL ""
+    OR NOT $ENV{LDFLAGS} STREQUAL ""
     OR CMAKE_C_FLAGS OR CMAKE_CXX_FLAGS OR CMAKE_EXE_LINKER_FLAGS OR CMAKE_SHARED_LINKER_FLAGS OR CMAKE_MODULE_LINKER_FLAGS
     OR CMAKE_C_FLAGS_INIT OR CMAKE_CXX_FLAGS_INIT OR CMAKE_EXE_LINKER_FLAGS_INIT OR CMAKE_SHARED_LINKER_FLAGS_INIT OR CMAKE_MODULE_LINKER_FLAGS_INIT)
 
@@ -35,7 +37,7 @@ if (DEFINED ENV{CFLAGS} OR DEFINED ENV{CXXFLAGS} OR DEFINED ENV{LDFLAGS}
 
     message(FATAL_ERROR "
         Some of the variables like CFLAGS, CXXFLAGS, LDFLAGS are not empty.
-        It is not possible to build ClickHouse with custom flags.
+        It is not possible to build proton with custom flags.
         These variables can be set up by previous invocation of some other build tools.
         You should cleanup these variables and start over again.
         Run the `env` command to check the details.
