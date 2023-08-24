@@ -375,10 +375,6 @@ else ()
 
     add_custom_target (proton-bundle ALL DEPENDS ${PROTON_BUNDLE})
 
-    if (USE_GDB_ADD_INDEX)
-        add_custom_command(TARGET proton POST_BUILD COMMAND ${GDB_ADD_INDEX_EXE} proton COMMENT "Adding .gdb-index to proton" VERBATIM)
-    endif()
-
     if (USE_BINARY_HASH)
         add_custom_command(TARGET clickhouse POST_BUILD COMMAND ./clickhouse hash-binary > hash && ${OBJCOPY_PATH} --add-section .clickhouse.hash=hash clickhouse COMMENT "Adding section '.clickhouse.hash' to clickhouse binary" VERBATIM)
     endif()
