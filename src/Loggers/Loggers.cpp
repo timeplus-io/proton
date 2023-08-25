@@ -28,7 +28,7 @@ static std::string createDirectory(const std::string & file)
         return "";
     fs::create_directories(path);
     return path;
-};
+}
 
 void Loggers::setTextLog(std::shared_ptr<DB::TextLog> log, int max_priority)
 {

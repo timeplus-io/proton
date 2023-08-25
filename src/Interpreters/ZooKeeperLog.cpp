@@ -200,4 +200,4 @@ void ZooKeeperLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(children_array);
 }
 
-};
+}
