@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Access/IAccessStorage.h>
+#include <base/defines.h>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -44,15 +45,15 @@ private:
         mutable std::list<OnChangedHandler> handlers_by_id;
     };
 
-    bool insertNoLock(const UUID & id, const AccessEntityPtr & entity, bool replace_if_exists, bool throw_if_exists, Notifications & notifications);
-    bool removeNoLock(const UUID & id, bool throw_if_not_exists, Notifications & notifications);
-    bool updateNoLock(const UUID & id, const UpdateFunc & update_func, bool throw_if_not_exists, Notifications & notifications);
-    void setAllNoLock(const std::vector<std::pair<UUID, AccessEntityPtr>> & all_entities, Notifications & notifications);
+    bool insertNoLock(const UUID & id, const AccessEntityPtr & entity, bool replace_if_exists, bool throw_if_exists, Notifications & notifications) TSA_REQUIRES(mutex);
+    bool removeNoLock(const UUID & id, bool throw_if_not_exists, Notifications & notifications) TSA_REQUIRES(mutex);
+    bool updateNoLock(const UUID & id, const UpdateFunc & update_func, bool throw_if_not_exists, Notifications & notifications) TSA_REQUIRES(mutex);
+    void setAllNoLock(const std::vector<std::pair<UUID, AccessEntityPtr>> & all_entities, Notifications & notifications) TSA_REQUIRES(mutex);
     void prepareNotifications(const Entry & entry, bool remove, Notifications & notifications) const;
 
     mutable std::recursive_mutex mutex;
-    std::unordered_map<UUID, Entry> entries_by_id; /// We want to search entries both by ID and by the pair of name and type.
-    std::unordered_map<String, Entry *> entries_by_name_and_type[static_cast<size_t>(AccessEntityType::MAX)];
+    std::unordered_map<UUID, Entry> entries_by_id TSA_GUARDED_BY(mutex); /// We want to search entries both by ID and by the pair of name and type.
+    std::unordered_map<String, Entry *> entries_by_name_and_type[static_cast<size_t>(AccessEntityType::MAX)] TSA_GUARDED_BY(mutex);
     mutable std::list<OnChangedHandler> handlers_by_type[static_cast<size_t>(AccessEntityType::MAX)];
 };
 }
