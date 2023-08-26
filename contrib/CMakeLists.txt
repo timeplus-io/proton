@@ -101,6 +101,7 @@ if (ENABLE_TESTS)
 endif()
 
 add_contrib (llvm-project-cmake llvm-project)
+add_contrib (gwpasan-cmake llvm-project)
 add_contrib (libxml2-cmake libxml2)
 add_contrib (aws-cmake
     aws

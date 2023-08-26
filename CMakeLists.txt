@@ -420,6 +420,11 @@ elseif (OS_FREEBSD)
 endif ()
 link_libraries(global-group)
 
+option (ENABLE_GWP_ASAN "Enable Gwp-Asan" ON)
+if (NOT OS_LINUX AND NOT OS_ANDROID)
+    set(ENABLE_GWP_ASAN OFF)
+endif ()
+
 if (WERROR)
     # Don't pollute CMAKE_CXX_FLAGS with -Werror as it will break some CMake checks.
     # Instead, adopt modern cmake usage requirement.
