@@ -314,7 +314,7 @@ std::variant<Block, int> RemoteQueryExecutor::read(std::unique_ptr<ReadContext> 
         read_context = std::make_unique<ReadContext>(*connections);
     }
 
-    do
+    while (true)
     {
         if (!read_context->resumeRoutine())
             return Block();
@@ -338,7 +338,6 @@ std::variant<Block, int> RemoteQueryExecutor::read(std::unique_ptr<ReadContext> 
                 return restartQueryWithoutDuplicatedUUIDs(&read_context);
         }
     }
-    while (true);
 #else
     return read();
 #endif
