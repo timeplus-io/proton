@@ -10,7 +10,7 @@
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 
-#pragma GCC diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wold-style-cast"
 
 
 namespace DB
