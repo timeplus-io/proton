@@ -215,7 +215,10 @@
 	url = https://github.com/schoentoon/hashidsxx.git
 [submodule "contrib/vectorscan"]
 	path = contrib/vectorscan
-	url = https://github.com/VectorCamp/vectorscan.git
+	# FIXME: update once upstream fixes will be merged:
+	# - https://github.com/VectorCamp/vectorscan/pull/148
+	# - https://github.com/VectorCamp/vectorscan/pull/149
+	url = https://github.com/azat-ch/vectorscan
 [submodule "contrib/liburing"]
 	path = contrib/liburing
 	url = https://github.com/axboe/liburing.git
