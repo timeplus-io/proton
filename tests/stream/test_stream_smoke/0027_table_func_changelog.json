@@ -415,7 +415,7 @@
         },
         {
             "id": 13,
-            "tags": ["table_func_changelog", "multiple_inner_joins", "bug"],
+            "tags": ["table_func_changelog", "multiple_inner_joins"],
             "name": "table_func_changelog_multiple_inner_joins",
             "description": "changelog_inner_joins_changelog_inner_joins_changelog_inner_joins",
             "steps":[
@@ -428,29 +428,29 @@
                         {"client":"python", "query_type": "table", "exist":"test28_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_stream2 (j int, k2 string);"},
                         {"client":"python", "query_type": "table", "exist":"test28_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_stream3 (k int, k3 string);"},
                         {"client":"python", "query_type": "stream", "query_id":"2813", "wait":1, "query": "select * from changelog(test28_stream1, k1) as c1 inner join changelog(test28_stream2, k2) as c2 ON c1.i = c2.j inner join changelog(test28_stream3, k3) as c3 ON c1.i = c3.k;"},
-                        {"client":"python", "query_type": "table", "depends_on":"2813", "wait":1, "query": "insert into test28_stream1(i, k1) values (1, 'k1');"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_stream2(j, k2) values (1, 'k2');"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_stream3(k, k3) values (1, 'k3');"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_stream1(i, k1) values (2, 'k1');"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_stream2(j, k2) values (2, 'k2');"},
-                        {"client":"python", "query_type": "table", "kill":"2813", "kill_wait":3, "wait":1, "query": "insert into test28_stream3(k, k3) values (2, 'k3');"}
+                        {"client":"python", "query_type": "table", "depends_on":"2813", "wait":1, "query": "insert into test28_stream1(i, k1, _tp_time) values (1, 'k1', '2023-01-01 00:00:01');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_stream2(j, k2, _tp_time) values (1, 'k2', '2023-01-01 00:00:02');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_stream3(k, k3, _tp_time) values (1, 'k3', '2023-01-01 00:00:03');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_stream1(i, k1, _tp_time) values (2, 'k1', '2023-01-01 00:00:04');"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_stream2(j, k2, _tp_time) values (2, 'k2', '2023-01-01 00:00:05');"},
+                        {"client":"python", "query_type": "table", "kill":"2813", "kill_wait":3, "wait":1, "query": "insert into test28_stream3(k, k3, _tp_time) values (2, 'k3', '2023-01-01 00:00:06');"}
                     ]
                 }
             ],
             "expected_results": [
                 {
-                    "query_id":"2812",
+                    "query_id":"2813",
                     "expected_results":[
-                        [1, "k1", 1, "k2", 1, "k3", 1],
-                        [1, "k1", 1, "k2", 1, "k3", -1],
-                        [2, "k1", 2, "k2", 2, "k3", 1]
+                        [1, "k1", "2023-01-01 00:00:01+00:00", 1, "k2", "2023-01-01 00:00:02+00:00", 1, "k3", "2023-01-01 00:00:03+00:00", 1],
+                        [1, "k1", "2023-01-01 00:00:01+00:00", 1, "k2", "2023-01-01 00:00:02+00:00", 1, "k3", "2023-01-01 00:00:03+00:00", -1],
+                        [2, "k1", "2023-01-01 00:00:04+00:00", 2, "k2", "2023-01-01 00:00:05+00:00", 2, "k3", "2023-01-01 00:00:06+00:00", 1]
                     ]
                 }
             ]
         },
         {
             "id": 14,
-            "tags": ["table_func_changelog", "multiple_inner_joins", "bug"],
+            "tags": ["table_func_changelog", "multiple_inner_joins"],
             "name": "table_func_changelog_multiple_inner_joins",
             "description": "changelog_inner_joins_changelog_inner_joins_changelog_inner_joins",
             "steps":[
@@ -462,7 +462,7 @@
                         {"client":"python", "query_type": "table", "exist":"test28_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_stream1 (i int, k1 string);"},
                         {"client":"python", "query_type": "table", "exist":"test28_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_stream2 (j int, k2 string);"},
                         {"client":"python", "query_type": "table", "exist":"test28_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_stream3 (k int, k3 string);"},
-                        {"client":"python", "query_type": "stream", "query_id":"2814", "wait":1, "query": "select c1.i, c1.k1, c1._tp_delta, c2.j, c2.k2, c2._tp_delta, c3.k, c3.k3, c3._tp_delta from changelog(test28_stream1, k1) as c1 inner join changelog(test28_stream2, k2) as c2 ON c1.i = c2.j inner join changelog(test28_stream3, k3) as c3 ON c1.i = c3.k;"},
+                        {"client":"python", "query_type": "stream", "query_id":"2814", "wait":1, "query": "select c1.i, c1.k1, c2.j, c2.k2, c3.k, c3.k3, _tp_delta from changelog(test28_stream1, k1) as c1 inner join changelog(test28_stream2, k2) as c2 ON c1.i = c2.j inner join changelog(test28_stream3, k3) as c3 ON c1.i = c3.k;"},
                         {"client":"python", "query_type": "table", "depends_on":"2814", "wait":1, "query": "insert into test28_stream1(i, k1) values (1, 'k1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_stream2(j, k2) values (1, 'k2');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_stream3(k, k3) values (1, 'k3');"},
@@ -476,9 +476,9 @@
                 {
                     "query_id":"2814",
                     "expected_results":[
-                        [1, "k1", 1, 1, "k2", 1, 1, "k3", 1],
-                        [1, "k1", -1, 1, "k2", 1, 1, "k3", 1],
-                        [2, "k1", 1, 2, "k2", 1, 2, "k3", 1]
+                        [1, "k1", 1, "k2", 1, "k3", 1],
+                        [1, "k1", 1, "k2", 1, "k3", -1],
+                        [2, "k1", 2, "k2", 2, "k3", 1]
                     ]
                 }
             ]

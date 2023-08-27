@@ -241,10 +241,10 @@ std::shared_ptr<Streaming::HashJoin> initHashJoin(
     const auto & tables = table_join->getTablesWithColumns();
     assert(tables.size() == 2);
 
-    auto left_join_stream_desc = std::make_shared<Streaming::JoinStreamDescription>(
-        tables[0].table.table, Block{}, tables[0].output_data_stream_semantic, keep_versions);
-    auto right_join_stream_desc = std::make_shared<Streaming::JoinStreamDescription>(
-        tables[1].table.table, right_header, tables[1].output_data_stream_semantic, keep_versions);
+    auto left_join_stream_desc
+        = std::make_shared<Streaming::JoinStreamDescription>(tables[0], Block{}, tables[0].output_data_stream_semantic, keep_versions);
+    auto right_join_stream_desc
+        = std::make_shared<Streaming::JoinStreamDescription>(tables[1], right_header, tables[1].output_data_stream_semantic, keep_versions);
     right_join_stream_desc->calculateColumnPositions(table_join->strictness());
 
     auto join = std::make_shared<Streaming::HashJoin>(table_join, std::move(left_join_stream_desc), std::move(right_join_stream_desc));
@@ -2210,8 +2210,8 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKV)
              /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .values = "(1, '2023-1-1 00:00:00', 1, '2023-1-1 00:00:00', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:00', 1)",
              },
          },
          {
@@ -2219,8 +2219,8 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKV)
              /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:00', -1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .retracted_values = "(1, '2023-1-1 00:00:00', -1, '2023-1-1 00:00:00', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .retracted_values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:00', -1)",
              },
          },
          {
@@ -2228,8 +2228,8 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKV)
              /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:01', +1)(2, '2023-1-1 00:00:01', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .values = "(1, '2023-1-1 00:00:00', 1, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:01', 1)",
              },
          },
          {
@@ -2237,8 +2237,8 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKV)
              /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00', -1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .retracted_values = "(1, '2023-1-1 00:00:00', -1, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .retracted_values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:01', -1)",
              },
          },
          {
@@ -2246,9 +2246,9 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKV)
              /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:01', +1)(2, '2023-1-1 00:00:01', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .values = "(1, '2023-1-1 00:00:01', 1, '2023-1-1 00:00:01', 1)"
-                           "(2, '2023-1-1 00:00:01', 1, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .values = "(1, '2023-1-1 00:00:01', '2023-1-1 00:00:01', 1)"
+                           "(2, '2023-1-1 00:00:01', '2023-1-1 00:00:01', 1)",
              },
          }},
         context);
@@ -2285,9 +2285,9 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKVWithPartialMultiPrimar
              /*to join block*/ prepareBlockByHeader(left_header, "(1, 't1', '2023-1-1 00:00:00', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_2, t2.col_3, t2._tp_delta
-                 .values = "(1, 't1', '2023-1-1 00:00:00', 1, 't1', '2023-1-1 00:00:00', 1)"
-                           "(1, 't1', '2023-1-1 00:00:00', 1, 't2', '2023-1-1 00:00:00', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3, _tp_delta
+                 .values = "(1, 't1', '2023-1-1 00:00:00', 't1', '2023-1-1 00:00:00', 1)"
+                           "(1, 't1', '2023-1-1 00:00:00', 't2', '2023-1-1 00:00:00', 1)",
              },
          },
          {
@@ -2295,8 +2295,8 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKVWithPartialMultiPrimar
              /*to join block*/ prepareBlockByHeader(right_header, "(1, 't2', '2023-1-1 00:00:00', -1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_2, t2.col_3, t2._tp_delta
-                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', -1, 't2', '2023-1-1 00:00:00', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3, _tp_delta
+                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', 't2', '2023-1-1 00:00:00', -1)",
              },
          },
          {
@@ -2305,8 +2305,8 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKVWithPartialMultiPrimar
              prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:01', +1)(2, 'tt2', '2023-1-1 00:00:01', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_2, t2.col_3, t2._tp_delta
-                 .values = "(1, 't1', '2023-1-1 00:00:00', 1, 'tt1', '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3, _tp_delta
+                 .values = "(1, 't1', '2023-1-1 00:00:00', 'tt1', '2023-1-1 00:00:01', 1)",
              },
          },
          {
@@ -2314,9 +2314,9 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKVWithPartialMultiPrimar
              /*to join block*/ prepareBlockByHeader(left_header, "(1, 't1', '2023-1-1 00:00:00', -1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_2, t2.col_3, t2._tp_delta
-                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', -1, 't1', '2023-1-1 00:00:00', 1)"
-                                     "(1, 't1', '2023-1-1 00:00:00', -1, 'tt1', '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3, _tp_delta
+                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', 't1', '2023-1-1 00:00:00', -1)"
+                                     "(1, 't1', '2023-1-1 00:00:00', 'tt1', '2023-1-1 00:00:01', -1)",
              },
          },
          {
@@ -2325,10 +2325,10 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKVWithPartialMultiPrimar
              prepareBlockByHeader(left_header, "(1, 'tt1', '2023-1-1 00:00:01', +1)(2, 'tt2', '2023-1-1 00:00:01', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_2, t2.col_3, t2._tp_delta
-                 .values = "(1, 'tt1', '2023-1-1 00:00:01', 1, 't1', '2023-1-1 00:00:00', 1)"
-                           "(1, 'tt1', '2023-1-1 00:00:01', 1, 'tt1', '2023-1-1 00:00:01', 1)"
-                           "(2, 'tt2', '2023-1-1 00:00:01', 1, 'tt2', '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3, _tp_delta
+                 .values = "(1, 'tt1', '2023-1-1 00:00:01', 't1', '2023-1-1 00:00:00', 1)"
+                           "(1, 'tt1', '2023-1-1 00:00:01', 'tt1', '2023-1-1 00:00:01', 1)"
+                           "(2, 'tt2', '2023-1-1 00:00:01', 'tt2', '2023-1-1 00:00:01', 1)",
              },
          }},
         context);
@@ -2365,9 +2365,9 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKVWithNoPrimaryKeys)
              /*to join block*/ prepareBlockByHeader(left_header, "(1, 't1', '2023-1-1 00:00:00', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_1, t2.col_3, t2._tp_delta
-                 .values = "(1, 't1', '2023-1-1 00:00:00', 1, 1, '2023-1-1 00:00:00', 1)"
-                           "(1, 't1', '2023-1-1 00:00:00', 1, 2, '2023-1-1 00:00:00', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_1, t2.col_3, _tp_delta
+                 .values = "(1, 't1', '2023-1-1 00:00:00', 1, '2023-1-1 00:00:00', 1)"
+                           "(1, 't1', '2023-1-1 00:00:00', 2, '2023-1-1 00:00:00', 1)",
              },
          },
          {
@@ -2375,8 +2375,8 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKVWithNoPrimaryKeys)
              /*to join block*/ prepareBlockByHeader(right_header, "(1, 't1', '2023-1-1 00:00:00', -1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_1, t2.col_3, t2._tp_delta
-                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', -1, 1, '2023-1-1 00:00:00', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_1, t2.col_3, _tp_delta
+                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', 1, '2023-1-1 00:00:00', -1)",
              },
          },
          {
@@ -2385,8 +2385,8 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKVWithNoPrimaryKeys)
              prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:01', +1)(22, 't1', '2023-1-1 00:00:01', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_1, t2.col_3, t2._tp_delta
-                 .values = "(1, 't1', '2023-1-1 00:00:00', 1, 22, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_1, t2.col_3, _tp_delta
+                 .values = "(1, 't1', '2023-1-1 00:00:00', 22, '2023-1-1 00:00:01', 1)",
              },
          },
          {
@@ -2394,9 +2394,9 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKVWithNoPrimaryKeys)
              /*to join block*/ prepareBlockByHeader(left_header, "(1, 't1', '2023-1-1 00:00:00', -1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_1, t2.col_3, t2._tp_delta
-                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', -1, 2, '2023-1-1 00:00:00', 1)"
-                                     "(1, 't1', '2023-1-1 00:00:00', -1, 22, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_1, t2.col_3, _tp_delta
+                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', 2, '2023-1-1 00:00:00', -1)"
+                                     "(1, 't1', '2023-1-1 00:00:00', 22, '2023-1-1 00:00:01', -1)",
              },
          },
          {
@@ -2405,10 +2405,10 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKVWithNoPrimaryKeys)
              prepareBlockByHeader(left_header, "(1, 'tt1', '2023-1-1 00:00:01', +1)(2, 't1', '2023-1-1 00:00:01', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_1, t2.col_3, t2._tp_delta
-                 .values = "(1, 'tt1', '2023-1-1 00:00:01', 1, 1, '2023-1-1 00:00:01', 1)"
-                           "(2, 't1', '2023-1-1 00:00:01', 1, 2, '2023-1-1 00:00:00', 1)"
-                           "(2, 't1', '2023-1-1 00:00:01', 1, 22, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_1, t2.col_3, _tp_delta
+                 .values = "(1, 'tt1', '2023-1-1 00:00:01', 1, '2023-1-1 00:00:01', 1)"
+                           "(2, 't1', '2023-1-1 00:00:01', 2, '2023-1-1 00:00:00', 1)"
+                           "(2, 't1', '2023-1-1 00:00:01', 22, '2023-1-1 00:00:01', 1)",
              },
          }},
         context);
@@ -2444,8 +2444,8 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKV)
              /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .values = "(1, '2023-1-1 00:00:00', 1, '2023-1-1 00:00:00', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:00', 1)",
              },
          },
          {
@@ -2453,8 +2453,8 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKV)
              /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:00', -1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .retracted_values = "(1, '2023-1-1 00:00:00', -1, '2023-1-1 00:00:00', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .retracted_values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:00', -1)",
              },
          },
          {
@@ -2462,8 +2462,8 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKV)
              /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:01', +1)(2, '2023-1-1 00:00:01', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .values = "(1, '2023-1-1 00:00:00', 1, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:01', 1)",
              },
          },
          {
@@ -2471,8 +2471,8 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKV)
              /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00', -1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .retracted_values = "(1, '2023-1-1 00:00:00', -1, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .retracted_values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:01', -1)",
              },
          },
          {
@@ -2480,9 +2480,9 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKV)
              /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:01', +1)(2, '2023-1-1 00:00:01', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .values = "(1, '2023-1-1 00:00:01', 1, '2023-1-1 00:00:01', 1)"
-                           "(2, '2023-1-1 00:00:01', 1, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .values = "(1, '2023-1-1 00:00:01', '2023-1-1 00:00:01', 1)"
+                           "(2, '2023-1-1 00:00:01', '2023-1-1 00:00:01', 1)",
              },
          }},
         context);
@@ -2519,9 +2519,9 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKVWithPartialMultiPrimar
              /*to join block*/ prepareBlockByHeader(left_header, "(1, 't1', '2023-1-1 00:00:00', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_2, t2.col_3, t2._tp_delta
-                 .values = "(1, 't1', '2023-1-1 00:00:00', 1, 't1', '2023-1-1 00:00:00', 1)"
-                           "(1, 't1', '2023-1-1 00:00:00', 1, 't2', '2023-1-1 00:00:00', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3, _tp_delta
+                 .values = "(1, 't1', '2023-1-1 00:00:00', 't1', '2023-1-1 00:00:00', 1)"
+                           "(1, 't1', '2023-1-1 00:00:00', 't2', '2023-1-1 00:00:00', 1)",
              },
          },
          {
@@ -2529,8 +2529,8 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKVWithPartialMultiPrimar
              /*to join block*/ prepareBlockByHeader(right_header, "(1, 't2', '2023-1-1 00:00:00', -1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_2, t2.col_3, t2._tp_delta
-                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', -1, 't2', '2023-1-1 00:00:00', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3, _tp_delta
+                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', 't2', '2023-1-1 00:00:00', -1)",
              },
          },
          {
@@ -2539,8 +2539,8 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKVWithPartialMultiPrimar
              prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:01', +1)(2, 'tt2', '2023-1-1 00:00:01', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_2, t2.col_3, t2._tp_delta
-                 .values = "(1, 't1', '2023-1-1 00:00:00', 1, 'tt1', '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3, _tp_delta
+                 .values = "(1, 't1', '2023-1-1 00:00:00', 'tt1', '2023-1-1 00:00:01', 1)",
              },
          },
          {
@@ -2548,9 +2548,9 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKVWithPartialMultiPrimar
              /*to join block*/ prepareBlockByHeader(left_header, "(1, 't1', '2023-1-1 00:00:00', -1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_2, t2.col_3, t2._tp_delta
-                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', -1, 't1', '2023-1-1 00:00:00', 1)"
-                                     "(1, 't1', '2023-1-1 00:00:00', -1, 'tt1', '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3, _tp_delta
+                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', 't1', '2023-1-1 00:00:00', -1)"
+                                     "(1, 't1', '2023-1-1 00:00:00', 'tt1', '2023-1-1 00:00:01', -1)",
              },
          },
          {
@@ -2559,10 +2559,10 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKVWithPartialMultiPrimar
              prepareBlockByHeader(left_header, "(1, 'tt1', '2023-1-1 00:00:01', +1)(2, 'tt2', '2023-1-1 00:00:01', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_2, t2.col_3, t2._tp_delta
-                 .values = "(1, 'tt1', '2023-1-1 00:00:01', 1, 't1', '2023-1-1 00:00:00', 1)"
-                           "(1, 'tt1', '2023-1-1 00:00:01', 1, 'tt1', '2023-1-1 00:00:01', 1)"
-                           "(2, 'tt2', '2023-1-1 00:00:01', 1, 'tt2', '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3, _tp_delta
+                 .values = "(1, 'tt1', '2023-1-1 00:00:01', 't1', '2023-1-1 00:00:00', 1)"
+                           "(1, 'tt1', '2023-1-1 00:00:01', 'tt1', '2023-1-1 00:00:01', 1)"
+                           "(2, 'tt2', '2023-1-1 00:00:01', 'tt2', '2023-1-1 00:00:01', 1)",
              },
          }},
         context);
@@ -2599,9 +2599,9 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKVWithNoPrimaryKeys)
              /*to join block*/ prepareBlockByHeader(left_header, "(1, 't1', '2023-1-1 00:00:00', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_1, t2.col_3, t2._tp_delta
-                 .values = "(1, 't1', '2023-1-1 00:00:00', 1, 1, '2023-1-1 00:00:00', 1)"
-                           "(1, 't1', '2023-1-1 00:00:00', 1, 2, '2023-1-1 00:00:00', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_1, t2.col_3, _tp_delta
+                 .values = "(1, 't1', '2023-1-1 00:00:00', 1, '2023-1-1 00:00:00', 1)"
+                           "(1, 't1', '2023-1-1 00:00:00', 2, '2023-1-1 00:00:00', 1)",
              },
          },
          {
@@ -2609,8 +2609,8 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKVWithNoPrimaryKeys)
              /*to join block*/ prepareBlockByHeader(right_header, "(1, 't1', '2023-1-1 00:00:00', -1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_1, t2.col_3, t2._tp_delta
-                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', -1, 1, '2023-1-1 00:00:00', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_1, t2.col_3, _tp_delta
+                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', 1, '2023-1-1 00:00:00', -1)",
              },
          },
          {
@@ -2619,8 +2619,8 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKVWithNoPrimaryKeys)
              prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:01', +1)(22, 't1', '2023-1-1 00:00:01', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_1, t2.col_3, t2._tp_delta
-                 .values = "(1, 't1', '2023-1-1 00:00:00', 1, 22, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_1, t2.col_3, _tp_delta
+                 .values = "(1, 't1', '2023-1-1 00:00:00', 22, '2023-1-1 00:00:01', 1)",
              },
          },
          {
@@ -2628,9 +2628,9 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKVWithNoPrimaryKeys)
              /*to join block*/ prepareBlockByHeader(left_header, "(1, 't1', '2023-1-1 00:00:00', -1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_1, t2.col_3, t2._tp_delta
-                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', -1, 2, '2023-1-1 00:00:00', 1)"
-                                     "(1, 't1', '2023-1-1 00:00:00', -1, 22, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_1, t2.col_3, _tp_delta
+                 .retracted_values = "(1, 't1', '2023-1-1 00:00:00', 2, '2023-1-1 00:00:00', -1)"
+                                     "(1, 't1', '2023-1-1 00:00:00', 22, '2023-1-1 00:00:01', -1)",
              },
          },
          {
@@ -2639,10 +2639,10 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKVWithNoPrimaryKeys)
              prepareBlockByHeader(left_header, "(1, 'tt1', '2023-1-1 00:00:01', +1)(2, 't1', '2023-1-1 00:00:01', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, col_3, _tp_delta, t2.col_1, t2.col_3, t2._tp_delta
-                 .values = "(1, 'tt1', '2023-1-1 00:00:01', 1, 1, '2023-1-1 00:00:01', 1)"
-                           "(2, 't1', '2023-1-1 00:00:01', 1, 2, '2023-1-1 00:00:00', 1)"
-                           "(2, 't1', '2023-1-1 00:00:01', 1, 22, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, col_3, t2.col_1, t2.col_3, _tp_delta
+                 .values = "(1, 'tt1', '2023-1-1 00:00:01', 1, '2023-1-1 00:00:01', 1)"
+                           "(2, 't1', '2023-1-1 00:00:01', 2, '2023-1-1 00:00:00', 1)"
+                           "(2, 't1', '2023-1-1 00:00:01', 22, '2023-1-1 00:00:01', 1)",
              },
          }},
         context);
@@ -2677,8 +2677,8 @@ TEST(StreamingHashJoin, ChangelogInnerAllJoinChangelog)
              /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .values = "(1, '2023-1-1 00:00:00', 1, '2023-1-1 00:00:00', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:00', 1)",
              },
          },
          {
@@ -2686,8 +2686,8 @@ TEST(StreamingHashJoin, ChangelogInnerAllJoinChangelog)
              /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:00', -1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .retracted_values = "(1, '2023-1-1 00:00:00', -1, '2023-1-1 00:00:00', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .retracted_values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:00', -1)",
              },
          },
          {
@@ -2695,8 +2695,8 @@ TEST(StreamingHashJoin, ChangelogInnerAllJoinChangelog)
              /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:01', +1)(2, '2023-1-1 00:00:01', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .values = "(1, '2023-1-1 00:00:00', 1, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:01', 1)",
              },
          },
          {
@@ -2704,8 +2704,8 @@ TEST(StreamingHashJoin, ChangelogInnerAllJoinChangelog)
              /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00', -1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .retracted_values = "(1, '2023-1-1 00:00:00', -1, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .retracted_values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:01', -1)",
              },
          },
          {
@@ -2713,9 +2713,9 @@ TEST(StreamingHashJoin, ChangelogInnerAllJoinChangelog)
              /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:01', +1)(2, '2023-1-1 00:00:01', +1)", context),
              /*expected join results*/
              ExpectedJoinResults{
-                 /// output header: col_1, col_2, _tp_delta, t2.col_2, t2._tp_delta
-                 .values = "(1, '2023-1-1 00:00:01', 1, '2023-1-1 00:00:01', 1)"
-                           "(2, '2023-1-1 00:00:01', 1, '2023-1-1 00:00:01', 1)",
+                 /// output header: col_1, col_2, t2.col_2, _tp_delta
+                 .values = "(1, '2023-1-1 00:00:01', '2023-1-1 00:00:01', 1)"
+                           "(2, '2023-1-1 00:00:01', '2023-1-1 00:00:01', 1)",
              },
          }},
         context);

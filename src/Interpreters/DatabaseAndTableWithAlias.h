@@ -74,6 +74,10 @@ struct TableWithColumnNamesAndTypes
             names.insert(col.name);
     }
 
+    /// proton: starts.
+    Names getColumnNamesWithPrefix(std::string_view prefix) const;
+    /// proton: ends.
+
     bool hasColumn(const String & name) const { return names.contains(name); }
 
     void addHiddenColumns(const NamesAndTypesList & addition)

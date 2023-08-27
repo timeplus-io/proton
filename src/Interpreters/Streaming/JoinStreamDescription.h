@@ -7,6 +7,8 @@
 
 namespace DB
 {
+struct TableWithColumnNamesAndTypes;
+
 namespace Streaming
 {
 
@@ -14,8 +16,8 @@ DataStreamSemantic getDataStreamSemantic(StoragePtr storage);
 
 struct JoinStreamDescription
 {
-    JoinStreamDescription(std::string_view table_, Block input_header_, DataStreamSemantic data_stream_semantic_, UInt64 keep_versions_)
-        : table_prefix(fmt::format("{}.", table_))
+    JoinStreamDescription(const TableWithColumnNamesAndTypes & table_with_columns_, Block input_header_, DataStreamSemantic data_stream_semantic_, UInt64 keep_versions_)
+        : table_with_columns(table_with_columns_)
         , input_header(std::move(input_header_))
         , data_stream_semantic(data_stream_semantic_)
         , keep_versions(keep_versions_)
@@ -23,7 +25,7 @@ struct JoinStreamDescription
     }
 
     JoinStreamDescription(JoinStreamDescription && other) noexcept
-        : table_prefix(std::move(other.table_prefix))
+        : table_with_columns(other.table_with_columns)
         , input_header(std::move(other.input_header))
         , data_stream_semantic(other.data_stream_semantic)
         , keep_versions(other.keep_versions)
@@ -39,7 +41,7 @@ struct JoinStreamDescription
 
     void calculateColumnPositions(JoinStrictness strictness);
 
-    String table_prefix;
+    const TableWithColumnNamesAndTypes & table_with_columns;
 
     Block input_header;
 

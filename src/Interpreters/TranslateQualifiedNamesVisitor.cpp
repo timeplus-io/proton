@@ -22,6 +22,7 @@
 
 /// proton : starts
 #include <Common/ProtonCommon.h>
+#include <Interpreters/Streaming/CalculateDataStreamSemantic.h>
 /// proton : ends
 
 namespace DB
@@ -298,12 +299,24 @@ void TranslateQualifiedNamesMatcher::visit(ASTExpressionList & node, const ASTPt
                 {
                     for (const auto & column : *cols)
                     {
+                        /// proton: starts. For join query, the `*` didn't include `_tp_delta` of any stream, so skip it
+                        if (column.name == ProtonConsts::RESERVED_DELTA_FLAG && tables_with_columns.size() > 1)
+                            continue;
+                        /// proton: ends.
+
                         if (first_table || !data.join_using_columns.contains(column.name))
                             addIdentifier(columns, table.table, column.name);
                     }
                 }
                 first_table = false;
             }
+
+            /// proton: starts. For join query emit changelog, expand `_tp_delta` for `*`
+            if (tables_with_columns.size() > 1
+                && Streaming::isJoinResultChangelog(
+                    tables_with_columns.front().output_data_stream_semantic, tables_with_columns.back().output_data_stream_semantic))
+                columns.emplace_back(std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
+            /// proton: ends.
 
             for (const auto & transformer : asterisk->children)
                 IASTColumnsTransformer::transform(transformer, columns);
@@ -343,7 +356,14 @@ void TranslateQualifiedNamesMatcher::visit(ASTExpressionList & node, const ASTPt
                 if (ident_db_and_name.satisfies(table.table, true))
                 {
                     for (const auto & column : table.columns)
+                    /// proton: starts. For join query, the `t.*` didn't include `_tp_delta` of any stream, so skip it
+                    {
+                        if (column.name == ProtonConsts::RESERVED_DELTA_FLAG && tables_with_columns.size() > 1)
+                            continue;
+
                         addIdentifier(columns, table.table, column.name);
+                    }
+                    /// proton: ends.
                     break;
                 }
             }

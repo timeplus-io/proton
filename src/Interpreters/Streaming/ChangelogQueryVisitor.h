@@ -1,7 +1,9 @@
 #pragma once
 
 #include <Core/Streaming/DataStreamSemantic.h>
+#include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/InDepthNodeVisitor.h>
+#include <Interpreters/Streaming/CalculateDataStreamSemantic.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/IAST.h>
@@ -31,17 +33,15 @@ class ChangelogQueryVisitorMatcher
 {
 public:
     ChangelogQueryVisitorMatcher(
-        DataStreamSemantic left_input_data_stream_semantic_,
-        std::optional<DataStreamSemantic> right_input_data_stream_semantic_,
-        std::optional<JoinStrictness> join_strictness_,
-        bool current_select_has_aggregates_,
+        DataStreamSemanticPair data_stream_semantic_pair_,
+        const TablesWithColumns & tables_with_columns_,
         bool add_new_required_result_columns_,
+        bool is_subquery_,
         const SelectQueryInfo & query_info_)
-        : left_input_data_stream_semantic(left_input_data_stream_semantic_)
-        , right_input_data_stream_semantic(right_input_data_stream_semantic_)
-        , join_strictness(join_strictness_)
-        , current_select_has_aggregates(current_select_has_aggregates_)
+        : data_stream_semantic_pair(data_stream_semantic_pair_)
+        , tables_with_columns(tables_with_columns_)
         , add_new_required_result_columns(add_new_required_result_columns_)
+        , is_subquery(is_subquery_)
         , query_info(query_info_)
     {
     }
@@ -57,20 +57,22 @@ public:
     auto && newRequiredResultColumnNames() { return std::move(new_required_result_column_names); }
 
 private:
-    void rewriteAsSubQuery(ASTTableExpression & table_expr);
-    void addDeltaColumn(ASTSelectQuery & select_query);
+    void rewriteAsSubquery(ASTTableExpression & table_expr);
+    void addDeltaColumn(ASTSelectQuery & select_query, bool asterisk_include_delta);
 
     Names new_required_result_column_names;
 
-    DataStreamSemantic left_input_data_stream_semantic;
-    std::optional<DataStreamSemantic> right_input_data_stream_semantic;
-    std::optional<JoinStrictness> join_strictness;
-    bool current_select_has_aggregates;
+    DataStreamSemanticPair data_stream_semantic_pair;
+    const TablesWithColumns & tables_with_columns;
     bool add_new_required_result_columns;
+    bool is_subquery;
     const SelectQueryInfo & query_info;
     bool hard_rewritten = false;
 };
 
 using ChangelogQueryVisitor = ChangelogQueryVisitorMatcher::Visitor;
+
+ASTPtr makeTemporaryDeltaColumn();
+void rewriteTemporaryDeltaColumnInSelectQuery(ASTSelectQuery & select_query, bool emit_changelog);
 }
 }

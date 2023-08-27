@@ -20,6 +20,11 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/typeid_cast.h>
 
+/// proton: starts.
+#include <Common/ProtonCommon.h>
+#include <Interpreters/Streaming/ChangelogQueryVisitor.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -136,7 +141,12 @@ private:
                 has_asterisks = true;
 
                 for (auto & table_name : data.tables_order)
-                    data.addTableColumns(table_name, columns);
+                /// proton: starts. For join query, the `*` didn't include `_tp_delta` of any stream, so skip it
+                    data.addTableColumns(table_name, columns, [&](const String & column_name) { return column_name != ProtonConsts::RESERVED_DELTA_FLAG; });
+
+                /// FIXME: Before resolveDataStreamSemantic, we don't know whether the join output emit changelog, here use a temporary `1 as _tp_delta`, which will be rewriten or removed later
+                columns.emplace_back(Streaming::makeTemporaryDeltaColumn());
+                /// proton: ends.
 
                 for (const auto & transformer : asterisk->children)
                     IASTColumnsTransformer::transform(transformer, columns);
@@ -149,7 +159,9 @@ private:
                     throw Exception("Logical error: qualified asterisk must have exactly one child", ErrorCodes::LOGICAL_ERROR);
                 auto & identifier = child->children[0]->as<ASTTableIdentifier &>();
 
-                data.addTableColumns(identifier.name(), columns);
+                /// proton: starts. For join query, the `t.*` didn't include `_tp_delta` of any stream, so skip it
+                data.addTableColumns(identifier.name(), columns, [&](const String & column_name) { return column_name != ProtonConsts::RESERVED_DELTA_FLAG; });
+                /// proton: ends.
 
                 // QualifiedAsterisk's transformers start to appear at child 1
                 for (auto it = qualified_asterisk->children.begin() + 1; it != qualified_asterisk->children.end(); ++it)
@@ -536,6 +548,9 @@ std::vector<TableNeededColumns> normalizeColumnNamesExtractNeeded(
     {
         bool got_alias = aliases.contains(ident->name());
         bool allow_ambiguous = got_alias; /// allow ambiguous column overridden by an alias
+        /// proton: starts. Allow ambiguous _tp_delta in select query with join
+        allow_ambiguous |= ident->name() == ProtonConsts::RESERVED_DELTA_FLAG;
+        /// proton: ends.
 
         if (auto table_pos = IdentifierSemantic::chooseTableColumnMatch(*ident, tables, allow_ambiguous))
         {

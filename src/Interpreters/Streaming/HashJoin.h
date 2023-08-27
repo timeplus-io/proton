@@ -335,6 +335,9 @@ private:
     template <bool is_left_block>
     std::optional<Block> eraseExistingKeysAndRetractJoin(Block & left_block);
 
+    template <bool is_left_block>
+    void transformToOutputBlock(Block & joined_block) const;
+
 private:
     /// Only SERDE the clauses of join
     SERDE std::shared_ptr<TableJoin> table_join;
@@ -430,6 +433,10 @@ private:
     /// `rlj` -> right-left-join
     std::optional<size_t> left_delta_column_position_rlj;
     std::optional<size_t> right_delta_column_position_rlj;
+
+    /// `lrj` -> left-right-join
+    std::optional<size_t> left_delta_column_position_lrj;
+    std::optional<size_t> right_delta_column_position_lrj;
 
     UInt64 join_max_cached_bytes = 0;
 

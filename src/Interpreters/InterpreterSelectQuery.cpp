@@ -586,23 +586,24 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     std::unique_ptr<Names> new_required_result_column_names;
     if (!has_input)
     {
-        if (isStreaming() && data_stream_semantic_pair.isChangelogInput())
+        const auto & tables = joined_tables.tablesWithColumns();
+        assert(tables.size() <= 2);
+
+        /// FIXME: For multiple joins query, during rewriteMultipleJoins, we don't know whether need to emit changelog for `select *` of joined output, then it always add a temporary delta column
+        /// so we need to manually rewrite/remove it, for example: `SELECT * from vk_1 join vk_2 on vk_1.id = vk_2.id join vk_3 on vk_3.id`
+        /// After rewriteMultipleJoins => SELECT vk_1.*, vk_2.*, vk_3.*, 1 as `_tp_delta` from (select vk_1.*, vk_2.* from vk_1 join vk_2 on vk_1.id) as `--.s` join vk_3 on vk_1.id = vk_3.id
+        /// => SELECT vk_1.id, vk_2.id, vk_3.id, _tp_delta from (select vk_1.*, vk_2.* from vk_1 join vk_2 on vk_1.id) as `--.s` join vk_3 on vk_1.id = vk_3.id
+        if (joined_tables.tablesCount() > 1 && tables[0].table.alias == "--.s")
+            Streaming::rewriteTemporaryDeltaColumnInSelectQuery(getSelectQuery(), data_stream_semantic_pair.isChangelogOutput());
+
+        if (isStreaming() && (data_stream_semantic_pair.isChangelogInput() || data_stream_semantic_pair.isChangelogOutput()))
         {
             /// Rewrite select query to add back _tp_delta if it is not present
-            const auto & tables = joined_tables.tablesWithColumns();
-            assert (tables.size() <= 2);
-
-            auto left_input_data_stream_semantic = tables.front().output_data_stream_semantic;
-            std::optional<Streaming::DataStreamSemantic> right_input_data_stream_semantic;
-            if (tables.size() == 2)
-                right_input_data_stream_semantic = tables.back().output_data_stream_semantic;
-
             Streaming::ChangelogQueryVisitorMatcher data(
-                left_input_data_stream_semantic,
-                right_input_data_stream_semantic,
-                current_select_join_strictness,
-                current_select_has_aggregates,
+                data_stream_semantic_pair,
+                tables,
                 !required_result_column_names.empty(),
+                options.is_subquery,
                 query_info);
 
             Streaming::ChangelogQueryVisitor(data).visit(query_ptr);

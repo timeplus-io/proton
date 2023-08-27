@@ -1,9 +1,17 @@
 #include <Interpreters/Streaming/JoinStreamDescription.h>
 
+#include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Storages/IStorage.h>
 #include <Common/ProtonCommon.h>
 
-namespace DB::Streaming
+namespace DB
+{
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+}
+
+namespace Streaming
 {
 DataStreamSemantic getDataStreamSemantic(StoragePtr storage)
 {
@@ -23,38 +31,49 @@ void JoinStreamDescription::calculateColumnPositions(JoinStrictness strictness)
     if (hasPrimaryKey() || hasDeltaColumn())
         return;
 
-    /// Usually, column name formats:
+    /// Usually, the formats of column clashes:
     /// 1) for left table, `<column>`
     /// 2) for right table, `<table>.<column>`
-    auto col_proj = [this](std::string_view name) -> std::string_view {
-        if (name.starts_with(table_prefix))
-            return name.substr(table_prefix.size());
-        else
-            return name;
+    auto calc_column_position = [this](const auto & col_name) -> std::optional<size_t> {
+        if (input_header.has(col_name))
+            return input_header.getPositionByName(col_name);
+
+        auto col_name_with_table_prefix = table_with_columns.table.getQualifiedNamePrefix() + col_name;
+        if (input_header.has(col_name_with_table_prefix))
+            return input_header.getPositionByName(col_name_with_table_prefix);
+
+        return {};
     };
 
     /// If we can find primary key column in the header, compute their column position in the header.
     /// This is a query optimization since we push all of the primary key indexing / retract etc to join phase
     /// instead doing all of these in a separate changelog transform.
-    for (size_t pos = 0; const auto & col : input_header)
+    if (auto names = table_with_columns.getColumnNamesWithPrefix(ProtonConsts::PRIMARY_KEY_COLUMN_PREFIX); !names.empty())
     {
-        auto col_name = col_proj(col.name);
-        if (col_name.starts_with(ProtonConsts::PRIMARY_KEY_COLUMN_PREFIX))
+        for (const auto & name : names)
         {
-            if (!primary_key_column_positions)
-                primary_key_column_positions.emplace();
+            if (auto pos = calc_column_position(name); pos.has_value())
+            {
+                if (!primary_key_column_positions)
+                    primary_key_column_positions.emplace();
 
-            primary_key_column_positions->push_back(pos);
+                primary_key_column_positions->push_back(*pos);
+            }
         }
-
-        if (col_name.starts_with(ProtonConsts::VERSION_COLUMN_PREFIX))
-            version_column_position = pos;
-
-        if (col_name == ProtonConsts::RESERVED_DELTA_FLAG || col_name.ends_with(ProtonConsts::RESERVED_DELTA_FLAG))
-            delta_column_position = pos;
-
-        ++pos;
     }
+
+    /// Calculate version column position
+    if (auto names = table_with_columns.getColumnNamesWithPrefix(ProtonConsts::VERSION_COLUMN_PREFIX); !names.empty())
+    {
+        if (names.size() > 1)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Only support at most one version column, but got: {}", fmt::join(names, ", "));
+
+        version_column_position = calc_column_position(names[0]);
+    }
+
+    /// Calculate delta flag column position
+    if (table_with_columns.hasColumn(ProtonConsts::RESERVED_DELTA_FLAG))
+        delta_column_position = calc_column_position(ProtonConsts::RESERVED_DELTA_FLAG);
 
     assertValid();
 }
@@ -71,5 +90,6 @@ void JoinStreamDescription::assertValid() const
     /// If it is a keyed data stream, we are expecting `delta` column or `primary key + version column`
     /// are there in the input
     assert(Streaming::isAppendDataStream(data_stream_semantic) || (hasDeltaColumn() || (hasPrimaryKey() && hasVersionColumn())));
+}
 }
 }

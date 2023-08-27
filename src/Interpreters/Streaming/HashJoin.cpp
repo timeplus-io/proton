@@ -1076,14 +1076,14 @@ void HashJoin::postInit(const Block & left_header, const Block & output_header_,
             initHashMaps(join_results->maps->map_variants);
         }
 
-        /// We'd like to compute some reserved column positions for `the right block join left block` case
-        /// since we will need swap them before project the join results
         if (emitChangeLog())
         {
+            /// We'd like to compute some reserved column positions for `the right block join left block` case
+            /// since we will need swap them before project the join results
             if (left_data.join_stream_desc->hasDeltaColumn() && right_data.join_stream_desc->hasDeltaColumn())
             {
                 Block right_join_left_header = right_data.join_stream_desc->input_header;
-                joinBlockWithHashTable<false>(right_join_left_header, left_data.buffered_data->getCurrentHashBlocksPtr());
+                doJoinBlockWithHashTable<false>(right_join_left_header, left_data.buffered_data->getCurrentHashBlocksPtr());
 
                 for (size_t i = 0; const auto & col : right_join_left_header)
                 {
@@ -1091,6 +1091,20 @@ void HashJoin::postInit(const Block & left_header, const Block & output_header_,
                         left_delta_column_position_rlj = i;
                     else if (col.name.ends_with(ProtonConsts::RESERVED_DELTA_FLAG))
                         right_delta_column_position_rlj = i;
+
+                    ++i;
+                }
+
+                /// We'd like to compute some reserved column positions for `the left block join right block` case
+                /// since we will need swap them before project the join results
+                Block left_join_right_header = left_data.join_stream_desc->input_header;
+                doJoinBlockWithHashTable<true>(left_join_right_header, right_data.buffered_data->getCurrentHashBlocksPtr());
+                for (size_t i = 0; const auto & col : left_join_right_header)
+                {
+                    if (col.name == ProtonConsts::RESERVED_DELTA_FLAG)
+                        left_delta_column_position_lrj = i;
+                    else if (col.name.ends_with(ProtonConsts::RESERVED_DELTA_FLAG))
+                        right_delta_column_position_lrj = i;
 
                     ++i;
                 }
@@ -1109,9 +1123,24 @@ void HashJoin::transformHeader(Block & header)
     {
         joinBlockWithHashTable<true>(header, right_data.buffered_data->getCurrentHashBlocksPtr());
 
-        /// Fix the emit changelog header
-        if (emitChangeLog() && !header.has(ProtonConsts::RESERVED_DELTA_FLAG))
-            header.insert({DataTypeFactory::instance().get(TypeIndex::Int8), ProtonConsts::RESERVED_DELTA_FLAG});
+        /// Fix the emit changelog header, remove left/right delta, then append joined delta
+        if (emitChangeLog())
+        {
+            {
+                std::set<size_t> delta_pos;
+                for (size_t pos = 0; auto & col_with_type_name : header)
+                {
+                    if (col_with_type_name.name.ends_with(ProtonConsts::RESERVED_DELTA_FLAG))
+                        delta_pos.emplace(pos);
+
+                    ++pos;
+                }
+                header.erase(delta_pos);
+            }
+
+            if (!header.has(ProtonConsts::RESERVED_DELTA_FLAG))
+                header.insert({DataTypeFactory::instance().get(TypeIndex::Int8), ProtonConsts::RESERVED_DELTA_FLAG});
+        }
     }
     else
     {
@@ -1664,29 +1693,19 @@ Block HashJoin::joinBlockWithHashTable(Block & block, HashBlocksPtr target_hash_
 
     doJoinBlockWithHashTable<is_left_block>(block, std::move(target_hash_blocks));
 
-    auto rows = block.rows();
     if (retract_push_down && emit_changelog)
     {
-        if (rows)
-        {
-            if (!block.has(ProtonConsts::RESERVED_DELTA_FLAG))
-                addDeltaColumn(block, rows);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Retraction push down is not implemented");
 
-            if constexpr (!is_left_block)
-            {
-                /// Re-arrange columns according to output header
-                block.reorderColumnsInplace(output_header);
-                /// assertBlocksHaveEqualStructure(right_block, output_header, "Join Left");
-                /// assert(blocksHaveEqualStructure(right_block, output_header));
-            }
+        // if (!block.has(ProtonConsts::RESERVED_DELTA_FLAG))
+        //     addDeltaColumn(block);
 
-            return retract(block);
-        }
+        // transformToOutputBlock<is_left_block>(block);
+
+        // return retract(block);
     }
-    else if constexpr (!is_left_block)
-        if (rows > 0)
-            block.reorderColumnsInplace(output_header);
 
+    transformToOutputBlock<is_left_block>(block);
     return {};
 }
 
@@ -1913,7 +1932,11 @@ std::vector<Block> HashJoin::insertBlockToRangeBucketsAndJoin(Block block)
 
 std::vector<Block> HashJoin::insertLeftBlockToRangeBucketsAndJoin(Block left_block)
 {
-    return insertBlockToRangeBucketsAndJoin<true>(std::move(left_block));
+    auto joined_blocks = insertBlockToRangeBucketsAndJoin<true>(std::move(left_block));
+    for (auto & block : joined_blocks)
+        transformToOutputBlock<true>(block);
+
+    return joined_blocks;
 }
 
 std::vector<Block> HashJoin::insertRightBlockToRangeBucketsAndJoin(Block right_block)
@@ -1923,10 +1946,7 @@ std::vector<Block> HashJoin::insertRightBlockToRangeBucketsAndJoin(Block right_b
     auto joined_blocks = insertBlockToRangeBucketsAndJoin<false>(std::move(right_block));
 
     for (auto & block : joined_blocks)
-    {
-        if (block.rows())
-            block.reorderColumnsInplace(output_header);
-    }
+        transformToOutputBlock<false>(block);
 
     return joined_blocks;
 }
@@ -1963,27 +1983,7 @@ std::optional<Block> HashJoin::eraseExistingKeysAndRetractJoin(Block & block)
     /// Then do retract join
     doJoinBlockWithHashTable<is_left_block>(block, joined_data->buffered_data->getCurrentHashBlocksPtr());
 
-    if constexpr (!is_left_block)
-    {
-        /// If we keep retracting on single stream, there may no join results
-        /// Please note we didn't reorder columns according to output header if block is empty to save some cpu cycles
-        /// Caller shall check if the retracted block is empty and avoid pushing this empty block downstream since
-        /// this empty block's structure probably doesn't match the output header
-        if (block.rows() > 0)
-        {
-            /// Fix the delta column by swapping since the right block has the retract value but got renamed
-            if (right_delta_column_position_rlj)
-            {
-                assert(left_delta_column_position_rlj);
-
-                auto & right_retract_delta_col = block.getByPosition(*right_delta_column_position_rlj);
-                auto & left_delta_col = block.getByPosition(*left_delta_column_position_rlj);
-                std::swap(right_retract_delta_col.column, left_delta_col.column);
-            }
-
-            block.reorderColumnsInplace(output_header);
-        }
-    }
+    transformToOutputBlock<is_left_block>(block);
 
     /// Even empty block, we will need move back to indicate this is a retract block and we have processed it
     return std::move(block);
@@ -2184,6 +2184,60 @@ std::vector<HashJoin::RefListMultipleRef *> HashJoin::eraseOrAppendForPartialPri
     assert(multi_refs.size() == rows);
 
     return multi_refs;
+}
+
+template <bool is_left_block>
+void HashJoin::transformToOutputBlock(Block & joined_block) const
+{
+    /// Please note we didn't reorder columns according to output header if block is empty to save some cpu cycles
+    /// Caller shall check if the retracted block is empty and avoid pushing this empty block downstream since
+    /// this empty block's structure probably doesn't match the output header
+    if (!joined_block.rows())
+        return;
+
+    if constexpr (is_left_block)
+    {
+        /// For exmaple: c1(i, v, _tp_delta) join c2(i, v, _tp_delta)
+        /// (left join right)
+        /// joined block:   "i, v, _tp_delta, c2.i, c2.v, c2._tp_delta"
+        /// output header:  "i, v, c2.i, c2.v, _tp_delta"
+        if (right_delta_column_position_lrj)
+        {
+            assert(left_delta_column_position_lrj);
+
+            /// At first, remove right delta column (from back to front)
+            assert(*right_delta_column_position_lrj > *left_delta_column_position_lrj);
+            joined_block.erase(*right_delta_column_position_lrj);
+
+            /// Then move left delta column to back
+            auto left_delta_col = std::move(joined_block.getByPosition(*left_delta_column_position_lrj));
+            joined_block.erase(*left_delta_column_position_lrj);
+            joined_block.insert(std::move(left_delta_col));
+        }
+    }
+    else
+    {
+        /// For exmaple: c1(i, v, _tp_delta) join c2(i, v, _tp_delta)
+        /// (right join left)
+        /// joined block:   "c2.i, c2.v, c2._tp_delta, i, v, _tp_delta"
+        /// output header:  "i, v, c2.i, c2.v, _tp_delta"
+
+        /// Fix the delta column by swapping since the right block has the retract value but got renamed
+        if (right_delta_column_position_rlj)
+        {
+            assert(left_delta_column_position_rlj);
+
+            /// At first, move right delta column to left delta column
+            auto & right_retract_delta_col = joined_block.getByPosition(*right_delta_column_position_rlj);
+            auto & left_delta_col = joined_block.getByPosition(*left_delta_column_position_rlj);
+            left_delta_col.column = std::move(right_retract_delta_col.column);
+
+            /// Then remove right delta column, skip this operation since next reordering will ignore it
+            // joined_block.erase(*right_delta_column_position_rlj);
+        }
+
+        joined_block.reorderColumnsInplace(output_header);
+    }
 }
 
 void HashJoin::calculateWatermark()

@@ -82,6 +82,19 @@ String DatabaseAndTableWithAlias::getQualifiedNamePrefix(bool with_dot) const
     return (!alias.empty() ? alias : table) + (with_dot ? "." : "");
 }
 
+/// proton: starts.
+Names TableWithColumnNamesAndTypes::getColumnNamesWithPrefix(std::string_view prefix) const
+{
+    Names names_with_prefix;
+    for (const auto & name : names)
+    {
+        if (name.starts_with(prefix))
+            names_with_prefix.emplace_back(name);
+    }
+    return names_with_prefix;
+}
+/// proton: ends.
+
 std::vector<DatabaseAndTableWithAlias> getDatabaseAndTables(const ASTSelectQuery & select_query, const String & current_database)
 {
     std::vector<const ASTTableExpression *> tables_expression = getTableExpressions(select_query);
