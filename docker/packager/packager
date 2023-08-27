@@ -257,6 +257,12 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", required=True)
 
     parser.add_argument("--compiler", choices=(
+                                        "clang-16",
+                                        "clang-16-darwin",
+                                        "clang-16-darwin-aarch64",
+                                        "clang-16-aarch64",
+                                        "clang-16-ppc64le",
+                                        "clang-16-freebsd",
                                         "clang-15",
                                         "clang-15-darwin",
                                         "clang-15-darwin-aarch64",
@@ -265,7 +271,7 @@ if __name__ == "__main__":
                                         "clang-15-freebsd",
                                         "gcc-11"
                                     ),
-                                    default="clang-15")
+                                    default="clang-16")
 
     parser.add_argument("--sanitizer", choices=("address", "thread", "memory", "undefined", ""), default="")
     parser.add_argument("--split-binary", action="store_true")

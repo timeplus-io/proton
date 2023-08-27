@@ -3,7 +3,7 @@ if (NOT ENABLE_GWP_ASAN)
   return ()
 endif ()
 
-set(COMPILER_RT_GWP_ASAN_SRC_DIR "${ClickHouse_SOURCE_DIR}/contrib/llvm-project/compiler-rt/lib/gwp_asan")
+set(COMPILER_RT_GWP_ASAN_SRC_DIR "${proton_SOURCE_DIR}/contrib/llvm-project/compiler-rt/lib/gwp_asan")
 
 set(GWP_ASAN_SOURCES
   ${COMPILER_RT_GWP_ASAN_SRC_DIR}/common.cpp
@@ -17,7 +17,7 @@ set(GWP_ASAN_SOURCES
   ${COMPILER_RT_GWP_ASAN_SRC_DIR}/optional/options_parser.cpp
 )
 
-set(GWP_ASAN_HEADERS "${ClickHouse_SOURCE_DIR}/contrib/llvm-project/compiler-rt/lib")
+set(GWP_ASAN_HEADERS "${proton_SOURCE_DIR}/contrib/llvm-project/compiler-rt/lib")
 
 add_library(_gwp_asan ${GWP_ASAN_SOURCES})
 target_include_directories (_gwp_asan SYSTEM PUBLIC ${GWP_ASAN_HEADERS})

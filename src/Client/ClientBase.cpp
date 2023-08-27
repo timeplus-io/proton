@@ -3,7 +3,6 @@
 #include <Client/ClientBaseHelpers.h>
 #include <Client/TestHint.h>
 #include <Client/InternalTextLogs.h>
-#include <Client/TestTags.h>
 
 #include <iomanip>
 #include <string_view>
@@ -70,7 +69,7 @@
 #include "config_version.h"
 #include "config.h"
 
-#include <base/ReplxxLineReader.h>
+#include <Client/ReplxxLineReader.h>
 
 /// proton: starts
 #include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>

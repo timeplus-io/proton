@@ -58,8 +58,8 @@ private:
     std::shared_ptr<const Storages> getStoragesInternal() const;
     void updateSubscriptionsToNestedStorages(std::unique_lock<std::mutex> & lock) const;
 
-    std::shared_ptr<const Storages> nested_storages TSA_GUARDED_BY(mutex);
-    mutable CacheBase<UUID, Storage> ids_cache TSA_GUARDED_BY(mutex);
+    std::shared_ptr<const Storages> nested_storages; /// TSA_GUARDED_BY(mutex);
+    mutable CacheBase<UUID, Storage> ids_cache; /// TSA_GUARDED_BY(mutex);
     mutable std::list<OnChangedHandler> handlers_by_type[static_cast<size_t>(AccessEntityType::MAX)];
     mutable std::unordered_map<StoragePtr, scope_guard> subscriptions_to_nested_storages[static_cast<size_t>(AccessEntityType::MAX)];
     mutable std::mutex mutex;

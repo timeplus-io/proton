@@ -30,7 +30,7 @@ jobs:
             mkdir $GITHUB_WORKSPACE/ccache
             echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
 
-            ./docker/packager/packager --package-type binary --docker-image-version cmake.3.26.4 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+            ./docker/packager/packager --package-type binary --docker-image-version clang-16 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
             if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
               echo "Compiling proton Failed"
@@ -170,7 +170,7 @@ jobs:
             mkdir $GITHUB_WORKSPACE/ccache
             echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
 
-            ./docker/packager/packager --package-type binary --docker-image-version cmake.3.26.4 --build-type release --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+            ./docker/packager/packager --package-type binary --docker-image-version clang-16 --build-type release --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
             if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
               echo "Compiling proton Failed"
@@ -281,7 +281,7 @@ jobs:
             mkdir $GITHUB_WORKSPACE/ccache
             echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
 
-            ./docker/packager/packager --package-type binary --docker-image-version cmake.3.26.4 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+            ./docker/packager/packager --package-type binary --docker-image-version clang-16 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
             if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
               echo "Compiling proton Failed"

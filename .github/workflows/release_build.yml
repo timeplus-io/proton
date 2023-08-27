@@ -31,7 +31,7 @@ jobs:
         rm cache.tar.gz
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version cmake.3.26.4 --build-type release --proton-build --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-16 --build-type release --proton-build --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
         
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"
@@ -83,7 +83,7 @@ jobs:
         rm cache-arm.tar.gz
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version cmake.3.26.4 --build-type release --proton-build --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-16 --build-type release --proton-build --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
         docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
         cd $GITHUB_WORKSPACE/docker/server
 

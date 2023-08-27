@@ -6,7 +6,7 @@ FROM ubuntu:20.04
 ARG apt_archive="http://archive.ubuntu.com"
 RUN sed -i "s|http://archive.ubuntu.com|$apt_archive|g" /etc/apt/sources.list
 
-ENV DEBIAN_FRONTEND=noninteractive LLVM_VERSION=15
+ENV DEBIAN_FRONTEND=noninteractive LLVM_VERSION=16
 
 RUN apt-get update \
     && apt-get install \
