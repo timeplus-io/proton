@@ -1,4 +1,4 @@
-set (SOURCE_DIR "${CMAKE_SOURCE_DIR}/contrib/snappy")
+set (SOURCE_DIR "${PROJECT_SOURCE_DIR}/contrib/snappy")
 
 set (SNAPPY_IS_BIG_ENDIAN 0)
 

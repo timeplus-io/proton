@@ -40,7 +40,7 @@ if (SANITIZE)
         # RelWithDebInfo, and downgrade optimizations to -O1 but not to -Og, to
         # keep the binary size down.
         # TODO: try compiling with -Og and with ld.gold.
-        set (MSAN_FLAGS "-fsanitize=memory -fsanitize-memory-use-after-dtor -fsanitize-memory-track-origins -fno-optimize-sibling-calls -fsanitize-blacklist=${CMAKE_SOURCE_DIR}/tests/msan_suppressions.txt")
+        set (MSAN_FLAGS "-fsanitize=memory -fsanitize-memory-use-after-dtor -fsanitize-memory-track-origins -fno-optimize-sibling-calls -fsanitize-blacklist=${PROJECT_SOURCE_DIR}/tests/msan_suppressions.txt")
 
         set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SAN_FLAGS} ${MSAN_FLAGS}")
         set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${SAN_FLAGS} ${MSAN_FLAGS}")
@@ -55,7 +55,7 @@ if (SANITIZE)
     elseif (SANITIZE STREQUAL "thread")
         set (TSAN_FLAGS "-fsanitize=thread")
         if (COMPILER_CLANG)
-            set (TSAN_FLAGS "${TSAN_FLAGS} -fsanitize-blacklist=${CMAKE_SOURCE_DIR}/tests/tsan_suppressions.txt")
+            set (TSAN_FLAGS "${TSAN_FLAGS} -fsanitize-blacklist=${PROJECT_SOURCE_DIR}/tests/tsan_suppressions.txt")
         endif()
 
 
@@ -80,7 +80,7 @@ if (SANITIZE)
             set(UBSAN_FLAGS "${UBSAN_FLAGS} -fno-sanitize=unsigned-integer-overflow")
         endif()
         if (COMPILER_CLANG)
-            set (UBSAN_FLAGS "${UBSAN_FLAGS} -fsanitize-blacklist=${CMAKE_SOURCE_DIR}/tests/ubsan_suppressions.txt")
+            set (UBSAN_FLAGS "${UBSAN_FLAGS} -fsanitize-blacklist=${PROJECT_SOURCE_DIR}/tests/ubsan_suppressions.txt")
         endif()
 
         set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SAN_FLAGS} ${UBSAN_FLAGS}")
