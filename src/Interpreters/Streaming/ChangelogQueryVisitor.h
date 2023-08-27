@@ -57,7 +57,6 @@ public:
     auto && newRequiredResultColumnNames() { return std::move(new_required_result_column_names); }
 
 private:
-    void rewriteAsSubquery(ASTTableExpression & table_expr);
     void addDeltaColumn(ASTSelectQuery & select_query, bool asterisk_include_delta);
 
     Names new_required_result_column_names;

@@ -11,7 +11,12 @@
 #include <Parsers/IAST.h>
 
 /// proton: starts.
+#include <Interpreters/Streaming/RewriteAsSubquery.h>
 #include <Interpreters/Streaming/WindowCommon.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTSubquery.h>
+#include <Storages/StorageView.h>
+#include <TableFunctions/TableFunctionFactory.h>
 /// proton: ends.
 
 namespace DB
@@ -32,7 +37,9 @@ PredicateExpressionsOptimizer::PredicateExpressionsOptimizer(
 {
 }
 
-bool PredicateExpressionsOptimizer::optimize(ASTSelectQuery & select_query)
+/// proton: starts.
+bool PredicateExpressionsOptimizer::optimize(ASTSelectQuery & select_query, ASTPtr & optimized_proxy_stream_query)
+/// proton: ends.
 {
     if (!enable_optimize_predicate_expression)
         return false;
@@ -54,7 +61,9 @@ bool PredicateExpressionsOptimizer::optimize(ASTSelectQuery & select_query)
     const auto & tables_predicates = extractTablesPredicates(select_query.where(), select_query.prewhere());
 
     if (!tables_predicates.empty())
-        return tryRewritePredicatesToTables(select_query.refTables()->children, tables_predicates);
+        /// proton: starts.
+        return tryRewritePredicatesToTables(select_query.refTables()->children, tables_predicates, optimized_proxy_stream_query);
+        /// proton: ends.
 
     return false;
 }
@@ -106,6 +115,11 @@ std::vector<ASTs> PredicateExpressionsOptimizer::extractTablesPredicates(const A
             return {};   /// Not optimized when predicate contains stateful function or indeterministic function or window functions
         }
 
+        /// proton: starts. Skip pushdown predicate include `window_start` or `window_end` (added by table function)
+        if (expression_info.is_window_start_or_end_function)
+            continue;
+        /// proton: ends.
+
         if (!expression_info.is_array_join)
         {
             if (expression_info.unique_reference_tables_pos.size() == 1)
@@ -121,7 +135,9 @@ std::vector<ASTs> PredicateExpressionsOptimizer::extractTablesPredicates(const A
     return tables_predicates;    /// everything is OK, it can be optimized
 }
 
-bool PredicateExpressionsOptimizer::tryRewritePredicatesToTables(ASTs & tables_element, const std::vector<ASTs> & tables_predicates)
+/// proton: starts.
+bool PredicateExpressionsOptimizer::tryRewritePredicatesToTables(ASTs & tables_element, const std::vector<ASTs> & tables_predicates, ASTPtr & optimized_proxy_stream_query)
+/// proton: ends.
 {
     bool is_rewrite_tables = false;
 
@@ -154,8 +170,20 @@ bool PredicateExpressionsOptimizer::tryRewritePredicatesToTables(ASTs & tables_e
             if (table_element->table_join && isFull(table_element->table_join->as<ASTTableJoin>()->kind))
                 break;  /// Skip left and right table optimization
 
-            is_rewrite_tables |= tryRewritePredicatesToTable(tables_element[table_pos], tables_predicates[table_pos],
-                tables_with_columns[table_pos]);
+            /// proton: starts. Allow push down predicates for ProxyStream
+            if (table_element->table_expression && table_element->table_expression->as<ASTTableExpression &>().table_function)
+            {
+                is_rewrite_tables |= tryRewritePredicatesToTableFunction(
+                    table_element->table_expression->as<ASTTableExpression &>(),
+                    tables_predicates[table_pos],
+                    tables_with_columns[table_pos],
+                    /*is_left*/ table_pos == 0,
+                    optimized_proxy_stream_query);
+            }
+            else
+                is_rewrite_tables |= tryRewritePredicatesToTable(tables_element[table_pos], tables_predicates[table_pos],
+                    tables_with_columns[table_pos]);
+            /// proton: ends.
 
             if (table_element->table_join && isRight(table_element->table_join->as<ASTTableJoin>()->kind))
                 break;  /// Skip left table optimization
@@ -303,6 +331,99 @@ bool PredicateExpressionsOptimizer::tryMovePredicatesFromWhereToHaving(ASTSelect
     }
 
     return false;
+}
+
+bool PredicateExpressionsOptimizer::tryRewritePredicatesToTableFunction(
+    ASTTableExpression & table_expression,
+    const ASTs & table_predicates,
+    const TableWithColumnNamesAndTypes & table_columns,
+    bool is_left,
+    ASTPtr & optimized_proxy_stream_query) const
+{
+    assert(table_expression.table_function);
+    if (table_predicates.empty())
+        return false;
+
+    ASTFunction * table_func = table_expression.table_function->as<ASTFunction>();
+    if (!TableFunctionFactory::instance().isSupportSubqueryTableFunctionName(table_func->name))
+        return false;
+
+    /// NOTE: Cannot push down predicates to table function `changelog(...)`, since the results may be inconsistent.
+    /// For example:
+    ///     with cte as (select id, status from stream) select * from changelog(cte, id) where status = 1;
+    ///     (id, status)  <<  (1, 1) (1, 0)
+    /// Without pushdown results:
+    ///     id      status     _tp_delta
+    ///     1           1           1
+    ///     1           1           -1
+    /// But pushdown results:
+    ///     id      status     _tp_delta
+    ///     1           1           1
+    /// In addition, `changelog(...)` always seek to earliest, so even if there are event predicates, still works without pushdown
+    if (Streaming::isTableFunctionChangelog(table_func))
+        return false;
+
+    /// Only can push down predicates to proxy subquery or view
+    /// Firstly, try extract proxy subquery from table function
+    ASTPtr proxy_subquery;
+    ASTPtr table_ast;
+    do
+    {
+        assert(table_func->arguments->children.size() >= 1);
+        table_ast = table_func->arguments->children[0];
+        if (table_ast->as<ASTSubquery>())
+        {
+            proxy_subquery = table_ast;
+            break;
+        }
+
+        table_func = table_ast->as<ASTFunction>();
+        /// Try extract subquery for storage view
+        if (!table_func)
+        {
+            auto storage_id = tryGetStorageID(table_ast);
+            assert(storage_id.has_value());
+            if (storage_id.value().database_name.empty())
+                storage_id.value().database_name = getContext()->getCurrentDatabase();
+
+            if (auto storage = DatabaseCatalog::instance().getTable(*storage_id, getContext()); storage->as<StorageView>())
+            {
+                proxy_subquery = std::make_shared<ASTSubquery>();
+                proxy_subquery->children.emplace_back(storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query->clone());
+                break;
+            }
+        }
+    } while (table_func);
+
+    if (!proxy_subquery)
+        return false;
+
+    PredicateRewriteVisitor::Data data(
+        getContext(),
+        table_predicates,
+        table_columns,
+        enable_optimize_predicate_expression_to_final_subquery,
+        allow_push_predicate_when_subquery_contains_with);
+
+    if (is_left)
+    {
+        /// For left table function, save rewritten proxy stream query
+        PredicateRewriteVisitor(data).visit(proxy_subquery);
+        /// The `optimized_proxy_stream_query` will be used for `ProxyStream::read(...)`
+        optimized_proxy_stream_query = data.is_rewrite ? proxy_subquery->as<ASTSubquery &>().children[0] : nullptr;
+        return false; /// Always return false (no need to analyze again) even if the original left table ast is written, but it doesn't be used
+    }
+    else
+    {
+        /// For right table function, rewrite as subquery
+        /// For exmaple:
+        /// `WITH cte as (select i from t) SELECT * FROM t1 JOIN tumble(cte, ...) as t2 where t2.i > 1`
+        /// => `WITH cte as (select i from t) SELECT * FROM t1 JOIN (select * from tumble(cte, ...) where i > 1) as t2 where t2.i > 1`
+        /// Next, we can do further pushdown optimization in joined subquery (Same as above for left table function)
+        auto subquery = Streaming::rewriteAsSubquery(table_expression);
+        PredicateRewriteVisitor(data).visit(subquery);
+        return true; /// Rewritten the original right table ast
+    }
 }
 /// proton: ends.
 

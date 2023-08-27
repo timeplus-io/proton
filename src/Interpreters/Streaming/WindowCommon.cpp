@@ -159,6 +159,12 @@ ALWAYS_INLINE bool isTableFunctionTable(const ASTFunction * ast)
     return !strcasecmp("table", ast->name.c_str());
 }
 
+ALWAYS_INLINE bool isTableFunctionChangelog(const ASTFunction * ast)
+{
+    assert(ast);
+    return !strcasecmp("changelog", ast->name.c_str());
+}
+
 ASTs checkAndExtractTumbleArguments(const ASTFunction * func_ast)
 {
     assert(isTableFunctionTumble(func_ast));

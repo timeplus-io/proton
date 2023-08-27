@@ -58,6 +58,8 @@ struct TreeRewriterResult
     bool streaming = true;
     bool has_group_by = false;
     bool hasAggregation() const noexcept { return has_group_by || !aggregates.empty(); }
+
+    ASTPtr optimized_proxy_stream_query; /// Optimized proxy subquery/view_query in ProxyStream
     /// proton: ends
 
     /// The backward mapping for array_join_alias_to_name.

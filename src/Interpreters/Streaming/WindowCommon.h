@@ -88,6 +88,7 @@ bool isTableFunctionTumble(const ASTFunction * ast);
 bool isTableFunctionHop(const ASTFunction * ast);
 bool isTableFunctionTable(const ASTFunction * ast);
 bool isTableFunctionSession(const ASTFunction * ast);
+bool isTableFunctionChangelog(const ASTFunction * ast);
 
 /// Note: the extracted arguments is whole (include omitted parameters represented by an empty ASTPtr)
 /// for example:

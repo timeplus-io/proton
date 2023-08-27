@@ -327,6 +327,61 @@
         {"query_id":"9902", "expected_results":[[3],[8]]},
         {"query_id":"9903", "expected_results":[[3]]}
       ]
+    },
+    {
+      "id": 13,
+      "tags": ["Disable some pushdown optimization for table function"],
+      "name": "#3064",
+      "description": "Covering pushdown optimization for table function",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query": "drop stream if exists test_stream_3064_l"},
+            {"client":"python", "query_type": "table", "query": "drop stream if exists test_stream_3064_r"},
+            {"client":"python", "query_type": "table", "exist": "test_stream_3064_l", "exist_wait":2, "wait":1, "query": "create stream test_stream_3064_l(i int, k string, val float)"},
+            {"client":"python", "query_type": "table", "exist": "test_stream_3064_r", "exist_wait":2, "wait":1, "query": "create stream test_stream_3064_r(j int, k2 string, status int)"},
+            {"client":"python", "query_type": "stream", "query_id":"9900", "depends_on_stream":"test_stream_3064_r", "wait":1, "query":"with cte as (select i, k, val, j, k2, status from test_stream_3064_l as a inner join test_stream_3064_r as b on a.k = b.k2) select * from changelog(cte, i , k) where status = 1"},
+            {"client":"python", "query_type": "table", "depends_on":"9900", "wait":1, "query": "insert into test_stream_3064_l(i, k, val) values (1, 'k', 11.1) (2, 'k', 33.3) (1, 'k2', 55.5) (2, 'k2', 77.7)"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into test_stream_3064_r(j, k2, status) values (1, 'k', 1)"},
+            {"client":"python", "query_type": "table", "query": "insert into test_stream_3064_r(j, k2, status) values (2, 'k2', 1)"},
+            {"client":"python", "query_type": "table", "kill": "9900", "kill_wait":3, "query": "insert into test_stream_3064_r(j, k2, status) values (1, 'k', 0)"}
+          ]
+        },
+        {
+          "statements": [
+            {"client":"python", "query_type": "stream", "query_id":"9901", "query_end_timer": 2, "query": "with cte as (select * from test_stream_3064_l) select i, k, val from tumble(cte, 2s) where _tp_time > earliest_ts() and window_start > 0"}
+          ]
+        },
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query": "drop view if exists test_stream_3064_v"},
+            {"client":"python", "query_type": "table", "exist": "test_stream_3064_v", "exist_wait":2, "wait":1, "query": "create view test_stream_3064_v as select * from test_stream_3064_l"},
+            {"client":"python", "query_type": "stream", "query_id":"9902", "depends_on_stream": "test_stream_3064_v", "wait":1, "query_end_timer":2, "drop_view":"test_stream_3064_v", "drop_view_wait":1, "query": "select i, k, val from tumble(test_stream_3064_v, 2s) where _tp_time > earliest_ts() and window_start > 0"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":[
+          [1, "k", 11.1, 1, "k", 1, 1],
+          [2, "k", 33.3, 1, "k", 1, 1],
+          [1, "k2", 55.5, 2, "k2", 1, 1],
+          [2, "k2", 77.7, 2, "k2", 1, 1],
+          [1, "k", 11.1, 1, "k", 1, -1],
+          [2, "k", 33.3, 1, "k", 1, -1]]
+        },
+        {"query_id":"9901", "expected_results":[
+            [1, "k", 11.1],
+            [2, "k", 33.3],
+            [1, "k2", 55.5],
+            [2, "k2", 77.7]]
+        },
+        {"query_id":"9902", "expected_results":[
+            [1, "k", 11.1],
+            [2, "k", 33.3],
+            [1, "k2", 55.5],
+            [2, "k2", 77.7]]
+        }
+      ]
     }
   ]
 }

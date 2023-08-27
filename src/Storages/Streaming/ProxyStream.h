@@ -9,7 +9,6 @@
 
 namespace DB
 {
-class ASTSelectQuery;
 class ColumnsDescription;
 struct StorageID;
 
@@ -61,8 +60,6 @@ public:
     bool hasGlobalAggregation() const { return has_global_aggr; }
 
     bool isProxyingSubqueryOrView() const;
-    ASTPtr replaceWithSubquery(ASTSelectQuery & outer_query) const;
-    ASTPtr restoreProxyStreamName(ASTSelectQuery & select_query, const ASTPtr & saved_proxy_stream) const;
 
     bool isRemote() const override;
     bool supportsParallelInsert() const override;

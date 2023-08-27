@@ -20,7 +20,9 @@ class PredicateExpressionsOptimizer : WithContext
 public:
     PredicateExpressionsOptimizer(ContextPtr context_, const TablesWithColumns & tables_with_columns_, const Settings & settings_);
 
-    bool optimize(ASTSelectQuery & select_query);
+    /// proton: starts.
+    bool optimize(ASTSelectQuery & select_query, ASTPtr & optimized_proxy_stream_query);
+    /// proton: ends.
 
 private:
     const bool enable_optimize_predicate_expression;
@@ -30,7 +32,9 @@ private:
 
     std::vector<ASTs> extractTablesPredicates(const ASTPtr & where, const ASTPtr & prewhere);
 
-    bool tryRewritePredicatesToTables(ASTs & tables_element, const std::vector<ASTs> & tables_predicates);
+    /// proton: starts.
+    bool tryRewritePredicatesToTables(ASTs & tables_element, const std::vector<ASTs> & tables_predicates, ASTPtr & optimized_proxy_stream_query);
+    /// proton: ends.
 
     bool tryRewritePredicatesToTable(
         ASTPtr & table_element, const ASTs & table_predicates, const TableWithColumnNamesAndTypes & table_columns) const;
@@ -39,6 +43,13 @@ private:
 
     /// proton: starts.
     bool tryMovePredicatesFromWhereToHaving(ASTSelectQuery & select_query);
+
+    bool tryRewritePredicatesToTableFunction(
+        ASTTableExpression & table_expression,
+        const ASTs & table_predicates,
+        const TableWithColumnNamesAndTypes & table_columns,
+        bool is_left,
+        ASTPtr & optimized_proxy_stream_query) const;
     /// proton: ends.
 };
 

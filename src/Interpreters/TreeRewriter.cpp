@@ -1286,7 +1286,9 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
         markTupleLiteralsAsLegacy(query);
 
     /// Push the predicate expression down to subqueries. The optimization should be applied to both initial and secondary queries.
-    result.rewrite_subqueries = PredicateExpressionsOptimizer(getContext(), tables_with_columns, settings).optimize(*select_query);
+    /// proton: starts. Save `optimized_proxy_stream_query`
+    result.rewrite_subqueries = PredicateExpressionsOptimizer(getContext(), tables_with_columns, settings).optimize(*select_query, result.optimized_proxy_stream_query);
+    /// proton: ends.
 
     TreeOptimizer::optimizeIf(query, result.aliases, settings.optimize_if_chain_to_multiif);
 

@@ -7,9 +7,6 @@
 #include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Interpreters/Streaming/TimestampFunctionDescription.h>
 #include <Interpreters/TreeRewriter.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTSubquery.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/Streaming/ChangelogConvertTransformStep.h>
@@ -32,19 +29,6 @@ namespace Streaming
 {
 namespace
 {
-ASTTableExpression * getFirstTableExpression(ASTSelectQuery & select_query)
-{
-    if (!select_query.tables() || select_query.tables()->children.empty())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: no stream expression in view select AST");
-
-    auto * select_element = select_query.tables()->children[0]->as<ASTTablesInSelectQueryElement>();
-
-    if (!select_element->table_expression)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: incorrect stream expression");
-
-    return select_element->table_expression->as<ASTTableExpression>();
-}
-
 ContextMutablePtr createProxySubqueryContext(const ContextPtr & context, const SelectQueryInfo & query_info, bool is_streaming)
 {
     auto sub_context = Context::createCopy(context);
@@ -189,14 +173,17 @@ void ProxyStream::doRead(
     size_t num_streams)
 {
     /// If this storage is built from subquery
-    if (query_info.proxy_stream_query)
+    if (query_info.optimized_proxy_stream_query)
     {
-        if (!query_info.proxy_stream_query->as<ASTSelectWithUnionQuery>())
+        if (!query_info.optimized_proxy_stream_query->as<ASTSelectWithUnionQuery>())
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected optimized ProxyStream query");
 
         auto sub_context = createProxySubqueryContext(context_, query_info, isStreaming());
         auto interpreter = std::make_unique<InterpreterSelectWithUnionQuery>(
-            query_info.proxy_stream_query->clone(), sub_context, SelectQueryOptions().subquery().noModify(), column_names);
+            query_info.optimized_proxy_stream_query,
+            sub_context,
+            SelectQueryOptions().subquery().noModify(),
+            column_names);
 
         interpreter->ignoreWithTotals();
         interpreter->buildQueryPlan(query_plan);
@@ -547,77 +534,6 @@ bool ProxyStream::isProxyingSubqueryOrView() const
         return true;
 
     return false;
-}
-
-/// For examples:
-/// Assume `test_v` view as `select i, s, _tp_time from test`
-/// 1) Query-1:
-///     @outer_query: with cte as select i, s, _tp_time from test select sum(i) from tumble(cte, 2s)
-///    Replaced:
-///     @outer_query: with cte as select i, s, _tp_time from test select sum(i) from (select i, s, _tp_time from test)
-///     @return (saved_proxy_stream): tumble(cte, 2s)
-/// 2) Query-2:
-///     @outer_query: select i, s, _tp_time from table(test_v)
-///    Replaced:
-///     @outer_query: select i from (select i, s, _tp_time from test)
-///     @return (saved_proxy_stream): table(test_v)
-ASTPtr ProxyStream::replaceWithSubquery(ASTSelectQuery & outer_query) const
-{
-    assert(isProxyingSubqueryOrView());
-
-    ASTTableExpression * table_expression = getFirstTableExpression(outer_query);
-
-    if (!table_expression || !table_expression->table_function)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: incorrect stream expression");
-
-    DatabaseAndTableWithAlias db_table(*table_expression);
-    String alias = db_table.alias.empty() ? db_table.table : db_table.alias;
-
-    ASTPtr saved_proxy_stream = table_expression->table_function;
-    table_expression->table_function = {};
-    table_expression->subquery = std::make_shared<ASTSubquery>();
-    table_expression->subquery->setAlias(alias);
-    if (subquery)
-        table_expression->subquery->children.push_back(subquery->children[0]->clone());
-    else
-        table_expression->subquery->children.push_back(getInMemoryMetadataPtr()->getSelectQuery().inner_query->clone());
-
-    for (auto & child : table_expression->children)
-        if (child.get() == saved_proxy_stream.get())
-            child = table_expression->subquery;
-
-    return saved_proxy_stream;
-}
-
-/// For examples (follow the above `replaceWithSubquery`):
-/// 1) Query-1:
-///     @outer_query (optimized): with cte as select i, s, _tp_time from test select sum(i) from (select i from test)
-///     @saved_proxy_stream: tumble(cte, 2s)
-///    Restored:
-///     @outer_query: with cte as select i, s, _tp_time from test select sum(i) from tumble(cte, 2s)
-///     @return (optimized_proxy_stream_query): (select i from test)
-///     @
-/// 2) Query-2:
-///     @outer_query: select i from (select i from test)
-///     @saved_proxy_stream: table(test_v)
-///    Restored:
-///     @outer_query: select i from table(test_v)
-///     @return (optimized_proxy_stream_query): (select i from test)
-ASTPtr ProxyStream::restoreProxyStreamName(ASTSelectQuery & outer_query, const ASTPtr & saved_proxy_stream) const
-{
-    ASTTableExpression * table_expression = getFirstTableExpression(outer_query);
-
-    if (!table_expression->subquery)
-        throw Exception("Logical error: incorrect stream expression", ErrorCodes::LOGICAL_ERROR);
-
-    ASTPtr subquery = table_expression->subquery;
-    table_expression->subquery = {};
-    table_expression->table_function = saved_proxy_stream;
-
-    for (auto & child : table_expression->children)
-        if (child.get() == subquery.get())
-            child = saved_proxy_stream;
-    return subquery->children[0];
 }
 
 DataStreamSemantic ProxyStream::dataStreamSemantic() const

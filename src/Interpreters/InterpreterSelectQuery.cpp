@@ -655,33 +655,12 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     if (storage)
         view = dynamic_cast<StorageView *>(storage.get());
 
-    /// proton: starts. If ProxyStream over a view or subquery like CTE, we are going to rewrite it.
-    Streaming::ProxyStream * proxy_stream = nullptr;
-    if (storage)
-    {
-        if (auto * proxy = storage->as<Streaming::ProxyStream>(); proxy && proxy->isProxyingSubqueryOrView())
-            proxy_stream = proxy;
-    }
-    /// proton: ends.
-
     auto analyze = [&] (bool try_move_to_prewhere)
     {
         /// Allow push down and other optimizations for VIEW: replace with subquery and rewrite it.
         ASTPtr view_table;
         if (view)
             view->replaceWithSubquery(getSelectQuery(), view_table, metadata_snapshot);
-
-        /// proton: starts.
-        /// Allow push down and other optimizations for ProxyStream: replace with subquery and rewrite it. For exmaples:
-        ///  `with cte as select * from test select sum(i) from tumble(cte, 2s) where _tp_sn > 0`
-        /// Replaced and optimized:
-        ///  `select sum(i) from (select i from test where _tp_sn > 0)`
-        /// NOTE: Through called `ProxyStream::replaceWithSubquery` and `ProxyStream::restoreProxyStreamName`,
-        /// we will get an optimized subquery for ProxyStream (@query_info.proxy_stream_query)
-        ASTPtr saved_proxy_stream;
-        if (proxy_stream)
-            saved_proxy_stream = proxy_stream->replaceWithSubquery(getSelectQuery());
-        /// proton: ends.
 
         TreeRewriterResult tree_rewriter_result(source_header.getNamesAndTypesList(), storage, storage_snapshot);
         tree_rewriter_result.streaming = isStreaming();
@@ -695,6 +674,11 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             table_join);
 
         checkEmitVersion();
+
+        /// If `optimized_proxy_stream_query` exists, skip reassign current `syntax_analyzer_result->optimized_proxy_stream_query`,
+        /// since it may be nullptr after some optimizations at first time
+        if (!query_info.optimized_proxy_stream_query)
+            query_info.optimized_proxy_stream_query = syntax_analyzer_result->optimized_proxy_stream_query;
         /// proton: ends
 
         query_info.syntax_analyzer_result = syntax_analyzer_result;
@@ -716,15 +700,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             query_info.view_query = view->restoreViewName(getSelectQuery(), view_table);
             view = nullptr;
         }
-
-        /// proton: starts.
-        if (proxy_stream)
-        {
-            /// Restore original proxy stream name. Save rewritten subquery for future usage in StreamProxy.
-            query_info.proxy_stream_query = proxy_stream->restoreProxyStreamName(getSelectQuery(), saved_proxy_stream);
-            proxy_stream = nullptr;
-        }
-        /// proton: ends.
 
         if (try_move_to_prewhere && storage && storage->canMoveConditionsToPrewhere() && query.where() && !query.prewhere())
         {
