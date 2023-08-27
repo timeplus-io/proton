@@ -6,7 +6,7 @@
 #include <Client/IServerConnection.h>
 #include <Client/LocalConnection.h>
 #include <IO/ConnectionTimeouts.h>
-#include <base/LineReader.h>
+#include <Client/LineReader.h>
 #include <thread>
 
 
