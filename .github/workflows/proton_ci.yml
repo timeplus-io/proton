@@ -131,8 +131,9 @@ jobs:
         pip install pyyaml==5.3.1
 
         pip install -r helpers/requirements.txt
+        df -h
         python ci_runner.py --settings=redp,nativelog
-
+        df -h
         echo "check test result"
         cat $GITHUB_WORKSPACE/tests/stream/.status
         cat $GITHUB_WORKSPACE/tests/stream/.status | grep nativelog:ExitCode.OK | grep redp:ExitCode.OK
