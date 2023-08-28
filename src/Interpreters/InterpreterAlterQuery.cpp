@@ -15,13 +15,6 @@
 #include <Storages/PartitionCommands.h>
 #include <Common/typeid_cast.h>
 
-/// proton: starts
-#include <Parsers/queryToString.h>
-#include <DistributedMetadata/CatalogService.h>
-#include <Interpreters/Streaming/BlockUtils.h>
-#include <Interpreters/Streaming/DDLHelper.h>
-/// proton: ends
-
 #include <base/insertAtEnd.h>
 
 #include <algorithm>
@@ -37,38 +30,6 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int STREAM_IS_READ_ONLY;
     extern const int UNKNOWN_STREAM;
-}
-
-namespace
-{
-    void setupColumnIfNotSet(ContextMutablePtr ctx, const ASTAlterQuery & alter)
-    {
-        if (alter.command_list->children.empty() || ctx->getQueryParameters().contains("column"))
-            return;
-
-        for (const auto & child : alter.command_list->children)
-        {
-            if (auto * cmd = child->as<ASTAlterCommand>())
-            {
-                if (cmd->type == ASTAlterCommand::Type::ADD_COLUMN || cmd->type == ASTAlterCommand::Type::MODIFY_COLUMN)
-                {
-                    const auto & column = cmd->col_decl->as<ASTColumnDeclaration &>();
-                    if (!column.name.starts_with("_tp_"))
-                    {
-                        return ctx->setQueryParameter("column", column.name);
-                    }
-                }
-                else if (cmd->type == ASTAlterCommand::Type::DROP_COLUMN || cmd->type == ASTAlterCommand::Type::RENAME_COLUMN)
-                {
-                    String col = queryToString(cmd->column);
-                    if (!col.starts_with("_tp_"))
-                    {
-                        return ctx->setQueryParameter("column", col);
-                    }
-                }
-            }
-        }
-    }
 }
 
 InterpreterAlterQuery::InterpreterAlterQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_) : WithMutableContext(context_), query_ptr(query_ptr_)
@@ -162,12 +123,6 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
         alter_commands.validate(metadata, getContext());
         alter_commands.prepare(metadata);
         table->checkAlterIsPossible(alter_commands, getContext());
-
-        /// proton: start
-        if (alterTableDistributed(alter))
-            return {};
-        /// proton: end
-
         table->alter(alter_commands, getContext(), alter_lock);
     }
 
@@ -469,104 +424,4 @@ void InterpreterAlterQuery::extendQueryLogElemImpl(QueryLogElement & elem, const
         }
     }
 }
-
-/// proton: start
-bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
-{
-    auto ctx = getContext();
-    if (!ctx->isDistributedEnv())
-        return false;
-
-    const String & database = query.getDatabase().empty() ? ctx->getCurrentDatabase() : query.getDatabase();
-    String payload;
-    if (ctx->isLocalQueryFromTCP())
-    {
-        /// We assume it is a `Stream`, so either `on local` or `not exists but is virtual`，
-        /// and try do distributed ddl operation.
-        /// NOTE: we can not check it from `CatalogService`, there are some reasons:
-        /// 1）When a table successfully created but failed to startup, will not update it in CatalogService
-        /// 2) When a table successfully created and startup, but fail to update it in CatalogService.
-        auto table = DatabaseCatalog::instance().tryGetTable({database, query.getTable()}, ctx);
-        if (!table || table->getName() == "Stream" || table->getName() == "MaterializedView")
-        {
-            /// Build json payload here from SQL statement
-            payload = Streaming::getJSONFromAlterQuery(query);
-            ctx->setDistributedDDLOperation(true);
-        }
-        else
-            return false;
-    }
-    else
-    {
-        payload = ctx->getQueryParameters().at("_payload");
-    }
-
-    if (ctx->isDistributedDDLOperation())
-    {
-        const auto & catalog_service = CatalogService::instance(ctx->getGlobalContext());
-        auto tables = catalog_service.findTableByName(database, query.getTable());
-        if (tables.empty())
-            throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} does not exist.", query.getDatabase(), query.getTable());
-
-        if (tables[0]->engine != "Stream" && tables[0]->engine != "MaterializedView")
-            /// FIXME: We only support `Stream` and 'MaterializedView' for now
-            return false;
-
-        assert(!ctx->getCurrentQueryId().empty());
-
-        auto * log = &Poco::Logger::get("InterpreterAlterQuery");
-
-        auto query_str = queryToString(query);
-        LOG_INFO(log, "Altering stream query={} query_id={}", query_str, ctx->getCurrentQueryId());
-
-        String uuid = toString(tables[0]->uuid);
-        /// get inner table uuid for materialized view
-        if (tables[0]->engine == "MaterializedView")
-        {
-            auto targets = catalog_service.findTableByName(database, fmt::format(".inner.target-id.{}", uuid));
-            if (targets.empty())
-                throw Exception(
-                    ErrorCodes::UNKNOWN_STREAM,
-                    "Inner table of materialized view {}.{} does not exist.",
-                    query.getDatabase(),
-                    query.getTable());
-
-            uuid = toString(targets[0]->uuid);
-        }
-
-        std::vector<std::pair<String, String>> string_cols
-            = {{"payload", payload},
-               {"database", query.getDatabase()},
-               {"table", query.getTable()},
-               {"uuid", uuid},
-               {"query_id", ctx->getCurrentQueryId()},
-               {"user", ctx->getUserName()}};
-
-        std::vector<std::pair<String, Int32>> int32_cols;
-
-        auto now = std::chrono::system_clock::now().time_since_epoch();
-        std::vector<std::pair<String, UInt64>> uint64_cols = {
-            /// Milliseconds since epoch
-            std::make_pair("timestamp", std::chrono::duration_cast<std::chrono::milliseconds>(now).count()),
-        };
-
-        /// Schema: (payload, database, table, timestamp, query_id, user)
-        Block block = Streaming::buildBlock(string_cols, int32_cols, uint64_cols);
-        setupColumnIfNotSet(ctx, query);
-        nlog::OpCode op_code;
-        op_code = ctx->getQueryParameters().contains("_payload") ? Streaming::getAlterTableParamOpCode(ctx->getQueryParameters())
-                                                                : Streaming::getOpCodeFromQuery(query);
-        Streaming::appendDDLBlock(
-            std::move(block), ctx, {"table_type", "column", "query_method"}, op_code, log);
-
-        LOG_INFO(
-            log, "Request of altering stream query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
-
-        /// FIXME, project tasks status
-        return true;
-    }
-    return false;
-}
-/// proton: end
-
 }

@@ -60,7 +60,6 @@
 #include <Interpreters/FunctionNameNormalizer.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/QueryLog.h>
-#include <Interpreters/Streaming/BlockUtils.h>
 #include <Interpreters/addTypeConversionToAST.h>
 
 #include <TableFunctions/TableFunctionFactory.h>
@@ -69,7 +68,7 @@
 #include <base/ClockUtils.h>
 
 /// proton: starts.
-#include <DistributedMetadata/CatalogService.h>
+#include <Interpreters/Cluster.h>
 #include <Interpreters/ActionLocksManager.h>
 #include <Interpreters/Streaming/ColumnValidateVisitor.h>
 #include <Interpreters/Streaming/DDLHelper.h>
@@ -127,11 +126,6 @@ InterpreterCreateQuery::InterpreterCreateQuery(const ASTPtr & query_ptr_, Contex
 
 BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 {
-    /// proton: start
-    if (createDatabaseDistributed(create))
-        return {};
-    /// proton: end
-
     String database_name = create.getDatabase();
 
     auto guard = DatabaseCatalog::instance().getDDLGuard(database_name, "");
@@ -858,7 +852,42 @@ void InterpreterCreateQuery::assertOrSetUUID(ASTCreateQuery & create, const Data
     }
 }
 
-/// proton: starts
+/// proton: starts. prepare engine and settings for create query before creating stream
+void InterpreterCreateQuery::handleStreamCreation(const String & current_database, ASTCreateQuery & create)
+{
+    auto ctx = getContext();
+
+    if (create.isView() || create.is_dictionary || create.is_external || create.is_random )
+        return;
+
+    if (!create.storage || !create.storage->engine)
+        Streaming::prepareEngine(create, ctx);
+
+    if (create.storage->engine->name != "Stream")
+        /// We only support `Stream` table engine for now
+        return;
+
+    Streaming::checkAndPrepareCreateQueryForStream(create, ctx);
+
+    if (!ctx->isDistributedEnv() && !nlog::NativeLog::instance(ctx).enabled())
+        throw Exception(
+            "Stream store is not ready. Unable to create stream", ErrorCodes::CONFIG_ERROR);
+
+    if (ctx->isLocalQueryFromTCP())
+    {
+        /// it comes from TCPHandler, therefore update column definitions if required
+        /// First prepare settings, and then create query since the latter depends on the settings
+        Streaming::prepareEngineSettings(create, ctx);
+    }
+
+    TableProperties properties = getTablePropertiesAndNormalizeCreateQuery(create);
+
+    if (create.getDatabase().empty())
+        create.setDatabase(current_database);
+
+    return;
+}
+
 /// external stream is always created locally in the DDL request accepting node
 void InterpreterCreateQuery::handleExternalStreamCreation(ASTCreateQuery & create)
 {
@@ -875,175 +904,6 @@ void InterpreterCreateQuery::handleExternalStreamCreation(ASTCreateQuery & creat
     if (create.storage->engine->name != "ExternalStream")
         throw Exception(ErrorCodes::INCORRECT_QUERY, "External stream requires ExternalStream engine");
 }
-
-bool InterpreterCreateQuery::createStreamDistributed(const String & current_database, ASTCreateQuery & create)
-{
-    auto ctx = getContext();
-
-    if (create.isView() || create.is_dictionary || create.is_external || create.is_random )
-        return false;
-
-    if (!create.storage || !create.storage->engine)
-        Streaming::prepareEngine(create, ctx);
-
-    if (create.storage->engine->name != "Stream")
-        /// We only support `Stream` table engine for now
-        return false;
-
-    Streaming::checkAndPrepareCreateQueryForStream(create, ctx);
-
-    if (!ctx->isDistributedEnv())
-    {
-        if (nlog::NativeLog::instance(ctx).enabled())
-        {
-            if (ctx->isLocalQueryFromTCP())
-            {
-                /// it comes from TCPHandler, therefore update column definitions if required
-                /// First prepare settings, and then create query since the latter depends on the settings
-                Streaming::prepareEngineSettings(create, ctx);
-            }
-            return false;
-        }
-
-        throw Exception(
-            "Distributed environment is not setup. Unable to create stream", ErrorCodes::CONFIG_ERROR);
-    }
-
-    assert(!ctx->getCurrentQueryId().empty());
-
-    auto * log = &Poco::Logger::get("InterpreterCreateQuery");
-
-    String payload;
-    if (ctx->isLocalQueryFromTCP())
-    {
-        /// it comes from TCPHandler, therefore update column definitions if required
-        Streaming::prepareEngineSettings(create, ctx);
-
-        /// Build json payload here from SQL statement
-        payload = Streaming::getJSONFromCreateQuery(create);
-        ctx->setDistributedDDLOperation(true);
-    }
-    else
-    {
-        payload = Streaming::getJSONFromCreateQuery(create);
-    }
-
-    if (payload.empty() || !ctx->isDistributedDDLOperation())
-        return false;
-
-    TableProperties properties = getTablePropertiesAndNormalizeCreateQuery(create);
-
-    if (create.getDatabase().empty())
-        create.setDatabase(current_database);
-
-    const auto & catalog_service = CatalogService::instance(ctx->getGlobalContext());
-    auto tables = catalog_service.findTableByName(create.getDatabase(), create.getTable());
-    if (!tables.empty())
-    {
-        if (create.if_not_exists)
-            return true;
-        else
-            throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "{} {}.{} already exists", tables[0]->engine, create.getDatabase(), create.getTable());
-    }
-
-    assert(create.storage);
-    auto stream_properties = StorageStreamProperties::create(*create.storage, properties.columns, ctx);
-    if (!stream_properties->storage_settings->host_shards.value.empty())
-    {
-        LOG_INFO(log, "Local stream creation with shard assigned");
-        return false;
-    }
-
-    auto query = queryToString(create);
-    LOG_INFO(log, "Creating stream query={} query_id={}", query, ctx->getCurrentQueryId());
-
-    auto uuid = create.uuid == UUIDHelpers::Nil ? UUIDHelpers::generateV4() : create.uuid;
-
-    std::vector<std::pair<String, String>> string_cols
-        = {{"payload", payload},
-           {"database", current_database},
-           {"table", create.getTable()},
-           {"uuid", toString(uuid)},
-           {"query_id", ctx->getCurrentQueryId()},
-           {"user", ctx->getUserName()}};
-
-    std::vector<std::pair<String, Int32>> int32_cols
-        = {{"shards", stream_properties->shards},
-           {"replication_factor", stream_properties->replication_factor},
-           {"logstore_replication_factor", stream_properties->storage_settings->logstore_replication_factor}};
-
-    /// Milliseconds since epoch
-    std::vector<std::pair<String, UInt64>> uint64_cols = {{"timestamp", MonotonicMilliseconds::now()}};
-
-    /// Schema: (payload, database, table, timestamp, query_id, user, shards, replication_factor, logstore_replication_factor)
-    Block block = Streaming::buildBlock(string_cols, int32_cols, uint64_cols);
-
-    Streaming::appendDDLBlock(std::move(block), ctx, {"table_type", "url_parameters"}, nlog::OpCode::CREATE_TABLE, log);
-
-    LOG_INFO(log, "Request of creating stream query={} query_id={} has been accepted", query, ctx->getCurrentQueryId());
-
-    /// If is a internal create query or synchronous DDL is enabled, sync create task status
-    Streaming::waitForDDLOps(log, ctx, internal);
-
-    /// FIXME, project tasks status
-    return true;
-}
-
-bool InterpreterCreateQuery::createDatabaseDistributed(ASTCreateQuery & create)
-{
-    auto ctx = getContext();
-    if (!ctx->isDistributedEnv())
-    {
-        return false;
-    }
-
-    if (!ctx->getQueryParameters().contains("_payload"))
-    {
-        /// FIXME:
-        /// Build json payload here from SQL statement
-        /// context.setDistributedDDLOperation(true);
-        return false;
-    }
-
-    if (ctx->isDistributedDDLOperation())
-    {
-        const auto & database = DatabaseCatalog::instance().tryGetDatabase(create.getDatabase());
-        if (database)
-        {
-            if (create.if_not_exists)
-                return true;
-            else
-                throw Exception(ErrorCodes::DATABASE_ALREADY_EXISTS, "Database {} already exists.", create.getDatabase());
-        }
-
-        auto * log = &Poco::Logger::get("InterpreterCreateQuery");
-
-        auto query_str = queryToString(create);
-        LOG_INFO(log, "Create database query={} query_id={}", query_str, ctx->getCurrentQueryId());
-
-        std::vector<std::pair<String, String>> string_cols
-            = {{"payload", ctx->getQueryParameters().at("_payload")},
-               {"database", create.getDatabase()},
-               {"query_id", ctx->getCurrentQueryId()},
-               {"user", ctx->getUserName()}};
-
-        std::vector<std::pair<String, Int32>> int32_cols;
-
-        /// Milliseconds since epoch
-        std::vector<std::pair<String, UInt64>> uint64_cols = {{"timestamp", MonotonicMilliseconds::now()}};
-
-        Block block = Streaming::buildBlock(string_cols, int32_cols, uint64_cols);
-        /// Schema: (payload, database, timestamp, query_id, user)
-
-        Streaming::appendDDLBlock(std::move(block), ctx, {"table_type"}, nlog::OpCode::CREATE_DATABASE, log);
-
-        LOG_INFO(log, "Request of create database query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
-
-        /// FIXME, project tasks status
-        return true;
-    }
-    return false;
-}
 /// proton: ends
 
 BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
@@ -1057,9 +917,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     auto database_name = create.database ? create.getDatabase() : current_database;
 
     /// proton: start
-    if (createStreamDistributed(database_name, create))
-        return {};
-
+    handleStreamCreation(database_name, create);
     handleExternalStreamCreation(create);
 
     /// Prepare reserved columns for MaterializedView and RandomStream

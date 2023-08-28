@@ -27,44 +27,6 @@ std::map<String, std::map<String, String> > RawstoreTableRestRouterHandler::crea
     }
 };
 
-void RawstoreTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, const CatalogService::TablePtrs & tables) const
-{
-    Poco::JSON::Array tables_mapping_json;
-    std::unordered_set<String> table_names;
-
-    bool include_internal_streams = getQueryParameterBool("include_internal_streams", query_context->getSettingsRef().include_internal_streams.value);
-    for (const auto & table : tables)
-    {
-        /// If include_internal_streams = false, ignore internal streams
-        if (table->name.starts_with(".inner.") && !include_internal_streams)
-            continue;
-
-        if (table_names.contains(table->name))
-            continue;
-
-        if (table->engine_full.find("subtype = 'rawstore'") == String::npos)
-            continue;
-
-        const auto & query_ptr = parseQuery(table->create_table_query, query_context);
-        const auto & create = query_ptr->as<const ASTCreateQuery &>();
-
-        Poco::JSON::Object table_mapping_json;
-        table_mapping_json.set("name", table->name);
-        table_mapping_json.set("engine", table->engine);
-        table_mapping_json.set("order_by_expression", table->sorting_key);
-        table_mapping_json.set("partition_by_expression", table->partition_key);
-
-        if (create.storage->ttl_table)
-            table_mapping_json.set("ttl", queryToString(*create.storage->ttl_table));
-
-        buildTablePlacements(table_mapping_json, table->name);
-        tables_mapping_json.add(table_mapping_json);
-        table_names.insert(table->name);
-    }
-
-    resp.set("data", tables_mapping_json);
-}
-
 bool RawstoreTableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
 {
     if (!validateSchema(create_schema, payload, error_msg))

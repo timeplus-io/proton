@@ -943,9 +943,6 @@ max_concurrent_insert_queries: 100
 # Maximum number of concurrent select queries.
 max_concurrent_select_queries: 100
 
-# With 'true', It means proton starts in recovery mode, which does not broadcast stream catalogs
-recovery_start: false
-
 settings:
     global:
         query_mode: streaming               # Default query mode. table or streaming
@@ -1047,54 +1044,10 @@ cluster_settings:
             cache_max_cached_entries_per_shard: 100
             cache_max_cached_bytes_per_shard: 4194304
 
-    # Internal Kafka topic for DDLs operations
-    system_ddls:
-        name: __system_ddls
-        replication_factor: 1
-        logstore_replication_factor: 1
-        data_retention: 168
-
-    # Internal Kafka topic for Catalog
-    system_catalogs:
-        name: __system_catalogs
-        replication_factor: 1
-        logstore_replication_factor: 1
-        log_roll_size: 100
-        log_roll_period: 7200
-        client_side_compression: true
-
-    # Internal Kafka topic for node metrics
-    system_node_metrics:
-        name: __system_node_metrics
-        replication_factor: 1
-        logstore_replication_factor: 1
-        log_roll_size: 100
-        log_roll_period: 7200
-        schedule_intervals: 5000
-
-    # Internal Kafka topic for system tasks status
-    system_tasks:
-        name: __system_tasks
-        replication_factor: 1
-        logstore_replication_factor: 1
-        data_retention: 24
-        max_cached_size_threshold: 100000
-
     # Node identity shall be unique in proton cluster
     # When leave it empty, the system will the nodes FQDN and tcp port to
     # generate one
     node_identity: localhost:8123
-
-    # Roles that the current node has
-    # Every node must have catalog role.
-    # For now, only a single node can have placement, ddl and task role and these 3 roles
-    # shall coexist on the same node
-    node_roles:
-        role:
-            - placement
-            - catalog
-            - ddl
-            - task
 
 # Metastore server config
 metastore_server:

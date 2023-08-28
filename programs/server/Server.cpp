@@ -88,10 +88,6 @@
 /// proton: starts
 #include <Checkpoint/CheckpointCoordinator.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <DistributedMetadata/CatalogService.h>
-#include <DistributedMetadata/DDLService.h>
-#include <DistributedMetadata/PlacementService.h>
-#include <DistributedMetadata/TaskStatusService.h>
 #include <Functions/UserDefined/ExternalUserDefinedFunctionsLoader.h>
 #include <Interpreters/DiskUtilChecker.h>
 #include <KafkaLog/KafkaWALPool.h>
@@ -271,14 +267,6 @@ size_t waitServersToFinish(std::vector<DB::ProtocolServerAdapter> & servers, siz
 }
 
 /// proton: starts
-/// Service dependencies :
-/// All meta services and StorageStream depend on DWAL
-/// Placement -> Catalog
-/// Task -> StorageStream
-/// DDL -> REST API Server
-///     -> Catalog
-///     -> Placement
-///     -> Task
 void initGlobalServices(DB::ContextMutablePtr & global_context)
 {
     auto & ckpt_coordinator = DB::CheckpointCoordinator::instance(global_context);
@@ -292,85 +280,6 @@ void initGlobalServices(DB::ContextMutablePtr & global_context)
 
     if (native_log.enabled() && pool.enabled())
         throw DB::Exception("Both external Kafka log and internal native log are enabled. This is not a supported configuration", DB::ErrorCodes::UNSUPPORTED);
-
-    auto & catalog_service = DB::CatalogService::instance(global_context);
-    catalog_service.startup();
-
-    auto & placement_service = DB::PlacementService::instance(global_context);
-    placement_service.startup();
-
-    auto & task_status_service = DB::TaskStatusService::instance(global_context);
-    task_status_service.startup();
-}
-
-/// DDL service depends on REST server
-/// so it will need initialize after REST server
-/// There is still a race condition: when http/tcp services are inited, but DDLService init is not done yet
-/// and at this very time, a table creation request sneaks in which will try to append the request to DDL WAL
-/// but the wal is not init yet. We will check if DDLService is ready in DDLService::append
-void initGlobalServicePost(DB::ContextMutablePtr global_context)
-{
-    auto & ddl_service = DB::DDLService::instance(global_context);
-    ddl_service.startup();
-}
-
-/// The shutdown sequence is
-/// 1) Stop TCP/HTTP etc servers to close all outstanding external TCP/HTTP connections
-/// 2) Kill all unfinished queries
-/// 3) Shutdown distributed metadata service:
-///    - DDLService -> PlacementService -> CatalogService -> TaskService
-/// 4) Shutdown Context
-///    - Disable periodic reload for Access Control
-///    - Disable periodic updates for external dictionaries
-///    - Disable periodic updates for external user defined functions
-///    - Shutdown named sessions
-///    - Shutdown system logs
-///    - DatabaseCatalog::shutdown which shutdown all table engines -> DMT depends on DWAL
-///    - Wait for merge mutate executor to finish
-///    - Wait for fetch executor to finish
-///    - Wait for moves executor to finish
-///    - Wait for common executor to finish
-///    - Clean CompiledExpressionCache
-///    - Reset dictionaries XMLs
-///    - Reset user defined executable function XMLs
-///    - Reset embedded dictionaries
-///    - Reset external dictionaries loader
-///    - Reset model repository
-///    - Reset buffer flush schedule pool
-///    - Reset schedule pool
-///    - Reset distributed schedule pool
-///    - Reset message broker schedule pool
-///    - Reset part commit pool
-///    - Reset access control pool
-///    - Reset trace control pool
-///    - Reset zookeeper
-///    - Shutdown system logs
-/// 5) Static singletons in function scope dtor
-///    - These singletons are dtored in the reverse order of their construction
-///    - They construction order can be manually ordered
-/// 6) Global singletons / variables dtor
-///    - These global variables are dtored in the reverse order of their construction
-///    - C++ basically can't guarantee the construction order unless we init them in a control way
-///      otherwise we can't guarantee their dtor order. We need avoid these kind of global variables
-///      as much as possible
-void deinitGlobalServices(DB::ContextMutablePtr global_context)
-{
-    auto & ddl_service = DB::DDLService::instance(global_context);
-    ddl_service.shutdown();
-
-    auto & placement_service = DB::PlacementService::instance(global_context);
-    placement_service.shutdown();
-
-    auto & catalog_service = DB::CatalogService::instance(global_context);
-    catalog_service.shutdown();
-
-    auto & task_status_service = DB::TaskStatusService::instance(global_context);
-    task_status_service.shutdown();
-
-    /// We can't shutdown WAL pool too early since storage shutdown will be after this
-    /// which depends on WAL pool.
-    /// auto & pool = DWAL::KafkaWALPool::instance(global_context);
-    /// pool.shutdown();
 }
 
 void initGlobalSingletons(DB::ContextMutablePtr & context)
@@ -1513,12 +1422,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
           */
         LOG_INFO(log, "Shutting down storages.");
 
-        /// Proton starts : we like to shutdown ExternalGrokPatterns here explicitly since it depends on
+        /// proton starts : we like to shutdown ExternalGrokPatterns here explicitly since it depends on
         /// ScheduleThreadPool in `global_context` which will be deleted after calling `global_context->shutdown()`
         /// which causes use after free segfault when ExternalGrokPatterns/PlacementService tries to deactivate its task from the
         /// ScheduleThreadPool which doesn't exist any more
         ExternalGrokPatterns::instance(global_context).shutdown();
-        DB::PlacementService::instance(global_context).preShutdown();
         /// proton : ends
 
         global_context->shutdown();
@@ -1614,17 +1522,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     LOG_DEBUG(log, "Loaded metadata.");
 
-    /// proton: start.
-    if (global_context->isDistributedEnv())
-    {
-        if (!config().getBool("recovery_start", false))
-            DB::CatalogService::instance(global_context).broadcast();
-        else
-            LOG_INFO(log, "Started in Recovery mode, does not broadcast catalogs");
-        DB::PlacementService::instance(global_context).scheduleBroadcast();
-    }
-    /// proton: end.
-
     /// Init trace collector only after trace_log system table was created
     /// Disable it if we collect test coverage information, because it will work extremely slow.
 #if USE_UNWIND && !WITH_COVERAGE
@@ -1683,31 +1580,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// Initialize a watcher periodically updating DNS cache
         dns_cache_updater = std::make_unique<DNSCacheUpdater>(global_context, config().getInt("dns_cache_update_period", 15));
     }
-
-#if defined(OS_LINUX)
-    if (!TasksStatsCounters::checkIfAvailable())
-    {
-        LOG_INFO(log, "It looks like this system does not have procfs mounted at /proc location,"
-            " neither proton-server process has CAP_NET_ADMIN capability."
-            " 'taskstats' performance statistics will be disabled."
-            " It could happen due to incorrect proton package installation."
-            " You can try to resolve the problem manually with 'sudo setcap cap_net_admin=+ep {}'."
-            " Note that it will not work on 'nosuid' mounted filesystems."
-            " It also doesn't work if you run proton-server inside network namespace as it happens in some containers.",
-            executable_path);
-    }
-
-    if (!hasLinuxCapability(CAP_SYS_NICE))
-    {
-        LOG_INFO(log, "It looks like the process has no CAP_SYS_NICE capability, the setting 'os_thread_priority' will have no effect."
-            " It could happen due to incorrect proton package installation."
-            " You could resolve the problem manually with 'sudo setcap cap_sys_nice=+ep {}'."
-            " Note that it will not work on 'nosuid' mounted filesystems.",
-            executable_path);
-    }
-#else
-    LOG_INFO(log, "TaskStats is not implemented for this OS. IO accounting will be disabled.");
-#endif
 
     {
         attachSystemTablesAsync(global_context, *DatabaseCatalog::instance().getSystemDatabase(), async_metrics);
@@ -1801,12 +1673,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             LOG_INFO(log, "Ready for connections.");
         }
 
-        /// proton: starts
-        initGlobalServicePost(global_context);
-        auto & task_status_service = DB::TaskStatusService::instance(global_context);
-        task_status_service.createTaskTableIfNotExists();
-        /// proton: ends
-
         SCOPE_EXIT_SAFE({
             LOG_DEBUG(log, "Received termination signal.");
             LOG_DEBUG(log, "Waiting for current connections to close.");
@@ -1846,8 +1712,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 LOG_INFO(log, "Closed connections.");
 
             /// proton: start.
-            deinitGlobalServices(global_context);
-
             deinitGlobalSingletons(global_context);
 
             disposeV8();

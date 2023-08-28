@@ -17,8 +17,5 @@ Block buildBlock(
 Block buildBlock(
     const std::vector<std::pair<String, std::vector<String>>> & string_cols,
     const std::vector<std::pair<String, std::vector<Int64>>> & int64_cols);
-
-void appendDDLBlock(
-    Block && block, ContextPtr context, const std::vector<String> & parameter_names, nlog::OpCode opCode, const Poco::Logger * log);
 }
 }

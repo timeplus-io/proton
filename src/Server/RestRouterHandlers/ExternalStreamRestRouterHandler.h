@@ -2,8 +2,6 @@
 
 #include "TableRestRouterHandler.h"
 
-#include <DistributedMetadata/CatalogService.h>
-
 namespace DB
 {
 class ExternalStreamRestRouterHandler final : public TableRestRouterHandler
@@ -17,7 +15,6 @@ private:
     static std::map<String, std::map<String, String>> column_schema;
     static std::map<String, std::map<String, String>> settings_schema;
 
-    void buildTablesJSON(Poco::JSON::Object & resp, const CatalogService::TablePtrs & tables) const override;
     bool validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const override;
 
     String getDefaultPartitionGranularity() const override { return ""; }

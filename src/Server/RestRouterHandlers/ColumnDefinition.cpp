@@ -1,11 +1,18 @@
 #include "ColumnDefinition.h"
 
-#include <DistributedMetadata/CatalogService.h>
+#include <Interpreters/DatabaseCatalog.h>
+#include <Storages/IStorage.h>
 
 #include <boost/algorithm/string/join.hpp>
+#include <fmt/format.h>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int ILLEGAL_COLUMN;
+}
+
 String getCreateColumnDefinition(const Poco::JSON::Object::Ptr & column)
 {
     std::vector<String> column_definition;
@@ -46,7 +53,8 @@ String getCreateColumnDefinition(const Poco::JSON::Object::Ptr & column)
     return boost::algorithm::join(column_definition, " ");
 }
 
-String getUpdateColumnDefination(const Poco::JSON::Object::Ptr & payload, const String & database, const String & table, String & column)
+String getUpdateColumnDefinition(
+    ContextPtr ctx, const Poco::JSON::Object::Ptr & payload, const String & database, const String & table, String & column)
 {
     std::vector<String> update_segments;
     if (payload->has("name"))
@@ -66,13 +74,25 @@ String getUpdateColumnDefination(const Poco::JSON::Object::Ptr & payload, const 
 
     if (payload->has("default"))
     {
-        const auto & catalog_service = CatalogService::instance(nullptr);
-        const auto & type = catalog_service.getColumnType(database, table, column);
+        auto storage = DatabaseCatalog::instance().tryGetTable({database, table}, ctx);
+        auto column_names_and_types{storage->getInMemoryMetadata().getColumns().getOrdinary()};
+        if (!column_names_and_types.contains(column))
+            throw Exception(
+                ErrorCodes::ILLEGAL_COLUMN,
+                "the column definitions of '{}.{}' stream does not contain the column '{}', it cannot be updated",
+                database,
+                table,
+                column);
 
-        String default_str = payload->get("default").toString();
-
-        if (type == "string")
-            default_str = fmt::format("'{}'", default_str);
+        String default_str = payload->get("default").toString(
+            std::find_if(column_names_and_types.begin(), column_names_and_types.end(), [&](NameAndTypePair & col) -> bool {
+                if (col.name == column && (col.type->getTypeId() == TypeIndex::String || col.type->getTypeId() == TypeIndex::FixedString))
+                {
+                    default_str = fmt::format("'{}'", default_str);
+                    return true;
+                }
+                return false;
+            }));
 
         update_segments.push_back(fmt::format("DEFAULT {}", default_str));
     }

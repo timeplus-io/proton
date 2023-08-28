@@ -40,7 +40,7 @@ std::map<String, std::map<String, String>> TabularTableRestRouterHandler::column
          {"ttl_expression", "string"},
          {"skipping_index_expression", "string"}}}};
 
-void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, const CatalogService::TablePtrs & tables) const
+void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, const TablePtrs & tables) const
 {
     Poco::JSON::Array tables_mapping_json;
     std::unordered_set<String> table_names;
@@ -82,7 +82,6 @@ void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, c
             table_mapping_json.set("ttl", queryToString(*create.storage->ttl_table));
 
         buildColumnsJSON(table_mapping_json, create.columns_list);
-        buildTablePlacements(table_mapping_json, table->name);
         tables_mapping_json.add(table_mapping_json);
 
         table_names.insert(table->name);

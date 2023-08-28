@@ -79,9 +79,8 @@ private:
     BlockIO createTable(ASTCreateQuery & create);
 
     /// proton: start
-    bool createStreamDistributed(const String & database, ASTCreateQuery & create);
+    void handleStreamCreation(const String & current_database, ASTCreateQuery & create);
     void handleExternalStreamCreation(ASTCreateQuery & create);
-    bool createDatabaseDistributed(ASTCreateQuery & create);
     /// proton: end
 
     /// Calculate list of columns, constraints, indices, etc... of table. Rewrite query in canonical way.

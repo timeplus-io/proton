@@ -14,6 +14,7 @@ namespace DB
 {
 namespace Streaming
 {
+using CallBack = std::function<void()>;
 using TTLSettings = std::pair<String, std::vector<std::pair<String, String>>>;
 
 void getAndValidateStorageSetting(
@@ -33,8 +34,9 @@ String getJSONFromCreateQuery(const ASTCreateQuery & create);
 String getJSONFromAlterQuery(const ASTAlterQuery & alter);
 String getJSONFromSystemQuery(const ASTSystemQuery & system);
 
-void waitForDDLOps(
-    Poco::Logger * log, const ContextMutablePtr & ctx, bool force_sync, UInt64 timeout = ProtonConsts::DEFAULT_DDL_TIMEOUT_MS);
+bool assertColumnExists(const String & database, const String & table, const String & column, ContextPtr ctx);
+void createDWAL(const String & uuid, Int32 shards, Int32 replication_factor, const String & url_parameters, ContextPtr global_context);
+void deleteDWAL(const String & uuid, ContextPtr global_context);
 
 int extractErrorCodeFromMsg(const String & err_msg);
 }

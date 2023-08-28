@@ -36,10 +36,6 @@ private:
     BlockIO executeToDatabase(const ASTAlterQuery & alter);
 
     ASTPtr query_ptr;
-
-    /// proton: start
-    bool alterTableDistributed(const ASTAlterQuery & query);
-    /// proton: end
 };
 
 }

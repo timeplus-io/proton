@@ -1,9 +1,8 @@
 #include "DDLHelper.h"
 
-#include <DistributedMetadata/TaskStatusService.h>
+#include <KafkaLog/KafkaWALPool.h>
 #include "ASTToJSONUtils.h"
 
-#include <DistributedMetadata/CatalogService.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
@@ -20,6 +19,7 @@
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
 #include <TableFunctions/TableFunctionFactory.h>
+#include <Common/logger_useful.h>
 
 #include <Poco/JSON/Parser.h>
 #include <Poco/Net/HTTPRequest.h>
@@ -37,6 +37,12 @@ extern const int TIMEOUT_EXCEEDED;
 extern const int SYNTAX_ERROR;
 extern const int NO_REPLICA_NAME_GIVEN;
 extern const int UNKNOWN_TYPE;
+
+extern const int OK;
+extern const int RESOURCE_ALREADY_EXISTS;
+extern const int DWAL_FATAL_ERROR;
+extern const int INVALID_LOGSTORE_REPLICATION_FACTOR;
+extern const int RESOURCE_NOT_FOUND;
 }
 
 namespace Streaming
@@ -62,6 +68,8 @@ const std::vector<String> CREATE_TABLE_SETTINGS = {
     "logstore",
     "mode",
 };
+
+constexpr Int32 DWAL_MAX_RETRIES = 3;
 
 void normalizeColumns(ASTCreateQuery & create, ContextPtr context)
 {
@@ -678,47 +686,160 @@ TTLSettings parseTTLSettings(const String & payload)
     return {ttl_expr, stream_settings};
 }
 
-void waitForDDLOps(Poco::Logger * log, const ContextMutablePtr & ctx, bool force_sync, UInt64 timeout)
+bool assertColumnExists(const String & database, const String & table, const String & column, ContextPtr ctx)
 {
-    UInt64 wait_time = 0;
-    if (!ctx->getSettingsRef().synchronous_ddl && !force_sync)
-        return;
+    auto storage = DatabaseCatalog::instance().tryGetTable({database, table}, ctx);
+    if (!storage)
+        return false;
 
-    /// FIXME: shall route to task service in a distributed env if task service is not local
-    auto & task_service = TaskStatusService::instance(ctx);
+    auto column_names_and_types{storage->getInMemoryMetadata().getColumns().getOrdinary()};
+    if (column_names_and_types.contains(column))
+        return true;
+
+    return false;
+}
+
+void waitUntilDWalReady(const klog::KafkaWALContext & ctx, ContextPtr global_context)
+{
+    klog::KafkaWALPtr dwal = klog::KafkaWALPool::instance(global_context).getMeta();
+    auto log = &Poco::Logger::get("DDLHelper");
     while (true)
     {
-        /// Loop wait to finish, sleep interval too large?
-        /// Actually, the create delay is about '1s'
-        LOG_INFO(log, "Wait for DDL operation for query_id={} ...", ctx->getCurrentQueryId());
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        wait_time += 100;
-
-        auto task_status = task_service.findById(ctx->getCurrentQueryId());
-        if (task_status)
+        if (dwal->describe(ctx.topic).err == ErrorCodes::OK)
         {
-            if (task_status->status == TaskStatusService::TaskStatus::SUCCEEDED)
-                break;
-            else if (task_status->status == TaskStatusService::TaskStatus::FAILED)
-                throw Exception(extractErrorCodeFromMsg(task_status->reason), "Fail to do DDL. reason: {}", task_status->reason);
+            return;
         }
-
-        if (wait_time > timeout)
+        else
         {
-            throw Exception(
-                ErrorCodes::TIMEOUT_EXCEEDED,
-                "Wait {} milliseconds for DDL operation timeout. the timeout is {} milliseconds.",
-                wait_time,
-                timeout);
+            LOG_INFO(log, "Wait for topic={} to be ready...", ctx.topic);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         }
     }
+}
+
+void doCreateDWal(const klog::KafkaWALContext & ctx, ContextPtr global_context)
+{
+    klog::KafkaWALPtr dwal = klog::KafkaWALPool::instance(global_context).getMeta();
+    auto * log = &Poco::Logger::get("DDLHelper");
+
+    if (dwal->describe(ctx.topic).err == ErrorCodes::OK)
+    {
+        LOG_INFO(log, "Found topic={} already exists", ctx.topic);
+        return;
+    }
+
+    LOG_INFO(log, "Didn't find topic={}, create one with settings={}", ctx.topic, ctx.string());
+
+    int retries = 0;
+    while (true)
+    {
+        auto err = dwal->create(ctx.topic, ctx);
+        if (err == ErrorCodes::OK)
+        {
+            LOG_INFO(log, "Successfully created topic={}", ctx.topic);
+            break;
+        }
+        else if (err == ErrorCodes::RESOURCE_ALREADY_EXISTS)
+        {
+            LOG_INFO(log, "Topic={} already exists", ctx.topic);
+            break;
+        }
+        else if (err == ErrorCodes::DWAL_FATAL_ERROR)
+        {
+            throw Exception("Underlying streaming store " + ctx.topic + " create failed due to fatal error.", ErrorCodes::DWAL_FATAL_ERROR);
+        }
+        else if (err == ErrorCodes::INVALID_LOGSTORE_REPLICATION_FACTOR)
+        {
+            throw Exception(
+                "Underlying streaming store " + ctx.topic + " create failed due to invalid replication factor.",
+                ErrorCodes::INVALID_LOGSTORE_REPLICATION_FACTOR);
+        }
+        else
+        {
+            if (retries >= DWAL_MAX_RETRIES)
+            {
+                throw Exception("Underlying streaming store " + ctx.topic + " create failed", ErrorCodes::UNKNOWN_EXCEPTION);
+            }
+
+            retries++;
+            LOG_INFO(log, "Failed to create topic={} and will try to create it={} again...", ctx.topic, retries);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        }
+    }
+
+    waitUntilDWalReady(ctx, global_context);
+}
+
+void createDWAL(const String & uuid, Int32 shards, Int32 replication_factor, const String & url_parameters, ContextPtr global_context)
+{
+    klog::KafkaWALContext ctx{uuid, shards, replication_factor, "delete"};
+
+    /// Parse these settings from url parameters
+    /// logstore_retention_bytes,
+    /// logstore_retention_ms,
+    /// logstore_flush_messages,
+    /// logstore_flush_ms
+    if (!url_parameters.empty())
+    {
+        Poco::URI uri;
+        uri.setRawQuery(url_parameters);
+        auto params = uri.getQueryParameters();
+
+        for (const auto & kv : params)
+        {
+            if (kv.first == "logstore_retention_bytes")
+                ctx.retention_bytes = std::stoll(kv.second);
+            else if (kv.first == "logstore_retention_ms")
+                ctx.retention_ms = std::stoll(kv.second);
+            else if (kv.first == "logstore_flush_messages")
+                ctx.flush_messages = std::stoll(kv.second);
+            else if (kv.first == "logstore_flush_ms")
+                ctx.flush_ms = std::stoll(kv.second);
+        }
+    }
+
+    doCreateDWal(ctx, global_context);
+}
+
+void doDeleteDWal(const klog::KafkaWALContext & ctx, ContextPtr global_context)
+{
+    klog::KafkaWALPtr dwal = klog::KafkaWALPool::instance(global_context).getMeta();
+    auto * log = &Poco::Logger::get("DDLHelper");
+
+    int retries = 0;
+    while (retries++ < DWAL_MAX_RETRIES)
+    {
+        auto err = dwal->remove(ctx.topic, ctx);
+        if (err == ErrorCodes::OK)
+        {
+            /// FIXME, if the error is fatal. throws
+            LOG_INFO(log, "Successfully deleted topic={}", ctx.topic);
+            break;
+        }
+        else if (err == ErrorCodes::RESOURCE_NOT_FOUND)
+        {
+            LOG_INFO(log, "Topic={} not exists", ctx.topic);
+            break;
+        }
+        else
+        {
+            LOG_INFO(log, "Failed to delete topic={}, will retry ...", ctx.topic);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        }
+    }
+}
+
+void deleteDWAL(const String & uuid, ContextPtr global_context)
+{
+    klog::KafkaWALContext ctx{uuid};
+    doDeleteDWal(ctx, global_context);
 }
 
 int extractErrorCodeFromMsg(const String & err_msg)
 {
     if (auto pos = err_msg.find("Code: "); pos != String::npos)
         return std::atoi(err_msg.c_str() + pos + 6);
-    else if(auto pos2 = err_msg.find("code:"); pos2 != String::npos)
+    else if (auto pos2 = err_msg.find("code:"); pos2 != String::npos)
         return std::atoi(err_msg.c_str() + pos2 + 5);
     else
         return 0;

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Poco/JSON/Parser.h>
 #include <base/types.h>
+#include <Poco/JSON/Parser.h>
 
 class ASTPtr;
 class ContextPtr;
@@ -9,5 +9,6 @@ class ContextPtr;
 namespace DB
 {
 String getCreateColumnDefinition(const Poco::JSON::Object::Ptr & payload);
-String getUpdateColumnDefination(const Poco::JSON::Object::Ptr & payload, const String & database, const String & table, String & column);
+String getUpdateColumnDefinition(
+    ContextPtr ctx, const Poco::JSON::Object::Ptr & payload, const String & database, const String & table, String & column);
 }

@@ -5,10 +5,9 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeString.h>
 #include <Databases/DatabaseFactory.h>
-#include <DistributedMetadata/DDLService.h>
 #include <Interpreters/Context.h>
-#include <Common/typeid_cast.h>
 #include <Common/logger_useful.h>
+#include <Common/typeid_cast.h>
 
 namespace DB
 {
@@ -95,36 +94,5 @@ Block buildBlock(
 
     return block;
 }
-
-void appendDDLBlock(
-    Block && block, ContextPtr context, const std::vector<String> & parameter_names, nlog::OpCode opCode, const Poco::Logger * log)
-{
-    nlog::Record record{opCode, std::move(block), nlog::NO_SCHEMA};
-    record.addHeader("_version", "1");
-
-    const auto & query_params = context->getQueryParameters();
-    for (const auto & parameter_name : parameter_names)
-    {
-        auto iter = query_params.find(parameter_name);
-        if (iter != query_params.end())
-        {
-            record.addHeader(parameter_name, iter->second);
-        }
-    }
-
-    /// Depending on DDLService is not ideal here, but it is convenient
-    auto & ddl_service = DDLService::instance(context->getGlobalContext());
-
-    const auto & query_id = context->getCurrentQueryId();
-    const auto & result_code = ddl_service.append(record);
-    if (result_code != ErrorCodes::OK)
-    {
-        LOG_ERROR(log, "Failed to append record to WAL, query_id={}, error={}", query_id, result_code);
-        throw Exception("Failed to append record to WAL, error={}", result_code);
-    }
-
-    LOG_INFO(log, "Successfully append record to WAL, query_id={}", query_id);
-}
-
 }
 }

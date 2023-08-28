@@ -11,13 +11,6 @@
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
 
-/// proton: starts
-#include <DistributedMetadata/CatalogService.h>
-#include <Interpreters/Streaming/BlockUtils.h>
-#include <Interpreters/Streaming/DDLHelper.h>
-#include <base/ClockUtils.h>
-/// proton: ends
-
 #include "config.h"
 
 namespace DB
@@ -73,161 +66,9 @@ void InterpreterDropQuery::waitForTableToBeActuallyDroppedOrDetached(const ASTDr
         db->waitDetachedTableNotInUse(uuid_to_wait);
 }
 
-/// proton: start
-bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
-{
-    auto ctx = getContext();
-    if (!ctx->isDistributedEnv())
-        return false;
-
-    const String & database = query.getDatabase().empty() ? ctx->getCurrentDatabase() : query.getDatabase();
-    String payload = "{}";
-    if (ctx->isLocalQueryFromTCP())
-    {
-        /// We assume it is a `Stream`, so either `on local` or `not exists but is virtual`，
-        /// and try do distributed ddl operation.
-        /// NOTE: we can not check it from `CatalogService`, there are some reasons:
-        /// 1）When a table successfully created but failed to startup, will not update it in CatalogService
-        /// 2) When a table successfully created and startup, but fail to update it in CatalogService.
-        auto table = DatabaseCatalog::instance().tryGetTable({database, query.getTable()}, ctx);
-        if (!table || table->getName() == "Stream" || table->getName() == "View" || table->getName() == "MaterializedView")
-            ctx->setDistributedDDLOperation(true);
-        else
-            return false;
-    }
-    else
-    {
-        payload = ctx->getQueryParameters().at("_payload");
-    }
-
-    if (ctx->isDistributedDDLOperation())
-    {
-        const auto & catalog_service = CatalogService::instance(ctx);
-        auto tables = catalog_service.findTableByName(database, query.getTable());
-        if (tables.empty())
-        {
-            if (query.if_exists)
-                return {};
-            else
-                /// proton: starts
-                throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} does not exist.", query.getDatabase(), query.getTable());
-                /// proton: ends
-        }
-
-        if (tables[0]->engine != "Stream" && tables[0]->engine != "View" && tables[0]->engine != "MaterializedView")
-            /// FIXME:  We only support 'Stream', 'View', 'MaterializedView' table engine for now
-            return false;
-
-        /// Check Access
-        StorageID table_id{tables[0]->database, tables[0]->name, tables[0]->uuid};
-        if (query.kind == ASTDropQuery::Kind::Truncate)
-            ctx->checkAccess(AccessType::TRUNCATE, table_id);
-        else if (query.kind == ASTDropQuery::Kind::Detach || query.kind == ASTDropQuery::Kind::Drop)
-            ctx->checkAccess(AccessType::DROP_TABLE, table_id);
-
-        auto * log = &Poco::Logger::get("InterpreterDropQuery");
-
-        auto query_str = queryToString(query);
-        /// proton: starts
-        LOG_INFO(
-            log,
-            "[{}]Drop stream query={} query_id={}",
-            ctx->isDistributedDDLOperation() ? "Distributed" : "Local",
-            query_str,
-            ctx->getCurrentQueryId());
-        /// proton: ends
-
-        std::vector<std::pair<String, String>> string_cols
-            = {{"payload", payload},
-               {"database", database},
-               {"table", query.getTable()},
-               {"engine", tables[0]->engine},
-               {"uuid", toString(tables[0]->uuid)},
-               {"query_id", ctx->getCurrentQueryId()},
-               {"user", ctx->getUserName()}};
-
-        std::vector<std::pair<String, Int32>> int32_cols;
-
-        /// Milliseconds since epoch
-        std::vector<std::pair<String, UInt64>> uint64_cols = {{"timestamp", MonotonicMilliseconds::now()}};
-
-        Block block = Streaming::buildBlock(string_cols, int32_cols, uint64_cols);
-        /// Schema: (payload, database, table, timestamp, query_id, user)
-        nlog::OpCode op_code = query.kind == ASTDropQuery::Kind::Truncate ? nlog::OpCode::TRUNCATE_TABLE : nlog::OpCode::DELETE_TABLE;
-        Streaming::appendDDLBlock(std::move(block), ctx, {"table_type"}, op_code, log);
-
-        LOG_INFO(log, "Request of dropping stream query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
-
-        Streaming::waitForDDLOps(log, ctx, false);
-        LOG_INFO(log, "Drop query={} succeeded， query_id={}", query_str, ctx->getCurrentQueryId());
-        /// FIXME, project tasks status
-        return true;
-    }
-    return false;
-}
-
-bool InterpreterDropQuery::deleteDatabaseDistributed(const ASTDropQuery & query)
-{
-    auto ctx = getContext();
-    if (!ctx->isDistributedEnv())
-        return false;
-
-    if (!ctx->getQueryParameters().contains("_payload"))
-        /// FIXME:
-        /// Build json payload here from SQL statement
-        /// context.setDistributedDDLOperation(true);
-        return false;
-
-    if (ctx->isDistributedDDLOperation())
-    {
-        const auto & database = DatabaseCatalog::instance().tryGetDatabase(query.getDatabase());
-        if (!database)
-            throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Databases {} does not exist.", query.getDatabase());
-
-        /// Check Access
-        if (query.kind == ASTDropQuery::Kind::Truncate)
-            throw Exception(ErrorCodes::SYNTAX_ERROR, "Unable to truncate database");
-        else if (query.kind == ASTDropQuery::Kind::Detach || query.kind == ASTDropQuery::Kind::Drop)
-            ctx->checkAccess(AccessType::DROP_DATABASE, query.getDatabase());
-
-        auto * log = &Poco::Logger::get("InterpreterDropQuery");
-
-        auto query_str = queryToString(query);
-        LOG_INFO(log, "Drop database query={} query_id={}", query_str, ctx->getCurrentQueryId());
-
-        std::vector<std::pair<String, String>> string_cols
-            = {{"payload", ctx->getQueryParameters().at("_payload")},
-               {"database", query.getDatabase()},
-               {"query_id", ctx->getCurrentQueryId()},
-               {"user", ctx->getUserName()}};
-
-        std::vector<std::pair<String, Int32>> int32_cols;
-
-        /// Milliseconds since epoch
-        std::vector<std::pair<String, UInt64>> uint64_cols = {{"timestamp", MonotonicMilliseconds::now()}};
-
-        Block block = Streaming::buildBlock(string_cols, int32_cols, uint64_cols);
-        /// Schema: (payload, database, timestamp, query_id, user)
-
-        Streaming::appendDDLBlock(std::move(block), ctx, {"table_type"}, nlog::OpCode::DELETE_DATABASE, log);
-
-        LOG_INFO(log, "Request of dropping database query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
-
-        /// FIXME, project tasks status
-        return true;
-    }
-    return false;
-}
-/// proton: end
-
 BlockIO InterpreterDropQuery::executeToTable(ASTDropQuery & query)
 {
     DatabasePtr database;
-
-    /// proton: start
-    if (deleteTableDistributed(query))
-        return {};
-    /// proton: end
 
     UUID table_to_wait_on = UUIDHelpers::Nil;
     auto res = executeToTableImpl(getContext(), query, database, table_to_wait_on);
@@ -422,13 +263,6 @@ BlockIO InterpreterDropQuery::executeToTemporaryTable(const String & table_name,
 
 BlockIO InterpreterDropQuery::executeToDatabase(const ASTDropQuery & query)
 {
-    /// proton: start
-    if (deleteDatabaseDistributed(query))
-    {
-        return {};
-    }
-    /// proton: end
-
     DatabasePtr database;
     std::vector<UUID> tables_to_wait;
     BlockIO res;

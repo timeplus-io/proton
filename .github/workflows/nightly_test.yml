@@ -366,7 +366,7 @@ jobs:
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '50'
+      ec2-volume-size: '60'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
@@ -490,7 +490,7 @@ jobs:
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '50'
+      ec2-volume-size: '60'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.X64_ARCH }}
@@ -614,7 +614,7 @@ jobs:
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '50'
+      ec2-volume-size: '60'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.X64_ARCH }}
@@ -738,7 +738,7 @@ jobs:
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '50'
+      ec2-volume-size: '60'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.X64_ARCH }}
@@ -837,7 +837,7 @@ jobs:
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '50'
+      ec2-volume-size: '60'
       submodules: false
       sanitizer: ""
       arch: ${{ vars.X64_ARCH }}
@@ -961,7 +961,7 @@ jobs:
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
-      ec2-volume-size: '50'
+      ec2-volume-size: '60'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.ARM_ARCH }}
@@ -1087,7 +1087,7 @@ jobs:
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
-      ec2-volume-size: '50'
+      ec2-volume-size: '60'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.ARM_ARCH }}
@@ -1213,7 +1213,7 @@ jobs:
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
-      ec2-volume-size: '50'
+      ec2-volume-size: '60'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.ARM_ARCH }}
@@ -1337,7 +1337,7 @@ jobs:
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
-      ec2-volume-size: '50'
+      ec2-volume-size: '60'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.ARM_ARCH }}
@@ -1436,7 +1436,7 @@ jobs:
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
-      ec2-volume-size: '50'
+      ec2-volume-size: '60'
       submodules: false
       sanitizer: ""
       arch: ${{ vars.ARM_ARCH }}

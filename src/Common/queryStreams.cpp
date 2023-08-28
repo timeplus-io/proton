@@ -1,4 +1,4 @@
-#include "queryStreams.h"
+#include <Common/queryStreams.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/executeSelectQuery.h>

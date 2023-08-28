@@ -12,7 +12,6 @@
 #include <Parsers/formatAST.h>
 #include <IO/ReadHelpers.h>
 #include <Poco/DirectoryIterator.h>
-#include <DistributedMetadata/CatalogService.h>
 #include <Common/renameat2.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/logger_useful.h>
@@ -209,58 +208,15 @@ void DatabaseCatalog::shutdownImpl()
     view_dependencies.clear();
 }
 
-/// proton: starts
-DatabaseAndTable DatabaseCatalog::tryGetByUUIDFromCatalogService(const UUID & uuid) const
-{
-    auto & catalog_service = CatalogService::instance(getContext());
-    auto [table, storage] = catalog_service.findTableStorageById(uuid);
-    /// Table doesn't exist in CatalogService neither
-    if (table == nullptr)
-    {
-        return {};
-    }
-
-    DatabasePtr database;
-    {
-        std::lock_guard lock{databases_mutex};
-        auto iter = databases.find(table->database);
-        if (iter == databases.end())
-        {
-            return {};
-        }
-        database = iter->second;
-    }
-
-    if (storage != nullptr)
-    {
-        return std::make_pair(database, storage);
-    }
-
-    storage = catalog_service.createVirtualTableStorage(table->create_table_query, table->database, table->name);
-    if (storage)
-    {
-        return std::make_pair(database, storage);
-    }
-    return {};
-}
-/// proton: ends
-
 DatabaseAndTable DatabaseCatalog::tryGetByUUID(const UUID & uuid) const
 {
     assert(uuid != UUIDHelpers::Nil && getFirstLevelIdx(uuid) < uuid_map.size());
-    /// proton: starts
     const UUIDToStorageMapPart & map_part = uuid_map[getFirstLevelIdx(uuid)];
-    {
-        std::lock_guard lock{map_part.mutex};
-        auto it = map_part.map.find(uuid);
-        if (it != map_part.map.end())
-        {
-            return it->second;
-        }
-    }
-
-    return tryGetByUUIDFromCatalogService(uuid);
-    /// proton: ends
+    std::lock_guard lock{map_part.mutex};
+    auto it = map_part.map.find(uuid);
+    if (it == map_part.map.end())
+        return {};
+    return it->second;
 }
 
 DatabaseAndTable DatabaseCatalog::getTableImpl(

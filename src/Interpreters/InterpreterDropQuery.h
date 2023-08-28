@@ -43,10 +43,5 @@ private:
     BlockIO executeToDictionary(const String & database_name, const String & dictionary_name, ASTDropQuery::Kind kind, bool if_exists, bool is_temporary, bool no_ddl_lock);
 
     BlockIO executeToTemporaryTable(const String & table_name, ASTDropQuery::Kind kind);
-
-    /// proton: start
-    bool deleteTableDistributed(const ASTDropQuery & query);
-    bool deleteDatabaseDistributed(const ASTDropQuery & query);
-    /// proton: end
 };
 }

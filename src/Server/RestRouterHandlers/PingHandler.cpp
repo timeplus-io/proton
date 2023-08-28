@@ -1,13 +1,12 @@
 #include "PingHandler.h"
 
+#include <KafkaLog/KafkaWALPool.h>
+#include <NativeLog/Server/NativeLog.h>
+
+#include <Core/Block.h>
 #include <base/getMemoryAmount.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
-#include <Core/Block.h>
-#include <NativeLog/Server/NativeLog.h>
-#include <DistributedMetadata/CatalogService.h>
-#include <DistributedMetadata/DDLService.h>
-#include <DistributedMetadata/PlacementService.h>
-#include <DistributedMetadata/TaskStatusService.h>
+
 #include <Interpreters/executeSelectQuery.h>
 #include <Server/HTTP/WriteBufferFromHTTPServerResponse.h>
 
@@ -41,10 +40,7 @@ std::pair<String, Int32> PingHandler::executeGet(const Poco::JSON::Object::Ptr &
     else if (status == "ping")
     {
         /// FIXME : introduce more sophisticated health calculation in future.
-        if (nlog::NativeLog::instance(query_context).enabled() || (CatalogService::instance(query_context).ready() &&
-            PlacementService::instance(query_context).ready() &&
-            TaskStatusService::instance(query_context).ready() &&
-            DDLService::instance(query_context).ready()))
+        if (nlog::NativeLog::instance(query_context).enabled() || klog::KafkaWALPool::instance(query_context).enabled())
             return {"{\"status\":\"UP\"}", HTTPResponse::HTTP_OK};
         else
             return {"{\"status\":\"Initializing\"}", HTTPResponse::HTTP_NOT_FOUND};

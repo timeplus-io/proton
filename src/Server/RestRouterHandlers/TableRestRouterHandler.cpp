@@ -2,9 +2,9 @@
 #include "SchemaValidator.h"
 
 #include <DataTypes/DataTypeNullable.h>
-#include <DistributedMetadata/queryStreams.h>
 #include <Interpreters/Streaming/ASTToJSONUtils.h>
 #include <Interpreters/Streaming/DDLHelper.h>
+#include <Interpreters/executeQuery.h>
 #include <KafkaLog/KafkaWALPool.h>
 #include <NativeLog/Server/NativeLog.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -12,10 +12,13 @@
 #include <Parsers/queryToString.h>
 #include <Storages/Streaming/StorageMaterializedView.h>
 #include <Storages/Streaming/StorageStream.h>
+#include <Storages/Streaming/parseHostShards.h>
 #include <Common/ProtonCommon.h>
+#include <Common/queryStreams.h>
 
 #include <boost/algorithm/string/join.hpp>
 
+#include <regex>
 #include <vector>
 
 namespace DB
@@ -45,6 +48,94 @@ inline DeleteMode toDeleteMode(const std::string & mode)
     else
         return DeleteMode::INVALID;
 }
+
+std::regex PARSE_HOST_SHARDS_REGEX{R"(host_shards\s*=\s*'([,|\s|\d]*)')"};
+std::regex PARSE_SHARDS_REGEX{R"(Stream\(\s*(\d+),\s*\d+\s*,)"};
+std::regex PARSE_REPLICATION_REGEX{R"(Stream\(\s*\d+,\s*(\d+)\s*,)"};
+
+Int32 searchIntValueByRegex(const std::regex & pattern, const String & str)
+{
+    std::smatch pattern_match;
+
+    auto m = std::regex_search(str, pattern_match, pattern);
+    /// assert(m);
+    /// (void)m;
+    /// FIXME, without ddl/placement service (nativelog case), we will not assign shard number
+    if (!m)
+        return 0;
+
+    return std::stoi(pattern_match.str(1));
+}
+}
+
+TableRestRouterHandler::Table::Table(const String & node_identity_, const String & host_, const Block & block, size_t row)
+    : node_identity(node_identity_), host(host_)
+{
+    std::unordered_map<String, void *> kvp = {
+        {"database", &database},
+        {"name", &name},
+        {"engine", &engine},
+        {"mode", &mode},
+        {"uuid", &uuid},
+        {"dependencies_table", &dependencies_table},
+        {"create_table_query", &create_table_query},
+        {"engine_full", &engine_full},
+        {"partition_key", &partition_key},
+        {"sorting_key", &sorting_key},
+        {"primary_key", &primary_key},
+        {"sampling_key", &sampling_key},
+        {"storage_policy", &storage_policy},
+    };
+
+    for (const auto & col : block)
+    {
+        auto it = kvp.find(col.name);
+        if (it != kvp.end())
+        {
+            if (col.name == "dependencies_table")
+            {
+                /// String array
+                WriteBufferFromOwnString buffer;
+                col.type->getDefaultSerialization()->serializeText(*col.column, row, buffer, FormatSettings{});
+                *static_cast<String *>(it->second) = buffer.str();
+            }
+            else if (col.name == "uuid")
+            {
+                auto type_id = col.type->getTypeId();
+                if (type_id == TypeIndex::UUID)
+                    *static_cast<UUID *>(it->second) = static_cast<const ColumnUUID *>(col.column.get())->getElement(row);
+                else if (type_id == TypeIndex::UInt128)
+                {
+                    static_assert(sizeof(UInt128) == sizeof(UUID));
+                    *static_cast<UUID *>(it->second) = static_cast<const ColumnUInt128 *>(col.column.get())->getElement(row);
+                }
+                else
+                    assert(false && "Invalid type of uuid column.");
+            }
+            else
+            {
+                /// String
+                *static_cast<String *>(it->second) = col.column->getDataAt(row).toString();
+            }
+        }
+    }
+
+    if (engine == "Stream")
+    {
+        auto shards = searchIntValueByRegex(PARSE_SHARDS_REGEX, engine_full);
+
+        std::smatch pattern_match;
+        auto m = std::regex_search(engine_full, pattern_match, PARSE_HOST_SHARDS_REGEX);
+        if (!m)
+        {
+            for (Int32 i = 0; i < shards; ++i)
+                host_shards.push_back(i);
+        }
+        else
+        {
+            host_shards = parseHostShards(pattern_match.str(1), shards);
+        }
+    }
 }
 
 std::map<String, std::map<String, String>> TableRestRouterHandler::update_schema = {
@@ -97,94 +188,50 @@ bool TableRestRouterHandler::validatePatch(const Poco::JSON::Object::Ptr & paylo
     return validateSchema(update_schema, payload, error_msg);
 }
 
-std::pair<String, String> parseRequestDatabaseAndNameFromPath(const String & path)
-{
-    /// PATH: '/proton/v1/ddl/streams[/{databse}/{key}] ...'
-    constexpr char prefix[] = "/proton/v1/ddl/streams";
-    assert(path.starts_with(prefix));
-    size_t root_len = strlen(prefix);
-    if (root_len == path.size())
-        return {"", ""};
-
-    ++root_len;  /// skip '/'
-    auto namespace_end = path.find_first_of('/', root_len);
-    if (namespace_end == std::string::npos)
-        return {path.substr(root_len), ""};
-    else
-        return {String(path, root_len, namespace_end - root_len), path.substr(namespace_end + 1)};
-}
-
 std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */) const
 {
-    if (!DatabaseCatalog::instance().tryGetDatabase(database))
+    String requested_database, requested_name;
+    requested_database = getPathParameter("database");
+    requested_name = getPathParameter("stream");
+
+    /// For the case GET '/proton/v1/ddl/streams'
+    if (requested_database.empty())
+        requested_database = database;
+
+    if (!DatabaseCatalog::instance().tryGetDatabase(requested_database))
         return {
             jsonErrorResponse(fmt::format("Databases {} does not exist.", database), ErrorCodes::UNKNOWN_DATABASE),
             HTTPResponse::HTTP_BAD_REQUEST};
 
-    String requested_database, requested_name;
-    std::tie(requested_database, requested_name) =  parseRequestDatabaseAndNameFromPath(this->query_uri.getPath());
-    
-    CatalogService::TablePtrs streams;
-    if (!CatalogService::instance(query_context).enabled())
-    {
-        auto node_identity{query_context->getNodeIdentity()};
-        auto this_host{query_context->getHostFQDN()};
+    TablePtrs streams;
+    auto node_identity{query_context->getNodeIdentity()};
+    auto this_host{query_context->getHostFQDN()};
 
-        if (requested_database.empty())
-            queryStreams(query_context, [&](Block && block) {
-                streams.reserve(block.rows());
-                for (size_t row = 0; row < block.rows(); ++row)
-                    streams.push_back(std::make_shared<CatalogService::Table>(node_identity, this_host, block, row));
-            });
-        else if (requested_name.empty())
-        {
-            queryStreamsByDatabasse(query_context, requested_database, [&](Block && block) {
-                streams.reserve(block.rows());
-                for (size_t row = 0; row < block.rows(); ++row)
-                    streams.push_back(std::make_shared<CatalogService::Table>(node_identity, this_host, block, row));
-            });
-            if (streams.empty())
-                throw Exception(ErrorCodes::BAD_ARGUMENTS, "database '{}' doesn't exit or does not have any streams", requested_database);
-        }
-        else
-        {
-            queryOneStream(query_context, requested_database, requested_name, [&](Block && block) {
-                streams.reserve(block.rows());
-                for (size_t row = 0; row < block.rows(); ++row)
-                    streams.push_back(std::make_shared<CatalogService::Table>(node_identity, this_host, block, row));
-            });
-            if (streams.empty())
-                throw Exception(ErrorCodes::BAD_ARGUMENTS, "No stream named '{}' in database '{}'", requested_name, requested_database);
-        }
+    if (requested_database.empty())
+        queryStreams(query_context, [&](Block && block) {
+            streams.reserve(block.rows());
+            for (size_t row = 0; row < block.rows(); ++row)
+                streams.push_back(std::make_shared<Table>(node_identity, this_host, block, row));
+        });
+    else if (requested_name.empty())
+    {
+        queryStreamsByDatabasse(query_context, requested_database, [&](Block && block) {
+            streams.reserve(block.rows());
+            for (size_t row = 0; row < block.rows(); ++row)
+                streams.push_back(std::make_shared<Table>(node_identity, this_host, block, row));
+        });
+        if (streams.empty())
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "database '{}' doesn't exit or does not have any streams", requested_database);
     }
     else
     {
-        if (requested_database.empty())
-        {
-            const auto & catalog_service = CatalogService::instance(query_context);
-            for (const auto & database : catalog_service.databases())
-                if (database != "system" && database != "INFORMATION_SCHEMA" && database != "information_schema")
-                {
-                    auto database_streams = catalog_service.findTableByDB(database);
-                    for (const auto &it : database_streams)
-                        streams.emplace_back(it);
-                }
-        }
-        else if (requested_name.empty())
-        {
-            const auto & catalog_service = CatalogService::instance(query_context);
-            streams = catalog_service.findTableByDB(requested_database);
-            if (streams.empty())
-                throw Exception(
-                    ErrorCodes::BAD_ARGUMENTS, "database '{}' doesn't exit or does not have any streams", requested_database);
-        }
-        else
-        {
-            const auto & catalog_service = CatalogService::instance(query_context);
-            streams = catalog_service.findTableByName(requested_database, requested_name);
-            if (streams.empty())
-                throw Exception(ErrorCodes::BAD_ARGUMENTS, "No stream named '{}' in database '{}'", requested_name, requested_database);
-        }
+        queryOneStream(query_context, requested_database, requested_name, [&](Block && block) {
+            streams.reserve(block.rows());
+            for (size_t row = 0; row < block.rows(); ++row)
+                streams.push_back(std::make_shared<Table>(node_identity, this_host, block, row));
+        });
+        if (streams.empty())
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "No stream named '{}' in database '{}'", requested_name, requested_database);
     }
 
     Poco::JSON::Object resp;
@@ -201,17 +248,10 @@ std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Ob
 std::pair<String, Int32> TableRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payload) const
 {
     const auto & table = payload->get("name").toString();
-    /// Only check table existence when the ddl is distributed since when it is local, the creation
-    /// may already happen in other nodes and broadcast to the action node, in this case, we will
-    /// report table exist failure but we should not
-    if (isDistributedDDL() && CatalogService::instance(query_context).tableExists(database, table))
-    {
-        auto tables = CatalogService::instance(query_context).findTableByName(database, table);
+    if (DatabaseCatalog::instance().tryGetTable({database, table}, query_context))
         return {
-            jsonErrorResponse(
-                fmt::format("{} {}.{} already exists.", tables[0]->engine, database, table), ErrorCodes::STREAM_ALREADY_EXISTS),
+            jsonErrorResponse(fmt::format("Stream '{}.{}' already exists.", database, table), ErrorCodes::STREAM_ALREADY_EXISTS),
             HTTPResponse::HTTP_BAD_REQUEST};
-    }
 
     const auto & host_shards = getQueryParameter("host_shards");
     const auto & uuid = getQueryParameter("uuid");
@@ -240,7 +280,7 @@ std::pair<String, Int32> TableRestRouterHandler::executePatch(const Poco::JSON::
 {
     const String & table = getPathParameter("stream");
 
-    if (isDistributedDDL() && !CatalogService::instance(query_context).tableExists(database, table))
+    if (!DatabaseCatalog::instance().tryGetTable({database, table}, query_context))
     {
         return {
             jsonErrorResponse(fmt::format("Stream {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_STREAM),
@@ -295,7 +335,7 @@ std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON:
             query = "TRUNCATE STREAM " + database + ".`" + table + "`";
     }
 
-    if (isDistributedDDL() && !CatalogService::instance(query_context).tableExists(database, table))
+    if (!DatabaseCatalog::instance().tryGetTable({database, table}, query_context))
     {
         return {
             jsonErrorResponse(fmt::format("Stream {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_STREAM),
@@ -381,34 +421,8 @@ void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, c
     resp_table.set("columns", columns_mapping_json);
 }
 
-void TableRestRouterHandler::buildTablePlacements(Poco::JSON::Object & resp_table, const String & table) const
-{
-    const auto & catalog_service = CatalogService::instance(query_context);
-    const auto & table_nodes = catalog_service.findTableByName(database, table);
-
-    std::multimap<int, String> nodes;
-    for (const auto & node : table_nodes)
-        for (auto & shard : node->host_shards)
-            nodes.emplace(shard, node->host);
-
-    Poco::JSON::Array shards;
-    for (auto it = nodes.begin(); it != nodes.end(); it = nodes.upper_bound(it->first))
-    {
-        Poco::JSON::Object placement;
-        placement.set("shard", it->first);
-
-        auto range = nodes.equal_range(it->first);
-        Poco::JSON::Array replicas;
-        while (range.first != range.second)
-            replicas.add(range.first++->second);
-
-        placement.set("replicas", replicas);
-        shards.add(placement);
-    }
-    resp_table.set("shards", shards);
-}
-
-String TableRestRouterHandler::getEngineExpr(const Poco::JSON::Object::Ptr & payload) const /// NOLINT(readability-convert-member-functions-to-static)
+String TableRestRouterHandler::getEngineExpr(
+    const Poco::JSON::Object::Ptr & payload) const /// NOLINT(readability-convert-member-functions-to-static)
 {
     const auto & shards = getStringValueFrom(payload, "shards", "1");
     const auto & replication_factor = getStringValueFrom(payload, "replication_factor", "1");
@@ -506,4 +520,41 @@ TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & payload, 
     return boost::algorithm::join(create_segments, " ");
 }
 
+void TableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, const TablePtrs & tables) const
+{
+    Poco::JSON::Array tables_mapping_json;
+    std::unordered_set<String> table_names;
+
+    bool include_internal_streams
+        = getQueryParameterBool("include_internal_streams", query_context->getSettingsRef().include_internal_streams.value);
+    for (const auto & table : tables)
+    {
+        /// If include_internal_streams = false, ignore internal streams
+        if (table->name.starts_with(".inner.") && !include_internal_streams)
+            continue;
+
+        if (table_names.contains(table->name))
+            continue;
+
+        if (table->engine_full.find("subtype = 'rawstore'") == String::npos)
+            continue;
+
+        const auto & query_ptr = parseQuery(table->create_table_query, query_context);
+        const auto & create = query_ptr->as<const ASTCreateQuery &>();
+
+        Poco::JSON::Object table_mapping_json;
+        table_mapping_json.set("name", table->name);
+        table_mapping_json.set("engine", table->engine);
+        table_mapping_json.set("order_by_expression", table->sorting_key);
+        table_mapping_json.set("partition_by_expression", table->partition_key);
+
+        if (create.storage->ttl_table)
+            table_mapping_json.set("ttl", queryToString(*create.storage->ttl_table));
+
+        tables_mapping_json.add(table_mapping_json);
+        table_names.insert(table->name);
+    }
+
+    resp.set("data", tables_mapping_json);
+}
 }

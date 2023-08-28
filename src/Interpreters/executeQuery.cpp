@@ -71,7 +71,6 @@
 
 /// proton: starts
 #include <Interpreters/AddTimeParamVisitor.h>
-#include <DistributedMetadata/CatalogService.h>
 #include <Checkpoint/CheckpointCoordinator.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/Streaming/ASTRecoverQuery.h>
@@ -108,23 +107,6 @@ namespace ErrorCodes
 namespace
 {
 /// proton: starts
-/// If there are any table definition changes locally on the node
-/// broadcast the table definitions to notify all CatalogService
-void broadcastCatalogIfNecessary(const ASTPtr & ast, ContextPtr & context)
-{
-    if (!context->isDistributedEnv() || context->isDistributedDDLOperation())
-        return;
-
-    if (auto * create = ast->as<ASTCreateQuery>())
-    {
-        if (!create->getDatabase().empty() || !create->getTable().empty())
-            CatalogService::instance(context->getGlobalContext()).broadcast();
-    }
-
-    if (ast->as<ASTDropQuery>() || ast->as<ASTAlterQuery>() || ast->as<ASTRenameQuery>())
-        CatalogService::instance(context->getGlobalContext()).broadcast();
-}
-
 /// 1. Get the underlying select query from checkpoint coordinator
 /// 2. Re-parse that select query and return the parsed select query ast
 std::pair<String, ASTPtr> handleRecoverQuery(const Streaming::ASTRecoverQuery * recover_query, ContextMutablePtr context)
@@ -1077,11 +1059,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                     opentelemetry_span_log->add(span);
                 }
-
-                /// proton: starts
-                auto const_context = std::const_pointer_cast<const Context>(context);
-                broadcastCatalogIfNecessary(ast, const_context);
-                /// proton: ends
             };
 
             auto exception_callback = [elem, context, ast,

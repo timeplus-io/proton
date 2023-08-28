@@ -45,9 +45,6 @@
 #include <csignal>
 
 /// proton: starts
-#include <DistributedMetadata/CatalogService.h>
-#include <Interpreters/Streaming/BlockUtils.h>
-#include <Interpreters/Streaming/DDLHelper.h>
 #include <Storages/Streaming/StorageStream.h>
 /// proton: ends
 #include "config.h"
@@ -630,91 +627,7 @@ BlockIO InterpreterSystemQuery::execute()
 /// proton: starts
 bool InterpreterSystemQuery::executeDistributed(ASTSystemQuery & system)
 {
-    auto ctx = getContext();
-
-    assert(!ctx->getCurrentQueryId().empty());
-
-    const String & replica = system.replica;
-    if (replica.empty())
-        return false;
-
-    const auto & catalog_service = CatalogService::instance(ctx->getGlobalContext());
-    auto node = catalog_service.nodeByIdentity(replica);
-    if (!node)
-        throw Exception(ErrorCodes::NO_SUCH_REPLICA, "Replica {} does not exist.", replica);
-
-    if (ctx->isLocalQueryFromTCP())
-    {
-        if (shouldBeDistributed(system, ctx))
-            ctx->setDistributedDDLOperation(true);
-    }
-    auto payload = Streaming::getJSONFromSystemQuery(system);
-
-    if (payload.empty() || !ctx->isDistributedDDLOperation())
-        return false;
-
-    const auto & table = system.getTable();
-    if (!table.empty() && system.getDatabase().empty())
-        system.setDatabase(ctx->getCurrentDatabase());
-    const auto & database = system.getDatabase();
-
-    /// make sure table exists if provided in query
-    if (!table.empty())
-    {
-        auto tables = catalog_service.findTableByName(database, table);
-        bool found = false;
-        if (system.type != ASTSystemQuery::Type::ADD_REPLICA)
-        {
-            for (const auto & stream : tables)
-                if (stream->node_identity == replica)
-                {
-                    found = true;
-                    break;
-                }
-        }
-        else
-            found = true;
-
-        if (!found)
-            throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} does not exist in replica {}", database, table, replica);
-    }
-
-    if (system.type == ASTSystemQuery::Type::ADD_REPLICA && system.shard < 0)
-        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Missing shard of Stream '{}.{}' for 'ADD REPLICA' command", database, table);
-
-    if (system.type == ASTSystemQuery::Type::REPLACE_REPLICA
-        && (system.old_replica.empty() || !catalog_service.nodeByIdentity(system.old_replica)))
-        throw Exception(
-            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-            "Missing target replica or target replica cannot be found' for 'REPLACE REPLICA' command");
-
-    auto query = queryToString(system);
-    LOG_INFO(log, "[Distributed] Execute system command query={} query_id={}", query, ctx->getCurrentQueryId());
-
-    std::vector<std::pair<String, String>> string_cols
-        = {{"payload", payload},
-           {"database", database},
-           {"table", table},
-           {"replica", replica},
-           {"old_replica", system.old_replica},
-           {"query_id", ctx->getCurrentQueryId()},
-           {"user", ctx->getUserName()}};
-
-    std::vector<std::pair<String, Int32>> int32_cols = {{"shard", static_cast<UInt64>(system.shard)}};
-
-    std::vector<std::pair<String, UInt64>> uint64_cols
-        = {{"timestamp", MonotonicMilliseconds::now()}, {"type", static_cast<UInt64>(system.type)}};
-
-    /// Schema: (payload, database, table, timestamp, query_id, user, type)
-    Block block = Streaming::buildBlock(string_cols, int32_cols, uint64_cols);
-
-    Streaming::appendDDLBlock(std::move(block), ctx, {}, nlog::OpCode::SYSTEM_CMD, log);
-
-    LOG_INFO(log, "Request of executing system command query={} query_id={} has been accepted", query, ctx->getCurrentQueryId());
-
-    Streaming::waitForDDLOps(log, ctx, true);
-
-    return true;
+    return false;
 }
 /// proton: ends
 

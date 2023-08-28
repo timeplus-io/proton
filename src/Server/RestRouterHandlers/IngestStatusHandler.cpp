@@ -1,7 +1,6 @@
 #include "IngestStatusHandler.h"
 #include "SchemaValidator.h"
 
-#include <DistributedMetadata/CatalogService.h>
 #include <Storages/Streaming/StorageStream.h>
 #include <Common/sendRequest.h>
 
@@ -24,8 +23,6 @@ namespace ErrorCodes
 
 namespace
 {
-    constexpr auto * BATCH_URL = "http://{}:{}/proton/v1/ingest/statuses";
-
     const std::map<String, std::map<String, String>> POLL_SCHEMA = {{"required", {{"channel", "string"}, {"poll_ids", "array"}}}};
 
     StoragePtr
@@ -126,32 +123,7 @@ std::pair<String, Int32> IngestStatusHandler::executePost(const Poco::JSON::Obje
     }
     else
     {
-        auto target_node = CatalogService::instance(query_context).nodeByChannel(chan);
-        if (target_node == nullptr)
-            /// Node not found, either node is gone or invalid channel
-            return {jsonErrorResponse("Unknown channel", ErrorCodes::CHANNEL_ID_NOT_EXISTS), HTTPResponse::HTTP_NOT_FOUND};
-
-        std::stringstream req_body_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-        payload->stringify(req_body_stream, 0);
-        const String & body = req_body_stream.str();
-
-        /// Forward the request to target node
-        /// FIXME, https
-        Poco::URI uri{fmt::format(BATCH_URL, target_node->host, target_node->http_port)};
-        auto [response, http_status] = sendRequest(
-            uri,
-            HTTPRequest::HTTP_POST,
-            query_context->getCurrentQueryId(),
-            query_context->getUserName(),
-            query_context->getPasswordByUserName(query_context->getUserName()),
-            body,
-            {},
-            log);
-
-        if (http_status == HTTPResponse::HTTP_OK)
-            return {response, http_status};
-
-        return {jsonErrorResponseFrom(response, ErrorCodes::SEND_POLL_REQ_ERROR), http_status};
+        return {jsonErrorResponseFrom("not support to insert in cluster yet", ErrorCodes::SEND_POLL_REQ_ERROR), HTTPResponse::HTTP_BAD_REQUEST};
     }
 }
 

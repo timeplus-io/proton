@@ -70,9 +70,9 @@ jobs:
         pip install pyyaml==5.3.1
 
         pip install -r helpers/requirements.txt
-        df -h
+
         python ci_runner.py --settings=redp,nativelog
-        df -h
+
         echo "check test result"
         cat $GITHUB_WORKSPACE/tests/stream/.status
         cat $GITHUB_WORKSPACE/tests/stream/.status | grep nativelog:ExitCode.OK | grep redp:ExitCode.OK
@@ -87,7 +87,7 @@ jobs:
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '50'
+      ec2-volume-size: '60'
       submodules: false
       sanitizer: ''
       arch: ${{ vars.X64_ARCH }}

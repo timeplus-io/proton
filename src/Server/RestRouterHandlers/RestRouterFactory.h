@@ -18,7 +18,6 @@
 #include "SQLFormatHandler.h"
 #include "SearchHandler.h"
 #include "TabularTableRestRouterHandler.h"
-#include "TaskRestRouterHandler.h"
 #include "UDFHandler.h"
 #include "SystemCommandHandler.h"
 
@@ -87,7 +86,7 @@ public:
 
         factory.registerRouterHandler(
             /// PATH: '/proton/v1/ddl/streams [/{databse}] [/{key}] ...'
-            "/proton/v1/ddl/streams(/[\\w\\W]*)?",
+            "/proton/v1/ddl/streams(/?(\\?[\\w\\-=&#]+){0,1}$|/(?P<database>[%\\w]+)(/?(\\?[\\w\\-=&#]+){0,1}$|/(?P<stream>[%\\-\\.\\w]+)(\\?[\\w\\-=&#]+){0,1})(\\?[\\w\\-=&#]+){0,1})",
             "GET",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<TabularTableRestRouterHandler>(query_context);
@@ -109,14 +108,7 @@ public:
 
         factory.registerRouterHandler(
             "/proton/v1/ddl/externalstreams(\\?[\\w\\-=&#]+){0,1}",
-            "GET/POST",
-            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-                return std::make_shared<ExternalStreamRestRouterHandler>(query_context);
-            });
-
-        factory.registerRouterHandler(
-            "/proton/v1/ddl/externalstreams/(?P<stream>[_%\\.\\-\\w]+)(\\?[\\w\\-=&#]+){0,1}",
-            "DELETE" /* So far, not support PATCH */,
+            "POST",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<ExternalStreamRestRouterHandler>(query_context);
             });
@@ -186,13 +178,6 @@ public:
                 return std::make_shared<UDFHandler>(query_context);
             });
 #endif
-        factory.registerRouterHandler(
-            "/proton/v1/tasks(/?$|/(?P<task_id>[-\\w]+))",
-            "GET",
-            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-                return std::make_shared<DB::TaskRestRouterHandler>(query_context);
-            });
-
         factory.registerRouterHandler(
             "/proton/(?P<status>ping|info)$",
             "GET",

@@ -270,10 +270,6 @@ private:
     static constexpr size_t reschedule_time_ms = 100;
     static constexpr time_t drop_error_cooldown_sec = 5;
 
-    /// proton: starts
-    DatabaseAndTable tryGetByUUIDFromCatalogService(const UUID & uuid) const;
-    /// proton: ends
-
 private:
     mutable std::mutex databases_mutex;
 

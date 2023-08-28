@@ -107,7 +107,7 @@ jobs:
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '50'
+      ec2-volume-size: '60'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}

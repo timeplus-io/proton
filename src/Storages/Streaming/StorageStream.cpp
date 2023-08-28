@@ -1,3 +1,4 @@
+#include <Interpreters/Streaming/DDLHelper.h>
 #include <Storages/Streaming/StorageStream.h>
 #include <Storages/Streaming/StreamShard.h>
 #include <Storages/Streaming/StreamSink.h>
@@ -9,7 +10,6 @@
 
 #include <Columns/ColumnConst.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <DistributedMetadata/CatalogService.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ClusterProxy/DistributedSelectStreamFactory.h>
 #include <Interpreters/ClusterProxy/executeQuery.h>
@@ -295,6 +295,20 @@ StorageStream::StorageStream(
     /// Init StreamShard
     {
         auto ssettings = storage_settings.get();
+
+        /// Kafka based stream
+        if(context_->isDistributedEnv())
+        {
+            const auto & query_params = context_->getQueryParameters();
+            String retention_settings;
+            auto it = query_params.find("url_parameters");
+            if (it != query_params.end())
+                retention_settings = it->second;
+
+            Streaming::createDWAL(
+                toString(table_id_.uuid), shards, static_cast<Int32>(ssettings->logstore_replication_factor), retention_settings, context_);
+        }
+
         auto host_shards = parseHostShards(ssettings->host_shards.value, shards);
         stream_shards.reserve(host_shards.size());
         for (auto shard : host_shards)
@@ -1069,6 +1083,14 @@ void StorageStream::drop()
     for (const auto & stream_shard : stream_shards)
         if (stream_shard->storage)
             stream_shard->storage->drop();
+
+    if (getContext()->isDistributedEnv())
+    {
+        String uuid_str = toString(getStorageID().uuid);
+        const auto & storage_id = getStorageID();
+        LOG_INFO(log, "Drop kafka topic '{}' for stream '{}.{}'", storage_id.uuid, storage_id.getDatabaseName(), storage_id.getTableName());
+        Streaming::deleteDWAL(toString(uuid_str), getContext());
+    }
 }
 
 void StorageStream::preRename(const StorageID & new_table_id)
@@ -1365,8 +1387,8 @@ std::unique_ptr<StreamSettings> StorageStream::getDefaultSettings() const
 /// Distributed query related functions
 ClusterPtr StorageStream::getCluster() const
 {
-    auto sid = getStorageID();
-    return CatalogService::instance(getContext()).tableCluster(sid.database_name, sid.table_name, replication_factor, shards);
+    /// FIXME: implement the logic for NativeLog cluster
+    return nullptr;
 }
 
 /// Returns a new cluster with fewer shards if constant folding for `sharding_key_expr` is possible
