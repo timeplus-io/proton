@@ -1046,42 +1046,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 #endif
 
-    if (config().has("interserver_http_port") && config().has("interserver_https_port"))
-        throw Exception("Both http and https interserver ports are specified", ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG);
-
-    static const auto interserver_tags =
-    {
-        std::make_tuple("interserver_http_host", "interserver_http_port", "http"),
-        std::make_tuple("interserver_https_host", "interserver_https_port", "https")
-    };
-
-    for (auto [host_tag, port_tag, scheme] : interserver_tags)
-    {
-        if (config().has(port_tag))
-        {
-            String this_host = config().getString(host_tag, "");
-
-            if (this_host.empty())
-            {
-                this_host = getFQDNOrHostName();
-                LOG_DEBUG(log, "Configuration parameter '{}' doesn't exist or exists and empty. Will use '{}' as replica host.",
-                    host_tag, this_host);
-            }
-
-            String port_str = config().getString(port_tag);
-            int port = parse<int>(port_str);
-
-            if (port < 0 || port > 0xFFFF)
-                throw Exception("Out of range '" + String(port_tag) + "': " + toString(port), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-
-            global_context->setInterserverIOAddress(this_host, port);
-            global_context->setInterserverScheme(scheme);
-        }
-    }
-
-    LOG_DEBUG(log, "Initializing interserver credentials.");
-    global_context->updateInterserverCredentials(config());
-
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros", log));
 
@@ -1908,51 +1872,6 @@ void Server::createServers(
                      new Poco::Net::TCPServerParams));
         });
         /// proton: ends
-
-        /// Interserver IO HTTP
-        port_name = "interserver_http_port";
-        createServer(config, listen_host, port_name, listen_try, start_servers, servers, [&](UInt16 port) -> ProtocolServerAdapter
-        {
-            Poco::Net::ServerSocket socket;
-            auto address = socketBindListen(socket, listen_host, port);
-            socket.setReceiveTimeout(settings.http_receive_timeout);
-            socket.setSendTimeout(settings.http_send_timeout);
-            return ProtocolServerAdapter(
-                listen_host,
-                port_name,
-                "replica communication (interserver): http://" + address.toString(),
-                std::make_unique<HTTPServer>(
-                    context(),
-                    createHandlerFactory(*this, async_metrics, "InterserverIOHTTPHandler-factory"),
-                    server_pool,
-                    socket,
-                    http_params));
-        });
-
-        port_name = "interserver_https_port";
-        createServer(config, listen_host, port_name, listen_try, start_servers, servers, [&](UInt16 port) -> ProtocolServerAdapter
-        {
-#if USE_SSL
-            Poco::Net::SecureServerSocket socket;
-            auto address = socketBindListen(socket, listen_host, port, /* secure = */ true);
-            socket.setReceiveTimeout(settings.http_receive_timeout);
-            socket.setSendTimeout(settings.http_send_timeout);
-            return ProtocolServerAdapter(
-                listen_host,
-                port_name,
-                "secure replica communication (interserver): https://" + address.toString(),
-                std::make_unique<HTTPServer>(
-                    context(),
-                    createHandlerFactory(*this, async_metrics, "InterserverIOHTTPSHandler-factory"),
-                    server_pool,
-                    socket,
-                    http_params));
-#else
-            UNUSED(port);
-            throw Exception{"SSL support for TCP protocol is disabled because Poco library was built without NetSSL support.",
-                            ErrorCodes::SUPPORT_IS_DISABLED};
-#endif
-        });
 
         port_name = "postgresql_port";
         createServer(config, listen_host, port_name, listen_try, start_servers, servers, [&](UInt16 port) -> ProtocolServerAdapter
