@@ -278,6 +278,9 @@ struct Window
 {
     Int64 start;
     Int64 end;
+
+    bool isValid() const { return end > start; }
+    operator bool() const { return isValid(); }
 };
 
 struct WindowWithBuckets

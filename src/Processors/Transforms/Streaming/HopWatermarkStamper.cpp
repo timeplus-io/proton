@@ -20,7 +20,11 @@ HopWatermarkStamper::HopWatermarkStamper(const WatermarkStamperParams & params_,
 
 Int64 HopWatermarkStamper::calculateWatermark(Int64 event_ts) const
 {
-    return HopHelper::getLastFinalizedWindow(event_ts, window_params).end;
+    auto last_finalized_window = HopHelper::getLastFinalizedWindow(event_ts, window_params);
+    if (likely(last_finalized_window.isValid()))
+        return last_finalized_window.end;
+    else
+        return event_ts;
 }
 
 }

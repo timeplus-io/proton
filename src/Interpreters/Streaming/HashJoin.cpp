@@ -2245,7 +2245,7 @@ void HashJoin::calculateWatermark()
     Int64 left_watermark = left_data.buffered_data->current_watermark;
     Int64 right_watermark = right_data.buffered_data->current_watermark;
 
-    if (left_watermark == 0 || right_watermark == 0)
+    if (left_watermark == INVALID_WATERMARK || right_watermark == INVALID_WATERMARK)
         return;
 
     Int64 last_combined_watermark = combined_watermark;

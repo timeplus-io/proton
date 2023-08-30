@@ -382,6 +382,33 @@
             [2, "k2", 77.7]]
         }
       ]
+    },
+    {
+      "id": 14,
+      "tags": ["Emit timeout processing"],
+      "name": "#2905",
+      "description": "Covering timeout processing for window aggregations",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query": "drop stream if exists test_stream_2905"},
+            {"client":"python", "query_type": "table", "exist": "test_stream_2905", "exist_wait":2, "wait":1, "query": "create stream test_stream_2905(id int, name string, val float, ts datetime)"},
+            {"client":"python", "query_type": "stream", "query_id":"9900", "depends_on_stream":"test_stream_2905", "wait":1, "query":"select id, count(*), min(val), max(val), sum(val), avg(val), window_start, window_end from hop(test_stream_2905, ts, 2s, 5s) group by id, window_start, window_end emit stream timeout 2s"},
+            {"client":"python", "query_type": "table", "depends_on":"9900", "wait":1, "kill": "9900", "kill_wait":4, "query": "insert into test_stream_2905(id, name, val, ts) values (1, 's1', 11.1, '2020-02-02 20:00:01')(2, 's2', 22.2, '2020-02-02 20:00:02')(1, 's3', 33.3, '2020-02-02 20:00:03')(2, 's4', 44.4, '2020-02-02 20:00:04');"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":[
+          [1, 1, 11.1, 11.1, 11.1, 11.1, "2020-02-02 19:59:58", "2020-02-02 20:00:03"],
+          [2, 1, 22.2, 22.2, 22.2, 22.2, "2020-02-02 19:59:58", "2020-02-02 20:00:03"],
+          [1, 2, 11.1, 33.3, 44.4, 22.2, "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+          [2, 2, 22.2, 44.4, 66.6, 33.3, "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+          [1, 1, 33.3, 33.3, 33.3, 33.3, "2020-02-02 20:00:02", "2020-02-02 20:00:07"],
+          [2, 2, 22.2, 44.4, 66.6, 33.3, "2020-02-02 20:00:02", "2020-02-02 20:00:07"],
+          [2, 1, 44.4, 44.4, 44.4, 44.4, "2020-02-02 20:00:04", "2020-02-02 20:00:09"]]
+        }
+      ]
     }
   ]
 }
