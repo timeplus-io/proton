@@ -40,8 +40,14 @@
   * Все методы immutable, кроме operator++.
   */
 
-
+#ifdef __clang__
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wdeprecated-dynamic-exception-spec"
+#endif
 POCO_DECLARE_EXCEPTION(Foundation_API, SimpleJSONException, Poco::Exception)
+#ifdef __clang__
+#  pragma clang diagnostic pop
+#endif
 
 
 class SimpleJSON

@@ -18,8 +18,8 @@ namespace
 
             bool hint = !(i == AccessEntityType::SETTINGS_PROFILE || i == AccessEntityType::ROW_POLICY);
 
-            if (ParserKeyword{type_info.plural_name.c_str()}.ignore(pos, expected, hint)
-                || (!type_info.plural_alias.empty() && ParserKeyword{type_info.plural_alias.c_str()}.ignore(pos, expected, hint)))
+            if (ParserKeyword{type_info.plural_name}.ignore(pos, expected, hint)
+                || (!type_info.plural_alias.empty() && ParserKeyword{type_info.plural_alias}.ignore(pos, expected, hint)))
             {
                 type = i;
                 return true;

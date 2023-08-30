@@ -28,6 +28,10 @@ if (TARGET ch_contrib::jemalloc)
     list(APPEND CLICKHOUSE_SERVER_LINK PRIVATE ch_contrib::jemalloc)
 endif()
 
+if (TARGET ch_contrib::azure_sdk)
+    list(APPEND CLICKHOUSE_SERVER_LINK PRIVATE ch_contrib::azure_sdk)
+endif()
+
 proton_program_add(server)
 
 install(FILES config.yaml users.yaml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-server" COMPONENT proton)

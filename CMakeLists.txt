@@ -59,7 +59,7 @@ if (ENABLE_CHECK_HEAVY_BUILDS)
     set (RLIMIT_CPU 1000)
 
     # gcc10/gcc10/clang -fsanitize=memory is too heavy
-    if (SANITIZE STREQUAL "memory" OR COMPILER_GCC)
+    if (SANITIZE STREQUAL "memory")
        set (RLIMIT_DATA 30000000000) # 30G
     endif()
 
@@ -197,26 +197,11 @@ else ()
     set(NO_WHOLE_ARCHIVE --no-whole-archive)
 endif ()
 
-# Ignored if `lld` is used
-option(ADD_GDB_INDEX_FOR_GOLD "Add .gdb-index to resulting binaries for gold linker.")
-
 if (NOT CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE")
     # Can be lld or ld-lld.
-    if (LINKER_NAME MATCHES "lld$")
+    if (LINKER_NAME MATCHES "lld")
         set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gdb-index")
-        set (CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--gdb-index")
         message (STATUS "Adding .gdb-index via --gdb-index linker option.")
-    # we use another tool for gdb-index, because gold linker removes section .debug_aranges, which used inside clickhouse stacktraces
-    # http://sourceware-org.1504.n7.nabble.com/gold-No-debug-aranges-section-when-linking-with-gdb-index-td540965.html#a556932
-    elseif (LINKER_NAME MATCHES "gold$" AND ADD_GDB_INDEX_FOR_GOLD)
-        find_program (GDB_ADD_INDEX_EXE NAMES "gdb-add-index" DOC "Path to gdb-add-index executable")
-        if (NOT GDB_ADD_INDEX_EXE)
-            set (USE_GDB_ADD_INDEX 0)
-            message (WARNING "Cannot add gdb index to binaries, because gold linker is used, but gdb-add-index executable not found.")
-        else()
-            set (USE_GDB_ADD_INDEX 1)
-            message (STATUS "gdb-add-index found: ${GDB_ADD_INDEX_EXE}")
-        endif()
     endif ()
 endif()
 
@@ -226,7 +211,7 @@ endif()
 option(USE_DEBUG_HELPERS "Enable debug helpers" ${USE_DEBUG_HELPERS})
 
 # Create BuildID when using lld. For other linkers it is created by default.
-if (LINKER_NAME MATCHES "lld$")
+if (LINKER_NAME MATCHES "lld")
     # SHA1 is not cryptographically secure but it is the best what lld is offering.
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--build-id=sha1")
 endif ()
@@ -234,9 +219,19 @@ endif ()
 # Add a section with the hash of the compiled machine code for integrity checks.
 # Only for official builds, because adding a section can be time consuming (rewrite of several GB).
 # And cross compiled binaries are not supported (since you cannot execute clickhouse hash-binary)
-if (OBJCOPY_PATH AND YANDEX_OFFICIAL_BUILD AND (NOT CMAKE_TOOLCHAIN_FILE))
-    set (USE_BINARY_HASH 1)
+if (YANDEX_OFFICIAL_BUILD AND (NOT CMAKE_TOOLCHAIN_FILE OR CMAKE_TOOLCHAIN_FILE MATCHES "linux/toolchain-x86_64.cmake$"))
+    message(STATUS "Official build: A checksum hash will be added to the clickhouse executable")
+    set (USE_BINARY_HASH 1 CACHE STRING "Calculate binary hash and store it in the separate section")
+else ()
+    message(STATUS "No official build: A checksum hash will not be added to the clickhouse executable")
 endif ()
+
+# Optionally split binaries and debug symbols.
+option(SPLIT_DEBUG_SYMBOLS "Split binaries and debug symbols" OFF)
+if (SPLIT_DEBUG_SYMBOLS)
+    message(STATUS "Will split binaries and debug symbols")
+    set(SPLITTED_DEBUG_SYMBOLS_DIR "stripped" CACHE STRING "A separate directory for stripped information")
+endif()
 
 cmake_host_system_information(RESULT AVAILABLE_PHYSICAL_MEMORY QUERY AVAILABLE_PHYSICAL_MEMORY) # Not available under freebsd
 
@@ -269,8 +264,8 @@ endif ()
 option (ENABLE_BUILD_PATH_MAPPING "Enable remapping of file source paths in debug info, predefined preprocessor macros, and __builtin_FILE(). It's used to generate reproducible builds. See https://reproducible-builds.org/docs/build-path" ${ENABLE_BUILD_PATH_MAPPING_DEFAULT})
 
 if (ENABLE_BUILD_PATH_MAPPING)
-    set (COMPILER_FLAGS "${COMPILER_FLAGS} -ffile-prefix-map=${CMAKE_SOURCE_DIR}=.")
-    set (CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -ffile-prefix-map=${CMAKE_SOURCE_DIR}=.")
+    set (COMPILER_FLAGS "${COMPILER_FLAGS} -ffile-prefix-map=${PROJECT_SOURCE_DIR}=.")
+    set (CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -ffile-prefix-map=${PROJECT_SOURCE_DIR}=.")
 endif ()
 
 if (${CMAKE_VERSION} VERSION_LESS "3.12.4")
@@ -295,35 +290,31 @@ set (CMAKE_C_STANDARD 11)
 set (CMAKE_C_EXTENSIONS ON)
 set (CMAKE_C_STANDARD_REQUIRED ON)
 
-if (COMPILER_GCC OR COMPILER_CLANG)
-    # Enable C++14 sized global deallocation functions. It should be enabled by setting -std=c++14 but I'm not sure.
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsized-deallocation")
-endif ()
-
-# falign-functions=32 prevents from random performance regressions with the code change. Thus, providing more stable
-# benchmarks.
-if (COMPILER_GCC OR COMPILER_CLANG)
-    set(COMPILER_FLAGS "${COMPILER_FLAGS} -falign-functions=32")
-endif ()
-
-if (COMPILER_GCC)
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
-endif ()
-
 # Compiler-specific coverage flags e.g. -fcoverage-mapping for gcc
 option(WITH_COVERAGE "Profile the resulting binary/binaries" OFF)
 
-if (WITH_COVERAGE AND COMPILER_CLANG)
-    set(COMPILER_FLAGS "${COMPILER_FLAGS} -fprofile-instr-generate -fcoverage-mapping")
-    # If we want to disable coverage for specific translation units
-    set(WITHOUT_COVERAGE "-fno-profile-instr-generate -fno-coverage-mapping")
-endif()
+if (COMPILER_CLANG)
+    # Enable C++14 sized global deallocation functions. It should be enabled by setting -std=c++14 but I'm not sure.
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsized-deallocation")
 
-if (WITH_COVERAGE AND COMPILER_GCC)
-    set(COMPILER_FLAGS "${COMPILER_FLAGS} -fprofile-arcs -ftest-coverage")
-    set(COVERAGE_OPTION "-lgcov")
-    set(WITHOUT_COVERAGE "-fno-profile-arcs -fno-test-coverage")
-endif()
+    # falign-functions=32 prevents from random performance regressions with the code change. Thus, providing more stable
+    # benchmarks.
+    set(COMPILER_FLAGS "${COMPILER_FLAGS} -falign-functions=32")
+
+    if (ARCH_AMD64)
+        # align branches within a 32-Byte boundary to avoid the potential performance loss when code layout change,
+        # which makes benchmark results more stable.
+        set(BRANCHES_WITHIN_32B_BOUNDARIES "-mbranches-within-32B-boundaries")
+        set(COMPILER_FLAGS "${COMPILER_FLAGS} ${BRANCHES_WITHIN_32B_BOUNDARIES}")
+    endif()
+
+    if (WITH_COVERAGE)
+        set(COMPILER_FLAGS "${COMPILER_FLAGS} -fprofile-instr-generate -fcoverage-mapping")
+        # If we want to disable coverage for specific translation units
+        set(WITHOUT_COVERAGE "-fno-profile-instr-generate -fno-coverage-mapping")
+    endif()
+
+endif ()
 
 set(COMPILER_FLAGS "${COMPILER_FLAGS}")
 
@@ -333,15 +324,15 @@ set (DEBUG_INFO_FLAGS "-g -gdwarf-4")
 set (CMAKE_BUILD_COLOR_MAKEFILE          ON)
 set (CMAKE_CXX_FLAGS                     "${CMAKE_CXX_FLAGS} ${COMPILER_FLAGS} ${PLATFORM_EXTRA_CXX_FLAG} ${COMMON_WARNING_FLAGS} ${CXX_WARNING_FLAGS}")
 set (CMAKE_CXX_FLAGS_RELWITHDEBINFO      "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -O3 ${DEBUG_INFO_FLAGS} ${CMAKE_CXX_FLAGS_ADD}")
-set (CMAKE_CXX_FLAGS_DEBUG               "${CMAKE_CXX_FLAGS_DEBUG} -O0 ${DEBUG_INFO_FLAGS} -fno-inline ${CMAKE_CXX_FLAGS_ADD}")
+set (CMAKE_CXX_FLAGS_DEBUG               "${CMAKE_CXX_FLAGS_DEBUG} -O0 ${DEBUG_INFO_FLAGS} ${CMAKE_CXX_FLAGS_ADD}")
 
 set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} ${COMPILER_FLAGS} ${COMMON_WARNING_FLAGS} ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} -O3 ${DEBUG_INFO_FLAGS} ${CMAKE_C_FLAGS_ADD}")
-set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} -O0 ${DEBUG_INFO_FLAGS} -fno-inline ${CMAKE_C_FLAGS_ADD}")
+set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} -O0 ${DEBUG_INFO_FLAGS} ${CMAKE_C_FLAGS_ADD}")
 
 set (CMAKE_ASM_FLAGS                     "${CMAKE_ASM_FLAGS} ${COMPILER_FLAGS} ${CMAKE_ASM_FLAGS_ADD}")
 set (CMAKE_ASM_FLAGS_RELWITHDEBINFO      "${CMAKE_ASM_FLAGS_RELWITHDEBINFO} -O3 ${DEBUG_INFO_FLAGS} ${CMAKE_ASM_FLAGS_ADD}")
-set (CMAKE_ASM_FLAGS_DEBUG               "${CMAKE_ASM_FLAGS_DEBUG} -O0 ${DEBUG_INFO_FLAGS} -fno-inline ${CMAKE_ASM_FLAGS_ADD}")
+set (CMAKE_ASM_FLAGS_DEBUG               "${CMAKE_ASM_FLAGS_DEBUG} -O0 ${DEBUG_INFO_FLAGS} ${CMAKE_ASM_FLAGS_ADD}")
 
 if (COMPILER_CLANG)
     if (OS_DARWIN)
@@ -361,11 +352,6 @@ if (COMPILER_CLANG)
     endif()
 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstrict-vtable-pointers")
-
-    # Set new experimental pass manager, it's a performance, build time and binary size win.
-    # Can be removed after https://reviews.llvm.org/D66490 merged and released to at least two versions of clang.
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexperimental-new-pass-manager")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fexperimental-new-pass-manager")
 
     # We cannot afford to use LTO when compiling unit tests, and it's not enough
     # to only supply -fno-lto at the final linking stage. So we disable it
@@ -409,6 +395,11 @@ elseif (OS_FREEBSD)
     include(cmake/freebsd/default_libs.cmake)
 endif ()
 link_libraries(global-group)
+
+option (ENABLE_GWP_ASAN "Enable Gwp-Asan" ON)
+if (NOT OS_LINUX AND NOT OS_ANDROID)
+    set(ENABLE_GWP_ASAN OFF)
+endif ()
 
 if (WERROR)
     # Don't pollute CMAKE_CXX_FLAGS with -Werror as it will break some CMake checks.
@@ -463,8 +454,7 @@ endif ()
 message (STATUS
     "Building for: ${CMAKE_SYSTEM} ${CMAKE_SYSTEM_PROCESSOR} ${CMAKE_LIBRARY_ARCHITECTURE} ;
     USE_STATIC_LIBRARIES=${USE_STATIC_LIBRARIES}
-    SPLIT_SHARED=${SPLIT_SHARED_LIBRARIES}
-    CCACHE=${CCACHE_FOUND} ${CCACHE_VERSION}")
+    SPLIT_SHARED=${SPLIT_SHARED_LIBRARIES}")
 
 include (GNUInstallDirs)
 

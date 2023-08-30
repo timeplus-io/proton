@@ -1,5 +1,6 @@
 #pragma once
 
+#include <base/defines.h>
 #include <Common/SimpleIncrement.h>
 #include <Common/MultiVersion.h>
 #include <Storages/IStorage.h>
@@ -892,16 +893,16 @@ public:
     /// section from config.xml.
     CompressionCodecPtr getCompressionCodecForPart(size_t part_size_compressed, const IMergeTreeDataPart::TTLInfos & ttl_infos, time_t current_time) const;
 
-    std::lock_guard<std::mutex> getQueryIdSetLock() const { return std::lock_guard<std::mutex>(query_id_set_mutex); }
+    std::shared_ptr<QueryIdHolder> getQueryIdHolder(const String & query_id, UInt64 max_concurrent_queries) const;
 
     /// Record current query id where querying the table. Throw if there are already `max_queries` queries accessing the same table.
     /// Returns false if the `query_id` already exists in the running set, otherwise return true.
     bool insertQueryIdOrThrow(const String & query_id, size_t max_queries) const;
-    bool insertQueryIdOrThrowNoLock(const String & query_id, size_t max_queries) const;
+    bool insertQueryIdOrThrowNoLock(const String & query_id, size_t max_queries) const TSA_REQUIRES(query_id_set_mutex);
 
     /// Remove current query id after query finished.
     void removeQueryId(const String & query_id) const;
-    void removeQueryIdNoLock(const String & query_id) const;
+    void removeQueryIdNoLock(const String & query_id) const TSA_REQUIRES(query_id_set_mutex);
 
     /// Return the partition expression types as a Tuple type. Return DataTypeUInt8 if partition expression is empty.
     DataTypePtr getPartitionValueType() const;
@@ -1276,7 +1277,7 @@ private:
     std::atomic<size_t> total_active_size_parts = 0;
 
     // Record all query ids which access the table. It's guarded by `query_id_set_mutex` and is always mutable.
-    mutable std::set<String> query_id_set;
+    mutable std::set<String> query_id_set TSA_GUARDED_BY(query_id_set_mutex);
     mutable std::mutex query_id_set_mutex;
 
     // Get partition matcher for FREEZE / UNFREEZE queries.

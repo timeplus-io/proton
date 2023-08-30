@@ -237,5 +237,5 @@ void registerStorageExecutable(StorageFactory & factory)
     }, storage_features);
 }
 
-};
+}
 

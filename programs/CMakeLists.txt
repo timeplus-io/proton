@@ -2,6 +2,8 @@ if (USE_CLANG_TIDY)
     set (CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_PATH}")
 endif ()
 
+include(${proton_SOURCE_DIR}/cmake/split_debug_symbols.cmake)
+
 # The `proton` binary is a multi purpose tool that contains multiple execution modes (client, server, etc.),
 # each of them may be built and linked as a separate library.
 # If you do not know what modes you need, turn this option OFF and enable SERVER and CLIENT only.
@@ -371,16 +373,17 @@ else ()
         list(APPEND PROTON_BUNDLE proton-klog-benchmark)
     endif ()
 
-    install (TARGETS proton RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
-
     add_custom_target (proton-bundle ALL DEPENDS ${PROTON_BUNDLE})
 
-    if (USE_GDB_ADD_INDEX)
-        add_custom_command(TARGET proton POST_BUILD COMMAND ${GDB_ADD_INDEX_EXE} proton COMMENT "Adding .gdb-index to proton" VERBATIM)
+    if (USE_BINARY_HASH)
+        add_custom_command(TARGET clickhouse POST_BUILD COMMAND ./clickhouse hash-binary > hash && ${OBJCOPY_PATH} --add-section .clickhouse.hash=hash clickhouse COMMENT "Adding section '.clickhouse.hash' to clickhouse binary" VERBATIM)
     endif()
 
-    if (USE_BINARY_HASH)
-        add_custom_command(TARGET proton POST_BUILD COMMAND ./proton hash-binary > hash && ${OBJCOPY_PATH} --add-section .note.proton .hash=hash proton COMMENT "Adding .note.proton.hash to proton" VERBATIM)
+    if (SPLIT_DEBUG_SYMBOLS)
+        proton_split_debug_symbols(TARGET proton DESTINATION_DIR ${CMAKE_CURRENT_BINARY_DIR}/${SPLITTED_DEBUG_SYMBOLS_DIR} BINARY_PATH proton)
+    else()
+        proton_make_empty_debug_info_for_nfpm(TARGET proton DESTINATION_DIR ${CMAKE_CURRENT_BINARY_DIR}/${SPLITTED_DEBUG_SYMBOLS_DIR})
+        install (TARGETS proton RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
     endif()
 endif ()
 

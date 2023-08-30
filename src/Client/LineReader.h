@@ -7,6 +7,10 @@
 #include <replxx.hxx>
 
 #include <base/types.h>
+#include <base/defines.h>
+
+namespace DB
+{
 
 class LineReader
 {
@@ -20,8 +24,8 @@ public:
         void addWords(Words && new_words);
 
     private:
-        Words words;
-        Words words_no_case;
+        Words words TSA_GUARDED_BY(mutex);
+        Words words_no_case TSA_GUARDED_BY(mutex);
 
         std::mutex mutex;
     };
@@ -29,7 +33,7 @@ public:
     using Patterns = std::vector<const char *>;
 
     LineReader(const String & history_file_path, bool multiline, Patterns extenders, Patterns delimiters);
-    virtual ~LineReader() {}
+    virtual ~LineReader() = default;
 
     /// Reads the whole line until delimiter (in multiline mode) or until the last line without extender.
     /// If resulting line is empty, it means the user interrupted the input.
@@ -67,3 +71,5 @@ protected:
     virtual InputStatus readOneLine(const String & prompt);
     virtual void addToHistory(const String &) {}
 };
+
+}

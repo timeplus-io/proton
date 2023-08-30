@@ -1,3 +1,6 @@
+# See linux/toolchain-x86_64.cmake for details about multiple load of toolchain file.
+include_guard(GLOBAL)
+
 set (CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
 set (CMAKE_SYSTEM_NAME "Linux")
@@ -19,7 +22,6 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --gcc-toolchain=${TOOLCHAIN_PATH}")
 set (CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} --gcc-toolchain=${TOOLCHAIN_PATH}")
 
 set (CMAKE_EXE_LINKER_FLAGS_INIT "-fuse-ld=bfd")
-set (CMAKE_SHARED_LINKER_FLAGS_INIT "-fuse-ld=bfd")
 
 set (HAS_PRE_1970_EXITCODE "0" CACHE STRING "Result from TRY_RUN" FORCE)
 set (HAS_PRE_1970_EXITCODE__TRYRUN_OUTPUT "" CACHE STRING "Output from TRY_RUN" FORCE)

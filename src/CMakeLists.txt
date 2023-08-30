@@ -33,18 +33,6 @@ if (USE_DEBUG_HELPERS)
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:${INCLUDE_DEBUG_HELPERS}>)
 endif ()
 
-if (COMPILER_GCC)
-    # If we leave this optimization enabled, gcc-7 replaces a pair of SSE intrinsics (16 byte load, store) with a call to memcpy.
-    # It leads to slow code. This is compiler bug. It looks like this:
-    #
-    # (gdb) bt
-    #0  memcpy (destination=0x7faa6e9f1638, source=0x7faa81d9e9a8, size=16) at ../libs/libmemcpy/memcpy.h:11
-    #1  0x0000000005341c5f in _mm_storeu_si128 (__B=..., __P=<optimized out>) at /usr/lib/gcc/x86_64-linux-gnu/7/include/emmintrin.h:720
-    #2  memcpySmallAllowReadWriteOverflow15Impl (n=<optimized out>, src=<optimized out>, dst=<optimized out>) at ../src/Common/memcpySmall.h:37
-
-    add_definitions ("-fno-tree-loop-distribute-patterns")
-endif ()
-
 # proton developers may use platform-dependent code under some macro (e.g. `#ifdef ENABLE_MULTITARGET`).
 # If turned ON, this option defines such macro.
 # See `src/Common/TargetSpecific.h`
@@ -168,14 +156,10 @@ endif ()
 add_library (clickhouse_malloc OBJECT Common/malloc.cpp)
 set_source_files_properties(Common/malloc.cpp PROPERTIES COMPILE_FLAGS "-fno-builtin")
 
-if (((SANITIZE STREQUAL "thread") OR (SANITIZE STREQUAL "address")) AND COMPILER_GCC)
-    message(WARNING "Memory tracking is disabled, due to gcc sanitizers")
-else()
-    add_library (clickhouse_new_delete STATIC Common/new_delete.cpp)
-    target_link_libraries (clickhouse_new_delete PRIVATE clickhouse_common_io)
-    if (TARGET ch_contrib::jemalloc)
-        target_link_libraries (clickhouse_new_delete PRIVATE ch_contrib::jemalloc)
-    endif()
+add_library (clickhouse_new_delete STATIC Common/new_delete.cpp)
+target_link_libraries (clickhouse_new_delete PRIVATE clickhouse_common_io)
+if (TARGET ch_contrib::jemalloc)
+    target_link_libraries (clickhouse_new_delete PRIVATE ch_contrib::jemalloc)
 endif()
 
 if (TARGET ch_contrib::jemalloc)
@@ -347,12 +331,17 @@ if (TARGET ch_contrib::llvm)
     dbms_target_link_libraries (PUBLIC ch_contrib::llvm)
 endif ()
 
+if (TARGET ch_contrib::gwp_asan)
+    target_link_libraries (clickhouse_common_io PRIVATE ch_contrib::gwp_asan)
+    target_link_libraries (clickhouse_new_delete PRIVATE ch_contrib::gwp_asan)
+endif()
+
 # Otherwise it will slow down stack traces printing too much.
 set_source_files_properties(
         Common/Elf.cpp
         Common/Dwarf.cpp
         Common/SymbolIndex.cpp
-        PROPERTIES COMPILE_FLAGS "-O3 ${WITHOUT_COVERAGE}")
+        PROPERTIES COMPILE_FLAGS "-O2 ${WITHOUT_COVERAGE}")
 
 if (TARGET ch_contrib::muduo_net)
     target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::muduo_net)
@@ -544,7 +533,7 @@ target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::fast_float)
 
 if (USE_ORC)
     dbms_target_link_libraries(PUBLIC ${ORC_LIBRARIES})
-    dbms_target_include_directories(SYSTEM BEFORE PUBLIC ${ORC_INCLUDE_DIR} "${CMAKE_BINARY_DIR}/contrib/orc/c++/include")
+    dbms_target_include_directories(SYSTEM BEFORE PUBLIC ${ORC_INCLUDE_DIR} "${PROJECT_BINARY_DIR}/contrib/orc/c++/include")
 endif ()
 
 if (TARGET ch_contrib::rocksdb)
@@ -589,7 +578,7 @@ include ("${proton_SOURCE_DIR}/cmake/add_check.cmake")
 if (ENABLE_TESTS)
     macro (grep_gtest_sources BASE_DIR DST_VAR)
         # Cold match files that are not in tests/ directories
-        file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
+        file(GLOB_RECURSE "${DST_VAR}" CONFIGURE_DEPENDS "${BASE_DIR}" "gtest*.cpp")
     endmacro()
 
     # attach all dbms gtest sources
@@ -599,13 +588,7 @@ if (ENABLE_TESTS)
 
     # gtest framework has substandard code
     target_compile_options(unit_tests_dbms PRIVATE
-        -Wno-zero-as-null-pointer-constant
-        -Wno-covered-switch-default
-        -Wno-undef
         -Wno-sign-compare
-        -Wno-used-but-marked-unused
-        -Wno-missing-noreturn
-        -Wno-gnu-zero-variadic-macro-arguments
     )
 
     target_link_libraries(unit_tests_dbms PRIVATE

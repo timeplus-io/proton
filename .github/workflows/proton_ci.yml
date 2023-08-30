@@ -30,7 +30,7 @@ jobs:
         rm cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version cmake.3.26.4 --sanitizer $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-16 --sanitizer $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
         # clear compiling footprint
         rm -rf $GITHUB_WORKSPACE/ccache
@@ -170,6 +170,7 @@ jobs:
         python -m venv env
         source env/bin/activate
         pip install -r requirements.txt
+
         export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
         python functional_tests_check.py stateless
     secrets:

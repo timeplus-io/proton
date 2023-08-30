@@ -81,13 +81,13 @@
 	url = https://github.com/ClickHouse-Extras/aws-sdk-cpp.git
 [submodule "aws-c-event-stream"]
 	path = contrib/aws-c-event-stream
-	url = https://github.com/ClickHouse-Extras/aws-c-event-stream.git
+	url = https://github.com/awslabs/aws-c-event-stream.git
 [submodule "aws-c-common"]
 	path = contrib/aws-c-common
-	url = https://github.com/ClickHouse-Extras/aws-c-common.git
+	url = https://github.com/ClickHouse/aws-c-common.git
 [submodule "aws-checksums"]
 	path = contrib/aws-checksums
-	url = https://github.com/ClickHouse-Extras/aws-checksums.git
+	url = https://github.com/awslabs/aws-checksums.git
 [submodule "contrib/curl"]
 	path = contrib/curl
 	url = https://github.com/curl/curl.git
@@ -185,7 +185,7 @@
 	url = https://github.com/ClickHouse-Extras/libpqxx.git
 [submodule "contrib/sqlite-amalgamation"]
 	path = contrib/sqlite-amalgamation
-	url = https://github.com/azadkuh/sqlite-amalgamation
+	url = https://github.com/ClickHouse/sqlite-amalgamation
 [submodule "contrib/s2geometry"]
 	path = contrib/s2geometry
 	url = https://github.com/ClickHouse-Extras/s2geometry.git
@@ -215,7 +215,10 @@
 	url = https://github.com/schoentoon/hashidsxx.git
 [submodule "contrib/vectorscan"]
 	path = contrib/vectorscan
-	url = https://github.com/VectorCamp/vectorscan.git
+	# FIXME: update once upstream fixes will be merged:
+	# - https://github.com/VectorCamp/vectorscan/pull/148
+	# - https://github.com/VectorCamp/vectorscan/pull/149
+	url = https://github.com/azat-ch/vectorscan
 [submodule "contrib/liburing"]
 	path = contrib/liburing
 	url = https://github.com/axboe/liburing.git
@@ -246,3 +249,33 @@
 [submodule "contrib/orc"]
 	path = contrib/orc
 	url = https://github.com/ClickHouse/orc
+[submodule "contrib/aws-crt-cpp"]
+	path = contrib/aws-crt-cpp
+	url = https://github.com/ClickHouse/aws-crt-cpp.git
+[submodule "contrib/aws-c-io"]
+	path = contrib/aws-c-io
+	url = https://github.com/ClickHouse/aws-c-io.git
+[submodule "contrib/aws-c-mqtt"]
+	path = contrib/aws-c-mqtt
+	url = https://github.com/awslabs/aws-c-mqtt.git
+[submodule "contrib/aws-c-auth"]
+	path = contrib/aws-c-auth
+	url = https://github.com/awslabs/aws-c-auth.git
+[submodule "contrib/aws-c-cal"]
+	path = contrib/aws-c-cal
+	url = https://github.com/ClickHouse/aws-c-cal.git
+[submodule "contrib/aws-c-sdkutils"]
+	path = contrib/aws-c-sdkutils
+	url = https://github.com/awslabs/aws-c-sdkutils.git
+[submodule "contrib/aws-c-http"]
+	path = contrib/aws-c-http
+	url = https://github.com/awslabs/aws-c-http.git
+[submodule "contrib/aws-c-s3"]
+	path = contrib/aws-c-s3
+	url = https://github.com/awslabs/aws-c-s3.git
+[submodule "contrib/aws-c-compression"]
+	path = contrib/aws-c-compression
+	url = https://github.com/awslabs/aws-c-compression.git
+[submodule "contrib/aws-s2n-tls"]
+	path = contrib/aws-s2n-tls
+	url = https://github.com/ClickHouse/s2n-tls.git

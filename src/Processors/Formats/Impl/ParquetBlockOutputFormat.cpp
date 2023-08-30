@@ -43,14 +43,14 @@ void ParquetBlockOutputFormat::consume(Chunk chunk)
         builder.compression(parquet::Compression::SNAPPY);
 #endif
         auto props = builder.build();
-        auto status = parquet::arrow::FileWriter::Open(
+        auto result = parquet::arrow::FileWriter::Open(
             *arrow_table->schema(),
             arrow::default_memory_pool(),
             sink,
-            props, /*parquet::default_writer_properties(),*/
-            &file_writer);
-        if (!status.ok())
-            throw Exception{"Error while opening a table: " + status.ToString(), ErrorCodes::UNKNOWN_EXCEPTION};
+            props);
+        if (!result.ok())
+            throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Error while opening a table: {}", result.status().ToString());
+        file_writer = std::move(result.ValueOrDie());
     }
 
     // TODO: calculate row_group_size depending on a number of rows and table size

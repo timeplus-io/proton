@@ -59,4 +59,4 @@ class FilesystemCacheLog : public SystemLog<FilesystemCacheLogElement>
     using SystemLog<FilesystemCacheLogElement>::SystemLog;
 };
 
-};
+}

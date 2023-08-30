@@ -14,6 +14,7 @@
 #include <Access/User.h>
 #include <Access/ExternalAuthenticators.h>
 #include <Core/Settings.h>
+#include <base/defines.h>
 #include <base/find_symbols.h>
 #include <Poco/ExpireCache.h>
 #include <Poco/Util/AbstractConfiguration.h>
@@ -129,7 +130,7 @@ public:
     }
 
 private:
-    Strings registered_prefixes;
+    Strings registered_prefixes TSA_GUARDED_BY(mutex);
     mutable std::mutex mutex;
 };
 

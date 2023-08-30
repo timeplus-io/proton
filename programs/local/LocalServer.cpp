@@ -47,6 +47,10 @@
     #include <Functions/getFuzzerData.h>
 #endif
 
+#if USE_AZURE_BLOB_STORAGE
+#   include <azure/storage/common/internal/xml_wrapper.hpp>
+#endif
+
 namespace fs = std::filesystem;
 
 
@@ -190,6 +194,14 @@ void LocalServer::initialize(Poco::Util::Application & self)
         auto loaded_config = config_processor.loadConfig();
         config().add(loaded_config.configuration.duplicate(), PRIO_DEFAULT, false);
     }
+
+#if USE_AZURE_BLOB_STORAGE
+    /// See the explanation near the same line in Server.cpp
+    GlobalThreadPool::instance().addOnDestroyCallback([]
+    {
+        Azure::Storage::_internal::XmlGlobalDeinitialize();
+    });
+#endif
 }
 
 

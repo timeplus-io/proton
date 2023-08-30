@@ -17,6 +17,10 @@ set (CLICKHOUSE_LOCAL_LINK
 
 proton_program_add(local)
 
+if (TARGET ch_contrib::azure_sdk)
+    target_link_libraries(clickhouse-local-lib PRIVATE ch_contrib::azure_sdk)
+endif()
+
 if(NOT CLICKHOUSE_ONE_SHARED)
     target_link_libraries(clickhouse-local-lib PRIVATE clickhouse-server-lib)
 endif()

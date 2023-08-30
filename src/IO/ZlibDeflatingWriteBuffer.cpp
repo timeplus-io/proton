@@ -34,10 +34,7 @@ ZlibDeflatingWriteBuffer::ZlibDeflatingWriteBuffer(
         window_bits += 16;
     }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wold-style-cast"
     int rc = deflateInit2(&zstr, compression_level, Z_DEFLATED, window_bits, 8, Z_DEFAULT_STRATEGY);
-#pragma GCC diagnostic pop
 
     if (rc != Z_OK)
         throw Exception(std::string("deflateInit2 failed: ") + zError(rc) + "; zlib version: " + ZLIB_VERSION, ErrorCodes::ZLIB_DEFLATE_FAILED);

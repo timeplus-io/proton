@@ -17,11 +17,9 @@ set (SRCS
     getThreadId.cpp
     JSON.cpp
     SimpleJSON.cpp
-    LineReader.cpp
     mremap.cpp
     phdr_cache.cpp
     preciseExp10.cpp
-    setTerminalEcho.cpp
     shift10.cpp
     sleep.cpp
     terminalColors.cpp
@@ -29,10 +27,6 @@ set (SRCS
     StringRef.cpp
     safeExit.cpp
 )
-
-if (ENABLE_REPLXX)
-    list (APPEND SRCS ReplxxLineReader.cpp)
-endif ()
 
 if (USE_DEBUG_HELPERS)
     get_target_property(MAGIC_ENUM_INCLUDE_DIR ch_contrib::magic_enum INTERFACE_INCLUDE_DIRECTORIES)

@@ -401,8 +401,8 @@ public:
     {
     }
 
-    const char * name() const throw() override { return "Coordination::Exception"; }
-    const char * className() const throw() override { return "Coordination::Exception"; }
+    const char * name() const noexcept override { return "Coordination::Exception"; }
+    const char * className() const noexcept override { return "Coordination::Exception"; }
     Exception * clone() const override { return new Exception(*this); }
 
     const Error code;
