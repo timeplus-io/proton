@@ -445,6 +445,7 @@ jobs:
         source env/bin/activate
         pip install -r requirements.txt
         export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
+
         python functional_tests_check.py stateful
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
