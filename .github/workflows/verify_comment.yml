@@ -80,6 +80,7 @@ jobs:
 
           commit_statuses = get_latest_commit_statuses(pulls_url, repository, github_token)
           commit_statuses = [s for s in commit_statuses if s['state'] == "pending" and s["context"] == "kms message"]
+
           if len(commit_statuses) < 1:
             exit(1)
 
