@@ -438,6 +438,7 @@ jobs:
         cd $GITHUB_WORKSPACE/tests/proton_ci
         # make virtualenv
         ln -s /usr/bin/python3 /usr/bin/python
+
         apt-get update
         systemctl stop unattended-upgrades
         apt install python3-venv -y
