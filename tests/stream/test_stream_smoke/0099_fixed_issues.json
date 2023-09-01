@@ -409,6 +409,29 @@
           [2, 1, 44.4, 44.4, 44.4, 44.4, "2020-02-02 20:00:04", "2020-02-02 20:00:09"]]
         }
       ]
+    },
+    {
+      "id": 15,
+      "tags": ["Changelog Global Aggr"],
+      "name": "#13",
+      "description": "Covering changelog global aggr processing",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query": "drop stream if exists test_stream_13_vk"},
+            {"client":"python", "query_type": "table", "exist": "test_stream_13_vk", "exist_wait":2, "wait":1, "query": "create stream test_stream_13_vk(id int, val float) primary key id settings mode='versioned_kv'"},
+            {"client":"python", "query_type": "stream", "query_id":"9900", "depends_on_stream":"test_stream_13_vk", "wait":1, "query":"select count(*), sum(val) from test_stream_13_vk emit periodic 1ms"},
+            {"client":"python", "query_type": "table", "depends_on":"9900", "wait":1, "query": "insert into test_stream_13_vk(id, val) values (1, 1.1)(2, 2.2);"},
+            {"client":"python", "query_type": "table", "kill": "9900", "kill_wait":2, "query": "insert into test_stream_13_vk(id, val) values (1, 11.1);"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":[
+          [2, 3.3],
+          [2, 13.3]]
+        }
+      ]
     }
   ]
 }
