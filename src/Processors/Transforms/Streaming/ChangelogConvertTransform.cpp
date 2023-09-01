@@ -302,6 +302,8 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
     /// Final touch for _tp_delta for resulting retract chunk
     retract_chunk_columns.back()->insertMany(-1, num_retractions);
     output_chunks.emplace_back(std::move(retract_chunk_columns), num_retractions);
+    /// Don't watermark this block. We can concat retracted / result blocks or use avoid watermarking
+    output_chunks.back().getOrCreateChunkContext()->setAvoidWatermark();
 
     /// Composing resulting chunk
     /// If we don't have late rows and we don't have duplicate primary key rows in the same chunk,
