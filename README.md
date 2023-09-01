@@ -1,21 +1,39 @@
 [![NightlyTest](https://github.com/timeplus-io/proton/actions/workflows/nightly_test.yml/badge.svg?branch=develop)](https://github.com/timeplus-io/proton/actions/workflows/nightly_test.yml)
 
-## What is Proton ?
+---
 
-Proton is a unified streaming and histroical data processing engine which powers the Timeplus streaming analytic platform. It is built on top of trimmed single instance ClickHouse code base. Its major goals are simplicity, efficient with good performance in both streaming and historical query processing. Users can do streaming queries and historial queries or a combination of both in one SQL. Since its major use cases focus is streaming query processing, by default, a SQL query in proton is a streaming query which means it is long running, never ends and continously tracks and evaluates the delta changes and push the query results to users or target systems.
+Proton is a unified streaming and historical data processing engine built on top of ClickHouse code base.
+
+- [What is Proton ?](#what-is-proton)
+- [Architecture](#architecture)
+- [Key Streaming Functionalities](#key-streaming-functionalities)
+- [Docs](#docs)
+- [Staring with Timeplus Cloud](#starting-with-timeplus-cloud)
+- [Starting with Proton in Container](#starting-with-proton-in-docker-container)
+- [License](#license)
+- [Contributing](#contributing)
+- [Need Help?](#need-help)
+
+## What is Proton?
+
+Proton is a unified streaming and historical data processing engine which powers the Timeplus streaming analytic platform.
+It is built on top of trimmed single instance ClickHouse code base. Its major goals are simplicity, efficient with good performance in both streaming and historical query processing.
+It is built in one single binary without any external service dependency, so it is easy for users to deploy it on bare metal, edge (ARM), container or in orchestrated cloud environment.
+After deployment, users can run streaming queries and historical queries or a combination of both in one SQL. Since its major use cases focus is streaming query processing,
+by default, a SQL query in Proton is a streaming query which means it is long-running, never ends and continuously tracks and evaluates the delta changes and push the query results to users or target systems.
 
 ## Architecture
 
-The following diagram depicts the high level architecture of single instance proton. All of the components / functionalites are built into a single binary.
+The following diagram depicts the high level architecture of single instance Proton. All of the components / functionalities are built into one single binary.
 Users can create a stream by using `CREATE STREAM ...` SQL. Every stream has 2 parts at storage layer by default: the real-time streaming data part and the historical data part which
-are backed by NativeLog and ClickHouse historical data store respectively. Fundamentally, a stream in proton is a reguar database table with a write ahead log in front, which is streaming queriable.
+are backed by NativeLog and ClickHouse historical data store respectively. Fundamentally, a stream in Proton is a regular database table with a replicated write-ahead-log in front but is streaming queryable.
 
-When users `INSERT INTO ...` data to proton, the data always first lands in NativeLog which is immediately queriable. since NativeLog is in essence a replicated write ahead log (WAL) and it is append-only, it
-can support high frequent, low latency and large concurrent data ingestion work loads. In background, there is a separate thread tailing the data from NativeLog and commits the data in bigger batch
-to the historical data store. Since proton leverages ClickHouse for its historical store, its historical query processing is very fast as well.
+When users `INSERT INTO ...` data to Proton, the data always first lands in NativeLog which is immediately queryable. Since NativeLog is in essence a replicated write-ahead-log and is append-only, it
+can support high frequent, low latency and large concurrent data ingestion work loads. In background, there is a separate thread tailing the delta data from NativeLog and commits the data in bigger batch
+to the historical data store. Since Proton leverages ClickHouse for the historical part, its historical query processing is blazing fast as well.
 
-In quite lots of scenarios, data is already in Kafka / Redpanda or other streaming data hub, users can create external streams to point to the streaming data hub and do streaming query processing
-directly against them and then either materialize them in Proton or send the results to external systems.
+In quite lots of scenarios, data is already in Kafka / Redpanda or other streaming data hubs, users can create external streams to point to the streaming data hub and do streaming query processing
+directly and then either materialize them in Proton or send the query results to external systems.
 
 Interested users can refer [How Timeplus Unifies Streaming and Historical Data Processing](https://www.timeplus.com/post/unify-streaming-and-historical-data-processing) blog for more details regarding its academic foundation and latest industry developments.
 
@@ -39,75 +57,35 @@ For more streaming query functionalities, SQL syntax, functions, aggregation fun
 
 ## Starting with Timeplus Cloud
 
-We can run Proton for you and even provide more functionalities in Timeplus console. See our online documentation : Quickstart with [Timeplus Cloud]().
+We can run Proton for you and even provide more functionalities in Timeplus console. See our online documentation : Quickstart with [Timeplus Cloud](https://docs.timeplus.com/quickstart).
 
-## Starting Proton with Container
+## Starting with Proton in Docker Container
 
-## Build From Source
+### Launch Proton Server and Client in Container
 
-### Clone proton
-
-```
-git clone --recurse-submodules git@github.com:timeplus-io/proton.git
-```
-
-### Build with Docker
+After [install Docker engine](https://docs.docker.com/engine/install/) in your OS, pull the latest Proton docker image by running:
 
 ```
-$ cd proton/docker/builder
-$ make build
+$ docker pull timeplus/proton:latest
 ```
 
-After build, you can find the compiled proton binary in `build_docker` directory.
-
-### Bare Metal Build
-
-#### Build Tools
-- clang-16 /clang++-16 or above
-- cmake 3.20 or above
-- ninja
-
-#### MacOS
-We don't support build proton by using Apple Clang. Please use `brew install llvm` to install
-clang-16 / clang++-16.
-
-#### Ad-hoc Build with Default C/C++ Compilers
+Run Proton docker image to run Proton server:
 
 ```
-$ cd proton
-$ mkdir -p build && cd build && cmake ..
-$ ninja
+$ docker run --name proton timeplus/proton:latest
 ```
 
-#### Ad-hoc build with Customized C/C++ Compilers
 
-The following is an example on MacOS after installing clang by using home brew.
-
-```
-$ cd proton
-$ mkdir -p build && cd build && cmake .. -DCMAKE_C_COMPILER=/usr/local/opt/llvm/bin/clang -DCMAKE_CXX_COMPILER=/usr/local/opt/llvm/bin/clang++
-$ ninja
-```
-
-## Run Proton Binary Locally
-
-Enter Proton binary folder and run Proton server
+Run Proton client to connect the server:
 
 ```
-$ cd proton/build
-$ ./programs/proton server --config ../programs/server/config.yaml
-```
-
-In another console, run Proton client
-
-```
-$ cd proton/build
-$ ./programs/proton client
+$ docker exec -it proton proton client
 ```
 
 ### Create Stream, Ingest Data and Query
 
-In Proton client console,  
+In Proton client console,
+
 ```sql
 -- Create stream
 CREATE STREAM devices(device string, location string, temperature float);
@@ -116,7 +94,13 @@ CREATE STREAM devices(device string, location string, temperature float);
 SELECT device, min(temperature), max(temperature) FROM devices GROUP BY device;
 ```
 
-Launch another Proton client console
+Launch another Proton client console by running:
+
+```
+$ docker exec -it proton proton client
+```
+
+Then ingest some data:
 
 ```sql
 -- Insert some data
@@ -127,11 +111,30 @@ VALUES
 ('dev3', 'van', 17.3);
 ```
 
+Insert more data and observe the query results.
+
 ```sql
--- Insert more data
 INSERT INTO devices (device, location, temperature)
 VALUES
 ('dev1', 'ca', 38.5),
 ('dev2', 'sh', 18.5),
 ('dev3', 'van', 88.5);
 ```
+
+## License
+
+All current code is released under Apache v2 license.
+
+## Contributing
+
+We welcome your contributions! If you are looking for issues to work on, try looking at [the issue list](https://github.com/timeplus-io/proton/issues).
+
+Please see [the wiki](https://github.com/timeplus-io/proton/wiki/Contributing) for more details and see [build from source](BUILD.md) for how to compile Proton in different platforms.
+
+We also encourage users to join [Timeplus Community Slack](https://timeplus.com/slack) and join the dedicated #contributors channel to ask questions.
+
+## Need Help?
+
+- [Timeplus Community Slack](https://timeplus.com/slack) - Join our community slack to connect with our engineers and other users running Proton in #proton channel.
+- For filing bugs, suggesting improvements or requesting new features, help us out by [opening an issue](https://github.com/timeplus-io/proton/issues).
+
