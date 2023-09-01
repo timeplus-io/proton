@@ -95,21 +95,16 @@ Int64 evaluateConstantSeekTo(SeekBy seek_by, ASTPtr & ast, ContextPtr context)
     catch (const Exception & e)
     {
         /// rethrow with better error message for exception of `evaluateConstantExpression`
-        if (e.code() == ErrorCodes::BAD_ARGUMENTS)
-        {
-            if (seek_by == SeekBy::EventTime)
-                throw Exception(
-                    ErrorCodes::UNEXPECTED_EXPRESSION,
-                    "The event time predicate expression must be constant timestamp string or expression. But got '{}'",
-                    ast->formatForErrorMessage());
-            else
-                throw Exception(
-                    ErrorCodes::UNEXPECTED_EXPRESSION,
-                    "The event sequence id predicate expression must be constant sequence id expression. But got '{}'",
-                    ast->formatForErrorMessage());
-        }
-
-        throw;
+        if (seek_by == SeekBy::EventTime)
+            throw Exception(
+                ErrorCodes::UNEXPECTED_EXPRESSION,
+                "The event time predicate expression must be constant timestamp string or expression. But got '{}'",
+                ast->formatForErrorMessage());
+        else
+            throw Exception(
+                ErrorCodes::UNEXPECTED_EXPRESSION,
+                "The event sequence id predicate expression must be constant sequence id expression. But got '{}'",
+                ast->formatForErrorMessage());
     }
 }
 
