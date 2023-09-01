@@ -1,4 +1,4 @@
-<clickhouse>
+<proton>
     <storage_configuration>
         <disks>
             <!-- s3 disks -->
@@ -6,43 +6,43 @@
                 <type>s3</type>
                 <path>s3_disk/</path>
                 <endpoint>http://localhost:11111/test/00170_test/</endpoint>
-                <access_key_id>clickhouse</access_key_id>
-                <secret_access_key>clickhouse</secret_access_key>
+                <access_key_id>proton</access_key_id>
+                <secret_access_key>proton</secret_access_key>
             </s3_disk>
             <s3_disk_2>
                 <type>s3</type>
                 <path>s3_disk_2/</path>
                 <endpoint>http://localhost:11111/test/00170_test/</endpoint>
-                <access_key_id>clickhouse</access_key_id>
-                <secret_access_key>clickhouse</secret_access_key>
+                <access_key_id>proton</access_key_id>
+                <secret_access_key>proton</secret_access_key>
             </s3_disk_2>
             <s3_disk_3>
                 <type>s3</type>
                 <path>s3_disk_3/</path>
                 <endpoint>http://localhost:11111/test/00170_test/</endpoint>
-                <access_key_id>clickhouse</access_key_id>
-                <secret_access_key>clickhouse</secret_access_key>
+                <access_key_id>proton</access_key_id>
+                <secret_access_key>proton</secret_access_key>
             </s3_disk_3>
             <s3_disk_4>
                 <type>s3</type>
                 <path>s3_disk_4/</path>
                 <endpoint>http://localhost:11111/test/00170_test/</endpoint>
-                <access_key_id>clickhouse</access_key_id>
-                <secret_access_key>clickhouse</secret_access_key>
+                <access_key_id>proton</access_key_id>
+                <secret_access_key>proton</secret_access_key>
             </s3_disk_4>
             <s3_disk_5>
                 <type>s3</type>
                 <path>s3_disk_5/</path>
                 <endpoint>http://localhost:11111/test/00170_test/</endpoint>
-                <access_key_id>clickhouse</access_key_id>
-                <secret_access_key>clickhouse</secret_access_key>
+                <access_key_id>proton</access_key_id>
+                <secret_access_key>proton</secret_access_key>
             </s3_disk_5>
             <s3_disk_6>
                 <type>s3</type>
                 <path>s3_disk_6/</path>
                 <endpoint>http://localhost:11111/test/00170_test/</endpoint>
-                <access_key_id>clickhouse</access_key_id>
-                <secret_access_key>clickhouse</secret_access_key>
+                <access_key_id>proton</access_key_id>
+                <secret_access_key>proton</secret_access_key>
             </s3_disk_6>
             <!-- cache for s3 disks -->
             <s3_cache>
@@ -229,4 +229,4 @@
             </s3_cache_small_segment_size>
         </policies>
     </storage_configuration>
-</clickhouse>
+</proton>

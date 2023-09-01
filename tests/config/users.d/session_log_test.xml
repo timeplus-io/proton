@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <!-- User and profile to be used in sesson_log tests, to make sure that list of user's profiles is logged correctly -->
-<clickhouse>
+<proton>
     <profiles>
         <session_log_test_xml_profile>
             <!--
@@ -8,7 +8,7 @@
             user settings in queries initiated by test.
             <readonly>1</readonly>
             -->
-            <send_logs_level>none</send_logs_level>
+            <!--send_logs_level>none</send_logs_level-->
         </session_log_test_xml_profile>
     </profiles>
     <roles>
@@ -27,4 +27,4 @@
             <quota>default</quota>
         </session_log_test_xml_user>
     </users>
-</clickhouse>
+</proton>

@@ -1,4 +1,4 @@
-<yandex>
+<proton>
     <metastore_server>
         <http_port>9444</http_port>
         <server_id>1</server_id>
@@ -64,4 +64,4 @@
             </server>
         </raft_configuration>
     </metastore_server>
-</yandex>
+</proton>

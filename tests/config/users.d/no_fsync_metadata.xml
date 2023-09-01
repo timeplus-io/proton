@@ -1,4 +1,4 @@
-<clickhouse>
+<proton>
     <profiles>
         <default>
             <!-- Sometimes we see that pretty simple queries like
@@ -8,4 +8,4 @@
             <fsync_metadata>false</fsync_metadata>
         </default>
     </profiles>
-</clickhouse>
+</proton>

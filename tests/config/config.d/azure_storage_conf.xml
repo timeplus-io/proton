@@ -1,4 +1,4 @@
-<clickhouse>
+<proton>
     <storage_configuration>
         <disks>
             <azure>
@@ -29,4 +29,4 @@
             </azure_cache>
         </policies>
     </storage_configuration>
-</clickhouse>
+</proton>

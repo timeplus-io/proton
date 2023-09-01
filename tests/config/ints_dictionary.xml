@@ -2,14 +2,14 @@
 <dictionary>
     <name>flat_ints</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>ints</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -65,14 +65,14 @@
 <dictionary>
     <name>hashed_ints</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>ints</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -128,14 +128,14 @@
 <dictionary>
     <name>hashed_sparse_ints</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>ints</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -191,14 +191,14 @@
 <dictionary>
     <name>cache_ints</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>ints</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -254,14 +254,14 @@
 <dictionary>
     <name>complex_hashed_ints</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>ints</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -320,14 +320,14 @@
 <dictionary>
     <name>complex_cache_ints</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>ints</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -387,14 +387,14 @@
 <dictionary>
 <name>one_cell_cache_ints</name>
 <source>
-    <clickhouse>
+    <proton>
         <host>localhost</host>
         <port>9000</port>
         <user>default</user>
         <password></password>
         <db>test_01054</db>
         <table>ints</table>
-    </clickhouse>
+    </proton>
 </source>
 <lifetime>0</lifetime>
 <layout>
@@ -451,14 +451,14 @@
 <dictionary>
     <name>one_cell_cache_ints_overflow</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>test_01054_overflow</db>
             <table>ints</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>

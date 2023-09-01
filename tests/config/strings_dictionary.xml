@@ -2,14 +2,14 @@
 <dictionary>
     <name>flat_strings</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>strings</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -30,14 +30,14 @@
 <dictionary>
     <name>hashed_strings</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>strings</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -58,14 +58,14 @@
 <dictionary>
     <name>cache_strings</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>strings</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -86,14 +86,14 @@
 <dictionary>
     <name>complex_hashed_strings</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>strings</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -117,14 +117,14 @@
 <dictionary>
     <name>complex_cache_strings</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>strings</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -148,14 +148,14 @@
 <dictionary>
     <name>complex_hashed_strings_key</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>strings</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -179,14 +179,14 @@
 <dictionary>
     <name>complex_cache_strings_key</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>strings</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>

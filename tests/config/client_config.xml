@@ -1,4 +1,4 @@
-<!-- Config set into /etc/clickhouse-client/. It's used if no other configs are found. -->
+<!-- Config set into /etc/proton-client/. It's used if no other configs are found. -->
 <config>
     <openSSL>
         <client>
