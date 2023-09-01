@@ -5,7 +5,7 @@
     <source>
         <executable>
             <format>JSONEachRow</format>
-            <command>cd /; clickhouse-local --input-format JSONEachRow --output-format JSONEachRow --structure 'x UInt64, y UInt64' --query "SELECT x, y, x + y AS a, x * y AS b FROM table"</command>
+            <command>cd /; proton-local --input-format JSONEachRow --output-format JSONEachRow --structure 'x UInt64, y UInt64' --query "SELECT x, y, x + y AS a, x * y AS b FROM table"</command>
         </executable>
     </source>
     <lifetime>0</lifetime>
@@ -43,7 +43,7 @@
     <source>
         <executable>
             <format>JSONEachRow</format>
-            <command>cd /; clickhouse-local --input-format JSONEachRow --output-format JSONEachRow --structure 'x UInt64' --query "SELECT x, x + x AS a, x * x AS b FROM table"</command>
+            <command>cd /; proton-local --input-format JSONEachRow --output-format JSONEachRow --structure 'x UInt64' --query "SELECT x, x + x AS a, x * x AS b FROM table"</command>
         </executable>
     </source>
     <lifetime>0</lifetime>
@@ -74,7 +74,7 @@
     <source>
         <executable>
             <format>JSONEachRow</format>
-            <command>cd /; clickhouse-local --input-format JSONEachRow --output-format JSONEachRow --structure 'x UInt64, y UInt64' --query "SELECT x, y, x + y AS a, x * y AS b FROM table"</command>
+            <command>cd /; proton-local --input-format JSONEachRow --output-format JSONEachRow --structure 'x UInt64, y UInt64' --query "SELECT x, y, x + y AS a, x * y AS b FROM table"</command>
         </executable>
     </source>
     <lifetime>0</lifetime>
@@ -124,7 +124,7 @@
     <source>
         <executable>
             <format>JSONEachRow</format>
-            <command>cd /; clickhouse-local --input-format JSONEachRow --output-format JSONEachRow --structure 'id UInt64' --query "SELECT id, 'Value' AS value FROM table"</command>
+            <command>cd /; proton-local --input-format JSONEachRow --output-format JSONEachRow --structure 'id UInt64' --query "SELECT id, 'Value' AS value FROM table"</command>
             <implicit_key>false</implicit_key>
         </executable>
     </source>
@@ -157,7 +157,7 @@
     <source>
         <executable>
             <format>JSONEachRow</format>
-            <command>cd /; clickhouse-local --input-format JSONEachRow --output-format JSONEachRow --structure 'id UInt64' --query "SELECT 'Value' AS value FROM table"</command>
+            <command>cd /; proton-local --input-format JSONEachRow --output-format JSONEachRow --structure 'id UInt64' --query "SELECT 'Value' AS value FROM table"</command>
             <implicit_key>true</implicit_key>
         </executable>
     </source>
@@ -198,7 +198,7 @@
     <source>
         <executable>
             <format>JSONEachRow</format>
-            <command>cd /; clickhouse-local --input-format JSONEachRow --output-format JSONEachRow --structure 'id UInt64, id_key String' --query "SELECT id, id_key, 'Value' AS value FROM table"</command>
+            <command>cd /; proton-local --input-format JSONEachRow --output-format JSONEachRow --structure 'id UInt64, id_key String' --query "SELECT id, id_key, 'Value' AS value FROM table"</command>
             <implicit_key>false</implicit_key>
         </executable>
     </source>
@@ -239,7 +239,7 @@
     <source>
         <executable>
             <format>JSONEachRow</format>
-            <command>cd /; clickhouse-local --input-format JSONEachRow --output-format JSONEachRow --structure 'id UInt64, id_key String' --query "SELECT 'Value' AS value FROM table"</command>
+            <command>cd /; proton-local --input-format JSONEachRow --output-format JSONEachRow --structure 'id UInt64, id_key String' --query "SELECT 'Value' AS value FROM table"</command>
             <implicit_key>true</implicit_key>
         </executable>
     </source>

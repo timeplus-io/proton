@@ -1,7 +1,7 @@
-<clickhouse>
+<proton>
     <profiles>
         <default>
             <default_database_engine>Ordinary</default_database_engine>
         </default>
     </profiles>
-</clickhouse>
+</proton>

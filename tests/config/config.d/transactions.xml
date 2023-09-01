@@ -11,7 +11,7 @@
     </transactions_info_log>
 
     <transaction_log>
-        <zookeeper_path>/test/clickhouse/txn</zookeeper_path>
+        <zookeeper_path>/test/proton/txn</zookeeper_path>
 
         <fault_probability_before_commit>0.0</fault_probability_before_commit>
 

@@ -1,4 +1,4 @@
-<clickhouse>
+<proton>
     <named_collections>
         <remote1>
             <host>127.0.0.2</host>
@@ -9,11 +9,11 @@
             <host>127.0.0.{1,2}</host>
             <table>remote_test</table>
         </remote2>
-        <clickhouse_dictionary>
+        <proton_dictionary>
             <host>localhost</host>
             <user>default</user>
             <table>s</table>
-        </clickhouse_dictionary>
+        </proton_dictionary>
         <s3_conn>
             <url>http://localhost:11111/test/</url>
             <access_key_id>test</access_key_id>
@@ -21,4 +21,4 @@
             <structure>auto</structure>
         </s3_conn>
     </named_collections>
-</clickhouse>
+</proton>

@@ -2,14 +2,14 @@
 <dictionary>
     <name>flat_decimals</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>decimals</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -40,14 +40,14 @@
 <dictionary>
     <name>hashed_decimals</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>decimals</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -78,14 +78,14 @@
 <dictionary>
     <name>cache_decimals</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>decimals</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -116,14 +116,14 @@
 <dictionary>
     <name>complex_hashed_decimals</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>decimals</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
@@ -157,14 +157,14 @@
 <dictionary>
     <name>complex_cache_decimals</name>
     <source>
-        <clickhouse>
+        <proton>
             <host>localhost</host>
             <port>9000</port>
             <user>default</user>
             <password></password>
             <db>system</db>
             <table>decimals</table>
-        </clickhouse>
+        </proton>
     </source>
     <lifetime>0</lifetime>
     <layout>
