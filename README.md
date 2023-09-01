@@ -21,7 +21,7 @@ Interested users can refer [How Timeplus Unifies Streaming and Historical Data P
 
 ![Proton Architecture](https://github.com/timeplus-io/proton/raw/develop/design/proton-high-level-arch.svg)
 
-## Key Streaming Functions
+## Key Streaming Functionalities
 
 1. Streaming Transformation
 2. Streaming Join (stream to stream, stream to table join)
@@ -89,89 +89,49 @@ $ mkdir -p build && cd build && cmake .. -DCMAKE_C_COMPILER=/usr/local/opt/llvm/
 $ ninja
 ```
 
-## Run Binary Locally
+## Run Proton Binary Locally
 
-Enter Proton binary folder and run
+Enter Proton binary folder and run Proton server
 
 ```
 $ cd proton/build
-$ ./programs/proton --config ../programs/server/config.yaml
+$ ./programs/proton server --config ../programs/server/config.yaml
 ```
 
-## Ingest Data
+In another console, run Proton client
 
-### Ingest Data via CLI
-
-Run `proton-client` console interactively
-```shell
-$ docker run --rm --network=timeplus-net -it timeplus/proton /bin/bash
-$ proton-client --host proton-server -m
 ```
+$ cd proton/build
+$ ./programs/proton client
+```
+
+### Create Stream, Ingest Data and Query
+
+In Proton client console,  
+```sql
+-- Create stream
+CREATE STREAM devices(device string, location string, temperature float);
+
+-- Run the stream query and it is always long running waiting for new data
+SELECT device, min(temperature), max(temperature) FROM devices GROUP BY device;
+```
+
+Launch another Proton client console
 
 ```sql
-# Launch proton-client if not yet
-
-INSERT INTO devices (device, location, temperature, timestamp)
+-- Insert some data
+INSERT INTO devices (device, location, temperature)
 VALUES
-('dev1', 'ca', 57.3, '2020-02-02 20:00:00'),
-('dev2', 'sh', 37.3, '2020-02-03 12:00:00'),
-('dev3', 'van', 17.3, '2020-02-02 20:00:00');
+('dev1', 'ca', 57.3),
+('dev2', 'sh', 37.3),
+('dev3', 'van', 17.3);
 ```
-
-### Ingest Data via REST API
-
-```
-curl http://localhost:8123/proton/v1/ingest/tables/devices -X POST -H "content-type: application/json" -d '{
-    "columns": ["device", "location", "temperature", "timestamp"],
-    "data": [
-        ["dev1", "ca", 57.3, "2020-02-02 20:00:00"],
-        ["dev2", "sh", 37.3, "2020-02-03 12:00:00"],
-        ["dev3", "van", 17.3, "2020-02-02 20:00:00"]
-    ]
-}'
-```
-
-## Query Data
-
-### Query via CLI
 
 ```sql
-# Launch proton-client if not yet
-
-SELECT * FROM devices
+-- Insert more data
+INSERT INTO devices (device, location, temperature)
+VALUES
+('dev1', 'ca', 38.5),
+('dev2', 'sh', 18.5),
+('dev3', 'van', 88.5);
 ```
-
-### Query Data via REST API
-
-```
-curl http://localhost:8123/proton/v1/search -H "content-type: application/json" -d '{"query": "SELECT * FROM table(devices)"}'
-```
-
-### Streaming Query
-
-Simple tail
-
-```
-docker run --rm --network=timeplus-net timeplus/proton \
-    proton-client --host proton-server \
-    --query 'SELECT * FROM devices WHERE temperature > 50.0'
-```
-
-Interactive streaming query
-
-```sql
-# Launch proton-client if not yet
-# Tumbling aggregation
-
-timeplus :) SELECT device, avg(temperature) as avg_temp
-FROM tumble(devices, INTERVAL 3 SECOND)
-WHERE temperature > 50.0 GROUP BY device, window_start, window_end
-
-# Use a different time column for windowing
-
-timeplus :) SELECT device, avg(temperature) as avg_temp
-FROM tumble(devices, timestamp, INTERVAL 3 SECOND)
-WHERE temperature > 50.0 GROUP BY device, window_start, window_end
-```
-
-For more streaming query, please refer to [Proton Streaming Processing Spec](spec/streaming.md)
