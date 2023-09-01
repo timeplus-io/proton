@@ -51,4 +51,19 @@ inline void assertArityAtMost(const std::string & name, const DataTypes & argume
                     ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 }
 
+/// proton: starts
+template <std::size_t maximal_arity>
+inline void assertArityAtLeast(const std::string & name, const DataTypes & argument_types)
+{
+    if (argument_types.size() >= maximal_arity)
+        return;
+
+    if constexpr (maximal_arity == 1)
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires at least one argument", name);
+
+    throw Exception(
+        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires at least {} arguments", name, maximal_arity);
+}
+/// proton: ends.
+
 }

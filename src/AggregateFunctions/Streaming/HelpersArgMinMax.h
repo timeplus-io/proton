@@ -62,7 +62,8 @@ static IAggregateFunction * createAggregateFunctionCountedArgMinMax(
     const String & name, const DataTypes & argument_types, const Array & parameters, const Settings * settings)
 {
     assertNoParameters(name, parameters);
-    assertBinary(name, argument_types);
+    /// arg_min_if/arg_max_if requries three arguments
+    assertArityAtLeast<2>(name, argument_types);
 
     const DataTypePtr & res_type = argument_types[0];
     const DataTypePtr & val_type = argument_types[1];
