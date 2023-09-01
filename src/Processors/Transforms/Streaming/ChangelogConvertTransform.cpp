@@ -302,6 +302,13 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
     /// Final touch for _tp_delta for resulting retract chunk
     retract_chunk_columns.back()->insertMany(-1, num_retractions);
     output_chunks.emplace_back(std::move(retract_chunk_columns), num_retractions);
+    /// Don't stamp watermark on this block since we have a following +1 _tp_delta chunk
+    /// updating the old values. If we happen to stamp watermark on it, this will cause
+    /// downstream join / aggregation to emit transitive results we don't want.
+    /// We also can't concat -1 / +1 chunks since downstream join depends on this separation
+    /// behavior meaning depends on a chunk is either all retraction or all append which
+    /// largely simplify its logic and usually more performant
+    output_chunks.back().getOrCreateChunkContext()->setAvoidWatermark();
 
     /// Composing resulting chunk
     /// If we don't have late rows and we don't have duplicate primary key rows in the same chunk,
