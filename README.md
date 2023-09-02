@@ -2,13 +2,13 @@
 
 ---
 
-Proton is a unified streaming and historical data processing engine built on top of ClickHouse code base.
+Timeplus database (code name: Proton) is a unified streaming and historical data processing engine built on top of ClickHouse code base.
 
 - [What is Proton ?](#what-is-proton)
 - [Architecture](#architecture)
 - [Key Streaming Functionalities](#key-streaming-functionalities)
-- [Docs](#docs)
-- [Staring with Timeplus Cloud](#starting-with-timeplus-cloud)
+- [Docs](#documentations)
+- [Starting with Timeplus Cloud](#starting-with-timeplus-cloud)
 - [Starting with Proton in Container](#starting-with-proton-in-docker-container)
 - [License](#license)
 - [Contributing](#contributing)
@@ -17,6 +17,7 @@ Proton is a unified streaming and historical data processing engine built on top
 ## What is Proton?
 
 Proton is a unified streaming and historical data processing engine which powers the Timeplus streaming analytic platform.
+
 It is built on top of trimmed single instance ClickHouse code base. Its major goals are simplicity, efficient with good performance in both streaming and historical query processing.
 It is built in one single binary without any external service dependency, so it is easy for users to deploy it on bare metal, edge (ARM), container or in orchestrated cloud environment.
 After deployment, users can run streaming queries and historical queries or a combination of both in one SQL. Since its major use cases focus is streaming query processing,
@@ -51,9 +52,9 @@ Interested users can refer [How Timeplus Unifies Streaming and Historical Data P
 8. JavaScript UDF / UDAF
 9. Materialize View
 
-## Docs
+## Documentations
 
-For more streaming query functionalities, SQL syntax, functions, aggregation functions etc, see our [User Documentation](https://docs.timeplus.com/)
+For more streaming query functionalities, SQL syntax, functions, aggregation functions etc, see our [Documentations](https://docs.timeplus.com/)
 
 ## Starting with Timeplus Cloud
 
