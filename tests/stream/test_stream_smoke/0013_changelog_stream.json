@@ -6,9 +6,9 @@
         "setup": {
             "statements": [
                 {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_stream"},
-        {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists changelog_stream(i int) settings mode='changelog'"},
-        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test14_changelog_kv_stream"},
-        {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test14_changelog_kv_stream(i int, s string) primary key s settings mode='changelog_kv'"}
+                {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists changelog_stream(i int) settings mode='changelog'"},
+                {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test14_changelog_kv_stream"},
+                {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test14_changelog_kv_stream(i int, s string) primary key s settings mode='changelog_kv'"}
             ]
         },    
         "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "native_not_support"],"cluster": ["view", "cluster_table_bug"]}}
@@ -18,8 +18,8 @@
         {
             "id": 0,
             "tags": ["changelog_stream"],
-      "name": "single shard changelog stream",
-      "description": "single shard changelog stream creation and query",
+            "name": "single shard changelog stream",
+            "description": "single shard changelog stream creation and query",
             "steps":[
                 {
                     "statements": [
@@ -33,14 +33,14 @@
                 {
                     "query_id":"1400",
                     "expected_results":[
-            [1, 1], [1, -1]
+                        [1, 1], [1, -1]
                     ]
                 }
             ]
         },
         {
             "id": 1,
-      "tags": ["test14_changelog_kv_stream"],
+            "tags": ["test14_changelog_kv_stream"],
             "name": "single shard changelog_kv stream",
             "description": "single shard changelog_kv stream creation and query",
             "steps":[
@@ -118,11 +118,10 @@
                         {"client":"python", "query_type": "table", "exist":"test14_changelog_kv_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_changelog_kv_stream(id int, val float) primary key id settings mode='changelog_kv'"}, 
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_kv_stream(id, val) values (1, 1.1), (2, 2.2), (3, 3.3)"},
                         {"client":"python", "query_type": "stream", "query_id":"1404", "depends_on_stream":"test14_changelog_kv_stream", "wait":1, "terminate":"manual", "query":"select count(val), min(val), max(val), sum(val), avg(val) from test14_changelog_kv_stream emit periodic 1s"},
-                        {"client":"python", "query_type": "stream", "query_id":"1404-2", "depends_on_stream":"test14_changelog_kv_stream", "wait":1, "terminate":"manual", "query":"select count_if(val, val > 2), min_if(val, val > 2), max_if(val, val > 2), sum_if(val, val > 2), avg_if(val, val > 2) from test14_changelog_kv_stream emit periodic 1s"},
-                        {"client":"python", "query_type": "table", "depends_on":"1404-2", "wait":1, "query": "insert into test14_changelog_kv_stream(id, val) values (4, 4.4), (5, 5.5)"},
+                        {"client":"python", "query_type": "table", "depends_on":"1404", "wait":1, "query": "insert into test14_changelog_kv_stream(id, val) values (4, 4.4), (5, 5.5)"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_kv_stream(id, val, _tp_delta) values (3, 3.3, -1)"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_kv_stream(id, val, _tp_delta) values (1, 1.1, -1)"},
-                        {"client":"python", "query_type": "table", "kill":"1404,1404-2", "kill_wait":3, "wait":1, "query": "insert into test14_changelog_kv_stream(id, val, _tp_delta) values (5, 5.5, -1)"}
+                        {"client":"python", "query_type": "table", "kill":"1404", "kill_wait":3, "wait":1, "query": "insert into test14_changelog_kv_stream(id, val, _tp_delta) values (5, 5.5, -1)"}
                     ]
                 }
             ],
@@ -132,17 +131,7 @@
                     "expected_results":[
                         ["3", "1.1", "3.3", "6.6", "2.2"],
                         ["5", "1.1", "5.5", "16.5", "3.3"],
-                        ["4", "1.1", "5.5", "13.2", "3.3"],
-                        ["3", "2.2", "5.5", "12.1", "4.0333333"],
-                        ["2", "2.2", "4.4", "6.6", "3.3"]
-                    ]
-                },
-                {
-                    "query_id":"1404-2",
-                    "expected_results":[
-                        ["2", "2.2", "3.3", "5.5", "2.75"],
-                        ["4", "2.2", "5.5", "15.4", "3.85"],
-                        ["3", "2.2", "5.5", "12.1", "4.0333333"],
+                        ["4", "1.1", "5.5", "14.2", "3.3"],
                         ["3", "2.2", "5.5", "12.1", "4.0333333"],
                         ["2", "2.2", "4.4", "6.6", "3.3"]
                     ]
@@ -327,6 +316,403 @@
                     ]
                 }
             ]
+        },
+        {
+            "id": 11,
+            "tags": ["changelog(table)", "bidirectional-join"],
+            "name": "changelog(table) Inner all join changelog(table)(all primary keys join)",
+            "description": "changelog(table) Inner all join changelog(table)(all primary keys join)",
+            "steps": [
+                {
+                    "statements": [
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_append_stream1"},
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_append_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test14_append_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_append_stream1(i int, k1 int, k2 string)"},
+                        {"client":"python", "query_type": "table", "exist":"test14_append_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_append_stream2(j int, kk1 int, kk2 string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1411", "wait":1, "terminate":"manual", "query":"select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, _tp_delta from changelog(test14_append_stream1, k1, k2) as a inner all join changelog(test14_append_stream2, kk1, kk2) as b on a.k1 = b.kk1 and a.k2 = b.kk2"},
+                        {"client":"python", "query_type": "table", "depends_on":"1411", "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (1, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (2, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (3, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "kill":"1411", "kill_wait":3, "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (4, 1, 'k')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1411",
+                    "expected_results":[
+                        [1, 1, "k", 2, 1, "k", 1],
+                        [1, 1, "k", 2, 1, "k", -1],
+                        [3, 1, "k", 2, 1, "k", 1],
+                        [3, 1, "k", 2, 1, "k", -1],
+                        [3, 1, "k", 4, 1, "k", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 12,
+            "tags": ["changelog_kv", "bidirectional-join"],
+            "name": "changelog(table) Inner all join changelog(table)(partial primary keys join)",
+            "description": "changelog(table) Inner all join changelog(table)(partial primary keys join)",
+            "steps": [
+                {
+                    "statements": [
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_append_stream1"},
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_append_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test14_append_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_append_stream1(i int, k1 int, k2 string)"},
+                        {"client":"python", "query_type": "table", "exist":"test14_append_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_append_stream2(j int, kk1 int, kk2 string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1412", "wait":1, "terminate":"manual", "query":"select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, _tp_delta from changelog(test14_append_stream1, k1, k2) as a inner all join changelog(test14_append_stream2, kk1, kk2) as b on a.k1 = b.kk1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1412", "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (1, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (2, 1, 'kk')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (3, 1, 'k2')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (3, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "kill":"1412", "kill_wait":3, "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (4, 1, 'kk')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1412",
+                    "expected_results":[
+                        [1, 1, "k", 2, 1, "kk", 1],
+                        [3, 1, "k2", 2, 1, "kk", 1],
+                        [1, 1, "k", 2, 1, "kk", -1],
+                        [3, 1, "k", 2, 1, "kk", 1],
+                        [3, 1, "k2", 2, 1, "kk", -1],
+                        [3, 1, "k", 2, 1, "kk", -1],
+                        [3, 1, "k2", 4, 1, "kk", 1],
+                        [3, 1, "k", 4, 1, "kk", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 13,
+            "tags": ["changelog", "bidirectional-join"],
+            "name": "changelog(table) Inner all join changelog(table)(no primary keys join)",
+            "description": "changelog(table) Inner all join changelog(table)(no primary keys join)",
+            "steps": [
+                {
+                    "statements": [
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_append_stream1"},
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_append_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test14_append_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_append_stream1(i int, k1 int, k2 string)"},
+                        {"client":"python", "query_type": "table", "exist":"test14_append_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_append_stream2(j int, kk1 int, kk2 string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1413", "wait":1, "terminate":"manual", "query":"select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, _tp_delta from changelog(test14_append_stream1, k1, k2) as a inner all join changelog(test14_append_stream2, kk1, kk2) as b on a.i = b.j"},
+                        {"client":"python", "query_type": "table", "depends_on":"1413", "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (1, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (1, 2, 'k2')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (2, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "kill":"1413", "kill_wait":3, "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (2, 2, 'k2')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1413",
+                    "expected_results":[
+                        [1, 1, "k", 1, 2, "k2", 1],
+                        [1, 1, "k", 1, 2, "k2", -1],
+                        [2, 1, "k", 2, 2, "k2", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 14,
+            "tags": ["versioned_kv", "bidirectional-join"],
+            "name": "versioned_kv Inner all join versioned_kv(all primary keys join)",
+            "description": "versioned_kv Inner all join versioned_kv(all primary keys join)",
+            "steps": [
+                {
+                    "statements": [
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_vk_stream1"},
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_vk_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test14_vk_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_vk_stream1(i int, k1 int, k2 string) primary key (k1, k2) settings mode='versioned_kv'"},
+                        {"client":"python", "query_type": "table", "exist":"test14_vk_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_vk_stream2(j int, kk1 int, kk2 string) primary key (kk1,kk2) settings mode='versioned_kv'"},
+                        {"client":"python", "query_type": "stream", "query_id":"1414", "wait":1, "terminate":"manual", "query":"select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, _tp_delta from test14_vk_stream1 as a inner all join test14_vk_stream2 as b on a.k1 = b.kk1 and a.k2 = b.kk2"},
+                        {"client":"python", "query_type": "table", "depends_on":"1414", "wait":1, "query": "insert into test14_vk_stream1(i, k1, k2) values (1, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_vk_stream2(j, kk1, kk2) values (2, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_vk_stream1(i, k1, k2) values (3, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "kill":"1414", "kill_wait":3, "wait":1, "query": "insert into test14_vk_stream2(j, kk1, kk2) values (4, 1, 'k')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1414",
+                    "expected_results":[
+                        [1, 1, "k", 2, 1, "k", 1],
+                        [1, 1, "k", 2, 1, "k", -1],
+                        [3, 1, "k", 2, 1, "k", 1],
+                        [3, 1, "k", 2, 1, "k", -1],
+                        [3, 1, "k", 4, 1, "k", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 15,
+            "tags": ["versioned_kv", "bidirectional-join"],
+            "name": "versioned_kv Inner all join versioned_kv(partial primary keys join)",
+            "description": "versioned_kv Inner all join versioned_kv(partial primary keys join)",
+            "steps": [
+                {
+                    "statements": [
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_vk_stream1"},
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_vk_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test14_vk_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_vk_stream1(i int, k1 int, k2 string) primary key (k1, k2) settings mode='versioned_kv'"},
+                        {"client":"python", "query_type": "table", "exist":"test14_vk_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_vk_stream2(j int, kk1 int, kk2 string) primary key (kk1,kk2) settings mode='versioned_kv'"},
+                        {"client":"python", "query_type": "stream", "query_id":"1415", "wait":1, "terminate":"manual", "query":"select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, _tp_delta from test14_vk_stream1 as a inner all join test14_vk_stream2 as b on a.k1 = b.kk1;"},
+                        {"client":"python", "query_type": "table", "depends_on":"1415", "wait":1, "query": "insert into test14_vk_stream1(i, k1, k2) values (1, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_vk_stream2(j, kk1, kk2) values (2, 1, 'kk')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_vk_stream1(i, k1, k2) values (3, 1, 'k2')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_vk_stream1(i, k1, k2) values (3, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "kill":"1415", "kill_wait":3, "wait":1, "query": "insert into test14_vk_stream2(j, kk1, kk2) values (4, 1, 'kk')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1415",
+                    "expected_results":[
+                        [1, 1, "k", 2, 1, "kk", 1],
+                        [3, 1, "k2", 2, 1, "kk", 1],
+                        [1, 1, "k", 2, 1, "kk", -1],
+                        [3, 1, "k", 2, 1, "kk", 1],
+                        [3, 1, "k2", 2, 1, "kk", -1],
+                        [3, 1, "k", 2, 1, "kk", -1],
+                        [3, 1, "k2", 4, 1, "kk", 1],
+                        [3, 1, "k", 4, 1, "kk", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 16,
+            "tags": ["versioned_kv", "bidirectional-join"],
+            "name": "versioned_kv Inner all join versioned_kv(no primary keys join)",
+            "description": "versioned_kv Inner all join versioned_kv(no primary keys join)",
+            "steps": [
+                {
+                    "statements": [
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_vk_stream1"},
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_vk_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test14_vk_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_vk_stream1(i int, k1 int, k2 string) primary key (k1, k2) settings mode='versioned_kv'"},
+                        {"client":"python", "query_type": "table", "exist":"test14_vk_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_vk_stream2(j int, kk1 int, kk2 string) primary key (kk1,kk2) settings mode='versioned_kv'"},
+                        {"client":"python", "query_type": "stream", "query_id":"1416", "wait":1, "terminate":"manual", "query":"select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, _tp_delta from test14_vk_stream1 as a inner all join test14_vk_stream2 as b on a.i = b.j"},
+                        {"client":"python", "query_type": "table", "depends_on":"1416", "wait":1, "query": "insert into test14_vk_stream1(i, k1, k2) values (1, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_vk_stream2(j, kk1, kk2) values (1, 2, 'k2')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_vk_stream1(i, k1, k2) values (2, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "kill":"1416", "kill_wait":3, "wait":1, "query": "insert into test14_vk_stream2(j, kk1, kk2) values (2, 2, 'k2')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1416",
+                    "expected_results":[
+                        [1, 1, "k", 1, 2, "k2", 1],
+                        [1, 1, "k", 1, 2, "k2", -1],
+                        [2, 1, "k", 2, 2, "k2", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 17,
+            "tags": ["versioned_kv", "append-only", "Dynamic data enrichment join"],
+            "name": "append-only Inner all join changelog",
+            "description": "append-only Inner all join changelog",
+            "steps": [
+                {
+                    "statements": [
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_left_stream"},
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_changelog_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test14_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_left_stream (i int, k1 int, k2 string)"},
+                        {"client":"python", "query_type": "table", "exist":"test14_changelog_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_changelog_stream (j int, kk1 int, kk2 string) settings mode='changelog'"},
+                        {"client":"python", "query_type": "stream", "query_id":"1417", "wait":1, "terminate":"manual", "query":"select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, _tp_delta from test14_left_stream as a inner all join test14_changelog_stream as b on a.k1 = b.kk1 and a.k2 = b.kk2"},
+                        {"client":"python", "query_type": "table", "depends_on":"1417", "wait":1, "query": "insert into test14_left_stream(i, k1, k2) values (1, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_stream(j, kk1, kk2) values (2, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_stream(j, kk1, kk2, _tp_delta) values (2, 1, 'k', -1);"},
+                        {"client":"python", "query_type": "table", "kill":"1417", "kill_wait":3, "wait":1, "query": "insert into test14_changelog_stream(j, kk1, kk2) values (4, 1, 'k')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1417",
+                    "expected_results":[
+                        [1, 1, "k", 2, 1, "k", 1],
+                        [1, 1, "k", 2, 1, "k", -1],
+                        [1, 1, "k", 4, 1, "k", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 18,
+            "tags": ["versioned_kv", "append-only", "Dynamic data enrichment join"],
+            "name": "append-only left all join changelog",
+            "description": "append-only left all join changelog",
+            "steps": [
+                {
+                    "statements": [
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_left_stream"},
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_changelog_stream"},
+                        {"client":"python", "query_type": "table", "exist":"test14_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_left_stream (i int, k1 int, k2 string)"},
+                        {"client":"python", "query_type": "table", "exist":"test14_changelog_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_changelog_stream (j int, kk1 int, kk2 string) settings mode='changelog'"},
+                        {"client":"python", "query_type": "stream", "query_id":"1418", "wait":1, "terminate":"manual", "query":"select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, _tp_delta from test14_left_stream as a left all join test14_changelog_stream as b on a.k1 = b.kk1 and a.k2 = b.kk2"},
+                        {"client":"python", "query_type": "table", "depends_on":"1418", "wait":1, "query": "insert into test14_left_stream(i, k1, k2) values (1, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_stream(j, kk1, kk2) values (2, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_stream(j, kk1, kk2, _tp_delta) values (2, 1, 'k', -1)"},
+                        {"client":"python", "query_type": "table", "kill":"1418", "kill_wait":3, "wait":1, "query": "insert into test14_changelog_stream(j, kk1, kk2) values (4, 1, 'k')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1418",
+                    "expected_results":[
+                        [1, 1, "k", 0, 0, "", 0],
+                        [1, 1, "k", 2, 1, "k", 1],
+                        [1, 1, "k", 2, 1, "k", -1],
+                        [1, 1, "k", 4, 1, "k", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 19,
+            "tags": ["changelog(table)", "append-only", "Dynamic data enrichment join"],
+            "name": "append-only Inner all join changelog(table)(all primary join)",
+            "description": "append-only Inner all join changelog(table)(all primary join)",
+            "steps": [
+                {
+                    "statements": [
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_append_stream1"},
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_append_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test14_append_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_append_stream1 (i int, k1 int, k2 string)"},
+                        {"client":"python", "query_type": "table", "exist":"test14_append_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_append_stream2 (j int, kk1 int, kk2 string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1419", "wait":1, "terminate":"manual", "query":"select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, _tp_delta from test14_append_stream1 as a inner all join changelog(test14_append_stream2, kk1, kk2) as b on a.k1 = b.kk1 and a.k2 = b.kk2"},
+                        {"client":"python", "query_type": "table", "depends_on":"1419", "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (2, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (1, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (4, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "kill":"1419", "kill_wait":3, "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (3, 1, 'k')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1419",
+                    "expected_results":[
+                        [1, 1, "k", 2, 1, "k", 1],
+                        [1, 1, "k", 2, 1, "k", -1],
+                        [1, 1, "k", 4, 1, "k", 1],
+                        [3, 1, "k", 4, 1, "k", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 20,
+            "tags": ["changelog(table)", "append-only", "Dynamic data enrichment join"],
+            "name": "append-only Inner all join changelog(table)(partial primary join)",
+            "description": "append-only Inner all join changelog(table)(partial primary join)",
+            "steps": [
+                {
+                    "statements": [
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_append_stream1"},
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_append_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test14_append_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_append_stream1 (i int, k1 int, k2 string)"},
+                        {"client":"python", "query_type": "table", "exist":"test14_append_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_append_stream2 (j int, kk1 int, kk2 string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1420", "wait":1, "terminate":"manual", "query":"select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, _tp_delta from test14_append_stream1 as a inner all join changelog(test14_append_stream2, kk1, kk2) as b on a.k1 = b.kk1"},
+                        {"client":"python", "query_type": "table", "depends_on":"1420", "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (2, 1, 'kk')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (1, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (4, 1, 'kk2')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (4, 1, 'kk')"},
+                        {"client":"python", "query_type": "table", "kill":"1420", "kill_wait":3, "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (3, 1, 'k')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1420",
+                    "expected_results":[
+                        [1, 1, "k", 2, 1, "kk", 1],
+                        [1, 1, "k", 4, 1, "kk2", 1],
+                        [1, 1, "k", 2, 1, "kk", -1],
+                        [1, 1, "k", 4, 1, "kk", 1],
+                        [3, 1, "k", 4, 1, "kk2", 1],
+                        [3, 1, "k", 4, 1, "kk", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 21,
+            "tags": ["changelog(table)", "append-only", "Dynamic data enrichment join"],
+            "name": "append-only Inner all join changelog(table)(mo primary join)",
+            "description": "append-only Inner all join changelog(table)(no primary join)",
+            "steps": [
+                {
+                    "statements": [
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_append_stream1"},
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_append_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test14_append_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_append_stream1 (i int, k1 int, k2 string)"},
+                        {"client":"python", "query_type": "table", "exist":"test14_append_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_append_stream2 (j int, kk1 int, kk2 string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1421", "wait":1, "terminate":"manual", "query":"select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, _tp_delta from changelog(test14_append_stream1, k1, k2) as a inner all join changelog(test14_append_stream2, kk1, kk2) as b on a.i = b.j"},
+                        {"client":"python", "query_type": "table", "depends_on":"1421", "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (1, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (1, 2, 'k2')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (2, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "kill":"1421", "kill_wait":3, "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (2, 2, 'k2')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1421",
+                    "expected_results":[
+                        [1, 1, "k", 1, 2, "k2", 1],
+                        [1, 1, "k", 1, 2, "k2", -1],
+                        [2, 1, "k", 2, 2, "k2", 1]
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 22,
+            "tags": ["changelog(table)", "append-only", "Dynamic data enrichment join"],
+            "name": "append-only left all join changelog(table)(all primary join)",
+            "description": "append-only left all join changelog(table)(all primary join)",
+            "steps": [
+                {
+                    "statements": [
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_append_stream1"},
+                        {"client":"python", "query_type":"table", "query":"drop stream if exists test14_append_stream2"},
+                        {"client":"python", "query_type": "table", "exist":"test14_append_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_append_stream1 (i int, k1 int, k2 string)"},
+                        {"client":"python", "query_type": "table", "exist":"test14_append_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test14_append_stream2 (j int, kk1 int, kk2 string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1422", "wait":1, "terminate":"manual", "query":"select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, _tp_delta from test14_append_stream1 as a left all join changelog(test14_append_stream2, kk1, kk2) as b on a.k1 = b.kk1 and a.k2 = b.kk2"},
+                        {"client":"python", "query_type": "table", "depends_on":"1422", "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (2, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (1, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_append_stream2(j, kk1, kk2) values (4, 1, 'k')"},
+                        {"client":"python", "query_type": "table", "kill":"1422", "kill_wait":3, "wait":1, "query": "insert into test14_append_stream1(i, k1, k2) values (3, 2, 'k')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1422",
+                    "expected_results":[
+                        [1, 1, "k", 2, 1, "k", 1],
+                        [1, 1, "k", 2, 1, "k", -1],
+                        [1, 1, "k", 4, 1, "k", 1],
+                        [3, 2, "k", 0, 0, "", 0]
+                    ]
+                }
+            ]
         }
+
     ]
 }
+
