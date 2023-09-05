@@ -58,7 +58,7 @@ def upload_results(
     s3_client,
     report_file_path,
     s3_report_name=None,
-    pr_number=0,
+    pr_number='0',
     commit_sha="",
     *additional_files_paths,
 ):
@@ -83,7 +83,7 @@ def upload_results(
     logging.info("Search result in url %s", report_urls)
     return report_urls
 
-def upload_proton_logs(s3_client, proton_log_folder, pr_number=0, commit_sha=""):
+def upload_proton_logs(s3_client, proton_log_folder, pr_number='0', commit_sha=""):
     s3_proton_log_folder = (
         f"reports/proton/tests/CI/{pr_number}/{commit_sha}/proton_logs"
     )
@@ -366,15 +366,14 @@ if __name__ == "__main__":
         os.environ["PROTON_CREATE_STREAM_SHARDS"] = args.create_stream_shards
     if args.create_stream_replicas:
         os.environ["PROTON_CREATE_STREAM_REPLICAS"] = args.create_stream_replicas
-    if args.no_retry is not None:
-        if args.no_retry is True:
-            test_retry = "False"
-        else:
-            test_retry = "True"
-        os.environ["TEST_RETRY"] = test_retry
-    if args.test_suite_timeout:
-        test_suite_timeout = args.test_suite_timeout
-        os.environ["TEST_SUITE_TIMEOUT"] = str(test_suite_timeout)
+    if args.no_retry is True:
+        test_retry = "False"
+    else:
+        test_retry = "True"
+    os.environ["TEST_RETRY"] = test_retry
+    #if args.test_suite_timeout:
+    test_suite_timeout = args.test_suite_timeout
+    os.environ["TEST_SUITE_TIMEOUT"] = str(test_suite_timeout)
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.formatter = formatter
     logger.addHandler(console_handler)
@@ -421,7 +420,7 @@ if __name__ == "__main__":
     event_detailed_type = 'status'
     #stream_name = 'test_event_2' #todo: read from test config
     api_key = os.environ.get("TIMEPLUS_API_KEY", None)
-    api_address = os.environ.get("TIMEPLUS_ADDRESS", None)
+    api_address = os.environ.get("TIMEPLUS_ADDRESS", '')
     work_space = os.environ.get("TIMEPLUS_WORKSPACE", None)
     if work_space is not None and work_space != '':
         api_address = api_address + "/" + work_space
@@ -437,7 +436,9 @@ if __name__ == "__main__":
     # version = "0.1"
     test_id = None
     event_id = None
-    test_result = "None"
+    test_result = ''
+    test_event_tag = None
+    timeplus_env = None
     if api_address is not None and api_key is not None:
         try: #write status start test_event to timeplus 
             timeplus_env = Environment().address(api_address).apikey(api_key) 
@@ -445,9 +446,11 @@ if __name__ == "__main__":
             event_details = 'start'
             test_event_start = Event.create(event_type, event_detailed_type, event_details)    
             test_event_record_start = EventRecord.create(None, test_event_start, test_event_tag, timeplus_event_version)
-            test_info_tag = test_event_tag.test_info_tag
-            test_event_record_start.write(timeplus_env, timeplus_event_stream)
-            os.environ["TIMEPLUS_TEST_EVENT_TAG"] = json.dumps(test_event_tag.value) #set env var for test_id to pass to rockets
+            if test_event_tag:
+                test_info_tag = test_event_tag.test_info_tag
+                os.environ["TIMEPLUS_TEST_EVENT_TAG"] = json.dumps(test_event_tag.value) #set env var for test_id to pass to rockets
+            if test_event_start:
+                test_event_record_start.write(timeplus_env, timeplus_event_stream)
             print(f"test_event_start sent")
             # test_event_tag_from_env = os.getenv("TIMEPLUS_TEST_EVENT_TAG")
             # print(f"test_event_tag_from_env = {test_event_tag_from_env}")
@@ -515,7 +518,8 @@ if __name__ == "__main__":
             test_event_end = Event.create(event_type, event_detailed_type, event_details, **test_result)
             test_event_record_end = EventRecord.create(None, test_event_end, test_event_tag, timeplus_event_version)
             print(f"test_event_end = {test_event_end}")
-            test_event_record_end.write(timeplus_env, timeplus_event_stream) 
+            if test_event_record_end:
+                test_event_record_end.write(timeplus_env, timeplus_event_stream) 
         except(BaseException) as error:
             logger.error(f"timeplus event write exception: {error}")
             traceback.print_exc()  

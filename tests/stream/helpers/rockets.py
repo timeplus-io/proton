@@ -358,27 +358,26 @@ def env_health_check(health_check_url):
         print(f"docker logs redpanda-1 result: #######\n {res}")        
         return False
 
-def env_setup(
+def env_check(
     rest_settings,
     proton_ci_mode="local",
 ):
     ci_mode = proton_ci_mode
-    logger.info(f"env_setup: ci_mode = {ci_mode}")
-    logger.debug(f"env_setup: rest_settings = {rest_settings}")
+    logger.info(f"env_check: ci_mode = {ci_mode}")
+    logger.debug(f"env_check: rest_settings = {rest_settings}")
     env_health_check_res_list = []
     for rest_setting in rest_settings:
         health_url = rest_setting.get("health_check_url")
-        print(f"env_setup: health_url = {health_url}")
+        print(f"env_check: health_url = {health_url}")
         tables_cleaned = []
         env_health_check_res = env_health_check(health_url)
-        print(f"env_setup: env_health_check_res: {env_health_check_res}")
+        print(f"env_check: env_health_check_res: {env_health_check_res}")
         retry = 30
         while env_health_check_res == False and retry > 0:
             time.sleep(4)
             env_health_check_res = env_health_check(health_url)
-            print(f"env_health_check retry, env_setup: health_url = {health_url}, retry = {retry}")
+            print(f"env_health_check retry, env_check: health_url = {health_url}, retry = {retry}")
             retry -= 1
-
         if env_health_check_res == False:
             error_msg = f"ENV_HEALTH_CHECK_FAILED, env_health_check_res = {env_health_check_res}, health_url = {health_url}"
             logger.error(error_msg)
@@ -641,9 +640,10 @@ def rockets_run(test_context):
             rest_settings.append(rest_setting)
     else:
         rest_setting = config.get("rest_setting")
+        rest_settings.append(rest_setting)
     if test_suites_selected_sets != None and len(test_suites_selected_sets) != 0:
-        env_setup_res = env_setup(rest_settings, proton_ci_mode)
-        logger.info(f"rockets_run env_etup done, env_setup_res = {env_setup_res}")
+        env_check_res = env_check(rest_settings, proton_ci_mode)
+        logger.info(f"rockets_run env_check done, env_check_res = {env_check_res}")
     else:
         test_suites_set_env = os.getenv("PROTON_TEST_SUITES", None)
         print(f'######\n Wrong Test Suite Name \nci_runner.py --test_suite={test_suites_set_env}, test suite name {test_suites_set_env} is not found in any test suite json file! \n######\n')
@@ -1933,7 +1933,7 @@ class QueryClientRest(QueryClient):
         table_ddl_url = rest_setting.get("table_ddl_url")
         proton_create_stream_shards = config.get("proton_create_stream_shards")
         proton_create_stream_replicas = config.get("proton_create_stream_replicas")
-        exception_retry = retry #set the retry times of exception catching, if continuous exception hits exception_retry, raise exceiption and let env_setup() to wrap and notify test_suite_run()
+        exception_retry = retry #set the retry times of exception catching
         while retry > 0 and exception_retry > 0:
             res = None
             try:
