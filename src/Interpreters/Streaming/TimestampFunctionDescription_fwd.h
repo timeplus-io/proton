@@ -1,5 +1,9 @@
 #pragma once
 
+#include <memory>
+#include <vector>
+
+
 namespace DB
 {
 namespace Streaming

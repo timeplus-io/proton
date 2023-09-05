@@ -93,14 +93,14 @@ void MsgPackRowOutputFormat::serializeField(const IColumn & column, DataTypePtr 
         }
         case TypeIndex::String:
         {
-            StringRef string = assert_cast<const ColumnString &>(column).getDataAt(row_num);
+            const std::string_view & string = assert_cast<const ColumnString &>(column).getDataAt(row_num).toView();
             packer.pack_bin(static_cast<unsigned>(string.size()));
             packer.pack_bin_body(string.data(), static_cast<unsigned>(string.size()));
             return;
         }
         case TypeIndex::FixedString:
         {
-            StringRef string = assert_cast<const ColumnFixedString &>(column).getDataAt(row_num);
+            const std::string_view & string = assert_cast<const ColumnFixedString &>(column).getDataAt(row_num).toView();
             packer.pack_bin(static_cast<unsigned>(string.size()));
             packer.pack_bin_body(string.data(), static_cast<unsigned>(string.size()));
             return;

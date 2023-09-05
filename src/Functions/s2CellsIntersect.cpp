@@ -6,6 +6,7 @@
 #include <Columns/ColumnTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <Functions/FunctionFactory.h>
 #include <Common/typeid_cast.h>
 #include <base/range.h>

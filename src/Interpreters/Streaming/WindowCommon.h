@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/ColumnWithTypeAndName.h>
 #include <Columns/ColumnsDateTime.h>
 #include <Interpreters/Streaming/SessionInfo.h>
 #include <Interpreters/Streaming/TableFunctionDescription_fwd.h>
