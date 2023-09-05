@@ -1,11 +1,11 @@
 #pragma once
 
 #include <TableFunctions/ITableFunction.h>
-
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/Streaming/TableFunctionDescription_fwd.h>
 #include <Interpreters/Streaming/TimestampFunctionDescription_fwd.h>
+#include <Interpreters/TreeRewriter.h>
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/StorageSnapshot.h>
 #include <Core/Streaming/DataStreamSemantic.h>

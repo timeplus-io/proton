@@ -511,24 +511,6 @@ TEST_F(UDATestCase, returnNumberForBoolArray)
     checkV8ReturnResult("bool", true, create_fn, check_fn);
 }
 
-void dumpArray(ColumnArray & col)
-{
-    std::cout << "structure: " << col.dumpStructure() << std::endl;
-    std::cout << "data: ";
-    for (int i = 0; i < col.getData().size(); i++)
-    {
-        std::cout << col.getData()[i] << ",";
-    }
-    std::cout << std::endl;
-
-    std::cout << "offsets: ";
-    for (uint64_t i : col.getOffsets())
-    {
-        std::cout << i << ",";
-    }
-    std::cout << std::endl;
-}
-
 using CREATE_DATA_FUNC = std::function<void(MutableColumnPtr &)>;
 using CHECK_V8_DATA_FUNC = std::function<void(v8::Isolate *, v8::Local<v8::Context> &, v8::Local<v8::Array> &)>;
 
@@ -661,7 +643,6 @@ TEST_F(UDATestCase, prepareArgumentsNestedArray)
         column_array.insert(nested1);
         Array nested2 = Array{Array{6}, Array{7}};
         column_array.insert(nested2);
-        /// dumpArray(column_array);
     };
 
     auto check_nested_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
