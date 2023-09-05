@@ -1,9 +1,9 @@
 import os, sys, logging, subprocess, time, datetime, json, csv, argparse, getopt, traceback
 from argparse import ArgumentParser
 from helpers.s3_helper import S3Helper
-from helpers.compress_files import compress_file_fast
+#from helpers.compress_files import compress_file_fast
 from helpers.utils import compose_up
-from helpers.event_util import Event,EventRecord,TestEventTag
+from helpers.event_util import Event, EventRecord, TestEventTag
 import multiprocessing as mp
 import pytest
 from timeplus import Stream, Environment
@@ -25,19 +25,25 @@ cur_dir = os.path.dirname(os.path.abspath(__file__))
 config_file_path = f"{cur_dir}/test_stream_smoke/configs/config.json"
 
 docker_compose_file_path = f"{cur_dir}/test_stream_smoke/configs/docker-compose.yaml"
-DEFAULT_TEST_SUITE_TIMEOUT = 900 #seconds
+DEFAULT_TEST_SUITE_TIMEOUT = 900  # seconds
 DEFAULT_TEST_FOLDER = "test_stream_smoke"
+
 
 def compress_logs(self, dir, relpaths, result_path):
     subprocess.check_call(
         "tar czf {} -C {} {}".format(result_path, dir, " ".join(relpaths)), shell=True
     )  # STYLE_CHECK_ALLOW_SUBPROCESS_CHECK_CALL
 
+
 def container_file_download(dir="./", setting="nativelog", *files_in_container):
     print(files_in_container)
     if len(files_in_container) != 0:
         files_downloaded = []
-        for file_tuple in files_in_container: #file is a tuple of {proton_server_container_name,log_file_path}
+        for (
+            file_tuple
+        ) in (
+            files_in_container
+        ):  # file is a tuple of {proton_server_container_name,log_file_path}
             try:
                 print(f"file_tuple = {file_tuple}")
                 file_name = file_tuple[1].split("/")[-1]
@@ -54,18 +60,19 @@ def container_file_download(dir="./", setting="nativelog", *files_in_container):
     else:
         return ()
 
+
 def upload_results(
     s3_client,
     report_file_path,
     s3_report_name=None,
-    pr_number='0',
+    pr_number="0",
     commit_sha="",
     *additional_files_paths,
 ):
     if s3_report_name == None:
         s3_report_name = "report.html"
     s3_path_prefix = f"reports/proton/tests/CI/{pr_number}/{commit_sha}/"
-    report_urls = [] #list of report file and log files
+    report_urls = []  # list of report file and log files
     report_url = s3_client.upload_test_report_to_s3(
         report_file_path, s3_path_prefix + s3_report_name
     )
@@ -83,7 +90,8 @@ def upload_results(
     logging.info("Search result in url %s", report_urls)
     return report_urls
 
-def upload_proton_logs(s3_client, proton_log_folder, pr_number='0', commit_sha=""):
+
+def upload_proton_logs(s3_client, proton_log_folder, pr_number="0", commit_sha=""):
     s3_proton_log_folder = (
         f"reports/proton/tests/CI/{pr_number}/{commit_sha}/proton_logs"
     )
@@ -92,6 +100,7 @@ def upload_proton_logs(s3_client, proton_log_folder, pr_number='0', commit_sha="
     )
     logging.info("Search result in url %s", proton_log_url)
     return proton_log_url
+
 
 def proton_python_driver_install():
     s3_helper = S3Helper("https://s3.amazonaws.com")
@@ -147,87 +156,102 @@ def ci_runner(
     pytest_logging_level_set = f"--log-cli-level={logging_level}"
     s3_helper = S3Helper("https://s3.amazonaws.com")
     multi_protons = setting_config.get("multi_protons")
-    global_sql_settings = setting_config.get("sql_settings") 
-    global_sql_settings_str = json.dumps(global_sql_settings) #todo: unify the procedure of ci_runner env var setting and passing to rockets 
-    os.environ["SQL_SETTINGS"] = global_sql_settings_str     
+    global_sql_settings = setting_config.get("sql_settings")
+    global_sql_settings_str = json.dumps(
+        global_sql_settings
+    )  # todo: unify the procedure of ci_runner env var setting and passing to rockets
+    os.environ["SQL_SETTINGS"] = global_sql_settings_str
     proton_server_container_name_list = []
     test_result = ""
-    if multi_protons == True:#if multi_protons is True, there are multiple settings for allocating the test suites on configs
+    if (
+        multi_protons == True
+    ):  # if multi_protons is True, there are multiple settings for allocating the test suites on configs
         for key in setting_config["settings"]:
-            proton_server_container_name_str = setting_config["settings"][key].get("proton_server_container_name")
-            ci_runner_params_from_config = setting_config["settings"][key].get("ci_runner_params") #todo: support ci_runner_params per env of multi envs setting
+            proton_server_container_name_str = setting_config["settings"][key].get(
+                "proton_server_container_name"
+            )
+            ci_runner_params_from_config = setting_config["settings"][key].get(
+                "ci_runner_params"
+            )  # todo: support ci_runner_params per env of multi envs setting
             if proton_server_container_name_str is None:
-                raise Exception(f"proton_server_container_name of setting = {setting} is not found in setting_config")
+                raise Exception(
+                    f"proton_server_container_name of setting = {setting} is not found in setting_config"
+                )
             else:
-                proton_server_container_name_list.extend(proton_server_container_name_str.split(','))
-    else:#todo: right now just make a simple if_else to handle the logic, so currently only multi env settings for single node proton is supported, need to optimize to support multi envs of cluster
-        proton_server_container_name_str = setting_config.get("proton_server_container_name")
+                proton_server_container_name_list.extend(
+                    proton_server_container_name_str.split(",")
+                )
+    else:  # todo: right now just make a simple if_else to handle the logic, so currently only multi env settings for single node proton is supported, need to optimize to support multi envs of cluster
+        proton_server_container_name_str = setting_config.get(
+            "proton_server_container_name"
+        )
         if proton_server_container_name_str is None:
-            raise Exception(f"proton_server_container_name of setting = {setting} is not found in setting_config")
-        proton_server_container_name_list = proton_server_container_name_str.split(',') #for multi containers in clustering settings
+            raise Exception(
+                f"proton_server_container_name of setting = {setting} is not found in setting_config"
+            )
+        proton_server_container_name_list = proton_server_container_name_str.split(
+            ","
+        )  # for multi containers in clustering settings
         ci_runner_params_from_config = setting_config.get("ci_runner_params")
-        if ci_runner_params_from_config is not None and len(ci_runner_params_from_config) > 0: #todo: currently only single env setting support ci_runner_params, need to optimize to support ci_runner_params per env
+        if (
+            ci_runner_params_from_config is not None
+            and len(ci_runner_params_from_config) > 0
+        ):  # todo: currently only single env setting support ci_runner_params, need to optimize to support ci_runner_params per env
             for param in ci_runner_params_from_config:
                 print(f"ci_runner: setting = {setting}, param = {param}")
                 for key, value in param.items():
                     os.environ[key] = value
                     env_setting = os.getenv(key)
-                    print(f"os.getenv({key}) = {env_setting}")        
-    os.environ["PROTON_SETTING"] = setting # set the env virable to setting for rockets_run() based on settings gotten from cmdline
-    proton_logs_in_container = [] # a list of tuple
+                    print(f"os.getenv({key}) = {env_setting}")
+    os.environ[
+        "PROTON_SETTING"
+    ] = setting  # set the env virable to setting for rockets_run() based on settings gotten from cmdline
+    proton_logs_in_container = []  # a list of tuple
     print(f"proton_server_container_name_list = {proton_server_container_name_list}")
     for proton_server_container_name in proton_server_container_name_list:
         proton_log_in_container = (
             f"{proton_server_container_name}://var/log/proton-server/proton-server.log"
         )
-        proton_logs_in_container.append((proton_server_container_name,proton_log_in_container))
-        proton_err_log_in_container = (
-            f"{proton_server_container_name}://var/log/proton-server/proton-server.err.log"
+        proton_logs_in_container.append(
+            (proton_server_container_name, proton_log_in_container)
         )
-        proton_logs_in_container.append((proton_server_container_name, proton_err_log_in_container))
-    pytest_args =         [
-            "-s",
-            "-v",
-            pytest_logging_level_set,
-            "--log-cli-format=%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)",
-            "--log-cli-date-format=%Y-%m-%d %H:%M:%S",
-            f"--html={report_file_path}",
-            "--self-contained-html",
-        ]
+        proton_err_log_in_container = f"{proton_server_container_name}://var/log/proton-server/proton-server.err.log"
+        proton_logs_in_container.append(
+            (proton_server_container_name, proton_err_log_in_container)
+        )
+    pytest_args = [
+        "-s",
+        "-v",
+        pytest_logging_level_set,
+        "--log-cli-format=%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)",
+        "--log-cli-date-format=%Y-%m-%d %H:%M:%S",
+        f"--html={report_file_path}",
+        "--self-contained-html",
+    ]
     for test_folder in test_folders_list:
         pytest_args.append(test_folder)
-    retcode = pytest.main(
-        pytest_args
-    )
+    retcode = pytest.main(pytest_args)
     if test_result_shared_list != None:
-        test_result_shared_list.append(
-            {"proton_setting": setting, "retcode": retcode}
-        )
+        test_result_shared_list.append({"proton_setting": setting, "retcode": retcode})
     setting_running_test_end = datetime.datetime.now()
     setting_test_duration = setting_running_test_end - setting_running_start
-    print(f"setting = {setting}, setting_test_duration = {setting_test_duration.seconds}")
+    print(
+        f"setting = {setting}, setting_test_duration = {setting_test_duration.seconds}"
+    )
 
     with open(".status", "a+") as status_result:
         status_result.writelines(f"{setting}:" + str(retcode))
     downloaded_log_files_paths = []
     downloaded_log_files_paths = container_file_download(
-        './',
-        setting,
-        *proton_logs_in_container
+        "./", setting, *proton_logs_in_container
     )
-    print(
-        f"ci_runner: downloaded_log_files_paths = {downloaded_log_files_paths}"
-    )
+    print(f"ci_runner: downloaded_log_files_paths = {downloaded_log_files_paths}")
     if run_mode == "github":
         pr_number = os.getenv("GITHUB_REF_NAME", pr_number)
         commit_sha = os.getenv("GITHUB_SHA", commit_sha)
-        if retcode == 0:   
+        if retcode == 0:
             report_urls = upload_results(
-                s3_helper,
-                report_file_path,
-                report_file_name,
-                pr_number,
-                commit_sha
+                s3_helper, report_file_path, report_file_name, pr_number, commit_sha
             )
         else:
             report_urls = upload_results(
@@ -237,12 +261,14 @@ def ci_runner(
                 pr_number,
                 commit_sha,
                 *downloaded_log_files_paths,
-            )            
+            )
         for report_url in report_urls:
             report_url = report_url.replace("https://s3.amazonaws.com/", "s3://")
             report_url = report_url.replace("%20", " ")
             print(f"::notice ::Report/Log s3 uri: {report_url}")
-            print(f"::notice ::Report/Log download command: aws s3 cp '{report_url}' ./")
+            print(
+                f"::notice ::Report/Log download command: aws s3 cp '{report_url}' ./"
+            )
             proton_log_folder_url = upload_proton_logs(
                 s3_helper,
                 proton_log_folder,
@@ -253,7 +279,8 @@ def ci_runner(
     else:
         print("ci_runner: local mode, no report uploaded.")
     return retcode
-                   
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run CI in local mode")
     run_mode = "github"
@@ -265,7 +292,9 @@ if __name__ == "__main__":
     ci_runner_start = datetime.datetime.now()
     ci_runner_end = datetime.datetime.now()
     ci_runner_duration = ci_runner_end - ci_runner_start
-    test_result_shared_list = [] #shared list for collecting result from ci_runner processes
+    test_result_shared_list = (
+        []
+    )  # shared list for collecting result from ci_runner processes
     mp_mgr = mp.Manager()
     test_result_shared_list = mp_mgr.list()
     configs = None
@@ -274,39 +303,35 @@ if __name__ == "__main__":
     group.add_argument(
         "--github",
         action="store_const",
-        const = "github",
-        default= "github",
+        const="github",
+        default="github",
         dest="run_mode",
         help="Run tests in github action flow mode",
-    )     
+    )
     group.add_argument(
         "--local",
         action="store_const",
-        const = "local",
+        const="local",
         default=None,
         dest="run_mode",
         help="Run tests in local mode",
     )
-    parser.add_argument( 
+    parser.add_argument(
         "--debug",
-        action = "store_true",
-        default = False, 
-        help="Run tests in debug mode to print debug log, otherwiese info log ouput")
+        action="store_true",
+        default=False,
+        help="Run tests in debug mode to print debug log, otherwiese info log ouput",
+    )
     parser.add_argument(
         "-d",
         "--test_folders",
         default=DEFAULT_TEST_FOLDER,
         help="test folders ci_runner will run tests in",
-    ) 
+    )
     parser.add_argument(
-        "-q", 
-        "--test_suites", 
-        default = None, 
-        help="Test suite name to be run")  
-    parser.add_argument(
-        "-i", 
-        "--id", 
-        help="Test suite name to be run")                   
+        "-q", "--test_suites", default=None, help="Test suite name to be run"
+    )
+    parser.add_argument("-i", "--id", help="Test suite name to be run")
     parser.add_argument(
         "--loop",
         default=1,
@@ -314,27 +339,30 @@ if __name__ == "__main__":
         help="Num of repeating running tests",
     )
     parser.add_argument(
-        "-s", 
-        "--settings", 
-        default = "default", 
-        help="settings of proton for testing running on, mapping to the proton settings in proton/tests/stream/test_stream_smoke/configs/config.json")
+        "-s",
+        "--settings",
+        default="default",
+        help="settings of proton for testing running on, mapping to the proton settings in proton/tests/stream/test_stream_smoke/configs/config.json",
+    )
     parser.add_argument(
-        "--cluster_query_route_mode", 
-        help="how to run query on cluster, e.g. none_stream_node_first")   
+        "--cluster_query_route_mode",
+        help="how to run query on cluster, e.g. none_stream_node_first",
+    )
     parser.add_argument(
-        "--cluster_query_node", 
-        help="cluster node name for running queries on, e.g. proton-cluster-node1")
+        "--cluster_query_node",
+        help="cluster node name for running queries on, e.g. proton-cluster-node1",
+    )
     parser.add_argument(
-        "--create_stream_shards", 
-        help="shards to be created when creating stream, if set settings shards = <create_stream_shards> will be added to all the stream creating statement")
+        "--create_stream_shards",
+        help="shards to be created when creating stream, if set settings shards = <create_stream_shards> will be added to all the stream creating statement",
+    )
     parser.add_argument(
-        "--create_stream_replicas", 
-        help="replicas to be created when creating stream, if set settings replicas = <create_stream_replicas> will be added to all the stream creating statement")                   
-    parser.add_argument( 
-        "--no_retry",
-        action = "store_true",
-        default = False, 
-        help="Run tests without retry")   
+        "--create_stream_replicas",
+        help="replicas to be created when creating stream, if set settings replicas = <create_stream_replicas> will be added to all the stream creating statement",
+    )
+    parser.add_argument(
+        "--no_retry", action="store_true", default=False, help="Run tests without retry"
+    )
     parser.add_argument(
         "--test_suite_timeout",
         default=DEFAULT_TEST_SUITE_TIMEOUT,
@@ -346,11 +374,11 @@ if __name__ == "__main__":
     envs = []
     if args.run_mode:
         run_mode = args.run_mode
-        os.environ["PROTON_CI_MODE"] = run_mode 
+        os.environ["PROTON_CI_MODE"] = run_mode
     if args.debug:
         logging_level = "DEBUG"
     settings = args.settings.split(",")
-    test_folders =args.test_folders
+    test_folders = args.test_folders
     test_folders_list = args.test_folders.split(",")
     if args.test_suites:
         os.environ["PROTON_TEST_SUITES"] = args.test_suites
@@ -371,7 +399,7 @@ if __name__ == "__main__":
     else:
         test_retry = "True"
     os.environ["TEST_RETRY"] = test_retry
-    #if args.test_suite_timeout:
+    # if args.test_suite_timeout:
     test_suite_timeout = args.test_suite_timeout
     os.environ["TEST_SUITE_TIMEOUT"] = str(test_suite_timeout)
     console_handler = logging.StreamHandler(sys.stderr)
@@ -402,29 +430,36 @@ if __name__ == "__main__":
     args_dict = {}
     for key, value in args_vars.items():
         if value is None:
-            value = 'None'
-        arg_dict = {key:value}
+            value = "None"
+        arg_dict = {key: value}
         args_dict = {**args_dict, **arg_dict}
     print(f"args_dict = {args_dict}")
     with open(config_file_path) as f:
-        configs = json.load(f)     
-    timeplus_event_stream = configs.get("timeplus_event_stream") #todo: distribute global configs into configs
+        configs = json.load(f)
+    timeplus_event_stream = configs.get(
+        "timeplus_event_stream"
+    )  # todo: distribute global configs into configs
     timeplus_event_version = configs.get("timeplus_event_version")
-    #initialize test event fields
-    test_command_details = {"test_command_details": {"test_program":__file__.split("/")[-1],"test_paras": args_dict}} #put ci_runner parameters into tag of test_event
+    # initialize test event fields
+    test_command_details = {
+        "test_command_details": {
+            "test_program": __file__.split("/")[-1],
+            "test_paras": args_dict,
+        }
+    }  # put ci_runner parameters into tag of test_event
     event_id = None
-    repo_name = 'proton'
-    test_name = 'ci_runner'
-    test_type = 'ci_smoke'
-    event_type = 'test_event'
-    event_detailed_type = 'status'
-    #stream_name = 'test_event_2' #todo: read from test config
+    repo_name = "proton"
+    test_name = "ci_runner"
+    test_type = "ci_smoke"
+    event_type = "test_event"
+    event_detailed_type = "status"
+    # stream_name = 'test_event_2' #todo: read from test config
     api_key = os.environ.get("TIMEPLUS_API_KEY", None)
-    api_address = os.environ.get("TIMEPLUS_ADDRESS", '')
+    api_address = os.environ.get("TIMEPLUS_ADDRESS", "")
     work_space = os.environ.get("TIMEPLUS_WORKSPACE", None)
-    if work_space is not None and work_space != '':
+    if work_space is not None and work_space != "":
         api_address = api_address + "/" + work_space
-    sanitizer = os.environ.get("SANITIZER","")
+    sanitizer = os.environ.get("SANITIZER", "")
     if len(sanitizer) == 0:
         build_type = "release_build"
     else:
@@ -436,34 +471,56 @@ if __name__ == "__main__":
     # version = "0.1"
     test_id = None
     event_id = None
-    test_result = ''
+    test_result = ""
     test_event_tag = None
     timeplus_env = None
     if api_address is not None and api_key is not None:
-        try: #write status start test_event to timeplus 
-            timeplus_env = Environment().address(api_address).apikey(api_key) 
-            test_event_tag = TestEventTag.create(repo_name, test_id, test_name, test_type,build_type, pr_number, commit_sha,os_info, platform_info)
-            event_details = 'start'
-            test_event_start = Event.create(event_type, event_detailed_type, event_details)    
-            test_event_record_start = EventRecord.create(None, test_event_start, test_event_tag, timeplus_event_version)
+        try:  # write status start test_event to timeplus
+            timeplus_env = Environment().address(api_address).apikey(api_key)
+            test_event_tag = TestEventTag.create(
+                repo_name,
+                test_id,
+                test_name,
+                test_type,
+                build_type,
+                pr_number,
+                commit_sha,
+                os_info,
+                platform_info,
+            )
+            event_details = "start"
+            test_event_start = Event.create(
+                event_type, event_detailed_type, event_details
+            )
+            test_event_record_start = EventRecord.create(
+                None, test_event_start, test_event_tag, timeplus_event_version
+            )
             if test_event_tag:
                 test_info_tag = test_event_tag.test_info_tag
-                os.environ["TIMEPLUS_TEST_EVENT_TAG"] = json.dumps(test_event_tag.value) #set env var for test_id to pass to rockets
+                os.environ["TIMEPLUS_TEST_EVENT_TAG"] = json.dumps(
+                    test_event_tag.value
+                )  # set env var for test_id to pass to rockets
             if test_event_start:
                 test_event_record_start.write(timeplus_env, timeplus_event_stream)
             print(f"test_event_start sent")
             # test_event_tag_from_env = os.getenv("TIMEPLUS_TEST_EVENT_TAG")
             # print(f"test_event_tag_from_env = {test_event_tag_from_env}")
-        except(BaseException) as error:
+        except BaseException as error:
             logger.error(f"timeplus event write exception: {error}")
             traceback.print_exc()
     else:
-        print(f"one of TIMEPLUS_API_KEY,TIMEPLUS_ADDRESS,TIMEPLUS_WORKSPACE is not found in ENV")   
+        print(
+            f"one of TIMEPLUS_API_KEY,TIMEPLUS_ADDRESS,TIMEPLUS_WORKSPACE is not found in ENV"
+        )
     logger.info(f"Check proton_python_driver and install...")
     proton_python_driver_install()
-    if "test_production_compatibility" in test_folders_list: #todo: hardcode now, refactor later to have a system_test_runner to run all pytests folders like test_production_compatibility
+    if (
+        "test_production_compatibility" in test_folders_list
+    ):  # todo: hardcode now, refactor later to have a system_test_runner to run all pytests folders like test_production_compatibility
         settings = ["default"]
-        docker_compose_file_path = f"{cur_dir}/test_production_compatibility/configs/docker-compose.yaml"
+        docker_compose_file_path = (
+            f"{cur_dir}/test_production_compatibility/configs/docker-compose.yaml"
+        )
     if run_mode == "local":
         env_docker_compose_res = True
         logger.info(f"Bypass docker compose up.")
@@ -474,21 +531,37 @@ if __name__ == "__main__":
     if not env_docker_compose_res:
         raise Exception("Env docker compose up failure.")
     if settings == []:
-        #settings = ["nativelog"]
-        settings = ["default"] 
+        # settings = ["nativelog"]
+        settings = ["default"]
     procs = []
     for setting in settings:
         logger.debug(f"setting = {setting}, get config...")
         # with open(config_file_path) as f:
-        #     configs = json.load(f)          
-        setting_config = configs.get(setting) #if settings is not null, then read different setting config and start processes
+        #     configs = json.load(f)
+        setting_config = configs.get(
+            setting
+        )  # if settings is not null, then read different setting config and start processes
         if setting_config is None:
-            raise Exception(f"no config for setting = {setting} found in {config_file_path}")  
-        logger.debug(f"ci_runner: setting_config for setting = {setting} = {setting_config}")
-        args = (cur_dir, setting_config,test_result_shared_list, test_folders_list, run_mode, "0", "0", setting, logging_level)
+            raise Exception(
+                f"no config for setting = {setting} found in {config_file_path}"
+            )
+        logger.debug(
+            f"ci_runner: setting_config for setting = {setting} = {setting_config}"
+        )
+        args = (
+            cur_dir,
+            setting_config,
+            test_result_shared_list,
+            test_folders_list,
+            run_mode,
+            "0",
+            "0",
+            setting,
+            logging_level,
+        )
         proc = mp.Process(target=ci_runner, args=args)
         proc.start()
-        #logger.debug(f"args = {args}, ci_runner proc starts...")
+        # logger.debug(f"args = {args}, ci_runner proc starts...")
         procs.append(proc)
         time.sleep(5)
     for proc in procs:
@@ -500,26 +573,34 @@ if __name__ == "__main__":
     )
     test_result_flag = 1
     detailed_summary = []
-    for item in test_result_shared_list: #retcode: {'proton_setting': 'default', 'retcode': <ExitCode.TESTS_FAILED: 1>}:
-        setting = item.get('proton_setting')
-        retcode_str = str(item.get('retcode'))
+    for (
+        item
+    ) in (
+        test_result_shared_list
+    ):  # retcode: {'proton_setting': 'default', 'retcode': <ExitCode.TESTS_FAILED: 1>}:
+        setting = item.get("proton_setting")
+        retcode_str = str(item.get("retcode"))
         if "OK" not in retcode_str:
             test_result_flag = test_result_flag * 0
-        detailed_summary.append({setting:retcode_str})
+        detailed_summary.append({setting: retcode_str})
     if test_result_flag:
         test_result_str = "success"
     else:
         test_result_str = "failed"
-    logger.info(f"test_result_str = {test_result_str}")           
+    logger.info(f"test_result_str = {test_result_str}")
     test_result = {"test_result": test_result_str, "detailed_summary": detailed_summary}
     if api_address is not None and api_key is not None:
-        try: #write status start test_event to timeplus                
-            event_details = 'end'
-            test_event_end = Event.create(event_type, event_detailed_type, event_details, **test_result)
-            test_event_record_end = EventRecord.create(None, test_event_end, test_event_tag, timeplus_event_version)
+        try:  # write status start test_event to timeplus
+            event_details = "end"
+            test_event_end = Event.create(
+                event_type, event_detailed_type, event_details, **test_result
+            )
+            test_event_record_end = EventRecord.create(
+                None, test_event_end, test_event_tag, timeplus_event_version
+            )
             print(f"test_event_end = {test_event_end}")
             if test_event_record_end:
-                test_event_record_end.write(timeplus_env, timeplus_event_stream) 
-        except(BaseException) as error:
+                test_event_record_end.write(timeplus_env, timeplus_event_stream)
+        except BaseException as error:
             logger.error(f"timeplus event write exception: {error}")
-            traceback.print_exc()  
+            traceback.print_exc()
