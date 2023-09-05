@@ -231,7 +231,7 @@ jobs:
               ```
               You can copy and run the following command:
               ```bash
-              aws kms generate-mac --key-id 'alias/github-testing' --mac-algorithm HMAC_SHA_256 --message '{description}' --query Mac --output text
+              aws kms generate-mac --region us-west-2 --key-id 'alias/github-testing' --mac-algorithm HMAC_SHA_256 --message '{description}' --query Mac --output text
               ```
 
           2. Then reply this issue with a comment with the following content:
