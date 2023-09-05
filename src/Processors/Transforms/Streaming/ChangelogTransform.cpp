@@ -143,6 +143,7 @@ void ChangelogTransform::work()
     for (size_t i = 0; auto delta : delta_flags)
         selector[i++] = delta > 0;
 
+    /// FIXME: Consider multiple changelogs processing orders
     /// Group 0: retract. Group 1: update
     std::array<Chunk, 2> chunks;
     for (const auto & col : chunk_columns)
@@ -154,11 +155,14 @@ void ChangelogTransform::work()
             chunks[chunk_index].addColumn(std::move(split_cols[chunk_index]));
     }
 
-    for (auto & chunk : chunks)
+    if (chunks[0].getNumRows())
     {
-        chunk.setChunkContext(input_data.chunk.getChunkContext());
-        transformChunk(chunk);
+        chunks[0].getOrCreateChunkContext()->setRetractedDataFlag();
+        transformChunk(chunks[0]);
     }
+
+    chunks[1].setChunkContext(input_data.chunk.getChunkContext());
+    transformChunk(chunks[1]);
 
     input_data.chunk.clear();
 }

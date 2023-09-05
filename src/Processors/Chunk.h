@@ -20,6 +20,7 @@ struct ChunkContext
     static constexpr UInt64 APPEND_TIME_FLAG = 0x2;
     static constexpr UInt64 HISTORICAL_DATA_START_FLAG = 0x4;
     static constexpr UInt64 HISTORICAL_DATA_END_FLAG = 0x8;
+    static constexpr UInt64 RETRACTED_DATA_FLAG = 0x10;
     static constexpr UInt64 AVOID_WATERMARK_FLAG = 0x8000'0000'0000'0000;
 
     /// A pair of Int64, flags represent what they mean
@@ -63,6 +64,14 @@ struct ChunkContext
             ts_1 = 0;
         }
     }
+
+    ALWAYS_INLINE void setRetractedDataFlag()
+    {
+        flags |= RETRACTED_DATA_FLAG;
+        setAvoidWatermark();
+    }
+
+    ALWAYS_INLINE bool isRetractedData() const { return flags & RETRACTED_DATA_FLAG; }
 
     ALWAYS_INLINE void setAvoidWatermark() { flags |= AVOID_WATERMARK_FLAG; }
 
@@ -245,6 +254,11 @@ public:
     void reserve(size_t num_columns)
     {
         columns.reserve(num_columns);
+    }
+
+    bool isRetractedData() const
+    {
+        return chunk_ctx && chunk_ctx->isRetractedData();
     }
 
     bool avoidWatermark() const
