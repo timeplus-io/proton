@@ -50,7 +50,8 @@ WatermarkTransform::WatermarkTransform(const Block & header, WatermarkStamperPar
 
 void WatermarkTransform::transform(Chunk & chunk)
 {
-    if (!chunk.avoidWatermark() && !chunk.requestCheckpoint())
+    chunk.clearWatermark();
+    if (!chunk.avoidWatermark())
         watermark->process(chunk);
 }
 

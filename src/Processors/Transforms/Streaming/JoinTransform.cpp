@@ -77,6 +77,10 @@ IProcessor::Status JoinTransform::prepare()
             if (input_port_with_data.input_chunk.requestCheckpoint())
                 continue;
 
+            /// In case, this input need wait for another input processing next consecutive chunk done.
+            if (required_update_processing_index.has_value() && *required_update_processing_index != i)
+                continue;
+
             status = Status::Ready;
         }
         else if (input_port_with_data.input_port->isFinished())
@@ -129,6 +133,19 @@ void JoinTransform::work()
             auto & input_chunk = input_ports_with_data[i].input_chunk;
             if (input_chunk)
             {
+                /// If any input needs to update data, currently the input is always two consecutive chunks with _tp_delta `-1 and +1`
+                /// So we have to process them together before processing another input
+                /// NOTE: Assume the first retracted chunk of updated data always set RetractedDataFlag.
+                if (required_update_processing_index.has_value())
+                {
+                    if (*required_update_processing_index != i)
+                        continue;
+
+                    required_update_processing_index.reset();
+                }
+                else if (input_chunk.isRetractedData())
+                    required_update_processing_index = i;
+
                 if (input_chunk.hasWatermark())
                 {
                     auto watermark = input_chunk.getChunkContext()->getWatermark();
@@ -149,8 +166,10 @@ void JoinTransform::work()
             }
         }
 
-        /// We propagate empty chunk with or without watermark
-        if (!has_data)
+        /// We propagate empty chunk with or without watermark.
+        /// Skip propagate if needs to processing next consecutive chunk
+        /// to avoid downstream aggregation to emit transitive results we don't want
+        if (!has_data && !required_update_processing_index)
             output_chunks.emplace_back(output_header_chunk.clone());
 
         /// All inputs request checkpoint
@@ -260,7 +279,7 @@ inline void JoinTransform::joinBidirectionally(Chunks chunks)
             {
                 /// Don't watermark this block. We can concat retracted / result blocks or use avoid watermarking
                 auto chunk_ctx = std::make_shared<ChunkContext>();
-                chunk_ctx->setAvoidWatermark();
+                chunk_ctx->setRetractedDataFlag();
                 output_chunks.emplace_back(retracted_block.getColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
             }
 
