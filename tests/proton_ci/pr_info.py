@@ -142,6 +142,7 @@ class PRInfo:
                     sleep=RETRY_SLEEP,
                     headers=headers
                 )
+                print("user_orgs_response", user_orgs_response.json())
                 if user_orgs_response.ok:
                     response_json = user_orgs_response.json()
                     self.user_orgs = set(org["id"] for org in response_json)

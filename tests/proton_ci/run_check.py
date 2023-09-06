@@ -51,6 +51,7 @@ def pr_is_by_trusted_user(pr_user_login, pr_user_orgs):
 def should_run_ci_for_pr(pr_info: PRInfo) -> Tuple[bool, str, str]:
     # Consider the labels and whether the user is trusted.
     print("Got labels", pr_info.labels)
+    logging.info(f"pr_info.user_orgs: {pr_info.user_orgs}")
     if PR_TEST_LABEL not in pr_info.labels and not pr_is_by_trusted_user(
         pr_info.user_login, pr_info.user_orgs
     ):
@@ -79,11 +80,11 @@ def main():
 
     if not can_run:
         print("::notice ::Cannot run")
-        post_commit_status(gh. pr_info.sha, "Labels check", description, labels_state, pr_info.pr_html_url)
+        post_commit_status(gh, pr_info.sha, "Labels check", description, labels_state, pr_info.pr_html_url)
         sys.exit(1)
     else:
         print("::notice ::Can run")
-        post_commit_status(gh. pr_info.sha, "Labels check", description, labels_state, pr_info.pr_html_url)
+        post_commit_status(gh, pr_info.sha, "Labels check", description, labels_state, pr_info.pr_html_url)
 
 if __name__ == '__main__':
     main()
