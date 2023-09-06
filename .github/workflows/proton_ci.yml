@@ -30,9 +30,10 @@ jobs:
         with:
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           submodules: false
-      - name: Report Started
+      - name: Label Check
         run: |
           cd "$GITHUB_WORKSPACE/tests/proton_ci"
+          env
           pip install -r requirements.txt
           python3 run_check.py
 
