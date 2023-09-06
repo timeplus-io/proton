@@ -10,6 +10,7 @@ from env_helper import (
     GITHUB_SERVER_URL,
     GITHUB_RUN_ID,
     GITHUB_EVENT_PATH,
+    GH_PERSONAL_ACCESS_TOKEN,
 )
 
 DIFF_IN_DOCUMENTATION_EXT = [
@@ -38,8 +39,11 @@ def get_pr_for_commit(sha, ref):
     try_get_pr_url = (
         f"https://api.github.com/repos/{GITHUB_REPOSITORY}/commits/{sha}/pulls"
     )
+    headers = {
+        'Authorization': f'token {GH_PERSONAL_ACCESS_TOKEN}',
+    }
     try:
-        response = get_with_retries(try_get_pr_url, sleep=RETRY_SLEEP)
+        response = get_with_retries(try_get_pr_url, sleep=RETRY_SLEEP, headers=headers)
         data = response.json()
         if len(data) > 1:
             print("Got more than one pr for commit", sha)
@@ -83,7 +87,9 @@ class PRInfo:
         ref = github_event.get("ref", "refs/head/master")
         if ref and ref.startswith("refs/heads/"):
             ref = ref[11:]
-
+        headers = {
+            'Authorization': f'token {GH_PERSONAL_ACCESS_TOKEN}',
+        }
         # workflow completed event, used for PRs only
         if "action" in github_event and github_event["action"] == "completed":
             self.sha = github_event["workflow_run"]["head_sha"]
@@ -91,6 +97,7 @@ class PRInfo:
                 f"https://api.github.com/repos/{GITHUB_REPOSITORY}/commits/{self.sha}"
                 "/pulls",
                 sleep=RETRY_SLEEP,
+                headers=headers
             ).json()
             if len(prs_for_sha) != 0:
                 github_event["pull_request"] = prs_for_sha[0]
@@ -102,6 +109,7 @@ class PRInfo:
                     f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
                     f"/pulls/{self.number}",
                     sleep=RETRY_SLEEP,
+                    headers=headers
                 )
                 github_event["pull_request"] = response.json()
 
@@ -132,6 +140,7 @@ class PRInfo:
                 user_orgs_response = get_with_retries(
                     github_event["pull_request"]["user"]["organizations_url"],
                     sleep=RETRY_SLEEP,
+                    headers=headers
                 )
                 if user_orgs_response.ok:
                     response_json = user_orgs_response.json()
@@ -194,10 +203,9 @@ class PRInfo:
     def fetch_changed_files(self):
         if not self.diff_url:
             raise Exception("Diff URL cannot be find for event")
-
         response = get_with_retries(
             self.diff_url,
-            sleep=RETRY_SLEEP,
+            sleep=RETRY_SLEEP
         )
         response.raise_for_status()
         if "commits" in self.event and self.number == 0:

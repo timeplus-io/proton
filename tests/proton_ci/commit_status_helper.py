@@ -36,3 +36,8 @@ def post_commit_status(gh, sha, check_name, description, state, report_url):
             if i == RETRY - 1:
                 raise ex
             time.sleep(i)
+
+def format_description(description: str) -> str:
+    if len(description) > 140:
+        description = description[:137] + "..."
+    return description
