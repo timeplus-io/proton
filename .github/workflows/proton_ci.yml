@@ -1,88 +1,37 @@
 name: ProtonCI
 
-on:
-  issue_comment:
+on: # yamllint disable-line rule:truthy
+  pull_request:
     types:
-      - created
+      - synchronize
+      - reopened
+      - opened
+    branches:
+      - develop
+      - feature/issue-37-pr-test-label
+    paths-ignore:
+      - 'CHANGELOG.md'
+      - 'README.md'
+      - 'SECURITY.md'
+      - 'docker/docs/**'
+      - 'docs/**'
+      - 'utils/check-style/aspell-ignore/**'
 
 jobs:
   verify:
-    name: Verify PR comment
-    permissions:
-      actions: read # for downloading artifact
-      id-token: write # This is required for requesting the JWT (needed for assume AWS IAM role)
-      issues: write # for posting comments
+    name: Labels check
     runs-on: ubuntu-latest
-    # because `issue_comment` does not support filters other than `types`,
-    # here we need a bunch of checks to make sure that this comment is from a valid deployment issue.
-    #
-    # Note: 41898282 is the github-action[bot]
-    # TODO: figure out a way not to hard-code the approver list
-    if: >-
-      ${{ github.event.pull_request.draft == false && github.event.issue.pull_request && github.event_name == 'issue_comment' && github.event.issue.state == 'open' && startsWith(github.event.comment.body, '/TODO') }}
+    if: github.event.pull_request.draft == false
     steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          submodules: false
       - name: Report Started
         run: |
-          curl --show-error --silent -X POST \
-            -H 'Content-Type: application/json' \
-            -H 'Accept: application/vnd.github+json' \
-            -H "Authorization: token ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" \
-            -d '{"body": "github workflow triggered: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' \
-            ${{ github.event.issue.comments_url }}
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: verify
-        run: |
-          echo verify started
-
-          BODY='${{ format('{0}', github.event.comment.body) }}'
-          parts=($BODY)
-
-          echo parts[0] = ${parts[0]}
-          echo parts[1] = ${parts[1]}
-
-          if [ "${parts[0]}" != '/test' ]; then
-            curl --show-error --silent -X POST \
-              -H 'Content-Type: application/json' \
-              -H 'Accept: application/vnd.github+json' \
-              -H 'Authorization: token ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}' \
-              -d '{"body": "Unrecognized command."}' \
-              ${{ github.event.issue.comments_url }}
-
-            exit 250
-          fi
-
-          planfile='${{ steps.vars.outputs.environment }}_${{ steps.vars.outputs.gitsha }}.tfplan'
-          if [ ! -f $planfile ]; then
-            echo Plan file not found.
-            exit 251
-          fi
-
-          filehash=($(sha256sum $planfile))
-          echo aws kms verify-mac --key-id 'alias/github-deployment' --message "${filehash[0]}" --mac-algorithm HMAC_SHA_256 --mac "${parts[1]}"
-          if ! aws kms verify-mac --key-id 'alias/github-deployment' --message "${filehash[0]}" --mac-algorithm HMAC_SHA_256 --mac "${parts[1]}"; then
-            curl --show-error --silent -X POST \
-              -H 'Content-Type: application/json' \
-              -H 'Accept: application/vnd.github+json' \
-              -H 'Authorization: token ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}' \
-              -d '{"body": "Invalid MAC hash."}' \
-              ${{ github.event.issue.comments_url }}
-
-            exit 252
-          fi
-
-          curl --show-error --silent -X POST \
-            -H 'Content-Type: application/json' \
-            -H 'Accept: application/vnd.github+json' \
-            -H 'Authorization: token ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}' \
-            -d '{"body": "MAC hash verified, start deployment, please wait."}' \
-            ${{ github.event.issue.comments_url }}
+          cd "$GITHUB_WORKSPACE/tests/proton_ci"
+          python3 run_check.py
 
   build_address_x64:
     needs: verify
