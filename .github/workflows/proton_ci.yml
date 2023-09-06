@@ -31,6 +31,7 @@ jobs:
       - name: Report Started
         run: |
           cd "$GITHUB_WORKSPACE/tests/proton_ci"
+          pip install -r requirements.txt
           python3 run_check.py
 
   build_address_x64:
