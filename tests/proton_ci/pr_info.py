@@ -203,13 +203,9 @@ class PRInfo:
     def fetch_changed_files(self):
         if not self.diff_url:
             raise Exception("Diff URL cannot be find for event")
-        headers = {
-            'Authorization': f'token {GH_PERSONAL_ACCESS_TOKEN}',
-        }
         response = get_with_retries(
             self.diff_url,
-            sleep=RETRY_SLEEP,
-            headers=headers
+            sleep=RETRY_SLEEP
         )
         response.raise_for_status()
         if "commits" in self.event and self.number == 0:

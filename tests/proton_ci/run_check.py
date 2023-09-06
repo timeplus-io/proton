@@ -7,7 +7,6 @@ from github import Github
 
 from commit_status_helper import (
     format_description,
-    get_commit,
     post_commit_status,
 )
 from env_helper import GH_PERSONAL_ACCESS_TOKEN
@@ -65,7 +64,7 @@ def should_run_ci_for_pr(pr_info: PRInfo) -> Tuple[bool, str, str]:
 
 def main():
     logging.basicConfig(level=logging.INFO)
-    pr_info = PRInfo(need_orgs=True, pr_event_from_api=True, need_changed_files=True)
+    pr_info = PRInfo(need_orgs=True, pr_event_from_api=True)
 
     # The case for special branches like backports and releases without created
     # PRs, like merged backport branches that are reset immediately after merge
