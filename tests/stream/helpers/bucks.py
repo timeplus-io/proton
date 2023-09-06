@@ -35,6 +35,11 @@ formatter = logging.Formatter(
 # todo: refactoring, Class Test and abstraction of test run logic in Rockets and reuse in performance test scripts.
 
 
+
+
+
+
+
 def env_var_get():
     proton_server = os.environ.get("PROTON_HOST")
     proton_server_native_port = os.environ.get("PROTON_NATIVE_PORT")
@@ -1174,7 +1179,7 @@ def input_client(
     if wait is not None:
         logger.debug(f"wait for {wait} seconds and then start the input.")
         time.sleep(int(wait))
-        
+
 
     start_from = source.get("$start_from")
     if start_from is None:
