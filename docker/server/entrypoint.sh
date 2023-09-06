@@ -130,7 +130,7 @@ if [ -n "$(ls /docker-entrypoint-initdb.d/)" ] || [ -n "$PROTON_DB" ]; then
         sleep 1
     done
 
-    protonclient=( proton-client --multiquery --host "128.0.0.1" -u "$PROTON_USER" --password "$PROTON_PASSWORD" )
+    protonclient=( proton-client --multiquery --host "127.0.0.1" -u "$PROTON_USER" --password "$PROTON_PASSWORD" )
 
     echo
 
