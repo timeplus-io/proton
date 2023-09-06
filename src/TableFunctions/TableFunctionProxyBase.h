@@ -33,6 +33,7 @@ protected:
     executeImpl(const ASTPtr & func_ast, ContextPtr context, const String & table_name, ColumnsDescription cached_columns) const override;
 
     TableFunctionDescriptionMutablePtr createStreamingTableFunctionDescription(ASTPtr ast, ContextPtr context) const;
+    virtual NamesAndTypesList getAdditionalResultColumns(const ColumnsWithTypeAndName &) const { return {}; }
 
 private:
     void validateProxyChain() const;

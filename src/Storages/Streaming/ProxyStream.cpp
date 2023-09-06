@@ -60,6 +60,7 @@ ProxyStream::ProxyStream(
     String internal_name_,
     StoragePtr storage_,
     ASTPtr subquery_,
+    DataStreamSemantic data_stream_semantic_,
     bool streaming_)
     : IStorage(id_)
     , WithContext(context_->getGlobalContext())
@@ -69,9 +70,13 @@ ProxyStream::ProxyStream(
     , internal_name(std::move(internal_name_))
     , storage(storage_)
     , subquery(subquery_)
+    , data_stream_semantic(data_stream_semantic_)
     , streaming(streaming_)
     , log(&Poco::Logger::get(id_.getNameForLogs()))
 {
+    if (internal_name == "changelog")
+        data_stream_semantic = DataStreamSemantic::Changelog;
+
     if (streaming)
         assert(table_func_desc);
 
@@ -79,14 +84,6 @@ ProxyStream::ProxyStream(
         assert(nested_proxy_storage->as<ProxyStream>());
 
     validateProxyChain();
-
-    if (!isStreaming())
-    {
-        if (windowType() == WindowType::SESSION || windowType() == WindowType::HOP)
-        {
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} window can only work with streaming query.", magic_enum::enum_name(windowType()));
-        }
-    }
 
     assert(storage || subquery);
     assert(!(storage && subquery));
@@ -131,6 +128,13 @@ void ProxyStream::read(
     size_t max_block_size,
     size_t num_streams)
 {
+    if (!(query_info.syntax_analyzer_result->streaming))
+    {
+        if (windowType() == WindowType::SESSION || windowType() == WindowType::HOP)
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED, "{} window can only work with streaming query.", magic_enum::enum_name(windowType()));
+    }
+
     if (internal_name == "changelog")
     {
         query_info.versioned_kv_tracking_changes = true;
@@ -154,7 +158,7 @@ void ProxyStream::read(
     if (!query_plan.isInitialized())
     {
         /// Only in case when read from historical proxy storage
-        assert(!isStreaming());
+        assert(!(query_info.syntax_analyzer_result->streaming));
         auto header = storage_snapshot->getSampleBlockForColumns(required_column_names_for_proxy_storage);
         InterpreterSelectQuery::addEmptySourceToQueryPlan(query_plan, header, query_info, context_);
     }
@@ -180,10 +184,7 @@ void ProxyStream::doRead(
 
         auto sub_context = createProxySubqueryContext(context_, query_info, isStreaming());
         auto interpreter = std::make_unique<InterpreterSelectWithUnionQuery>(
-            query_info.optimized_proxy_stream_query,
-            sub_context,
-            SelectQueryOptions().subquery().noModify(),
-            column_names);
+            query_info.optimized_proxy_stream_query, sub_context, SelectQueryOptions().subquery().noModify(), column_names);
 
         interpreter->ignoreWithTotals();
         interpreter->buildQueryPlan(query_plan);
@@ -230,27 +231,10 @@ void ProxyStream::doRead(
 
 Names ProxyStream::getRequiredColumnsForProxyStorage(const Names & column_names) const
 {
-    Names required_columns = mergeAdditionalRequiredColumnsAfterFunc(column_names);
+    if (nested_proxy_storage)
+        return nested_proxy_storage->as<ProxyStream>()->getRequiredColumnsForProxyStorage(getRequiredInputs(column_names));
 
-    /// issue-1289
-    /// If current table function is session / tumble / hop,
-    /// we need drop STREAMING_WINDOW_START/END columns before forwarding the request
-    /// since for these table functions, we will add window_start/end automatically
-    /// Note even the inner is a table function or stream or view or MV which contains window_start/end,
-    /// we choose the outer table function's window_start/end override the inner ones.
-    if (windowType() != WindowType::NONE)
-    {
-        std::erase_if(required_columns, [](const auto & name) {
-            return name == ProtonConsts::STREAMING_WINDOW_START || name == ProtonConsts::STREAMING_WINDOW_END
-                || name == ProtonConsts::STREAMING_SESSION_START || name == ProtonConsts::STREAMING_SESSION_END
-                || name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS;
-        });
-    }
-
-    if (internal_name == "changelog")
-        std::erase_if(required_columns, [](const auto & name) { return name == ProtonConsts::RESERVED_DELTA_FLAG; });
-
-    return required_columns;
+    return getRequiredInputs(column_names);
 }
 
 NamesAndTypesList ProxyStream::getVirtuals() const
@@ -275,27 +259,49 @@ NamesAndTypesList ProxyStream::getVirtuals() const
     return {};
 }
 
-Names ProxyStream::mergeAdditionalRequiredColumnsAfterFunc(Names required, const String & after_func_name) const
+Names ProxyStream::getRequiredInputs(Names required_outputs) const
 {
-    if (after_func_name == internal_name)
-        return required;
-
-    if (nested_proxy_storage)
-        required = nested_proxy_storage->as<ProxyStream>()->mergeAdditionalRequiredColumnsAfterFunc(std::move(required), after_func_name);
+    auto required_inputs = std::move(required_outputs);
+    if (table_func_desc)
+    {
+        /// Merge additional input columns
+        std::ranges::for_each(table_func_desc->input_columns, [&](const auto & name) {
+            if (std::ranges::find(required_inputs, name) == required_inputs.end())
+                required_inputs.push_back(name);
+        });
+        /// Remove generated columns after current streaming table func
+        std::erase_if(required_inputs, [this](const auto & name) { return table_func_desc->additional_result_columns.contains(name); });
+    }
 
     if (timestamp_func_desc)
-        std::ranges::for_each(timestamp_func_desc->input_columns, [&required](const auto & name) {
-            if (std::ranges::find(required, name) == required.end())
-                required.push_back(name);
+    {
+        /// Merge additional input columns
+        std::ranges::for_each(timestamp_func_desc->input_columns, [&](const auto & name) {
+            if (std::ranges::find(required_inputs, name) == required_inputs.end())
+                required_inputs.push_back(name);
         });
+        /// Remove generated column `_tp_ts`
+        std::erase_if(required_inputs, [](const auto & name) { return name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS; });
+    }
 
-    if (table_func_desc)
-        std::ranges::for_each(table_func_desc->input_columns, [&required](const auto & name) {
-            if (std::ranges::find(required, name) == required.end())
-                required.push_back(name);
-        });
+    return required_inputs;
+}
 
-    return required;
+Block ProxyStream::checkAndGetOutputHeader(const Names & required_columns, const Block & input_header) const
+{
+    assert(table_func_desc);
+    Block output_header;
+    output_header.reserve(required_columns.size());
+    for (const auto & name : required_columns)
+    {
+        if (auto * col = input_header.findByName(name))
+            output_header.insert(*col);
+        else if (auto col = table_func_desc->additional_result_columns.tryGetByName(name); col.has_value())
+            output_header.insert(ColumnWithTypeAndName{col->type->createColumn(), col->type, col->name});
+        else
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown input column '{}' of {} step", name, internal_name);
+    }
+    return output_header;
 }
 
 void ProxyStream::validateProxyChain() const
@@ -333,22 +339,22 @@ void ProxyStream::validateProxyChain() const
 
 void ProxyStream::buildStreamingFunctionQueryPlan(
     QueryPlan & query_plan,
-    const Names & required_columns_after_streaming_window,
+    const Names & required_columns,
     const SelectQueryInfo & query_info,
     const StorageSnapshotPtr & storage_snapshot) const
 {
     if (nested_proxy_storage)
         nested_proxy_storage->as<ProxyStream>()->buildStreamingFunctionQueryPlan(
-            query_plan, required_columns_after_streaming_window, query_info, storage_snapshot);
+            query_plan, getRequiredInputs(required_columns), query_info, storage_snapshot);
 
     /// changelog(dedup(table(stream), columns...), ...)
     if (internal_name == "changelog")
     {
-        processChangelogStep(query_plan, required_columns_after_streaming_window);
+        processChangelogStep(query_plan, required_columns);
     }
     else if (internal_name == "dedup")
     {
-        processDedupStep(query_plan, required_columns_after_streaming_window);
+        processDedupStep(query_plan, required_columns);
     }
     else
     {
@@ -357,11 +363,11 @@ void ProxyStream::buildStreamingFunctionQueryPlan(
 
         /// tumble(dedup(table(stream), columns...), 5s)
         if (table_func_desc && table_func_desc->type != WindowType::NONE)
-            processWindowAssignmentStep(query_plan, query_info, required_columns_after_streaming_window, storage_snapshot);
+            processWindowAssignmentStep(query_plan, query_info, required_columns, storage_snapshot);
     }
 }
 
-void ProxyStream::processChangelogStep(QueryPlan & query_plan, const Names & required_columns_after_streaming_window) const
+void ProxyStream::processChangelogStep(QueryPlan & query_plan, const Names & required_columns) const
 {
     assert(table_func_desc);
 
@@ -371,26 +377,7 @@ void ProxyStream::processChangelogStep(QueryPlan & query_plan, const Names & req
         && isVersionedKeyedDataStream(storage->dataStreamSemantic()))
         return;
 
-    auto required_columns_after_changelog = mergeAdditionalRequiredColumnsAfterFunc(required_columns_after_streaming_window, internal_name);
-
-    const auto & input_header = query_plan.getCurrentDataStream().header;
-    Block output_header;
-    output_header.reserve(required_columns_after_changelog.size());
-    for (const auto & name : required_columns_after_changelog)
-    {
-        if (auto * col = input_header.findByName(name))
-        {
-            output_header.insert(*col);
-        }
-        else if (name == ProtonConsts::RESERVED_DELTA_FLAG)
-        {
-            /// changelog step adds _tp_delta column
-            auto delta_type = DataTypeFactory::instance().get(TypeIndex::Int8);
-            output_header.insert(ColumnWithTypeAndName{delta_type->createColumn(), delta_type, ProtonConsts::RESERVED_DELTA_FLAG});
-        }
-        else
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown input column '{}' of changelog step", name);
-    }
+    auto output_header = checkAndGetOutputHeader(required_columns, query_plan.getCurrentDataStream().header);
 
     /// Get key columns
     String version_column;
@@ -420,16 +407,10 @@ void ProxyStream::processChangelogStep(QueryPlan & query_plan, const Names & req
         /*max_thread = */ 1));
 }
 
-void ProxyStream::processDedupStep(QueryPlan & query_plan, const Names & required_columns_after_streaming_window) const
+void ProxyStream::processDedupStep(QueryPlan & query_plan, const Names & required_columns) const
 {
     assert(table_func_desc);
-
-    auto required_columns_after_dedup = mergeAdditionalRequiredColumnsAfterFunc(required_columns_after_streaming_window, internal_name);
-
-    const auto & input_header = query_plan.getCurrentDataStream().header;
-    Block output_header;
-    for (const auto & name : required_columns_after_dedup)
-        output_header.insert(input_header.getByName(name));
+    auto output_header = checkAndGetOutputHeader(required_columns, query_plan.getCurrentDataStream().header);
 
     /// Insert dedup step
     query_plan.addStep(std::make_unique<DedupTransformStep>(query_plan.getCurrentDataStream(), output_header, table_func_desc));
@@ -458,12 +439,11 @@ void ProxyStream::processTimestampStep(QueryPlan & query_plan, const SelectQuery
 void ProxyStream::processWindowAssignmentStep(
     QueryPlan & query_plan,
     const SelectQueryInfo & query_info,
-    const Names & required_columns_after_streaming_window,
+    const Names & required_columns,
     const StorageSnapshotPtr & storage_snapshot) const
 {
     assert(table_func_desc && table_func_desc->type != WindowType::NONE);
-    auto required_columns_after_window = mergeAdditionalRequiredColumnsAfterFunc(required_columns_after_streaming_window, internal_name);
-    Block output_header = storage_snapshot->getSampleBlockForColumns(required_columns_after_window);
+    auto output_header = checkAndGetOutputHeader(required_columns, query_plan.getCurrentDataStream().header);
 
     query_plan.addStep(std::make_unique<WindowAssignmentStep>(
         query_plan.getCurrentDataStream(), std::move(output_header), query_info.streaming_window_params));
@@ -479,7 +459,21 @@ StorageSnapshotPtr ProxyStream::getStorageSnapshot(const StorageMetadataPtr & me
 
 WindowType ProxyStream::windowType() const
 {
-    return table_func_desc != nullptr ? table_func_desc->type : WindowType::NONE;
+    WindowType type = table_func_desc != nullptr ? table_func_desc->type : WindowType::NONE;
+    if (type == WindowType::NONE && nested_proxy_storage)
+        type = nested_proxy_storage->as<ProxyStream>()->windowType();
+    return type;
+}
+
+TableFunctionDescriptionPtr ProxyStream::getStreamingWindowFunctionDescription() const
+{
+    if (table_func_desc && table_func_desc->type != WindowType::NONE)
+        return table_func_desc;
+
+    if (nested_proxy_storage)
+        return nested_proxy_storage->as<ProxyStream>()->getStreamingWindowFunctionDescription();
+
+    return nullptr;
 }
 
 bool ProxyStream::isRemote() const
@@ -536,12 +530,5 @@ bool ProxyStream::isProxyingSubqueryOrView() const
     return false;
 }
 
-DataStreamSemantic ProxyStream::dataStreamSemantic() const
-{
-    if (internal_name == "changelog")
-        return DataStreamSemantic::Changelog;
-
-    return DataStreamSemantic::Append;
-}
 }
 }

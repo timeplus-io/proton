@@ -2,6 +2,7 @@
 
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <TableFunctions/TableFunctionFactory.h>
@@ -11,10 +12,10 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
-    extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
-    extern const int BAD_ARGUMENTS;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
+extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
+extern const int BAD_ARGUMENTS;
 }
 
 namespace Streaming
@@ -22,8 +23,10 @@ namespace Streaming
 TableFunctionDedup::TableFunctionDedup(const String & name_) : TableFunctionProxyBase(name_)
 {
     help_message = fmt::format(
-        "Function '{}' requires at least 2 parameters. The deduplication key column parameters shall not be constant. The `timeout` optional "
-        "parameter shall be constant interval seconds like `10s` if present, and the last optional limit parameter shall be integer constant if present. "
+        "Function '{}' requires at least 2 parameters. The deduplication key column parameters shall not be constant. The `timeout` "
+        "optional "
+        "parameter shall be constant interval seconds like `10s` if present, and the last optional limit parameter shall be integer "
+        "constant if present. "
         "For example, dedup(test, id, 1s, 1000). dedup(stream, column1[, column2, ..., [timeout, [limit]]])",
         name);
 }
@@ -53,6 +56,10 @@ void TableFunctionDedup::parseArguments(const ASTPtr & func_ast, ContextPtr cont
 
     /// Create table func desc
     streaming_func_desc = createStreamingTableFunctionDescription(dedup_func_ast, context);
+
+    /// Project additional result columns of the streaming function to metadata
+    for (const auto & column : streaming_func_desc->additional_result_columns)
+        columns.add(ColumnDescription{column.name, column.type});
 }
 
 ASTs TableFunctionDedup::checkAndExtractArguments(ASTFunction * node) const
