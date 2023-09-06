@@ -15,6 +15,7 @@ from pr_info import PRInfo
 TRUSTED_ORG_IDS = {
     87796806    # timeplus-io
 }
+
 # Individual trusted contirbutors who are not in any trusted organization.
 # Can be changed in runtime: we will append users that we learned to be in
 # a trusted org, to save GitHub API calls.
@@ -23,7 +24,9 @@ TRUSTED_CONTRIBUTORS = {
     for e in [
     ]
 }
+
 PR_TEST_LABEL = 'pr-test'
+
 
 def pr_is_by_trusted_user(pr_user_login, pr_user_orgs):
     if pr_user_login.lower() in TRUSTED_CONTRIBUTORS:
