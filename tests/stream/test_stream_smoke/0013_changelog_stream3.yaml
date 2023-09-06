@@ -1,0 +1,129 @@
+test_suite_name: changelog_stream3
+tag: smoke
+test_suite_config:
+  setup:
+    statements:
+      - client: python
+        query_type: table
+        wait: 1
+        query: DROP VIEW IF EXISTS test14_view2;
+
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: [ ]
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+      cluster:
+        - view
+        - cluster_table_bug
+comments: Test Changelog and stream.
+
+tests:
+  - id: 13
+    tags:
+      - changelog_stream
+    name: simple insert and query
+    description: Test query from materlized view from view smoke cases.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP VIEW IF EXISTS test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP VIEW IF EXISTS test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP STREAM IF EXISTS test14_subquery;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              CREATE STREAM IF NOT EXISTS test14_subquery
+              (`i` float, `k1` int, `k2` string);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              CREATE VIEW IF NOT EXISTS test14_view1 AS
+              SELECT 
+                i, k1, k2, _tp_delta
+              FROM 
+                changelog(test14_subquery, k2);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              CREATE MATERIALIZED VIEW IF NOT EXISTS test14_view2 AS
+              SELECT 
+                i, k1, k2, _tp_delta
+              FROM 
+                test14_view1
+
+          - client: python
+            query_id: '1413'
+            depends_on_stream: test14_subquery
+            query_end_timer: 7
+            query_type: stream
+            query: |
+              SELECT 
+                lag(i, 2), k2
+              FROM 
+                test14_view2
+
+          - client: python
+            query_type: table
+            depends_on: 1413
+            wait: 1
+            depends_on_stream: test14_subquery
+            query: INSERT INTO test14_subquery(i, k1, k2) values (4, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            depends_on_stream: test14_subquery
+            query: INSERT INTO test14_subquery(i, k1, k2) values (2, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            depends_on_stream: test14_subquery
+            query: INSERT INTO test14_subquery(i, k1, k2) values (5, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 1
+            depends_on_stream: test14_subquery
+            query: INSERT INTO test14_subquery(i, k1, k2) values (2, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            depends_on_stream: test14_subquery
+            query: INSERT INTO test14_subquery(i, k1, k2) values (8, 5, 'b');
+
+    expected_results:
+      - query_id: '1413'
+        expected_results:
+          - [ 0, 'a' ] # INSERT INTO test14_subquery(i, k1, k2) values (4, 3, 'a');
+          - [ 0, 'a' ] # INSERT INTO test14_subquery(i, k1, k2) values (2, 3, 'a');
+          - [ 4, 'a' ] # INSERT INTO test14_subquery(i, k1, k2) values (2, 3, 'a');
+          - [ 4, 'b' ] # INSERT INTO test14_subquery(i, k1, k2) values (5, 5, 'b');
+          - [ 2, 'a' ] # INSERT INTO test14_subquery(i, k1, k2) values (2, 2, 'a');
+          - [ 5, 'a' ] # INSERT INTO test14_subquery(i, k1, k2) values (2, 2, 'a');
+          - [ 2, 'b' ] # INSERT INTO test14_subquery(i, k1, k2) values (8, 5, 'b');
+          - [ 2, 'b' ] # INSERT INTO test14_subquery(i, k1, k2) values (8, 5, 'b');
