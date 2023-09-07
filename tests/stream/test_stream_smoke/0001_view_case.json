@@ -1,6 +1,6 @@
 {
     "test_suite_name": "view",
-    "commments":
+    "comments":
         "test_mvs covering the steam query smoke cases.",
     "test_suite_config": {
         "table_schemas":[

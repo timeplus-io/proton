@@ -1,7 +1,7 @@
 {
     "test_suite_name": "session",
     "tag":"smoke",
-    "commments":
+    "comments":
         "Tests covering session window test cases.",
     "test_suite_config": {
         "table_schemas":[
