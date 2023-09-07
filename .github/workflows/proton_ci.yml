@@ -37,7 +37,7 @@ jobs:
 
   build_address_x64:
     needs: verify
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -68,19 +68,19 @@ jobs:
         # build unit test docker image
         cp $GITHUB_WORKSPACE/output/unit_tests_dbms $GITHUB_WORKSPACE/docker/test/proton_unit_test/
         cd $GITHUB_WORKSPACE/docker/test/proton_unit_test/
-        docker build . -t timeplus/proton-unit-test:testing-$SANITIZER-$ARCH-$GITHUB_SHA
-        docker push timeplus/proton-unit-test:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+        docker build . -t ghcr.io/timeplus-io/proton-unit-test:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+        docker push ghcr.io/timeplus-io/proton-unit-test:testing-$SANITIZER-$ARCH-$GITHUB_SHA
 
         docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
         cd $GITHUB_WORKSPACE/docker/server
 
         # build docker image
-        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t ghcr.io/timeplus-io/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA
 
         # push docker image
-        docker push timeplus/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+        docker push ghcr.io/timeplus-io/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA
 
-        echo 'docker pull timeplus/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA'
+        echo 'docker pull ghcr.io/timeplus-io/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA'
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -95,7 +95,7 @@ jobs:
 
   unit_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -133,7 +133,7 @@ jobs:
 
   smoke_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -182,7 +182,7 @@ jobs:
 
   stateless_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -219,7 +219,7 @@ jobs:
 
   stateful_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}

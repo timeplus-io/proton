@@ -1,4 +1,4 @@
-# docker build -t timeplus/proton-unit-test .
+# docker build -t ghcr.io/timeplus-io/proton-unit-test .
 ARG FROM_TAG=latest
 FROM clickhouse/unit-test:$FROM_TAG
 

@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   proton-server:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     pull_policy: always
     container_name: proton-server
     volumes:
@@ -32,7 +32,7 @@ services:
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
 
   proton-server1:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     pull_policy: always
     container_name: proton-server1
     volumes:
@@ -63,7 +63,7 @@ services:
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
 
   proton-server2:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     pull_policy: always
     container_name: proton-server2
     volumes:

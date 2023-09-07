@@ -15,7 +15,7 @@ ARG deb_location_url=""
 # from a single binary url (useful for non-standard builds - with sanitizers, for arm64).
 # for example (run on aarch64 server):
 # docker build . --network host --build-arg single_binary_location_url="https://builds.proton.tech/master/aarch64/proton" -t altinity/proton-server:master-testing-arm
-# docker build . --network host --build-arg single_binary_location_url=http://192.168.0.16:8000/build_docker/programs/proton -t timeplus/proton
+# docker build . --network host --build-arg single_binary_location_url=http://192.168.0.16:8000/build_docker/programs/proton -t ghcr.io/timeplus-io/proton
 # note: proton-odbc-bridge is not supported there.
 ARG single_binary_location_url=""
 

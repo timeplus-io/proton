@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   proton-server:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     #pull_policy: always
     container_name: proton-server
     volumes:
@@ -32,7 +32,7 @@ services:
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
 
   proton-server1:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     #pull_policy: always
     container_name: proton-server1
     volumes:
@@ -64,7 +64,7 @@ services:
 
 
   proton-server2:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     #pull_policy: always
     container_name: proton-server2
     volumes:
@@ -95,7 +95,7 @@ services:
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"  
 
   proton-server3:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     #pull_policy: always
     container_name: proton-server3
     volumes:
@@ -126,7 +126,7 @@ services:
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
 
   proton-server4:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     #pull_policy: always
     container_name: proton-server4
     volumes:
@@ -158,7 +158,7 @@ services:
 
 
   proton-redp:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     #pull_policy: always
     container_name: proton-redp
     volumes:
@@ -196,7 +196,7 @@ services:
         hard: 262144      
 
   proton-redp1:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     #pull_policy: always
     container_name: proton-redp1
     volumes:
@@ -235,7 +235,7 @@ services:
 
 
   proton-redp2:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     #pull_policy: always
     container_name: proton-redp2
     volumes:
@@ -273,7 +273,7 @@ services:
         hard: 262144      
 
   proton-redp3:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     #pull_policy: always
     container_name: proton-redp3
     volumes:
@@ -311,7 +311,7 @@ services:
         hard: 262144      
 
   proton-redp4:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     #pull_policy: always
     container_name: proton-redp4
     volumes:
@@ -349,7 +349,7 @@ services:
         hard: 262144            
 
   proton-redp5:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     #pull_policy: always
     container_name: proton-redp5
     volumes:
@@ -387,7 +387,7 @@ services:
         hard: 262144       
 
   proton-redp6:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     #pull_policy: always
     container_name: proton-redp6
     volumes:
