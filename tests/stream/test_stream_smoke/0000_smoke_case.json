@@ -1,6 +1,6 @@
 {
     "test_suite_name": "smoke",
-    "commments":
+    "comments":
         "Tests covering the steam query smoke cases.",
     "test_suite_config": {
         "table_schemas":[
