@@ -1,15 +1,55 @@
-version: "2"
-
+version: '3.7'
+name: proton-demo
+networks:
+  demo_network:
+    driver: bridge
+volumes:
+  redpanda: null
 services:
-  builder:
-    image: clickhouse/clickhouse-builder
-    build: docker/builder
-  client:
-    image: clickhouse/clickhouse-client
-    build: docker/client
-    command: ['--host', 'server']
-  server:
-    image: clickhouse/clickhouse-server
-    build: docker/server
+  proton:
+     image: ghcr.io/timeplus-io/proton:develop
+     networks:
+      - demo_network
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.8
+    command:
+      - redpanda start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --smp 1
+      - --memory 1G
+      - --mode dev-container
+    volumes:
+      - redpanda:/var/lib/redpanda/data
+    networks:
+      - demo_network
+
+  console:
+    image: docker.redpanda.com/redpandadata/console:v2.3.1
+    entrypoint: /bin/sh
+    command: -c "echo \"$$CONSOLE_CONFIG_FILE\" > /tmp/config.yml; /app/console"
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda:9092"]
     ports:
-      - 8123:8123
+      - 8080:8080
+    networks:
+      - demo_network
+    depends_on:
+      - redpanda
+
+  owl-shop:
+    image: quay.io/cloudhut/owl-shop:latest
+    networks:
+      - demo_network
+    #platform: 'linux/amd64'
+    environment:
+      - SHOP_KAFKA_BROKERS=redpanda:9092
+      - SHOP_KAFKA_TOPICREPLICATIONFACTOR=1
+      - SHOP_TRAFFIC_INTERVAL_RATE=1
+      - SHOP_TRAFFIC_INTERVAL_DURATION=0.1s
+    depends_on:
+      - redpanda
