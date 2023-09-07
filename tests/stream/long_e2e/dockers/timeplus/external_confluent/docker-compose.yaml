@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   proton-server:
-    image: timeplus/proton:${PROTON_VERSION:-testing-d4d2c373ea743d5549f00442d6c12490bb413f5d}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-testing-d4d2c373ea743d5549f00442d6c12490bb413f5d}
     pull_policy: always
     container_name: proton-server
     volumes:

@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   proton-redp:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     pull_policy: always
     container_name: proton-redp
     volumes:
@@ -35,7 +35,7 @@ services:
       - stream-store
 
   proton-redp1:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     pull_policy: always
     container_name: proton-redp1
     volumes:
@@ -70,7 +70,7 @@ services:
 
 
   proton-redp2:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     pull_policy: always
     container_name: proton-redp2
     volumes:
@@ -104,7 +104,7 @@ services:
       - stream-store2
 
   proton-redp3:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     pull_policy: always
     container_name: proton-redp3
     volumes:
@@ -138,7 +138,7 @@ services:
       - stream-store3
 
   proton-redp4:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     pull_policy: always
     container_name: proton-redp4
     volumes:

@@ -4,12 +4,14 @@
 
 Proton is a unified streaming and historical data processing engine built on top of ClickHouse code base.
 
-- [What is Proton ?](#what-is-proton)
+- [What is Proton?](#what-is-proton)
 - [Architecture](#architecture)
 - [Key Streaming Functionalities](#key-streaming-functionalities)
 - [Docs](#docs)
-- [Staring with Timeplus Cloud](#starting-with-timeplus-cloud)
-- [Starting with Proton in Container](#starting-with-proton-in-docker-container)
+- [Starting with Timeplus Cloud](#starting-with-timeplus-cloud)
+- [Starting with Proton in Docker Container](#starting-with-proton-in-docker-container)
+  - [Launch Proton Server and Client in Container](#launch-proton-server-and-client-in-container)
+  - [Create Stream, Ingest Data and Query](#create-stream-ingest-data-and-query)
 - [License](#license)
 - [Contributing](#contributing)
 - [Need Help?](#need-help)
@@ -66,13 +68,13 @@ We can run Proton for you and even provide more functionalities in Timeplus cons
 After [install Docker engine](https://docs.docker.com/engine/install/) in your OS, pull the latest Proton docker image by running:
 
 ```
-$ docker pull timeplus/proton:latest
+$ docker pull ghcr.io/timeplus-io/proton:latest
 ```
 
 Run Proton docker image to run Proton server:
 
 ```
-$ docker run --name proton timeplus/proton:latest
+$ docker run --name proton ghcr.io/timeplus-io/proton:latest
 ```
 
 

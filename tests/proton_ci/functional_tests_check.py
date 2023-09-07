@@ -23,7 +23,7 @@ if PROTON_VERSION is None:
     logging.error("PROTON_VERSION is None, could not find proton image")
     sys.exit(1)
 
-IMAGE_NAME = "timeplus/proton:" + PROTON_VERSION
+IMAGE_NAME = "ghcr.io/timeplus-io/proton:" + PROTON_VERSION
 TIMEOUT = 90 * 60   # 90 minutes 
 # aarch64 with asan running stateless need more time than 60 mins
 # https://github.com/timeplus-io/proton/actions/runs/4726682507/jobs/8387999573#step:6:4081
@@ -31,7 +31,7 @@ TIMEOUT = 90 * 60   # 90 minutes
 
 def get_build_image_command():
     return (
-        f"docker build --build-arg FROM_TAG={PROTON_VERSION} -t timeplus/proton-functional-testrunner:{PROTON_VERSION} ."
+        f"docker build --build-arg FROM_TAG={PROTON_VERSION} -t ghcr.io/timeplus-io/proton-functional-testrunner:{PROTON_VERSION} ."
     )
 
 def get_run_command(check_name, output_path):
@@ -51,7 +51,7 @@ def get_run_command(check_name, output_path):
     env_str = " ".join(env)
 
     return (
-        f"docker run --volume {output_path}:/test_output --volume {GITHUB_WORKSPACE}:/proton_src --cap-add=SYS_PTRACE {env_str} timeplus/proton-functional-testrunner:{PROTON_VERSION}"
+        f"docker run --volume {output_path}:/test_output --volume {GITHUB_WORKSPACE}:/proton_src --cap-add=SYS_PTRACE {env_str} ghcr.io/timeplus-io/proton-functional-testrunner:{PROTON_VERSION}"
     )
 
 def process_results(
