@@ -21,7 +21,7 @@ protected:
 
     virtual ASTs checkAndExtractArguments(ASTFunction *) const = 0;
 
-    virtual void handleResultType(const ColumnsWithTypeAndName & arguments);
+    NamesAndTypesList getAdditionalResultColumns(const ColumnsWithTypeAndName & arguments) const override;
 
 protected:
     void init(ContextPtr context, ASTPtr streaming_func_ast, ASTPtr timestamp_expr_ast);

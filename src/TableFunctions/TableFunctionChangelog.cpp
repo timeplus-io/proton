@@ -95,12 +95,13 @@ void TableFunctionChangelog::parseArguments(const ASTPtr & func_ast, ContextPtr 
         /// For other stream / query, we expect at least 1 primary key column and 1 version column arg if target stream is not versioned-kv
         throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
 
-    /// Add _tp_delta column
-    columns.add(ColumnDescription(ProtonConsts::RESERVED_DELTA_FLAG, DataTypeFactory::instance().get(TypeIndex::Int8)));
-
     /// Create table func desc
     streaming_func_desc = createStreamingTableFunctionDescription(changelog_func_ast, context);
     streaming_func_desc->func_ctx = drop_late_rows;
+
+    /// Project additional result columns of the streaming function to metadata
+    for (const auto & column : streaming_func_desc->additional_result_columns)
+        columns.add(ColumnDescription{column.name, column.type});
 }
 
 std::pair<ASTs, std::optional<bool>> TableFunctionChangelog::checkAndExtractArguments(ASTFunction * node) const
@@ -135,6 +136,11 @@ std::pair<ASTs, std::optional<bool>> TableFunctionChangelog::checkAndExtractArgu
             throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
 
     return {std::move(args), drop_late_rows};
+}
+
+NamesAndTypesList TableFunctionChangelog::getAdditionalResultColumns(const ColumnsWithTypeAndName &) const
+{
+    return NamesAndTypesList{NameAndTypePair(ProtonConsts::RESERVED_DELTA_FLAG, DataTypeFactory::instance().get(TypeIndex::Int8))};
 }
 
 void registerTableFunctionChangelog(TableFunctionFactory & factory)
