@@ -58,6 +58,8 @@ private:
         Chunk input_chunk;
     };
 
+    std::optional<size_t> required_update_processing_index;
+
     /// std::atomic_bool stop_reading = false;
     [[maybe_unused]] bool process_non_joined = true;
 

@@ -107,7 +107,18 @@ void WatermarkTransformWithSubstream::work()
     /// We will need clear input_chunk for next run
     Chunk process_chunk;
     process_chunk.swap(input_chunk);
-    if (process_chunk.hasRows())
+
+    process_chunk.clearWatermark();
+    if (unlikely(process_chunk.requestCheckpoint()))
+    {
+        checkpoint(process_chunk.getCheckpointContext());
+        output_chunks.emplace_back(std::move(process_chunk));
+    }
+    else if (process_chunk.avoidWatermark())
+    {
+        output_chunks.emplace_back(std::move(process_chunk));
+    }
+    else if (process_chunk.hasRows())
     {
         assert(process_chunk.hasChunkContext());
 
@@ -120,34 +131,26 @@ void WatermarkTransformWithSubstream::work()
     }
     else
     {
-        if (unlikely(process_chunk.requestCheckpoint()))
+        /// FIXME, we shall establish timer only when necessary instead of blindly generating empty heartbeat chunk
+        bool propagated_heartbeat = false;
+        output_chunks.reserve(substream_watermarks.size());
+        for (auto & [id, watermark] : substream_watermarks)
         {
-            checkpoint(process_chunk.getCheckpointContext());
-            output_chunks.emplace_back(std::move(process_chunk));
+            auto chunk = process_chunk.clone();
+            watermark->process(chunk);
+
+            if (chunk.hasChunkContext())
+            {
+                chunk.getChunkContext()->setSubstreamID(id);
+                output_chunks.emplace_back(std::move(chunk));
+                propagated_heartbeat = true;
+            }
         }
-        else
+
+        if (!propagated_heartbeat)
         {
-            /// FIXME, we shall establish timer only when necessary instead of blindly generating empty heartbeat chunk
-            bool propagated_heartbeat = false;
-            output_chunks.reserve(substream_watermarks.size());
-            for (auto & [id, watermark] : substream_watermarks)
-            {
-                auto chunk = process_chunk.clone();
-                watermark->process(chunk);
-
-                if (chunk.hasChunkContext())
-                {
-                    chunk.getChunkContext()->setSubstreamID(id);
-                    output_chunks.emplace_back(std::move(chunk));
-                    propagated_heartbeat = true;
-                }
-            }
-
-            if (!propagated_heartbeat)
-            {
-                process_chunk.setChunkContext(nullptr); /// clear context, act as a heart beat
-                output_chunks.emplace_back(std::move(process_chunk));
-            }
+            process_chunk.setChunkContext(nullptr); /// clear context, act as a heart beat
+            output_chunks.emplace_back(std::move(process_chunk));
         }
     }
 

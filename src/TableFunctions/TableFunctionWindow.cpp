@@ -112,16 +112,18 @@ void TableFunctionWindow::init(ContextPtr context, ASTPtr streaming_func_ast, AS
 
     streaming_func_desc = createStreamingTableFunctionDescription(streaming_func_ast, context);
 
-    /// Parsing the result type of the streaming win function
-    handleResultType(streaming_func_desc->expr_before_table_function->getSampleBlock().getColumnsWithTypeAndName());
+    /// Project additional result columns of the streaming function to metadata
+    for (const auto & column : streaming_func_desc->additional_result_columns)
+        columns.add(ColumnDescription{column.name, column.type});
 }
 
-void TableFunctionWindow::handleResultType(const ColumnsWithTypeAndName & arguments)
+NamesAndTypesList TableFunctionWindow::getAdditionalResultColumns(const ColumnsWithTypeAndName & arguments) const
 {
     assert(!arguments.empty());
     /// If streaming table function is used, we will need project `wstart, wend ...` columns to metadata
-    columns.add(ColumnDescription(ProtonConsts::STREAMING_WINDOW_START, arguments[0].type));
-    columns.add(ColumnDescription(ProtonConsts::STREAMING_WINDOW_END, arguments[0].type));
+    return NamesAndTypesList{
+        NameAndTypePair(ProtonConsts::STREAMING_WINDOW_START, arguments[0].type),
+        NameAndTypePair(ProtonConsts::STREAMING_WINDOW_END, arguments[0].type)};
 }
 
 TimestampFunctionDescriptionMutablePtr TableFunctionWindow::createTimestampFunctionDescription(ASTPtr timestamp_expr_ast, ContextPtr context)
@@ -137,7 +139,7 @@ TimestampFunctionDescriptionMutablePtr TableFunctionWindow::createTimestampFunct
         is_now_func = true;
 
     auto syntax_analyzer_result = TreeRewriter(context).analyze(
-        timestamp_expr_ast, columns.getAll(), storage ? storage : nullptr, storage ? underlying_storage_snapshot : nullptr);
+        timestamp_expr_ast, columns.getAll(), nested_proxy_storage ? nested_proxy_storage : storage, underlying_storage_snapshot);
     ExpressionAnalyzer func_expr_analyzer(timestamp_expr_ast, syntax_analyzer_result, context);
 
     auto timestamp_func_expr = func_expr_analyzer.getActions(true);
@@ -151,6 +153,5 @@ TimestampFunctionDescriptionMutablePtr TableFunctionWindow::createTimestampFunct
     return std::make_shared<TimestampFunctionDescription>(
         std::move(timestamp_expr_ast), std::move(timestamp_func_expr), syntax_analyzer_result->requiredSourceColumns(), is_now_func);
 }
-
 }
 }

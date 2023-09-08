@@ -11,7 +11,7 @@ x-logging: &default-logging
 services:
 
   proton-server:
-    image: timeplus/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
     logging: *default-logging
     extra_hosts: 
         - "kafka:${KAFKA_IP}"      

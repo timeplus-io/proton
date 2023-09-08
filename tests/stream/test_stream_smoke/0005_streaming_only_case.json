@@ -1,6 +1,6 @@
 {
     "test_suite_name": "streaming_only",
-    "commments":
+    "comments":
         "test_stream_onlys covering the steam query smoke cases for streaming only mode.",
     "test_suite_config": {
         "table_schemas":[
@@ -132,8 +132,8 @@
             "description": "tumble window aggregate by max and group by id, window_start, window_end",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":601, "depends_on_stream":"test6_stream_only", "run_mode":"process", "query_type": "stream", "terminate":"manuel", "query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test6_stream_only, timestamp, interval 5 second) group by id, window_start, window_end emit stream"},
-                    {"client":"python", "query_id":602, "depends_on_stream":"test6_stream_only", "run_mode":"process", "query_type": "stream", "terminate":"auto","query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test6_stream_only, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}
+                    {"client":"python", "query_id":"601", "depends_on_stream":"test6_stream_only", "run_mode":"process", "query_type": "stream", "terminate":"manuel", "query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test6_stream_only, timestamp, interval 5 second) group by id, window_start, window_end emit stream"},
+                    {"client":"python", "query_id":"602", "depends_on_stream":"test6_stream_only", "run_mode":"process", "query_type": "stream", "terminate":"auto","query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test6_stream_only, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}
                 ]},
 
 
@@ -178,12 +178,12 @@
             "description": "expected exception",
             "steps":[
                 {"statements": [
-                        {"client":"python", "query_id":601, "query_type": "stream", "terminate":"auto", "query":"select id, max(value), window_start, window_end from tumble(test6_stream_only, timestamp, interval 5 second) group by window_start, window_end emit stream"}
+                        {"client":"python", "query_id":"601", "query_type": "stream", "terminate":"auto", "query":"select id, max(value), window_start, window_end from tumble(test6_stream_only, timestamp, interval 5 second) group by window_start, window_end emit stream"}
                 ]
 
                 }
             ],
-            "expected_results": [{"query_id":601, "expected_results": "error_code:215"}]
+            "expected_results": [{"query_id":"601", "expected_results": "error_code:215"}]
         },
         {
             "id": 2,
@@ -192,11 +192,11 @@
             "description": "expected exception",
             "steps": [
                 {"statements": [
-                    {"client":"python", "query_id":601, "query_type": "stream", "terminate":"auto", "query":"SELECT * FROM test6_stream_only WHERE value >25 EMIT STREAM PERIODIC INTERVAL 2 SECOND"}
+                    {"client":"python", "query_id":"601", "query_type": "stream", "terminate":"auto", "query":"SELECT * FROM test6_stream_only WHERE value >25 EMIT STREAM PERIODIC INTERVAL 2 SECOND"}
                 ]}
             ],
 
-            "expected_results": [{"query_id":601, "expected_results": "error_code:62"}]
+            "expected_results": [{"query_id":"601", "expected_results": "error_code:62"}]
         },
         {
             "id": 3,
@@ -205,11 +205,11 @@
             "description": "expected exception",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":601, "query_type": "stream", "terminate":"auto", "query":"select id, max(value) from tumble(test6_stream_only, timestamp, interval 5 second) group by id emit stream after watermark"}
+                    {"client":"python", "query_id":"601", "query_type": "stream", "terminate":"auto", "query":"select id, max(value) from tumble(test6_stream_only, timestamp, interval 5 second) group by id emit stream after watermark"}
                 ]}
             ],
 
-            "expected_results": [{"query_id":601, "expected_results":"error_code:2002"}]
+            "expected_results": [{"query_id":"601", "expected_results":"error_code:2002"}]
         },
         {
             "id": 4,
@@ -218,7 +218,7 @@
             "description": "stream tumble window with designated 5 sec timestamp.",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":601, "query_type": "stream", "terminate":"auto", "query_end_timer": 2, "query":"select max(value), window_start, window_end from tumble(test6_stream_only, timestamp, interval 5 second) group by window_start, window_end emit stream"}
+                    {"client":"python", "query_id":"601", "query_type": "stream", "terminate":"auto", "query_end_timer": 2, "query":"select max(value), window_start, window_end from tumble(test6_stream_only, timestamp, interval 5 second) group by window_start, window_end emit stream"}
                 ]},
                 {"inputs": [
                     {"table_name":"test6_stream_only","depends_on":"601", "data": [
@@ -232,7 +232,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id":601, "expected_results":
+            "expected_results": [{"query_id":"601", "expected_results":
                 [["66", "2020-02-02 20:00:10", "2020-02-02 20:00:15"]]}
             ]
         },
@@ -243,7 +243,7 @@
             "description": "stream tumble window query and send 3 inptus in the first batch, the window_start of the next window should be based on the minimal timestamp of the first batch",
             "steps": [
                 {"statements": [
-                    {"client":"python", "query_id":601, "query_type": "stream","query_end_timer": 1, "query":"select window_start, window_end, max(timestamp), min(timestamp) from tumble(test6_stream_only, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream"}]},
+                    {"client":"python", "query_id":"601", "query_type": "stream","query_end_timer": 1, "query":"select window_start, window_end, max(timestamp), min(timestamp) from tumble(test6_stream_only, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream"}]},
                 {"inputs": [
                         {"table_name":"test6_stream_only", "wait":1, "depends_on":"601","data": [
                             ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:20"],
@@ -253,7 +253,7 @@
                 ]}
             ],
 
-            "expected_results": [ {"query_id":601, "expected_results":
+            "expected_results": [ {"query_id":"601", "expected_results":
                 [
                     ["2020-02-02 20:00:18", "2020-02-02 20:00:21", "2020-02-02 20:00:20", "2020-02-02 20:00:20"],
                     ["2020-02-02 20:00:21", "2020-02-02 20:00:24", "2020-02-02 20:00:23", "2020-02-02 20:00:23"]

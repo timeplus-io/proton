@@ -1,5 +1,5 @@
 {
-    "commments":
+    "comments":
         "Tests covering the steam query smoke cases.",
     "test_suite_config": {
         "proton_ci_mode": "local",

@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 # _*_ coding: utf-8 _*_
-
-import datetime, json, logging, logging.config, math, os, platform, random, requests, subprocess, sys, threading, time, traceback, uuid
+import datetime, yaml, json, getopt, logging, logging.config, math, os, platform, random, requests,signal,subprocess, sys, threading, time, traceback, uuid
 import multiprocessing as mp
 from clickhouse_driver import Client, errors
 from timeplus import Stream, Environment
@@ -184,11 +183,14 @@ def scan_tests_file_path(tests_file_path):
     files = os.listdir(tests_file_path)
     logger.debug(f"files = {files}")
     for file_name in files:
-        if file_name.endswith(".json"):
+        if file_name.endswith(".json") or file_name.endswith(".yaml") or file_name.endswith(".yml"):
             file_abs_path = f"{tests_file_path}/{file_name}"
             logger.debug(f"file_abs_path = {file_abs_path}")
             with open(file_abs_path) as test_suite_file:
-                test_suite = json.load(test_suite_file, strict=False)
+                if file_name.endswith(".json"):
+                    test_suite = json.load(test_suite_file, strict=False)
+                else:
+                    test_suite = yaml.safe_load(test_suite_file)
                 logger.debug(
                     f"test_suite_file = {test_suite_file}, was loaded successfully."
                 )
@@ -265,10 +267,11 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     config = rockets_env_var_get()
     if config == None:
         with open(config_file) as f:
-            configs = json.load(f)
-        timeplus_event_stream = configs.get(
-            "timeplus_event_stream"
-        )  # todo: distribute global configs into configs
+            if config_file.endswith(".json"):
+                configs = json.load(f)
+            elif config_file.endswith(".yaml") or config_file.endswith(".yml"):
+                configs = yaml.safe_load(f)
+        timeplus_event_stream = configs.get("timeplus_event_stream") #todo: distribute global configs into configs
         timeplus_event_version = configs.get("timeplus_event_version")
         config = configs.get(proton_setting)
         logger.debug(f"setting = {proton_setting},config = {config}")

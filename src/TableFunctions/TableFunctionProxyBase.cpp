@@ -68,7 +68,13 @@ void TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPtr con
 
 StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr context)
 {
-    if (subquery)
+    if (nested_proxy_storage)
+    {
+        underlying_storage_snapshot = nested_proxy_storage->getStorageSnapshot(nested_proxy_storage->getInMemoryMetadataPtr(), context);
+        columns = underlying_storage_snapshot->metadata->getColumns();
+        data_stream_semantic = nested_proxy_storage->dataStreamSemantic();
+    }
+    else if (subquery)
     {
         auto interpreter_subquery
             = std::make_unique<InterpreterSelectWithUnionQuery>(subquery->children[0], context, SelectQueryOptions().subquery().analyze());
@@ -127,6 +133,7 @@ StoragePtr TableFunctionProxyBase::executeImpl(
         getName(),
         storage,
         subquery,
+        data_stream_semantic,
         streaming);
 }
 
@@ -139,7 +146,7 @@ TableFunctionDescriptionMutablePtr TableFunctionProxyBase::createStreamingTableF
 {
     auto & func = ast->as<ASTFunction &>();
     auto syntax_analyzer_result
-        = TreeRewriter(context).analyze(func.arguments, columns.getAll(), storage, storage ? underlying_storage_snapshot : nullptr);
+        = TreeRewriter(context).analyze(func.arguments, columns.getAll(), nested_proxy_storage ? nested_proxy_storage : storage, underlying_storage_snapshot);
 
     ExpressionAnalyzer func_expr_analyzer(func.arguments, syntax_analyzer_result, context);
     auto expr_before_table_function = func_expr_analyzer.getActions(true);
@@ -159,13 +166,16 @@ TableFunctionDescriptionMutablePtr TableFunctionProxyBase::createStreamingTableF
         argument_types.emplace_back(column_with_type.type);
     }
 
+    auto additional_result_columns = getAdditionalResultColumns(args_header.getColumnsWithTypeAndName());
+
     return std::make_shared<TableFunctionDescription>(
         std::move(ast),
         toWindowType(func.name),
         argument_names,
         argument_types,
         std::move(expr_before_table_function),
-        syntax_analyzer_result->requiredSourceColumns());
+        syntax_analyzer_result->requiredSourceColumns(),
+        std::move(additional_result_columns));
 }
 }
 }

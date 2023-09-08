@@ -72,7 +72,7 @@ services:
       - proton-server  
 
   proton-server:
-    image: timeplus/proton:${PROTON_TAG}
+    image: ghcr.io/timeplus-io/proton:${PROTON_TAG}
     logging: *default-logging
     pull_policy: always
     container_name: proton-server

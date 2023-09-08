@@ -1,6 +1,6 @@
-# docker build --build-arg FROM_TAG=1.2.26 -t timeplus/proton-functional-testrunner .
+# docker build --build-arg FROM_TAG=1.2.26 -t ghcr.io/timeplus-io/proton-functional-testrunner .
 ARG FROM_TAG=latest
-FROM timeplus/proton:$FROM_TAG
+FROM ghcr.io/timeplus-io/proton:$FROM_TAG
 
 RUN apt-get update \
  && env DEBIAN_FRONTEND=noninteractive \
