@@ -1,141 +1,112 @@
 [![NightlyTest](https://github.com/timeplus-io/proton/actions/workflows/nightly_test.yml/badge.svg?branch=develop)](https://github.com/timeplus-io/proton/actions/workflows/nightly_test.yml)
 
 ---
-
-Timeplus database (code name: Proton) is a unified streaming and historical data processing engine built on top of ClickHouse code base.
-
-- [What is Proton ?](#what-is-proton)
-- [Architecture](#architecture)
-- [Key Streaming Functionalities](#key-streaming-functionalities)
-- [Docs](#documentations)
-- [Starting with Timeplus Cloud](#starting-with-timeplus-cloud)
-- [Starting with Proton in Container](#starting-with-proton-in-docker-container)
-- [License](#license)
-- [Contributing](#contributing)
-- [Need Help?](#need-help)
+# Proton
 
 ## What is Proton?
 
-Proton is a unified streaming and historical data processing engine which powers the Timeplus streaming analytic platform.
+Proton is a unified streaming and historical data processing engine which powers the Timeplus streaming analytic platform. It is built on top of a trimmed single instance [ClickHouse](https://github.com/clickhouse/clickhouse) code base, with major goals: 
 
-It is built on top of trimmed single instance ClickHouse code base. Its major goals are simplicity, efficient with good performance in both streaming and historical query processing.
-It is built in one single binary without any external service dependency, so it is easy for users to deploy it on bare metal, edge (ARM), container or in orchestrated cloud environment.
-After deployment, users can run streaming queries and historical queries or a combination of both in one SQL. Since its major use cases focus is streaming query processing,
-by default, a SQL query in Proton is a streaming query which means it is long-running, never ends and continuously tracks and evaluates the delta changes and push the query results to users or target systems.
+* efficient with good performance in both streaming and historical query processing
 
-## Architecture
+* without any external service dependency, so it is easy for users to deploy it on bare metal, edge, container or in orchestrated cloud environment.
 
-The following diagram depicts the high level architecture of single instance Proton. All of the components / functionalities are built into one single binary.
-Users can create a stream by using `CREATE STREAM ...` SQL. Every stream has 2 parts at storage layer by default: the real-time streaming data part and the historical data part which
-are backed by NativeLog and ClickHouse historical data store respectively. Fundamentally, a stream in Proton is a regular database table with a replicated write-ahead-log in front but is streaming queryable.
+SQL is the main interface for Proton. Users can run streaming queries and historical queries or a combination of both in one SQL.  By default, a SQL query in Proton is a streaming query, which means it is long-running, never ends and continuously tracks and evaluates the delta changes and push the query results to users or target systems.
 
-When users `INSERT INTO ...` data to Proton, the data always first lands in NativeLog which is immediately queryable. Since NativeLog is in essence a replicated write-ahead-log and is append-only, it
-can support high frequent, low latency and large concurrent data ingestion work loads. In background, there is a separate thread tailing the delta data from NativeLog and commits the data in bigger batch
-to the historical data store. Since Proton leverages ClickHouse for the historical part, its historical query processing is blazing fast as well.
 
-In quite lots of scenarios, data is already in Kafka / Redpanda or other streaming data hubs, users can create external streams to point to the streaming data hub and do streaming query processing
-directly and then either materialize them in Proton or send the query results to external systems.
-
-Interested users can refer [How Timeplus Unifies Streaming and Historical Data Processing](https://www.timeplus.com/post/unify-streaming-and-historical-data-processing) blog for more details regarding its academic foundation and latest industry developments.
-
-![Proton Architecture](https://github.com/timeplus-io/proton/raw/develop/design/proton-high-level-arch.svg)
 
 ## Key Streaming Functionalities
 
-1. Streaming Transformation
-2. Streaming Join (stream to stream, stream to table join)
-3. Streaming Aggregation
-4. Streaming Window Processing (tumble / top / session)
-5. Substream
-6. Data Revision Processing
-7. Federated Streaming Query
-8. JavaScript UDF / UDAF
-9. Materialize View
+1. [Streaming Transformation](https://docs.timeplus.com/usecases#data)
+2. [Streaming Join (stream to stream, stream to table join)](https://docs.timeplus.com/joins)
+3. [Streaming Aggregation](https://docs.timeplus.com/functions_for_agg)
+4. Streaming Window Processing ([tumble](https://docs.timeplus.com/functions_for_streaming#tumble) / [hop](https://docs.timeplus.com/functions_for_streaming#hop) / [session](https://docs.timeplus.com/functions_for_streaming#session))
+5. [Substream](https://docs.timeplus.com/substream)
+6. [Data Revision Processing](https://docs.timeplus.com/changelog-stream)
+7. [Federated Streaming Query with Materialized View](https://docs.timeplus.com/external-stream)
+8. [JavaScript UDF / UDAF](https://docs.timeplus.com/js-udf)
+9. [Materialize View](https://docs.timeplus.com/view#m_view)
 
-## Documentations
+## Get started
 
-For more streaming query functionalities, SQL syntax, functions, aggregation functions etc, see our [Documentations](https://docs.timeplus.com/)
+### Launch with Docker
 
-## Starting with Timeplus Cloud
+After [install Docker engine](https://docs.docker.com/engine/install/) in your OS, pull and run the latest Proton docker image by running:
 
-We can run Proton for you and even provide more functionalities in Timeplus console. See our online documentation : Quickstart with [Timeplus Cloud](https://docs.timeplus.com/quickstart).
-
-## Starting with Proton in Docker Container
-
-### Launch Proton Server and Client in Container
-
-After [install Docker engine](https://docs.docker.com/engine/install/) in your OS, pull the latest Proton docker image by running:
-
-```
-$ docker pull timeplus/proton:latest
-```
-
-Run Proton docker image to run Proton server:
-
-```
-$ docker run --name proton timeplus/proton:latest
+```bash
+docker run --name proton ghcr.io/timeplus-io/proton:develop
 ```
 
 
-Run Proton client to connect the server:
+Run the `proton-client` tool in the docker container to connect to the local proton server:
 
+```bash
+docker exec -it proton proton-client
 ```
-$ docker exec -it proton proton client
+
+If you stop the container and want to start it again, you can run
+
+```bash
+docker start -a proton 
 ```
 
-### Create Stream, Ingest Data and Query
 
-In Proton client console,
+
+### Query on a test stream
+
+In Proton client, run the following SQL to create test stream with random data,
 
 ```sql
 -- Create stream
-CREATE STREAM devices(device string, location string, temperature float);
+CREATE RANDOM STREAM devices(device string default 'device'||to_string(rand()%4), location string default 'city'||to_string(rand()%10), temperature float default rand()%1000/10);
 
 -- Run the stream query and it is always long running waiting for new data
-SELECT device, min(temperature), max(temperature) FROM devices GROUP BY device;
+SELECT device, count(*), min(temperature), max(temperature) FROM devices GROUP BY device;
 ```
 
-Launch another Proton client console by running:
+You will get streaming results like this:
 
-```
-$ docker exec -it proton proton client
-```
+| device  | count()  | min(temperature) | max(temperature) |
+| ------- | -------- | ---------------- | ---------------- |
+| device0 | 56694906 | 0                | 99.6             |
+| device1 | 56697926 | 0.1              | 99.7             |
+| device3 | 56680741 | 0.3              | 99.9             |
+| Device2 | 56699430 | 0.2              | 99.8             |
 
-Then ingest some data:
+### Kafka demo with Docker Compose
 
-```sql
--- Insert some data
-INSERT INTO devices (device, location, temperature)
-VALUES
-('dev1', 'ca', 57.3),
-('dev2', 'sh', 37.3),
-('dev3', 'van', 17.3);
-```
+A [docker-compose file](https://github.com/timeplus-io/proton/blob/develop/docker-compose.yml) is created to bundle proton image with Redpanda (as a lightweight server with Kafka API), Redpanda Console, and [owl-shop](https://github.com/cloudhut/owl-shop) to generate sample live data.
 
-Insert more data and observe the query results.
+1. Download the [docker-compose.yml](https://github.com/timeplus-io/proton/blob/develop/docker-compose.yml) and put into a new folder.
+2. Open a terminal and run `docker compose up` in this folder.
+3. Wait for few minutes to pull all required images and start the containers. Visit http://localhost:8080 to use Redpanda Console to explore the topics and live data.
+4. Use `proton-client` to run SQL to query such Kafka data: `docker exec -it <folder>-proton-1 proton-client` (You can get the container name via `docker ps`)
+5. Create an external stream to connect to a topic in the Kafka/Redpanda server and run SQL to filter or aggregate data. Check the [tutorial](https://docs.timeplus.com/proton-kafka#tutorial) for details.
 
-```sql
-INSERT INTO devices (device, location, temperature)
-VALUES
-('dev1', 'ca', 38.5),
-('dev2', 'sh', 18.5),
-('dev3', 'van', 88.5);
-```
+## Documentation
+
+For detailed tutorials and SQL syntax and functions, check our [Documentation](https://docs.timeplus.com/proton).
+
+## Get more with Timeplus Cloud
+
+To access more features, such as sources, sinks, dashboards, alerts, data lineage, you can create a workspace at [Timeplus Cloud](https://us.timeplus.cloud) or try the [live demo](https://demo.timeplus.cloud) with pre-built live data and dashboards.
 
 ## License
 
-All current code is released under Apache v2 license.
+Source code of the single node Proton is released under Apache v2 license.
 
 ## Contributing
 
 We welcome your contributions! If you are looking for issues to work on, try looking at [the issue list](https://github.com/timeplus-io/proton/issues).
 
-Please see [the wiki](https://github.com/timeplus-io/proton/wiki/Contributing) for more details and see [build from source](BUILD.md) for how to compile Proton in different platforms.
+Please see [the wiki](https://github.com/timeplus-io/proton/wiki/Contributing) for more details and see BUILD.md for how to compile Proton in different platforms.
 
-We also encourage users to join [Timeplus Community Slack](https://timeplus.com/slack) and join the dedicated #contributors channel to ask questions.
+We also encourage users to join [Timeplus Community Slack](https://timeplus.com/slack) and join the dedicated #contributing channel to ask questions.
 
 ## Need Help?
 
-- [Timeplus Community Slack](https://timeplus.com/slack) - Join our community slack to connect with our engineers and other users running Proton in #proton channel.
-- For filing bugs, suggesting improvements or requesting new features, help us out by [opening an issue](https://github.com/timeplus-io/proton/issues).
+- [Timeplus Community Slack](https://timeplus.com/slack) - Join our community slack to connect with our engineers and other users
+  - #proton channel for questions about how to use Proton
+  - #contributing channel if you are considering contributing to Proton project
 
+- For filing bugs, suggesting improvements or requesting new features, please [open issues](https://github.com/timeplus-io/proton/issues) on Github.
