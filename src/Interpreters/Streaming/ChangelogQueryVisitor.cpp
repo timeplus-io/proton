@@ -90,7 +90,7 @@ void ChangelogQueryVisitorMatcher::addDeltaColumn(ASTSelectQuery & select_query,
     const auto select_expression_list = select_query.select();
 
     bool found_delta_col = false;
-    bool has_asterisk = false;
+    [[maybe_unused]] bool has_asterisk = false;
     for (const auto & selected_col : select_expression_list->children)
     {
         if (auto * id = selected_col->as<ASTIdentifier>(); id)

@@ -92,7 +92,7 @@ Int64 evaluateConstantSeekTo(SeekBy seek_by, ASTPtr & ast, ContextPtr context)
         else
             return parseSeekToSequenceNumber(value, type);
     }
-    catch (const Exception & e)
+    catch (const Exception &)
     {
         /// rethrow with better error message for exception of `evaluateConstantExpression`
         if (seek_by == SeekBy::EventTime)
