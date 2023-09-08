@@ -1,5 +1,5 @@
 {
-    "commments": "'Tests covering the steam query smoke cases.'",
+    "comments": "'Tests covering the steam query smoke cases.'",
     "rest_setting": {
         "table_ddl_url": "'http://localhost:8123/proton/v1/ddl/streams'",
         "ingest_url": "'http://localhost:8123/proton/v1/ingest/streams'",

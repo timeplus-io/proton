@@ -73,7 +73,7 @@
                 {
                     "statements": [
                         {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_stream_rest"},
-                        {"client":"rest", "query_type": "table", "wait": 2, "rest_type": "raw", "query_url":"/proton/v1/ddl/streams", "query_id": 1402,"http_method": "POST",
+                        {"client":"rest", "query_type": "table", "wait": 2, "rest_type": "raw", "query_url":"/proton/v1/ddl/streams", "query_id": "1402","http_method": "POST",
                         "data" : {"name": "changelog_stream_rest", "columns": [{"name": "i", "type": "int"}], "mode": "changelog"}}
                     ]
                 }
@@ -94,7 +94,7 @@
                 {
                     "statements": [
             {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test14_changelog_kv_stream_rest"},
-                        {"client":"rest", "query_type": "table", "wait": 2, "rest_type": "raw", "query_url":"/proton/v1/ddl/streams", "query_id": 1403,"http_method": "POST",
+                        {"client":"rest", "query_type": "table", "wait": 2, "rest_type": "raw", "query_url":"/proton/v1/ddl/streams", "query_id": "1403","http_method": "POST",
               "data" : {"name": "test14_changelog_kv_stream_rest", "columns": [{"name": "i", "type": "int"}, {"name": "k", "type": "string"}], "mode": "changelog_kv", "primary_key": "k"}}
                     ]
                 }

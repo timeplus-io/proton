@@ -1,6 +1,6 @@
 {
     "test_suite_name": "streaming_only1",
-    "commments":
+    "comments":
         "test_stream_only1 covering the steam query smoke cases for streaming only mode.",
     "test_suite_config": {
         "table_schemas":[
