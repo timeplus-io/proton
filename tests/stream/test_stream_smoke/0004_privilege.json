@@ -4,7 +4,7 @@
     "test_suite_config":{
         "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"]}}
     },
-    "commments":
+    "comments":
         "Tests covering the privilige smoke cases.",
     "tests": [
 
@@ -32,9 +32,9 @@
             ],
 
             "expected_results": [
-                {"query_id": 500, "expected_results": "error_code:497"},
-                {"query_id": 502, "expected_results": "error_code:497"},
-                {"query_id": 503, "expected_results": "error_code:497"},
+                {"query_id": "500", "expected_results": "error_code:497"},
+                {"query_id": "502", "expected_results": "error_code:497"},
+                {"query_id": "503", "expected_results": "error_code:497"},
                 {"query_id":"504", "expected_results":[
                 ["dev1", "ca", 100, "2020-01-01 11:11:11"],
                 ["dev2", "ca", 100, "2020-01-01 11:11:11"],

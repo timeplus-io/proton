@@ -1,6 +1,6 @@
 {
     "test_suite_name": "view",
-    "commments":
+    "comments":
         "test_mvs covering the steam query smoke cases.",
     "test_suite_config": {
         "table_schemas":[
@@ -185,7 +185,7 @@
                     ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08+00:00"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 5, "run_mode":"table", "depends":{"query_id":301}, "query_type": "table", "query":"kill query where query_id = '301'"}
+                    {"client":"python", "wait": 5, "run_mode":"table", "depends":{"query_id":"301"}, "query_type": "table", "query":"kill query where query_id = '301'"}
 
                 ]
                 }
@@ -224,7 +224,7 @@
                     ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 3, "run_mode":"table", "depends":{"query_id":301}, "query_type": "table", "query":"kill query where query_id = '301'"}
+                    {"client":"python", "wait": 3, "run_mode":"table", "depends":{"query_id":"301"}, "query_type": "table", "query":"kill query where query_id = '301'"}
 
                 ]
                 }
@@ -346,7 +346,7 @@
                     ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 3, "run_mode":"table", "depends":{"query_id":301}, "query_type": "table", "query":"kill query where query_id = '301'"}
+                    {"client":"python", "wait": 3, "run_mode":"table", "depends":{"query_id":"301"}, "query_type": "table", "query":"kill query where query_id = '301'"}
 
                 ]
                 }
@@ -385,7 +385,7 @@
                     ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 7, "run_mode":"table", "depends":{"query_id":301}, "query_type": "table", "query":"kill query where query_id = '301'"}                   
+                    {"client":"python", "wait": 7, "run_mode":"table", "depends":{"query_id":"301"}, "query_type": "table", "query":"kill query where query_id = '301'"}                   
                 ]
                 }
             ],
@@ -423,7 +423,7 @@
                     ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 8, "run_mode":"table", "depends":{"query_id":301}, "query_type": "table", "query":"kill query where query_id = '301'"}
+                    {"client":"python", "wait": 8, "run_mode":"table", "depends":{"query_id":"301"}, "query_type": "table", "query":"kill query where query_id = '301'"}
                 ]
                 }
             ],
@@ -461,7 +461,7 @@
                     ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08+00:00"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 7, "run_mode":"table", "depends":{"query_id":301}, "query_type": "table", "query":"kill query where query_id = '301'"}
+                    {"client":"python", "wait": 7, "run_mode":"table", "depends":{"query_id":"301"}, "query_type": "table", "query":"kill query where query_id = '301'"}
 
                 ]
                 }
