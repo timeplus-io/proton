@@ -80,7 +80,7 @@ class ErrorCodes:
     TEST_SUITE_ENV_SETUP_ERROR = 403
     TEST_CASE_COLLECTION_ERROR = 404
     TEST_SUITE_TIMEOUT_ERROR = 405
-    Test_CASE_INPUT_TABLE_NAME_NOT_FOUND = 406
+    TEST_CASE_INPUT_TABLE_NAME_NOT_FOUND = 406
 
 
 class Error(Exception):
@@ -127,46 +127,6 @@ def timeout_flag(
         print(
             f"{str(datetime.datetime.now())}, {hit_context_info}, timeout_flag exception, error = {error}"
         )
-
-
-def rockets_env_var_get():  # todo: need refactor
-    proton_server = os.environ.get("PROTON_HOST")
-    proton_server_native_port = os.environ.get("PROTON_NATIVE_PORT")
-    proton_rest_port = os.environ.get("PROTON_REST_PORT")
-    proton_rest_params = os.environ.get("PROTON_REST_PARAMS")
-    proton_rest_table_ddl_path = os.environ.get("PROTON_REST_TABLE_PATH")
-    proton_rest_ingest_path = os.environ.get("PROTON_REST_INGEST_PATH")
-    proton_rest_query_path = os.environ.get("PROTON_REST_QUERY_PATH")
-    proton_rest_health_path = os.environ.get("PROTON_REST_HEALTH_PATH")
-    proton_rest_info_path = os.environ.get("PROTON_REST_INFO_PATH")
-
-    if (
-        proton_server != None
-        and proton_server_native_port != None
-        and proton_rest_port != None
-        and proton_rest_params != None
-        and proton_rest_table_ddl_path != None
-        and proton_rest_ingest_path != None
-        and proton_rest_query_path != None
-        and proton_rest_health_path != None
-        and proton_rest_info_path != None
-    ):
-        config = {
-            "rest_setting": {
-                "table_ddl_url": f"http://{proton_server}:{proton_rest_port}{proton_rest_table_ddl_path}",
-                "ingest_url": f"http://{proton_server}:{proton_rest_port}{proton_rest_ingest_path}",
-                "query_url": f"http://{proton_server}:{proton_rest_port}{proton_rest_query_path}",
-                "health_check_url": f"http://{proton_server}:{proton_rest_port}{proton_rest_health_path}",
-                "info_url": f"http://{proton_server}:{proton_rest_port}{proton_rest_info_path}",
-                "prarams": proton_rest_params,
-            },
-            "roton_server": proton_server,
-            "proton_server_native_port": proton_server_native_port,
-        }
-        return config
-    else:
-        return None
-
 
 def scan_tests_file_path(tests_file_path):
     test_suites_selected = []
@@ -224,7 +184,7 @@ def scan_tests_file_path(tests_file_path):
     }
 
 
-def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=None):
+def rockets_context(config_file, tests_file_path, docker_compose_file):
     test_suites = []
     test_suite_names_selected = []
     test_suites_selected = []
@@ -263,18 +223,16 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
         logging_level = "CRITICAL"
     else:
         logging_level = "INFO"
-
-    config = rockets_env_var_get()
-    if config == None:
-        with open(config_file) as f:
-            if config_file.endswith(".json"):
-                configs = json.load(f)
-            elif config_file.endswith(".yaml") or config_file.endswith(".yml"):
-                configs = yaml.safe_load(f)
-        timeplus_event_stream = configs.get("timeplus_event_stream") #todo: distribute global configs into configs
-        timeplus_event_version = configs.get("timeplus_event_version")
-        config = configs.get(proton_setting)
-        logger.debug(f"setting = {proton_setting},config = {config}")
+    configs = {}
+    with open(config_file) as f:
+        if config_file.endswith(".json"):
+            configs = json.load(f)
+        elif config_file.endswith(".yaml") or config_file.endswith(".yml"):
+            configs = yaml.safe_load(f)
+    timeplus_event_stream = configs.get("timeplus_event_stream") #todo: distribute global configs into configs
+    timeplus_event_version = configs.get("timeplus_event_version")
+    config = configs.get(proton_setting)
+    logger.debug(f"setting = {proton_setting},config = {config}")
 
     if config == None:
         error_msg = f"NO_CONFIG_EXIST, no config found for setting = {proton_setting}"
@@ -311,7 +269,7 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     test_suite_names_selected = res_scan_tests_file_path.get(
         "test_suite_names_selected"
     )
-    test_suites_selected = res_scan_tests_file_path.get("test_suites_selected")
+    test_suites_selected = res_scan_tests_file_path.get("test_suites_selected", {})
     logger.debug(f"test_suite_names_selected = {test_suite_names_selected}")
     test_suite_run_ctl_queue = (
         mp.JoinableQueue()
@@ -613,13 +571,11 @@ def run_test_suites(
     logger.debug(
         f"proton_setting = {proton_setting}, total {len(test_suites_selected_sets)} test suties are launched: {test_suite_names}"
     )
+    test_run_list_len_total = 0  
+    test_suite_result_summary_list = []    
     try:
-        # print(f"rockets_run:test_suite_run_ctl_queue.join() to be run ")
         test_suite_run_ctl_queue.join()
-        # print(f"rockets_run:test_suite_run_ctl_queue.join() done ")
-        test_suite_result_collect_done = 0
-        test_run_list_len_total = 0
-        test_suite_result_summary_list = []
+        test_suite_result_collect_done = 0      
         logger.debug(
             f"test_suite_result_collect_done = {test_suite_result_collect_done},len(test_suites_selected_sets) = {len(test_suites_selected_sets)} "
         )
@@ -1548,6 +1504,7 @@ class QueryClientPy(QueryClient):
                     if (
                         "kill query" in query or "KILL QUERY" in query
                     ):  # todo: better logic for the manual kill query in cluster
+                        res = None
                         for item in proton_servers:
                             proton_server = item.get("host")
                             proton_server_native_port = item.get("port")
@@ -1919,8 +1876,9 @@ class QueryClientRest(QueryClient):
         input_rest_columns = []
         input_rest_body_data = []
         input_rest_body = {"columns": input_rest_columns, "data": input_rest_body_data}
+        proton_setting = config.get("proton_setting")
+        running_state_check_res = None
         try:
-            proton_setting = config.get("proton_setting")
             logger.debug(
                 f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, input_batch_rest: input_batch = {input_batch}, table_schema = {table_schema}, input_batch_rest starts."
             )
@@ -2215,13 +2173,14 @@ class QueryClientRest(QueryClient):
         proton_create_stream_shards = config.get("proton_create_stream_shards")
         proton_create_stream_replicas = config.get("proton_create_stream_replicas")
         exception_retry = retry  # set the retry times of exception catching
+        table_name = table_schema.get("name")
+        type = table_schema.get("type")
+        create_start_time = datetime.datetime.now()  
+        res = None      
         while retry > 0 and exception_retry > 0:
-            res = None
+            query_parameters = table_schema.get("query_parameters")            
             try:
                 logger.debug(f"create_table_rest starts...")
-                table_name = table_schema.get("name")
-                type = table_schema.get("type")
-                query_parameters = table_schema.get("query_parameters")
                 if query_parameters != None:
                     table_create_url = table_ddl_url + "?" + query_parameters
                 else:
@@ -2251,7 +2210,6 @@ class QueryClientRest(QueryClient):
                 res = requests.post(
                     table_create_url, data=post_data
                 )  # create the table w/ table schema
-                create_start_time = datetime.datetime.now()
                 if res.status_code == 200:
                     logger.info(
                         f"proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, table {table_name} create_rest is called successfully."
@@ -2279,7 +2237,7 @@ class QueryClientRest(QueryClient):
                 time.sleep(1)
         exception_retry = retry  # reset exception_retry for table_exit check
         create_table_time_out = 200  # set how many times wait and list table to check if table creation completed.
-        while create_table_time_out > 0 and exception_retry > 0:
+        while create_table_time_out > 0 and exception_retry > 0:       
             try:
                 if QueryClientRest.table_exist(table_ddl_url, table_name):
                     logger.info(f"table {table_name} is created successfully.")
@@ -2337,7 +2295,7 @@ class QueryClientRest(QueryClient):
                 res = requests.delete(f"{table_ddl_url}/{table_name}")
                 logger.debug(f"drop stream if exists {table_name} res = {res}")
                 if res.status_code != 200:
-                    error_msg = f"DROP_STREAM_REST_ERROR FATAL exception: url = {table_ddl_url}, table_name = {table_name}, error = {error}."
+                    error_msg = f"DROP_STREAM_REST_ERROR FATAL exception: url = {table_ddl_url}, table_name = {table_name}, res = {res}."
                     drop_stream_rest_exception = TestException(
                         error_msg, ErrorCodes.DROP_STREAM_REST_ERROR
                     )
@@ -2480,7 +2438,7 @@ class QueryClientRest(QueryClient):
                     error_msg = f"QUERY_DEPENDS_ON_NOT_FOUND FATAL exception: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} does not exist"
                     logger.debug(error_msg)
                     query_depends_on_not_found_exception = TestException(
-                        error_msg, ErrorCodes.QUERY_DEPENDS_ON_NOT_FOUND
+                        error_msg, ErrorCodes.QUERY_DEPENDS_ON_FAILED_TO_START
                     )
                     raise query_depends_on_not_found_exception
             if rest_type == "raw":
@@ -2732,6 +2690,7 @@ class QueryExecuter(object):
         proton_setting = config.get("proton_setting")
         proton_cluster_query_node = config.get("proton_cluster_query_node")
         proton_server = None
+        proton_server_native_port = ''
         if proton_setting is None or "cluster" not in proton_setting:
             proton_server = config.get("proton_server")
             proton_server_native_ports = config.get("proton_server_native_port")
@@ -2820,6 +2779,7 @@ class QueryExecuter(object):
     def run(self):
         mp_mgr = None  # multiprocess manager, will be created when loading query_run_py process
         logger = mp.get_logger()
+        pyclient = None
         try:
             time.sleep(1)
             query_procs = (
@@ -2856,6 +2816,7 @@ class QueryExecuter(object):
                 proton_server,
                 proton_server_native_port,
             ) = self.get_proton_client_config(self.config)
+            proton_servers = [] if proton_servers is None else proton_servers
             proton_admin = self.config.get("proton_admin")
             proton_admin_name = proton_admin.get("name")
             proton_admin_password = proton_admin.get("password")
@@ -2871,6 +2832,7 @@ class QueryExecuter(object):
             )  # create python client
             i = 0  # query
             auto_terminate_queries = []
+            test_id, query_id, query_type, query, query_start_time_str, query_end_time_str, message_recv  = None, None, None, None, None, None, None
             while (not tear_down) and query_run_count > 0 and self.alive.value:
                 try:
                     query_proc = None
@@ -3721,6 +3683,7 @@ class TestSuite(object):
 
     def test_case_collect(self, test_suite, tests_2_run, test_ids_set, proton_setting):
         logger = mp.get_logger()
+        test_ids_set_list = []
         try:
             test_suite_name = test_suite.get("test_suite_name")
             tests = test_suite.get("tests")
