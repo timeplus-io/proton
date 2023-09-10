@@ -1,1 +1,0 @@
-create stream if not exists auction (id int64, initialBid int64, itemName string, reserve int64, seller int64, category int64, dateTime datetime64(3), description string, expires datetime64(3), extra string)
