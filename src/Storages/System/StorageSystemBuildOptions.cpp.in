@@ -11,6 +11,7 @@ const char * auto_config_build[]
     "VERSION_DATE", "@VERSION_DATE@",
     /// proton: start.
     "BUILD_TIME", "@BUILD_TIME@",
+    "EDITION", "@EDITION@",
     /// proton: end.
     "BUILD_TYPE", "@CMAKE_BUILD_TYPE@",
     "SYSTEM_PROCESSOR", "@CMAKE_SYSTEM_PROCESSOR@",
