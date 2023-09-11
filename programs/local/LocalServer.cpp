@@ -14,6 +14,7 @@
 #include <base/getFQDNOrHostName.h>
 #include <Common/scope_guard_safe.h>
 #include <Interpreters/Session.h>
+#include <Access/AccessControl.h>
 #include <Common/Exception.h>
 #include <Common/Macros.h>
 #include <Common/Config/ConfigProcessor.h>
@@ -396,6 +397,10 @@ void LocalServer::setupUsers()
 
     ConfigurationPtr users_config;
 
+    auto & access_control = global_context->getAccessControl();
+    access_control.setPlaintextPasswordSetting(config().getBool("allow_plaintext_password", true));
+    access_control.setNoPasswordSetting(config().getBool("allow_no_password", true));
+
     if (config().has("users_config") || config().has("config-file") || fs::exists("config.xml"))
     {
         const auto users_config_path = config().getString("users_config", config().getString("config-file", "config.xml"));
@@ -404,10 +409,7 @@ void LocalServer::setupUsers()
         users_config = loaded_config.configuration;
     }
     else
-    {
         users_config = getConfigurationFromXMLString(minimal_default_user_xml);
-    }
-
     if (users_config)
         global_context->setUsersConfig(users_config);
     else
@@ -808,7 +810,6 @@ void LocalServer::processOptions(const OptionsDescription &, const CommandLineOp
 }
 
 }
-
 
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic ignored "-Wmissing-declarations"

@@ -422,6 +422,10 @@
     <!-- Path to temporary data for processing hard queries. -->
     <tmp_path>/var/lib/proton/tmp/</tmp_path>
 
+    <!-- Disable AuthType Plaintext_password and No_password for ACL. --> 
+    <!-- <allow_plaintext_password>0</allow_plaintext_password> -->
+    <!-- <allow_no_password>0</allow_no_password> -->`
+
     <!-- Policy from the <storage_configuration> for the temporary files.
          If not set <tmp_path> is used, otherwise <tmp_path> is ignored.
 
