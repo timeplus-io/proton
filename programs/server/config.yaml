@@ -309,6 +309,10 @@ checkpoint:
     # When server teardown, last checkpoint flush timeout in seconds
     teardown_flush_timeout: 60
 
+# Disable AuthType plaintext_password and no_password for ACL.
+# allow_plaintext_password: 0
+# allow_no_password: 0
+
 # Policy from the <storage_configuration> for the temporary files.
 # If not set <tmp_path> is used, otherwise <tmp_path> is ignored.
 
@@ -467,6 +471,13 @@ user_directories:
 #   #         scope: subtree
 #   #         search_filter: '(&amp;(objectClass=group)(member={user_dn}))'
 #   #         prefix: proton_
+
+access_control_improvements:
+  users_without_row_policies_can_read_rows: false
+  # Enables logic that users without permissive row policies can still read rows using a SELECT query.
+  # For example, if there two users A, B and a row policy is defined only for A, then
+  # if this setting is true the user B will see all rows, and if this setting is false the user B will see no rows.
+  # By default this setting is false for compatibility with earlier access configurations.
 
 # Default profile of settings.
 default_profile: default

@@ -1281,14 +1281,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
             ProfileEvents::increment(ProfileEvents::MainConfigLoads);
         },
         /* already_loaded = */ false);  /// Reload it right now (initial loading)
-    auto & access_control = global_context->getAccessControl();
-    if (config().has("custom_settings_prefixes"))
-        access_control.setCustomSettingsPrefixes(config().getString("custom_settings_prefixes"));
 
     /// Initialize access storages.
+    auto & access_control = global_context->getAccessControl();
     try
     {
-        access_control.addStoragesFromMainConfig(config(), config_path);
+        access_control.setUpFromMainConfig(config(), config_path);
     }
     catch (...)
     {
@@ -1300,7 +1298,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setConfigReloadCallback([&]()
     {
         main_config_reloader->reload();
-        access_control.reloadUsersConfigs();
+        access_control.reload();
     });
 
     /// Limit on total number of concurrently executed queries.
@@ -1393,6 +1391,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// Stop reloading of the main config. This must be done before `global_context->shutdown()` because
         /// otherwise the reloading may pass a changed config to some destroyed parts of ContextSharedPart.
         main_config_reloader.reset();
+        access_control.stopPeriodicReloading();
 
         async_metrics.stop();
 
@@ -1585,7 +1584,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         buildLoggers(config(), logger());
 
         main_config_reloader->start();
-        access_control.startPeriodicReloadingUsersConfigs();
+        access_control.startPeriodicReloading();
         if (dns_cache_updater)
             dns_cache_updater->start();
 
