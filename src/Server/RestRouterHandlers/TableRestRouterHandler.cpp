@@ -200,7 +200,7 @@ std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Ob
 
     if (!DatabaseCatalog::instance().tryGetDatabase(requested_database))
         return {
-            jsonErrorResponse(fmt::format("Databases {} does not exist.", database), ErrorCodes::UNKNOWN_DATABASE),
+            jsonErrorResponse(fmt::format("Databases {} does not exist.", requested_database), ErrorCodes::UNKNOWN_DATABASE),
             HTTPResponse::HTTP_BAD_REQUEST};
 
     TablePtrs streams;
