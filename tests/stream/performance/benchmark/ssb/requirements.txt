@@ -1,2 +1,0 @@
-clickhouse-driver==0.2.4
-pandas==1.4.3
