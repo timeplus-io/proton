@@ -221,7 +221,7 @@ std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Ob
                 streams.push_back(std::make_shared<Table>(node_identity, this_host, block, row));
         });
         if (streams.empty())
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "database '{}' doesn't exit or does not have any streams", requested_database);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "database '{}' does not have any streams", requested_database);
     }
     else
     {
