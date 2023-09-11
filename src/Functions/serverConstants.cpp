@@ -104,7 +104,7 @@ namespace
     public:
         static constexpr auto name = "edition";
         static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionEdition>(context); }
-        explicit FunctionEdition(ContextPtr context) : FunctionConstantBase(PROTON_EDITION, context->isDistributed()) {}
+        explicit FunctionEdition(ContextPtr context) : FunctionConstantBase(EDITION, context->isDistributed()) {}
     };
 
     class FunctionGetOSKernelVersion : public FunctionConstantBase<FunctionGetOSKernelVersion, String, DataTypeString>
