@@ -20,7 +20,7 @@ namespace ErrorCodes
 namespace
 {
     std::map<String, String> colname_bldkey_mapping
-        = {{"VERSION_DESCRIBE", "version"}, {"BUILD_TIME", "time"}, {"VERSION_GITHASH", "commit_sha"}};
+        = {{"VERSION_DESCRIBE", "version"}, {"BUILD_TIME", "time"}, {"VERSION_GITHASH", "commit_sha"}, {"PROTON_EDITION", "proton_edition"}};
 }
 
 std::pair<String, Int32> PingHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*/) const
@@ -30,7 +30,7 @@ std::pair<String, Int32> PingHandler::executeGet(const Poco::JSON::Object::Ptr &
     if (status == "info")
     {
         String query = "SELECT name, value FROM system.build_options WHERE name IN ('VERSION_FULL','VERSION_DESCRIBE','BUILD_TIME', "
-                       "'VERSION_GITHASH') SETTINGS _tp_internal_system_open_sesame=true;";
+                       "'VERSION_GITHASH', 'PROTON_EDITION') SETTINGS _tp_internal_system_open_sesame=true;";
 
         String resp = "";
         executeNonInsertQuery(query, query_context, [this, &resp](Block && block) { return this->buildResponse(block, resp); });

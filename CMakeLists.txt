@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.20)
 
 project(proton LANGUAGES C CXX ASM)
 
+set(PROTON_EDITION "OSS")
+
 # If turned off: e.g. when ENABLE_FOO is ON, but FOO tool was not found, the CMake will continue.
 option(FAIL_ON_UNSUPPORTED_OPTIONS_COMBINATION
    "Stop/Fail CMake configuration if some ENABLE_XXX option is defined (either ON or OFF)

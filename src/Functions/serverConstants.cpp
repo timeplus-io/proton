@@ -98,6 +98,15 @@ namespace
         explicit FunctionRevision(ContextPtr context) : FunctionConstantBase(ProtonRevision::getVersionRevision(), context->isDistributed()) {}
     };
 
+    /// edition() - returns the current edition.
+    class FunctionEdition : public FunctionConstantBase<FunctionEdition, String, DataTypeString>
+    {
+    public:
+        static constexpr auto name = "edition";
+        static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionEdition>(context); }
+        explicit FunctionEdition(ContextPtr context) : FunctionConstantBase(PROTON_EDITION, context->isDistributed()) {}
+    };
+
     class FunctionGetOSKernelVersion : public FunctionConstantBase<FunctionGetOSKernelVersion, String, DataTypeString>
     {
     public:
@@ -155,6 +164,11 @@ REGISTER_FUNCTION(Version)
 REGISTER_FUNCTION(Revision)
 {
     factory.registerFunction<FunctionRevision>({}, FunctionFactory::CaseInsensitive);
+}
+
+REGISTER_FUNCTION(Edition)
+{
+    factory.registerFunction<FunctionEdition>({}, FunctionFactory::CaseInsensitive);
 }
 
 REGISTER_FUNCTION(GetOSKernelVersion)
