@@ -150,6 +150,21 @@ AccessControl::AccessControl()
 
 AccessControl::~AccessControl() = default;
 
+void AccessControl::setUpFromMainConfig(const Poco::Util::AbstractConfiguration & config_, const String & config_path_)
+{
+    if (config_.has("custom_settings_prefixes"))
+        setCustomSettingsPrefixes(config_.getString("custom_settings_prefixes"));
+
+    setNoPasswordAllowed(config_.getBool("allow_no_password", true));
+    setPlaintextPasswordAllowed(config_.getBool("allow_plaintext_password", true));
+
+    setEnabledUsersWithoutRowPoliciesCanReadRows(config_.getBool(
+        "access_control_improvements.users_without_row_policies_can_read_rows",
+        false /* false because we need to be compatible with earlier access configurations */));
+
+    addStoragesFromMainConfig(config_, config_path_);
+}
+
 void AccessControl::setUsersConfig(const Poco::Util::AbstractConfiguration & users_config_)
 {
     auto storages = getStoragesPtr();
@@ -171,11 +186,7 @@ void AccessControl::addUsersConfigStorage(const Poco::Util::AbstractConfiguratio
 
 void AccessControl::addUsersConfigStorage(const String & storage_name_, const Poco::Util::AbstractConfiguration & users_config_)
 {
-    auto check_setting_name_function = [this](std::string_view setting_name) { checkSettingNameIsAllowed(setting_name); };
-    auto is_no_password_allowed_function = [this]() -> bool { return isNoPasswordAllowed(); };
-    auto is_plaintext_password_allowed_function = [this]() -> bool { return isPlaintextPasswordAllowed(); };
-    auto new_storage = std::make_shared<UsersConfigAccessStorage>(storage_name_, check_setting_name_function,
-                                                                  is_no_password_allowed_function, is_plaintext_password_allowed_function);
+    auto new_storage = std::make_shared<UsersConfigAccessStorage>(storage_name_, *this);
     new_storage->setConfig(users_config_);
     addStorage(new_storage);
     LOG_DEBUG(getLogger(), "Added {} access storage '{}', path: {}",
@@ -206,11 +217,7 @@ void AccessControl::addUsersConfigStorage(
                 return;
         }
     }
-    auto check_setting_name_function = [this](std::string_view setting_name) { checkSettingNameIsAllowed(setting_name); };
-    auto is_no_password_allowed_function = [this]() -> bool { return isNoPasswordAllowed(); };
-    auto is_plaintext_password_allowed_function = [this]() -> bool { return isPlaintextPasswordAllowed(); };
-    auto new_storage = std::make_shared<UsersConfigAccessStorage>(storage_name_, check_setting_name_function,
-                                                                  is_no_password_allowed_function, is_plaintext_password_allowed_function);
+    auto new_storage = std::make_shared<UsersConfigAccessStorage>(storage_name_, *this);
     new_storage->load(users_config_path_, include_from_path_, preprocessed_dir_);
     addStorage(new_storage);
     LOG_DEBUG(getLogger(), "Added {} access storage '{}', path: {}", String(new_storage->getStorageType()), new_storage->getStorageName(), new_storage->getPath());
