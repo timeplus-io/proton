@@ -309,7 +309,7 @@ checkpoint:
     # When server teardown, last checkpoint flush timeout in seconds
     teardown_flush_timeout: 60
 
-# Disable AuthType Plaintext_password and No_password for ACL.
+# Disable AuthType plaintext_password and no_password for ACL.
 # allow_plaintext_password: 0
 # allow_no_password: 0
 

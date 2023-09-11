@@ -398,8 +398,8 @@ void LocalServer::setupUsers()
     ConfigurationPtr users_config;
 
     auto & access_control = global_context->getAccessControl();
-    access_control.setPlaintextPasswordSetting(config().getBool("allow_plaintext_password", true));
-    access_control.setNoPasswordSetting(config().getBool("allow_no_password", true));
+    access_control.setNoPasswordAllowed(config().getBool("allow_no_password", true));
+    access_control.setPlaintextPasswordAllowed(config().getBool("allow_plaintext_password", true));
 
     if (config().has("users_config") || config().has("config-file") || fs::exists("config.xml"))
     {
