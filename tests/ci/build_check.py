@@ -34,8 +34,6 @@ def get_build_config(build_check_name: str, build_name: str) -> BuildConfig:
 def _can_export_binaries(build_config: BuildConfig) -> bool:
     if build_config["package_type"] != "deb":
         return False
-    if build_config["bundled"] != "bundled":
-        return False
     if build_config["splitted"] == "splitted":
         return False
     if build_config["sanitizer"] != "":

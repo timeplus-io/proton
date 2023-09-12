@@ -12,7 +12,6 @@ SCRIPT_PATH = os.path.realpath(__file__)
 IMAGE_MAP = {
     "deb": "ghcr.io/timeplus-io/proton-deb-builder",        # Not used
     "binary": "ghcr.io/timeplus-io/proton-binary-builder",
-    "unbundled": "ghcr.io/timeplus-io/unbundled-builder"    # Not used
 }
 # proton: ends.
 
