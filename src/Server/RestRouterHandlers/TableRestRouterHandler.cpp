@@ -223,7 +223,9 @@ std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Ob
                 streams.push_back(std::make_shared<Table>(node_identity, this_host, block, row));
         });
         if (streams.empty())
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "No stream named '{}' in database '{}'", requested_name, requested_database);
+            return {
+                jsonErrorResponse(fmt::format("No stream named '{}' in database '{}'", requested_name, requested_database), ErrorCodes::UNKNOWN_STREAM),
+                HTTPResponse::HTTP_NOT_FOUND};
     }
 
     Poco::JSON::Object resp;
