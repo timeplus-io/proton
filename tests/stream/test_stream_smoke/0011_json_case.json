@@ -37,19 +37,7 @@
                     {"client":"python","query_id":"1201", "wait":2,"exist":"json_tumble_hop_mv", "exit_wait":2, "query_type": "table", "query":"create materialized view if not exists json_tumble_hop_mv as select window_start as w_s, window_end as w_e, count() as cnt from tumble(json_hop_mv, we, 5s) group by window_start, window_end"},
                     {"client":"python","query_id":"1202","wait":2, "terinate":"manual", "query_type": "stream","drop_view":"json_tumble_hop_mv,json_hop_mv", "drop_view_wait":2, "query":"select cnt from json_tumble_hop_mv"},
                     {"client":"python", "query_type": "table","depends_on":1202, "wait":1, "kill": 1202, "kill_wait":8, "query":
-                        "insert into test_json_str (json, timestamp) values
-                        ('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:01')
-                        ('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:03\"}, \"tag\":\"temperature\"}' ,'2021-11-02 20:00:03')
-                        ('{\"data\":{\"id\":\"dev2\", \"value\":100, \"create_time\":\"2021-11-02 20:00:02\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:02')
-                        ('{\"data\":{\"id\":\"dev2\", \"value\":100, \"create_time\":\"2021-11-02 20:00:04\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:04')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:05\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:05')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:06\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:06')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:09\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:09')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:08\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:08')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:07\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:07')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:09\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:09')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:01')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:10\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:10')"
+                        "insert into test_json_str (json, timestamp) values('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:01')('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:03\"}, \"tag\":\"temperature\"}' ,'2021-11-02 20:00:03')('{\"data\":{\"id\":\"dev2\", \"value\":100, \"create_time\":\"2021-11-02 20:00:02\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:02')('{\"data\":{\"id\":\"dev2\", \"value\":100, \"create_time\":\"2021-11-02 20:00:04\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:04')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:05\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:05')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:06\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:06')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:09\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:09')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:08\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:08')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:07\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:07')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:09\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:09')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:01')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:10\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:10')"
                     }                      
                     ]}
                  
@@ -73,19 +61,7 @@
                     {"client":"python","query_id":"1201", "wait":2,"exist":"json_tumble_hop_v", "exit_wait":2, "query_type": "table", "query":"create view if not exists json_tumble_hop_v as select window_start as w_s, window_end as w_e, count() as cnt from tumble(json_hop_v, we, 5s) group by window_start, window_end"},
                     {"client":"python","query_id":"1202", "wait":2, "terinate":"manual", "query_type": "stream","drop_view":"json_tumble_hop_v,json_hop_v", "drop_view_wait":2, "query":"select cnt from json_tumble_hop_v"},
                     {"client":"python", "query_type": "table","depends_on":1202, "wait":1, "kill": 1202, "kill_wait":8,"query":
-                        "insert into test_json_str (json, timestamp) values
-                        ('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:01')
-                        ('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:03\"}, \"tag\":\"temperature\"}' ,'2021-11-02 20:00:03')
-                        ('{\"data\":{\"id\":\"dev2\", \"value\":100, \"create_time\":\"2021-11-02 20:00:02\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:02')
-                        ('{\"data\":{\"id\":\"dev2\", \"value\":100, \"create_time\":\"2021-11-02 20:00:04\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:04')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:05\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:05')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:06\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:06')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:09\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:09')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:08\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:08')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:07\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:07')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:09\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:09')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:01')
-                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:10\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:10')"
+                        "insert into test_json_str (json, timestamp) values('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:01')('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:03\"}, \"tag\":\"temperature\"}' ,'2021-11-02 20:00:03')('{\"data\":{\"id\":\"dev2\", \"value\":100, \"create_time\":\"2021-11-02 20:00:02\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:02')('{\"data\":{\"id\":\"dev2\", \"value\":100, \"create_time\":\"2021-11-02 20:00:04\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:04')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:05\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:05')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:06\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:06')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:09\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:09')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:08\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:08')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:07\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:07')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:09\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:09')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:01')('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:10\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:10')"
                     }
                     ]}
             ],
@@ -104,8 +80,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json_obj"},
                     {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_obj (json json, timestamp datetime64(3) default now64(3))"},
                     {"client":"python", "query_type": "table","depends_on_stream": "test_json_obj", "wait":2,"query":
-                        "insert into test_json_obj (json, timestamp) values
-                        ('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:01')"
+                        "insert into test_json_obj (json, timestamp) values('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:01')"
                     },
                     {"client":"python", "query_id":"1203", "depends_on_stream": "test_json_obj", "wait":3, "query":"select json.data.id, json.data.value, json.tag from test_json_obj limit 1 settings seek_to='earliest'"},
                     {"client":"python", "query_id":"1204", "query_type": "table" ,"depends_on_stream": "test_json_obj","wait":2, "query":"select json.data.id, json.data.value, json.tag from table(test_json_obj)"}

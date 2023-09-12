@@ -1,0 +1,1506 @@
+test_suite_name: changelog_stream11
+tag: smoke
+test_suite_config:
+  setup:
+    statements:
+      - client: python
+        query_type: table
+        wait: 1
+        query: DROP VIEW IF EXISTS test14_view2;
+
+      - client: python
+        query_type: table
+        wait: 1
+        query: DROP VIEW IF EXISTS test14_view1;
+
+      - client: python
+        query_type: table
+        wait: 1
+        query: DROP VIEW IF EXISTS test14_view;
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: []
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+      cluster:
+        - view
+        - cluster_table_bug
+comments: Tests covering the single shard changelog stream query smoke cases.
+tests:
+  - id: 84
+    tags:
+      - versioned_kv
+      - multi_shard
+      - subquery
+      - subquery/view/materialized_view
+      - tail/aggr
+      - group_by
+      - primary_key
+      - UDA
+      - bug
+    name: subquery from subquery from view aggr with UDA, update
+    description: subquery from subquery from view aggr with UDA, update
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000002'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: sec_large
+              arguments:
+              - name: value
+                type: float32
+              is_aggregation: true
+              return_type: float32
+              source: '{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {''max'': this.max, ''sec'':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s[''max'']; this.sec = s[''sec'']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s[''sec''] >= this.max) { this.max = s[''max'']; this.sec = s[''sec''];} else if(s[''max''] >= this.max) { this.sec = this.max; this.max = s[''max''];} else if (s[''max''] > this.sec) { this.sec = s[''max'']; } } }'
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
+                                                                                                                     shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test14_view1 as
+                (select i,
+                        k2
+                 from test14_multishard
+                 where k1 = 1 );
+
+          - client: python
+            query_id: '1484'
+            depends_on_stream: test14_multishard
+            query_end_timer: 6
+            query_type: stream
+            query: |
+              select sec_large(i),
+                     k2
+              from
+                (select i,
+                        k2
+                 from test14_view1
+                 where k2 == 'a' )
+              group by k2
+              order by k2;
+
+          - client: python
+            query_type: table
+            depends_on: '1484'
+            wait: 1
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (2, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (3, 0, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (4, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (5, 0, 'e');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (6, 0, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (7, 0, 'a');
+
+          - client: python
+            query_type: table
+            kill: '1484'
+            kill_wait: 10
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (8, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+  - id: 85
+    tags:
+      - versioned_kv
+      - multi_shard
+      - subquery
+      - subquery/view/materialized_view
+      - tail/aggr
+      - group_by
+      - no_primary_key
+      - stateful_function
+    name: subquery from view from subquery aggr with stateful function, add
+    description: subquery from view from subquery aggr with stateful function, add
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
+                                                                                                                     shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test14_view1 as
+                (select i,
+                        k1,
+                        k2
+                 from
+                   (select i,
+                           k1,
+                           k2
+                    from test14_multishard
+                    where k1 <> 0 )
+                 where k2 <> 'd' );
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test14_view2 as
+                (select max(i) as max_i,
+                        min(i) as min_i,
+                        avg(i) as avg_i,
+                        count(i) as cnt,
+                        k1
+                 from test14_view1
+                 group by k1
+                 order by k1);
+
+          - client: python
+            query_id: '1485'
+            depends_on_stream: test14_multishard
+            query_end_timer: 6
+            query_type: stream
+            query: |
+              select max_i,
+                     min_i,
+                     avg_i,
+                     cnt,
+                     k1
+              from test14_view2;
+
+          - client: python
+            query_type: table
+            depends_on: '1485'
+            wait: 1
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (2, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (3, 0, 'c');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (4, 1, 'd');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (5, 0, 'e');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (6, 2, 'f');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (7, 2, 'g');
+
+          - client: python
+            query_type: table
+            kill: '1485'
+            kill_wait: 10
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (8, 1, 'h');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+    expected_results:
+      - query_id: '1485'
+        expected_results:
+          - [8, 1, 3.6666666666666665, 3, 1]
+          - [7, 6, 6.5, 2, 2]
+
+  - id: 86
+    tags:
+      - versioned_kv
+      - multi_shard
+      - subquery
+      - subquery/view/materialized_view
+      - tail/aggr
+      - group_by
+      - no_primary_key
+      - stateful_function
+      - bug
+    name: subquery from view from subquery aggr with stateful function, update
+    description: subquery from view from subquery aggr with stateful function, update
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
+                                                                                                                     shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test14_view1 as
+                (select i,
+                        k1,
+                        k2
+                 from
+                   (select i,
+                           k1,
+                           k2
+                    from test14_multishard
+                    where k1 <> 0 )
+                 where k2 <> 'd' );
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test14_view2 as
+                (select max(i) as max_i,
+                        min(i) as min_i,
+                        avg(i) as avg_i,
+                        count(i) as cnt,
+                        k1
+                 from test14_view1
+                 group by k1
+                 order by k1);
+
+          - client: python
+            query_id: '1486'
+            depends_on_stream: test14_multishard
+            query_end_timer: 6
+            query_type: stream
+            query: |
+              select max_i,
+                     min_i,
+                     avg_i,
+                     cnt,
+                     k1
+              from test14_view2;
+
+          - client: python
+            query_type: table
+            depends_on: '1486'
+            wait: 1
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (2, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (3, 0, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (4, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (5, 2, 'e');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (6, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (7, 2, 'b');
+
+          - client: python
+            query_type: table
+            kill: '1486'
+            kill_wait: 10
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (8, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+  - id: 87
+    tags:
+      - versioned_kv
+      - multi_shard
+      - subquery
+      - subquery/view/materialized_view
+      - tail/aggr
+      - group_by
+      - no_primary_key
+      - UDA
+    name: subquery from view from subquery aggr with UDA, add
+    description: subquery from view from subquery aggr with UDA, add
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000002'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: sec_large
+              arguments:
+              - name: value
+                type: float32
+              is_aggregation: true
+              return_type: float32
+              source: '{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {''max'': this.max, ''sec'':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s[''max'']; this.sec = s[''sec'']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s[''sec''] >= this.max) { this.max = s[''max'']; this.sec = s[''sec''];} else if(s[''max''] >= this.max) { this.sec = this.max; this.max = s[''max''];} else if (s[''max''] > this.sec) { this.sec = s[''max'']; } } }'
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
+                                                                                                                     shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test14_view1 as
+                (select i,
+                        k1,
+                        k2
+                 from test14_multishard
+                 where k1 <> 0 );
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test14_view2 as
+                (select sec_large(i) as sec_l,
+                        k1
+                 from
+                   (select i,
+                           k1,
+                           k2
+                    from test14_view1
+                    where k2 <> 'd' )
+                 group by k1
+                 order by k1);
+
+          - client: python
+            query_id: '1487'
+            depends_on_stream: test14_multishard
+            query_end_timer: 6
+            query_type: stream
+            query: |
+              select sec_l,
+                     k1
+              from test14_view2;
+
+          - client: python
+            query_type: table
+            depends_on: '1487'
+            wait: 1
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (2, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (3, 0, 'c');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (4, 1, 'd');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (5, 0, 'e');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (6, 2, 'f');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (7, 2, 'g');
+
+          - client: python
+            query_type: table
+            kill: '1487'
+            kill_wait: 10
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (8, 1, 'h');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+    expected_results:
+      - query_id: '1487'
+        expected_results:
+          - [2, 1]
+          - [6, 2]
+
+  - id: 88
+    tags:
+      - versioned_kv
+      - multi_shard
+      - subquery
+      - subquery/view/materialized_view
+      - tail/aggr
+      - group_by
+      - no_primary_key
+      - UDA
+      - bug
+    name: subquery from view from subquery aggr with UDA, update
+    description: subquery from view from subquery aggr with UDA, update
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000002'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: sec_large
+              arguments:
+              - name: value
+                type: float32
+              is_aggregation: true
+              return_type: float32
+              source: '{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {''max'': this.max, ''sec'':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s[''max'']; this.sec = s[''sec'']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s[''sec''] >= this.max) { this.max = s[''max'']; this.sec = s[''sec''];} else if(s[''max''] >= this.max) { this.sec = this.max; this.max = s[''max''];} else if (s[''max''] > this.sec) { this.sec = s[''max'']; } } }'
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
+                                                                                                                     shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test14_view1 as
+                (select i,
+                        k1,
+                        k2
+                 from test14_multishard
+                 where k1 <> 0 );
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test14_view2 as
+                (select sec_large(i) as sec_l,
+                        k1
+                 from
+                   (select i,
+                           k1,
+                           k2
+                    from test14_view1
+                    where k2 <> 'd' )
+                 group by k1
+                 order by k1);
+
+          - client: python
+            query_id: '1488'
+            depends_on_stream: test14_multishard
+            query_end_timer: 6
+            query_type: stream
+            query: |
+              select sec_l,
+                     k1
+              from test14_view2;
+
+          - client: python
+            query_type: table
+            depends_on: '1488'
+            wait: 1
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (2, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (3, 0, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (4, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (5, 2, 'e');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (6, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (7, 2, 'b');
+
+          - client: python
+            query_type: table
+            kill: '1488'
+            kill_wait: 10
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (8, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+  - id: 89
+    tags:
+      - versioned_kv
+      - multi_shard
+      - subquery
+      - subquery/view/materialized_view
+      - tail/aggr
+      - no_group_by
+      - stateful_function
+    name: subquery from view from subquery aggr with stateful function, add
+    description: subquery from view from subquery aggr with stateful function, add
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
+                                                                                                                     shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test14_view1 as
+                (select i,
+                        k1,
+                        k2
+                 from
+                   (select i,
+                           k1,
+                           k2
+                    from test14_multishard
+                    where k1 <> 0 )
+                 where k2 <> 'd' );
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test14_view2 as
+                (select max(i) as max_i,
+                        min(i) as min_i,
+                        avg(i) as avg_i,
+                        count(i) as cnt
+                 from test14_view1);
+
+          - client: python
+            query_id: '1489'
+            depends_on_stream: test14_multishard
+            query_end_timer: 6
+            query_type: stream
+            query: |
+              select max_i,
+                     min_i,
+                     avg_i,
+                     cnt
+              from test14_view2;
+
+          - client: python
+            query_type: table
+            depends_on: '1489'
+            wait: 1
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (2, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (3, 0, 'c');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (4, 1, 'd');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (5, 0, 'e');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (6, 2, 'f');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (7, 2, 'g');
+
+          - client: python
+            query_type: table
+            kill: '1489'
+            kill_wait: 10
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (8, 1, 'h');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+    expected_results:
+      - query_id: '1489'
+        expected_results:
+          - [8, 1, 4.8, 5]
+
+  - id: 90
+    tags:
+      - versioned_kv
+      - multi_shard
+      - subquery
+      - subquery/view/materialized_view
+      - tail/aggr
+      - no_group_by
+      - stateful_function
+      - bug
+    name: subquery from view from subquery aggr with stateful function, update
+    description: subquery from view from subquery aggr with stateful function, update
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
+                                                                                                                     shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test14_view1 as
+                (select i,
+                        k1,
+                        k2
+                 from
+                   (select i,
+                           k1,
+                           k2
+                    from test14_multishard
+                    where k1 <> 0 )
+                 where k2 <> 'd' );
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test14_view2 as
+                (select max(i) as max_i,
+                        min(i) as min_i,
+                        avg(i) as avg_i,
+                        count(i) as cnt
+                 from test14_view1);
+
+          - client: python
+            query_id: '1490'
+            depends_on_stream: test14_multishard
+            query_end_timer: 6
+            query_type: stream
+            query: |
+              select max_i,
+                     min_i,
+                     avg_i,
+                     cnt
+              from test14_view2;
+
+          - client: python
+            query_type: table
+            depends_on: '1490'
+            wait: 1
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (2, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (3, 0, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (4, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (5, 2, 'e');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (6, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (7, 2, 'b');
+
+          - client: python
+            query_type: table
+            kill: '1490'
+            kill_wait: 10
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (8, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+  - id: 91
+    tags:
+      - versioned_kv
+      - multi_shard
+      - subquery
+      - subquery/view/materialized_view
+      - tail/aggr
+      - no_group_by
+      - UDA
+    name: subquery from view from subquery aggr with UDA, add
+    description: subquery from view from subquery aggr with UDA, add
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000002'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: sec_large
+              arguments:
+              - name: value
+                type: float32
+              is_aggregation: true
+              return_type: float32
+              source: '{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {''max'': this.max, ''sec'':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s[''max'']; this.sec = s[''sec'']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s[''sec''] >= this.max) { this.max = s[''max'']; this.sec = s[''sec''];} else if(s[''max''] >= this.max) { this.sec = this.max; this.max = s[''max''];} else if (s[''max''] > this.sec) { this.sec = s[''max'']; } } }'
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
+                                                                                                                     shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test14_view1 as
+                (select i,
+                        k1,
+                        k2
+                 from test14_multishard
+                 where k1 <> 0 );
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test14_view2 as
+                (select sec_large(i) as sec_l
+                 from
+                   (select i,
+                           k1,
+                           k2
+                    from test14_view1
+                    where k2 <> 'd' ));
+
+          - client: python
+            query_id: '1491'
+            depends_on_stream: test14_multishard
+            query_end_timer: 6
+            query_type: stream
+            query: |
+              select sec_l
+              from test14_view2;
+
+          - client: python
+            query_type: table
+            depends_on: '1491'
+            wait: 1
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (2, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (3, 0, 'c');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (4, 1, 'd');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (5, 0, 'e');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (6, 2, 'f');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (7, 2, 'g');
+
+          - client: python
+            query_type: table
+            kill: '1491'
+            kill_wait: 10
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (8, 1, 'h');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+    expected_results:
+      - query_id: '1491'
+        expected_results:
+          - [7]
+
+  - id: 92
+    tags:
+      - versioned_kv
+      - multi_shard
+      - subquery
+      - subquery/view/materialized_view
+      - tail/aggr
+      - no_group_by
+      - UDA
+      - bug
+    name: subquery from view from subquery aggr with UDA, update
+    description: subquery from view from subquery aggr with UDA, update
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000002'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: sec_large
+              arguments:
+              - name: value
+                type: float32
+              is_aggregation: true
+              return_type: float32
+              source: '{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {''max'': this.max, ''sec'':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s[''max'']; this.sec = s[''sec'']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s[''sec''] >= this.max) { this.max = s[''max'']; this.sec = s[''sec''];} else if(s[''max''] >= this.max) { this.sec = this.max; this.max = s[''max''];} else if (s[''max''] > this.sec) { this.sec = s[''max'']; } } }'
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
+                                                                                                                     shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test14_view1 as
+                (select i,
+                        k1,
+                        k2
+                 from test14_multishard
+                 where k1 <> 0 );
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test14_view2 as
+                (select sec_large(i) as sec_l
+                 from
+                   (select i,
+                           k1,
+                           k2
+                    from test14_view1
+                    where k2 <> 'd' ));
+
+          - client: python
+            query_id: '1492'
+            depends_on_stream: test14_multishard
+            query_end_timer: 6
+            query_type: stream
+            query: |
+              select sec_l
+              from test14_view2;
+
+          - client: python
+            query_type: table
+            depends_on: '1492'
+            wait: 1
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (2, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (3, 0, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (4, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (5, 2, 'e');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (6, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (7, 2, 'b');
+
+          - client: python
+            query_type: table
+            kill: '1492'
+            kill_wait: 10
+            wait: 0
+            query: |
+              insert into test14_multishard(i, k1, k2)
+              values (8, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test14_view2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test14_view1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard;
+
