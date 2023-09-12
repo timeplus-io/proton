@@ -4,7 +4,7 @@
 
 ## What is Proton?
 
-Proton is a unified streaming and historical data processing engine which powers the Timeplus streaming analytic platform. It is built on top of a trimmed single instance [ClickHouse](https://github.com/clickhouse/clickhouse) code base, with major goals: 
+Proton is a single binary for unified streaming and historical data processing engine, which powers the Timeplus streaming analytic platform. It is built on top of a trimmed single instance [ClickHouse](https://github.com/clickhouse/clickhouse) code base, with major goals: 
 
 * efficient with good performance in both streaming and historical query processing
 
@@ -89,13 +89,13 @@ To access more features, such as sources, sinks, dashboards, alerts, data lineag
 
 ## License
 
-Source code of the single node Proton is released under Apache v2 license.
+Apache v2 license.
 
 ## Contributing
 
 We welcome your contributions! If you are looking for issues to work on, try looking at [the issue list](https://github.com/timeplus-io/proton/issues).
 
-Please see [the wiki](https://github.com/timeplus-io/proton/wiki/Contributing) for more details and see BUILD.md for how to compile Proton in different platforms.
+Please see [the wiki](https://github.com/timeplus-io/proton/wiki/Contributing) for more details and see [BUILD.md](BUILD.md) for how to compile Proton in different platforms.
 
 We also encourage users to join [Timeplus Community Slack](https://timeplus.com/slack) and join the dedicated #contributing channel to ask questions.
 
