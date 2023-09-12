@@ -207,21 +207,13 @@ std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Ob
     auto node_identity{query_context->getNodeIdentity()};
     auto this_host{query_context->getHostFQDN()};
 
-    if (requested_database.empty())
-        queryStreams(query_context, [&](Block && block) {
-            streams.reserve(block.rows());
-            for (size_t row = 0; row < block.rows(); ++row)
-                streams.push_back(std::make_shared<Table>(node_identity, this_host, block, row));
-        });
-    else if (requested_name.empty())
+    if (requested_name.empty())
     {
         queryStreamsByDatabasse(query_context, requested_database, [&](Block && block) {
             streams.reserve(block.rows());
             for (size_t row = 0; row < block.rows(); ++row)
                 streams.push_back(std::make_shared<Table>(node_identity, this_host, block, row));
         });
-        if (streams.empty())
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "database '{}' does not have any streams", requested_database);
     }
     else
     {
