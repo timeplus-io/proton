@@ -201,7 +201,7 @@ std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Ob
     if (!DatabaseCatalog::instance().tryGetDatabase(requested_database))
         return {
             jsonErrorResponse(fmt::format("Databases {} does not exist.", requested_database), ErrorCodes::UNKNOWN_DATABASE),
-            HTTPResponse::HTTP_BAD_REQUEST};
+            HTTPResponse::HTTP_NOT_FOUND};
 
     TablePtrs streams;
     auto node_identity{query_context->getNodeIdentity()};
