@@ -4,7 +4,7 @@
 
 ## What is Proton?
 
-Proton is a single binary for unified streaming and historical data processing engine, which powers the Timeplus streaming analytic platform. It is built on top of a trimmed single instance [ClickHouse](https://github.com/clickhouse/clickhouse) code base, with major goals: 
+Proton is a single binary for unified streaming and historical data processing, which powers the Timeplus streaming analytic platform. It is built on top of a trimmed single instance [ClickHouse](https://github.com/clickhouse/clickhouse) code base, with major goals: 
 
 * efficient with good performance in both streaming and historical query processing
 
