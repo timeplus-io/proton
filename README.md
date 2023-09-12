@@ -1,7 +1,5 @@
 [![NightlyTest](https://github.com/timeplus-io/proton/actions/workflows/nightly_test.yml/badge.svg?branch=develop)](https://github.com/timeplus-io/proton/actions/workflows/nightly_test.yml)
 
----
-
 ## What is Proton?
 
 Proton is a single binary for unified streaming and historical data processing, which powers the Timeplus streaming analytic platform. It is built on top of a trimmed single instance [ClickHouse](https://github.com/clickhouse/clickhouse) code base, with major goals: 
@@ -12,9 +10,7 @@ Proton is a single binary for unified streaming and historical data processing, 
 
 SQL is the main interface for Proton. Users can run streaming queries and historical queries or a combination of both in one SQL.  By default, a SQL query in Proton is a streaming query, which means it is long-running, never ends and continuously tracks and evaluates the delta changes and push the query results to users or target systems.
 
-
-
-## Key Streaming Functionalities
+## Key streaming functionalities
 
 1. [Streaming Transformation](https://docs.timeplus.com/usecases#data)
 2. [Streaming Join (stream to stream, stream to table join)](https://docs.timeplus.com/joins)
@@ -25,6 +21,12 @@ SQL is the main interface for Proton. Users can run streaming queries and histor
 7. [Federated Streaming Query with Materialized View](https://docs.timeplus.com/external-stream)
 8. [JavaScript UDF / UDAF](https://docs.timeplus.com/js-udf)
 9. [Materialize View](https://docs.timeplus.com/view#m_view)
+
+## How it works
+![architecture](design/proton-high-level-arch.svg)
+
+[Learn more](https://docs.timeplus.com/proton-architecture)
+
 
 ## Get started
 
