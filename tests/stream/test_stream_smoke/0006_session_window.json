@@ -1,7 +1,7 @@
 {
     "test_suite_name": "session",
     "tag":"smoke",
-    "commments":
+    "comments":
         "Tests covering session window test cases.",
     "test_suite_config": {
         "table_schemas":[
@@ -48,7 +48,7 @@
             "description": "stream session window with session_size triggered emit, 2s interval with session_size 10s",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 2s) partition by id group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 2s) partition by id group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -62,7 +62,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
                 [
                     [57.3, "2020-02-02 20:00:00.000", "2020-02-02 20:00:02.000", "dev1"],
                     [66, "2020-02-02 20:00:02.000", "2020-02-02 20:00:12.000", "dev1"]
@@ -77,7 +77,7 @@
             "description": "stream session window with session_size triggered emit, 2s interval with session_size 10s",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 2s) partition by id group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 2s) partition by id group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -89,7 +89,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
                 [
                     ["58.3", "2020-02-02 20:00:00.000", "2020-02-02 20:00:10.000", "dev2"],
                     ["57.3", "2020-02-02 20:00:00.000", "2020-02-02 20:00:02.000", "dev1"]
@@ -104,7 +104,7 @@
             "description": "stream session window with force timeout, session window interval 1s, input data with 1s interval continuously and session window emit at 5s",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select count(), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 1s) partition by id group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select count(), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 1s) partition by id group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session", "depends_on":"701", "wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:00"]]},
@@ -132,7 +132,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
                 [
                     ["10", "2020-02-02 20:00:00.000", "2020-02-02 20:00:05.000", "dev2"],
                     ["10", "2020-02-02 20:00:00.000", "2020-02-02 20:00:05.000", "dev1"]
@@ -146,7 +146,7 @@
             "description": "3 unique stream session window based id and location, session window interval 1s, input data in 2 batches and 1st batch is emit dur to force timeout threshold is it while 2nd is not emit for not hitting threshold",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select count(), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 2s) partition by id group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select count(), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 2s) partition by id group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session", "depends_on":"701", "wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:00"]]},
@@ -166,7 +166,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
                 [
                     ["2", "2020-02-02 20:00:00.000", "2020-02-02 20:00:03.000", "dev2"],
                     ["2", "2020-02-02 20:00:00.000", "2020-02-02 20:00:03.000", "dev3"],
@@ -183,7 +183,7 @@
             "description": "3 unique stream session window based id and location, session window interval 1s, input data in 2 batches and triggle 2 batch emits, where clause filter events",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 3, "query":"select emit_version() as emit_version, count(), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 2s) where id !='dev4' partition by id group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 3, "query":"select emit_version() as emit_version, count(), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 2s) where id !='dev4' partition by id group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session", "depends_on":"701", "wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:00"]]},
@@ -200,7 +200,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
                 [
                     ["0", "3", "2020-02-02 20:00:00.000", "2020-02-02 20:00:04.000", "dev2"],
                     ["0", "3", "2020-02-02 20:00:00.000", "2020-02-02 20:00:04.000", "dev3"]
@@ -215,7 +215,7 @@
             "description": "stream session window with interval triggered emit, 2s interval with session_size 10s",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 2s) partition by id group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 2s) partition by id group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -236,7 +236,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
             [
                 ["60", "2020-02-02 20:00:01.000", "2020-02-02 20:00:04.000", "dev2"],
                 ["66", "2020-02-02 20:00:00.000", "2020-02-02 20:00:03.000", "dev1"],
@@ -251,7 +251,7 @@
             "description": "stream session window with interval triggered emit, 5s interval with session_size 25s",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id from session(test7_session, to_start_of_interval(timestamp, 2s), 5s) partition by id group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id from session(test7_session, to_start_of_interval(timestamp, 2s), 5s) partition by id group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -268,7 +268,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
             [
                 ["60", "2020-02-02 20:00:00", "2020-02-02 20:00:07", "dev2"]
             ]}
@@ -281,7 +281,7 @@
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id, location from session(test7_session, timestamp, 2s) partition by id, location group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id, location from session(test7_session, timestamp, 2s) partition by id, location group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -298,7 +298,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
             [
                 ["57.3", "2020-02-02 20:00:00.000", "2020-02-02 20:00:02.000", "dev1", "ca"],
                 ["60", "2020-02-02 20:00:02.000", "2020-02-02 20:00:12.000", "dev2", "ca"]
@@ -314,7 +314,7 @@
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"create stream if not exists test7_session_d (id string, type string)"},
                     {"client":"python", "query_type": "table","wait":1, "query":"insert into test7_session_d (id, type) values ('dev1', 'roof') ('dev2', 'field') ('dev3', 'window') ('dev4', 'wall') ('dev5', 'roof') ('dev6', 'window') ('dev7', 'wall') ('dev8', 'floor')"},                    
-                    {"client":"python", "query_id": 701, "query_type": "stream","wait":2, "terminate":"auto", "query_end_timer": 3, "query":"select max(value), to_string(window_start), to_string(window_end), id, b.type, location from session(test7_session, timestamp, 2s) as a join table(test7_session_d) as b on a.id = b.id partition by id, location group by window_start, window_end, b.type"}
+                    {"client":"python", "query_id": "701", "query_type": "stream","wait":2, "terminate":"auto", "query_end_timer": 3, "query":"select max(value), to_string(window_start), to_string(window_end), id, b.type, location from session(test7_session, timestamp, 2s) as a join table(test7_session_d) as b on a.id = b.id partition by id, location group by window_start, window_end, b.type"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -335,7 +335,7 @@
                 ]
                 }                
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
             [
                 ["57.3", "2020-02-02 20:00:00.000", "2020-02-02 20:00:02.000", "dev1", "roof", "ca"],
                 ["60", "2020-02-02 20:00:02.000", "2020-02-02 20:00:12.000", "dev2","field", "ca"]
@@ -349,7 +349,7 @@
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, session based on transformed tail",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"with transformed as (select id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') as transformed_timestamp from test7_session) select max(value), to_string(window_start), to_string(window_end), id, location from session(transformed, transformed_timestamp, 2s) partition by id, location group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"with transformed as (select id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') as transformed_timestamp from test7_session) select max(value), to_string(window_start), to_string(window_end), id, location from session(transformed, transformed_timestamp, 2s) partition by id, location group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -366,7 +366,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
             [
                 ["57.3", "2020-02-02 20:00:00.000", "2020-02-02 20:00:02.000", "dev1", "ca"],
                 ["60", "2020-02-02 20:00:02.000", "2020-02-02 20:00:12.000", "dev2", "ca"]
@@ -383,7 +383,7 @@
                     {"client":"python", "query_type": "table", "query":"drop stream if exists test7_session_d"},
                     {"client":"python", "query_type": "table", "wait":1, "query":"create stream if not exists test7_session_d (id string, type string)"},
                     {"client":"python", "query_type": "table","wait":1, "query":"insert into test7_session_d (id, type) values ('dev1', 'roof') ('dev2', 'field') ('dev3', 'window') ('dev4', 'wall') ('dev5', 'roof') ('dev6', 'window') ('dev7', 'wall') ('dev8', 'floor')"},                    
-                    {"client":"python", "query_id": 702, "wait":4, "query_type": "stream", "terminate":"auto", "query_end_timer": 3, "query":"with transformed as (select max(value) over(partition by id, location), to_string(window_start) as s, to_string(window_end) as e, id, b.type, location from session(test7_session, timestamp, 2s) as a join table(test7_session_d) as b on a.id = b.id group by window_start, window_end, id, location, b.type) select * from transformed"}
+                    {"client":"python", "query_id": "702", "wait":4, "query_type": "stream", "terminate":"auto", "query_end_timer": 3, "query":"with transformed as (select max(value) over(partition by id, location), to_string(window_start) as s, to_string(window_end) as e, id, b.type, location from session(test7_session, timestamp, 2s) as a join table(test7_session_d) as b on a.id = b.id group by window_start, window_end, id, location, b.type) select * from transformed"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on_stream": "test7_session_d","depends_on":"702", "wait":1, "data": [
@@ -400,7 +400,7 @@
                 ]
                 }     
             ],
-            "expected_results": [{"query_id" : 702, "expected_results":
+            "expected_results": [{"query_id" : "702", "expected_results":
             [
                 ["57.3", "2020-02-02 20:00:00.000", "2020-02-02 20:00:02.000", "dev1", "roof", "ca"],
                 ["60", "2020-02-02 20:00:02.000", "2020-02-02 20:00:12.000", "dev2","field", "ca"]
@@ -414,7 +414,7 @@
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, session based on tumble",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"with transformed as (select id, location, max(value) as max_v, window_start as w_s, window_end as w_e from tumble(test7_session, to_datetime64(json_extract_string(json, 'create_time'), 3), 2s) group by id, location, window_start, window_end) select count(max_v), to_string(window_start), to_string(window_end), id, location from session(transformed, w_e, 2001ms) partition by id, location group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"with transformed as (select id, location, max(value) as max_v, window_start as w_s, window_end as w_e from tumble(test7_session, to_datetime64(json_extract_string(json, 'create_time'), 3), 2s) group by id, location, window_start, window_end) select count(max_v), to_string(window_start), to_string(window_end), id, location from session(transformed, w_e, 2001ms) partition by id, location group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -437,7 +437,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
             [
                 ["2", "2020-02-02 20:00:02.000", "2020-02-02 20:00:12.005", "dev1", "ca"],
                 ["1", "2020-02-02 20:00:06.000", "2020-02-02 20:00:16.005", "dev2", "ca"]
@@ -451,7 +451,7 @@
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, session based on hop",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"with transformed as (select id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') as transformed_timestamp from test7_session) select max(value), window_start, window_end, id, location from session(transformed, transformed_timestamp, 2s) partition by id, location group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"with transformed as (select id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') as transformed_timestamp from test7_session) select max(value), window_start, window_end, id, location from session(transformed, transformed_timestamp, 2s) partition by id, location group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -468,7 +468,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
             [
                 ["57.3", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:02+00:00", "dev1", "ca"],
                 ["60", "2020-02-02 20:00:02+00:00", "2020-02-02 20:00:12+00:00", "dev2", "ca"]
@@ -482,7 +482,7 @@
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, tumble based on session",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"with transformed as (select id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') as transformed_timestamp from test7_session) select max(value), window_start, window_end, id, location from session(transformed, transformed_timestamp, 2s) partition by id, location group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"with transformed as (select id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') as transformed_timestamp from test7_session) select max(value), window_start, window_end, id, location from session(transformed, transformed_timestamp, 2s) partition by id, location group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -499,7 +499,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
             [
                 ["57.3", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:02+00:00", "dev1", "ca"],
                 ["60", "2020-02-02 20:00:02+00:00", "2020-02-02 20:00:12+00:00", "dev2", "ca"]
@@ -513,7 +513,7 @@
             "description": "insert event with tp_time in milliseconds",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 5s) partition by id group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 5s) partition by id group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -525,7 +525,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
                 [
                     ["58.3", "2020-02-02 20:00:00.262", "2020-02-02 20:00:10.261", "dev1"],
                     ["66", "2020-02-02 20:00:10.263", "2020-02-02 20:00:15.263","dev1"]
@@ -539,7 +539,7 @@
             "description": "insert event with tp_time in milliseconds",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 5s, 10s) partition by id group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 5s, 10s) partition by id group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -554,7 +554,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
                 [
                     ["59.3", "2020-02-02 20:00:00.262", "2020-02-02 20:00:10.262", "dev1"],
                     ["68", "2020-02-02 20:00:10.263", "2020-02-02 20:00:20.263","dev1"]
@@ -568,7 +568,7 @@
             "description": "insert event with tp_time in milliseconds",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 5s, location='ca', location<>'ca') partition by id group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), to_string(window_start), to_string(window_end), id from session(test7_session, timestamp, 5s, location='ca', location<>'ca') partition by id group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -584,7 +584,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
                 [
                     ["59.3", "2020-02-02 20:00:00.261", "2020-02-02 20:00:08.263", "dev1"],
                     ["69", "2020-02-02 20:00:10.263", "2020-02-02 20:00:21.262","dev1"]
@@ -598,7 +598,7 @@
             "description": "insert event with tp_time in milliseconds",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select min(value), max(value), count(location), to_string(window_start), to_string(window_end), id from session(test7_session, 5s, [location='ca', location='sh']) partition by id group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select min(value), max(value), count(location), to_string(window_start), to_string(window_end), id from session(test7_session, 5s, [location='ca', location='sh']) partition by id group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -614,7 +614,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
                 [
                     ["57.3", "59.3", "3", "2020-02-02 20:00:00.261", "2020-02-02 20:00:08.263", "dev1"],
                     ["66", "69", "4", "2020-02-02 20:00:10.263", "2020-02-02 20:00:18.262", "dev1"]
@@ -628,7 +628,7 @@
             "description": "insert event with tp_time in milliseconds",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select min(value), max(value), count(location), to_string(window_start), to_string(window_end), id from session(test7_session, 5s, [location='ca', location='sh')) partition by id group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select min(value), max(value), count(location), to_string(window_start), to_string(window_end), id from session(test7_session, 5s, [location='ca', location='sh')) partition by id group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -644,7 +644,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
                 [
                     ["57.3", "58.3", "2", "2020-02-02 20:00:00.261", "2020-02-02 20:00:08.262", "dev1"],
                     ["66", "68", "3", "2020-02-02 20:00:10.263", "2020-02-02 20:00:18.262", "dev1"]
@@ -658,7 +658,7 @@
             "description": "insert event with tp_time in milliseconds",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select min(value), max(value), count(location), to_string(window_start), to_string(window_end), id from session(test7_session, 5s, (location='ca', location='sh']) partition by id group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select min(value), max(value), count(location), to_string(window_start), to_string(window_end), id from session(test7_session, 5s, (location='ca', location='sh']) partition by id group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -674,7 +674,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
                 [
                     ["58.3", "59.3", "2", "2020-02-02 20:00:05.260", "2020-02-02 20:00:08.263", "dev1"],
                     ["67", "69", "3", "2020-02-02 20:00:13.262", "2020-02-02 20:00:18.263", "dev1"]
@@ -688,7 +688,7 @@
             "description": "insert event with tp_time in milliseconds",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select min(value), max(value), count(location), to_string(window_start), to_string(window_end), id from session(test7_session, 5s, (location='ca', location='sh')) partition by id group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select min(value), max(value), count(location), to_string(window_start), to_string(window_end), id from session(test7_session, 5s, (location='ca', location='sh')) partition by id group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -704,7 +704,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
                 [
                     ["58.3", "58.3", "1", "2020-02-02 20:00:05.260", "2020-02-02 20:00:08.262", "dev1"],
                     ["67", "68", "2", "2020-02-02 20:00:13.262", "2020-02-02 20:00:18.262", "dev1"]
@@ -718,7 +718,7 @@
             "description": "insert event with tp_time in milliseconds",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select to_string(window_start), to_string(window_end), date_diff('second', window_start, window_end) from session(test7_session, 5s, [location='ca', location='sh')) group by window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select to_string(window_start), to_string(window_end), date_diff('second', window_start, window_end) from session(test7_session, 5s, [location='ca', location='sh')) group by window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -734,7 +734,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
                 [
                     ["2020-02-02 20:00:00.261", "2020-02-02 20:00:08.262", 8],
                     ["2020-02-02 20:00:10.263", "2020-02-02 20:00:18.262", 8]
@@ -748,7 +748,7 @@
             "description": "insert event with tp_time in milliseconds",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select id, to_string(window_start), to_string(window_end), sum(value) over (partition by id)  from session(test7_session, timestamp, 2s, [value>0, value<=50]) group by id, window_start, window_end"}
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select id, to_string(window_start), to_string(window_end), sum(value) over (partition by id)  from session(test7_session, timestamp, 2s, [value>0, value<=50]) group by id, window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test7_session","depends_on":"701", "wait":1, "data": [
@@ -765,7 +765,7 @@
                 ]
                 }
             ],
-            "expected_results": [{"query_id" : 701, "expected_results":
+            "expected_results": [{"query_id" : "701", "expected_results":
                 [
                     ["dev1", "2020-02-02 20:00:01.262", "2020-02-02 20:00:03.263", 250],
                     ["dev2", "2020-02-02 20:00:02.262", "2020-02-02 20:00:03.263", 150]

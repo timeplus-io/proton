@@ -13,6 +13,7 @@ endif ()
 
 # proton: starts
 set (VERSION_NAME "proton")
+set (EDITION "OSS")
 # proton: ends
 
 set (VERSION_FULL "${VERSION_NAME} ${VERSION_STRING}")

@@ -56,18 +56,18 @@ jobs:
         # build unit test docker image
         cp $GITHUB_WORKSPACE/output/unit_tests_dbms $GITHUB_WORKSPACE/docker/test/proton_unit_test/
         cd $GITHUB_WORKSPACE/docker/test/proton_unit_test/
-        docker build . -t timeplus/proton-unit-test:$TAG
-        docker push timeplus/proton-unit-test:$TAG
+        docker build . -t ghcr.io/timeplus-io/proton-unit-test:$TAG
+        docker push ghcr.io/timeplus-io/proton-unit-test:$TAG
 
         docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
         cd $GITHUB_WORKSPACE/docker/server
 
         # build docker image
-        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$TAG
+        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t ghcr.io/timeplus-io/proton:$TAG
 
         # push docker image
-        docker push timeplus/proton:$TAG
-        echo "docker pull timeplus/proton:$TAG"
+        docker push ghcr.io/timeplus-io/proton:$TAG
+        echo "docker push ghcr.io/timeplus-io/proton:$TAG"
     steps:
       - name: display command
         run: |
@@ -100,18 +100,18 @@ jobs:
         cd $GITHUB_WORKSPACE/docker/server
 
         # build docker image
-        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$TAG
+        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t ghcr.io/timeplus-io/proton:$TAG
 
         # push docker image
-        docker push timeplus/proton:$TAG
-        echo "docker pull timeplus/proton:$TAG"
+        docker push ghcr.io/timeplus-io/proton:$TAG
+        echo "docker pull ghcr.io/timeplus-io/proton:$TAG"
     steps:
       - name: display command
         run: |
           echo 'command: ${{ steps.set_command.outputs.command }}'
   build_x64:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.inputs.arch == 'x64' && github.event.inputs.build_type != 'release'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -133,7 +133,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   build_x64_release:
     needs: prepare_release
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.inputs.arch == 'x64' && github.event.inputs.build_type == 'release'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -155,7 +155,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   build_arm:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.inputs.arch == 'arm' && github.event.inputs.build_type != 'release'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
@@ -177,7 +177,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   build_arm_release:
     needs: prepare_release
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.inputs.arch == 'arm' && github.event.inputs.build_type == 'release'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}

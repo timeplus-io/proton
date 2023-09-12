@@ -10,9 +10,9 @@ SCRIPT_PATH = os.path.realpath(__file__)
 
 # proton: starts.
 IMAGE_MAP = {
-    "deb": "timeplus/proton-deb-builder",
-    "binary": "timeplus/proton-binary-builder",
-    "unbundled": "timeplus/unbundled-builder"
+    "deb": "ghcr.io/timeplus-io/proton-deb-builder",        # Not used
+    "binary": "ghcr.io/timeplus-io/proton-binary-builder",
+    "unbundled": "ghcr.io/timeplus-io/unbundled-builder"    # Not used
 }
 # proton: ends.
 
@@ -166,7 +166,7 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_TESTS=1')
 
     if split_binary:
-        cmake_flags.append('-DUSE_STATIC_LIBRARIES=0 -DSPLIT_SHARED_LIBRARIES=1 -DCLICKHOUSE_SPLIT_BINARY=1')
+        cmake_flags.append('-DUSE_STATIC_LIBRARIES=0 -DSPLIT_SHARED_LIBRARIES=1')
         # We can't always build utils because it requires too much space, but
         # we have to build them at least in some way in CI. The split build is
         # probably the least heavy disk-wise.

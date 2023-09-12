@@ -49,7 +49,7 @@ jobs:
     outputs:
       command: |
         # pull docker image
-        docker pull timeplus/proton:$TAG
+        docker pull ghcr.io/timeplus-io/proton:$TAG
 
         echo "run stream test"
         cd $GITHUB_WORKSPACE/tests/stream
@@ -82,7 +82,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   smoke_test_on_x64:
     needs: prepare_smoke_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -107,7 +107,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_on_arm:
     needs: prepare_smoke_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
@@ -137,7 +137,7 @@ jobs:
       command: |
       
         # pull docker image
-        docker pull timeplus/proton:$TAG
+        docker pull ghcr.io/timeplus-io/proton:$TAG
 
         echo "run quary compatibility test"
         # cd $GITHUB_WORKSPACE/tests/stream
@@ -179,7 +179,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'  
   query_compability_test_on_x64:
     needs: prepare_query_compability_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: ${{ vars.X64_TEST_ONLY_INSTANCE_TYPE_SMALL }}
@@ -206,7 +206,7 @@ jobs:
       TP_DEMO_SITE_API_KEY: ${{ secrets.TP_DEMO_SITE_API_KEY }}  
   query_compability_on_arm:
     needs: prepare_query_compability_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_TEST_ONLY_INSTANCE_TYPE_SMALL }}
@@ -254,7 +254,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   unit_test_on_x64:
     needs: prepare_unit_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -279,7 +279,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_on_arm:
     needs: prepare_unit_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
@@ -326,7 +326,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   stateless_test_on_x64:
     needs: prepare_stateless_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -351,7 +351,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_on_arm:
     needs: prepare_stateless_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
@@ -398,7 +398,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   stateful_test_on_x64:
     needs: prepare_stateful_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -423,7 +423,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_on_arm:
     needs: prepare_stateful_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}

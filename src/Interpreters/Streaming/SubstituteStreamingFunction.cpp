@@ -95,9 +95,9 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
             /// `count_distinct`        => `__count_retract_distinct`
             /// `count_distinct_if`     => `__count_retract_distinct_if`
             String combinator_suffix;
+            auto nested_func_name = func.name;
             while (iter == changelog_func_map.end())
             {
-                auto nested_func_name = func.name;
                 if (auto combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix(nested_func_name))
                 {
                     const std::string & combinator_name = combinator->getName();

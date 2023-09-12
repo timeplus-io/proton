@@ -425,8 +425,6 @@ struct ContextSharedPart : boost::noncopyable
         /// Stop periodic reloading of the configuration files.
         /// This must be done first because otherwise the reloading may pass a changed config
         /// to some destroyed parts of ContextSharedPart.
-        if (access_control)
-            access_control->stopPeriodicReloadingUsersConfigs();
         if (external_dictionaries_loader)
             external_dictionaries_loader->enablePeriodicUpdates(false);
         if (user_defined_sql_objects_loader)
@@ -1262,7 +1260,7 @@ void Context::setSettings(const Settings & settings_)
 }
 
 
-void Context::setSetting(StringRef name, const String & value)
+void Context::setSetting(std::string_view name, const String & value)
 {
     auto lock = getLock();
     if (name == "profile")
@@ -1270,14 +1268,14 @@ void Context::setSetting(StringRef name, const String & value)
         setCurrentProfile(value);
         return;
     }
-    settings.set(std::string_view{name}, value);
+    settings.set(name, value);
 
     if (name == "readonly" || name == "allow_ddl" || name == "allow_introspection_functions")
         calculateAccessRights();
 }
 
 
-void Context::setSetting(StringRef name, const Field & value)
+void Context::setSetting(std::string_view name, const Field & value)
 {
     auto lock = getLock();
     if (name == "profile")
@@ -1285,7 +1283,7 @@ void Context::setSetting(StringRef name, const Field & value)
         setCurrentProfile(value.safeGet<String>());
         return;
     }
-    settings.set(std::string_view{name}, value);
+    settings.set(name, value);
 
     if (name == "readonly" || name == "allow_ddl" || name == "allow_introspection_functions")
         calculateAccessRights();

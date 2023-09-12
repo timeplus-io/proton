@@ -1942,10 +1942,11 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             {
                 if (const auto * proxy = storage->as<Streaming::ProxyStream>())
                 {
-                    if (proxy->windowType() == Streaming::WindowType::SESSION)
+                    if (auto window_desc = proxy->getStreamingWindowFunctionDescription();
+                        window_desc && window_desc->type == Streaming::WindowType::SESSION)
                     {
                         auto & step = chain.getLastStep();
-                        step.addRequiredOutput(proxy->getStreamingTableFunctionDescription()->argument_names[0]);
+                        step.addRequiredOutput(window_desc->argument_names[0]);
                         step.addRequiredOutput(ProtonConsts::STREAMING_SESSION_START);
                         step.addRequiredOutput(ProtonConsts::STREAMING_SESSION_END);
                     }

@@ -55,6 +55,7 @@ public:
 
     /// Return WindowType::NONE, if it has no window func
     WindowType windowType() const;
+    TableFunctionDescriptionPtr getStreamingWindowFunctionDescription() const;
 
     /// Whether has GlobalAggregation in subquery
     bool hasGlobalAggregation() const { return has_global_aggr; }
@@ -65,7 +66,7 @@ public:
     bool supportsParallelInsert() const override;
     bool supportsIndexForIn() const override;
     bool supportsSubcolumns() const override;
-    DataStreamSemantic dataStreamSemantic() const override;
+    DataStreamSemantic dataStreamSemantic() const override { return data_stream_semantic; }
 
     std::variant<StoragePtr, ASTPtr> getProxyStorageOrSubquery() const;
 
@@ -104,9 +105,9 @@ private:
         const Names & required_columns_after_streaming_window,
         const StorageSnapshotPtr & storage_snapshot) const;
 
-    /// If @param after_func_name is specified, we only get additional required columns of others funcions after the func
-    /// For example: we can use `mergeAdditionalRequiredColumnsAfterFunc("dedup")` to get required columns after `dedup`
-    Names mergeAdditionalRequiredColumnsAfterFunc(Names required, const String & after_func_name = "") const;
+    Names getRequiredInputs(Names required_outputs) const;
+
+    Block checkAndGetOutputHeader(const Names & required_columns, const Block & input_header) const;
 
 private:
     ProxyStream(
@@ -119,6 +120,7 @@ private:
         String internal_name_,
         StoragePtr storage_,
         ASTPtr subquery_,
+        DataStreamSemantic data_stream_semantic_,
         bool streaming_ = false);
 
     TableFunctionDescriptionPtr table_func_desc;
@@ -131,6 +133,8 @@ private:
     StoragePtr storage;
     ASTPtr subquery;
     bool has_global_aggr = false;
+
+    DataStreamSemantic data_stream_semantic;
 
     bool streaming = false;
 

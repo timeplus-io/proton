@@ -147,7 +147,6 @@ void WatermarkStamper::preProcess(const Block & header)
 
 void WatermarkStamper::process(Chunk & chunk)
 {
-    chunk.clearWatermark();
     switch (params.mode)
     {
         case WatermarkStamperParams::EmitMode::PERIODIC: {

@@ -3626,8 +3626,15 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
     {
         if (auto * proxy = storage->as<Streaming::ProxyStream>())
         {
-            if (auto desc = proxy->getStreamingTableFunctionDescription(); desc && desc->type != Streaming::WindowType::NONE)
-                query_info.streaming_window_params = Streaming::WindowParams::create(desc);
+            if (auto window_desc = proxy->getStreamingWindowFunctionDescription())
+            {
+                query_info.streaming_window_params = Streaming::WindowParams::create(window_desc);
+                if (data_stream_semantic_pair.isChangelogInput())
+                    throw Exception(
+                        ErrorCodes::NOT_IMPLEMENTED,
+                        "The window '{}' is not supported in changelog query processing",
+                        magic_enum::enum_name(window_desc->type));
+            }
         }
     }
 

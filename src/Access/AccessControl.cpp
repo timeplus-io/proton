@@ -13,10 +13,11 @@
 #include <Access/SettingsProfilesCache.h>
 #include <Access/User.h>
 #include <Access/ExternalAuthenticators.h>
+#include <Access/AccessChangesNotifier.h>
 #include <Core/Settings.h>
 #include <base/defines.h>
 #include <base/find_symbols.h>
-#include <Poco/ExpireCache.h>
+#include <Poco/AccessExpireCache.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -83,7 +84,7 @@ public:
 
 private:
     const AccessControl & access_control;
-    Poco::ExpireCache<ContextAccess::Params, std::shared_ptr<const ContextAccess>> cache;
+    Poco::AccessExpireCache<ContextAccess::Params, std::shared_ptr<const ContextAccess>> cache;
     std::mutex mutex;
 };
 
@@ -143,12 +144,28 @@ AccessControl::AccessControl()
       quota_cache(std::make_unique<QuotaCache>(*this)),
       settings_profiles_cache(std::make_unique<SettingsProfilesCache>(*this)),
       external_authenticators(std::make_unique<ExternalAuthenticators>()),
-      custom_settings_prefixes(std::make_unique<CustomSettingsPrefixes>())
+      custom_settings_prefixes(std::make_unique<CustomSettingsPrefixes>()),
+      changes_notifier(std::make_unique<AccessChangesNotifier>())
 {
 }
 
 
 AccessControl::~AccessControl() = default;
+
+void AccessControl::setUpFromMainConfig(const Poco::Util::AbstractConfiguration & config_, const String & config_path_)
+{
+    if (config_.has("custom_settings_prefixes"))
+        setCustomSettingsPrefixes(config_.getString("custom_settings_prefixes"));
+
+    setNoPasswordAllowed(config_.getBool("allow_no_password", true));
+    setPlaintextPasswordAllowed(config_.getBool("allow_plaintext_password", true));
+
+    setEnabledUsersWithoutRowPoliciesCanReadRows(config_.getBool(
+        "access_control_improvements.users_without_row_policies_can_read_rows",
+        false /* false because we need to be compatible with earlier access configurations */));
+
+    addStoragesFromMainConfig(config_, config_path_);
+}
 
 void AccessControl::setUsersConfig(const Poco::Util::AbstractConfiguration & users_config_)
 {
@@ -171,8 +188,7 @@ void AccessControl::addUsersConfigStorage(const Poco::Util::AbstractConfiguratio
 
 void AccessControl::addUsersConfigStorage(const String & storage_name_, const Poco::Util::AbstractConfiguration & users_config_)
 {
-    auto check_setting_name_function = [this](std::string_view setting_name) { checkSettingNameIsAllowed(setting_name); };
-    auto new_storage = std::make_shared<UsersConfigAccessStorage>(storage_name_, check_setting_name_function);
+    auto new_storage = std::make_shared<UsersConfigAccessStorage>(storage_name_, *this);
     new_storage->setConfig(users_config_);
     addStorage(new_storage);
     LOG_DEBUG(getLogger(), "Added {} access storage '{}', path: {}",
@@ -203,42 +219,12 @@ void AccessControl::addUsersConfigStorage(
                 return;
         }
     }
-    auto check_setting_name_function = [this](std::string_view setting_name) { checkSettingNameIsAllowed(setting_name); };
-    auto new_storage = std::make_shared<UsersConfigAccessStorage>(storage_name_, check_setting_name_function);
+    auto new_storage = std::make_shared<UsersConfigAccessStorage>(storage_name_, *this);
     new_storage->load(users_config_path_, include_from_path_, preprocessed_dir_);
     addStorage(new_storage);
     LOG_DEBUG(getLogger(), "Added {} access storage '{}', path: {}", String(new_storage->getStorageType()), new_storage->getStorageName(), new_storage->getPath());
 }
 
-void AccessControl::reloadUsersConfigs()
-{
-    auto storages = getStoragesPtr();
-    for (const auto & storage : *storages)
-    {
-        if (auto users_config_storage = typeid_cast<std::shared_ptr<UsersConfigAccessStorage>>(storage))
-            users_config_storage->reload();
-    }
-}
-
-void AccessControl::startPeriodicReloadingUsersConfigs()
-{
-    auto storages = getStoragesPtr();
-    for (const auto & storage : *storages)
-    {
-        if (auto users_config_storage = typeid_cast<std::shared_ptr<UsersConfigAccessStorage>>(storage))
-            users_config_storage->startPeriodicReloading();
-    }
-}
-
-void AccessControl::stopPeriodicReloadingUsersConfigs()
-{
-    auto storages = getStoragesPtr();
-    for (const auto & storage : *storages)
-    {
-        if (auto users_config_storage = typeid_cast<std::shared_ptr<UsersConfigAccessStorage>>(storage))
-            users_config_storage->stopPeriodicReloading();
-    }
-}
 
 void AccessControl::addDiskStorage(const String & directory_, bool readonly_)
 {
@@ -260,7 +246,7 @@ void AccessControl::addDiskStorage(const String & storage_name_, const String & 
             }
         }
     }
-    auto new_storage = std::make_shared<DiskAccessStorage>(storage_name_, directory_, readonly_);
+    auto new_storage = std::make_shared<DiskAccessStorage>(storage_name_, directory_, readonly_, *changes_notifier);
     addStorage(new_storage);
     LOG_DEBUG(getLogger(), "Added {} access storage '{}', path: {}", String(new_storage->getStorageType()), new_storage->getStorageName(), new_storage->getPath());
 }
@@ -274,7 +260,7 @@ void AccessControl::addMemoryStorage(const String & storage_name_)
         if (auto memory_storage = typeid_cast<std::shared_ptr<MemoryAccessStorage>>(storage))
             return;
     }
-    auto new_storage = std::make_shared<MemoryAccessStorage>(storage_name_);
+    auto new_storage = std::make_shared<MemoryAccessStorage>(storage_name_, *changes_notifier);
     addStorage(new_storage);
     LOG_DEBUG(getLogger(), "Added {} access storage '{}'", String(new_storage->getStorageType()), new_storage->getStorageName());
 }
@@ -282,7 +268,7 @@ void AccessControl::addMemoryStorage(const String & storage_name_)
 
 void AccessControl::addLDAPStorage(const String & storage_name_, const Poco::Util::AbstractConfiguration & config_, const String & prefix_)
 {
-    auto new_storage = std::make_shared<LDAPAccessStorage>(storage_name_, this, config_, prefix_);
+    auto new_storage = std::make_shared<LDAPAccessStorage>(storage_name_, *this, config_, prefix_);
     addStorage(new_storage);
     LOG_DEBUG(getLogger(), "Added {} access storage '{}', LDAP server name: {}", String(new_storage->getStorageType()), new_storage->getStorageName(), new_storage->getLDAPServerName());
 }
@@ -377,12 +363,63 @@ void AccessControl::addStoragesFromMainConfig(
         addStoragesFromUserDirectoriesConfig(config, "user_directories", config_dir, dbms_dir, include_from_path);
 }
 
+void AccessControl::reload()
+{
+    MultipleAccessStorage::reload();
+    changes_notifier->sendNotifications();
+}
+
+scope_guard AccessControl::subscribeForChanges(AccessEntityType type, const OnChangedHandler & handler) const
+{
+    return changes_notifier->subscribeForChanges(type, handler);
+}
+
+scope_guard AccessControl::subscribeForChanges(const UUID & id, const OnChangedHandler & handler) const
+{
+    return changes_notifier->subscribeForChanges(id, handler);
+}
+
+scope_guard AccessControl::subscribeForChanges(const std::vector<UUID> & ids, const OnChangedHandler & handler) const
+{
+    return changes_notifier->subscribeForChanges(ids, handler);
+}
+
+std::optional<UUID> AccessControl::insertImpl(const AccessEntityPtr & entity, bool replace_if_exists, bool throw_if_exists)
+{
+    auto id = MultipleAccessStorage::insertImpl(entity, replace_if_exists, throw_if_exists);
+    if (id)
+        changes_notifier->sendNotifications();
+    return id;
+}
+
+bool AccessControl::removeImpl(const UUID & id, bool throw_if_not_exists)
+{
+    bool removed = MultipleAccessStorage::removeImpl(id, throw_if_not_exists);
+    if (removed)
+        changes_notifier->sendNotifications();
+    return removed;
+}
+
+bool AccessControl::updateImpl(const UUID & id, const UpdateFunc & update_func, bool throw_if_not_exists)
+{
+    bool updated = MultipleAccessStorage::updateImpl(id, update_func, throw_if_not_exists);
+    if (updated)
+        changes_notifier->sendNotifications();
+    return updated;
+}
+
+AccessChangesNotifier & AccessControl::getChangesNotifier()
+{
+    return *changes_notifier;
+}
+
 
 UUID AccessControl::authenticate(const Credentials & credentials, const Poco::Net::IPAddress & address) const
 {
     try
     {
-        return MultipleAccessStorage::authenticate(credentials, address, *external_authenticators);
+        return MultipleAccessStorage::authenticate(credentials, address, *external_authenticators, allow_no_password,
+                                                   allow_plaintext_password);
     }
     catch (...)
     {
@@ -418,16 +455,36 @@ void AccessControl::setCustomSettingsPrefixes(const String & comma_separated_pre
     setCustomSettingsPrefixes(prefixes);
 }
 
-bool AccessControl::isSettingNameAllowed(std::string_view setting_name) const
+bool AccessControl::isSettingNameAllowed(const std::string_view setting_name) const
 {
     return custom_settings_prefixes->isSettingNameAllowed(setting_name);
 }
 
-void AccessControl::checkSettingNameIsAllowed(std::string_view setting_name) const
+void AccessControl::checkSettingNameIsAllowed(const std::string_view setting_name) const
 {
     custom_settings_prefixes->checkSettingNameIsAllowed(setting_name);
 }
 
+
+void AccessControl::setNoPasswordAllowed(bool allow_no_password_)
+{
+    allow_no_password = allow_no_password_;
+}
+
+bool AccessControl::isNoPasswordAllowed() const
+{
+    return allow_no_password;
+}
+
+void AccessControl::setPlaintextPasswordAllowed(bool allow_plaintext_password_)
+{
+    allow_plaintext_password = allow_plaintext_password_;
+}
+
+bool AccessControl::isPlaintextPasswordAllowed() const
+{
+    return allow_plaintext_password;
+}
 
 std::shared_ptr<const ContextAccess> AccessControl::getContextAccess(
     const UUID & user_id,

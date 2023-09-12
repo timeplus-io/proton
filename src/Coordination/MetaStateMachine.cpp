@@ -17,7 +17,13 @@
 
 #include <future>
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-macro-identifier"
+
 #define _TP_SYSTEM_COLUMN_FAMILY_NAME (rocksdb::kDefaultColumnFamilyName)
+
+#pragma clang diagnostic pop
+
 namespace DB
 {
 [[maybe_unused]] const std::string META_LOG_INDEX_KEY = "_metastore_log_index";

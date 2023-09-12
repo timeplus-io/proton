@@ -38,14 +38,15 @@ ASTs TableFunctionSession::checkAndExtractArguments(ASTFunction * node) const
     return checkAndExtractSessionArguments(node);
 }
 
-void TableFunctionSession::handleResultType(const ColumnsWithTypeAndName & arguments)
+NamesAndTypesList TableFunctionSession::getAdditionalResultColumns(const ColumnsWithTypeAndName & arguments) const
 {
     /// __session(timestamp_expr, timeout_interval, max_session_size, start_cond, start_with_inclusion, end_cond, end_with_inclusion)
     assert(arguments.size() == 7);
-    columns.add(ColumnDescription(ProtonConsts::STREAMING_WINDOW_START, arguments[0].type));
-    columns.add(ColumnDescription(ProtonConsts::STREAMING_WINDOW_END, arguments[0].type));
-    columns.add(ColumnDescription(ProtonConsts::STREAMING_SESSION_START, arguments[3].type));
-    columns.add(ColumnDescription(ProtonConsts::STREAMING_SESSION_END, arguments[5].type));
+    return NamesAndTypesList{
+        NameAndTypePair(ProtonConsts::STREAMING_WINDOW_START, arguments[0].type),
+        NameAndTypePair(ProtonConsts::STREAMING_WINDOW_END, arguments[0].type),
+        NameAndTypePair(ProtonConsts::STREAMING_SESSION_START, arguments[3].type),
+        NameAndTypePair(ProtonConsts::STREAMING_SESSION_END, arguments[5].type)};
 }
 
 void registerTableFunctionSession(TableFunctionFactory & factory)
