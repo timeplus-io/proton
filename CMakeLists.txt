@@ -76,18 +76,12 @@ message (STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 string (TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UC)
 
 option(USE_STATIC_LIBRARIES "Disable to use shared libraries" ON)
-
-if (NOT USE_STATIC_LIBRARIES)
-    # DEVELOPER ONLY.
-    # Faster linking if turned on.
-    option(SPLIT_SHARED_LIBRARIES "Keep all internal libraries as separate .so files")
-
-    option(CLICKHOUSE_SPLIT_BINARY
-        "Make several binaries (clickhouse-server, clickhouse-client etc.) instead of one bundled")
-endif ()
+# DEVELOPER ONLY.
+# Faster linking if turned on.
+option(SPLIT_SHARED_LIBRARIES "Keep all internal libraries as separate .so files" OFF)
 
 if (USE_STATIC_LIBRARIES AND SPLIT_SHARED_LIBRARIES)
-    message(FATAL_ERROR "Defining SPLIT_SHARED_LIBRARIES=1 without USE_STATIC_LIBRARIES=0 has no effect.")
+    message(FATAL_ERROR "SPLIT_SHARED_LIBRARIES=1 must not be used together with USE_STATIC_LIBRARIES=1")
 endif()
 
 if (NOT USE_STATIC_LIBRARIES AND SPLIT_SHARED_LIBRARIES)
@@ -455,7 +449,7 @@ endif ()
 message (STATUS
     "Building for: ${CMAKE_SYSTEM} ${CMAKE_SYSTEM_PROCESSOR} ${CMAKE_LIBRARY_ARCHITECTURE} ;
     USE_STATIC_LIBRARIES=${USE_STATIC_LIBRARIES}
-    SPLIT_SHARED=${SPLIT_SHARED_LIBRARIES}")
+    SPLIT_SHARED_LIBRARIES=${SPLIT_SHARED_LIBRARIES}")
 
 include (GNUInstallDirs)
 
