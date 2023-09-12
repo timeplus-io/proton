@@ -29,11 +29,13 @@ using UTCClock = ClockUtils<std::chrono::system_clock, TimeScale>;
 template<typename TimeScale>
 using MonotonicClock = ClockUtils<std::chrono::steady_clock, TimeScale>;
 
+using UTCMinutes = UTCClock<std::chrono::minutes>;
 using UTCSeconds = UTCClock<std::chrono::seconds>;
 using UTCMilliseconds = UTCClock<std::chrono::milliseconds>;
 using UTCMicroseconds = UTCClock<std::chrono::microseconds>;
 using UTCNanoseconds = UTCClock<std::chrono::nanoseconds>;
 
+using MonotonicMinutes = MonotonicClock<std::chrono::minutes>;
 using MonotonicSeconds = MonotonicClock<std::chrono::seconds>;
 using MonotonicMilliseconds = MonotonicClock<std::chrono::milliseconds>;
 using MonotonicMicroseconds = MonotonicClock<std::chrono::microseconds>;
