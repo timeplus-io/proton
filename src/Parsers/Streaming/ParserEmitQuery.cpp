@@ -13,7 +13,7 @@ namespace ErrorCodes
 
 bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
-    /// EMIT [STREAM]
+    /// EMIT [STREAM|CHANGELOG]
     ///         - [PERIODIC INTERVAL '3' SECONDS]
     ///         - [AFTER WATERMARK]
     ///         - [DELAY INTERVAL '3' SECONDS]
@@ -24,6 +24,7 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [
     /// 2) EMIT STREAM AFTER WATERMARK AND DELAY INTERVAL '3' SECONDS
     /// 3) EMIT STREAM AFTER WATERMARK AND LAST <last-x>
     /// 4) EMIT STREAM LAST 1h ON PROCTIME
+    /// 5) EMIT CHANGELOG
     /// ...
     if (!parse_only_internals)
     {
@@ -32,9 +33,11 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [
             return false;
     }
 
-    bool streaming = false;
+    ASTEmitQuery::StreamMode stream_mode = ASTEmitQuery::StreamMode::STREAM;
     if (ParserKeyword("STREAM").ignore(pos, expected))
-        streaming = true;
+        stream_mode = ASTEmitQuery::StreamMode::STREAM;
+    else if (ParserKeyword("CHANGELOG").ignore(pos, expected))
+        stream_mode = ASTEmitQuery::StreamMode::CHANGELOG;
 
     bool after_watermark = false;
     bool proctime = false;
@@ -104,7 +107,7 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [
     } while (ParserKeyword("AND").ignore(pos, expected));
 
     auto query = std::make_shared<ASTEmitQuery>();
-    query->streaming = streaming;
+    query->stream_mode = stream_mode;
     query->after_watermark = after_watermark;
     query->proc_time = proctime;
     query->periodic_interval = periodic_interval;

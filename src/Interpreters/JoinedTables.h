@@ -34,7 +34,7 @@ public:
     void reset(const ASTSelectQuery & select_query);
 
     StoragePtr getLeftTableStorage();
-    bool resolveTables(Streaming::GetSampleBlockContext & get_sample_block_ctx);
+    bool resolveTables();
 
     /// Make fake tables_with_columns[0] in case we have predefined input in InterpreterSelectQuery
     void makeFakeTable(StoragePtr storage, const StorageMetadataPtr & metadata_snapshot, const Block & source_header);

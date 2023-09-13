@@ -1,6 +1,7 @@
 #include "EventPredicateVisitor.h"
 
 #include <Functions/FunctionsConversion.h>
+#include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <NativeLog/Record/Record.h>
 #include <Parsers/ASTFunction.h>
@@ -92,7 +93,7 @@ Int64 evaluateConstantSeekTo(SeekBy seek_by, ASTPtr & ast, ContextPtr context)
         else
             return parseSeekToSequenceNumber(value, type);
     }
-    catch (const Exception &)
+    catch (...)
     {
         /// rethrow with better error message for exception of `evaluateConstantExpression`
         if (seek_by == SeekBy::EventTime)
@@ -159,7 +160,7 @@ std::pair<size_t, SeekBy> EventPredicateMatcher::Data::parseSeekBy(ASTPtr ast) c
     if (seek_by == SeekBy::None)
         return {0, SeekBy::None};
 
-    auto stream_pos = membership_collector.getIdentsMembership(ast);
+    auto stream_pos = IdentifierSemantic::getIdentMembership(ast->as<const ASTIdentifier &>(), tables);
     if (!stream_pos.has_value())
         throw Exception(ErrorCodes::UNEXPECTED_EXPRESSION, "Unknown column identifier '{}'", ast->formatForErrorMessage());
 

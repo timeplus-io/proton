@@ -23,7 +23,6 @@
 #include <Processors/QueryPlan/QueryExecuteMode.h>
 #include <Processors/QueryPlan/Streaming/LimitStep.h>
 #include <Processors/QueryPlan/Streaming/OffsetStep.h>
-#include <Interpreters/Streaming/GetSampleBlockContext.h>
 /// proton: ends.
 
 namespace DB
@@ -242,51 +241,33 @@ InterpreterSelectWithUnionQuery::buildCurrentChildInterpreter(const ASTPtr & ast
 
 InterpreterSelectWithUnionQuery::~InterpreterSelectWithUnionQuery() = default;
 
-Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_, ContextPtr context_, bool is_subquery, Streaming::GetSampleBlockContext * get_sample_block_ctx)
+/// proton : starts. Calculate data stream semantic for the underlying subquery as well
+Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_, ContextPtr context_, bool is_subquery, Streaming::DataStreamSemanticEx * output_data_stream_semantic)
 {
-    /// proton : starts. Clone the query and work on the cloned query
-    /// since we may update the query in place during the evaluation of the sample block
-    auto updatable_query_ptr = query_ptr_->clone();
-
     SelectQueryOptions select_options;
-    /// NOTE: When get_sample_block_ctx exists, we shall save the rewritten_query to be used for subsequent processing.
-    /// If so, we can't set the only_anlayze flag to avoid incorrectly cached rewritten query
-    /// For example:
-    /// In `executeScalarSubqueries` of TreeRewriter, which shall optimize the scalar subquery to a function `identity` if only_analyze is set
-    /// e.g. "with (select count() from test limit 2) as max select * from (select * from test where to_uint8(name) < max)"
-    ///    ->"with identity(_cast(0, 'nullable(uint64)')) AS max as max select * from (select * from test where to_uint8(name) < max)"
-    select_options.analyze(!get_sample_block_ctx);
-    select_options.modify(true);
+    select_options.analyze();
 
     if (is_subquery)
         select_options.setSubquery();
 
-    if (get_sample_block_ctx)
-        get_sample_block_ctx->mergeSelectOptions(select_options);
-
     if (!context_->hasQueryContext())
     {
-        InterpreterSelectWithUnionQuery interpreter(updatable_query_ptr, context_, select_options);
-        if (get_sample_block_ctx)
-        {
-            get_sample_block_ctx->output_data_stream_semantic = interpreter.getDataStreamSemantic();
-            get_sample_block_ctx->rewritten_query = std::move(updatable_query_ptr);
-        }
+        InterpreterSelectWithUnionQuery interpreter(query_ptr_, context_, std::move(select_options));
+        if (output_data_stream_semantic)
+            *output_data_stream_semantic = interpreter.getDataStreamSemantic();
+
         return interpreter.getSampleBlock();
     }
 
     /// Using query string because query_ptr changes for every internal SELECT
-    auto key = queryToString(updatable_query_ptr);
+    auto key = queryToString(query_ptr_);
 
     auto & data_stream_semantic_cache = context_->getDataStreamSemanticCache();
-    if (get_sample_block_ctx)
+    if (output_data_stream_semantic)
     {
         auto semantic_iter = data_stream_semantic_cache.find(key);
         if (semantic_iter != data_stream_semantic_cache.end())
-        {
-            get_sample_block_ctx->output_data_stream_semantic = semantic_iter->second.data_stream_semantic;
-            get_sample_block_ctx->rewritten_query = semantic_iter->second.query->clone(); /// Cannot share with cached query
-        }
+            *output_data_stream_semantic = semantic_iter->second;
     }
 
     auto & cache = context_->getSampleBlockCache();
@@ -294,21 +275,14 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
     if (cache_iter != cache.end())
         return cache_iter->second;
 
-    InterpreterSelectWithUnionQuery interpreter(updatable_query_ptr, context_, select_options);
+    InterpreterSelectWithUnionQuery interpreter(query_ptr_, context_, std::move(select_options));
 
-    auto & entry = data_stream_semantic_cache[key];
-    entry.query = std::move(updatable_query_ptr);
-    entry.data_stream_semantic = interpreter.getDataStreamSemantic();
-
-    if (get_sample_block_ctx)
-    {
-        get_sample_block_ctx->output_data_stream_semantic = entry.data_stream_semantic;
-        get_sample_block_ctx->rewritten_query = entry.query->clone(); /// Cannot share with cached query
-    }
+    auto data_stream_semantic = interpreter.getDataStreamSemantic();
+    data_stream_semantic_cache[key] = data_stream_semantic;
+    if (output_data_stream_semantic)
+        *output_data_stream_semantic = data_stream_semantic;
 
     return cache[key] = interpreter.getSampleBlock();
-
-    /// proton : ends
 }
 /// proton : ends
 
@@ -481,7 +455,7 @@ bool InterpreterSelectWithUnionQuery::hasStreamingWindowFunc() const
     return false;
 }
 
-Streaming::DataStreamSemantic InterpreterSelectWithUnionQuery::getDataStreamSemantic() const
+Streaming::DataStreamSemanticEx InterpreterSelectWithUnionQuery::getDataStreamSemantic() const
 {
     auto data_semantic = nested_interpreters[0]->getDataStreamSemantic();
 

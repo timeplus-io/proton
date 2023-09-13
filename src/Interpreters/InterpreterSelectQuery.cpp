@@ -31,6 +31,7 @@
 #include <Interpreters/TableJoin.h>
 #include <Interpreters/JoinedTables.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
+#include <Interpreters/QueryAliasesVisitor.h>
 #include <Interpreters/replaceAliasColumnsInQuery.h>
 #include <Interpreters/UnnestSubqueryVisitor.h>
 
@@ -96,6 +97,7 @@
 #include <Interpreters/Streaming/SyntaxAnalyzeUtils.h>
 #include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Parsers/ASTWindowDefinition.h>
+#include <Parsers/Streaming/ASTEmitQuery.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStepWithSubstream.h>
 #include <Processors/QueryPlan/Streaming/JoinStep.h>
@@ -396,8 +398,8 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     std::tie(current_select_has_join, current_select_has_aggregates) = Streaming::analyzeSelectQueryForJoinOrAggregates(query_ptr);
 
     if (current_select_has_join)
-        current_select_join_strictness
-            = Streaming::analyzeJoinStrictness(getSelectQuery(), context->getSettingsRef().join_default_strictness);
+        current_select_join_kind_and_strictness
+            = Streaming::analyzeJoinKindAndStrictness(getSelectQuery(), context->getSettingsRef().join_default_strictness);
     /// proton : ends
 
     initSettings();
@@ -432,12 +434,16 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
     /// proton: starts. Try to process the streaming query extension grammar.
     /// we need to process before table storage generation (maybe has table function)
-    if (getSelectQuery().emit())
+    if (auto emit = getSelectQuery().emit())
     {
         Streaming::EmitInterpreter::handleRules(
                     /* streaming query */ query_ptr,
                     /* rules */ Streaming::EmitInterpreter::checkEmitAST,
                                 Streaming::EmitInterpreter::LastXRule(settings, log));
+
+        /// Force emit changelog, for example: `select * from versioned_kv emit changelog`
+        if (emit->as<ASTEmitQuery &>().stream_mode == ASTEmitQuery::StreamMode::CHANGELOG)
+            query_info.force_emit_changelog = true;
 
         /// After handling, update setting for context.
         if (getSelectQuery().settings())
@@ -491,8 +497,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             storage_snapshot = storage->getStorageSnapshotForQuery(metadata_snapshot, query_ptr, context);
         }
 
-        auto get_sample_block_ctx = getSampleBlockContext();
-        if (has_input || !joined_tables.resolveTables(get_sample_block_ctx))
+        if (has_input || !joined_tables.resolveTables())
             joined_tables.makeFakeTable(storage, metadata_snapshot, source_header);
 
         if (context->getCurrentTransaction() && context->getSettingsRef().throw_on_unsupported_query_inside_transaction)
@@ -518,24 +523,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             rewriteMultipleJoins(query_ptr, joined_tables.tablesWithColumns(), context->getCurrentDatabase(), context->getSettingsRef());
 
             joined_tables.reset(getSelectQuery());
-
-            /// proton : starts
-            if (!current_select_join_strictness)
-            {
-                current_select_join_strictness
-                    = Streaming::analyzeJoinStrictness(getSelectQuery(), context->getSettingsRef().join_default_strictness);
-
-                if (!current_select_join_strictness)
-                    /// We still don't know the strictness, guess it is `All`
-                    /// FIXME, if we are wrong about this, we will need interpret
-                    /// can we split TreeRewriter to make it modular to have join strictness
-                    /// correctly analyzed ?
-                    current_select_join_strictness = JoinStrictness::All;
-            }
-
-            auto rewrite_get_sample_block_ctx = getSampleBlockContext();
-            joined_tables.resolveTables(rewrite_get_sample_block_ctx);
-            /// proton : ends
+            joined_tables.resolveTables();
 
             if (storage && joined_tables.isLeftTableSubquery())
             {
@@ -546,13 +534,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
         if (!has_input)
         {
-
-            /// proton : propagate the aggregates / join
-            auto subquery_options = options.subquery()
-                .setParentSelectJoinStrictness(current_select_join_strictness)
-                .setParentSelectHasAggregates(current_select_has_aggregates);
-
-            interpreter_subquery = joined_tables.makeLeftTableSubquery(subquery_options);
+            interpreter_subquery = joined_tables.makeLeftTableSubquery(options.subquery());
             if (interpreter_subquery)
             {
                 source_header = interpreter_subquery->getSampleBlock();
@@ -589,14 +571,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         const auto & tables = joined_tables.tablesWithColumns();
         assert(tables.size() <= 2);
 
-        /// FIXME: For multiple joins query, during rewriteMultipleJoins, we don't know whether need to emit changelog for `select *` of joined output, then it always add a temporary delta column
-        /// so we need to manually rewrite/remove it, for example: `SELECT * from vk_1 join vk_2 on vk_1.id = vk_2.id join vk_3 on vk_3.id`
-        /// After rewriteMultipleJoins => SELECT vk_1.*, vk_2.*, vk_3.*, 1 as `_tp_delta` from (select vk_1.*, vk_2.* from vk_1 join vk_2 on vk_1.id) as `--.s` join vk_3 on vk_1.id = vk_3.id
-        /// => SELECT vk_1.id, vk_2.id, vk_3.id, _tp_delta from (select vk_1.*, vk_2.* from vk_1 join vk_2 on vk_1.id) as `--.s` join vk_3 on vk_1.id = vk_3.id
-        if (joined_tables.tablesCount() > 1 && tables[0].table.alias == "--.s")
-            Streaming::rewriteTemporaryDeltaColumnInSelectQuery(getSelectQuery(), data_stream_semantic_pair.isChangelogOutput());
-
-        if (isStreaming() && (data_stream_semantic_pair.isChangelogInput() || data_stream_semantic_pair.isChangelogOutput()))
+        if (isStreaming() && (query_info.trackingChanges() || data_stream_semantic_pair.isChangelogOutput()))
         {
             /// Rewrite select query to add back _tp_delta if it is not present
             Streaming::ChangelogQueryVisitorMatcher data(
@@ -732,11 +707,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
                 ASTSelectQuery::Expression::WHERE, makeASTFunction("and", query.prewhere()->clone(), query.where()->clone()));
         }
 
-        /// proton : propagate the aggregates / join
-        auto analyzer_option = options.copy()
-                                   .setParentSelectHasAggregates(current_select_has_aggregates)
-                                   .setParentSelectJoinStrictness(current_select_join_strictness);
-
         query_analyzer = std::make_unique<SelectQueryExpressionAnalyzer>(
             query_ptr,
             syntax_analyzer_result,
@@ -744,7 +714,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             metadata_snapshot,
             NameSet(required_result_column_names_p->begin(), required_result_column_names_p->end()),
             !options.only_analyze,
-            analyzer_option,
+            options,
             prepared_sets);
 
         if (!options.only_analyze)
@@ -773,15 +743,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             if (syntax_analyzer_result->rewrite_subqueries)
             {
                 /// remake interpreter_subquery when PredicateOptimizer rewrites subqueries and main table is subquery
-                joined_tables.reset(getSelectQuery());
-                /// proton : propagate the aggregates / join
-                auto get_sample_block_ctx = getSampleBlockContext();
-                joined_tables.resolveTables(get_sample_block_ctx);
-
-                auto subquery_options = options.subquery()
-                                            .setParentSelectJoinStrictness(current_select_join_strictness)
-                                            .setParentSelectHasAggregates(current_select_has_aggregates);
-                interpreter_subquery = joined_tables.makeLeftTableSubquery(subquery_options);
+                interpreter_subquery = joined_tables.makeLeftTableSubquery(options.subquery());
             }
         }
 
@@ -816,7 +778,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         /// proton: starts.
         /// Analyze event predicates in WHERE clause like `WHERE _tp_time > 2023-01-01 00:01:01` or `WHERE _tp_sn > 1000`
         /// and create `SeekToInfo` objects to represent these predicates for streaming store rewinding in a streaming query.
-        analyzeEventPredicateAsSeekTo();
+        analyzeEventPredicateAsSeekTo(joined_tables);
 
         /// Calculate structure of the result.
         result_header = getSampleBlockImpl();
@@ -905,7 +867,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     /// proton: starts
     checkForStreamingQuery();
     checkUDA();
-    /// proton: ends
 
     if (query_info.projection)
         storage_snapshot->addProjection(query_info.projection->desc);
@@ -2272,14 +2233,9 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         if (!subquery)
             throw Exception("Subquery expected", ErrorCodes::LOGICAL_ERROR);
 
-        auto subquery_options = options.subquery()
-                                    .noModify()
-                                    .setParentSelectHasAggregates(current_select_has_aggregates)
-                                    .setParentSelectJoinStrictness(current_select_join_strictness);
-
         interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(
             subquery, getSubqueryContext(context),
-            subquery_options, required_columns);
+            options.copy().subquery().noModify(), required_columns);
 
         interpreter_subquery->addStorageLimits(storage_limits);
 
@@ -3209,16 +3165,6 @@ void InterpreterSelectQuery::executeStreamingAggregation(
             query_plan.getCurrentDataStream(), params, final, merge_threads, temporary_data_merge_threads, emit_version));
 }
 
-Streaming::GetSampleBlockContext InterpreterSelectQuery::getSampleBlockContext() const
-{
-    return Streaming::GetSampleBlockContext{
-        .parent_select_has_aggregates = (current_select_has_aggregates || options.parent_select_has_aggregates),
-        .parent_select_join_strictness
-        = (current_select_join_strictness ? current_select_join_strictness : options.parent_select_join_strictness),
-        .rewrite_query_inplace = options.modify_inplace,
-    };
-}
-
 /// Resolve input / output data stream semantic.
 /// Output data stream semantic depends on the current layer of query (its inputs) as well as the parent's SELECT query
 /// Basically parent SELECT pushes `has_aggregates / has_join` down to subquery, and subquery then decides its
@@ -3235,17 +3181,16 @@ void InterpreterSelectQuery::resolveDataStreamSemantic(const JoinedTables & join
     if (tables_with_columns.size() == 1)
     {
         data_stream_semantic_pair = Streaming::calculateDataStreamSemantic(
-            tables_with_columns[0].output_data_stream_semantic, {}, {}, current_select_has_aggregates, options, query_info);
+            tables_with_columns[0].output_data_stream_semantic, {}, {}, current_select_has_aggregates, query_info);
     }
     else if (tables_with_columns.size() == 2)
     {
-        /// auto join_strictness = Streaming::analyzeJoinStrictness(getSelectQuery(), context->getSettingsRef().join_default_strictness);
+        /// auto join_strictness = Streaming::analyzeJoinKindAndStrictness(getSelectQuery(), context->getSettingsRef().join_default_strictness);
         data_stream_semantic_pair = Streaming::calculateDataStreamSemantic(
             tables_with_columns[0].output_data_stream_semantic,
             tables_with_columns[1].output_data_stream_semantic,
-            current_select_join_strictness,
+            current_select_join_kind_and_strictness,
             current_select_has_aggregates,
-            options,
             query_info);
     }
     else
@@ -3524,7 +3469,7 @@ void InterpreterSelectQuery::handleSeekToSetting()
     }
 }
 
-void InterpreterSelectQuery::analyzeEventPredicateAsSeekTo()
+void InterpreterSelectQuery::analyzeEventPredicateAsSeekTo(const JoinedTables & joined_tables)
 {
     /// If a streaming query already has `seek_to` query setting like
     /// `SELECT * FROM my_stream WHERE _tp_time > '2023-01-01 00:01:01' SETTINGS seek_to=2022-01-01 00:01:01`.
@@ -3533,7 +3478,7 @@ void InterpreterSelectQuery::analyzeEventPredicateAsSeekTo()
     if (!isStreaming() || !context->getSettingsRef().seek_to.value.empty())
         return;
 
-    Streaming::EventPredicateVisitor::Data data(getSelectQuery(), context);
+    Streaming::EventPredicateVisitor::Data data(getSelectQuery(), joined_tables.tablesWithColumns(), context);
     Streaming::EventPredicateVisitor(data).visit(query_ptr);
 
     /// Try set seek to info for the left table (if exists, no need analyzing for the second time)

@@ -8,6 +8,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/Streaming/ASTEmitQuery.h>
 
 namespace DB
 {
@@ -48,24 +49,23 @@ ASTPtr rewriteAsSubquery(ASTTableExpression & table_expr)
 
     new_table_expr->database_and_table_name = table_expr.database_and_table_name;
     new_table_expr->table_function = table_expr.table_function;
+    new_table_expr->subquery = table_expr.subquery;
 
     /// If there is alias or long version storage name, things will become complicated
-    /// SELECT * FROM default.vk1 INNER JOIN default.vk2 => We can't rewrite as
-    /// SELECT * FROM (SELECT * FROM default.vk1) AS default.vk1 INNER JOIN default.vk2
-    /// SELECT * FROM vk1 AS vvk1 INNER JOIN default.vk2 => We actually can't rewrite as
-    /// SELECT * FROM (SELECT * FROM vk1) AS vvk1 INNER JOIN default.vk2 => Since after rewrite, vk1 is not visible any more
+    /// SELECT * FROM default.vk1 INNER JOIN default.vk2
+    /// SELECT * FROM (SELECT * FROM default.vk1)(CTE: vk1) INNER JOIN default.vk2
+    /// SELECT * FROM vk1 AS vvk1 INNER JOIN default.vk2
+    /// SELECT * FROM (SELECT * FROM vk1)(CTE: vk1) AS vvk1 INNER JOIN default.vk2
     /// FIXME, let's assume by all default database
-    /// let's assume after alias, user will always use alias
+    String table_name;
     String alias;
 
     if (new_table_expr->database_and_table_name != nullptr)
     {
         auto & table_id = new_table_expr->database_and_table_name->as<ASTTableIdentifier &>();
+        table_name = table_id.shortName();
         alias = table_id.alias;
         table_id.alias.clear();
-
-        if (alias.empty())
-            alias = table_id.shortName();
 
         new_table_expr->children.emplace_back(new_table_expr->database_and_table_name);
     }
@@ -81,11 +81,18 @@ ASTPtr rewriteAsSubquery(ASTTableExpression & table_expr)
         new_table_expr->children.emplace_back(new_table_expr->table_function);
     }
     else
-        return nullptr; /// No rewrite for subquery
+    {
+        assert(new_table_expr->subquery);
+        auto & sub_query = new_table_expr->subquery->as<ASTSubquery &>();
+        table_name = sub_query.cte_name;
+        alias = sub_query.alias;
+        sub_query.alias.clear();
 
-    assert(!alias.empty());
+        new_table_expr->children.emplace_back(new_table_expr->subquery);
+    }
 
-    subquery->setAlias(alias);
+    subquery->cte_name = std::move(table_name);
+    subquery->alias = std::move(alias);
 
     /// Rewrite table expr
     table_expr.subquery = subquery;
@@ -94,6 +101,41 @@ ASTPtr rewriteAsSubquery(ASTTableExpression & table_expr)
     table_expr.table_function = nullptr;
     table_expr.children.push_back(table_expr.subquery);
     return subquery;
+}
+
+bool rewriteAsChangelogSubquery(ASTTableExpression & table_expression, bool only_rewrite_subquery)
+{
+    auto subquery = table_expression.subquery;
+    if (!subquery)
+    {
+        if (only_rewrite_subquery)
+            return false;
+
+        subquery = rewriteAsSubquery(table_expression);
+    }
+
+    auto & query = subquery->as<ASTSubquery &>().children[0]->as<ASTSelectWithUnionQuery &>();
+    return rewriteAsChangelogQuery(query);
+}
+
+bool rewriteAsChangelogQuery(ASTSelectWithUnionQuery & query)
+{
+    if (query.list_of_selects->children.size() != 1)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Only expect one select query to rewrite as changelog query");
+
+    auto & select_query = query.list_of_selects->children[0]->as<ASTSelectQuery &>();
+
+    /// Emit changelog
+    auto emit_query = select_query.emit();
+    if (!emit_query)
+        emit_query = std::make_shared<ASTEmitQuery>();
+
+    if (emit_query->as<ASTEmitQuery &>().stream_mode == ASTEmitQuery::StreamMode::CHANGELOG)
+        return false;
+
+    emit_query->as<ASTEmitQuery &>().stream_mode = ASTEmitQuery::StreamMode::CHANGELOG;
+    select_query.setExpression(ASTSelectQuery::Expression::EMIT, std::move(emit_query));
+    return true;
 }
 }
 }

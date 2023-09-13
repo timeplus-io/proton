@@ -43,7 +43,9 @@ public:
     bool supportsSubcolumns() const override { return true; }
     bool supportsDynamicSubcolumns() const override { return true; }
     StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const override;
-    Streaming::DataStreamSemantic dataStreamSemantic() const override;
+    Streaming::DataStreamSemanticEx dataStreamSemantic() const override;
+
+    NamesAndTypesList getVirtuals() const override;
 
     void startup() override;
     void shutdown() override;
