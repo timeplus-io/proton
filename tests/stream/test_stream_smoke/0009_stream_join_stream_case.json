@@ -25,15 +25,7 @@
             {"client":"python","query_id":"1001","terminate":"manual", "query_type": "stream", "query":"select s, ss from test10_left_stream inner join test10_right_stream on i=ii and date_diff_within(10s, ts, tts)"},
             {"client":"python", "query_type": "table","depends_on":1001, "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,"kill": 1001, "kill_wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-                        (1, 's1', '2022-05-23 15:44:59'),
-                        (1, 's2', '2022-05-23 15:45:00'),
-                        (1, 's3', '2022-05-23 15:45:09'),
-                        (1, 's4', '2022-05-23 15:45:10'),
-                        (1, 's5', '2022-05-23 15:45:15'),
-                        (1, 's6', '2022-05-23 15:45:19'),
-                        (1, 's7', '2022-05-23 15:45:20'),
-                        (1, 's8', '2022-05-23 15:45:21')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:44:59'),(1, 's2', '2022-05-23 15:45:00'),(1, 's3', '2022-05-23 15:45:09'),(1, 's4', '2022-05-23 15:45:10'),(1, 's5', '2022-05-23 15:45:15'),(1, 's6', '2022-05-23 15:45:19'),(1, 's7', '2022-05-23 15:45:20'),(1, 's8', '2022-05-23 15:45:21')"
             }
           ]
         }
@@ -58,15 +50,7 @@
             {"client":"python","query_id":"1002", "terminate":"manual", "query_type": "stream", "wait":1, "query":"select s, ss from test10_left_stream inner join test10_right_stream on i=ii and date_diff_within(10s)"},
             {"client":"python", "query_type": "table","depends_on":1002, "trace_stream": {"trace_id": "01_start", "streams":"test10_left_stream, test10_right_stream", "trace_query": "select count() from table($)"}, "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:44:59'),
-              (1, 's2', '2022-05-23 15:45:00'),
-              (1, 's3', '2022-05-23 15:45:09'),
-              (1, 's4', '2022-05-23 15:45:10'),
-              (1, 's5', '2022-05-23 15:45:15'),
-              (1, 's6', '2022-05-23 15:45:19'),
-              (1, 's7', '2022-05-23 15:45:20'),
-              (1, 's8', '2022-05-23 15:45:21')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:44:59'),(1, 's2', '2022-05-23 15:45:00'),(1, 's3', '2022-05-23 15:45:09'),(1, 's4', '2022-05-23 15:45:10'),(1, 's5', '2022-05-23 15:45:15'),(1, 's6', '2022-05-23 15:45:19'),(1, 's7', '2022-05-23 15:45:20'),(1, 's8', '2022-05-23 15:45:21')"
             },
             {"client":"python", "wait": 5, "run_mode":"batch", "query_type": "table","trace_stream": {"trace_id": "01_end", "streams":"test10_left_stream, test10_right_stream", "trace_query": "select count() from table($)"}, "query":"kill query where query_id = '1002'"}
           ]
@@ -92,9 +76,7 @@
             {"client":"python","query_id":"1003","terminate":"manual", "wait":1, "query_type": "stream", "query":"select s, ss from test10_left_stream left join test10_right_stream on i=ii and date_diff_within(10s, ts, tts)"},
             {"client":"python", "query_type": "table","depends_on":1003, "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:45:10'),
-              (2, 's2', '2022-05-23 15:45:10')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:45:10'),(2, 's2', '2022-05-23 15:45:10')"
             },
             {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_left_stream(i, s, ts) values (3, 'ss', '2022-05-23 15:45:10')"},
             {"client":"python", "wait": 4, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1003'"}
@@ -121,15 +103,7 @@
             {"client":"python","query_id":"1004", "terminate":"manual", "wait":1,"query_type": "stream", "query":"select s, ss from test10_left_stream inner join test10_right_stream on i=ii and date_diff('second', ts, tts) between -10 and 10"},
             {"client":"python", "query_type": "table","depends_on":1004, "trace_stream": {"trace_id": "03_start", "streams":"test10_left_stream, test10_right_stream", "trace_query": "select count() from table($)"}, "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:44:59'),
-              (1, 's2', '2022-05-23 15:45:00'),
-              (1, 's3', '2022-05-23 15:45:09'),
-              (1, 's4', '2022-05-23 15:45:10'),
-              (1, 's5', '2022-05-23 15:45:15'),
-              (1, 's6', '2022-05-23 15:45:19'),
-              (1, 's7', '2022-05-23 15:45:20'),
-              (1, 's8', '2022-05-23 15:45:21')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:44:59'),(1, 's2', '2022-05-23 15:45:00'),(1, 's3', '2022-05-23 15:45:09'),(1, 's4', '2022-05-23 15:45:10'),(1, 's5', '2022-05-23 15:45:15'),(1, 's6', '2022-05-23 15:45:19'),(1, 's7', '2022-05-23 15:45:20'),(1, 's8', '2022-05-23 15:45:21')"
             },
             {"client":"python", "wait": 7, "run_mode":"batch", "query_type": "table","trace_stream": {"trace_id": "03_end", "streams":"test10_left_stream, test10_right_stream", "trace_query": "select count() from table($)"}, "query":"kill query where query_id = '1004'"}
           ]
@@ -155,15 +129,7 @@
             {"client":"python","query_id":"1005", "terminate":"manual","wait":1, "query_type": "stream", "query":"select s, ss from test10_left_stream inner join test10_right_stream on i=ii and date_diff('second', tts, ts) between -10 and 10"},
             {"client":"python", "query_type": "table","depends_on":1005, "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:44:59'),
-              (1, 's2', '2022-05-23 15:45:00'),
-              (1, 's3', '2022-05-23 15:45:09'),
-              (1, 's4', '2022-05-23 15:45:10'),
-              (1, 's5', '2022-05-23 15:45:15'),
-              (1, 's6', '2022-05-23 15:45:19'),
-              (1, 's7', '2022-05-23 15:45:20'),
-              (1, 's8', '2022-05-23 15:45:21')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:44:59'),(1, 's2', '2022-05-23 15:45:00'),(1, 's3', '2022-05-23 15:45:09'),(1, 's4', '2022-05-23 15:45:10'),(1, 's5', '2022-05-23 15:45:15'),(1, 's6', '2022-05-23 15:45:19'),(1, 's7', '2022-05-23 15:45:20'),(1, 's8', '2022-05-23 15:45:21')"
             },
             {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1005'"}
           ]
@@ -190,17 +156,7 @@
             {"client":"python", "query_type": "table","depends_on":1006,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:44:59'),
-              (1, 's2', '2022-05-23 15:45:00'),
-              (1, 's3', '2022-05-23 15:45:09'),
-              (1, 's4', '2022-05-23 15:45:10'),
-              (1, 's5', '2022-05-23 15:45:11'),
-              (2, 's6', '2022-05-23 15:45:59'),
-              (2, 's7', '2022-05-23 15:46:00'),
-              (2, 's8', '2022-05-23 15:46:01'),
-              (2, 's9', '2022-05-23 15:46:10'),
-              (2, 's10', '2022-05-23 15:46:11')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:44:59'),(1, 's2', '2022-05-23 15:45:00'),(1, 's3', '2022-05-23 15:45:09'),(1, 's4', '2022-05-23 15:45:10'),(1, 's5', '2022-05-23 15:45:11'),(2, 's6', '2022-05-23 15:45:59'),(2, 's7', '2022-05-23 15:46:00'),(2, 's8', '2022-05-23 15:46:01'),(2, 's9', '2022-05-23 15:46:10'),(2, 's10', '2022-05-23 15:46:11')"
             },
             {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1006'"}
           ]
@@ -227,17 +183,7 @@
             {"client":"python", "query_type": "table","depends_on":1007,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:44:59'),
-              (1, 's2', '2022-05-23 15:45:00'),
-              (1, 's3', '2022-05-23 15:45:09'),
-              (1, 's4', '2022-05-23 15:45:10'),
-              (1, 's5', '2022-05-23 15:45:11'),
-              (2, 's6', '2022-05-23 15:45:59'),
-              (2, 's7', '2022-05-23 15:46:00'),
-              (2, 's8', '2022-05-23 15:46:01'),
-              (2, 's9', '2022-05-23 15:46:10'),
-              (2, 's10', '2022-05-23 15:46:11')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:44:59'),(1, 's2', '2022-05-23 15:45:00'),(1, 's3', '2022-05-23 15:45:09'),(1, 's4', '2022-05-23 15:45:10'),(1, 's5', '2022-05-23 15:45:11'),(2, 's6', '2022-05-23 15:45:59'),(2, 's7', '2022-05-23 15:46:00'),(2, 's8', '2022-05-23 15:46:01'),(2, 's9', '2022-05-23 15:46:10'),(2, 's10', '2022-05-23 15:46:11')"
             },
             {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1007'"}
           ]
@@ -264,17 +210,7 @@
             {"client":"python", "query_type": "table","depends_on":1008,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:44:59'),
-              (1, 's2', '2022-05-23 15:45:00'),
-              (1, 's3', '2022-05-23 15:45:09'),
-              (1, 's4', '2022-05-23 15:45:10'),
-              (1, 's5', '2022-05-23 15:45:11'),
-              (2, 's6', '2022-05-23 15:45:59'),
-              (2, 's7', '2022-05-23 15:46:00'),
-              (2, 's8', '2022-05-23 15:46:01'),
-              (2, 's9', '2022-05-23 15:46:10'),
-              (2, 's10', '2022-05-23 15:46:11')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:44:59'),(1, 's2', '2022-05-23 15:45:00'),(1, 's3', '2022-05-23 15:45:09'),(1, 's4', '2022-05-23 15:45:10'),(1, 's5', '2022-05-23 15:45:11'),(2, 's6', '2022-05-23 15:45:59'),(2, 's7', '2022-05-23 15:46:00'),(2, 's8', '2022-05-23 15:46:01'),(2, 's9', '2022-05-23 15:46:10'),(2, 's10', '2022-05-23 15:46:11')"
             },
             {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1008'"}
           ]
@@ -301,17 +237,7 @@
             {"client":"python", "query_type": "table","depends_on":1009,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:44:59'),
-              (1, 's2', '2022-05-23 15:45:00'),
-              (1, 's3', '2022-05-23 15:45:09'),
-              (1, 's4', '2022-05-23 15:45:10'),
-              (1, 's5', '2022-05-23 15:45:11'),
-              (2, 's6', '2022-05-23 15:45:59'),
-              (2, 's7', '2022-05-23 15:46:00'),
-              (2, 's8', '2022-05-23 15:46:01'),
-              (2, 's9', '2022-05-23 15:46:10'),
-              (2, 's10', '2022-05-23 15:46:11')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:44:59'),(1, 's2', '2022-05-23 15:45:00'),(1, 's3', '2022-05-23 15:45:09'),(1, 's4', '2022-05-23 15:45:10'),(1, 's5', '2022-05-23 15:45:11'),(2, 's6', '2022-05-23 15:45:59'),(2, 's7', '2022-05-23 15:46:00'),(2, 's8', '2022-05-23 15:46:01'),(2, 's9', '2022-05-23 15:46:10'),(2, 's10', '2022-05-23 15:46:11')"
             },
             {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1009'"}
           ]
@@ -338,17 +264,7 @@
             {"client":"python", "query_type": "table","depends_on":1010,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:45:09'),
-              (1, 's2', '2022-05-23 15:45:10'),
-              (1, 's3', '2022-05-23 15:45:11'),
-              (1, 's4', '2022-05-23 15:45:20'),
-              (1, 's5', '2022-05-23 15:45:21'),
-              (2, 's6', '2022-05-23 15:46:09'),
-              (2, 's7', '2022-05-23 15:46:10'),
-              (2, 's8', '2022-05-23 15:46:11'),
-              (2, 's9', '2022-05-23 15:46:20'),
-              (2, 's10', '2022-05-23 15:46:21')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:45:09'),(1, 's2', '2022-05-23 15:45:10'),(1, 's3', '2022-05-23 15:45:11'),(1, 's4', '2022-05-23 15:45:20'),(1, 's5', '2022-05-23 15:45:21'),(2, 's6', '2022-05-23 15:46:09'),(2, 's7', '2022-05-23 15:46:10'),(2, 's8', '2022-05-23 15:46:11'),(2, 's9', '2022-05-23 15:46:20'),(2, 's10', '2022-05-23 15:46:21')"
             },
             {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1010'"}
           ]
@@ -375,17 +291,7 @@
             {"client":"python", "query_type": "table", "depends_on":1011,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:45:09'),
-              (1, 's2', '2022-05-23 15:45:10'),
-              (1, 's3', '2022-05-23 15:45:11'),
-              (1, 's4', '2022-05-23 15:45:20'),
-              (1, 's5', '2022-05-23 15:45:21'),
-              (2, 's6', '2022-05-23 15:46:09'),
-              (2, 's7', '2022-05-23 15:46:10'),
-              (2, 's8', '2022-05-23 15:46:11'),
-              (2, 's9', '2022-05-23 15:46:20'),
-              (2, 's10', '2022-05-23 15:46:21')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:45:09'),(1, 's2', '2022-05-23 15:45:10'),(1, 's3', '2022-05-23 15:45:11'),(1, 's4', '2022-05-23 15:45:20'),(1, 's5', '2022-05-23 15:45:21'),(2, 's6', '2022-05-23 15:46:09'),(2, 's7', '2022-05-23 15:46:10'),(2, 's8', '2022-05-23 15:46:11'),(2, 's9', '2022-05-23 15:46:20'),(2, 's10', '2022-05-23 15:46:21')"
             },
             {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1011'"}
           ]
@@ -412,17 +318,7 @@
             {"client":"python", "query_type": "table","depends_on":1012,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table","depends_on":1012, "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:45:09'),
-              (1, 's2', '2022-05-23 15:45:10'),
-              (1, 's3', '2022-05-23 15:45:11'),
-              (1, 's4', '2022-05-23 15:45:20'),
-              (1, 's5', '2022-05-23 15:45:21'),
-              (2, 's6', '2022-05-23 15:46:09'),
-              (2, 's7', '2022-05-23 15:46:10'),
-              (2, 's8', '2022-05-23 15:46:11'),
-              (2, 's9', '2022-05-23 15:46:20'),
-              (2, 's10', '2022-05-23 15:46:21')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:45:09'),(1, 's2', '2022-05-23 15:45:10'),(1, 's3', '2022-05-23 15:45:11'),(1, 's4', '2022-05-23 15:45:20'),(1, 's5', '2022-05-23 15:45:21'),(2, 's6', '2022-05-23 15:46:09'),(2, 's7', '2022-05-23 15:46:10'),(2, 's8', '2022-05-23 15:46:11'),(2, 's9', '2022-05-23 15:46:20'),(2, 's10', '2022-05-23 15:46:21')"
             },
             {"client":"python", "wait": 5, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1012'"}
           ]
@@ -449,17 +345,7 @@
             {"client":"python", "query_type": "table","depends_on":1013,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:45:09'),
-              (1, 's2', '2022-05-23 15:45:10'),
-              (1, 's3', '2022-05-23 15:45:11'),
-              (1, 's4', '2022-05-23 15:45:20'),
-              (1, 's5', '2022-05-23 15:45:21'),
-              (2, 's6', '2022-05-23 15:46:09'),
-              (2, 's7', '2022-05-23 15:46:10'),
-              (2, 's8', '2022-05-23 15:46:11'),
-              (2, 's9', '2022-05-23 15:46:20'),
-              (2, 's10', '2022-05-23 15:46:21')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:45:09'),(1, 's2', '2022-05-23 15:45:10'),(1, 's3', '2022-05-23 15:45:11'),(1, 's4', '2022-05-23 15:45:20'),(1, 's5', '2022-05-23 15:45:21'),(2, 's6', '2022-05-23 15:46:09'),(2, 's7', '2022-05-23 15:46:10'),(2, 's8', '2022-05-23 15:46:11'),(2, 's9', '2022-05-23 15:46:20'),(2, 's10', '2022-05-23 15:46:21')"
             },
             {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1013'"}
           ]
@@ -486,17 +372,7 @@
             {"client":"python", "query_type": "table","depends_on":1014,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:45:09'),
-              (1, 's2', '2022-05-23 15:45:10'),
-              (1, 's3', '2022-05-23 15:45:11'),
-              (1, 's4', '2022-05-23 15:45:20'),
-              (1, 's5', '2022-05-23 15:45:21'),
-              (2, 's6', '2022-05-23 15:46:09'),
-              (2, 's7', '2022-05-23 15:46:10'),
-              (2, 's8', '2022-05-23 15:46:11'),
-              (2, 's9', '2022-05-23 15:46:20'),
-              (2, 's10', '2022-05-23 15:46:21')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:45:09'),(1, 's2', '2022-05-23 15:45:10'),(1, 's3', '2022-05-23 15:45:11'),(1, 's4', '2022-05-23 15:45:20'),(1, 's5', '2022-05-23 15:45:21'),(2, 's6', '2022-05-23 15:46:09'),(2, 's7', '2022-05-23 15:46:10'),(2, 's8', '2022-05-23 15:46:11'),(2, 's9', '2022-05-23 15:46:20'),(2, 's10', '2022-05-23 15:46:21')"
             },
             {"client":"python", "wait": 8, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1014'"}
           ]
@@ -523,17 +399,7 @@
             {"client":"python", "query_type": "table","depends_on":1015,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:45:09'),
-              (1, 's2', '2022-05-23 15:45:10'),
-              (1, 's3', '2022-05-23 15:45:11'),
-              (1, 's4', '2022-05-23 15:45:18'),
-              (1, 's5', '2022-05-23 15:45:19'),
-              (2, 's6', '2022-05-23 15:46:09'),
-              (2, 's7', '2022-05-23 15:46:10'),
-              (2, 's8', '2022-05-23 15:46:11'),
-              (2, 's9', '2022-05-23 15:46:18'),
-              (2, 's10', '2022-05-23 15:46:19')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:45:09'),(1, 's2', '2022-05-23 15:45:10'),(1, 's3', '2022-05-23 15:45:11'),(1, 's4', '2022-05-23 15:45:18'),(1, 's5', '2022-05-23 15:45:19'),(2, 's6', '2022-05-23 15:46:09'),(2, 's7', '2022-05-23 15:46:10'),(2, 's8', '2022-05-23 15:46:11'),(2, 's9', '2022-05-23 15:46:18'),(2, 's10', '2022-05-23 15:46:19')"
             },
             {"client":"python", "wait": 4, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1015'"}
           ]
@@ -560,17 +426,7 @@
             {"client":"python", "query_type": "table","depends_on":1016,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:45:09'),
-              (1, 's2', '2022-05-23 15:45:10'),
-              (1, 's3', '2022-05-23 15:45:11'),
-              (1, 's4', '2022-05-23 15:45:12'),
-              (1, 's5', '2022-05-23 15:45:13'),
-              (2, 's6', '2022-05-23 15:46:09'),
-              (2, 's7', '2022-05-23 15:46:10'),
-              (2, 's8', '2022-05-23 15:46:11'),
-              (2, 's9', '2022-05-23 15:46:18'),
-              (2, 's10', '2022-05-23 15:46:19')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:45:09'),(1, 's2', '2022-05-23 15:45:10'),(1, 's3', '2022-05-23 15:45:11'),(1, 's4', '2022-05-23 15:45:12'),(1, 's5', '2022-05-23 15:45:13'),(2, 's6', '2022-05-23 15:46:09'),(2, 's7', '2022-05-23 15:46:10'),(2, 's8', '2022-05-23 15:46:11'),(2, 's9', '2022-05-23 15:46:18'),(2, 's10', '2022-05-23 15:46:19')"
             },
             {"client":"python", "wait": 4, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1016'"}
           ]
@@ -597,12 +453,7 @@
             {"client":"python", "query_type": "table","depends_on":1017,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:45:09'),
-              (1, 's2', '2022-05-23 15:45:10'),
-              (1, 's3', '2022-05-23 15:45:11'),
-              (1, 's4', '2022-05-23 15:45:12'),
-              (1, 's5', '2022-05-23 15:45:13')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:45:09'),(1, 's2', '2022-05-23 15:45:10'),(1, 's3', '2022-05-23 15:45:11'),(1, 's4', '2022-05-23 15:45:12'),(1, 's5', '2022-05-23 15:45:13')"
             },
             {"client":"python", "query_type": "table", "wait":1,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 'new', '2022-05-23 15:45:10'), (2, 'new', '2022-05-23 15:46:10')"},
@@ -632,20 +483,10 @@
             {"client":"python", "query_type": "table","depends_on":1018, "wait":2,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:45:09'),
-              (1, 's2', '2022-05-23 15:45:10'),
-              (1, 's3', '2022-05-23 15:45:11'),
-              (1, 's4', '2022-05-23 15:45:12'),
-              (1, 's5', '2022-05-23 15:45:13')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:45:09'),(1, 's2', '2022-05-23 15:45:10'),(1, 's3', '2022-05-23 15:45:11'),(1, 's4', '2022-05-23 15:45:12'),(1, 's5', '2022-05-23 15:45:13')"
             },
             {"client":"python", "query_type": "table", "wait":3,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 'new_s1', '2022-05-23 15:45:09'),
-              (1, 'new_s2', '2022-05-23 15:45:10'),
-              (1, 'new_s3', '2022-05-23 15:45:11'),
-              (1, 'new_s4', '2022-05-23 15:45:12'),
-              (1, 'new_s5', '2022-05-23 15:45:13')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 'new_s1', '2022-05-23 15:45:09'),(1, 'new_s2', '2022-05-23 15:45:10'),(1, 'new_s3', '2022-05-23 15:45:11'),(1, 'new_s4', '2022-05-23 15:45:12'),(1, 'new_s5', '2022-05-23 15:45:13')"
             },
             {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1018'"}
           ]
@@ -673,17 +514,7 @@
             {"client":"python", "query_type": "table", "depends_on":1019,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table","depends_on":1019, "wait":1,
-              "query": "insert into test10_right_stream(ii, ss, tts) values
-              (1, 's1', '2022-05-23 15:45:09'),
-              (1, 's2', '2022-05-23 15:45:10'),
-              (1, 's3', '2022-05-23 15:45:11'),
-              (1, 's4', '2022-05-23 15:45:12'),
-              (1, 's5', '2022-05-23 15:45:13'),
-              (2, 's6', '2022-05-23 15:46:09'),
-              (2, 's7', '2022-05-23 15:46:10'),
-              (2, 's8', '2022-05-23 15:46:11'),
-              (2, 's9', '2022-05-23 15:46:18'),
-              (2, 's10', '2022-05-23 15:46:19')"
+              "query": "insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:45:09'),(1, 's2', '2022-05-23 15:45:10'),(1, 's3', '2022-05-23 15:45:11'),(1, 's4', '2022-05-23 15:45:12'),(1, 's5', '2022-05-23 15:45:13'),(2, 's6', '2022-05-23 15:46:09'),(2, 's7', '2022-05-23 15:46:10'),(2, 's8', '2022-05-23 15:46:11'),(2, 's9', '2022-05-23 15:46:18'),(2, 's10', '2022-05-23 15:46:19')"
             },
             {"client":"python", "query_type": "table", "wait":3,
               "query": "insert into test10_left_stream(i, s, ts) values (1, 'new', '2022-05-23 15:45:10'), (2, 'new', '2022-05-23 15:46:10')"},

@@ -1,0 +1,1094 @@
+test_suite_name: changelog_stream6
+tag: smoke
+test_suite_config:
+  setup:
+    statements:
+      - client: python
+        query_type: table
+        wait: 2
+        query: DROP VIEW IF EXISTS test14_view2_6;
+
+      - client: python
+        query_type: table
+        wait: 2
+        query: DROP VIEW IF EXISTS test14_view1_6;
+
+      - client: python
+        query_type: table
+        wait: 2
+        query: DROP VIEW IF EXISTS test14_view_6;
+
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: []
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+      cluster:
+        - view
+        - cluster_table_bug
+comments: Tests covering the single shard changelog stream query smoke cases.
+tests:
+  - id: 24
+    tags:
+      - subquery/view/materialized_view/
+      - tumble(table)
+      - group_by
+      - primary_key
+      - todo
+    name: subquery view materialized view with tumble(table), group by and primary key
+    description: subquery view materialized view with tumble(table), group by and primary key
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view_6;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_6;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_subquery_6(i float, k1 int, k2 string, ts datetime);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create view if not exists test14_view_6 as (with cte as (select i, k1, k2, _tp_delta from changelog(tumble(test14_subquery_6, ts, 5s), k2)) select * from cte );
+
+          - client: python
+            query_id: '1424'
+            depends_on_stream: test14_subquery_6
+            query_end_timer: 12
+            query_type: stream
+            query: select max(i), min(i), avg(i) from test14_view_6 group by k2;
+
+          - client: python
+            query_type: table
+            depends_on: '1424'
+            wait: 2
+            query: insert into test14_subquery_6 (i, k1, k2, ts) values (4, 3, 'a','2020-02-02 20:00:00');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_6 (i, k1, k2, ts) values (2, 3, 'a' ,'2020-02-02 20:00:01');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_6 (i, k1, k2, ts) values (5, 5, 'b','2020-02-02 20:00:03');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_6 (i, k1, k2, ts) values (2, 2, 'a','2020-02-02 20:00:04');
+
+          - client: python
+            query_type: table
+            kill: '1424'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_subquery_6 (i, k1, k2, ts) values (8, 5, 'b' ,'2020-02-02 20:00:04');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop view if exists test14_view_6;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_6;
+
+  - id: 25
+    tags:
+      - subquery/view/materialized_view/
+      - tumble(table)
+      - group_by
+      - primary_key
+    name: substream streaming tailing partition by primary key, stateful function
+    description: substream streaming tailing partition by primary key, stateful function
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_substream_6;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_substream_6(val int, id int, name string);
+
+          - client: python
+            query_id: '1425'
+            depends_on_stream: test14_substream_6
+            query_end_timer: 12
+            query_type: stream
+            query: select val, id, lag(val, 2), _tp_delta from changelog(test14_substream_6, id) partition by id;
+
+          - client: python
+            query_type: table
+            depends_on: '1425'
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (1, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (3, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (5, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (8, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (9, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (11, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (10, 1, 'c');
+
+          - client: python
+            query_type: table
+            kill: '1425'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (14, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop stream if exists test14_substream_6;
+
+    expected_results:
+      - query_id: '1425'
+        expected_results:
+          - [1, 2, 0, 1]
+          - [3, 3, 0, 1]
+          - [5, 1, 0, 1]
+          - [1, 2, 0, -1]
+          - [8, 2, 1, 1]
+          - [3, 3, 0, -1]
+          - [9, 3, 3, 1]
+          - [8, 2, 1, -1]
+          - [11, 2, 8, 1]
+          - [5, 1, 0, -1]
+          - [10, 1, 5, 1]
+          - [11, 2, 8, -1]
+          - [14, 2, 11, 1]
+
+  - id: 26
+    tags:
+      - subquery/view/materialized_view/
+      - tumble(table)
+      - group_by
+      - primary_key
+      - UDF
+    name: substream streaming tailing partition by primary key, UDF
+    description: substream streaming tailing partition by primary key, UDF
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000001'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: add_five
+              arguments:
+              - name: value
+                type: float32
+              return_type: float32
+              source: function add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_substream_6;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_substream_6(val int, id int, name string);
+
+          - client: python
+            query_id: '1426'
+            depends_on_stream: test14_substream_6
+            query_end_timer: 12
+            query_type: stream
+            query: select val, id, add_five(val), _tp_delta from changelog(test14_substream_6, id) partition by id;
+
+          - client: python
+            query_type: table
+            depends_on: '1426'
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (1, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (3, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (5, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (8, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (9, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (11, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (10, 1, 'c');
+
+          - client: python
+            query_type: table
+            kill: '1426'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (14, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop stream if exists test14_substream_6;
+
+    expected_results:
+      - query_id: '1426'
+        expected_results:
+          - [1, 2, 6, 1]
+          - [3, 3, 8, 1]
+          - [5, 1, 10, 1]
+          - [1, 2, 6, -1]
+          - [8, 2, 13, 1]
+          - [3, 3, 8, -1]
+          - [9, 3, 14, 1]
+          - [8, 2, 13, -1]
+          - [11, 2, 16, 1]
+          - [5, 1, 10, -1]
+          - [10, 1, 15, 1]
+          - [11, 2, 16, -1]
+          - [14, 2, 19, 1]
+
+  - id: 27
+    tags:
+      - subquery/view/materialized_view/
+      - tumble(table)
+      - group_by
+      - primary_key
+    name: substream streaming tailing partition by primary key, stateless function
+    description: substream streaming tailing partition by primary key, stateless function
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_substream_6;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_substream_6(val int, id int, name string);
+
+          - client: python
+            query_id: '1427'
+            depends_on_stream: test14_substream_6
+            query_end_timer: 12
+            query_type: stream
+            query: select val, id, upper(name), _tp_delta from changelog(test14_substream_6, id) partition by id;
+
+          - client: python
+            query_type: table
+            depends_on: '1427'
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (1, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (3, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (5, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (8, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (9, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (11, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (10, 1, 'c');
+
+          - client: python
+            query_type: table
+            kill: '1427'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (14, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop stream if exists test14_substream_6;
+
+    expected_results:
+      - query_id: '1427'
+        expected_results:
+          - [1, 2, 'A', 1]
+          - [3, 3, 'B', 1]
+          - [5, 1, 'C', 1]
+          - [1, 2, 'A', -1]
+          - [8, 2, 'A', 1]
+          - [3, 3, 'B', -1]
+          - [9, 3, 'B', 1]
+          - [8, 2, 'A', -1]
+          - [11, 2, 'B', 1]
+          - [5, 1, 'C', -1]
+          - [10, 1, 'C', 1]
+          - [11, 2, 'B', -1]
+          - [14, 2, 'B', 1]
+
+  - id: 28
+    tags:
+      - subquery/view/materialized_view/
+      - tumble(table)
+      - group_by
+      - primary_key
+      - todo
+    name: substream global aggregation partition by primary key, group by primary key,stateful function
+    description: substream global aggregation partition by primary key, group by primary key,stateful function
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_substream_6;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_substream_6(val int, id int, name string);
+
+          - client: python
+            query_id: '1428'
+            depends_on_stream: test14_substream_6
+            query_end_timer: 12
+            query_type: stream
+            query: select max(val), min(val), avg(val), id from changelog(test14_substream_6, id) partition by id group by id;
+
+          - client: python
+            query_type: table
+            depends_on: '1428'
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (1, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (3, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (5, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (8, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (9, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (11, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (10, 1, 'c');
+
+          - client: python
+            query_type: table
+            kill: '1428'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (14, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop stream if exists test14_substream_6;
+
+    expected_results:
+      - query_id: '1428'
+        expected_results:
+          - [1, 1, 1, 2]
+          - [3, 3, 3, 3]
+          - [5, 5, 5, 1]
+          - [14, 14, 14, 2]
+          - [10, 10, 10, 1]
+          - [9, 9, 9, 3]
+
+  - id: 29
+    tags:
+      - subquery/view/materialized_view/
+      - tumble(table)
+      - group_by
+      - primary_key
+      - to_support
+    name: substream global aggregation partition by primary key, group by primary key, UDA (unrealized)
+    description: substream global aggregation partition by primary key, group by primary key, UDA (unrealized)
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000002'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: sec_large
+              arguments:
+              - name: value
+                type: float32
+              is_aggregation: true
+              return_type: float32
+              source: '{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {''max'': this.max, ''sec'':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s[''max'']; this.sec = s[''sec'']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s[''sec''] >= this.max) { this.max = s[''max'']; this.sec = s[''sec''];} else if(s[''max''] >= this.max) { this.sec = this.max; this.max = s[''max''];} else if (s[''max''] > this.sec) { this.sec = s[''max'']; } } }'
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_substream_6;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_substream_6(val float, id int, name string);
+
+          - client: python
+            query_id: '1429'
+            depends_on_stream: test14_substream_6
+            query_end_timer: 12
+            query_type: stream
+            query: select sec_large(val), name from changelog(test14_substream_6, id) partition by id group by name;
+
+          - client: python
+            query_type: table
+            depends_on: '1429'
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (1, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (3, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (5, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (8, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (9, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (11, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (10, 1, 'c');
+
+          - client: python
+            query_type: table
+            kill: '1429'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (14, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop stream if exists test14_substream_6;
+
+  - id: 30
+    tags:
+      - subquery/view/materialized_view/
+      - tumble(table)
+      - group_by
+      - primary_key
+      - bug
+    name: substream global aggregation partition by primary key, group by no primary key, stateful function
+    description: substream global aggregation partition by primary key, group by no primary key, stateful function
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_substream_6;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_substream_6(val float, id int, name string);
+
+          - client: python
+            query_id: '1430'
+            depends_on_stream: test14_substream_6
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select max(val), min(val), avg(val), name from changelog(test14_substream_6, id)
+              partition by id group by name;
+
+          - client: python
+            query_type: table
+            depends_on: '1430'
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (1, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (3, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (5, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (8, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (9, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (11, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (10, 1, 'c');
+
+          - client: python
+            query_type: table
+            kill: '1430'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (14, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop stream if exists test14_substream_6;
+
+    expected_results:
+      - query_id: '1430'
+        expected_results:
+          - [1, 1, 1, 'a']
+          - [3, 3, 3, 'b']
+          - [5, 5, 5, 'c']
+          - [14, 14, 14, 'b']
+          - [0, 0, nan, 'a']
+          - [9, 9, 9, 'b']
+          - [10, 10, 10, 'c']
+
+  - id: 31
+    tags:
+      - subquery/view/materialized_view/
+      - tumble(table)
+      - group_by
+      - primary_key
+    name: substream global aggregation partition by primary key, no group by,stateful function
+    description: substream global aggregation partition by primary key, no group by,stateful function
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_substream_6;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_substream_6(val float, id int, name string);
+
+          - client: python
+            query_id: '1431'
+            depends_on_stream: test14_substream_6
+            query_end_timer: 12
+            query_type: stream
+            query: select lag(val, 1), val, id, name from changelog(test14_substream_6, id) partition by id;
+
+          - client: python
+            query_type: table
+            depends_on: '1431'
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (1, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (3, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (5, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (8, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (9, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (11, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (10, 1, 'c');
+
+          - client: python
+            query_type: table
+            kill: '1431'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (14, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop stream if exists test14_substream_6;
+
+    expected_results:
+      - query_id: '1431'
+        expected_results:
+          - [0, 1, 2, 'a']
+          - [0, 3, 3, 'b']
+          - [0, 5, 1, 'c']
+          - [1, 1, 2, 'a']
+          - [1, 8, 2, 'a']
+          - [3, 3, 3, 'b']
+          - [3, 9, 3, 'b']
+          - [8, 8, 2, 'a']
+          - [8, 11, 2, 'b']
+          - [5, 5, 1, 'c']
+          - [5, 10, 1, 'c']
+          - [11, 11, 2, 'b']
+          - [11, 14, 2, 'b']
+
+  - id: 32
+    tags:
+      - subquery/view/materialized_view/
+      - tumble(table)
+      - group_by
+      - primary_key
+      - todo
+    name: substream global aggregation partition by primary key, no group by, UDA
+    description: substream global aggregation partition by primary key, no group by, UDA
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_substream_6;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_substream_6(val float, id int, name string);
+
+          - client: python
+            query_id: '1432'
+            depends_on_stream: test14_substream_6
+            query_end_timer: 12
+            query_type: stream
+            query: select (val), id from changelog(test14_substream_6, id) partition by id;
+
+          - client: python
+            query_type: table
+            depends_on: '1432'
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (1, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (3, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (5, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (8, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (9, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (11, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (10, 1, 'c');
+
+          - client: python
+            query_type: table
+            kill: '1432'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (14, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop stream if exists test14_substream_6;
+
+  - id: 33
+    tags:
+      - subquery/view/materialized_view/
+      - tumble(table)
+      - group_by
+      - primary_key
+      - bug
+    name: substream window aggreagtion  partition by primary key, tumble window,
+    description: substream window aggreagtion  partition by primary key, tumble window,
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_substream_6;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_substream_6(val float, id int, name string, ts datetime);
+
+          - client: python
+            query_id: '1433'
+            depends_on_stream: test14_substream_6
+            query_end_timer: 12
+            query_type: stream
+            query: with cte as (select * from tumble(test14_substream_6, ts, 3s)) select max(val), min(val), avg(val), id from changelog(cte, id) partition by id group by id;
+
+          - client: python
+            query_type: table
+            depends_on: '1433'
+            wait: 2
+            query: insert into test14_substream_6(val, id, name, ts) values (1, 2, 'a', '2020-02-02 20:00:01');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name, ts) values (3, 3, 'b', '2020-02-02 20:00:02');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name, ts) values (5, 1, 'c', '2020-02-02 20:00:04');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name, ts) values (8, 2, 'a', '2020-02-02 20:00:06');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name, ts) values (9, 3, 'b', '2020-02-02 20:00:07');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name, ts) values (11, 2, 'b', '2020-02-02 20:00:08');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name, ts) values (10, 1, 'c', '2020-02-02 20:00:09');
+
+          - client: python
+            query_type: table
+            kill: '1433'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_substream_6(val, id, name, ts) values (14, 2, 'b', '2020-02-02 20:00:20');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop stream if exists test14_substream_6;
+
+  - id: 34
+    tags:
+      - subquery/view/materialized_view/
+      - tumble(table)
+      - group_by
+      - primary_key
+      - bug
+    name: streaming tailing partition by no primary key,
+    description: streaming tailing partition by no primary key,
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_substream_6;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_substream_6(val float, id int, name string);
+
+          - client: python
+            query_id: '1434'
+            depends_on_stream: test14_substream_6
+            query_end_timer: 12
+            query_type: stream
+            query: select max(val), min(val), avg(val), name from changelog(test14_substream_6, id) partition by name;
+
+          - client: python
+            query_type: table
+            depends_on: '1434'
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (1, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (3, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (5, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (8, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (9, 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (11, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (10, 1, 'c');
+
+          - client: python
+            query_type: table
+            kill: '1434'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_substream_6(val, id, name) values (14, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop stream if exists test14_substream_6;
+
+    expected_results:
+      - query_id: '1434'
+        expected_results:
+          - [1, 1, 1, 'a']
+          - [3, 3, 3, 'b']
+          - [5, 5, 5, 'c']
+          - [14, 9, 11.5, 'b']
+          - [0, 0, nan, 'a']
+          - [10, 10, 10, 'c']
+
+  - id: 35
+    tags:
+      - subquery/view/materialized_view/
+      - tumble(table)
+      - group_by
+      - primary_key
+      - bug
+    name: global aggregation, partition by no primary key, group by primary key, stateful function
+    description: global aggregation, partition by no primary key, group by primary key, stateful function
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_substream_6;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_substream_6(val float, types string, id int, name string);
+
+          - client: python
+            query_id: '1435'
+            depends_on_stream: test14_substream_6
+            query_end_timer: 12
+            query_type: stream
+            query: select max(val), min(val), avg(val), name from changelog(test14_substream_6, id) partition by name group by id;
+
+          - client: python
+            query_type: table
+            depends_on: '1435'
+            wait: 2
+            query: insert into test14_substream_6(val, types, id, name) values (1, 'c', 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, types, id, name) values (3, 'b', 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, types, id, name) values (5, 'a', 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, types, id, name) values (8, 'c', 12, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, types, id, name) values (9, 'b', 3, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, types, id, name) values (11, 'a', 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_substream_6(val, types, id, name) values (10, 'c', 1, 'c');
+
+          - client: python
+            query_type: table
+            kill: '1435'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_substream_6(val, types, id, name) values (14, 'b', 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop stream if exists test14_substream_6;
+
+    expected_results:
+      - query_id: '1435'
+        expected_results:
+          - [1, 1, 1, 'a']
+          - [3, 3, 3, 'b']
+          - [5, 5, 5, 'c']
+          - [1, 1, 1, 'a']
+          - [8, 8, 8, 'a']
+          - [9, 9, 9, 'b']
+          - [9, 9, 9, 'b']
+          - [11, 11, 11, 'b']
+          - [0, 0, nan, 'a']
+          - [8, 8, 8, 'a']
+          - [10, 10, 10, 'c']
+          - [9, 9, 9, 'b']
+          - [14, 14, 14, 'b']
+
