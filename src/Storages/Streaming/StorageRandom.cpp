@@ -34,7 +34,6 @@
 #include <Common/ProtonCommon.h>
 #include <Common/SipHash.h>
 #include <Common/randomSeed.h>
-#include "base/types.h"
 
 
 namespace DB
