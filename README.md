@@ -22,7 +22,7 @@ SQL is the main interface for Proton. Users can run streaming queries and histor
 8. [JavaScript UDF / UDAF](https://docs.timeplus.com/js-udf)
 9. [Materialize View](https://docs.timeplus.com/view#m_view)
 
-## How it works
+## Architecture
 ![architecture](design/proton-high-level-arch.svg)
 
 [Learn more](https://docs.timeplus.com/proton-architecture) how Proton works internally.
