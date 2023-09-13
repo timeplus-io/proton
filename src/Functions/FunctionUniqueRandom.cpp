@@ -130,14 +130,14 @@ DataGenerator createDefaultDataGenerator(const DataTypePtr & result_type)
         CREATE_DATA_GENERATOR(TypeIndex::UUID, UUID)
 #undef CREATE_DATA_GENERATOR
         default:
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "The random_in_type doesn't support argument type '{}'", result_type->getName());
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "The unique_random doesn't support argument type '{}'", result_type->getName());
     }
     UNREACHABLE();
 }
 
 class FunctionUniqueRandom : public IFunction
 {
-    // usage:random_in_type('int8', [lambda expression] ,[num_of_uniques]), this function will return a Unique and Random 'int8' type data
+    // usage:unique_random('int8', [lambda expression] ,[num_of_uniques]), this function will return a Unique and Random 'int8' type data
     // lambda expression and num_of_uniques can switch places
 private:
     UInt64 num_of_uniques = std::numeric_limits<UInt64>::max();
@@ -145,7 +145,7 @@ private:
     DataGenerator default_data_generator;
 
 public:
-    static constexpr auto name = "random_in_type";
+    static constexpr auto name = "unique_random";
 
     FunctionUniqueRandom(UInt64 num_of_uniques_, int lambda_function_pos_, DataGenerator default_data_generator_)
         : num_of_uniques(num_of_uniques_), lambda_function_pos(lambda_function_pos_), default_data_generator(default_data_generator_)
@@ -181,7 +181,7 @@ public:
 class FunctionUniqueRandomOverloadResolver : public IFunctionOverloadResolver
 {
 public:
-    static constexpr auto name = "random_in_type";
+    static constexpr auto name = "unique_random";
 
     String getName() const override { return name; }
     bool isDeterministic() const override { return false; }

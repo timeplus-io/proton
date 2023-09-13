@@ -1,5 +1,3 @@
-#include <cstddef>
-#include <elf.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
@@ -613,35 +611,29 @@ Pipe StorageRandom::read(
     /// Will create more seed values for each source from initial seed.
     pcg64 generate(random_seed);
     
-
-    /// the number of datas that each thread should generate
-    size_t count_per_thread = events_per_second / num_streams;
-    size_t remainder = events_per_second % num_streams;
     if (events_per_second < num_streams)
     {
         /// number of datas generated per second is less than the number of thread;
-        count_per_thread = 1;
         for (size_t i = 0; i < events_per_second; i++) {
             pipes.emplace_back(
-                std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread));
+                std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, 1));
         }
         
     }
     else
-    {   /// number of datas generated per second is bigger than the number of thread;
-        for (size_t i = 0; i < num_streams; i++) {
-            if (i == num_streams - 1)
-            {
-                /// The last thread will do the remaining work
-                pipes.emplace_back(
-                    std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread + remainder));
-            }
-            else [[likely]]
-            {
-                pipes.emplace_back(
-                    std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread));
-            }
+    {   
+        /// the number of datas that each thread should generate
+        size_t count_per_thread = events_per_second / num_streams;
+        size_t remainder = events_per_second % num_streams;
+        /// number of datas generated per second is bigger than the number of thread;
+        for (size_t i = 0; i < num_streams - 1; i++) {
+            pipes.emplace_back(
+                std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread));
         }
+        /// The last thread will do the remaining work
+        pipes.emplace_back(
+            std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread + remainder));
+
     }
     return Pipe::unitePipes(std::move(pipes));
 }
