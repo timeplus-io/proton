@@ -10,7 +10,8 @@ set (SAN_FLAGS "${SAN_FLAGS} -g -fno-omit-frame-pointer -DSANITIZER")
 
 if (SANITIZE)
     if (SANITIZE STREQUAL "address")
-        set (ASAN_FLAGS "-fsanitize=address -fsanitize-address-use-after-scope")
+        # https://github.com/llvm/llvm-project/issues/59007
+        set (ASAN_FLAGS "-fsanitize=address -fsanitize-address-use-after-scope -lresolv")
         if (COMPILER_CLANG)
             if (${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER_EQUAL 15 AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_LESS 16)
                 # LLVM-15 has a bug in Address Sanitizer, preventing the usage

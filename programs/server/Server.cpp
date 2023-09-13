@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <Poco/Version.h>
 #include <Poco/Net/HTTPServer.h>
+#include <Poco/Net/HTTPSClientSession.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/Util/HelpFormatter.h>
 #include <Poco/Environment.h>
@@ -86,6 +87,7 @@
 #include "config_version.h"
 
 /// proton: starts
+#include "TelemetryCollector.h"
 #include <Checkpoint/CheckpointCoordinator.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Functions/UserDefined/ExternalUserDefinedFunctionsLoader.h>
@@ -294,6 +296,7 @@ void initGlobalSingletons(DB::ContextMutablePtr & context)
     DB::DiskUtilChecker::instance(context);
     DB::ExternalGrokPatterns::instance(context);
     DB::ExternalUserDefinedFunctionsLoader::instance(context);
+    DB::TelemetryCollector::instance(context);
 }
 
 void deinitGlobalSingletons(DB::ContextMutablePtr & context)
@@ -1407,6 +1410,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// which causes use after free segfault when ExternalGrokPatterns/PlacementService tries to deactivate its task from the
         /// ScheduleThreadPool which doesn't exist any more
         ExternalGrokPatterns::instance(global_context).shutdown();
+        TelemetryCollector::instance(global_context).shutdown();
         /// proton : ends
 
         global_context->shutdown();
