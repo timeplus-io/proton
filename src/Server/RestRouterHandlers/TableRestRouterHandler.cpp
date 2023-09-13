@@ -200,28 +200,20 @@ std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Ob
 
     if (!DatabaseCatalog::instance().tryGetDatabase(requested_database))
         return {
-            jsonErrorResponse(fmt::format("Databases {} does not exist.", database), ErrorCodes::UNKNOWN_DATABASE),
-            HTTPResponse::HTTP_BAD_REQUEST};
+            jsonErrorResponse(fmt::format("Databases {} does not exist.", requested_database), ErrorCodes::UNKNOWN_DATABASE),
+            HTTPResponse::HTTP_NOT_FOUND};
 
     TablePtrs streams;
     auto node_identity{query_context->getNodeIdentity()};
     auto this_host{query_context->getHostFQDN()};
 
-    if (requested_database.empty())
-        queryStreams(query_context, [&](Block && block) {
-            streams.reserve(block.rows());
-            for (size_t row = 0; row < block.rows(); ++row)
-                streams.push_back(std::make_shared<Table>(node_identity, this_host, block, row));
-        });
-    else if (requested_name.empty())
+    if (requested_name.empty())
     {
         queryStreamsByDatabasse(query_context, requested_database, [&](Block && block) {
             streams.reserve(block.rows());
             for (size_t row = 0; row < block.rows(); ++row)
                 streams.push_back(std::make_shared<Table>(node_identity, this_host, block, row));
         });
-        if (streams.empty())
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "database '{}' doesn't exit or does not have any streams", requested_database);
     }
     else
     {
@@ -231,7 +223,9 @@ std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Ob
                 streams.push_back(std::make_shared<Table>(node_identity, this_host, block, row));
         });
         if (streams.empty())
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "No stream named '{}' in database '{}'", requested_name, requested_database);
+            return {
+                jsonErrorResponse(fmt::format("No stream named '{}' in database '{}'", requested_name, requested_database), ErrorCodes::UNKNOWN_STREAM),
+                HTTPResponse::HTTP_NOT_FOUND};
     }
 
     Poco::JSON::Object resp;
