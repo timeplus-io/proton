@@ -266,6 +266,77 @@
                     "expected_results": "dev1\tca\t100\t100\t2020-01-01 11:11:11.000\ndev2\tca\t100\t100\t2020-01-01 11:11:11.000\ndev3\t\t100\t100\t2020-01-01 11:11:11.000\ndev777\t\t100\t100\t2020-01-01 11:11:11.000\n"
                 }
             ]
+        },
+        {
+            "id": 4,
+            "tags": [],
+            "name": "get_streams",
+            "description": "verify GET /proton/v1/ddl/streams behavior (incomplete)",
+            "steps": [
+                {
+                    "description": "Call GET /streams on a non-exist database",
+                    "statements": [
+                        {
+                            "client": "rest",
+                            "rest_type": "raw",
+                            "query_type": "table",
+                            "query_id": "410",
+                            "query_url": "/proton/v1/ddl/streams/nonexist",
+                            "http_method": "GET"
+                        }
+                    ]
+                },
+                {
+                    "description": "Call GET /streams on an empty database (i.e. no streams). This test assumes no other tests create any stream in the `neutron` database.",
+                    "statements": [
+                        {
+                            "client": "rest",
+                            "rest_type": "raw",
+                            "query_type": "table",
+                            "query_id": "411",
+                            "query_url": "/proton/v1/ddl/streams/neutron",
+                            "http_method": "GET"
+                        }
+                    ]
+                },
+                {
+                    "description": "Call GET /streams on a non-exist stream",
+                    "statements": [
+                        {
+                            "client": "rest",
+                            "rest_type": "raw",
+                            "query_type": "table",
+                            "query_id": "412",
+                            "query_url": "/proton/v1/ddl/streams/neutron/foo",
+                            "http_method": "GET"
+                        }
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id": "410",
+                    "expected_results": {
+                        "code": 81,
+                        "error_msg": "Databases nonexist does not exist."
+                    }
+                },
+                {
+                    "query_id": "411",
+                    "expected_results": {
+                        "data": [],
+                        "request_id": "any_value"
+                    }
+                },
+                {
+                    "query_id": "412",
+                    "expected_results": {
+                        "code": 60,
+                        "error_msg": "No stream named 'foo' in database 'neutron'",
+                        "request_id": "any_value"
+                    }
+                }
+            ]
         }
     ]
 }
