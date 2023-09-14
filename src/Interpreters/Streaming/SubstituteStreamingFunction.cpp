@@ -81,6 +81,8 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
         auto iter = func_map.find(func.name);
         if (iter != func_map.end())
         {
+            /// Always show original column name
+            func.code_name = func.getColumnNameWithoutAlias();
             func.name = iter->second;
             return;
         }
