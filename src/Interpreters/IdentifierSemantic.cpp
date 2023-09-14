@@ -314,8 +314,7 @@ IdentifierMembershipCollector::IdentifierMembershipCollector(const ASTSelectQuer
     const auto & settings = context->getSettingsRef();
     tables = getDatabaseAndTablesWithColumns(getTableExpressions(select), context,
                                              settings.asterisk_include_alias_columns,
-                                             settings.asterisk_include_materialized_columns,
-                                             nullptr); /// proton : FIXME we may need analyze select for this
+                                             settings.asterisk_include_materialized_columns);
 }
 
 std::optional<size_t> IdentifierMembershipCollector::getIdentsMembership(ASTPtr ast) const

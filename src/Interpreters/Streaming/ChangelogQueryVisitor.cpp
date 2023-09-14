@@ -32,28 +32,17 @@ void ChangelogQueryVisitorMatcher::visit(ASTSelectQuery & select_query, ASTPtr &
     /// For join, replace the left / right stream with subquery if necessary
     if (tables_with_columns.size() == 2)
     {
-        auto rewrite = [&](ASTPtr & query_element, DataStreamSemantic data_stream_semantic) {
-            auto & table_element = query_element->as<ASTTablesInSelectQueryElement &>();
-            auto & table_expr = table_element.table_expression->as<ASTTableExpression &>();
+        /// Rewrite left input as a changelog subquery if required tracking changes
+        if (query_info.left_storage_tracking_changes)
+            rewritten |= rewriteAsChangelogSubquery(
+                tables->children[0]->as<ASTTablesInSelectQueryElement &>().table_expression->as<ASTTableExpression &>(),
+                /*only_rewrite_subqeury*/ false);
 
-            /// If table expression is a subquery, it shall already rewritten to include
-            /// the _tp_delta column
-            if (!table_expr.subquery)
-            {
-                bool need_rewrite = (isChangelogDataStream(data_stream_semantic) || isChangelogKeyedDataStream(data_stream_semantic))
-                    && query_info.changelog_tracking_changes;
-                need_rewrite |= isVersionedKeyedDataStream(data_stream_semantic) && query_info.versioned_kv_tracking_changes;
-
-                if (need_rewrite)
-                {
-                    rewriteAsSubquery(table_expr);
-                    hard_rewritten = true;
-                }
-            }
-        };
-
-        for (size_t i = 0; auto & query_element : tables->children)
-            rewrite(query_element, tables_with_columns[i].output_data_stream_semantic);
+        /// Rewrite right input as a changelog subquery if required tracking changes
+        if (query_info.right_storage_tracking_changes)
+            rewritten |= rewriteAsChangelogSubquery(
+                tables->children[1]->as<ASTTablesInSelectQueryElement &>().table_expression->as<ASTTableExpression &>(),
+                /*only_rewrite_subqeury*/ false);
 
         /// Only add _tp_delta for subquery, skip top level select query, for exmaple:
         /// select s, ss from vk_1 inner join vk_2 on i=ii
@@ -70,12 +59,19 @@ void ChangelogQueryVisitorMatcher::visit(ASTSelectQuery & select_query, ASTPtr &
         /// Single stream
         assert(tables->children.size() == 1);
 
+        /// Rewrite `subquery` as a changelog query if required tracking changes
+        /// Only rewrite the subquery emit changelog, since it shall already be converted to changelog in IStorage::read() if storage exists
+        if (query_info.left_storage_tracking_changes)
+            rewritten |= rewriteAsChangelogSubquery(
+                tables->children[0]->as<ASTTablesInSelectQueryElement &>().table_expression->as<ASTTableExpression &>(),
+                /*only_rewrite_subqeury*/ true);
+
         if (data_stream_semantic_pair.isChangelogOutput())
         {
             /// For changelog/changelog_kv, the `*` include `_tp_delta`
             /// For versioned_kv, the `*` didn't include `_tp_delta`
             bool asterisk_include_delta = isChangelogDataStream(tables_with_columns.front().output_data_stream_semantic)
-                || isChangelogKeyedDataStream(tables_with_columns.front().output_data_stream_semantic);
+                || isChangelogKeyedStorage(tables_with_columns.front().output_data_stream_semantic);
             addDeltaColumn(select_query, asterisk_include_delta);
         }
     }
@@ -90,7 +86,6 @@ void ChangelogQueryVisitorMatcher::addDeltaColumn(ASTSelectQuery & select_query,
     const auto select_expression_list = select_query.select();
 
     bool found_delta_col = false;
-    [[maybe_unused]] bool has_asterisk = false;
     for (const auto & selected_col : select_expression_list->children)
     {
         if (auto * id = selected_col->as<ASTIdentifier>(); id)
@@ -120,7 +115,6 @@ void ChangelogQueryVisitorMatcher::addDeltaColumn(ASTSelectQuery & select_query,
         /// For one table, `t.*` <=> `*`
         else if ((selected_col->as<ASTAsterisk>() || (selected_col->as<ASTQualifiedAsterisk>() && tables_with_columns.size() == 1)))
         {
-            has_asterisk = true;
             if (!asterisk_include_delta)
                 continue;
 
@@ -134,13 +128,9 @@ void ChangelogQueryVisitorMatcher::addDeltaColumn(ASTSelectQuery & select_query,
         }
     }
 
-    /// Here are two scenarios, need add delta
-    /// 1) The @p select_query is a subquery, and _tp_delta is not present
-    if (is_subquery && !found_delta_col)
+    /// Need add delta if _tp_delta is not present and the @p select_query is a subquery or an `EMIT CHANGELOG` query
+    if (!found_delta_col && (is_subquery || query_info.force_emit_changelog))
         select_expression_list->children.emplace_back(std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
-
-    /// 2) The @p select_query is a top query, and _tp_delta is not present, and the select list has `*` (The `*` should be expanded in `TranslateQualifiedNamesVisitor` or `JoinToSubqueryTransformVisitor` (Skipped)
-    assert(!(!is_subquery && !found_delta_col && has_asterisk));
 
     if (add_new_required_result_columns)
         new_required_result_column_names.push_back(ProtonConsts::RESERVED_DELTA_FLAG);

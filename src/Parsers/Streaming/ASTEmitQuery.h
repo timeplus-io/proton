@@ -7,7 +7,12 @@ namespace DB
 struct ASTEmitQuery : public IAST
 {
 public:
-    bool streaming = false;
+    enum StreamMode {
+        STREAM,
+        CHANGELOG
+    };
+    StreamMode stream_mode = StreamMode::STREAM;
+
     /// [AFTER WATERMARK]
     bool after_watermark = false;
 

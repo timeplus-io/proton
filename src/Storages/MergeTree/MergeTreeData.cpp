@@ -185,16 +185,16 @@ inline UInt64 time_in_seconds(std::chrono::time_point<std::chrono::system_clock>
     return std::chrono::duration_cast<std::chrono::seconds>(timepoint.time_since_epoch()).count();
 }
 
-static Streaming::DataStreamSemantic toDataStreamSemantic(const std::string & storage_mode)
+static Streaming::StorageSemantic toStorageSemantic(const std::string & storage_mode)
 {
     if (storage_mode == ProtonConsts::CHANGELOG_MODE)
-        return Streaming::DataStreamSemantic::Changelog;
+        return Streaming::StorageSemantic::Changelog;
     else if (storage_mode == ProtonConsts::CHANGELOG_KV_MODE)
-        return Streaming::DataStreamSemantic::ChangelogKV;
+        return Streaming::StorageSemantic::ChangelogKV;
     else if (storage_mode == ProtonConsts::VERSIONED_KV_MODE)
-        return Streaming::DataStreamSemantic::VersionedKV;
+        return Streaming::StorageSemantic::VersionedKV;
     else
-        return Streaming::DataStreamSemantic::Append;
+        return Streaming::StorageSemantic::Append;
 }
 
 MergeTreeData::MergeTreeData(
@@ -230,7 +230,7 @@ MergeTreeData::MergeTreeData(
     /// proton: starts.
     , shard_num(shard_num_)
 {
-    data_stream_semantic = toDataStreamSemantic(storage_settings.get()->mode.value);
+    data_stream_semantic.attachStorageSemantic(toStorageSemantic(storage_settings.get()->mode.value));
     /// proton : ends
 
     context_->getGlobalContext()->initializeBackgroundExecutorsIfNeeded();

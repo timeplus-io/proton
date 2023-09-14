@@ -56,7 +56,7 @@ protected:
     StoragePtr nested_proxy_storage;
 
     bool streaming = true;
-    DataStreamSemantic data_stream_semantic = DataStreamSemantic::Append;
+    DataStreamSemanticEx data_stream_semantic;
 };
 }
 }

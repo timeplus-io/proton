@@ -22,7 +22,10 @@
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 
 /// proton: starts.
+#include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/ObjectUtils.h>
+#include <Interpreters/Streaming/RewriteAsSubquery.h>
+#include <Common/ProtonCommon.h>
 /// proton: ends.
 
 namespace DB
@@ -130,6 +133,11 @@ void StorageView::read(
             throw Exception("Unexpected optimized VIEW query", ErrorCodes::LOGICAL_ERROR);
         current_inner_query = query_info.view_query->clone();
     }
+
+    /// proton: starts.
+    if (query_info.left_storage_tracking_changes)
+        Streaming::rewriteAsChangelogQuery(current_inner_query->as<ASTSelectWithUnionQuery &>());
+    /// proton: ends.
 
     auto options = SelectQueryOptions(QueryProcessingStage::Complete, 0, false, query_info.settings_limit_offset_done);
     InterpreterSelectWithUnionQuery interpreter(current_inner_query, context, options, column_names);
@@ -269,7 +277,7 @@ bool StorageView::isReady() const
     return true;
 }
 
-Streaming::DataStreamSemantic StorageView::dataStreamSemantic() const
+Streaming::DataStreamSemanticEx StorageView::dataStreamSemantic() const
 {
     if (data_stream_semantic_resolved)
         return data_stream_semantic;
@@ -283,6 +291,15 @@ Streaming::DataStreamSemantic StorageView::dataStreamSemantic() const
     data_stream_semantic_resolved = true;
 
     return data_stream_semantic;
+}
+
+NamesAndTypesList StorageView::getVirtuals() const
+{
+    /// We may emit _tp_delta on the fly
+    if (Streaming::isVersionedKeyedStorage(dataStreamSemantic()))
+        return {NameAndTypePair(ProtonConsts::RESERVED_DELTA_FLAG, DataTypeFactory::instance().get("int8"))};
+
+    return {};
 }
 /// proton: ends.
 

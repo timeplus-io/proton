@@ -72,7 +72,7 @@ BlockIO InterpreterDescribeQuery::execute()
     if (table_expression.subquery)
     {
         auto names_and_types = InterpreterSelectWithUnionQuery::getSampleBlock(
-            table_expression.subquery->children.at(0), getContext(), false, nullptr).getNamesAndTypesList();
+            table_expression.subquery->children.at(0), getContext(), false).getNamesAndTypesList();
         columns = ColumnsDescription(std::move(names_and_types));
     }
     else if (table_expression.table_function)

@@ -40,7 +40,7 @@ public:
     bool isStreaming() const override;
     bool hasGlobalAggregation() const override;
     bool hasStreamingWindowFunc() const override;
-    Streaming::DataStreamSemantic getDataStreamSemantic() const override;
+    Streaming::DataStreamSemanticEx getDataStreamSemantic() const override;
 
     ColumnsDescriptionPtr getExtendedObjects() const override;
     std::set<String> getGroupByColumns() const override;

@@ -66,7 +66,7 @@ public:
     bool supportsParallelInsert() const override;
     bool supportsIndexForIn() const override;
     bool supportsSubcolumns() const override;
-    DataStreamSemantic dataStreamSemantic() const override { return data_stream_semantic; }
+    DataStreamSemanticEx dataStreamSemantic() const override;
 
     std::variant<StoragePtr, ASTPtr> getProxyStorageOrSubquery() const;
 
@@ -120,7 +120,7 @@ private:
         String internal_name_,
         StoragePtr storage_,
         ASTPtr subquery_,
-        DataStreamSemantic data_stream_semantic_,
+        DataStreamSemanticEx data_stream_semantic_,
         bool streaming_ = false);
 
     TableFunctionDescriptionPtr table_func_desc;
@@ -134,7 +134,7 @@ private:
     ASTPtr subquery;
     bool has_global_aggr = false;
 
-    DataStreamSemantic data_stream_semantic;
+    DataStreamSemanticEx data_stream_semantic;
 
     bool streaming = false;
 

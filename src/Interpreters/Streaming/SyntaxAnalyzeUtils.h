@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Parsers/IAST_fwd.h>
 #include <Core/Joins.h>
+#include <Parsers/IAST_fwd.h>
 
 namespace DB
 {
@@ -16,6 +16,7 @@ std::pair<bool, bool> analyzeSelectQueryForJoinOrAggregates(const ASTPtr & selec
 bool selectQueryHasJoinOrAggregates(const ASTPtr & select_query);
 
 /// Syntactically analyze the join strictness
-std::optional<JoinStrictness> analyzeJoinStrictness(const ASTSelectQuery & select_query, JoinStrictness default_strictness);
+std::optional<std::pair<JoinKind, JoinStrictness>>
+analyzeJoinKindAndStrictness(const ASTSelectQuery & select_query, JoinStrictness default_strictness);
 }
 }
