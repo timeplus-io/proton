@@ -52,18 +52,18 @@
               {
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
-                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings random_storages_rate_limitor=1000"},
-                  {"client":"python", "query_type": "table", "query_id":"2205", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random limit 2 emit periodic 1s) offset 1 settings max_threads=1"},
-                  {"client":"python", "query_type": "table", "query_id":"2206", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random limit 2 emit periodic 100ms) offset 1 settings max_threads=1"}
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings eps=1000"},
+                  {"client":"python", "query_type": "table", "query_id":"2205", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random limit 2 emit periodic 1s) offset 1 settings max_threads=8"},
+                  {"client":"python", "query_type": "table", "query_id":"2206", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random limit 2 emit periodic 2s) offset 1 settings max_threads=8"}
                 ]
               }
             ],
             "expected_results": [
               {"query_id":"2205", "expected_results":[
-                ["10000"]
+                ["1000"]
               ]},
               {"query_id":"2206", "expected_results":[
-                ["1000"]
+                ["2000"]
               ]}
             ]
           },
@@ -77,12 +77,12 @@
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
                   {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int8 default unique_random('int8'))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 0 and id < 256 from test22_create_random limit 5"}
+                  {"client":"python", "query_type": "table", "query_id":"2207", "wait":2, "query":"select id >= 0 and id < 256 from test22_create_random limit 5"}
                   ]
               }
             ],
             "expected_results": [
-              {"query_id":"2200", "expected_results":[
+              {"query_id":"2207", "expected_results":[
                 ["True"], ["True"], ["True"], ["True"], ["True"]
               ]}
             ]
@@ -97,12 +97,12 @@
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
                   {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id string default unique_random('string'))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from test22_create_random limit 5"}
+                  {"client":"python", "query_type": "table", "query_id":"2208", "wait":2, "query":"select id from test22_create_random limit 5"}
                   ]
               }
             ],
             "expected_results": [
-              {"query_id":"2200", "expected_results":[
+              {"query_id":"2208", "expected_results":[
                 ["any_value"], ["any_value"], ["any_value"], ["any_value"], ["any_value"]
               ]}
             ]
@@ -117,12 +117,12 @@
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
                   {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id decimal(9,4) default unique_random('decimal(9,4)'))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id from test22_create_random limit 5"}
+                  {"client":"python", "query_type": "table", "query_id":"2209", "wait":2, "query":"select id from test22_create_random limit 5"}
                   ]
               }
             ],
             "expected_results": [
-              {"query_id":"2200", "expected_results":[
+              {"query_id":"2209", "expected_results":[
                 ["any_value"], ["any_value"], ["any_value"], ["any_value"], ["any_value"]
               ]}
             ]
@@ -137,12 +137,12 @@
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
                   {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id uint8 default unique_random('uint8',x->to_uint8(x+10)))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 10 from test22_create_random limit 5"}
+                  {"client":"python", "query_type": "table", "query_id":"2211", "wait":2, "query":"select id >= 10 from test22_create_random limit 5"}
                   ]
               }
             ],
             "expected_results": [
-              {"query_id":"2200", "expected_results":[
+              {"query_id":"2211", "expected_results":[
                 ["True"], ["True"], ["True"], ["True"], ["True"]
               ]}
             ]
@@ -157,12 +157,12 @@
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
                   {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int8 default unique_random('int8',5))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select count(distinct id) from test22_create_random limit 1"}
+                  {"client":"python", "query_type": "table", "query_id":"2212", "wait":2, "query":"select count(distinct id) from test22_create_random limit 1"}
                   ]
               }
             ],
             "expected_results": [
-              {"query_id":"2200", "expected_results":[
+              {"query_id":"2212", "expected_results":[
                 ["5"]
               ]}
             ]
@@ -177,12 +177,12 @@
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
                   {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id uint8 default unique_random('uint8',x->to_uint8(x+10),5))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 10 and id < 15 from test22_create_random limit 10"}
+                  {"client":"python", "query_type": "table", "query_id":"2213", "wait":2, "query":"select id >= 10 and id < 15 from test22_create_random limit 10"}
                   ]
               }
             ],
             "expected_results": [
-              {"query_id":"2200", "expected_results":[
+              {"query_id":"2213", "expected_results":[
                 ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"]
               ]}
             ]
@@ -197,13 +197,61 @@
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
                   {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id uint8 default unique_random('uint8',5,x->to_uint8(x+10)))"},
-                  {"client":"python", "query_type": "table", "query_id":"2200", "wait":2, "query":"select id >= 10 and id < 15 from test22_create_random limit 10"}
+                  {"client":"python", "query_type": "table", "query_id":"2214", "wait":2, "query":"select id >= 10 and id < 15 from test22_create_random limit 10"}
                   ]
               }
             ],
             "expected_results": [
-              {"query_id":"2200", "expected_results":[
+              {"query_id":"2214", "expected_results":[
                 ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"], ["True"]
+              ]}
+            ]
+          },
+          {
+            "id": 9,
+            "tags": ["create random"],
+            "name": "test random stream generating function",
+            "description": "create random stream with default generating function, limit the amount of data produced per window;",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings eps=10"},
+                  {"client":"python", "query_type": "table", "query_id":"2215", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random limit 2 emit periodic 1s) offset 1 settings max_threads=12"},
+                  {"client":"python", "query_type": "table", "query_id":"2216", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random limit 2 emit periodic 2s) offset 1 settings max_threads=12"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"2215", "expected_results":[
+                ["10"]
+              ]},
+              {"query_id":"2216", "expected_results":[
+                ["20"]
+              ]}
+            ]
+          },
+          {
+            "id": 10,
+            "tags": ["create random"],
+            "name": "test random stream generating function",
+            "description": "create random stream with default generating function, limit the amount of data produced per window;",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings eps=10"},
+                  {"client":"python", "query_type": "table", "query_id":"2217", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random limit 2 emit periodic 1s) offset 1 settings max_threads=10"},
+                  {"client":"python", "query_type": "table", "query_id":"2218", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random limit 2 emit periodic 2s) offset 1 settings max_threads=10"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"2217", "expected_results":[
+                ["10"]
+              ]},
+              {"query_id":"2218", "expected_results":[
+                ["20"]
               ]}
             ]
           }
