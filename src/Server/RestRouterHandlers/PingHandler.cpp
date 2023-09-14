@@ -20,7 +20,7 @@ namespace ErrorCodes
 namespace
 {
     std::map<String, String> colname_bldkey_mapping
-        = {{"VERSION_DESCRIBE", "version"}, {"BUILD_TIME", "time"}, {"VERSION_GITHASH", "commit_sha"}, {"EDITION", "EDITION"}};
+        = {{"VERSION_DESCRIBE", "version"}, {"BUILD_TIME", "time"}, {"VERSION_GITHASH", "commit_sha"}, {"EDITION", "edition"}};
 }
 
 std::pair<String, Int32> PingHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*/) const
