@@ -21,6 +21,9 @@ namespace Streaming
 {
 ASTPtr rewriteAsSubquery(ASTTableExpression & table_expr)
 {
+    if (table_expr.subquery)
+        return nullptr;
+
     auto subquery = std::make_shared<ASTSubquery>();
     auto select_with_union_query = std::make_shared<ASTSelectWithUnionQuery>();
     subquery->children.emplace_back(select_with_union_query);
@@ -49,7 +52,6 @@ ASTPtr rewriteAsSubquery(ASTTableExpression & table_expr)
 
     new_table_expr->database_and_table_name = table_expr.database_and_table_name;
     new_table_expr->table_function = table_expr.table_function;
-    new_table_expr->subquery = table_expr.subquery;
 
     /// If there is alias or long version storage name, things will become complicated
     /// SELECT * FROM default.vk1 INNER JOIN default.vk2
@@ -81,15 +83,7 @@ ASTPtr rewriteAsSubquery(ASTTableExpression & table_expr)
         new_table_expr->children.emplace_back(new_table_expr->table_function);
     }
     else
-    {
-        assert(new_table_expr->subquery);
-        auto & sub_query = new_table_expr->subquery->as<ASTSubquery &>();
-        table_name = sub_query.cte_name;
-        alias = sub_query.alias;
-        sub_query.alias.clear();
-
-        new_table_expr->children.emplace_back(new_table_expr->subquery);
-    }
+        return nullptr; /// No rewrite for subquery
 
     subquery->cte_name = std::move(table_name);
     subquery->alias = std::move(alias);
@@ -112,6 +106,7 @@ bool rewriteAsChangelogSubquery(ASTTableExpression & table_expression, bool only
             return false;
 
         subquery = rewriteAsSubquery(table_expression);
+        assert(subquery);
     }
 
     auto & query = subquery->as<ASTSubquery &>().children[0]->as<ASTSelectWithUnionQuery &>();

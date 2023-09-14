@@ -70,8 +70,6 @@ DataStreamSemanticEx calculateDataStreamSemanticForJoin(
 
 bool canTrackChangesFromStorage(DataStreamSemanticEx input_data_stream_semantic)
 {
-    /// 1) Storages: VerionsedKV, ChangelogKV, Changelog
-    /// 2) Or flat transformation / filtering data stream over 1) Storages
     return isVersionedKeyedStorage(input_data_stream_semantic) || isChangelogKeyedStorage(input_data_stream_semantic)
         || isChangelogKeyedStorage(input_data_stream_semantic);
 }

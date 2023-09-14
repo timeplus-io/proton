@@ -10,7 +10,11 @@ struct SelectQueryInfo;
 
 namespace Streaming
 {
+/// @brief Return whether current semantic can tracking changes:
+/// 1) Storage (VersionedKV/ChangelogKV/Changelog)
+/// 2) Or flat transformation / filtering data stream over 1) Storages
 bool canTrackChangesFromStorage(DataStreamSemanticEx input_data_stream_semantic);
+
 bool isJoinResultChangelog(DataStreamSemanticEx left_data_stream_semantic, DataStreamSemanticEx right_data_stream_semantic);
 
 /// Calculate output data stream semantic according its inputs data stream semantic and

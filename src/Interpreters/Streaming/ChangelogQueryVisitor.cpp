@@ -34,13 +34,13 @@ void ChangelogQueryVisitorMatcher::visit(ASTSelectQuery & select_query, ASTPtr &
     {
         /// Rewrite left input as a changelog subquery if required tracking changes
         if (query_info.left_storage_tracking_changes)
-            hard_rewritten |= rewriteAsChangelogSubquery(
+            rewritten |= rewriteAsChangelogSubquery(
                 tables->children[0]->as<ASTTablesInSelectQueryElement &>().table_expression->as<ASTTableExpression &>(),
                 /*only_rewrite_subqeury*/ false);
 
         /// Rewrite right input as a changelog subquery if required tracking changes
         if (query_info.right_storage_tracking_changes)
-            hard_rewritten |= rewriteAsChangelogSubquery(
+            rewritten |= rewriteAsChangelogSubquery(
                 tables->children[1]->as<ASTTablesInSelectQueryElement &>().table_expression->as<ASTTableExpression &>(),
                 /*only_rewrite_subqeury*/ false);
 
@@ -62,7 +62,7 @@ void ChangelogQueryVisitorMatcher::visit(ASTSelectQuery & select_query, ASTPtr &
         /// Rewrite `subquery` as a changelog query if required tracking changes
         /// Only rewrite the subquery emit changelog, since it shall already be converted to changelog in IStorage::read() if storage exists
         if (query_info.left_storage_tracking_changes)
-            hard_rewritten |= rewriteAsChangelogSubquery(
+            rewritten |= rewriteAsChangelogSubquery(
                 tables->children[0]->as<ASTTablesInSelectQueryElement &>().table_expression->as<ASTTableExpression &>(),
                 /*only_rewrite_subqeury*/ true);
 

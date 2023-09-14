@@ -582,7 +582,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
                 query_info);
 
             Streaming::ChangelogQueryVisitor(data).visit(query_ptr);
-            if (data.queryIsHardRewritten())
+            if (data.queryIsRewritten())
             {
                 clear_inits();
 
