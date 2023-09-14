@@ -11,4 +11,4 @@ psycopg2-binary==2.9.3
 kafka-python==2.0.2
 timeplus==1.1.2
 sseclient-py>=1.7.2
-proton-driver>=0.2.4
+proton-driver>=0.2.6
