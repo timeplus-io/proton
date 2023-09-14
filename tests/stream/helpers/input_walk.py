@@ -12,8 +12,8 @@ from pytest_cases.fixture_parametrize_plus import parametrize
 import requests
 
 import multiprocessing as mp
-from clickhouse_driver import Client
-from clickhouse_driver import errors
+from proton_driver import Client
+from proton_driver import errors
 from requests.api import request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
