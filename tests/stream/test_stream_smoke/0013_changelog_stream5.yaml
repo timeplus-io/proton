@@ -58,7 +58,52 @@ tests:
                 type: float32
               is_aggregation: true
               return_type: float32
-              source: '{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {''max'': this.max, ''sec'':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s[''max'']; this.sec = s[''sec'']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s[''sec''] >= this.max) { this.max = s[''max'']; this.sec = s[''sec''];} else if(s[''max''] >= this.max) { this.sec = this.max; this.max = s[''max''];} else if (s[''max''] > this.sec) { this.sec = s[''max'']; } } }'
+              source: |
+                {
+                  initialize: function() { 
+                    this.max = -1.0;
+                    this.sec = -1.0;
+                  },
+
+                  process: function(values) {
+                    for(let i=0; i<values.length; i++) {
+                      if(values[i] > this.max) {
+                        this.sec = this.max;
+                        this.max = values[i];
+                      }
+                      if(values[i] < this.max && values[i] > this.sec)
+                        this.sec = values[i];
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.sec;
+                  },
+
+                  serialize: function() {
+                    let s = {"max": this.max, "sec":this.sec };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.max = s["max"];
+                    this.sec = s["sec"];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    if (s["sec"] >= this.max) {
+                      this.max = s["max"];
+                      this.sec = s["sec"];
+                    } else if (s["max"] >= this.max) {
+                      this.sec = this.max;
+                      this.max = s["max"];
+                    } else if (s["max"] > this.sec) {
+                      this.sec = s["max"];
+                    }
+                  }
+                }
 
           - client: python
             query_type: table
@@ -139,7 +184,52 @@ tests:
                 type: float32
               is_aggregation: true
               return_type: float32
-              source: '{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {''max'': this.max, ''sec'':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s[''max'']; this.sec = s[''sec'']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s[''sec''] >= this.max) { this.max = s[''max'']; this.sec = s[''sec''];} else if(s[''max''] >= this.max) { this.sec = this.max; this.max = s[''max''];} else if (s[''max''] > this.sec) { this.sec = s[''max'']; } } }'
+              source: |
+                {
+                  initialize: function() { 
+                    this.max = -1.0;
+                    this.sec = -1.0;
+                  },
+
+                  process: function(values) {
+                    for(let i=0; i<values.length; i++) {
+                      if(values[i] > this.max) {
+                        this.sec = this.max;
+                        this.max = values[i];
+                      }
+                      if(values[i] < this.max && values[i] > this.sec)
+                        this.sec = values[i];
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.sec;
+                  },
+
+                  serialize: function() {
+                    let s = {"max": this.max, "sec":this.sec };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.max = s["max"];
+                    this.sec = s["sec"];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    if (s["sec"] >= this.max) {
+                      this.max = s["max"];
+                      this.sec = s["sec"];
+                    } else if (s["max"] >= this.max) {
+                      this.sec = this.max;
+                      this.max = s["max"];
+                    } else if (s["max"] > this.sec) {
+                      this.sec = s["max"];
+                    }
+                  }
+                }
 
           - client: python
             query_type: table
@@ -645,7 +735,13 @@ tests:
               - name: value
                 type: float32
               return_type: float32
-              source: function add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
 
           - client: python
             query_type: table
@@ -855,7 +951,11 @@ tests:
           - client: python
             query_type: table
             wait: 2
-            query: create materialized view if not exists test14_view_5 as ( with cte as (select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2)) select i, k1, k2, _tp_delta from cte );
+            query: |
+              create materialized view if not exists test14_view_5 as (
+                with cte as (select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2))
+                select i, k1, k2, _tp_delta from cte
+              );
 
           - client: python
             query_id: '1420'
@@ -946,12 +1046,15 @@ tests:
           - client: python
             query_type: table
             wait: 2
-            query: create view if not exists test14_view1_5 as ( select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2) );
+            query: |
+              create view if not exists test14_view1_5 as (
+                select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2)
+              );
 
           - client: python
             query_type: table
             wait: 2
-            query: create view if not exists test14_view2_5 as ( select * from test14_view1_5 );
+            query: create view if not exists test14_view2_5 as (select * from test14_view1_5);
 
           - client: python
             query_id: '1421'
@@ -1039,7 +1142,11 @@ tests:
             depends_on_stream: test14_subquery_5
             query_end_timer: 12
             query_type: stream
-            query: with cte1 as (with cte2 as (select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2)) select * from cte2) select lag(i, 2), k2 from cte1;
+            query: |
+              with cte1 as (
+                with cte2 as (select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2))
+                select * from cte2
+              )select lag(i, 2), k2 from cte1;
 
           - client: python
             query_type: table
@@ -1118,12 +1225,18 @@ tests:
           - client: python
             query_type: table
             wait: 2
-            query: create view if not exists test14_view1_5 as ( select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2) );
+            query: |
+              create view if not exists test14_view1_5 as (
+                select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2)
+              );
 
           - client: python
             query_type: table
             wait: 2
-            query: create materialized view if not exists test14_view2_5 as ( select i, k1, k2, _tp_delta from test14_view1_5 );
+            query: |
+              create materialized view if not exists test14_view2_5 as (
+                select i, k1, k2, _tp_delta from test14_view1_5
+              );
 
           - client: python
             query_id: '1423'

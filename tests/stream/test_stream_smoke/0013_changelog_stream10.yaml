@@ -43,7 +43,52 @@ tests:
                 type: float32
               is_aggregation: true
               return_type: float32
-              source: '{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {''max'': this.max, ''sec'':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s[''max'']; this.sec = s[''sec'']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s[''sec''] >= this.max) { this.max = s[''max'']; this.sec = s[''sec''];} else if(s[''max''] >= this.max) { this.sec = this.max; this.max = s[''max''];} else if (s[''max''] > this.sec) { this.sec = s[''max'']; } } }'
+              source: |
+                {
+                  initialize: function() { 
+                    this.max = -1.0;
+                    this.sec = -1.0;
+                  },
+
+                  process: function(values) {
+                    for(let i=0; i<values.length; i++) {
+                      if(values[i] > this.max) {
+                        this.sec = this.max;
+                        this.max = values[i];
+                      }
+                      if(values[i] < this.max && values[i] > this.sec)
+                        this.sec = values[i];
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.sec;
+                  },
+
+                  serialize: function() {
+                    let s = {"max": this.max, "sec":this.sec };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.max = s["max"];
+                    this.sec = s["sec"];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    if (s["sec"] >= this.max) {
+                      this.max = s["max"];
+                      this.sec = s["sec"];
+                    } else if (s["max"] >= this.max) {
+                      this.sec = this.max;
+                      this.max = s["max"];
+                    } else if (s["max"] > this.sec) {
+                      this.sec = s["max"];
+                    }
+                  }
+                }
 
           - client: python
             query_type: table
@@ -55,8 +100,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                        shards=3;
+              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_id: '1472'
@@ -131,7 +176,52 @@ tests:
                 type: float32
               is_aggregation: true
               return_type: float32
-              source: '{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {''max'': this.max, ''sec'':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s[''max'']; this.sec = s[''sec'']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s[''sec''] >= this.max) { this.max = s[''max'']; this.sec = s[''sec''];} else if(s[''max''] >= this.max) { this.sec = this.max; this.max = s[''max''];} else if (s[''max''] > this.sec) { this.sec = s[''max'']; } } }'
+              source: |
+                {
+                  initialize: function() { 
+                    this.max = -1.0;
+                    this.sec = -1.0;
+                  },
+
+                  process: function(values) {
+                    for(let i=0; i<values.length; i++) {
+                      if(values[i] > this.max) {
+                        this.sec = this.max;
+                        this.max = values[i];
+                      }
+                      if(values[i] < this.max && values[i] > this.sec)
+                        this.sec = values[i];
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.sec;
+                  },
+
+                  serialize: function() {
+                    let s = {"max": this.max, "sec":this.sec };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.max = s["max"];
+                    this.sec = s["sec"];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    if (s["sec"] >= this.max) {
+                      this.max = s["max"];
+                      this.sec = s["sec"];
+                    } else if (s["max"] >= this.max) {
+                      this.sec = this.max;
+                      this.max = s["max"];
+                    } else if (s["max"] > this.sec) {
+                      this.sec = s["max"];
+                    }
+                  }
+                }
 
           - client: python
             query_type: table
@@ -143,8 +233,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                        shards=3;
+              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_id: '1473'
@@ -228,8 +318,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                        shards=3;
+              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_id: '1474'
@@ -325,8 +415,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                        shards=3;
+              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_type: table
@@ -434,8 +524,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                        shards=3;
+              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_type: table
@@ -549,8 +639,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                        shards=3;
+              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_type: table
@@ -700,8 +790,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                        shards=3;
+              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_type: table
@@ -839,8 +929,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                        shards=3;
+              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_type: table
@@ -990,8 +1080,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                        shards=3;
+              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_type: table
@@ -1144,8 +1234,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                        shards=3;
+              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_type: table
@@ -1294,8 +1384,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                        shards=3;
+              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_type: table
@@ -1425,7 +1515,52 @@ tests:
                 type: float32
               is_aggregation: true
               return_type: float32
-              source: '{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {''max'': this.max, ''sec'':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s[''max'']; this.sec = s[''sec'']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s[''sec''] >= this.max) { this.max = s[''max'']; this.sec = s[''sec''];} else if(s[''max''] >= this.max) { this.sec = this.max; this.max = s[''max''];} else if (s[''max''] > this.sec) { this.sec = s[''max'']; } } }'
+              source: |
+                {
+                  initialize: function() { 
+                    this.max = -1.0;
+                    this.sec = -1.0;
+                  },
+
+                  process: function(values) {
+                    for(let i=0; i<values.length; i++) {
+                      if(values[i] > this.max) {
+                        this.sec = this.max;
+                        this.max = values[i];
+                      }
+                      if(values[i] < this.max && values[i] > this.sec)
+                        this.sec = values[i];
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.sec;
+                  },
+
+                  serialize: function() {
+                    let s = {"max": this.max, "sec":this.sec };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.max = s["max"];
+                    this.sec = s["sec"];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    if (s["sec"] >= this.max) {
+                      this.max = s["max"];
+                      this.sec = s["sec"];
+                    } else if (s["max"] >= this.max) {
+                      this.sec = this.max;
+                      this.max = s["max"];
+                    } else if (s["max"] > this.sec) {
+                      this.sec = s["max"];
+                    }
+                  }
+                }
 
           - client: python
             query_type: table
@@ -1449,8 +1584,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                        shards=3;
+              create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_type: table

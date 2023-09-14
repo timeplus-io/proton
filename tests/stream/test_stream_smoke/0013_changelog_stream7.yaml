@@ -59,7 +59,52 @@ tests:
                 type: float32
               is_aggregation: true
               return_type: float32
-              source: '{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {''max'': this.max, ''sec'':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s[''max'']; this.sec = s[''sec'']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s[''sec''] >= this.max) { this.max = s[''max'']; this.sec = s[''sec''];} else if(s[''max''] >= this.max) { this.sec = this.max; this.max = s[''max''];} else if (s[''max''] > this.sec) { this.sec = s[''max'']; } } }'
+              source: |
+                {
+                  initialize: function() { 
+                    this.max = -1.0;
+                    this.sec = -1.0;
+                  },
+
+                  process: function(values) {
+                    for(let i=0; i<values.length; i++) {
+                      if(values[i] > this.max) {
+                        this.sec = this.max;
+                        this.max = values[i];
+                      }
+                      if(values[i] < this.max && values[i] > this.sec)
+                        this.sec = values[i];
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.sec;
+                  },
+
+                  serialize: function() {
+                    let s = {"max": this.max, "sec":this.sec };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.max = s["max"];
+                    this.sec = s["sec"];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    if (s["sec"] >= this.max) {
+                      this.max = s["max"];
+                      this.sec = s["sec"];
+                    } else if (s["max"] >= this.max) {
+                      this.sec = this.max;
+                      this.max = s["max"];
+                    } else if (s["max"] > this.sec) {
+                      this.sec = s["max"];
+                    }
+                  }
+                }
 
           - client: python
             query_type: table
@@ -243,7 +288,52 @@ tests:
                 type: float32
               is_aggregation: true
               return_type: float32
-              source: '{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {''max'': this.max, ''sec'':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s[''max'']; this.sec = s[''sec'']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s[''sec''] >= this.max) { this.max = s[''max'']; this.sec = s[''sec''];} else if(s[''max''] >= this.max) { this.sec = this.max; this.max = s[''max''];} else if (s[''max''] > this.sec) { this.sec = s[''max'']; } } }'
+              source: |
+                {
+                  initialize: function() { 
+                    this.max = -1.0;
+                    this.sec = -1.0;
+                  },
+
+                  process: function(values) {
+                    for(let i=0; i<values.length; i++) {
+                      if(values[i] > this.max) {
+                        this.sec = this.max;
+                        this.max = values[i];
+                      }
+                      if(values[i] < this.max && values[i] > this.sec)
+                        this.sec = values[i];
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.sec;
+                  },
+
+                  serialize: function() {
+                    let s = {"max": this.max, "sec":this.sec };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.max = s["max"];
+                    this.sec = s["sec"];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    if (s["sec"] >= this.max) {
+                      this.max = s["max"];
+                      this.sec = s["sec"];
+                    } else if (s["max"] >= this.max) {
+                      this.sec = this.max;
+                      this.max = s["max"];
+                    } else if (s["max"] > this.sec) {
+                      this.sec = s["max"];
+                    }
+                  }
+                }
 
           - client: python
             query_type: table
@@ -260,7 +350,9 @@ tests:
             depends_on_stream: test14_substream_7
             query_end_timer: 12
             query_type: stream
-            query: select sec_large(val), max(val), min(val), avg(val), name from changelog(test14_substream_7, id) partition by name group by types;
+            query: |
+              select sec_large(val), max(val), min(val), avg(val), name from changelog(test14_substream_7, id)
+              partition by name group by types;
 
           - client: python
             query_type: table
@@ -336,7 +428,13 @@ tests:
             depends_on_stream: test14_substream_7
             query_end_timer: 12
             query_type: stream
-            query: select max(val), min(val), avg(val), count(*), sum(val), window_start from tumble(test14_stream, ts, 5s) group by window_start insert into test14_stream(val, id, name, ts) values (1, 2, 'a', '2020-02-02 20:00:01');
+            query: select max(val), min(val), avg(val), count(*), sum(val), window_start from tumble(test14_stream, ts, 5s) group by window_start;
+
+          - client: python
+            query_type: table
+            depends_on: '1439'
+            wait: 2
+            query: insert into test14_stream(val, id, name, ts) values (1, 2, 'a', '2020-02-02 20:00:01');
 
           - client: python
             query_type: table
@@ -410,18 +508,27 @@ tests:
           - client: python
             query_type: table
             wait: 2
-            query: create stream if not exists test14_stream(val float, id int, name string, ts datetime) primary key id settings mode='versioned_kv';
+            query: |
+              create stream if not exists test14_stream(val float, id int, name string, ts datetime)
+              primary key id settings mode='versioned_kv';
 
           - client: python
             query_id: '1440'
             depends_on_stream: test14_substream_7
             query_end_timer: 12
             query_type: stream
-            query: select max(val), min(val), avg(val), count(*), sum(val), window_start from hop(test14_stream, ts, 2s, 5s) group by window_start insert into test14_stream(val, id, name, ts) values (1, 2, 'a', '2020-02-02 20:00:01');
+            query: |
+              select max(val), min(val), avg(val), count(*), sum(val), window_start from hop(test14_stream, ts, 2s, 5s)
+              group by window_start;
 
           - client: python
             query_type: table
             depends_on: '1440'
+            wait: 2
+            query: insert into test14_stream(val, id, name, ts) values (1, 2, 'a', '2020-02-02 20:00:01');
+
+          - client: python
+            query_type: table
             wait: 2
             query: insert into test14_stream(val, id, name, ts) values (3, 3, 'b', '2020-02-02 20:00:02');
 
@@ -493,7 +600,13 @@ tests:
               - name: value
                 type: float32
               return_type: float32
-              source: function add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
 
           - client: python
             query_type: table
@@ -513,7 +626,7 @@ tests:
           - client: python
             query_type: table
             wait: 2
-            query: create view if not exists test14_view_7 as (with cte as (select i, k1, k2 from test14_subquery_7) select * from cte );
+            query: create view if not exists test14_view_7 as (with cte as (select i, k1, k2 from test14_subquery_7) select * from cte);
 
           - client: python
             query_id: '1441'
@@ -608,7 +721,13 @@ tests:
               - name: value
                 type: float32
               return_type: float32
-              source: function add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
 
           - client: python
             query_type: table
@@ -628,7 +747,11 @@ tests:
           - client: python
             query_type: table
             wait: 2
-            query: create materialized view if not exists test14_view_7 as ( with cte as (select i, k1, k2 from test14_subquery_7) select i, k1, k2 from cte );
+            query: |
+              create materialized view if not exists test14_view_7 as (
+                with cte as (select i, k1, k2 from test14_subquery_7)
+                select i, k1, k2 from cte
+              );
 
           - client: python
             query_id: '1442'
@@ -723,7 +846,13 @@ tests:
               - name: value
                 type: float32
               return_type: float32
-              source: function add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
 
           - client: python
             query_type: table
@@ -743,17 +872,19 @@ tests:
           - client: python
             query_type: table
             wait: 2
-            query: create stream if not exists test14_subquery_7(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv';
+            query: |
+              create stream if not exists test14_subquery_7(i float, k1 int, k2 string)
+              primary key k2 settings mode='versioned_kv';
 
           - client: python
             query_type: table
             wait: 2
-            query: create view if not exists test14_view1_7 as ( select i, k1, k2, _tp_delta from test14_subquery_7 );
+            query: create view if not exists test14_view1_7 as (select i, k1, k2, _tp_delta from test14_subquery_7);
 
           - client: python
             query_type: table
             wait: 2
-            query: create view if not exists test14_view2_7 as ( select * from test14_view1_7 );
+            query: create view if not exists test14_view2_7 as (select * from test14_view1_7);
 
           - client: python
             query_id: '1443'
@@ -853,7 +984,13 @@ tests:
               - name: value
                 type: float32
               return_type: float32
-              source: function add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
 
           - client: python
             query_type: table
@@ -870,7 +1007,9 @@ tests:
             depends_on_stream: test14_subquery_7
             query_end_timer: 12
             query_type: stream
-            query: with cte1 as (with cte2 as (select i, k1, k2, _tp_delta from test14_subquery_7) select * from cte2) select i, k1, k2, lag(i, 2), upper(k2), add_five(i) from cte1;
+            query: |
+              with cte1 as (with cte2 as (select i, k1, k2, _tp_delta from test14_subquery_7) select * from cte2)
+              select i, k1, k2, lag(i, 2), upper(k2), add_five(i) from cte1;
 
           - client: python
             query_type: table
@@ -953,7 +1092,13 @@ tests:
               - name: value
                 type: float32
               return_type: float32
-              source: function add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
 
           - client: python
             query_type: table
@@ -978,17 +1123,19 @@ tests:
           - client: python
             query_type: table
             wait: 2
-            query: create stream if not exists test14_subquery_7(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv';
+            query: |
+              create stream if not exists test14_subquery_7(i float, k1 int, k2 string)
+              primary key k2 settings mode='versioned_kv';
 
           - client: python
             query_type: table
             wait: 2
-            query: create view if not exists test14_view1_7 as ( select i, k1, k2 from test14_subquery_7 );
+            query: create view if not exists test14_view1_7 as (select i, k1, k2 from test14_subquery_7);
 
           - client: python
             query_type: table
             wait: 2
-            query: create materialized view if not exists test14_view2_7 as ( select i, k1, k2 from test14_view1_7 );
+            query: create materialized view if not exists test14_view2_7 as (select i, k1, k2 from test14_view1_7);
 
           - client: python
             query_id: '1445'
@@ -1095,7 +1242,7 @@ tests:
           - client: python
             query_type: table
             wait: 2
-            query: create view if not exists test14_view_7 as (with cte as (select i, k1, k2 from test14_subquery_7) select * from cte );
+            query: create view if not exists test14_view_7 as (with cte as (select i, k1, k2 from test14_subquery_7) select * from cte);
 
           - client: python
             query_id: '1446'
@@ -1180,7 +1327,11 @@ tests:
           - client: python
             query_type: table
             wait: 2
-            query: create materialized view if not exists test14_view_7 as ( with cte as (select i, k1, k2 from test14_subquery_7) select i, k1, k2 from cte );
+            query: |
+              create materialized view if not exists test14_view_7 as (
+                with cte as (select i, k1, k2 from test14_subquery_7)
+                select i, k1, k2 from cte
+              );
 
           - client: python
             query_id: '1447'

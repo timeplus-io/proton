@@ -45,17 +45,19 @@ tests:
           - client: python
             query_type: table
             wait: 2
-            query: create stream if not exists test14_subquery_8(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv';
+            query: |
+              create stream if not exists test14_subquery_8(i float, k1 int, k2 string)
+              primary key k2 settings mode='versioned_kv';
 
           - client: python
             query_type: table
             wait: 2
-            query: create view if not exists test14_view1_8 as ( select i, k1, k2, _tp_delta from test14_subquery_8 );
+            query: create view if not exists test14_view1_8 as (select i, k1, k2, _tp_delta from test14_subquery_8);
 
           - client: python
             query_type: table
             wait: 2
-            query: create view if not exists test14_view2_8 as ( select * from test14_view1_8 );
+            query: create view if not exists test14_view2_8 as (select * from test14_view1_8);
 
           - client: python
             query_id: '1448'
@@ -146,7 +148,9 @@ tests:
             depends_on_stream: test14_subquery_8
             query_end_timer: 6
             query_type: stream
-            query: with cte1 as (with cte2 as (select i, k1, k2, _tp_delta from test14_subquery_8) select * from cte2) select max(i), min(i), avg(i), k2 from cte1 group by k2;
+            query: |
+              with cte1 as (with cte2 as (select i, k1, k2, _tp_delta from test14_subquery_8)
+              select * from cte2) select max(i), min(i), avg(i), k2 from cte1 group by k2;
 
           - client: python
             query_type: table
@@ -259,12 +263,12 @@ tests:
           - client: python
             query_type: table
             wait: 2
-            query: create view if not exists test14_view1_8 as ( select i, k1, k2 from test14_subquery_8 );
+            query: create view if not exists test14_view1_8 as (select i, k1, k2 from test14_subquery_8);
 
           - client: python
             query_type: table
             wait: 2
-            query: create materialized view if not exists test14_view2_8 as ( select i, k1, k2 from test14_view1_8 );
+            query: create materialized view if not exists test14_view2_8 as (select i, k1, k2 from test14_view1_8);
 
           - client: python
             query_id: '1450'
@@ -365,7 +369,13 @@ tests:
                 - name: value
                 - type: float32
               return_type: float32
-              source: function add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
 
           - client: python
             query_type: table
@@ -638,7 +648,13 @@ tests:
                 - name: value
                 - type: float32
               return_type: float32
-              source: function add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
 
           - client: python
             query_type: table
@@ -823,8 +839,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_8(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                       shards=3;
+              create stream if not exists test14_multishard_8(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_id: '1456'
@@ -910,8 +926,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_8(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                       shards=3;
+              create stream if not exists test14_multishard_8(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_id: '1457'
@@ -1008,7 +1024,13 @@ tests:
               - name: value
                 type: float32
               return_type: float32
-              source: function add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
 
           - client: python
             query_type: table
@@ -1020,8 +1042,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_8(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                       shards=3;
+              create stream if not exists test14_multishard_8(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_id: '1458'
@@ -1110,7 +1132,13 @@ tests:
               - name: value
                 type: float32
               return_type: float32
-              source: function add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
 
           - client: python
             query_type: table
@@ -1122,8 +1150,8 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create stream if not exists test14_multishard_8(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv',
-                                                                                                                       shards=3;
+              create stream if not exists test14_multishard_8(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
 
           - client: python
             query_id: '1459'
