@@ -79,10 +79,10 @@ void TelemetryCollector::collect()
 
         std::string data = fmt::format("{{"
             "\"type\": \"track\","
-            "\"event\": \"protonPing\","
+            "\"event\": \"proton_ping\","
             "\"properties\": {{"
             "    \"cpu\": \"{}\","
-            "    \"memory_in_GB\": \"{}\","
+            "    \"memory_in_gb\": \"{}\","
             "    \"edition\": \"{}\","
             "    \"version\": \"{}\","
             "    \"new_session\": \"{}\","
