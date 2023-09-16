@@ -12,7 +12,7 @@
 
 namespace Poco
 {
-    class Logger;
+class Logger;
 }
 
 namespace klog

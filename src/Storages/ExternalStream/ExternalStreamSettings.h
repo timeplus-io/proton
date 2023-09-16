@@ -15,6 +15,7 @@ class ASTStorage;
     M(String, security_protocol, "plaintext", "The protocol to connection external logstore", 0) \
     M(String, username, "", "The username of external logstore", 0) \
     M(String, password, "", "The password of external logstore", 0) \
+    M(String, properties, "", "A semi-colon-separated key-value pairs for configuring the kafka client used by the external stream. A key-value pair is separated by a equal sign. Example: 'client.id=my-client-id;group.id=my-group-id'. Note, not all properties are supported, please check the document for supported properties.", 0) \
     /* those are log related settings */ \
     M(String, log_files, "", "A comma-separated list of log files", 0) \
     M(String, log_dir, "", "log root directory", 0) \

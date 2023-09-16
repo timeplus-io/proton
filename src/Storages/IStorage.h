@@ -221,6 +221,11 @@ public:
         /// proton: FIXME, introduce versioning schema physically in metastore
         return metadata.get();
     }
+
+    /// Insert queries squash blocks for buffering (see InterpreterInsertQuery.cpp).
+    /// However, not all storages need this feature, for example, external streams likely have
+    /// their own ways to do buffering.
+    virtual bool insertWithoutSquash() const { return false; }
     /// proton: ends.
 
     /// Return list of virtual columns (like _part, _table, etc). In the vast

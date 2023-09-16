@@ -254,9 +254,11 @@ Chain InterpreterInsertQuery::buildChainImpl(
     /// It's important to squash blocks as early as possible (before other transforms),
     ///  because other transforms may work inefficient if block size is small.
 
+    /// proton: Do not squash if the table storage does not require it.
     /// Do not squash blocks if it is a sync INSERT into Distributed, since it lead to double bufferization on client and server side.
     /// Client-side bufferization might cause excessive timeouts (especially in case of big blocks).
-    if (!(settings.insert_distributed_sync && table->isRemote()) && !no_squash && !(query && query->watch))
+    if (/* proton: start */ !table->insertWithoutSquash() /* proton: end */
+        && !(settings.insert_distributed_sync && table->isRemote()) && !no_squash && !(query && query->watch))
     {
         bool table_prefers_large_blocks = table->prefersLargeBlocks();
 

@@ -18,8 +18,8 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int INVALID_SETTING_VALUE;
-    extern const int CANNOT_FSTAT;
+extern const int INVALID_SETTING_VALUE;
+extern const int CANNOT_FSTAT;
 }
 
 FileLog::FileLog(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_)
@@ -112,13 +112,12 @@ Pipe FileLog::read(
         saved_start_timestamp = SeekToInfo::parse(query_info.seek_to_info->getSeekTo(), false).second[0];
 
     return Pipe(std::make_shared<FileLogSource>(
-        this,
-        std::move(header),
-        std::move(context),
-        max_block_size,
-        saved_start_timestamp,
-        searchForCandidates(),
-        log));
+        this, std::move(header), std::move(context), max_block_size, saved_start_timestamp, searchForCandidates(), log));
+}
+
+SinkToStoragePtr FileLog::write(const ASTPtr & /*query*/, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr /*context*/)
+{
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Ingesting data to external stream of 'log' type is not supported");
 }
 
 FileLogSource::FileContainer FileLog::searchForCandidates()

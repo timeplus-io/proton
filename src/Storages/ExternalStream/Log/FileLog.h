@@ -46,6 +46,8 @@ public:
         size_t max_block_size,
         size_t num_streams) override;
 
+    SinkToStoragePtr write(const ASTPtr & /*query*/, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr /*context*/) override;
+
     FileLogSource::FileContainer searchForCandidates();
 
 private:

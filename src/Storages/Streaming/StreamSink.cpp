@@ -167,7 +167,7 @@ void StreamSink::onFinish()
 
     /// 3) Inplace poll append result until either all of records have been committed
     auto start = MonotonicSeconds::now();
-    while (1)
+    while (true)
     {
         if (ingest_state->committed == outstanding)
         {
@@ -202,7 +202,7 @@ void StreamSink::checkpoint(CheckpointContextPtr ckpt_ctx)
     const auto checkpoint_timeout = MonotonicSeconds::now() + CHECKPOINT_TIMEOUT_SECONDS;
 
     std::unique_lock lock(mutex);
-    while (1)
+    while (true)
     {
         if (checkpoint_cv.wait_for(lock, CHECK_INTERVAL, [&] { return ingest_state->committed == outstanding; }))
         {

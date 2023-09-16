@@ -1,6 +1,12 @@
 #include "Kafka.h"
+#include <fmt/core.h>
+#include <memory>
+#include <vector>
+#include "KafkaSink.h"
 #include "KafkaSource.h"
 
+#include <Common/ProtonCommon.h>
+#include <Common/logger_useful.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <KafkaLog/KafkaWALPool.h>
@@ -8,8 +14,9 @@
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
-#include <Common/logger_useful.h>
-#include <Common/ProtonCommon.h>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/split.hpp>
 
 namespace DB
 {
@@ -18,6 +25,64 @@ namespace ErrorCodes
 extern const int INVALID_SETTING_VALUE;
 extern const int OK;
 extern const int RESOURCE_NOT_FOUND;
+}
+
+std::vector<std::pair<std::string, std::string>> Kafka::parseProperties(std::string properties)
+{
+    std::vector<std::pair<std::string, std::string>> result;
+    if (properties.empty())
+        return result;
+
+    static auto ltrim = [](std::string &s)
+    {
+        s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
+            return !std::isspace(ch);
+        }));
+    };
+
+    static auto rtrim = [](std::string &s)
+    {
+        s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
+            return !std::isspace(ch);
+        }).base(), s.end());
+    };
+
+    /// properties example:
+    /// message.max.bytes=1024;max.in.flight=1000;group.id=my-group
+
+    std::vector<std::string> parts;
+    boost::split(parts, properties, boost::is_any_of(";"));
+    result.reserve(parts.size());
+
+    std::vector<std::string> kv{2};
+    for (const auto& part : parts)
+    {
+        boost::split(kv, part, boost::is_any_of("="));
+        if (unlikely(kv.empty())) /* redundant/trailing semi-colon */
+            continue;
+
+        if (unlikely(kv.size() == 1))
+        {
+            if (kv.at(0).empty()) /* something like `;;;` */
+                continue;
+
+            throw Exception(fmt::format("Invalid property `{}`, missing value.", part), ErrorCodes::INVALID_SETTING_VALUE);
+        }
+
+        /// in case the property value actually contains `=`, this should be vary rare
+        if (unlikely(kv.size() > 2))
+            kv[1] = boost::join(std::vector(kv.begin() + 1, kv.end()), "=");
+
+        if (unlikely(kv.at(0).empty()))
+            throw Exception(fmt::format("Invalid property `{}`, empty property name.", part), ErrorCodes::INVALID_SETTING_VALUE);
+
+        /// no spaces are supposed be around `=`, thus only need to
+        /// remove the leading spaces of keys and trailing spaces of values
+        ltrim(kv.at(0));
+        rtrim(kv.at(1));
+        result.push_back(std::make_pair(kv.at(0), kv.at(1)));
+    }
+    return result;
 }
 
 Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, bool attach)
@@ -85,7 +150,11 @@ Pipe Kafka::read(
             pipes.emplace_back(std::make_shared<KafkaSource>(this, header, storage_snapshot, context, i, offsets[i], max_block_size, log));
     }
 
-    LOG_INFO(log, "Starting reading {} streams by seeking to {} in dedicated resource group", pipes.size(), query_info.seek_to_info->getSeekTo());
+    LOG_INFO(
+        log,
+        "Starting reading {} streams by seeking to {} in dedicated resource group",
+        pipes.size(),
+        query_info.seek_to_info->getSeekTo());
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
     auto min_threads = context->getSettingsRef().min_threads.value;
@@ -165,5 +234,10 @@ void Kafka::validate()
         throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "{} topic doesn't exist", settings->topic.value);
 
     shards = result.partitions;
+}
+
+SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
+{
+    return std::make_shared<KafkaSink>(this, metadata_snapshot->getSampleBlock(), context, log);
 }
 }

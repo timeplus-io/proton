@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vector>
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 
@@ -30,6 +31,8 @@ public:
         size_t max_block_size,
         size_t num_streams) override;
 
+    SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
+
     const String & brokers() const { return settings->brokers.value; }
     const String & dataFormat() const { return data_format; }
     const String & dataSchema() const { return settings->data_schema.value; }
@@ -37,12 +40,14 @@ public:
     const String & securityProtocol() const { return settings->security_protocol.value; }
     const String & username() const { return settings->username.value; }
     const String & password() const { return settings->password.value; }
+    std::vector<std::pair<std::string, std::string>> properties() const { return parseProperties(settings->properties.value); }
 
 private:
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
     std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info) const;
     void validate();
+    static std::vector<std::pair<std::string, std::string>> parseProperties(std::string properties);
 
 private:
     StorageID storage_id;
