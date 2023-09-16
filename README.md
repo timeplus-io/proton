@@ -65,7 +65,6 @@ Plus built-in support for powerful streaming and analytical functionality:
 | <b>[Substreams](https://docs.timeplus.com/substream)</b>     | Maintain separate watermarks and streaming windows.          |      |
 | <b>[Data revision processing (changelog)](https://docs.timeplus.com/changelog-stream)</b> | Create and manage non-append streams with primary keys and change data capture (CDC) semantics. |      |
 | <b>[Federated streaming queries](https://docs.timeplus.com/external-stream)</b> | Query streaming data in external systems (e.g. Kafka) without duplicating them. |      |
-| <b>[JavaScript UDF/UDAF](https://docs.timeplus.com/js-udf)</b> | Integrate JavaScript-based functions that can't be expressing using SQL. |      |
 | <b>[Materialized views](https://docs.timeplus.com/view#m_view)</b> | Create long-running and internally-stored queries.           |      |
 
 See our [architecture](https://docs.timeplus.com/proton-architecture) doc for technical details and the [FAQ](https://docs.timeplus.com/proton-faq) for more information on the various editions of Proton, how it's related to ClickHouse, and why we chose Apache License 2.0.
@@ -109,39 +108,15 @@ You should see data like the following:
 └─────────┴─────────┴──────────────────┴──────────────────┘
 ```
 
-### Create a view
-
-In Proton, views are like bookmarks for your queries, helping you quickly run views again or reference views in other
-queries. The basic view creation syntax looks like this:
-
-```sql
-CREATE VIEW [IF NOT EXISTS] <view_name> AS SELECT ...
-```
-
-For example, to create a view `hello_world` on the random streaming data using our previous min/max temperature query:
-
-```sql
-CREATE VIEW IF NOT EXISTS hello_world AS SELECT device, count(*), min(temperature), max(temperature) FROM devices GROUP BY device;
-```
-
-You can now run this view again without having to type out the entire SQL query:
-
-```sql
-SELECT * FROM hello_world
-```
-
 ### What's next?
 
-Now that you're running Proton and have created your first stream, query, and view, you can explore [reading and writing
-data from Apache Kafka](https://docs.timeplus.com/proton-kafka#tutorial) with External Streams, or view the [Proton documentation](https://docs.timeplus.com/proton) to explore additional capabilities.
+Now that you're running Proton and have created your first stream, query, and view, you can explore [reading and writing data from Apache Kafka](https://docs.timeplus.com/proton-kafka#tutorial) with External Streams, or view the [Proton documentation](https://docs.timeplus.com/proton) to explore additional capabilities.
 
-To see how such a deployment of Proton works as a demo, using `owl-shop` sample live data, check out our [tutorial with
-Docker Compose](https://docs.timeplus.com/proton-kafka#tutorial).
+To see how such a deployment of Proton works as a demo, using `owl-shop` sample live data, check out our [tutorial with Docker Compose](https://docs.timeplus.com/proton-kafka#tutorial).
 
 ## Get more with Timeplus Cloud
 
-To access more features, such as sources, sinks, dashboards, alerts, data lineage, create a workspace at [Timeplus
-Cloud](https://us.timeplus.cloud) or try the [live demo](https://demo.timeplus.cloud) with pre-built live data and
+To access more features, such as sources, sinks, dashboards, alerts, data lineage, create a workspace at [Timeplus Cloud](https://us.timeplus.cloud) or try the [live demo](https://demo.timeplus.cloud) with pre-built live data and
 dashboards.
 
 <!-- 
@@ -150,11 +125,9 @@ dashboards.
 
 ## Documentation
 
-We publish full documentation for Proton at [`docs.timeplus.com`](https://docs.timeplus.com/proton) alongside documentation
-for the Timeplus (Cloud and Enterprise) platform.
+We publish full documentation for Proton at [`docs.timeplus.com`](https://docs.timeplus.com/proton) alongside documentation for the Timeplus (Cloud and Enterprise) platform.
 
-We also have a [FAQ](https://docs.timeplus.com/proton-faq/) for detailing how we chose Apache License 2.0, how Proton is
-related to ClickHouse, what features are available in Proton versus Timeplus Cloud, and more.
+We also have a [FAQ](https://docs.timeplus.com/proton-faq/) for detailing how we chose Apache License 2.0, how Proton is related to ClickHouse, what features are available in Proton versus Timeplus Cloud, and more.
 
 <!-- 
 ---- END REMOVE FOR DOCS.TIMEPLUS.COM VERSION
@@ -162,8 +135,7 @@ related to ClickHouse, what features are available in Proton versus Timeplus Clo
 
 ## Contributing
 
-We welcome your contributions! If you are looking for issues to work on, try looking at [the issue
-list](https://github.com/timeplus-io/proton/issues).
+We welcome your contributions! If you are looking for issues to work on, try looking at [the issue list](https://github.com/timeplus-io/proton/issues).
 
 Please see the [wiki](https://github.com/timeplus-io/proton/wiki/Contributing) for more details, and [BUILD.md](https://github.com/timeplus-io/proton/blob/develop/BUILD.md) to compile Proton in different platforms.
 
