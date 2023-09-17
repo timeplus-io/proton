@@ -6,8 +6,8 @@ import random
 import requests
 import csv
 import multiprocessing as mp
-from clickhouse_driver import Client
-from clickhouse_driver import errors
+from proton_driver import Client
+from proton_driver import errors
 from github import (Github,enable_console_debug_logging,GithubException,RateLimitExceededException)
 from requests.exceptions import ReadTimeout
 import requests
