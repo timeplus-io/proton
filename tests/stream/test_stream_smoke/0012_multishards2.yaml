@@ -1,0 +1,1598 @@
+test_suite_name: multishards2
+tag: smoke
+test_suite_config:
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: []
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+      cluster:
+        - view
+        - cluster_table_bug
+comments: Tests covering the multishard stream query smoke cases.
+tests:
+  - id: 10
+    tags:
+      - multishards
+      - append_only
+      - substream
+      - streaming_aggregation
+      - window_aggregation
+      - hop_window_aggregation
+      - no_group_by
+      - stateful_function
+    name: hop window aggregation no group by keys, select with stateful func
+    description: hop window aggregation no group by keys, select with stateful func
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subst_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_subst_2(i float, k1 int, k2 string, timestamp datetime64(3) default now64(3)) settings shards=3;
+
+          - client: python
+            query_id: '1310'
+            depends_on_stream: test13_subst_2
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select k2,
+                     max(i),
+                     min(i),
+                     avg(i),
+                     count(i),
+                     window_start as s,
+                     window_end as e
+              from hop(test13_subst_2, timestamp, 2s, 5s) partition by k2
+              group by window_start,
+                       window_end;
+
+          - client: python
+            query_type: table
+            depends_on: '1310'
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(0, 0, 'a', '2021-11-02 20:00:01');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(1, 1, 'b', '2021-11-02 20:00:02');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(2, 2, 'a', '2021-11-02 20:00:03');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(3, 3, 'b', '2021-11-02 20:00:04');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(4, 4, 'a', '2021-11-02 20:00:05');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(5, 0, 'b', '2021-11-02 20:00:06');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(6, 1, 'a', '2021-11-02 20:00:07');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(7, 2, 'b', '2021-11-02 20:00:08');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(8, 3, 'a', '2021-11-02 20:00:09');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(9, 4, 'b', '2021-11-02 20:00:10');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(10, 0, 'a', '2021-11-02 20:00:11');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(11, 1, 'b', '2021-11-02 20:00:12');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(12, 2, 'a', '2021-11-02 20:00:13');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(13, 3, 'b', '2021-11-02 20:00:14');
+
+          - client: python
+            query_type: table
+            kill: '1310'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(14, 4, 'a', '2021-11-02 20:00:15');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test13_subst_2;
+
+    expected_results:
+      - query_id: '1310'
+        expected_results:
+          - ['a', 0, 0, 0, 1, '2021-11-02 19:59:58', '2021-11-02 20:00:03']
+          - ['b', 1, 1, 1, 1, '2021-11-02 19:59:58', '2021-11-02 20:00:03']
+          - ['a', 2, 0, 1, 2, '2021-11-02 20:00:00', '2021-11-02 20:00:05']
+          - ['b', 3, 1, 2, 2, '2021-11-02 20:00:00', '2021-11-02 20:00:05']
+          - ['a', 4, 2, 3, 2, '2021-11-02 20:00:02', '2021-11-02 20:00:07']
+          - ['b', 5, 1, 3, 3, '2021-11-02 20:00:02', '2021-11-02 20:00:07']
+          - ['a', 6, 4, 5, 2, '2021-11-02 20:00:04', '2021-11-02 20:00:09']
+          - ['b', 7, 3, 5, 3, '2021-11-02 20:00:04', '2021-11-02 20:00:09']
+          - ['a', 8, 6, 7, 2, '2021-11-02 20:00:06', '2021-11-02 20:00:11']
+          - ['b', 9, 5, 7, 3, '2021-11-02 20:00:06', '2021-11-02 20:00:11']
+          - ['a', 10, 8, 9, 2, '2021-11-02 20:00:08', '2021-11-02 20:00:13']
+          - ['b', 11, 7, 9, 3, '2021-11-02 20:00:08', '2021-11-02 20:00:13']
+          - ['a', 12, 10, 11, 2, '2021-11-02 20:00:10', '2021-11-02 20:00:15']
+
+  - id: 11
+    tags:
+      - multishards
+      - append_only
+      - substream
+      - streaming_aggregation
+      - window_aggregation
+      - hop_window_aggregation
+      - no_group_by
+      - UDA
+    name: hop window aggregation no group by keys, select with UDA
+    description: hop window aggregation no group by keys, select with UDA
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000002'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: sec_large
+              arguments:
+              - name: value
+                type: float32
+              is_aggregation: true
+              return_type: float32
+              source: |
+                {
+                  initialize: function() { 
+                    this.max = -1.0;
+                    this.sec = -1.0;
+                  },
+
+                  process: function(values) {
+                    for(let i=0; i<values.length; i++) {
+                      if(values[i] > this.max) {
+                        this.sec = this.max;
+                        this.max = values[i];
+                      }
+                      if(values[i] < this.max && values[i] > this.sec)
+                        this.sec = values[i];
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.sec;
+                  },
+
+                  serialize: function() {
+                    let s = {"max": this.max, "sec":this.sec };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.max = s["max"];
+                    this.sec = s["sec"];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    if (s["sec"] >= this.max) {
+                      this.max = s["max"];
+                      this.sec = s["sec"];
+                    } else if (s["max"] >= this.max) {
+                      this.sec = this.max;
+                      this.max = s["max"];
+                    } else if (s["max"] > this.sec) {
+                      this.sec = s["max"];
+                    }
+                  }
+                }
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subst_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_subst_2(i float, k1 int, k2 string, timestamp datetime64(3) default now64(3)) settings shards=3;
+
+          - client: python
+            query_id: '1311'
+            depends_on_stream: test13_subst_2
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select k2,
+                     sec_large(i),
+                     window_start as s,
+                     window_end as e
+              from hop(test13_subst_2, timestamp, 2s, 5s) partition by k2
+              group by window_start,
+                       window_end;
+
+          - client: python
+            query_type: table
+            depends_on: '1311'
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(0, 0, 'a', '2021-11-02 20:00:01');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(1, 1, 'b', '2021-11-02 20:00:02');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(2, 2, 'a', '2021-11-02 20:00:03');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(3, 3, 'b', '2021-11-02 20:00:04');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(4, 4, 'a', '2021-11-02 20:00:05');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(5, 0, 'b', '2021-11-02 20:00:06');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(6, 1, 'a', '2021-11-02 20:00:07');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(7, 2, 'b', '2021-11-02 20:00:08');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(8, 3, 'a', '2021-11-02 20:00:09');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(9, 4, 'b', '2021-11-02 20:00:10');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(10, 0, 'a', '2021-11-02 20:00:11');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(11, 1, 'b', '2021-11-02 20:00:12');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(12, 2, 'a', '2021-11-02 20:00:13');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(13, 3, 'b', '2021-11-02 20:00:14');
+
+          - client: python
+            query_type: table
+            kill: '1311'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_subst_2(i, k1, k2, timestamp)
+              values(14, 4, 'a', '2021-11-02 20:00:15');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test13_subst_2;
+
+    expected_results:
+      - query_id: '1311'
+        expected_results:
+          - ['a', -1, '2021-11-02 19:59:58', '2021-11-02 20:00:03']
+          - ['b', -1, '2021-11-02 19:59:58', '2021-11-02 20:00:03']
+          - ['a', 0, '2021-11-02 20:00:00', '2021-11-02 20:00:05']
+          - ['b', 1, '2021-11-02 20:00:00', '2021-11-02 20:00:05']
+          - ['a', 2, '2021-11-02 20:00:02', '2021-11-02 20:00:07']
+          - ['b', 3, '2021-11-02 20:00:02', '2021-11-02 20:00:07']
+          - ['a', 4, '2021-11-02 20:00:04', '2021-11-02 20:00:09']
+          - ['b', 5, '2021-11-02 20:00:04', '2021-11-02 20:00:09']
+          - ['a', 6, '2021-11-02 20:00:06', '2021-11-02 20:00:11']
+          - ['b', 7, '2021-11-02 20:00:06', '2021-11-02 20:00:11']
+          - ['a', 8, '2021-11-02 20:00:08', '2021-11-02 20:00:13']
+          - ['b', 9, '2021-11-02 20:00:08', '2021-11-02 20:00:13']
+          - ['a', 10, '2021-11-02 20:00:10', '2021-11-02 20:00:15']
+
+  - id: 12
+    tags:
+      - multishards
+      - append_only
+      - substream
+      - streaming_aggregation
+      - window_aggregation
+      - session_window_aggregation
+      - group_by
+      - stateful_function
+    name: session window aggregation substream group by, stateful function
+    description: session window aggregation substream group by, stateful function
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_multishard_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_multishard_2(speed int, id int, timestamp datetime64(3) default now64(3)) settings shards=3;
+
+          - client: python
+            query_id: '1312'
+            depends_on_stream: test13_multishard_2
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select id,
+                     max(speed),
+                     min(speed),
+                     avg(speed),
+                     window_start as s,
+                     window_end as e
+              from session(test13_multishard_2, timestamp, 5m, [speed >= 60, speed < 60)) partition by id
+              group by id,
+                       window_start,
+                       window_end;
+
+          - client: python
+            query_type: table
+            depends_on: '1312'
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (40, 1, '2021-11-02 20:00:01');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (50, 2, '2021-11-02 20:00:02');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (60, 1, '2021-11-02 20:00:03');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (70, 2, '2021-11-02 20:00:04');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (80, 1, '2021-11-02 20:00:05');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (90, 2, '2021-11-02 20:00:06');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (80, 1, '2021-11-02 20:00:07');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (70, 2, '2021-11-02 20:00:08');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (60, 1, '2021-11-02 20:00:09');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (50, 2, '2021-11-02 20:00:10');
+
+          - client: python
+            query_type: table
+            kill: '1312'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (40, 1, '2021-11-02 20:00:11');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test13_multishard_2;
+
+    expected_results:
+      - query_id: '1312'
+        expected_results:
+          - [2, 90, 70, 76.66666666666667, '2021-11-02 20:00:04', '2021-11-02 20:00:10']
+          - [1, 80, 60, 70, '2021-11-02 20:00:03', '2021-11-02 20:00:11']
+
+  - id: 13
+    tags:
+      - multishards
+      - append_only
+      - substream
+      - streaming_aggregation
+      - window_aggregation
+      - session_window_aggregation
+      - group_by
+      - UDA
+    name: session window aggregation substream group by, UDA
+    description: session window aggregation substream group by, UDA
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000002'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: sec_large
+              arguments:
+              - name: value
+                type: float32
+              is_aggregation: true
+              return_type: float32
+              source: |
+                {
+                  initialize: function() { 
+                    this.max = -1.0;
+                    this.sec = -1.0;
+                  },
+
+                  process: function(values) {
+                    for(let i=0; i<values.length; i++) {
+                      if(values[i] > this.max) {
+                        this.sec = this.max;
+                        this.max = values[i];
+                      }
+                      if(values[i] < this.max && values[i] > this.sec)
+                        this.sec = values[i];
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.sec;
+                  },
+
+                  serialize: function() {
+                    let s = {"max": this.max, "sec":this.sec };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.max = s["max"];
+                    this.sec = s["sec"];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    if (s["sec"] >= this.max) {
+                      this.max = s["max"];
+                      this.sec = s["sec"];
+                    } else if (s["max"] >= this.max) {
+                      this.sec = this.max;
+                      this.max = s["max"];
+                    } else if (s["max"] > this.sec) {
+                      this.sec = s["max"];
+                    }
+                  }
+                }
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_multishard_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_multishard_2(speed float, id int, timestamp datetime64(3) default now64(3)) settings shards=3;
+
+          - client: python
+            query_id: '1313'
+            depends_on_stream: test13_multishard_2
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select id,
+                     sec_large(speed),
+                     window_start as s,
+                     window_end as e
+              from session(test13_multishard_2, timestamp, 5m, [speed >= 60, speed < 60)) partition by id
+              group by id,
+                       window_start,
+                       window_end;
+
+          - client: python
+            query_type: table
+            depends_on: '1313'
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (40, 1, '2021-11-02 20:00:01');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (50, 2, '2021-11-02 20:00:02');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (60, 1, '2021-11-02 20:00:03');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (70, 2, '2021-11-02 20:00:04');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (80, 1, '2021-11-02 20:00:05');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (90, 2, '2021-11-02 20:00:06');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (80, 1, '2021-11-02 20:00:07');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (70, 2, '2021-11-02 20:00:08');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (60, 1, '2021-11-02 20:00:09');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (50, 2, '2021-11-02 20:00:10');
+
+          - client: python
+            query_type: table
+            kill: '1313'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (40, 1, '2021-11-02 20:00:11');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test13_multishard_2;
+
+    expected_results:
+      - query_id: '1313'
+        expected_results:
+          - [2, 70, '2021-11-02 20:00:04', '2021-11-02 20:00:10']
+          - [1, 60, '2021-11-02 20:00:03', '2021-11-02 20:00:11']
+
+  - id: 14
+    tags:
+      - multishards
+      - append_only
+      - substream
+      - streaming_aggregation
+      - window_aggregation
+      - session_window_aggregation
+      - no_group_by
+      - stateful_function
+    name: session window aggregation substream no group by, stateful function
+    description: session window aggregation substream no group by, stateful function
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_multishard_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_multishard_2(speed int, id int, timestamp datetime64(3) default now64(3)) settings shards=3;
+
+          - client: python
+            query_id: '1314'
+            depends_on_stream: test13_multishard_2
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select id,
+                     max(speed),
+                     min(speed),
+                     avg(speed),
+                     window_start as s,
+                     window_end as e
+              from session(test13_multishard_2, timestamp, 5m, [speed >= 60, speed < 60)) partition by id
+              group by window_start,
+                       window_end;
+
+          - client: python
+            query_type: table
+            depends_on: '1314'
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (40, 1, '2021-11-02 20:00:01');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (50, 2, '2021-11-02 20:00:02');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (60, 1, '2021-11-02 20:00:03');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (70, 2, '2021-11-02 20:00:04');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (80, 1, '2021-11-02 20:00:05');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (90, 2, '2021-11-02 20:00:06');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (80, 1, '2021-11-02 20:00:07');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (70, 2, '2021-11-02 20:00:08');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (60, 1, '2021-11-02 20:00:09');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (50, 2, '2021-11-02 20:00:10');
+
+          - client: python
+            query_type: table
+            kill: '1314'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (40, 1, '2021-11-02 20:00:11');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test13_multishard_2;
+
+    expected_results:
+      - query_id: '1314'
+        expected_results:
+          - [2, 90, 70, 76.66666666666667, '2021-11-02 20:00:04', '2021-11-02 20:00:10']
+          - [1, 80, 60, 70, '2021-11-02 20:00:03', '2021-11-02 20:00:11']
+
+  - id: 15
+    tags:
+      - multishards
+      - append_only
+      - substream
+      - streaming_aggregation
+      - window_aggregation
+      - session_window_aggregation
+      - no_group_by
+      - UDA
+    name: session window aggregation substream no group by, UDA
+    description: session window aggregation substream no group by, UDA
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000002'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: sec_large
+              arguments:
+              - name: value
+                type: float32
+              is_aggregation: true
+              return_type: float32
+              source: |
+                {
+                  initialize: function() { 
+                    this.max = -1.0;
+                    this.sec = -1.0;
+                  },
+
+                  process: function(values) {
+                    for(let i=0; i<values.length; i++) {
+                      if(values[i] > this.max) {
+                        this.sec = this.max;
+                        this.max = values[i];
+                      }
+                      if(values[i] < this.max && values[i] > this.sec)
+                        this.sec = values[i];
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.sec;
+                  },
+
+                  serialize: function() {
+                    let s = {"max": this.max, "sec":this.sec };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.max = s["max"];
+                    this.sec = s["sec"];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    if (s["sec"] >= this.max) {
+                      this.max = s["max"];
+                      this.sec = s["sec"];
+                    } else if (s["max"] >= this.max) {
+                      this.sec = this.max;
+                      this.max = s["max"];
+                    } else if (s["max"] > this.sec) {
+                      this.sec = s["max"];
+                    }
+                  }
+                }
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_multishard_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_multishard_2(speed float, id int, timestamp datetime64(3) default now64(3)) settings shards=3;
+
+          - client: python
+            query_id: '1315'
+            depends_on_stream: test13_multishard_2
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select id,
+                     sec_large(speed),
+                     window_start as s,
+                     window_end as e
+              from session(test13_multishard_2, timestamp, 5m, [speed >= 60, speed < 60)) partition by id
+              group by window_start,
+                       window_end;
+
+          - client: python
+            query_type: table
+            depends_on: '1315'
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (40, 1, '2021-11-02 20:00:01');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (50, 2, '2021-11-02 20:00:02');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (60, 1, '2021-11-02 20:00:03');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (70, 2, '2021-11-02 20:00:04');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (80, 1, '2021-11-02 20:00:05');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (90, 2, '2021-11-02 20:00:06');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (80, 1, '2021-11-02 20:00:07');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (70, 2, '2021-11-02 20:00:08');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (60, 1, '2021-11-02 20:00:09');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (50, 2, '2021-11-02 20:00:10');
+
+          - client: python
+            query_type: table
+            kill: '1315'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_multishard_2(speed, id, timestamp)
+              values (40, 1, '2021-11-02 20:00:11');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test13_multishard_2;
+
+    expected_results:
+      - query_id: '1315'
+        expected_results:
+          - [2, 70, '2021-11-02 20:00:04', '2021-11-02 20:00:10']
+          - [1, 60, '2021-11-02 20:00:03', '2021-11-02 20:00:11']
+
+  - id: 16
+    tags:
+      - multishards
+      - append_only
+      - substream
+      - streaming_tailing
+      - UDF
+    name: substreaming tailing with UDF
+    description: substreaming tailing with UDF
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000001'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: add_five
+              arguments:
+              - name: value
+                type: float32
+              return_type: float32
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subst_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_subst_2(val float, k int) settings shards=3;
+
+          - client: python
+            query_id: '1316'
+            depends_on_stream: test13_subst_2
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select add_five(val),
+                     k
+              from test13_subst_2 partition by k;
+
+          - client: python
+            query_type: table
+            depends_on: '1316'
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (6, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (1, 2);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (2, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (3, 2);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (4, 1);
+
+          - client: python
+            query_type: table
+            kill: '1316'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (5, 2);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test13_subst_2;
+
+    expected_results:
+      - query_id: '1316'
+        expected_results:
+          - [11, 1]
+          - [6, 2]
+          - [7, 1]
+          - [8, 2]
+          - [9, 1]
+          - [10, 2]
+
+  - id: 17
+    tags:
+      - multishards
+      - append_only
+      - substream
+      - streaming_tailing
+      - stateless_function
+    name: substreaming tailing with stateless func
+    description: substreaming tailing with stateless func
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subst_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_subst_2(val float, k int) settings shards=3;
+
+          - client: python
+            query_id: '1317'
+            depends_on_stream: test13_subst_2
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select plus(val, 5),
+                     k
+              from test13_subst_2 partition by k;
+
+          - client: python
+            query_type: table
+            depends_on: '1317'
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (6, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (1, 2);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (2, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (3, 2);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (4, 1);
+
+          - client: python
+            query_type: table
+            kill: '1317'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (5, 2);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test13_subst_2;
+
+    expected_results:
+      - query_id: '1317'
+        expected_results:
+          - [11, 1]
+          - [6, 2]
+          - [7, 1]
+          - [8, 2]
+          - [9, 1]
+          - [10, 2]
+
+  - id: 18
+    tags:
+      - multishards
+      - append_only
+      - substream
+      - streaming_tailing
+      - stateful_function
+      - bug
+    name: substreaming tailing with stateful func
+    description: substreaming tailing with stateful func
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subst_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_subst_2(val float, k int) settings shards=3;
+
+          - client: python
+            query_id: '1318'
+            depends_on_stream: test13_subst_2
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select lag(val, 1),
+                     k
+              from test13_subst_2 partition by k;
+
+          - client: python
+            query_type: table
+            depends_on: '1318'
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (6, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (1, 2);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (2, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (3, 2);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (4, 1);
+
+          - client: python
+            query_type: table
+            kill: '1318'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_subst_2 (val, k)
+              values (5, 2);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test13_subst_2;
+
+    expected_results:
+      - query_id: '1318'
+        expected_results:
+          - [0, 1]
+          - [0, 2]
+          - [6, 1]
+          - [1, 2]
+          - [2, 1]
+          - [3, 2]
+
+  - id: 19
+    tags:
+      - multishards
+      - append_only
+      - streaming_aggregation
+      - global_aggregation
+      - group_by
+      - stateful_function
+    name: streaming aggregation group by, stateful function add
+    description: streaming aggregation group by, stateful function add
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_multishard_2;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_multishard_2(i float, k1 int, k2 string) settings shards=3;
+
+          - client: python
+            query_id: '1319'
+            depends_on_stream: test13_multishard_2
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select max(i),
+                     min(i),
+                     avg(i),
+                     count(i),
+                     k2
+              from test13_multishard_2
+              group by k2 emit periodic 100ms;
+
+          - client: python
+            query_type: table
+            depends_on: '1319'
+            wait: 1
+            query: |
+              insert into test13_multishard_2 (i, k1, k2)
+              values (1, 0, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2 (i, k1, k2)
+              values (2, 0, 'b');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2 (i, k1, k2)
+              values (3, 0, 'c');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2 (i, k1, k2)
+              values (4, 0, 'c');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_2 (i, k1, k2)
+              values (5, 0, 'a');
+
+          - client: python
+            query_type: table
+            kill: '1319'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_multishard_2 (i, k1, k2)
+              values (6, 0, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test13_multishard_2;
+
+    expected_results:
+      - query_id: '1319'
+        expected_results:
+          - [1, 1, 1, 1, 'a']
+          - [2, 2, 2, 1, 'b']
+          - [1, 1, 1, 1, 'a']
+          - [2, 2, 2, 1, 'b']
+          - [3, 3, 3, 1, 'c']
+          - [1, 1, 1, 1, 'a']
+          - [2, 2, 2, 1, 'b']
+          - [4, 3, 3.5, 2, 'c']
+          - [1, 1, 1, 1, 'a']
+          - [2, 2, 2, 1, 'b']
+          - [4, 3, 3.5, 2, 'c']
+          - [5, 1, 3, 2, 'a']
+          - [6, 2, 4, 2, 'b']
+          - [4, 3, 3.5, 2, 'c']
+          - [5, 1, 3, 2, 'a']
+
