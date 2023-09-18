@@ -361,7 +361,8 @@ public:
         Block block_header_,
         const ColumnsDescription our_columns_,
         ContextPtr context_,
-        UInt64 events_per_second_)
+        UInt64 events_per_second_,
+        UInt64 interval_time_)
         : ISource(Nested::flatten(prepareBlockToFill(block_header_)), true, ProcessorID::GenerateRandomSourceID)
         , block_size(block_size_)
         , block_full(std::move(block_header_))
@@ -370,13 +371,21 @@ public:
         , context(context_)
         , events_per_second(events_per_second_)
         , header_chunk(Nested::flatten(block_full.cloneEmpty()).getColumns(), 0)
+        , generate_interval(interval_time_)
     {
         is_streaming = true;
-
-        boundary_time = MonotonicMilliseconds::now() + generate_interval;
         block_idx_in_window = 0;
         max_full_block_count = events_per_second_ / block_size;
         partial_size = events_per_second_ % block_size;
+        /// calculate the number of interval during 1 sec
+        interval_count = 1000 / generate_interval;
+        /// special interval
+        special_interval_time = generate_interval + 1000 % generate_interval;
+        boundary_time = MonotonicMilliseconds::now() + last_interval_time;
+        /// calculate the number of data generated per interval
+        normal_interval = events_per_second / interval_count;
+        /// calculate the number of data generated in the special interval
+        special_interval_count = normal_interval + events_per_second % interval_count;
 
         for (const auto & elem : block_full)
         {
@@ -393,21 +402,27 @@ public:
 
 protected:
     Chunk generate() override
-    {
+    {   
+
         if (events_per_second != 0)
-        {
+        {   
+            /// Efficient modulo operation from clickouse
+            int is_special = index - index / interval_count * interval_count;
             auto now_time = MonotonicMilliseconds::now();
 
             if (now_time >= boundary_time)
             {
-                boundary_time += generate_interval;
+                boundary_time += is_special ? generate_interval : special_interval_time;
                 block_idx_in_window = 0;
             }
 
             UInt64 batch_size = 0;
 
             if (block_idx_in_window == 0) // The size of the first generated chunk is partial_size (events_per_second % block_size).
-                batch_size = partial_size;
+            {
+                batch_size = is_special ? normal_interval : special_interval_count;
+                index++;
+            }
             else if (block_idx_in_window <= max_full_block_count) // The remaining chunk size is block size.
                 batch_size = block_size;
 
@@ -472,9 +487,14 @@ private:
     UInt64 events_per_second;
     UInt64 max_full_block_count;
     UInt64 partial_size;
+    UInt64 normal_interval = 0;
+    UInt64 special_interval_count = 0;
     Chunk header_chunk;
+    size_t index = 0;
     // Set the size of a window for random storages to generate data, measured in milliseconds.
-    static constexpr UInt64 generate_interval = 1000; 
+    const UInt64 generate_interval = 100;
+    UInt64 special_interval_time = 0;
+    size_t interval_count = 0;
 
     static Block & prepareBlockToFill(Block & block)
     {
@@ -488,6 +508,7 @@ private:
     }
 };
 
+
 }
 
 IMPLEMENT_SETTINGS_TRAITS(StorageRandomSettingsTraits, LIST_OF_STORAGE_RANDOM_SETTINGS)
@@ -499,7 +520,7 @@ void StorageRandomSettings::loadFromQuery(ASTStorage & storage_def)
         try
         {
             applyChanges(storage_def.settings->changes);
-        }
+        }doGenerate
         catch (Exception & e)
         {
             if (e.code() == ErrorCodes::UNKNOWN_SETTING)
@@ -627,11 +648,11 @@ Pipe StorageRandom::read(
         /// number of datas generated per second is bigger than the number of thread;
         for (size_t i = 0; i < num_streams - 1; i++) {
             pipes.emplace_back(
-                std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread));
+                std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread, interval_time));
         }
         /// The last thread will do the remaining work
         pipes.emplace_back(
-            std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread + remainder));
+            std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread + remainder, interval_time));
 
     }
     return Pipe::unitePipes(std::move(pipes));
