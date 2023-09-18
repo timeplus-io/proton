@@ -520,7 +520,7 @@ void StorageRandomSettings::loadFromQuery(ASTStorage & storage_def)
         try
         {
             applyChanges(storage_def.settings->changes);
-        }doGenerate
+        }
         catch (Exception & e)
         {
             if (e.code() == ErrorCodes::UNKNOWN_SETTING)
