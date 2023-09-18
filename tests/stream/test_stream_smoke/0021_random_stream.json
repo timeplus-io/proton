@@ -211,7 +211,7 @@
             "id": 9,
             "tags": ["create random"],
             "name": "test random stream generating function",
-            "description": "create random stream with default generating function, limit the amount of data produced per window;",
+            "description": "create random stream with default generating function, limit the amount of data produced per window, eps > the number of threads",
             "steps":[
               {
                 "statements": [
@@ -235,7 +235,7 @@
             "id": 10,
             "tags": ["create random"],
             "name": "test random stream generating function",
-            "description": "create random stream with default generating function, limit the amount of data produced per window;",
+            "description": "create random stream with default generating function, limit the amount of data produced per window, eps > the number of threads",
             "steps":[
               {
                 "statements": [
@@ -253,6 +253,104 @@
               {"query_id":"2218", "expected_results":[
                 ["20"]
               ]}
+            ]
+          },
+          {
+            "id": 11,
+            "tags": ["create random"],
+            "name": "test random stream generating function",
+            "description": "create random stream with default generating function, limit the amount of data produced per window, set interval_time, check the the number of data produced per interval_time is correct;",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings eps=1000, interval_time=100"},
+                  {"client":"python", "query_type": "table", "query_id":"2219", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random limit 2 emit periodic 100ms) offset 1 settings max_threads=10"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"2219", "expected_results":[
+                ["100"]
+              ]}
+            ]
+          },
+          {
+            "id": 12,
+            "tags": ["create random"],
+            "name": "test random stream generating function",
+            "description": "create random stream with default generating function, limit the amount of data produced per window, set interval_time, cannot be diveded by 1000ms, check the the number of data produced per second is correct;",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings eps=1000, interval_time=80"},
+                  {"client":"python", "query_type": "table", "query_id":"2220", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random limit 2 emit periodic 1s) offset 1 settings max_threads=10"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"2220", "expected_results":[
+                ["1000"]
+              ]}
+            ]
+          },
+          {
+            "id": 13,
+            "tags": ["create random"],
+            "name": "test random stream generating function",
+            "description": "create random stream with default generating function, limit the amount of data produced per window, set an invalid interval_time",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings eps=1000, interval_time=15000"},
+                  {"client":"python", "query_type": "table", "query_id":"2222", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random limit 2 emit periodic 1s) offset 1 settings max_threads=10"}
+                ]
+              }
+            ],
+            "expected_results": [
+                {"query_id": "2222", "expected_results": "error_code:60"}
+            ]
+          },
+          {
+            "id": 14,
+            "tags": ["create random"],
+            "name": "test random stream generating function",
+            "description": "create random stream with default generating function, limit the amount of data produced per window, set an invalid interval_time",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings eps=1000, interval_time=0"},
+                  {"client":"python", "query_type": "table", "query_id":"2223", "wait":2, "query":"select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random limit 2 emit periodic 1s) offset 1 settings max_threads=10"}
+                ]
+              }
+            ],
+            "expected_results": [
+                {"query_id": "2223", "expected_results": "error_code:60"}
+            ]
+          },
+          {
+            "id": 15,
+            "tags": ["create random"],
+            "name": "test random stream generating function",
+            "description": "create random stream with default generating function, limit the amount of data produced per window, set interval_time, cannot be diveded by 1000ms, check the the number of data produced per interval is correct;",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings eps=1000, interval_time=80"},
+                  {"client":"python", "query_type": "table", "query_id":"2224", "wait":2, "query":"select count(1) from tumble(test22_create_random, 80ms) group by window_start limit 5 settings max_threads=20"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {
+                "query_id":"2224", "expected_results":[
+                    ["120"], ["80"], ["80"], ["80"], ["80"]
+                ]
+              }
             ]
           }
     ]
