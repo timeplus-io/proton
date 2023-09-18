@@ -93,12 +93,13 @@ struct HashJoinMapsVariants;
 class HashJoin final : public IHashJoin
 {
 public:
-    using SupportMatrix = std::unordered_map<
-        DataStreamSemantic,
-        std::unordered_map<JoinKind, std::unordered_map<JoinStrictness, std::unordered_map<DataStreamSemantic, bool>>>>;
+    /// <left_data_storage_semantic, join_kind, join_strictness, right_data_storage_semantic> - bool
+    using JoinCombinationType = std::tuple<StorageSemantic, JoinKind, JoinStrictness, StorageSemantic>;
+    using SupportMatrix = std::unordered_map<JoinCombinationType, bool, boost::hash<JoinCombinationType>>;
 
     /// So far we only support these join combinations
     static const SupportMatrix support_matrix;
+    static void validate(const JoinCombinationType & join_combination);
 
 public:
     HashJoin(

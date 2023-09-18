@@ -4,6 +4,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/Streaming/RewriteAsSubquery.h>
 #include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Interpreters/Streaming/TimestampFunctionDescription.h>
 #include <Interpreters/TreeRewriter.h>
@@ -60,7 +61,7 @@ ProxyStream::ProxyStream(
     String internal_name_,
     StoragePtr storage_,
     ASTPtr subquery_,
-    DataStreamSemantic data_stream_semantic_,
+    DataStreamSemanticEx data_stream_semantic_,
     bool streaming_)
     : IStorage(id_)
     , WithContext(context_->getGlobalContext())
@@ -74,9 +75,6 @@ ProxyStream::ProxyStream(
     , streaming(streaming_)
     , log(&Poco::Logger::get(id_.getNameForLogs()))
 {
-    if (internal_name == "changelog")
-        data_stream_semantic = DataStreamSemantic::Changelog;
-
     if (streaming)
         assert(table_func_desc);
 
@@ -135,10 +133,10 @@ void ProxyStream::read(
                 ErrorCodes::NOT_IMPLEMENTED, "{} window can only work with streaming query.", magic_enum::enum_name(windowType()));
     }
 
-    if (internal_name == "changelog")
+    /// Push down tracking changes
+    if (internal_name == "changelog" && canTrackChangesFromStorage(data_stream_semantic))
     {
-        query_info.versioned_kv_tracking_changes = true;
-        query_info.changelog_tracking_changes = true;
+        query_info.left_storage_tracking_changes = true;
         query_info.changelog_query_drop_late_rows = std::any_cast<std::optional<bool>>(table_func_desc->func_ctx);
     }
 
@@ -176,27 +174,24 @@ void ProxyStream::doRead(
     size_t max_block_size,
     size_t num_streams)
 {
-    /// If this storage is built from subquery
+    ASTPtr current_subquery = subquery ? subquery->children[0] : nullptr;
+
     if (query_info.optimized_proxy_stream_query)
     {
         if (!query_info.optimized_proxy_stream_query->as<ASTSelectWithUnionQuery>())
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected optimized ProxyStream query");
 
-        auto sub_context = createProxySubqueryContext(context_, query_info, isStreaming());
-        auto interpreter = std::make_unique<InterpreterSelectWithUnionQuery>(
-            query_info.optimized_proxy_stream_query, sub_context, SelectQueryOptions().subquery().noModify(), column_names);
-
-        interpreter->ignoreWithTotals();
-        interpreter->buildQueryPlan(query_plan);
-        query_plan.addInterpreterContext(sub_context);
-        return;
+        current_subquery = query_info.optimized_proxy_stream_query->clone();
     }
 
-    if (subquery)
+    if (current_subquery)
     {
+        if (query_info.left_storage_tracking_changes)
+            Streaming::rewriteAsChangelogQuery(current_subquery->as<ASTSelectWithUnionQuery &>());
+
         auto sub_context = createProxySubqueryContext(context_, query_info, isStreaming());
         auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(
-            subquery->children[0], sub_context, SelectQueryOptions().subquery().noModify(), column_names);
+            current_subquery, sub_context, SelectQueryOptions().subquery().noModify(), column_names);
 
         interpreter_subquery->ignoreWithTotals();
         interpreter_subquery->buildQueryPlan(query_plan);
@@ -242,21 +237,25 @@ NamesAndTypesList ProxyStream::getVirtuals() const
     if (nested_proxy_storage)
         return nested_proxy_storage->getVirtuals();
 
-    if (!storage)
-        return {};
-
-    if (auto * materialized_view = storage->as<StorageMaterializedView>(); materialized_view)
-        return materialized_view->getVirtuals();
-
-    if (auto * distributed = storage->as<StorageStream>(); distributed)
+    NamesAndTypesList virtuals;
+    if (storage)
     {
-        if (streaming)
-            return distributed->getVirtuals();
+        if (auto * distributed = storage->as<StorageStream>(); distributed)
+        {
+            if (streaming)
+                virtuals = distributed->getVirtuals();
+            else
+                virtuals = distributed->getVirtualsHistory();
+        }
         else
-            return distributed->getVirtualsHistory();
+            virtuals = storage->getVirtuals();
     }
 
-    return {};
+    /// We may emit _tp_delta on the fly
+    if (Streaming::isVersionedKeyedStorage(dataStreamSemantic()) && !virtuals.contains(ProtonConsts::RESERVED_DELTA_FLAG))
+        virtuals.emplace_back(ProtonConsts::RESERVED_DELTA_FLAG, DataTypeFactory::instance().get("int8"));
+
+    return virtuals;
 }
 
 Names ProxyStream::getRequiredInputs(Names required_outputs) const
@@ -373,8 +372,7 @@ void ProxyStream::processChangelogStep(QueryPlan & query_plan, const Names & req
 
     /// Everything shall be in-place already since versioned_vk.read(...) will take care of adding
     /// ChangelogTransform step
-    if (storage && (storage->as<StorageStream>() || storage->as<StorageMaterializedView>())
-        && isVersionedKeyedDataStream(storage->dataStreamSemantic()))
+    if (canTrackChangesFromStorage(data_stream_semantic))
         return;
 
     auto output_header = checkAndGetOutputHeader(required_columns, query_plan.getCurrentDataStream().header);
@@ -528,6 +526,14 @@ bool ProxyStream::isProxyingSubqueryOrView() const
         return true;
 
     return false;
+}
+
+DataStreamSemanticEx ProxyStream::dataStreamSemantic() const
+{
+    if (internal_name == "changelog")
+        return DataStreamSemantic::Changelog;
+
+    return data_stream_semantic; /// proxy data stream semantic
 }
 
 }

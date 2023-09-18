@@ -66,6 +66,9 @@ public:
         std::unordered_map<String, NamesAndTypesList> table_columns;
         std::vector<String> tables_order;
         std::shared_ptr<ASTExpressionList> new_select_expression_list;
+        /// proton: starts.
+        bool is_join_result_changelog = false;
+        /// proton: ends.
 
         explicit Data(const std::vector<TableWithColumnNamesAndTypes> & tables)
         {
@@ -77,6 +80,17 @@ public:
                 tables_order.push_back(table_name);
                 table_columns.emplace(std::move(table_name), std::move(columns));
             }
+
+            /// proton: starts.
+            assert(tables.size() > 2);
+            is_join_result_changelog
+                = Streaming::isJoinResultChangelog(tables[0].output_data_stream_semantic, tables[1].output_data_stream_semantic);
+
+            for (size_t i = 2; i < tables.size(); ++i)
+                is_join_result_changelog = (Streaming::isJoinResultChangelog(
+                    is_join_result_changelog ? Streaming::DataStreamSemantic::Changelog : Streaming::DataStreamSemantic::Append,
+                    tables[i].output_data_stream_semantic));
+            /// proton: ends.
         }
 
         using ShouldAddColumnPredicate = std::function<bool (const String&)>;
@@ -144,8 +158,9 @@ private:
                 /// proton: starts. For join query, the `*` didn't include `_tp_delta` of any stream, so skip it
                     data.addTableColumns(table_name, columns, [&](const String & column_name) { return column_name != ProtonConsts::RESERVED_DELTA_FLAG; });
 
-                /// FIXME: Before resolveDataStreamSemantic, we don't know whether the join output emit changelog, here use a temporary `1 as _tp_delta`, which will be rewriten or removed later
-                columns.emplace_back(Streaming::makeTemporaryDeltaColumn());
+                /// For join query emit changelog, expand `_tp_delta` for `*`
+                if (data.is_join_result_changelog)
+                    columns.emplace_back(std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
                 /// proton: ends.
 
                 for (const auto & transformer : asterisk->children)

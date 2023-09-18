@@ -13,7 +13,7 @@ import multiprocessing as mp
 from enum import Enum, unique
 # import swagger_client
 # from swagger_client.rest import ApiException
-from clickhouse_driver import Client
+from proton_driver import Client
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # from timeplus import Environment, Stream

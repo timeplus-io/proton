@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Interpreters/DatabaseAndTableWithAlias.h>
-#include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <Storages/Streaming/SeekToInfo.h>
 
@@ -29,15 +28,10 @@ public:
     private:
         /// Allow multiple streams: stream_pos - SeekToInfos
         SeekToInfosOfStreams seek_to_infos;
-        /// FIXME, the init of IdentifierMembershipCollector could be expensive since it needs walk
-        /// through the AST to resolve the table expression which will recursively call
-        /// InterpreterSelectWithUnionQuery::getSampleBlock(subquery, ...) to evaluate the sample header
-        /// if the table expression is a subquery (this is mostly true for join case)
-        /// Check the sample block cache hit rate
-        const IdentifierMembershipCollector membership_collector;
+        const TablesWithColumns & tables;
 
     public:
-        Data(const ASTSelectQuery & select, ContextPtr context_) : WithContext(context_), membership_collector(select, getContext()) { }
+        Data(const ASTSelectQuery & select, const TablesWithColumns & tables_, ContextPtr context_) : WithContext(context_), tables(tables_) { }
 
         SeekToInfoPtr tryGetSeekToInfoForLeftStream() const { return tryGetSeekToInfo(0); }
         SeekToInfoPtr tryGetSeekToInfoForRightStream() const { return tryGetSeekToInfo(1); }

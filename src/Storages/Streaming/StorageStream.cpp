@@ -297,7 +297,7 @@ StorageStream::StorageStream(
         auto ssettings = storage_settings.get();
 
         /// Kafka based stream
-        if(context_->isDistributedEnv())
+        if (context_->isDistributedEnv())
         {
             const auto & query_params = context_->getQueryParameters();
             String retention_settings;
@@ -462,57 +462,6 @@ void StorageStream::readConcat(
     auto description = makeFormattedNameOfConcatShards(shards_to_read);
     LOG_INFO(log, "Read local streaming concat {}", description);
 
-    Names original_required_columns = column_names;
-
-    if (query_info.trackingChanges())
-    {
-        auto add_version_column = [&] {
-            assert(!merging_params.version_column.empty());
-
-            if (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows)
-            {
-                /// Add version column
-                if (std::find(column_names.begin(), column_names.end(), merging_params.version_column) == column_names.end())
-                    column_names.push_back(merging_params.version_column);
-            }
-        };
-
-        /// For changelog-kv, we always read back _tp_delta column always
-        if (query_info.changelog_tracking_changes
-            && (Streaming::isChangelogKeyedDataStream(dataStreamSemantic()) || Streaming::isChangelogDataStream(dataStreamSemantic())))
-        {
-            assert(!merging_params.sign_column.empty() && merging_params.sign_column == ProtonConsts::RESERVED_DELTA_FLAG);
-
-            /// Add _tp_delta column if it is necessary
-            if (std::find(column_names.begin(), column_names.end(), ProtonConsts::RESERVED_DELTA_FLAG) == column_names.end())
-                column_names.push_back(ProtonConsts::RESERVED_DELTA_FLAG);
-
-            add_version_column();
-        }
-        else if (query_info.versioned_kv_tracking_changes && Streaming::isVersionedKeyedDataStream(dataStreamSemantic()))
-        {
-            /// Drop _tp_delta since we will generate that on the fly
-            if (auto iter = std::find(column_names.begin(), column_names.end(), ProtonConsts::RESERVED_DELTA_FLAG);
-                iter != column_names.end())
-                column_names.erase(iter);
-
-            if (auto iter
-                = std::find(original_required_columns.begin(), original_required_columns.end(), ProtonConsts::RESERVED_DELTA_FLAG);
-                iter != original_required_columns.end())
-                original_required_columns.erase(iter);
-
-            /// For versioned-kv, we always read back primary key columns and version column
-            auto primary_key_columns = storage_snapshot->metadata->getPrimaryKeyColumns();
-            for (auto & primary_key_column : primary_key_columns)
-            {
-                if (std::find(column_names.begin(), column_names.end(), primary_key_column) == column_names.end())
-                    column_names.emplace_back(std::move(primary_key_column));
-            }
-
-            add_version_column();
-        }
-    }
-
     /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
     /// We will need add one
     Block header;
@@ -622,33 +571,6 @@ void StorageStream::readConcat(
         query_plan.unitePlans(std::move(union_step), std::move(plans));
         query_plan.setMaxThreads(plans.size());
     }
-
-    if (query_info.changelog_tracking_changes
-        && (Streaming::isChangelogKeyedDataStream(dataStreamSemantic()) || Streaming::isChangelogDataStream(dataStreamSemantic())))
-    {
-        auto output_header
-            = storage_snapshot->getSampleBlockForColumns(original_required_columns.empty() ? column_names : original_required_columns);
-
-        query_plan.addStep(std::make_unique<Streaming::ChangelogTransformStep>(
-            query_plan.getCurrentDataStream(),
-            output_header,
-            storage_snapshot->metadata->getPrimaryKeyColumns(),
-            (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column : "",
-            plans.size()));
-    }
-    else if (query_info.versioned_kv_tracking_changes && Streaming::isVersionedKeyedDataStream(dataStreamSemantic()))
-    {
-        auto output_header
-            = storage_snapshot->getSampleBlockForColumns(original_required_columns.empty() ? column_names : original_required_columns);
-
-        /// FIXME, resize
-        query_plan.addStep(std::make_unique<Streaming::ChangelogConvertTransformStep>(
-            query_plan.getCurrentDataStream(),
-            std::move(output_header),
-            storage_snapshot->metadata->getPrimaryKeyColumns(),
-            (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column : "",
-            plans.size()));
-    }
 }
 
 void StorageStream::readStreaming(
@@ -749,6 +671,20 @@ void StorageStream::read(
     }
 
     /// [LOCAL]
+    if (query_info.left_storage_tracking_changes)
+    {
+        return readChangelog(
+            shards_to_read,
+            query_plan,
+            column_names,
+            storage_snapshot,
+            query_info,
+            std::move(context_),
+            processed_stage,
+            max_block_size,
+            num_streams);
+    }
+
     assert(!shards_to_read.local_shards.empty());
     switch (shards_to_read.mode)
     {
@@ -778,6 +714,128 @@ void StorageStream::read(
                 max_block_size,
                 num_streams);
         }
+    }
+}
+
+void StorageStream::readChangelog(
+    const ShardsToRead & shards_to_read,
+    QueryPlan & query_plan,
+    Names column_names,
+    const StorageSnapshotPtr & storage_snapshot,
+    SelectQueryInfo & query_info,
+    ContextPtr context_,
+    QueryProcessingStage::Enum processed_stage,
+    size_t max_block_size,
+    size_t num_streams)
+{
+    Names original_required_columns = column_names;
+    auto add_version_column = [&] {
+        assert(!merging_params.version_column.empty());
+
+        if (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows)
+        {
+            /// Add version column
+            if (std::find(column_names.begin(), column_names.end(), merging_params.version_column) == column_names.end())
+                column_names.push_back(merging_params.version_column);
+        }
+    };
+
+    if (Streaming::isChangelogDataStream(dataStreamSemantic()))
+    {
+        /// Add _tp_delta column if it is necessary
+        if (std::find(column_names.begin(), column_names.end(), ProtonConsts::RESERVED_DELTA_FLAG) == column_names.end())
+            column_names.push_back(ProtonConsts::RESERVED_DELTA_FLAG);
+    }
+    else if (Streaming::isChangelogKeyedStorage(dataStreamSemantic()))
+    {
+        assert(!merging_params.sign_column.empty() && merging_params.sign_column == ProtonConsts::RESERVED_DELTA_FLAG);
+
+        /// Add _tp_delta column if it is necessary
+        if (std::find(column_names.begin(), column_names.end(), ProtonConsts::RESERVED_DELTA_FLAG) == column_names.end())
+            column_names.push_back(ProtonConsts::RESERVED_DELTA_FLAG);
+
+        add_version_column();
+    }
+    else if (Streaming::isVersionedKeyedStorage(dataStreamSemantic()))
+    {
+        /// Drop _tp_delta since we will generate that on the fly
+        if (auto iter = std::find(column_names.begin(), column_names.end(), ProtonConsts::RESERVED_DELTA_FLAG); iter != column_names.end())
+            column_names.erase(iter);
+
+        if (auto iter = std::find(original_required_columns.begin(), original_required_columns.end(), ProtonConsts::RESERVED_DELTA_FLAG);
+            iter != original_required_columns.end())
+            original_required_columns.erase(iter);
+
+        /// For versioned-kv, we always read back primary key columns and version column
+        auto primary_key_columns = storage_snapshot->metadata->getPrimaryKeyColumns();
+        for (auto & primary_key_column : primary_key_columns)
+        {
+            if (std::find(column_names.begin(), column_names.end(), primary_key_column) == column_names.end())
+                column_names.emplace_back(std::move(primary_key_column));
+        }
+
+        add_version_column();
+    }
+
+    /// [LOCAL]
+    assert(!shards_to_read.local_shards.empty());
+    switch (shards_to_read.mode)
+    {
+        case QueryMode::STREAMING: {
+            readStreaming(shards_to_read.local_shards, query_plan, query_info, column_names, storage_snapshot, std::move(context_));
+            break;
+        }
+        case QueryMode::STREAMING_CONCAT: {
+            readConcat(
+                shards_to_read.local_shards,
+                query_plan,
+                query_info,
+                column_names,
+                storage_snapshot,
+                std::move(context_),
+                processed_stage,
+                max_block_size);
+            break;
+        }
+        case QueryMode::HISTORICAL: {
+            readHistory(
+                shards_to_read.local_shards,
+                query_plan,
+                column_names,
+                storage_snapshot,
+                query_info,
+                std::move(context_),
+                processed_stage,
+                max_block_size,
+                num_streams);
+            break;
+        }
+    }
+
+    if (Streaming::isChangelogKeyedStorage(dataStreamSemantic()) || Streaming::isChangelogDataStream(dataStreamSemantic()))
+    {
+        auto output_header
+            = storage_snapshot->getSampleBlockForColumns(original_required_columns.empty() ? column_names : original_required_columns);
+
+        query_plan.addStep(std::make_unique<Streaming::ChangelogTransformStep>(
+            query_plan.getCurrentDataStream(),
+            output_header,
+            storage_snapshot->metadata->getPrimaryKeyColumns(),
+            (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column : "",
+            query_plan.getMaxThreads()));
+    }
+    else if (Streaming::isVersionedKeyedStorage(dataStreamSemantic()))
+    {
+        auto output_header
+            = storage_snapshot->getSampleBlockForColumns(original_required_columns.empty() ? column_names : original_required_columns);
+
+        /// FIXME, resize
+        query_plan.addStep(std::make_unique<Streaming::ChangelogConvertTransformStep>(
+            query_plan.getCurrentDataStream(),
+            std::move(output_header),
+            storage_snapshot->metadata->getPrimaryKeyColumns(),
+            (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column : "",
+            query_plan.getMaxThreads()));
     }
 }
 
@@ -933,7 +991,7 @@ StorageStream::ShardsToRead StorageStream::getRequiredShardsToRead(ContextPtr co
         assert(query_info.seek_to_info);
         const auto & settings_ref = context_->getSettingsRef();
         bool require_back_fill_from_historical = !isInmemory()
-            && (Streaming::isChangelogKeyedDataStream(dataStreamSemantic()) || Streaming::isVersionedKeyedDataStream(dataStreamSemantic())
+            && (Streaming::isChangelogKeyedStorage(dataStreamSemantic()) || Streaming::isVersionedKeyedStorage(dataStreamSemantic())
                 || (query_info.seek_to_info->getSeekTo() == "earliest" && settings_ref.enable_backfill_from_historical_store.value));
         result.mode = require_back_fill_from_historical ? QueryMode::STREAMING_CONCAT : QueryMode::STREAMING;
     }
@@ -1858,7 +1916,7 @@ void StorageStream::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_SHARD, type_factory.get("int32")));
 
     /// We may emit _tp_delta on the fly
-    if (Streaming::isVersionedKeyedDataStream(dataStreamSemantic()))
+    if (Streaming::isVersionedKeyedStorage(dataStreamSemantic()))
         virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_DELTA_FLAG, type_factory.get("int8")));
 }
 

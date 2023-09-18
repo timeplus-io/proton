@@ -13,7 +13,7 @@ extern const int LOGICAL_ERROR;
 
 namespace Streaming
 {
-DataStreamSemantic getDataStreamSemantic(StoragePtr storage)
+DataStreamSemanticEx getDataStreamSemantic(StoragePtr storage)
 {
     if (!storage)
         return Streaming::DataStreamSemantic::Append;

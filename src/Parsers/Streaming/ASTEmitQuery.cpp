@@ -6,8 +6,7 @@ namespace DB
 {
 void ASTEmitQuery::formatImpl(const FormatSettings & format, FormatState &, FormatStateStacked) const
 {
-    if (streaming)
-        format.ostr << (format.hilite ? hilite_keyword : "") << "STREAM " << (format.hilite ? hilite_none : "");
+    format.ostr << (format.hilite ? hilite_keyword : "") << magic_enum::enum_name(stream_mode) << " " << (format.hilite ? hilite_none : "");
 
     int elems = 0;
 
@@ -51,7 +50,7 @@ void ASTEmitQuery::formatImpl(const FormatSettings & format, FormatState &, Form
 
 void ASTEmitQuery::updateTreeHashImpl(SipHash & hash_state) const
 {
-    hash_state.update(streaming);
+    hash_state.update(stream_mode);
     hash_state.update(after_watermark);
     hash_state.update(proc_time);
 

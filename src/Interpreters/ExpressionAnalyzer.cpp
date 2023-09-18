@@ -2260,8 +2260,8 @@ std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreami
     const auto & tables = analyzed_join->getTablesWithColumns();
     assert(tables.size() == 2);
 
-    Streaming::DataStreamSemantic left_input_data_stream_semantic = tables[0].output_data_stream_semantic;
-    Streaming::DataStreamSemantic right_input_data_stream_semantic = tables[1].output_data_stream_semantic;
+    Streaming::DataStreamSemanticEx left_input_data_stream_semantic = tables[0].output_data_stream_semantic;
+    Streaming::DataStreamSemanticEx right_input_data_stream_semantic = tables[1].output_data_stream_semantic;
 
     auto keep_versions = getContext()->getSettingsRef().keep_versions;
     auto max_threads = getContext()->getSettingsRef().max_threads;

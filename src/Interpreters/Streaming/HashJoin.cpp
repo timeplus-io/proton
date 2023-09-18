@@ -776,87 +776,73 @@ inline void addDeltaColumn(Block & block, size_t rows)
 /// `left anti`: if there are non-matching rows from left stream, returning these non-matching rows with default value filling for right projected columns
 /// `right anti`: if there are non-matching rows from right stream, returning these non-matching rows with default value filling left projected columns
 
-/// A 4 dimensions array : Left DataStreamSemantic, Kind, Strictness, Right DataStreamSemantic
+/// A 4 dimensions array : Left StorageSemantic, Kind, Strictness, Right StorageSemantic
 /// There are 4 * 6 * 5 * 4 = 480 total combinations
 const HashJoin::SupportMatrix HashJoin::support_matrix = {
-    {DataStreamSemantic::Append,
-     {{
-          JoinKind::Left,
-          {{JoinStrictness::All, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}, {DataStreamSemantic::ChangelogKV, true}, {DataStreamSemantic::Changelog, true}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}}},
-      },
-      {
-          /// Append
-          JoinKind::Inner,
-          {{JoinStrictness::All, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}, {DataStreamSemantic::ChangelogKV, true}, {DataStreamSemantic::Changelog, true}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::Append, true}, {DataStreamSemantic::VersionedKV, true}}}},
-      }}},
-    {DataStreamSemantic::Changelog,
-     {{
-          JoinKind::Left,
-          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
-      },
-      {
-          /// Changelog
-          JoinKind::Inner,
-          {{JoinStrictness::All, {{DataStreamSemantic::Changelog, true}, {DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
-      }}},
-    {DataStreamSemantic::ChangelogKV,
-     {{
-          JoinKind::Left,
-          {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}}}},
-      },
-      {
-          /// ChangelogKV
-          JoinKind::Inner,
-          {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, true}, {DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}, {DataStreamSemantic::VersionedKV, false}}}},
-      },
-      {
-          /// ChangelogKV
-          JoinKind::Full,
-          {{JoinStrictness::All, {{DataStreamSemantic::ChangelogKV, false}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::ChangelogKV, false}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::ChangelogKV, false}}}},
-      }}},
-    {DataStreamSemantic::VersionedKV,
-     {{
-          JoinKind::Left,
-          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
-      },
-      {
-          /// VersionedKV
-          JoinKind::Inner,
-          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, true}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
-      },
-      {
-          /// VersionedKV
-          JoinKind::Right,
-          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
-      },
-      {
-          /// VersionedKV
-          JoinKind::Full,
-          {{JoinStrictness::All, {{DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Asof, {{DataStreamSemantic::VersionedKV, false}}},
-           {JoinStrictness::Any, {{DataStreamSemantic::VersionedKV, false}}}},
-      }}},
+    /// <left_stroage_semantic, join_kind, join_strictness, right_storage_semantic> - supported
+    /// Append ...
+    {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::All, StorageSemantic::Append}, true},
+    {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
+    {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::All, StorageSemantic::Changelog}, true},
+
+    {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::Asof, StorageSemantic::Append}, true},
+    {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::Asof, StorageSemantic::VersionedKV}, true},
+
+    {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::Any, StorageSemantic::Append}, true},
+    {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::Any, StorageSemantic::VersionedKV}, true},
+
+    {{StorageSemantic::Append, JoinKind::Inner, JoinStrictness::All, StorageSemantic::Append}, true},
+    {{StorageSemantic::Append, JoinKind::Inner, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
+    {{StorageSemantic::Append, JoinKind::Inner, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::Append, JoinKind::Inner, JoinStrictness::All, StorageSemantic::Changelog}, true},
+
+    {{StorageSemantic::Append, JoinKind::Inner, JoinStrictness::Asof, StorageSemantic::Append}, true},
+    {{StorageSemantic::Append, JoinKind::Inner, JoinStrictness::Asof, StorageSemantic::VersionedKV}, true},
+
+    {{StorageSemantic::Append, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::Append}, true},
+    {{StorageSemantic::Append, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::VersionedKV}, true},
+
+    /// Changelog ...
+    {{StorageSemantic::Changelog, JoinKind::Inner, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
+    {{StorageSemantic::Changelog, JoinKind::Inner, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::Changelog, JoinKind::Inner, JoinStrictness::All, StorageSemantic::Changelog}, true},
+
+    /// ChangelogKV ...
+    {{StorageSemantic::ChangelogKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
+    {{StorageSemantic::ChangelogKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::ChangelogKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::Changelog}, true},
+
+    /// VersionedKV ...
+    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::Changelog}, true},
+
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Asof, StorageSemantic::Append}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Asof, StorageSemantic::VersionedKV}, true},
+
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Any, StorageSemantic::Append}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Any, StorageSemantic::VersionedKV}, true},
+
+    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Asof, StorageSemantic::Append}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Asof, StorageSemantic::VersionedKV}, true},
+
+    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::Append}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::VersionedKV}, true},
 };
+
+void HashJoin::validate(const JoinCombinationType & join_combination)
+{
+    auto iter = support_matrix.find(join_combination);
+    if (iter == support_matrix.end() || !(iter->second))
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "'{} stream' {} {} JOIN '{} stream' is not supported",
+            magic_enum::enum_name(std::get<0>(join_combination)),
+            toString(std::get<1>(join_combination)),
+            toString(std::get<2>(join_combination)),
+            magic_enum::enum_name(std::get<3>(join_combination)));
+}
 
 HashJoin::HashJoin(
     std::shared_ptr<TableJoin> table_join_,
@@ -920,14 +906,12 @@ void HashJoin::init()
         = isJoinResultChangelog(left_data.join_stream_desc->data_stream_semantic, right_data.join_stream_desc->data_stream_semantic);
 
     retract_push_down
-        = (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV
-           && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV
-           && right_data.join_stream_desc->hasPrimaryKey());
+        = (isVersionedKeyedStorage(left_data.join_stream_desc->data_stream_semantic)
+           && isVersionedKeyedStorage(right_data.join_stream_desc->data_stream_semantic) && right_data.join_stream_desc->hasPrimaryKey());
 
     retract_push_down
-        |= (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::ChangelogKV
-            && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::ChangelogKV
-            && right_data.join_stream_desc->hasPrimaryKey());
+        |= (isChangelogKeyedStorage(left_data.join_stream_desc->data_stream_semantic)
+            && isChangelogKeyedStorage(right_data.join_stream_desc->data_stream_semantic) && right_data.join_stream_desc->hasPrimaryKey());
 
     /// So far there are following cases which doesn't require bidirectional join
     /// SELECT * FROM append_only INNER ALL JOIN versioned_kv ON append_only.key = versioned_kv.key;
@@ -936,15 +920,9 @@ void HashJoin::init()
     /// SELECT * FROM left_append_only INNER ASOF JOIN right_append_only ON left_append_only.key = right_append_only.key AND left_append_only.timestamp < right_append_only.timestamp SETTINGS keep_versions=3;
     /// SELECT * FROM left_append_only INNER LATEST JOIN right_append_only ON left_append_only.key = right_append_only.key;
     /// `ASOF` keeps multiple versions and `LATEST` only keeps the latest version for the join key
-    auto data_enrichment_join = ((left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
-                                  || left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Changelog
-                                  || left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::ChangelogKV)
-                                 && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::VersionedKV)
+    auto data_enrichment_join = (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
+                                 && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Changelog)
         || streaming_strictness == Strictness::Asof || streaming_strictness == Strictness::Latest;
-
-    data_enrichment_join
-        |= (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
-            && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::ChangelogKV);
 
     bidirectional_hash_join = !data_enrichment_join;
 
@@ -2026,7 +2004,7 @@ void HashJoin::eraseExistingKeys(Block & block, JoinData & join_data)
 
     auto & map_variant = join_data.buffered_data->getCurrentHashBlocksPtr()->maps->map_variants[0];
     const auto & key_size = key_sizes[0];
-    auto delete_key = isChangelogKeyedDataStream(join_data.join_stream_desc->data_stream_semantic);
+    auto delete_key = isChangelogKeyedStorage(join_data.join_stream_desc->data_stream_semantic);
 
     joinDispatch(streaming_kind, streaming_strictness, map_variant, [&, this](auto, auto, auto & maps) {
         switch (hash_method_type)
@@ -2489,31 +2467,11 @@ void HashJoin::checkJoinSemantic() const
                 ErrorCodes::NOT_IMPLEMENTED, "Streaming join doesn't support predicates in JOIN ON clause. Use WHERE predicate instead");
     }
 
-    auto throw_ex = [this]() {
-        throw Exception(
-            ErrorCodes::NOT_IMPLEMENTED,
-            "'{} stream' {} {} JOIN '{} stream' is not supported",
-            magic_enum::enum_name(left_data.join_stream_desc->data_stream_semantic),
-            toString(kind),
-            toString(strictness),
-            magic_enum::enum_name(right_data.join_stream_desc->data_stream_semantic));
-    };
-
-    auto left_data_stream_semantic_iter = support_matrix.find(left_data.join_stream_desc->data_stream_semantic);
-    if (left_data_stream_semantic_iter == support_matrix.end())
-        throw_ex();
-
-    auto kind_iter = left_data_stream_semantic_iter->second.find(kind);
-    if (kind_iter == left_data_stream_semantic_iter->second.end())
-        throw_ex();
-
-    auto strictness_iter = kind_iter->second.find(strictness);
-    if (strictness_iter == kind_iter->second.end())
-        throw_ex();
-
-    auto right_data_stream_semantic_iter = strictness_iter->second.find(right_data.join_stream_desc->data_stream_semantic);
-    if (right_data_stream_semantic_iter == strictness_iter->second.end() || !right_data_stream_semantic_iter->second)
-        throw_ex();
+    validate(
+        {left_data.join_stream_desc->data_stream_semantic.toStorageSemantic(),
+         kind,
+         strictness,
+         right_data.join_stream_desc->data_stream_semantic.toStorageSemantic()});
 }
 
 size_t HashJoin::sizeOfMapsVariant(const MapsVariant & maps_variant) const
@@ -2583,11 +2541,11 @@ void HashJoin::serialize(WriteBuffer & wb) const
 
     /// Part-2: Description of left/right join stream
     DB::writeStringBinary(left_data.join_stream_desc->input_header.dumpStructure(), wb);
-    DB::writeIntBinary<UInt16>(static_cast<UInt16>(left_data.join_stream_desc->data_stream_semantic), wb);
+    DB::writeIntBinary<UInt16>(static_cast<UInt16>(left_data.join_stream_desc->data_stream_semantic.semantic), wb);
     DB::writeIntBinary(left_data.join_stream_desc->keep_versions, wb);
 
     DB::writeStringBinary(right_data.join_stream_desc->input_header.dumpStructure(), wb);
-    DB::writeIntBinary<UInt16>(static_cast<UInt16>(right_data.join_stream_desc->data_stream_semantic), wb);
+    DB::writeIntBinary<UInt16>(static_cast<UInt16>(right_data.join_stream_desc->data_stream_semantic.semantic), wb);
     DB::writeIntBinary(right_data.join_stream_desc->keep_versions, wb);
 
     /// Part-3: Join method
@@ -2648,7 +2606,7 @@ void HashJoin::deserialize(ReadBuffer & rb)
 
         auto left_header_str = left_data.join_stream_desc->input_header.dumpStructure();
         if (recovered_left_header_str != left_header_str
-            || static_cast<DataStreamSemantic>(recovered_left_stream_semantic) != left_data.join_stream_desc->data_stream_semantic
+            || static_cast<DataStreamSemantic>(recovered_left_stream_semantic) != left_data.join_stream_desc->data_stream_semantic.semantic
             || recovered_left_keep_versions != left_data.join_stream_desc->keep_versions)
             throw Exception(
                 ErrorCodes::RECOVER_CHECKPOINT_FAILED,
@@ -2658,7 +2616,7 @@ void HashJoin::deserialize(ReadBuffer & rb)
                 static_cast<DataStreamSemantic>(recovered_left_stream_semantic),
                 recovered_left_keep_versions,
                 left_header_str,
-                left_data.join_stream_desc->data_stream_semantic,
+                left_data.join_stream_desc->data_stream_semantic.semantic,
                 left_data.join_stream_desc->keep_versions);
 
         String recovered_right_header_str;
@@ -2670,7 +2628,8 @@ void HashJoin::deserialize(ReadBuffer & rb)
 
         auto right_header_str = right_data.join_stream_desc->input_header.dumpStructure();
         if (recovered_right_header_str != right_header_str
-            || static_cast<DataStreamSemantic>(recovered_right_stream_semantic) != right_data.join_stream_desc->data_stream_semantic
+            || static_cast<DataStreamSemantic>(recovered_right_stream_semantic)
+                != right_data.join_stream_desc->data_stream_semantic.semantic
             || recovered_right_keep_versions != right_data.join_stream_desc->keep_versions)
             throw Exception(
                 ErrorCodes::RECOVER_CHECKPOINT_FAILED,
@@ -2680,7 +2639,7 @@ void HashJoin::deserialize(ReadBuffer & rb)
                 static_cast<DataStreamSemantic>(recovered_right_stream_semantic),
                 recovered_right_keep_versions,
                 right_header_str,
-                right_data.join_stream_desc->data_stream_semantic,
+                right_data.join_stream_desc->data_stream_semantic.semantic,
                 right_data.join_stream_desc->keep_versions);
     }
 

@@ -14,11 +14,7 @@ formatter = logging.Formatter(
 )
 
 PROTON_PYTHON_DRIVER_S3_BUCKET_NAME = "tp-internal"
-PROTON_PYTHON_DIRVER_S3_OBJ_NAME = (
-    "proton/proton-python-driver/clickhouse-driver-0.2.4.tar.gz"
-)
-PROTON_PYTHON_DRIVER_FILE_NAME = "clickhouse-driver-0.2.4.tar.gz"
-PROTON_PYTHON_DRIVER_NANME = "clickhouse-driver"
+PROTON_PYTHON_DRIVER_NANME = "proton-driver"
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
 config_file_path = f"{cur_dir}/test_stream_smoke/configs/config.json"
@@ -100,41 +96,6 @@ def upload_proton_logs(s3_client, proton_log_folder, pr_number="0", commit_sha="
     logging.info("Search result in url %s", proton_log_url)
     return proton_log_url
 
-
-def proton_python_driver_install():
-    s3_helper = S3Helper("https://s3.amazonaws.com")
-    command = "pip3 list | grep clickhouse-driver"
-    ret = subprocess.run(
-        command,
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        encoding="utf-8",
-        timeout=600,
-    )
-    logger.debug(f"ret.stdout == {ret.stdout}")
-    if PROTON_PYTHON_DRIVER_NANME not in ret.stdout:
-        s3_helper.client.download_file(
-            PROTON_PYTHON_DRIVER_S3_BUCKET_NAME,
-            PROTON_PYTHON_DIRVER_S3_OBJ_NAME,
-            PROTON_PYTHON_DRIVER_FILE_NAME,
-        )
-        logger.debug(f"{PROTON_PYTHON_DRIVER_FILE_NAME} is downloaded")
-        command = "pip3 install ./" + PROTON_PYTHON_DRIVER_FILE_NAME
-        ret = ret = subprocess.run(
-            command,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            encoding="utf-8",
-            timeout=600,
-        )
-        logger.debug(f"ret of subprocess.run({command}) = {ret}")
-    else:
-        logger.debug(
-            f"{PROTON_PYTHON_DRIVER_NANME} exists bypass s3 download and install"
-        )
-    time.sleep(1)
 
 def ci_runner(
     local_all_results_folder_path,
@@ -511,8 +472,7 @@ if __name__ == "__main__":
         print(
             f"one of TIMEPLUS_API_KEY,TIMEPLUS_ADDRESS,TIMEPLUS_WORKSPACE is not found in ENV"
         )
-    logger.info(f"Check proton_python_driver and install...")
-    proton_python_driver_install()
+
     if (
         "test_production_compatibility" in test_folders_list
     ):  # todo: hardcode now, refactor later to have a system_test_runner to run all pytests folders like test_production_compatibility

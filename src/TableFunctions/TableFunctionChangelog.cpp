@@ -66,7 +66,7 @@ void TableFunctionChangelog::parseArguments(const ASTPtr & func_ast, ContextPtr 
     if (!streaming)
         throw Exception(ErrorCodes::UNSUPPORTED, "`changelog` table function doesn't supports historical stream yet");
 
-    if (Streaming::isChangelogKeyedDataStream(data_stream_semantic))
+    if (Streaming::isChangelogKeyedStorage(data_stream_semantic))
         throw Exception(ErrorCodes::UNSUPPORTED, "`changelog` table function doesn't support changelog stream yet");
 
     /// Here we already erased the stream name in the first argument
@@ -75,25 +75,20 @@ void TableFunctionChangelog::parseArguments(const ASTPtr & func_ast, ContextPtr 
     /// since it already has these defined at storage layer. Changing to a different primary key columns / version column
     /// seems having no sense for now
     /// changelog(versioned_kv, [true | false])
-    if (storage && (storage->as<StorageStream>() || storage->as<StorageMaterializedView>())
-        && isVersionedKeyedDataStream(storage->dataStreamSemantic()) && node->arguments->children.size() >= 1)
+    if (isVersionedKeyedStorage(data_stream_semantic) && node->arguments->children.size() >= 1)
         throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
 
     if (node->arguments->children.empty())
     {
-        /// We expect the underlying storage is versioned-kv or changelog-kv
-        if (storage
-            && ((storage->as<StorageStream>() || storage->as<StorageMaterializedView>())
-                && isVersionedKeyedDataStream(storage->dataStreamSemantic())))
-        {
-        }
-        else
+        if (!isVersionedKeyedStorage(data_stream_semantic))
             throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
     }
-
-    if (drop_late_rows && *drop_late_rows && (node->arguments->children.size() == 1))
+    else if (node->arguments->children.size() == 1)
+    {
         /// For other stream / query, we expect at least 1 primary key column and 1 version column arg if target stream is not versioned-kv
-        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
+        if (drop_late_rows && *drop_late_rows && !isVersionedKeyedStorage(data_stream_semantic))
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
+    }
 
     /// Create table func desc
     streaming_func_desc = createStreamingTableFunctionDescription(changelog_func_ast, context);

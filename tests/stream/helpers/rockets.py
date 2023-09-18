@@ -2,7 +2,7 @@
 # _*_ coding: utf-8 _*_
 import datetime, yaml, json, getopt, logging, logging.config, math, os, platform, random, requests,signal,subprocess, sys, threading, time, traceback, uuid
 import multiprocessing as mp
-from clickhouse_driver import Client, errors
+from proton_driver import Client, errors
 from timeplus import Stream, Environment
 from helpers.event_util import (
     Event,
@@ -57,7 +57,7 @@ INIT_STATE = "init"
 TIME_STR_FORMAT = "%y/%m/%d, %H:%M:%S"
 
 
-# TestException and errors, steal some codes from clickhouse_driver.errors
+# TestException and errors, steal some codes from proton_driver.errors
 class ErrorCodes:
     STREAM_CREATE_FAILED = 100
     QUERY_ID_NOT_EXIST = 101
