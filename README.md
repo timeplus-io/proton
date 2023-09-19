@@ -3,6 +3,9 @@
   />
 </p>
 <p align="center">
+  <a href="https://timeplus.com/slack">
+    <img src="https://img.shields.io/badge/Join%20Our%20Community-Slack-blue" alt="Slack" />
+  </a>
   <a href="https://twitter.com/timeplusdata">
     <img src="https://img.shields.io/twitter/follow/timeplusdata?style=flat&label=%40timeplusdata&logo=twitter&color=0bf&logoColor=fff" alt="Twitter" />
   </a>
@@ -26,7 +29,7 @@
 
 ## Introduction
 
-Proton is a unified streaming and historical data processing engine in a single binary. It helps data engineers and platform engineers solve complex real-time analytics use cases, and powers the [Timeplus Cloud](https://timeplus.com) streaming analytics platform.
+Proton is a unified streaming and historical data processing engine in a single binary. It helps data engineers and platform engineers solve complex real-time analytics use cases, and powers [Timeplus](https://timeplus.com) streaming analytics platform.
 
 Proton extends the historical data, storage, and computing functionality of the popular [ClickHouse project](https://github.com/clickhouse/clickhouse) with streaming and OLAP data processing.
 
@@ -99,22 +102,14 @@ To see how such a deployment of Proton works as a demo, using `owl-shop` sample 
 
 ## Get more with Timeplus Cloud
 
-To access more features, such as sources, sinks, dashboards, alerts, data lineage, create a workspace at [Timeplus Cloud](https://us.timeplus.cloud) or try the [live demo](https://demo.timeplus.cloud) with pre-built live data and
-dashboards.
-
-<!-- 
--- START REMOVE FOR DOCS.TIMEPLUS.COM VERSION 
--->
+To access more features, such as sources, sinks, dashboards, alerts, data lineage, create a workspace at [Timeplus Cloud](https://us.timeplus.cloud) or try the [live demo](https://demo.timeplus.cloud) with pre-built live data and dashboards.
 
 ## Documentation
 
-We publish full documentation for Proton at [`docs.timeplus.com`](https://docs.timeplus.com/proton) alongside documentation for the Timeplus (Cloud and Enterprise) platform.
+We publish full documentation for Proton at [docs.timeplus.com](https://docs.timeplus.com/proton) alongside documentation for the Timeplus (Cloud and Enterprise) platform.
 
-We also have a [FAQ](https://docs.timeplus.com/proton-faq/) for detailing how we chose Apache License 2.0, how Proton is related to ClickHouse, what features are available in Proton versus Timeplus Cloud, and more.
+We also have a [FAQ](https://docs.timeplus.com/proton-faq/) for detailing how we chose Apache License 2.0, how Proton is related to ClickHouse, what features are available in Proton versus Timeplus, and more.
 
-<!-- 
----- END REMOVE FOR DOCS.TIMEPLUS.COM VERSION
--->
 
 ## Contributing
 
