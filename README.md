@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="Proton – open source, unified streaming and data processing engine for real-time analytics" src="https://github.com/timeplus-io/proton/blob/84f0ea831d43e4920cf77fe3ecbb4c3c5a25651b/design/proton-logo-white-bg.png"
+  <img alt="Proton – open source, unified streaming and data processing engine for real-time analytics" src="https://github.com/timeplus-io/proton/blob/6825207e4e80e545e6fc19711bb59d4e0d92946c/design/proton-logo-white-bg.png"
   />
 </p>
 <p align="center">
@@ -136,6 +136,6 @@ For filing bugs, suggesting improvements, or requesting new features, see the [o
 
 ## Licensing
 
-Proton uses Apache License 2.0. See details in the [LICENSE](https://github.com/timeplus-io/proton/blob/master/LICENSE).
+Proton uses Apache License 2.0. See details in the [LICENSE](https://github.com/timeplus-io/proton/blob/develop/LICENSE).
 
 
