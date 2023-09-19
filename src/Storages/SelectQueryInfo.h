@@ -185,8 +185,9 @@ struct SelectQueryInfo
 
     Streaming::WindowParamsPtr streaming_window_params;
 
-    bool changelog_tracking_changes = false;
-    bool versioned_kv_tracking_changes = false;
+    bool left_storage_tracking_changes = false;
+    bool right_storage_tracking_changes = false;
+    bool force_emit_changelog = false;
     std::optional<bool> changelog_query_drop_late_rows = true;
 
     bool has_aggregate_over = false;
@@ -195,7 +196,7 @@ struct SelectQueryInfo
     Names partition_by_keys;
 
     bool hasPartitionByKeys() const noexcept { return !partition_by_keys.empty(); }
-    bool trackingChanges() const noexcept { return changelog_tracking_changes || versioned_kv_tracking_changes; }
+    bool trackingChanges() const noexcept { return left_storage_tracking_changes || right_storage_tracking_changes; }
     /// proton: ends.
 
     ClusterPtr getCluster() const { return !optimized_cluster ? cluster : optimized_cluster; }

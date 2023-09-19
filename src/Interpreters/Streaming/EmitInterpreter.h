@@ -30,7 +30,7 @@ public:
 public:
     /// [Rule] Last X
     /// -------------
-    /// EMIT STREAM [LAST <last-x>]
+    /// EMIT [STREAM|CHANGELOG] [LAST <last-x>]
     /// <last-x> is Interval alias, such as : 1s 1m 1h
     ///
     /// Note: Last X streaming processing is just based on existing streaming processing primitives

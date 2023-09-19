@@ -34,7 +34,7 @@ ColumnsDescription TableFunctionView::getActualTableStructure(ContextPtr context
     assert(create.select);
     assert(create.children.size() == 1);
     assert(create.children[0]->as<ASTSelectWithUnionQuery>());
-    auto sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.children[0], context, false, nullptr);
+    auto sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.children[0], context, false);
     return ColumnsDescription(sample.getNamesAndTypesList());
 }
 

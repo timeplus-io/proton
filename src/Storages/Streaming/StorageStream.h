@@ -185,6 +185,17 @@ public:
 private:
     ShardsToRead getRequiredShardsToRead(ContextPtr context_, const SelectQueryInfo & query_info) const;
 
+    void readChangelog(
+        const ShardsToRead & shards_to_read,
+        QueryPlan & query_plan,
+        Names column_names,
+        const StorageSnapshotPtr & storage_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr context_,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        size_t num_streams);
+
     void readStreaming(
         const StreamShardPtrs & shards_to_read,
         QueryPlan & query_plan,
