@@ -20,7 +20,7 @@
 <p align="center">
   <a href="#introduction"><strong>Introduction</strong></a> ·
   <a href="#get-started"><strong>Get started</strong></a> ·
-  <a href="#get-more-with-timeplus-cloud"><strong>Timeplus Cloud</strong></a> ·
+  <a href="#get-more-with-timeplus"><strong>Timeplus</strong></a> ·
   <a href="#documentation"><strong>Documentation</strong></a> ·
   <a href="#contributing"><strong>Contributing</strong></a> ·
   <a href="#need-help"><strong>Need help?</strong></a> ·
@@ -100,7 +100,7 @@ Now that you're running Proton and have created your first stream, query, and vi
 
 To see how such a deployment of Proton works as a demo, using `owl-shop` sample live data, check out our [tutorial with Docker Compose](https://docs.timeplus.com/proton-kafka#tutorial).
 
-## Get more with Timeplus Cloud
+## Get more with Timeplus
 
 To access more features, such as sources, sinks, dashboards, alerts, data lineage, create a workspace at [Timeplus Cloud](https://us.timeplus.cloud) or try the [live demo](https://demo.timeplus.cloud) with pre-built live data and dashboards.
 
