@@ -13,7 +13,7 @@ from enum import Enum, unique
 import timeplus
 from timeplus import Environment, Stream
 import sseclient
-from clickhouse_driver import Client
+from proton_driver import Client
 
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter(
@@ -23,7 +23,7 @@ formatter = logging.Formatter(
 DEFAULT_REST_GET_TIMEOUT = 5
 DEFAULT_REST_TIMEOUT_RETRY = 3
 DEFAULT_REST_TIMEOUT_RETRY_INTERVAL = 1
-TPNATIVE_DRIVER = 'clickhouse_driver'
+TPNATIVE_DRIVER = 'proton_driver'
 
 
 @unique
