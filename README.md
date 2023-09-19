@@ -6,7 +6,7 @@
   <a href="https://twitter.com/timeplusdata">
     <img src="https://img.shields.io/twitter/follow/timeplusdata?style=flat&label=%40timeplusdata&logo=twitter&color=0bf&logoColor=fff" alt="Twitter" />
   </a>
-  <a href="https://github.com/timeplus-io/proton/blob/main/LICENSE">
+  <a href="https://github.com/timeplus-io/proton/blob/develop/LICENSE">
     <img src="https://img.shields.io/github/license/timeplus-io/proton?label=license&logo=github&color=f80&logoColor=fff" alt="License" />
   </a>
   <a href="https://github.com/timeplus-io/proton/actions/workflows/nightly_test.yml">
