@@ -37,6 +37,10 @@ public:
 
     Chunk generate() override;
 
+    void checkpoint(CheckpointContextPtr ckpt_ctx_) override;
+
+    void recover(CheckpointContextPtr ckpt_ctx_) override;
+
 private:
     void calculateColumnPositions();
     void initConsumer(const Kafka * kafka);
@@ -48,6 +52,8 @@ private:
     void parseRaw(const rd_kafka_message_s * kmessage);
 
     inline void readAndProcess();
+
+    Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx_);
 
 private:
     StorageSnapshotPtr storage_snapshot;
@@ -76,6 +82,24 @@ private:
 
     UInt32 record_consume_batch_count = 1000;
     Int32 record_consume_timeout = 100;
+
+    /// For checkpoint
+    /// FIXME, switch to llvm-15
+    std::atomic<CheckpointContext *> ckpt_ctx;
+    struct State
+    {
+        void serialize(WriteBuffer & wb) const;
+        void deserialize(VersionType version, ReadBuffer & rb);
+
+        static constexpr VersionType VERSION = 0; /// Current State Version
+
+        /// For VERSION-0
+        const String & topic;
+        Int32 partition;
+        Int64 last_sn = -1;
+
+        State(const klog::KafkaWALContext & consume_ctx_) : topic(consume_ctx_.topic), partition(consume_ctx_.partition) { }
+    } ckpt_data;
 };
 
 }
