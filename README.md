@@ -35,7 +35,7 @@ Why use Proton?
 - **A unified, lightweight engine** to connect streaming and historical data processing tasks with efficiency and robust performance.
 - **Smooth developer experience** with powerful streaming and analytical functionality.
 - **Flexible deployments** with Proton's single binary and no external service dependencies.
-- **Low total cost** of ownership compared to other analytical frameworks.
+- **Low total cost of ownership** compared to other analytical frameworks.
 
 Plus built-in support for powerful streaming and analytical functionality:
 
@@ -57,7 +57,7 @@ See our [architecture](https://docs.timeplus.com/proton-architecture) doc for te
 With [Docker engine](https://docs.docker.com/engine/install/) installed on your local machine, pull and run the latest version of the Proton Docker image.
 
 ```bash
-docker run -d --name proton ghcr.io/timeplus-io/proton:develop
+docker run -d --pull always --name proton ghcr.io/timeplus-io/proton:develop
 ```
 
 Connect to your `proton` container and run the `proton-client` tool to connect to the local Proton server:
@@ -74,7 +74,7 @@ From `proton-client`, run the following SQL to create a stream of random data:
 
 ```sql
 -- Create a stream with random data.
-CREATE RANDOM STREAM devices(device string default 'device'||to_string(rand()%4), location string default 'city'||to_string(rand()%10), temperature float default rand()%1000/10);
+CREATE RANDOM STREAM devices(device string default 'device'||to_string(rand()%4), temperature float default rand()%1000/10);
 
 -- Run the long-running stream query.
 SELECT device, count(*), min(temperature), max(temperature) FROM devices GROUP BY device;
