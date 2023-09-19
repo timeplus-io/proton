@@ -16,11 +16,10 @@ from ci_config import CI_CONFIG
 from rerun_helper import RerunHelper
 
 class BuildResult():
-    def __init__(self, compiler, build_type, sanitizer, bundled, splitted, status, elapsed_seconds, with_coverage):
+    def __init__(self, compiler, build_type, sanitizer, splitted, status, elapsed_seconds, with_coverage):
         self.compiler = compiler
         self.build_type = build_type
         self.sanitizer = sanitizer
-        self.bundled = bundled
         self.splitted = splitted
         self.status = status
         self.elapsed_seconds = elapsed_seconds
@@ -47,7 +46,6 @@ def process_report(build_report):
         compiler=build_config['compiler'],
         build_type=build_config['build_type'],
         sanitizer=build_config['sanitizer'],
-        bundled=build_config['bundled'],
         splitted=build_config['splitted'],
         status="success" if build_report['status'] else "failure",
         elapsed_seconds=build_report['elapsed_seconds'],
