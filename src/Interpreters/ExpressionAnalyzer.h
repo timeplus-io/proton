@@ -207,7 +207,7 @@ namespace Streaming
 struct ExpressionAnalysisContext
 {
     bool emit_version;
-    DataStreamSemantic data_stream_semantic;
+    DataStreamSemanticEx data_stream_semantic;
 };
 }
 /// proton : ends

@@ -206,7 +206,7 @@ bool InterpreterSelectIntersectExceptQuery::hasStreamingWindowFunc() const
     return false;
 }
 
-Streaming::DataStreamSemantic InterpreterSelectIntersectExceptQuery::getDataStreamSemantic() const
+Streaming::DataStreamSemanticEx InterpreterSelectIntersectExceptQuery::getDataStreamSemantic() const
 {
     auto hash_semantic = nested_interpreters[0]->getDataStreamSemantic();
 

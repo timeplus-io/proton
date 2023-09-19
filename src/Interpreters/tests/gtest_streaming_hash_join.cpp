@@ -6,7 +6,6 @@
 #include <Interpreters/CollectJoinOnKeysVisitor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/JoinedTables.h>
-#include <Interpreters/Streaming/GetSampleBlockContext.h>
 #include <Interpreters/Streaming/HashJoin.h>
 #include <Interpreters/Streaming/SyntaxAnalyzeUtils.h>
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
@@ -185,9 +184,9 @@ std::shared_ptr<TableJoin> initTableJoin(
     std::string_view strictness,
     std::string_view on_clause,
     const Block & left_header,
-    Streaming::DataStreamSemantic left_data_stream_semantic,
+    Streaming::DataStreamSemanticEx left_data_stream_semantic,
     const Block & right_header,
-    Streaming::DataStreamSemantic right_data_stream_semantic,
+    Streaming::DataStreamSemanticEx right_data_stream_semantic,
     ContextPtr context)
 {
     ParserSelectQuery parser;
@@ -391,20 +390,30 @@ void commonTest(
     std::string_view strictness,
     std::string_view on_clause,
     Block left_header,
-    Streaming::DataStreamSemantic left_data_stream_semantic,
+    Streaming::DataStreamSemanticEx left_data_stream_semantic,
     std::optional<std::vector<size_t>> left_primary_key_column_indexes,
     Block right_header,
-    Streaming::DataStreamSemantic right_data_stream_semantic,
+    Streaming::DataStreamSemanticEx right_data_stream_semantic,
     std::optional<std::vector<size_t>> right_primary_key_column_indexes,
     std::vector<ToJoinStep> to_join_steps,
     ContextPtr context)
 {
+    auto lower_strictness = Poco::toLower(String(strictness));
+    if (lower_strictness != "asof" && lower_strictness != "any" && lower_strictness != "latest")
+    {
+        if (Streaming::isVersionedKeyedStorage(left_data_stream_semantic))
+            left_data_stream_semantic = Streaming::DataStreamSemantic::Changelog;
+
+        if (Streaming::isVersionedKeyedStorage(right_data_stream_semantic))
+            right_data_stream_semantic = Streaming::DataStreamSemantic::Changelog;
+    }
+
     auto msg = fmt::format(
         "(Test case: <{}> {} {} JOIN <{}>, ON clause: {}, left header: '{}', right header: '{}')",
-        magic_enum::enum_name(left_data_stream_semantic),
+        magic_enum::enum_name(left_data_stream_semantic.toStorageSemantic()),
         kind,
         strictness,
-        magic_enum::enum_name(right_data_stream_semantic),
+        magic_enum::enum_name(right_data_stream_semantic.toStorageSemantic()),
         on_clause,
         left_header.dumpStructure(),
         right_header.dumpStructure());
@@ -412,9 +421,9 @@ void commonTest(
     try
     {
         auto convert_block
-            = [&](Streaming::DataStreamSemantic data_stream_semantic, const auto & primary_key_column_indexes, Block & block) -> Block & {
+            = [&](Streaming::DataStreamSemanticEx data_stream_semantic, const auto & primary_key_column_indexes, Block & block) -> Block & {
             /// So far not support primary key column + version column
-            // if (Streaming::isKeyedDataStream(data_stream_semantic))
+            // if (Streaming::isKeyedStorage(data_stream_semantic))
             // {
             //     assert(primary_key_column_indexes.has_value());
             //     /// Add primary key column
@@ -558,48 +567,43 @@ void commonTest(
 }
 
 template <typename JoinTest>
-    requires(std::is_invocable_v<JoinTest, Streaming::DataStreamSemantic, JoinKind, JoinStrictness, Streaming::DataStreamSemantic>)
+    requires(std::is_invocable_v<JoinTest, Streaming::DataStreamSemanticEx, JoinKind, JoinStrictness, Streaming::DataStreamSemanticEx>)
 void dispatchJoinTests(JoinTest && join_test)
 {
     /// A 4 dimensions array : Left DataStreamSemantic, JoinKind, JoinStrictness, Right DataStreamSemantic
     /// NOTE: Skip JoinStrictness::Unspecified and JoinStrictness::RightAny.
-    constexpr auto total_combinations = magic_enum::enum_count<Streaming::DataStreamSemantic>() * magic_enum::enum_count<JoinKind>()
-        * (magic_enum::enum_count<JoinStrictness>() - 2) * magic_enum::enum_count<Streaming::DataStreamSemantic>();
-    constexpr auto dim3_combinations = total_combinations / magic_enum::enum_count<Streaming::DataStreamSemantic>();
+    constexpr auto total_combinations = magic_enum::enum_count<Streaming::StorageSemantic>() * magic_enum::enum_count<JoinKind>()
+        * (magic_enum::enum_count<JoinStrictness>() - 2) * magic_enum::enum_count<Streaming::StorageSemantic>();
+    constexpr auto dim3_combinations = total_combinations / magic_enum::enum_count<Streaming::StorageSemantic>();
     constexpr auto dim2_combinations = dim3_combinations / magic_enum::enum_count<JoinKind>();
     constexpr auto dim1_combinations = dim2_combinations / (magic_enum::enum_count<JoinStrictness>() - 2);
 
     ///  static_for<0, total_combinations>([&](auto index)
     for (size_t index = 0; index < total_combinations; ++index)
     {
-        auto left_data_stream_semantic = magic_enum::enum_value<Streaming::DataStreamSemantic>(index / dim3_combinations);
+        auto left_storage_semantic = magic_enum::enum_value<Streaming::StorageSemantic>(index / dim3_combinations);
         auto kind = magic_enum::enum_value<JoinKind>(index % dim3_combinations / dim2_combinations);
         auto strictness = magic_enum::enum_value<JoinStrictness>(index % dim3_combinations % dim2_combinations / dim1_combinations + 2);
-        auto right_data_stream_semantic
-            = magic_enum::enum_value<Streaming::DataStreamSemantic>(index % dim3_combinations % dim2_combinations % dim1_combinations);
+        auto right_storage_semantic
+            = magic_enum::enum_value<Streaming::StorageSemantic>(index % dim3_combinations % dim2_combinations % dim1_combinations);
 
         /// Retrieve streaming hash join support matrix
         bool supported = false;
-        if (auto left_data_stream_semantic_iter = Streaming::HashJoin::support_matrix.find(left_data_stream_semantic);
-            left_data_stream_semantic_iter != Streaming::HashJoin::support_matrix.end())
-            if (auto kind_iter = left_data_stream_semantic_iter->second.find(kind);
-                kind_iter != left_data_stream_semantic_iter->second.end())
-                if (auto strictness_iter = kind_iter->second.find(strictness); strictness_iter != kind_iter->second.end())
-                    if (auto right_data_stream_semantic_iter = strictness_iter->second.find(right_data_stream_semantic);
-                        right_data_stream_semantic_iter != strictness_iter->second.end())
-                        supported = right_data_stream_semantic_iter->second;
+        auto join_combination = std::make_tuple(left_storage_semantic, kind, strictness, right_storage_semantic);
+        if (auto iter = Streaming::HashJoin::support_matrix.find(join_combination); iter != Streaming::HashJoin::support_matrix.end())
+            supported = iter->second;
 
         try
         {
-            join_test(left_data_stream_semantic, kind, strictness, right_data_stream_semantic);
+            join_test(left_storage_semantic, kind, strictness, right_storage_semantic);
             if (!supported)
             {
                 FAIL() << fmt::format(
                     "Unsupported test case (but passed): (<{}> {} {} JOIN <{}>) in join test '{}'",
-                    magic_enum::enum_name(left_data_stream_semantic),
+                    magic_enum::enum_name(left_storage_semantic),
                     kind,
                     strictness,
-                    magic_enum::enum_name(right_data_stream_semantic),
+                    magic_enum::enum_name(right_storage_semantic),
                     typeid(join_test).name());
             }
             else
@@ -619,10 +623,10 @@ void dispatchJoinTests(JoinTest && join_test)
 
             FAIL() << fmt::format(
                 "Failure test case: (<{}> {} {} JOIN <{}>) in join test '{}', it throws an exception \"{}\"",
-                magic_enum::enum_name(left_data_stream_semantic),
+                magic_enum::enum_name(left_storage_semantic),
                 kind,
                 strictness,
-                magic_enum::enum_name(right_data_stream_semantic),
+                magic_enum::enum_name(right_storage_semantic),
                 typeid(join_test).name(),
                 getExceptionMessage(e, true));
         }
@@ -630,10 +634,10 @@ void dispatchJoinTests(JoinTest && join_test)
         {
             FAIL() << fmt::format(
                 "Failure test case: (<{}> {} {} JOIN <{}>) in join test '{}', it throws an exception \"{}\"",
-                magic_enum::enum_name(left_data_stream_semantic),
+                magic_enum::enum_name(left_storage_semantic),
                 kind,
                 strictness,
-                magic_enum::enum_name(right_data_stream_semantic),
+                magic_enum::enum_name(right_storage_semantic),
                 typeid(join_test).name(),
                 getCurrentExceptionMessage(true));
         }
@@ -663,10 +667,10 @@ TEST(StreamingHashJoin, CommonTest)
         /*default join strictness*/ "",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*right_primary_key_column_indexes*/ std::nullopt,
         /*to_join_steps*/
         {
@@ -782,10 +786,10 @@ TEST(StreamingHashJoin, SimpleJoinTests)
         dispatchJoinTests([&](auto left_data_stream_semantic, auto kind, auto strictness, auto right_data_stream_semantic) {
             std::optional<std::vector<size_t>> left_primary_key_column_indexes;
             std::optional<std::vector<size_t>> right_primary_key_column_indexes;
-            if (Streaming::isKeyedDataStream(left_data_stream_semantic))
+            if (Streaming::isKeyedStorage(left_data_stream_semantic))
                 left_primary_key_column_indexes = std::vector<size_t>{i - 1};
 
-            if (Streaming::isKeyedDataStream(right_data_stream_semantic))
+            if (Streaming::isKeyedStorage(right_data_stream_semantic))
                 right_primary_key_column_indexes = std::vector<size_t>{i - 1};
 
             commonTest(
@@ -802,8 +806,8 @@ TEST(StreamingHashJoin, SimpleJoinTests)
                 context);
 
             /// Additional range between
-            if (left_data_stream_semantic == Streaming::DataStreamSemantic::Append && kind == JoinKind::Inner
-                && strictness == JoinStrictness::All && right_data_stream_semantic == Streaming::DataStreamSemantic::Append)
+            if (Streaming::isAppendStorage(left_data_stream_semantic) && kind == JoinKind::Inner && strictness == JoinStrictness::All
+                && Streaming::isAppendStorage(right_data_stream_semantic))
             {
                 commonTest(
                     toString(kind),
@@ -833,10 +837,10 @@ TEST(StreamingHashJoin, AppendLeftAsofJoinAppend)
         "asof",
         /*on_clause*/ "t1.col_1 = t2.col_1 and t1.col_2 > t2.col_2",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*right_primary_key_column_indexes*/ std::nullopt,
         /*to_join_steps*/
         {
@@ -885,10 +889,10 @@ TEST(StreamingHashJoin, AppendLeftLatestJoinAppend)
         "latest",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*right_primary_key_column_indexes*/ std::nullopt,
         /*to_join_steps*/
         {
@@ -937,10 +941,10 @@ TEST(StreamingHashJoin, AppendLeftAllJoinAppend)
         "all",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*right_primary_key_column_indexes*/ std::nullopt,
         /*to_join_steps*/
         {
@@ -992,10 +996,10 @@ TEST(StreamingHashJoin, AppendLeftAllJoinChangelog)
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::Changelog,
+        Streaming::StorageSemantic::Changelog,
         /*right_primary_key_column_indexes*/ std::nullopt,
         /*to_join_steps*/
         {
@@ -1050,10 +1054,10 @@ TEST(StreamingHashJoin, AppendLeftAllJoinChangelogKV)
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::ChangelogKV,
+        Streaming::StorageSemantic::ChangelogKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
         /*to_join_steps*/
         {
@@ -1108,10 +1112,10 @@ TEST(StreamingHashJoin, AppendLeftAllJoinVersionedKV)
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
         /*to_join_steps*/
         {
@@ -1166,10 +1170,10 @@ TEST(StreamingHashJoin, AppendLeftAllJoinVersionedKVWithFullMultiPrimaryKeys)
         /*default join strictness*/ "all",
         /*on_clause*/ "t1.col_1 = t2.col_1 and t1.col_2 = t2.col_2",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0, 1},
         /*to_join_steps*/
         {
@@ -1224,10 +1228,10 @@ TEST(StreamingHashJoin, AppendLeftAllJoinVersionedKVWithPartialMultiPrimaryKeys)
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0, 1},
         /*to_join_steps*/
         {
@@ -1284,10 +1288,10 @@ TEST(StreamingHashJoin, AppendLeftAllJoinVersionedKVWithNoPrimaryKeys)
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_2 = t2.col_2",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
         /*to_join_steps*/
         {
@@ -1335,7 +1339,7 @@ TEST(StreamingHashJoin, AppendLeftLatestJoinVersionedKV)
 {
     auto context = getContext().context;
     Block left_header = prepareBlock(/*types*/ {"int", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
-    Block right_header = prepareBlockWithDelta(/*types*/ {"int", "datetime64(3, 'UTC')", "int8"}, /*no data*/ "", context);
+    Block right_header = prepareBlock(/*types*/ {"int", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
 
     /// Single primary key
     /// Append JOIN VersionedKV
@@ -1345,16 +1349,16 @@ TEST(StreamingHashJoin, AppendLeftLatestJoinVersionedKV)
         /*join strictness*/ "latest",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
         /*to_join_steps*/
         {
             {
                 /*to join pos*/ ToJoinStep::RIGHT,
-                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:00', +1)", context),
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:00')", context),
                 /*expected join results*/ ExpectedJoinResults{},
             },
             {
@@ -1362,18 +1366,13 @@ TEST(StreamingHashJoin, AppendLeftLatestJoinVersionedKV)
                 /*to join block*/ prepareBlockByHeader(left_header, "(2, '2023-1-1 00:00:00')", context),
                 /*expected join results*/
                 ExpectedJoinResults{
-                    /// output header: col_1, col_2, t2.col_2, t2._tp_delta
-                    .values = "(2, '2023-1-1 00:00:00', '1970-1-1 00:00:00', 0)",
+                    /// output header: col_1, col_2, t2.col_2
+                    .values = "(2, '2023-1-1 00:00:00', '1970-1-1 00:00:00')",
                 },
             },
             {
                 /*to join pos*/ ToJoinStep::RIGHT,
-                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:00', -1)", context),
-                /*expected join results*/ ExpectedJoinResults{},
-            },
-            {
-                /*to join pos*/ ToJoinStep::RIGHT,
-                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:01', +1)", context),
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:01')", context),
                 /*expected join results*/ ExpectedJoinResults{},
             },
             {
@@ -1381,8 +1380,8 @@ TEST(StreamingHashJoin, AppendLeftLatestJoinVersionedKV)
                 /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00')", context),
                 /*expected join results*/
                 ExpectedJoinResults{
-                    /// output header: col_1, col_2, t2.col_2, t2._tp_delta
-                    .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:01', 1)",
+                    /// output header: col_1, col_2, t2.col_2
+                    .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:01')",
                 },
             },
         },
@@ -1393,7 +1392,7 @@ TEST(StreamingHashJoin, AppendLeftLatestJoinVersionedKVWithPartialMultiPrimaryKe
 {
     auto context = getContext().context;
     Block left_header = prepareBlock(/*types*/ {"int", "string", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
-    Block right_header = prepareBlockWithDelta(/*types*/ {"int", "string", "datetime64(3, 'UTC')", "int8"}, /*no data*/ "", context);
+    Block right_header = prepareBlock(/*types*/ {"int", "string", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
 
     /// Join on partial primary key(s)
     /// Append JOIN VersionedKV (with multiple primary keys)
@@ -1403,16 +1402,16 @@ TEST(StreamingHashJoin, AppendLeftLatestJoinVersionedKVWithPartialMultiPrimaryKe
         /*join strictness*/ "latest",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0, 1},
         /*to_join_steps*/
         {
             {
                 /*to join pos*/ ToJoinStep::RIGHT,
-                /*to join block*/ prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:00', +1)", context),
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:00')", context),
                 /*expected join results*/ ExpectedJoinResults{},
             },
             {
@@ -1420,19 +1419,14 @@ TEST(StreamingHashJoin, AppendLeftLatestJoinVersionedKVWithPartialMultiPrimaryKe
                 /*to join block*/ prepareBlockByHeader(left_header, "(2, 't1', '2023-1-1 00:00:00')", context),
                 /*expected join results*/
                 ExpectedJoinResults{
-                    /// output header: col_1, col_2, col_3, t2.col_3, t2._tp_delta
-                    .values = "(2, 't1', '2023-1-1 00:00:00', '', '1970-1-1 00:00:00', 0)",
+                    /// output header: col_1, col_2, col_3, t2.col_3
+                    .values = "(2, 't1', '2023-1-1 00:00:00', '', '1970-1-1 00:00:00')",
                 },
             },
             {
                 /*to join pos*/ ToJoinStep::RIGHT,
-                /*to join block*/ prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:00', -1)", context),
-                /*expected join results*/ ExpectedJoinResults{},
-            },
-            {
-                /*to join pos*/ ToJoinStep::RIGHT,
                 /*to join block*/
-                prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:01', +1)(1, 'tt2', '2023-1-1 00:00:01', +1)", context),
+                prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:01')(1, 'tt2', '2023-1-1 00:00:01')", context),
                 /*expected join results*/ ExpectedJoinResults{},
             },
             {
@@ -1440,8 +1434,8 @@ TEST(StreamingHashJoin, AppendLeftLatestJoinVersionedKVWithPartialMultiPrimaryKe
                 /*to join block*/ prepareBlockByHeader(left_header, "(1, 't2', '2023-1-1 00:00:01')", context),
                 /*expected join results*/
                 ExpectedJoinResults{
-                    /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3, t2._tp_delta
-                    .values = "(1, 't2', '2023-1-1 00:00:01', 'tt2', '2023-1-1 00:00:01', 1)",
+                    /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3
+                    .values = "(1, 't2', '2023-1-1 00:00:01', 'tt2', '2023-1-1 00:00:01')",
                 },
             },
         },
@@ -1452,7 +1446,7 @@ TEST(StreamingHashJoin, AppendLeftLatestJoinVersionedKVWithNoPrimaryKeys)
 {
     auto context = getContext().context;
     Block left_header = prepareBlock(/*types*/ {"int", "string", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
-    Block right_header = prepareBlockWithDelta(/*types*/ {"int", "string", "datetime64(3, 'UTC')", "int8"}, /*no data*/ "", context);
+    Block right_header = prepareBlock(/*types*/ {"int", "string", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
 
     /// Join on no primary key(s)
     /// Append JOIN VersionedKV (with multiple primary keys)
@@ -1462,16 +1456,16 @@ TEST(StreamingHashJoin, AppendLeftLatestJoinVersionedKVWithNoPrimaryKeys)
         /*join strictness*/ "latest",
         /*on_clause*/ "t1.col_2 = t2.col_2",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
         /*to_join_steps*/
         {
             {
                 /*to join pos*/ ToJoinStep::RIGHT,
-                /*to join block*/ prepareBlockByHeader(right_header, "(1, 't1', '2023-1-1 00:00:00', +1)", context),
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, 't1', '2023-1-1 00:00:00')", context),
                 /*expected join results*/ ExpectedJoinResults{},
             },
             {
@@ -1479,19 +1473,14 @@ TEST(StreamingHashJoin, AppendLeftLatestJoinVersionedKVWithNoPrimaryKeys)
                 /*to join block*/ prepareBlockByHeader(left_header, "(2, 't2', '2023-1-1 00:00:00')", context),
                 /*expected join results*/
                 ExpectedJoinResults{
-                    /// output header: col_1, col_2, col_3, t2.col_1, t2.col_3, t2._tp_delta
-                    .values = "(2, 't2', '2023-1-1 00:00:00', 0, '1970-1-1 00:00:00', 0)",
+                    /// output header: col_1, col_2, col_3, t2.col_1, t2.col_3
+                    .values = "(2, 't2', '2023-1-1 00:00:00', 0, '1970-1-1 00:00:00')",
                 },
             },
             {
                 /*to join pos*/ ToJoinStep::RIGHT,
-                /*to join block*/ prepareBlockByHeader(right_header, "(1, 't1', '2023-1-1 00:00:00', -1)", context),
-                /*expected join results*/ ExpectedJoinResults{},
-            },
-            {
-                /*to join pos*/ ToJoinStep::RIGHT,
                 /*to join block*/
-                prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:01', +1)(2, 'tt1', '2023-1-1 00:00:01', +1)", context),
+                prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:01')(2, 'tt1', '2023-1-1 00:00:01')", context),
                 /*expected join results*/ ExpectedJoinResults{},
             },
             {
@@ -1500,8 +1489,8 @@ TEST(StreamingHashJoin, AppendLeftLatestJoinVersionedKVWithNoPrimaryKeys)
                 prepareBlockByHeader(left_header, "(1, 'tt1', '2023-1-1 00:00:01')", context),
                 /*expected join results*/
                 ExpectedJoinResults{
-                    /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3, t2._tp_delta
-                    .values = "(1, 'tt1', '2023-1-1 00:00:01', 2, '2023-1-1 00:00:01', 1)",
+                    /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3
+                    .values = "(1, 'tt1', '2023-1-1 00:00:01', 2, '2023-1-1 00:00:01')",
                 },
             },
         },
@@ -1520,10 +1509,10 @@ TEST(StreamingHashJoin, AppendInnerAllJoinAppend)
         "all",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*right_primary_key_column_indexes*/ std::nullopt,
         /*to_join_steps*/
         {
@@ -1556,10 +1545,10 @@ TEST(StreamingHashJoin, AppendInnerRangeJoinAppend)
         "all",
         /*on_clause*/ "t1.col_1 = t2.col_1 and date_diff_within(2s, t1.col_2, t2.col_2)",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*right_primary_key_column_indexes*/ std::nullopt,
         /*to_join_steps*/
         {
@@ -1616,10 +1605,10 @@ TEST(StreamingHashJoin, AppendInnerAsofJoinAppend)
         "asof",
         /*on_clause*/ "t1.col_1 = t2.col_1 and t1.col_2 >= t2.col_2",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*right_primary_key_column_indexes*/ std::nullopt,
         /*to_join_steps*/
         {
@@ -1668,10 +1657,10 @@ TEST(StreamingHashJoin, AppendInnerLatestJoinAppend)
         "latest",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*right_primary_key_column_indexes*/ std::nullopt,
         /*to_join_steps*/
         {
@@ -1722,10 +1711,10 @@ TEST(StreamingHashJoin, AppendInnerAllJoinChangelogKV)
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::ChangelogKV,
+        Streaming::StorageSemantic::ChangelogKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
         /*to_join_steps*/
         {
@@ -1780,10 +1769,10 @@ TEST(StreamingHashJoin, AppendInnerAllJoinVersionedKV)
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
         /*to_join_steps*/
         {
@@ -1838,10 +1827,10 @@ TEST(StreamingHashJoin, AppendInnerAllJoinVersionedKVWithFullMultiPrimaryKeys)
         /*default join strictness*/ "all",
         /*on_clause*/ "t1.col_1 = t2.col_1 and t1.col_2 = t2.col_2",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0, 1},
         /*to_join_steps*/
         {
@@ -1896,10 +1885,10 @@ TEST(StreamingHashJoin, AppendInnerAllJoinVersionedKVWithPartialMultiPrimaryKeys
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0, 1},
         /*to_join_steps*/
         {
@@ -1956,10 +1945,10 @@ TEST(StreamingHashJoin, AppendInnerAllJoinVersionedKVWithNoPrimaryKeys)
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_2 = t2.col_2",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
         /*to_join_steps*/
         {
@@ -2007,7 +1996,7 @@ TEST(StreamingHashJoin, AppendInnerLatestJoinVersionedKV)
 {
     auto context = getContext().context;
     Block left_header = prepareBlock(/*types*/ {"int", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
-    Block right_header = prepareBlockWithDelta(/*types*/ {"int", "datetime64(3, 'UTC')", "int8"}, /*no data*/ "", context);
+    Block right_header = prepareBlock(/*types*/ {"int", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
 
     /// Single primary key
     /// Append JOIN VersionedKV
@@ -2017,16 +2006,16 @@ TEST(StreamingHashJoin, AppendInnerLatestJoinVersionedKV)
         /*join strictness*/ "latest",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
         /*to_join_steps*/
         {
             {
                 /*to join pos*/ ToJoinStep::RIGHT,
-                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:00', +1)", context),
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:00')", context),
                 /*expected join results*/ ExpectedJoinResults{},
             },
             {
@@ -2034,18 +2023,13 @@ TEST(StreamingHashJoin, AppendInnerLatestJoinVersionedKV)
                 /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00')", context),
                 /*expected join results*/
                 ExpectedJoinResults{
-                    /// output header: col_1, col_2, t2.col_2, t2._tp_delta
-                    .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:00', 1)",
+                    /// output header: col_1, col_2, t2.col_2
+                    .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:00')",
                 },
             },
             {
                 /*to join pos*/ ToJoinStep::RIGHT,
-                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:00', -1)", context),
-                /*expected join results*/ ExpectedJoinResults{},
-            },
-            {
-                /*to join pos*/ ToJoinStep::RIGHT,
-                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:01', +1)", context),
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:01')", context),
                 /*expected join results*/ ExpectedJoinResults{},
             },
             {
@@ -2053,8 +2037,8 @@ TEST(StreamingHashJoin, AppendInnerLatestJoinVersionedKV)
                 /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00')", context),
                 /*expected join results*/
                 ExpectedJoinResults{
-                    /// output header: col_1, col_2, t2.col_2, t2._tp_delta
-                    .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:01', 1)",
+                    /// output header: col_1, col_2, t2.col_2
+                    .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:01')",
                 },
             },
         },
@@ -2065,7 +2049,7 @@ TEST(StreamingHashJoin, AppendInnerLatestJoinVersionedKVWithPartialMultiPrimaryK
 {
     auto context = getContext().context;
     Block left_header = prepareBlock(/*types*/ {"int", "string", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
-    Block right_header = prepareBlockWithDelta(/*types*/ {"int", "string", "datetime64(3, 'UTC')", "int8"}, /*no data*/ "", context);
+    Block right_header = prepareBlock(/*types*/ {"int", "string", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
 
     /// Join on partial primary key(s)
     /// Append JOIN VersionedKV (with multiple primary keys)
@@ -2075,16 +2059,16 @@ TEST(StreamingHashJoin, AppendInnerLatestJoinVersionedKVWithPartialMultiPrimaryK
         /*join strictness*/ "latest",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0, 1},
         /*to_join_steps*/
         {
             {
                 /*to join pos*/ ToJoinStep::RIGHT,
-                /*to join block*/ prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:00', +1)", context),
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:00')", context),
                 /*expected join results*/ ExpectedJoinResults{},
             },
             {
@@ -2092,19 +2076,14 @@ TEST(StreamingHashJoin, AppendInnerLatestJoinVersionedKVWithPartialMultiPrimaryK
                 /*to join block*/ prepareBlockByHeader(left_header, "(1, 't1', '2023-1-1 00:00:00')", context),
                 /*expected join results*/
                 ExpectedJoinResults{
-                    /// output header: col_1, col_2, col_3, t2.col_3, t2._tp_delta
-                    .values = "(1, 't1', '2023-1-1 00:00:00', 'tt1', '2023-1-1 00:00:00', 1)",
+                    /// output header: col_1, col_2, col_3, t2.col_3
+                    .values = "(1, 't1', '2023-1-1 00:00:00', 'tt1', '2023-1-1 00:00:00')",
                 },
             },
             {
                 /*to join pos*/ ToJoinStep::RIGHT,
-                /*to join block*/ prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:00', -1)", context),
-                /*expected join results*/ ExpectedJoinResults{},
-            },
-            {
-                /*to join pos*/ ToJoinStep::RIGHT,
                 /*to join block*/
-                prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:01', +1)(1, 'tt2', '2023-1-1 00:00:01', +1)", context),
+                prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:01')(1, 'tt2', '2023-1-1 00:00:01')", context),
                 /*expected join results*/ ExpectedJoinResults{},
             },
             {
@@ -2112,8 +2091,8 @@ TEST(StreamingHashJoin, AppendInnerLatestJoinVersionedKVWithPartialMultiPrimaryK
                 /*to join block*/ prepareBlockByHeader(left_header, "(1, 't2', '2023-1-1 00:00:01')", context),
                 /*expected join results*/
                 ExpectedJoinResults{
-                    /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3, t2._tp_delta
-                    .values = "(1, 't2', '2023-1-1 00:00:01', 'tt2', '2023-1-1 00:00:01', 1)",
+                    /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3
+                    .values = "(1, 't2', '2023-1-1 00:00:01', 'tt2', '2023-1-1 00:00:01')",
                 },
             },
         },
@@ -2124,7 +2103,7 @@ TEST(StreamingHashJoin, AppendInnerLatestJoinVersionedKVWithNoPrimaryKeys)
 {
     auto context = getContext().context;
     Block left_header = prepareBlock(/*types*/ {"int", "string", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
-    Block right_header = prepareBlockWithDelta(/*types*/ {"int", "string", "datetime64(3, 'UTC')", "int8"}, /*no data*/ "", context);
+    Block right_header = prepareBlock(/*types*/ {"int", "string", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
 
     /// Join on no primary key(s)
     /// Append JOIN VersionedKV (with multiple primary keys)
@@ -2134,16 +2113,16 @@ TEST(StreamingHashJoin, AppendInnerLatestJoinVersionedKVWithNoPrimaryKeys)
         /*join strictness*/ "latest",
         /*on_clause*/ "t1.col_2 = t2.col_2",
         left_header,
-        Streaming::DataStreamSemantic::Append,
+        Streaming::StorageSemantic::Append,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
         /*to_join_steps*/
         {
             {
                 /*to join pos*/ ToJoinStep::RIGHT,
-                /*to join block*/ prepareBlockByHeader(right_header, "(1, 't1', '2023-1-1 00:00:00', +1)", context),
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, 't1', '2023-1-1 00:00:00')", context),
                 /*expected join results*/ ExpectedJoinResults{},
             },
             {
@@ -2151,19 +2130,14 @@ TEST(StreamingHashJoin, AppendInnerLatestJoinVersionedKVWithNoPrimaryKeys)
                 /*to join block*/ prepareBlockByHeader(left_header, "(1, 't1', '2023-1-1 00:00:00')", context),
                 /*expected join results*/
                 ExpectedJoinResults{
-                    /// output header: col_1, col_2, col_3, t2.col_1, t2.col_3, t2._tp_delta
-                    .values = "(1, 't1', '2023-1-1 00:00:00', 1, '2023-1-1 00:00:00', 1)",
+                    /// output header: col_1, col_2, col_3, t2.col_1, t2.col_3
+                    .values = "(1, 't1', '2023-1-1 00:00:00', 1, '2023-1-1 00:00:00')",
                 },
             },
             {
                 /*to join pos*/ ToJoinStep::RIGHT,
-                /*to join block*/ prepareBlockByHeader(right_header, "(1, 't1', '2023-1-1 00:00:00', -1)", context),
-                /*expected join results*/ ExpectedJoinResults{},
-            },
-            {
-                /*to join pos*/ ToJoinStep::RIGHT,
                 /*to join block*/
-                prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:01', +1)(2, 'tt1', '2023-1-1 00:00:01', +1)", context),
+                prepareBlockByHeader(right_header, "(1, 'tt1', '2023-1-1 00:00:01')(2, 'tt1', '2023-1-1 00:00:01')", context),
                 /*expected join results*/ ExpectedJoinResults{},
             },
             {
@@ -2172,8 +2146,8 @@ TEST(StreamingHashJoin, AppendInnerLatestJoinVersionedKVWithNoPrimaryKeys)
                 prepareBlockByHeader(left_header, "(1, 'tt1', '2023-1-1 00:00:01')", context),
                 /*expected join results*/
                 ExpectedJoinResults{
-                    /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3, t2._tp_delta
-                    .values = "(1, 'tt1', '2023-1-1 00:00:01', 2, '2023-1-1 00:00:01', 1)",
+                    /// output header: col_1, col_2, col_3, t2.col_2, t2.col_3
+                    .values = "(1, 'tt1', '2023-1-1 00:00:01', 2, '2023-1-1 00:00:01')",
                 },
             },
         },
@@ -2194,10 +2168,10 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKV)
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*left_primary_key_column_indexes*/ std::vector<size_t>{0},
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
         /*to_join_steps*/
         {{
@@ -2268,10 +2242,10 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKVWithPartialMultiPrimar
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*left_primary_key_column_indexes*/ std::vector<size_t>{0, 1},
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0, 1},
         /*to_join_steps*/
         {{
@@ -2348,10 +2322,10 @@ TEST(StreamingHashJoin, VersionedKVInnerAllJoinVersionedKVWithNoPrimaryKeys)
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_2 = t2.col_2",
         left_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*left_primary_key_column_indexes*/ std::vector<size_t>{0},
         right_header,
-        Streaming::DataStreamSemantic::VersionedKV,
+        Streaming::StorageSemantic::VersionedKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
         /*to_join_steps*/
         {{
@@ -2428,10 +2402,10 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKV)
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::ChangelogKV,
+        Streaming::StorageSemantic::ChangelogKV,
         /*left_primary_key_column_indexes*/ std::vector<size_t>{0},
         right_header,
-        Streaming::DataStreamSemantic::ChangelogKV,
+        Streaming::StorageSemantic::ChangelogKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
         /*to_join_steps*/
         {{
@@ -2502,10 +2476,10 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKVWithPartialMultiPrimar
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::ChangelogKV,
+        Streaming::StorageSemantic::ChangelogKV,
         /*left_primary_key_column_indexes*/ std::vector<size_t>{0, 1},
         right_header,
-        Streaming::DataStreamSemantic::ChangelogKV,
+        Streaming::StorageSemantic::ChangelogKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0, 1},
         /*to_join_steps*/
         {{
@@ -2582,10 +2556,10 @@ TEST(StreamingHashJoin, ChangelogKVInnerAllJoinChangelogKVWithNoPrimaryKeys)
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_2 = t2.col_2",
         left_header,
-        Streaming::DataStreamSemantic::ChangelogKV,
+        Streaming::StorageSemantic::ChangelogKV,
         /*left_primary_key_column_indexes*/ std::vector<size_t>{0},
         right_header,
-        Streaming::DataStreamSemantic::ChangelogKV,
+        Streaming::StorageSemantic::ChangelogKV,
         /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
         /*to_join_steps*/
         {{
@@ -2661,10 +2635,10 @@ TEST(StreamingHashJoin, ChangelogInnerAllJoinChangelog)
         /*join strictness*/ "all",
         /*on_clause*/ "t1.col_1 = t2.col_1",
         left_header,
-        Streaming::DataStreamSemantic::Changelog,
+        Streaming::StorageSemantic::Changelog,
         /*left_primary_key_column_indexes*/ std::nullopt,
         right_header,
-        Streaming::DataStreamSemantic::Changelog,
+        Streaming::StorageSemantic::Changelog,
         /*right_primary_key_column_indexes*/ std::nullopt,
         /*to_join_steps*/
         {{

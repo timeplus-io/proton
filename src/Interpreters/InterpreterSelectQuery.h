@@ -18,7 +18,6 @@
 
 /// proton: starts.
 #include <Interpreters/Streaming/CalculateDataStreamSemantic.h>
-#include <Interpreters/Streaming/GetSampleBlockContext.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 /// proton: ends.
 
@@ -118,12 +117,11 @@ public:
     /// proton: starts
     bool hasAggregation() const override { return query_analyzer->hasAggregation(); }
     bool isStreaming() const override;
-    Streaming::DataStreamSemantic getDataStreamSemantic() const override { return data_stream_semantic_pair.output_data_stream_semantic; }
+    Streaming::DataStreamSemanticEx getDataStreamSemantic() const override { return data_stream_semantic_pair.output_data_stream_semantic; }
     std::set<String> getGroupByColumns() const override;
     bool hasStreamingWindowFunc() const override;
     Streaming::WindowType windowType() const;
     bool hasGlobalAggregation() const override;
-    Streaming::GetSampleBlockContext getSampleBlockContext() const;
     /// proton: ends
 
     static void addEmptySourceToQueryPlan(
@@ -204,7 +202,7 @@ private:
     void buildStreamingProcessingQueryPlanAfterJoin(QueryPlan & query_plan);
     void checkEmitVersion();
     void handleSeekToSetting();
-    void analyzeEventPredicateAsSeekTo();
+    void analyzeEventPredicateAsSeekTo(const JoinedTables & joined_tables);
     void checkAndPrepareStreamingFunctions();
     void checkUDA();
 
@@ -255,7 +253,7 @@ private:
     bool has_user_defined_emit_strategy = false;
     /// Bools to tell the query properties of the `current layer` of SELECT.
     bool current_select_has_aggregates = false;
-    std::optional<JoinStrictness> current_select_join_strictness; /// Which implies having join if have value
+    std::optional<std::pair<JoinKind, JoinStrictness>> current_select_join_kind_and_strictness; /// Which implies having join if have value
     mutable std::optional<bool> is_streaming;
     bool shuffled_before_join = false;
     /// Overall data stream semantic defines the output semantic of the current layer of SELECT

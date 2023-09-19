@@ -52,7 +52,7 @@ public:
 
     void visit(ASTSelectQuery & node, ASTPtr &);
 
-    bool queryIsHardRewritten() const noexcept { return hard_rewritten; }
+    bool queryIsRewritten() const noexcept { return rewritten; }
 
     auto && newRequiredResultColumnNames() { return std::move(new_required_result_column_names); }
 
@@ -66,7 +66,7 @@ private:
     bool add_new_required_result_columns;
     bool is_subquery;
     const SelectQueryInfo & query_info;
-    bool hard_rewritten = false;
+    bool rewritten = false;
 };
 
 using ChangelogQueryVisitor = ChangelogQueryVisitorMatcher::Visitor;

@@ -267,7 +267,7 @@ protected:
     /// proton: starts.
     MultiVersionStorageCreateQueryPtr create_query;
     /// When storage is inited, init this data member
-    mutable Streaming::DataStreamSemantic data_stream_semantic = Streaming::DataStreamSemantic::Append;
+    mutable Streaming::DataStreamSemanticEx data_stream_semantic;
     /// proton: ends.
 
     RWLockImpl::LockHolder tryLockTimed(
@@ -654,7 +654,7 @@ public:
 
     virtual void preRename(const StorageID & /*new_table_id*/) { }
 
-    virtual Streaming::DataStreamSemantic dataStreamSemantic() const { return data_stream_semantic; }
+    virtual Streaming::DataStreamSemanticEx dataStreamSemantic() const { return data_stream_semantic; }
     /// proton: ends
 
     /// Creates a storage snapshot from given metadata.

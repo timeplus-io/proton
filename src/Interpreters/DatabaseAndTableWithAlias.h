@@ -58,9 +58,9 @@ struct TableWithColumnNamesAndTypes
 
     /// proton : starts. The data stream semantic bound to this storage or subquery
     /// Physical storage only has output data stream semantic and doesn't have input data stream semantic
-    Streaming::DataStreamSemantic output_data_stream_semantic = Streaming::DataStreamSemantic::Append;
+    Streaming::DataStreamSemanticEx output_data_stream_semantic;
 
-    void setOutputDataStreamSemantic(Streaming::DataStreamSemantic data_stream_semantic_)
+    void setOutputDataStreamSemantic(Streaming::DataStreamSemanticEx data_stream_semantic_)
     {
         output_data_stream_semantic = data_stream_semantic_;
     }

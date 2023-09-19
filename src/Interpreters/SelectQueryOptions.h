@@ -52,13 +52,6 @@ struct SelectQueryOptions
     bool settings_limit_offset_done = false;
     bool is_explain = false; /// The value is true if it's explain statement.
 
-    /// proton : starts. Since SQL is interpreted recursively and deep first,
-    /// we may not have join semantic yet, which we will fix later in the analyzing
-    /// phase
-    std::optional<JoinStrictness> parent_select_join_strictness;
-    bool parent_select_has_aggregates = false;
-    /// proton : ends
-
     /// These two fields are used to evaluate shardNum() and shardCount() function when
     /// prefer_localhost_replica == 1 and local instance is selected. They are needed because local
     /// instance might have multiple shards and scalars can only hold one value.
@@ -167,20 +160,6 @@ struct SelectQueryOptions
     }
 
     /// proton : starts
-    SelectQueryOptions & setParentSelectHasAggregates(bool value)
-    {
-        parent_select_has_aggregates |= value;
-        return *this;
-    }
-
-    SelectQueryOptions & setParentSelectJoinStrictness(std::optional<JoinStrictness> strictness)
-    {
-        if (strictness)
-            parent_select_join_strictness = strictness;
-
-        return *this;
-    }
-
     /// set subquery in place
     SelectQueryOptions & setSubquery()
     {

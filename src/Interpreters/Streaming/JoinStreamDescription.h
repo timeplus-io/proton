@@ -12,11 +12,11 @@ struct TableWithColumnNamesAndTypes;
 namespace Streaming
 {
 
-DataStreamSemantic getDataStreamSemantic(StoragePtr storage);
+DataStreamSemanticEx getDataStreamSemantic(StoragePtr storage);
 
 struct JoinStreamDescription
 {
-    JoinStreamDescription(const TableWithColumnNamesAndTypes & table_with_columns_, Block input_header_, DataStreamSemantic data_stream_semantic_, UInt64 keep_versions_)
+    JoinStreamDescription(const TableWithColumnNamesAndTypes & table_with_columns_, Block input_header_, DataStreamSemanticEx data_stream_semantic_, UInt64 keep_versions_)
         : table_with_columns(table_with_columns_)
         , input_header(std::move(input_header_))
         , data_stream_semantic(data_stream_semantic_)
@@ -46,7 +46,7 @@ struct JoinStreamDescription
     Block input_header;
 
     /// The input stream data semantic
-    DataStreamSemantic data_stream_semantic;
+    DataStreamSemanticEx data_stream_semantic;
 
     UInt64 keep_versions;
 

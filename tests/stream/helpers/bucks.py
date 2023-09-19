@@ -2,8 +2,8 @@ from ast import Pass
 import os, sys, getopt, json, random, copy, traceback
 from re import sub
 import logging, logging.config
-from clickhouse_driver import Client
-from clickhouse_driver import errors
+from proton_driver import Client
+from proton_driver import errors
 import csv
 import datetime
 import time

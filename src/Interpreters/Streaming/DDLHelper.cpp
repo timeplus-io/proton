@@ -92,7 +92,7 @@ void normalizeColumns(ASTCreateQuery & create, ContextPtr context)
     else if (create.select)
     {
         /// Case: `create stream t1 as select * from test`
-        Block as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), context, false, nullptr);
+        Block as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), context, false);
         create.columns_list->setOrReplace(
             create.columns_list->columns, InterpreterCreateQuery::formatColumns(as_select_sample.getNamesAndTypesList()));
     }
