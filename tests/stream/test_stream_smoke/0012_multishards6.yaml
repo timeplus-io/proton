@@ -1,0 +1,1390 @@
+test_suite_name: multishards6
+tag: smoke
+test_suite_config:
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: []
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+      cluster:
+        - view
+        - cluster_table_bug
+comments: Tests covering the multishard stream query smoke cases.
+tests:
+  - id: 50
+    tags:
+      - multishards
+      - append_only
+      - subquery
+      - subquery_view_materialized-view
+      - tail_aggr_last-X
+      - streaming_aggregation
+      - window_aggregation
+      - session_window_aggregation
+      - no_group_by
+      - UDA
+    name: session window aggregation no group by, UDA
+    description: session window aggregation no group by, UDA
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000002'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: sec_large
+              arguments:
+              - name: value
+                type: float32
+              is_aggregation: true
+              return_type: float32
+              source: |
+                {
+                  initialize: function() { 
+                    this.max = -1.0;
+                    this.sec = -1.0;
+                  },
+
+                  process: function(values) {
+                    for(let i=0; i<values.length; i++) {
+                      if(values[i] > this.max) {
+                        this.sec = this.max;
+                        this.max = values[i];
+                      }
+                      if(values[i] < this.max && values[i] > this.sec)
+                        this.sec = values[i];
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.sec;
+                  },
+
+                  serialize: function() {
+                    let s = {"max": this.max, "sec":this.sec };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.max = s["max"];
+                    this.sec = s["sec"];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    if (s["sec"] >= this.max) {
+                      this.max = s["max"];
+                      this.sec = s["sec"];
+                    } else if (s["max"] >= this.max) {
+                      this.sec = this.max;
+                      this.max = s["max"];
+                    } else if (s["max"] > this.sec) {
+                      this.sec = s["max"];
+                    }
+                  }
+                }
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_multishard_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_multishard_6(speed int, id int, timestamp datetime64(3) default now64(3)) settings shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test13_view1_6 as
+              select speed,
+                     id, timestamp
+              from test13_multishard_6;
+
+          - client: python
+            query_id: '1350'
+            depends_on_stream: test13_multishard_6
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select sec_large(to_float(speed)) as sec_l,
+                     window_start as s,
+                     window_end as e
+              from session(test13_view1_6, timestamp, 5m, [speed >= 60, speed < 60))
+              group by window_start,
+                       window_end;
+
+          - client: python
+            query_type: table
+            depends_on: '1350'
+            wait: 1
+            query: |
+              insert into test13_multishard_6(speed, id, timestamp)
+              values (40, 1, '2021-11-02 20:00:01');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_6(speed, id, timestamp)
+              values (50, 2, '2021-11-02 20:00:02');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_6(speed, id, timestamp)
+              values (60, 1, '2021-11-02 20:00:03');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_6(speed, id, timestamp)
+              values (70, 2, '2021-11-02 20:00:04');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_6(speed, id, timestamp)
+              values (80, 1, '2021-11-02 20:00:05');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_6(speed, id, timestamp)
+              values (90, 2, '2021-11-02 20:00:06');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_6(speed, id, timestamp)
+              values (80, 1, '2021-11-02 20:00:07');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_6(speed, id, timestamp)
+              values (70, 2, '2021-11-02 20:00:08');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_6(speed, id, timestamp)
+              values (60, 1, '2021-11-02 20:00:09');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_multishard_6(speed, id, timestamp)
+              values (50, 2, '2021-11-02 20:00:10');
+
+          - client: python
+            query_type: table
+            kill: '1350'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_multishard_6(speed, id, timestamp)
+              values (40, 1, '2021-11-02 20:00:11');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_multishard_6;
+
+    expected_results:
+      - query_id: '1350'
+        expected_results:
+          - [80, '2021-11-02 20:00:03', '2021-11-02 20:00:10']
+
+  - id: 51
+    tags:
+      - multishards
+      - append_only
+      - subquery
+      - subquery_view_materialized-view
+      - tail_aggr_last-X
+      - streaming_tailing
+      - UDF
+    name: query view materialized view test
+    description: query view materialized view test
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000001'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: add_five
+              arguments:
+              - name: value
+                type: float32
+              return_type: float32
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_subq_6(val float, f1 int, f2 int) settings shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test13_view1_6 as
+              select val,
+                     f1,
+                     f2
+              from test13_subq_6
+              where f1 = 1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test13_view2_6 as
+              select val,
+                     f1,
+                     f2
+              from test13_view1_6
+              where f2 = 1
+                and val > 0;
+
+          - client: python
+            query_id: '1351'
+            depends_on_stream: test13_subq_6
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select add_five(val),
+                     f1,
+                     f2
+              from test13_view2_6;
+
+          - client: python
+            query_type: table
+            depends_on: '1351'
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (1, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (2, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (3, 0, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (4, 1, 0);
+
+          - client: python
+            query_type: table
+            kill: '1351'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (5, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test13_view2_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+    expected_results:
+      - query_id: '1351'
+        expected_results:
+          - [6, 1, 1]
+          - [7, 1, 1]
+          - [10, 1, 1]
+
+  - id: 52
+    tags:
+      - multishards
+      - append_only
+      - subquery
+      - subquery_view_materialized-view
+      - tail_aggr_last-X
+      - streaming_tailing
+      - UDF
+    name: query view materialized view test
+    description: query view materialized view test
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000001'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: add_five
+              arguments:
+              - name: value
+                type: float32
+              return_type: float32
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_subq_6(val float, f1 int, f2 int) settings shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test13_view1_6 as
+              select val,
+                     f1,
+                     f2
+              from test13_subq_6
+              where f1 = 1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test13_view2_6 as
+              select val,
+                     f1,
+                     f2
+              from test13_view1_6
+              where f2 = 1
+                and val > 0;
+
+          - client: python
+            query_id: '1352'
+            depends_on_stream: test13_subq_6
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select add_five(add_five(val)),
+                     f1,
+                     f2
+              from test13_view2_6;
+
+          - client: python
+            query_type: table
+            depends_on: '1352'
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (1, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (2, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (3, 0, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (4, 1, 0);
+
+          - client: python
+            query_type: table
+            kill: '1352'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (5, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test13_view2_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+    expected_results:
+      - query_id: '1352'
+        expected_results:
+          - [11, 1, 1]
+          - [12, 1, 1]
+          - [15, 1, 1]
+
+  - id: 53
+    tags:
+      - multishards
+      - append_only
+      - subquery
+      - subquery_view_materialized-view
+      - tail_aggr_last-X
+      - streaming_tailing
+      - stateless_function
+    name: query subquery materialized view test
+    description: query subquery materialized view test
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_subq_6(val float, f1 int, f2 int) settings shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test13_view1_6 as
+              select val,
+                     f1,
+                     f2
+              from test13_subq_6
+              where f1 = 1;
+
+          - client: python
+            query_id: '1353'
+            depends_on_stream: test13_subq_6
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select format('val: {}', to_string(val)),
+                     f1,
+                     f2
+              from
+                (select val,
+                        f1,
+                        f2
+                 from test13_view1_6
+                 where f2 = 1
+                   and val > 0 );
+
+          - client: python
+            query_type: table
+            depends_on: '1353'
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (1, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (2, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (3, 0, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (4, 1, 0);
+
+          - client: python
+            query_type: table
+            kill: '1353'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (5, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+    expected_results:
+      - query_id: '1353'
+        expected_results:
+          - ['val: 1', 1, 1]
+          - ['val: 2', 1, 1]
+          - ['val: 5', 1, 1]
+
+  - id: 54
+    tags:
+      - multishards
+      - append_only
+      - subquery
+      - subquery_view_materialized-view
+      - tail_aggr_last-X
+      - streaming_tailing
+      - stateless_function
+    name: query subquery subquery test
+    description: query subquery subquery test
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_subq_6(val float, f1 int, f2 int) settings shards=3;
+
+          - client: python
+            query_id: '1354'
+            depends_on_stream: test13_subq_6
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select pow(plus(val, f1), 2),
+                     f1,
+                     f2
+              from
+                (select val,
+                        f1,
+                        f2
+                 from
+                   (select val,
+                           f1,
+                           f2
+                    from test13_subq_6
+                    where f1 = 1 )
+                 where f2 = 1
+                   and val > 0 );
+
+          - client: python
+            query_type: table
+            depends_on: '1354'
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (1, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (2, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (3, 0, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (4, 1, 0);
+
+          - client: python
+            query_type: table
+            kill: '1354'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (5, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test13_subq_6;
+
+    expected_results:
+      - query_id: '1354'
+        expected_results:
+          - [4, 1, 1]
+          - [9, 1, 1]
+          - [36, 1, 1]
+
+  - id: 55
+    tags:
+      - multishards
+      - append_only
+      - subquery
+      - subquery_view_materialized-view
+      - tail_aggr_last-X
+      - streaming_tailing
+      - stateless_function
+    name: query subquery view test
+    description: query subquery view test
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_subq_6(val float, f1 int, f2 int) settings shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test13_view1_6 as
+              select val,
+                     f1,
+                     f2
+              from test13_subq_6
+              where f1 = 1;
+
+          - client: python
+            query_id: '1355'
+            depends_on_stream: test13_subq_6
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select pow(2, val),
+                     f1,
+                     f2
+              from
+                (select val,
+                        f1,
+                        f2
+                 from test13_view1_6
+                 where f2 = 1
+                   and val > 0 );
+
+          - client: python
+            query_type: table
+            depends_on: '1355'
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (1, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (2, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (3, 0, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (4, 1, 0);
+
+          - client: python
+            query_type: table
+            kill: '1355'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (5, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+    expected_results:
+      - query_id: '1355'
+        expected_results:
+          - [2, 1, 1]
+          - [4, 1, 1]
+          - [32, 1, 1]
+
+  - id: 56
+    tags:
+      - multishards
+      - append_only
+      - subquery
+      - subquery_view_materialized-view
+      - tail_aggr_last-X
+      - streaming_tailing
+      - stateful_function
+    name: query materialized view subquery test
+    description: query materialized view subquery test
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_subq_6(val float, f1 int, f2 int) settings shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test13_view1_6 as
+              select val,
+                     f1,
+                     f2
+              from
+                (select val,
+                        f1,
+                        f2
+                 from test13_subq_6
+                 where f1 = 1 )
+              where f2 = 1
+                and val > 0;
+
+          - client: python
+            query_id: '1356'
+            depends_on_stream: test13_subq_6
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select lag(val),
+                     f1,
+                     f2
+              from test13_view1_6;
+
+          - client: python
+            query_type: table
+            depends_on: '1356'
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (1, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (2, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (3, 0, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (4, 1, 0);
+
+          - client: python
+            query_type: table
+            kill: '1356'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (5, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+    expected_results:
+      - query_id: '1356'
+        expected_results:
+          - [0, 1, 1]
+          - [1, 1, 1]
+          - [2, 1, 1]
+
+  - id: 57
+    tags:
+      - multishards
+      - append_only
+      - subquery
+      - subquery_view_materialized-view
+      - tail_aggr_last-X
+      - streaming_tailing
+      - stateful_function
+    name: query subquery subquery test
+    description: query subquery subquery test
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_subq_6(val float, f1 int, f2 int) settings shards=3;
+
+          - client: python
+            query_id: '1357'
+            depends_on_stream: test13_subq_6
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select lag(val),
+                     f1,
+                     f2
+              from
+                (select val,
+                        f1,
+                        f2
+                 from
+                   (select val,
+                           f1,
+                           f2
+                    from test13_subq_6
+                    where f1 = 1 )
+                 where f2 = 1
+                   and val > 0 );
+
+          - client: python
+            query_type: table
+            depends_on: '1357'
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (1, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (2, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (3, 0, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (4, 1, 0);
+
+          - client: python
+            query_type: table
+            kill: '1357'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (5, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test13_subq_6;
+
+    expected_results:
+      - query_id: '1357'
+        expected_results:
+          - [0, 1, 1]
+          - [1, 1, 1]
+          - [2, 1, 1]
+
+  - id: 58
+    tags:
+      - multishards
+      - append_only
+      - subquery
+      - subquery_view_materialized-view
+      - tail_aggr_last-X
+      - streaming_tailing
+      - stateful_function
+    name: query view materialized view test
+    description: query view materialized view test
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_subq_6(val float, f1 int, f2 int) settings shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test13_view1_6 as
+              select val,
+                     f1,
+                     f2
+              from test13_subq_6
+              where f1 = 1;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test13_view2_6 as
+              select val,
+                     f1,
+                     f2
+              from test13_view1_6
+              where f2 = 1
+                and val > 0;
+
+          - client: python
+            query_id: '1358'
+            depends_on_stream: test13_subq_6
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select lag(val),
+                     f1,
+                     f2
+              from test13_view2_6;
+
+          - client: python
+            query_type: table
+            depends_on: '1358'
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (1, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (2, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (3, 0, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (4, 1, 0);
+
+          - client: python
+            query_type: table
+            kill: '1358'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (5, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test13_view2_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+    expected_results:
+      - query_id: '1358'
+        expected_results:
+          - [0, 1, 1]
+          - [1, 1, 1]
+          - [2, 1, 1]
+
+  - id: 59
+    tags:
+      - multishards
+      - append_only
+      - subquery
+      - subquery_view_materialized-view
+      - tail_aggr_last-X
+      - streaming_tailing
+      - stateful_function
+    name: query view subquery test
+    description: query view subquery test
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view2_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_subq_6(val float, f1 int, f2 int) settings shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test13_view1_6 as
+              select val,
+                     f1,
+                     f2
+              from
+                (select val,
+                        f1,
+                        f2
+                 from test13_subq_6
+                 where f1 = 1 )
+              where f2 = 1
+                and val > 0;
+
+          - client: python
+            query_id: '1359'
+            depends_on_stream: test13_subq_6
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select lag(val),
+                     f1,
+                     f2
+              from test13_view1_6;
+
+          - client: python
+            query_type: table
+            depends_on: '1359'
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (1, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (2, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (3, 0, 1);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (4, 1, 0);
+
+          - client: python
+            query_type: table
+            kill: '1359'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test13_subq_6 (val, f1, f2)
+              values (5, 1, 1);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop view if exists test13_view1_6;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_subq_6;
+
+    expected_results:
+      - query_id: '1359'
+        expected_results:
+          - [0, 1, 1]
+          - [1, 1, 1]
+          - [2, 1, 1]
+
