@@ -4,11 +4,14 @@
 #include <Functions/UserDefined/IUserDefinedSQLObjectsLoader.h>
 #include <Functions/UserDefined/UserDefinedSQLFunctionFactory.h>
 #include <Interpreters/Context.h>
-/// proton: starts
-//#include <Interpreters/executeDDLQueryOnCluster.h>
-/// proton: ends
 #include <Parsers/ASTCreateFunctionQuery.h>
 
+/// proton: starts
+//#include <Interpreters/executeDDLQueryOnCluster.h>
+#include <Functions/UserDefined/UDFHelper.h>
+#include <Functions/UserDefined/UserDefinedFunctionFactory.h>
+#include <Parsers/Streaming/ASTJavaScriptFunction.h>
+/// proton: ends
 
 namespace DB
 {
@@ -16,6 +19,9 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int INCORRECT_QUERY;
+    /// proton: starts
+    extern const int FUNCTION_ALREADY_EXISTS;
+    /// proton: ends
 }
 
 BlockIO InterpreterCreateFunctionQuery::execute()
@@ -48,9 +54,27 @@ BlockIO InterpreterCreateFunctionQuery::execute()
     bool throw_if_exists = !create_function_query.if_not_exists && !create_function_query.or_replace;
     bool replace_if_exists = create_function_query.or_replace;
 
+    /// proton: starts. Handle javascript UDF
+    if (create_function_query.is_javascript_func)
+        return handleJavaScriptUDF(throw_if_exists, replace_if_exists);
+    /// proton: ends
+
     UserDefinedSQLFunctionFactory::instance().registerFunction(current_context, function_name, query_ptr, throw_if_exists, replace_if_exists);
 
     return {};
 }
 
+/// proton: starts
+BlockIO InterpreterCreateFunctionQuery::handleJavaScriptUDF(bool throw_if_exists, bool replace_if_exists)
+{
+    ASTCreateFunctionQuery & create = query_ptr->as<ASTCreateFunctionQuery &>();
+    assert(create.is_javascript_func);
+
+    const auto func_name = create.getFunctionName();
+    Poco::JSON::Object::Ptr func = create.toJSON();
+    UserDefinedFunctionFactory::instance().registerFunction(getContext(), func_name, func, throw_if_exists, replace_if_exists);
+
+    return {};
+}
+/// proton: ends
 }

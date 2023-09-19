@@ -32,6 +32,15 @@ public:
     static bool isAggregateFunctionName(const String & function_name);
 
     static bool isOrdinaryFunctionName(const String & function_name);
+
+    bool registerFunction(
+        ContextPtr context,
+        const String & function_name,
+        const Poco::JSON::Object::Ptr & json_func,
+        bool throw_if_exists,
+        bool replace_if_exists);
+
+    bool unregisterFunction(const ContextMutablePtr & context, const String & function_name, bool throw_if_not_exists);
     /// proton: ends
 
     static FunctionOverloadResolverPtr tryGet(const String & function_name, ContextPtr context);

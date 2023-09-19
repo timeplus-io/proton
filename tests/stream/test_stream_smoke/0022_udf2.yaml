@@ -1,0 +1,174 @@
+test_suite_name: udf2
+tag: smoke
+test_suite_config:
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: [ ]
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+      cluster:
+        - view
+        - cluster_table_bug
+comments: Test SQL to create UDF/UDA.
+
+tests:
+  - id: 21
+    tags:
+      - udf2
+    name: SQL create scalar UDF
+    description: SQL - scalar UDF
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP FUNCTION IF EXISTS test_add_five;
+
+          - client: python
+            query_type: table
+            query_id: udf-21-0
+            wait: 1
+            query: |
+              CREATE OR REPLACE FUNCTION test_add_five(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+                function test_add_five(value) {
+                  for(let i=0;i<value.length;i++) {
+                    value[i]=value[i]+5;
+                  }
+                  return value;
+                }
+              $$;
+
+          - client: python
+            query_id: udf-21-1
+            query_end_timer: 7
+            depends_on_done: udf-21-0
+            query_type: table
+            wait: 5
+            query: |
+              DESCRIBE (SELECT test_add_five(1) AS a);
+
+          - client: python
+            query_type: table
+            query_id: udf-21-2
+            depends_on_done: udf-21-1
+            wait: 1
+            query: |
+              DROP FUNCTION test_add_five;
+
+          - client: python
+            query_id: udf-21-3
+            query_end_timer: 1
+            query_type: table
+            depends_on_done: udf-21-2
+            wait: 5
+            query: |
+              SELECT test_add_five(1)
+
+    expected_results:
+      - query_id: udf-21-1
+        expected_results:
+          - [ 'a', 'float32', '', '', '', '', '' ] # DESCRIBE (SELECT test_add_five(1) AS a)
+      - query_id: udf-21-3
+        expected_results: 'error_code:46' # SELECT test_add_five(1) after DROP FUNCTION
+
+  - id: 22
+    tags:
+      - udf2
+    name: SQL create UDA
+    description: SQL - UDA
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP STREAM IF EXISTS udf_types;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: CREATE STREAM IF NOT EXISTS udf_types
+              (`f32` float);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP FUNCTION IF EXISTS test_sec_large;
+
+          - client: python
+            query_type: table
+            query_id: udf-22-0
+            wait: 1
+            query: |
+              CREATE AGGREGATE FUNCTION test_sec_large(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+                  {
+                    initialize: function() {
+                       this.max = -1.0;
+                       this.sec = -1.0
+                    },
+                    process: function(values) {
+                      for (let i = 0; i < values.length; i++) {
+                        if (values[i] > this.max) {
+                          this.sec = this.max;
+                          this.max = values[i]
+                        }
+                        if (values[i] < this.max && values[i] > this.sec)
+                          this.sec = values[i];
+                      }
+                    },
+                          finalize: function() {
+                          return this.sec
+                          },
+                          serialize: function() {
+                          let s = {
+                          'max': this.max,
+                          'sec': this.sec
+                          };
+                      return JSON.stringify(s)
+                    },
+                      deserialize: function(state_str) {
+                                                         let s = JSON.parse(state_str);
+                                                         this.max = s['max'];
+                                                         this.sec = s['sec']
+                      },
+                      merge: function(state_str) {
+                                                   let s = JSON.parse(state_str);
+                                                   if (s['sec'] >= this.max) {
+                                                   this.max = s['max'];
+                                                   this.sec = s['sec']
+                                                   } else if (s['max'] >= this.max) {
+                                                   this.sec = this.max;
+                                                   this.max = s['max']
+                                                   } else if (s['max'] > this.sec) {
+                                                   this.sec = s['max']
+                                                   }
+                                                   }
+                      }
+              $$;
+
+          - client: python
+            query_id: udf-22-1
+            depends_on_done: udf-22-0
+            depends_on_stream: udf_types
+            query_end_timer: 7
+            query_type: stream
+            wait: 5
+            query: |
+              select test_sec_large(f32) from udf_types;
+
+          - client: python
+            query_type: table
+            depends_on: udf-22-1
+            wait: 1
+            depends_on_stream: udf_types
+            query: INSERT INTO udf_types (f32) SELECT number FROM numbers(10);
+
+    expected_results:
+      - query_id: udf-22-1
+        expected_results:
+          - [ 8.0 ] # select test_sec_large(f32) from 02045_types;

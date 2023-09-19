@@ -56,6 +56,9 @@ namespace DB
     M(At)                     /** @. Used for specifying user names and also for MySQL-style variables. */ \
     M(DoubleAt)               /** @@. Used for MySQL-style global variables. */ \
     \
+    /** proton: starts. Source code of user defined function */ \
+    \
+    M(Source) \
     /** Order is important. EndOfStream goes after all usual tokens, and special error tokens goes after EndOfStream. */ \
     \
     M(EndOfStream) \

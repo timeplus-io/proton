@@ -49,6 +49,12 @@ public:
     /// Has brackets around arguments
     bool has_brackets;
 
+    /// proton: starts
+    /// ignore function name when formating to string, for example, used as argument list like:
+    ///     (value int64, price float32)
+    bool ignore_name;
+    /// proton: ends
+
     explicit ASTFunctionWithKeyValueArguments(bool has_brackets_ = true)
         : has_brackets(has_brackets_)
     {

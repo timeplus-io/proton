@@ -70,6 +70,17 @@ Token Lexer::nextTokenImpl()
         return Token(TokenType::Comment, token_begin, pos);
     };
 
+    /// proton: starts
+    auto set_to_end_of_double_dollar_if_found = [&]() {
+        const char * quote_begin = pos;
+        std::string_view token_stream(pos, end - pos);
+        auto source_end_position = token_stream.rfind("$$", token_stream.size() - 1);
+        if (source_end_position != std::string::npos)
+            pos += source_end_position + 1; /// set 'pos' to the end of the ending '$$'
+        return pos == quote_begin ? false : true;
+    };
+    /// proton: ends
+
     switch (*pos)
     {
         case ' ': [[fallthrough]];
@@ -367,6 +378,15 @@ Token Lexer::nextTokenImpl()
         default:
             if (*pos == '$')
             {
+                /// proton: starts. capture double dollar quoted string as user defined function source
+                if (pos + 3 < end && pos[1] == '$')
+                {
+                    if (set_to_end_of_double_dollar_if_found())
+                        return Token(TokenType::Source, token_begin, ++pos);
+                        /// not double dollar quoted string. reset pos and try to capture the token in another way.
+                }
+                /// proton: ends
+
                 /// Try to capture dollar sign as start of here doc
 
                 std::string_view token_stream(pos, end - pos);

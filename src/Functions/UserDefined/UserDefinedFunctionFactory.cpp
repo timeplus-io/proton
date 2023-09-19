@@ -1,15 +1,21 @@
-#include "UserDefinedFunctionFactory.h"
+#include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 
 /// proton: starts
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionJavaScriptAdapter.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/UserDefined/ExternalUserDefinedFunctionsLoader.h>
 #include <Functions/UserDefined/ExecutableUserDefinedFunction.h>
-#include <Functions/UserDefined/RemoteUserDefinedFunction.h>
+#include <Functions/UserDefined/ExternalUserDefinedFunctionsLoader.h>
 #include <Functions/UserDefined/JavaScriptUserDefinedFunction.h>
+#include <Functions/UserDefined/RemoteUserDefinedFunction.h>
+#include <Functions/UserDefined/UDFHelper.h>
+#include <Functions/UserDefined/UserDefinedSQLFunctionFactory.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Streaming/MetaStoreJSONConfigRepository.h>
+#include <V8/Utils.h>
+
+#include <Poco/Util/JSONConfiguration.h>
 /// proton: ends
 
 namespace DB
@@ -20,6 +26,9 @@ namespace ErrorCodes
 /// proton: starts
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int FUNCTION_ALREADY_EXISTS;
+extern const int CANNOT_DROP_FUNCTION;
+extern const int UNKNOWN_FUNCTION;
 /// proton: ends
 }
 
@@ -151,6 +160,7 @@ FunctionOverloadResolverPtr UserDefinedFunctionFactory::tryGet(const String & fu
     /// proton: ends
 }
 
+/// proton: starts
 bool UserDefinedFunctionFactory::has(const String & function_name, ContextPtr context)
 {
     const auto & loader = ExternalUserDefinedFunctionsLoader::instance(context);
@@ -159,6 +169,7 @@ bool UserDefinedFunctionFactory::has(const String & function_name, ContextPtr co
     bool result = load_result.object != nullptr;
     return result;
 }
+/// proton: ends
 
 std::vector<String> UserDefinedFunctionFactory::getRegisteredNames(ContextPtr context)
 {
@@ -174,4 +185,92 @@ std::vector<String> UserDefinedFunctionFactory::getRegisteredNames(ContextPtr co
     return registered_names;
 }
 
+/// proton: starts
+bool UserDefinedFunctionFactory::registerFunction(
+    ContextPtr context,
+    const String & function_name,
+    const Poco::JSON::Object::Ptr & json_func,
+    bool throw_if_exists,
+    bool replace_if_exists)
+{
+    Streaming::validateUDFName(function_name);
+
+    assert(json_func->has("function"));
+    const Poco::JSON::Object::Ptr & config = json_func->getObject("function");
+    assert(config);
+
+    if (config->get("type") == "javascript")
+    {
+        if (!config->has("source"))
+            throw Exception(
+                ErrorCodes::FUNCTION_ALREADY_EXISTS, "Missing 'source' property of JavaScript function '{}' already exists", function_name);
+
+        /// check whether the source can be compiled
+        if (config->has("is_aggregation") && config->getValue<bool>("is_aggregation"))
+            /// UDA
+            V8::validateAggregationFunctionSource(function_name, {"initialize", "process", "finalize"}, config->get("source"));
+        else
+            /// UDF
+            V8::validateStatelessFunctionSource(function_name, config->get("source"));
+    }
+
+    /// Create the UserDefinedExecutableFunction, it also validates the json configuration and throws exception if invalid
+    auto udf = Streaming::createUserDefinedExecutableFunction(context, function_name, Poco::Util::JSONConfiguration(json_func));
+
+    /// Check whether the function already exists.
+    if (FunctionFactory::instance().hasBuiltInNameOrAlias(function_name))
+        throw Exception(ErrorCodes::FUNCTION_ALREADY_EXISTS, "The function '{}' already exists", function_name);
+
+    if (AggregateFunctionFactory::instance().hasBuiltInNameOrAlias(function_name))
+        throw Exception(ErrorCodes::FUNCTION_ALREADY_EXISTS, "The aggregate function '{}' already exists", function_name);
+
+    if (UserDefinedSQLFunctionFactory::instance().tryGet(function_name))
+        throw Exception(ErrorCodes::FUNCTION_ALREADY_EXISTS, "The same SQL function '{}' already exists", function_name);
+
+    try
+    {
+        auto * metastore_repo = context->getMetaStoreJSONConfigRepository();
+        assert(metastore_repo);
+        metastore_repo->save(function_name, json_func);
+    }
+    catch (Exception & e)
+    {
+        e.addMessage(fmt::format("save UDF {} to MetaStore failed", function_name));
+        throw;
+    }
+
+    /// load the function into memory.
+    /// TODO: in future, ExternalLoader should support 'save' method to directly update memory and persist to disk
+    const auto & loader = ExternalUserDefinedFunctionsLoader::instance(context);
+    loader.tryLoad(function_name);
+
+    return true;
+}
+
+bool UserDefinedFunctionFactory::unregisterFunction(
+    const ContextMutablePtr & context, const String & function_name, bool throw_if_not_exists)
+{
+    if (FunctionFactory::instance().hasBuiltInNameOrAlias(function_name)
+        || AggregateFunctionFactory::instance().hasBuiltInNameOrAlias(function_name))
+        throw Exception(ErrorCodes::CANNOT_DROP_FUNCTION, "Cannot drop system function '{}'", function_name);
+
+    if (!has(function_name, context))
+    {
+        if (throw_if_not_exists)
+            throw Exception(ErrorCodes::UNKNOWN_FUNCTION, "User-defined function '{}' doesn't exist", function_name);
+        else
+            return false;
+    }
+
+    auto * metastore_repo = context->getMetaStoreJSONConfigRepository();
+    assert(metastore_repo);
+    metastore_repo->remove(function_name);
+
+    /// Reload all functions to delete the function from memory
+    const auto & loader = ExternalUserDefinedFunctionsLoader::instance(context);
+    loader.loadOrReloadAll();
+
+    return true;
+}
+/// proton: ends
 }

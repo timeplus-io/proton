@@ -3,6 +3,9 @@
 #include <Parsers/IAST.h>
 #include <Parsers/ASTQueryWithOnCluster.h>
 
+/// proton: starts
+#include <Poco/JSON/Object.h>
+/// proton: ends
 
 namespace DB
 {
@@ -16,6 +19,13 @@ public:
     bool or_replace = false;
     bool if_not_exists = false;
 
+    /// proton: starts
+    bool is_aggregation = false;
+    bool is_javascript_func = false;
+    ASTPtr arguments;
+    ASTPtr return_type;
+    /// proton: ends
+
     String getID(char delim) const override { return "CreateFunctionQuery" + (delim + getFunctionName()); }
 
     ASTPtr clone() const override;
@@ -25,6 +35,10 @@ public:
     ASTPtr getRewrittenASTWithoutOnCluster(const std::string &) const override { return removeOnCluster<ASTCreateFunctionQuery>(clone()); }
 
     String getFunctionName() const;
+
+    /// proton: starts
+    Poco::JSON::Object::Ptr toJSON() const;
+    /// proton: ends
 };
 
 }
