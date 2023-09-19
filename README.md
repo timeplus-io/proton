@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="Proton – open source, unified streaming and data processing engine for real-time analytics" src="https://github.com/timeplus-io/proton/blob/6825207e4e80e545e6fc19711bb59d4e0d92946c/design/proton-logo-white-bg.png"
+  <img alt="Proton – open source, unified streaming and data processing engine for real-time analytics" src="design/proton-logo-white-bg.png"
   />
 </p>
 <p align="center">
