@@ -1,20 +1,7 @@
-<!-- 
--- START REMOVE FOR DOCS.TIMEPLUS.COM VERSION 
--->
-
 <p align="center">
-  <img alt="Proton – open source, unified streaming and data processing engine for real-time analytics" src="https://github.com/timeplus-io/docs/assets/1153921/7214eeb0-7e08-4956-9a5b-7a7cf0343657"
+  <img alt="Proton – open source, unified streaming and data processing engine for real-time analytics" src="https://github.com/timeplus-io/proton/blob/84f0ea831d43e4920cf77fe3ecbb4c3c5a25651b/design/proton-logo-white-bg.png"
   />
 </p>
-
-
-<h1 align="center">Proton</h1>
-
-<p align="center">
-  <b>Powered by <a href="https://timeplus.com">Timeplus</a> streaming SQL and <a href="https://github.com/ClickHouse/ClickHouse">ClickHouse</a> historical OLAP</b>.
-</p>
-
-
 <p align="center">
   <a href="https://twitter.com/timeplusdata">
     <img src="https://img.shields.io/twitter/follow/timeplusdata?style=flat&label=%40timeplusdata&logo=twitter&color=0bf&logoColor=fff" alt="Twitter" />
@@ -27,7 +14,6 @@
   </a>
 </p>
 
-
 <p align="center">
   <a href="#introduction"><strong>Introduction</strong></a> ·
   <a href="#get-started"><strong>Get started</strong></a> ·
@@ -37,8 +23,6 @@
   <a href="#need-help"><strong>Need help?</strong></a> ·
   <a href="#licensing"><strong>Licensing</strong></a>
 </p>
-
-<br/>
 
 ## Introduction
 
