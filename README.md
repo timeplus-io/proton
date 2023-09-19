@@ -1,8 +1,11 @@
 <p align="center">
-  <img alt="Proton – open source, unified streaming and data processing engine for real-time analytics" src="https://github.com/timeplus-io/proton/blob/84f0ea831d43e4920cf77fe3ecbb4c3c5a25651b/design/proton-logo-white-bg.png"
+  <img alt="Proton – open source, unified streaming and data processing engine for real-time analytics" src="design/proton-logo-white-bg.png"
   />
 </p>
 <p align="center">
+  <a href="https://timeplus.com/slack">
+    <img src="https://img.shields.io/badge/Join%20Our%20Community-Slack-blue" alt="Slack" />
+  </a>
   <a href="https://twitter.com/timeplusdata">
     <img src="https://img.shields.io/twitter/follow/timeplusdata?style=flat&label=%40timeplusdata&logo=twitter&color=0bf&logoColor=fff" alt="Twitter" />
   </a>
@@ -17,7 +20,7 @@
 <p align="center">
   <a href="#introduction"><strong>Introduction</strong></a> ·
   <a href="#get-started"><strong>Get started</strong></a> ·
-  <a href="#get-more-with-timeplus-cloud"><strong>Timeplus Cloud</strong></a> ·
+  <a href="#get-more-with-timeplus"><strong>Timeplus</strong></a> ·
   <a href="#documentation"><strong>Documentation</strong></a> ·
   <a href="#contributing"><strong>Contributing</strong></a> ·
   <a href="#need-help"><strong>Need help?</strong></a> ·
@@ -26,7 +29,7 @@
 
 ## Introduction
 
-Proton is a unified streaming and historical data processing engine in a single binary. It helps data engineers and platform engineers solve complex real-time analytics use cases, and powers the [Timeplus Cloud](https://timeplus.com) streaming analytics platform.
+Proton is a unified streaming and historical data processing engine in a single binary. It helps data engineers and platform engineers solve complex real-time analytics use cases, and powers [Timeplus](https://timeplus.com) streaming analytics platform.
 
 Proton extends the historical data, storage, and computing functionality of the popular [ClickHouse project](https://github.com/clickhouse/clickhouse) with streaming and OLAP data processing.
 
@@ -97,24 +100,16 @@ Now that you're running Proton and have created your first stream, query, and vi
 
 To see how such a deployment of Proton works as a demo, using `owl-shop` sample live data, check out our [tutorial with Docker Compose](https://docs.timeplus.com/proton-kafka#tutorial).
 
-## Get more with Timeplus Cloud
+## Get more with Timeplus
 
-To access more features, such as sources, sinks, dashboards, alerts, data lineage, create a workspace at [Timeplus Cloud](https://us.timeplus.cloud) or try the [live demo](https://demo.timeplus.cloud) with pre-built live data and
-dashboards.
-
-<!-- 
--- START REMOVE FOR DOCS.TIMEPLUS.COM VERSION 
--->
+To access more features, such as sources, sinks, dashboards, alerts, data lineage, create a workspace at [Timeplus Cloud](https://us.timeplus.cloud) or try the [live demo](https://demo.timeplus.cloud) with pre-built live data and dashboards.
 
 ## Documentation
 
-We publish full documentation for Proton at [`docs.timeplus.com`](https://docs.timeplus.com/proton) alongside documentation for the Timeplus (Cloud and Enterprise) platform.
+We publish full documentation for Proton at [docs.timeplus.com](https://docs.timeplus.com/proton) alongside documentation for the Timeplus (Cloud and Enterprise) platform.
 
-We also have a [FAQ](https://docs.timeplus.com/proton-faq/) for detailing how we chose Apache License 2.0, how Proton is related to ClickHouse, what features are available in Proton versus Timeplus Cloud, and more.
+We also have a [FAQ](https://docs.timeplus.com/proton-faq/) for detailing how we chose Apache License 2.0, how Proton is related to ClickHouse, what features are available in Proton versus Timeplus, and more.
 
-<!-- 
----- END REMOVE FOR DOCS.TIMEPLUS.COM VERSION
--->
 
 ## Contributing
 
@@ -136,6 +131,6 @@ For filing bugs, suggesting improvements, or requesting new features, see the [o
 
 ## Licensing
 
-Proton uses Apache License 2.0. See details in the [LICENSE](https://github.com/timeplus-io/proton/blob/master/LICENSE).
+Proton uses Apache License 2.0. See details in the [LICENSE](https://github.com/timeplus-io/proton/blob/develop/LICENSE).
 
 
