@@ -4,6 +4,10 @@
 
 ### Build with docker container
 
+```sh
+./docker/packager/packager --package-type binary --docker-image-version clang-16 --proton-build --output-dir `pwd`/build_output
+```
+
 ### Bare metal build
 
 #### Install toolchain
@@ -11,6 +15,18 @@
 - clang-16 /clang++-16 or above
 - cmake 3.20 or above
 - ninja
+
+```sh
+apt install git cmake ccache python3 ninja-build wget apt-transport-https apt-utils ca-certificates dnsutils gnupg iputils-ping lsb-release gpg curl
+```
+
+install llvm-16 compiler
+
+```sh
+bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
+chmod +x llvm.sh
+sudo ./llvm.sh 16
+```
 
 #### Build
 
