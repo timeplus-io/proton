@@ -1,15 +1,19 @@
 #include "KafkaSource.h"
 #include "Kafka.h"
 
+#include <Checkpoint/CheckpointContext.h>
+#include <Checkpoint/CheckpointCoordinator.h>
 #include <Formats/FormatFactory.h>
 #include <IO/ReadBufferFromMemory.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <KafkaLog/KafkaWALPool.h>
 #include <KafkaLog/KafkaWALSettings.h>
 #include <Processors/Executors/StreamingFormatExecutor.h>
 #include <base/ClockUtils.h>
-#include <Common/logger_useful.h>
 #include <Common/ProtonCommon.h>
+#include <Common/logger_useful.h>
 #include <Common/parseIntStrict.h>
 
 #include <librdkafka/rdkafka.h>
@@ -20,6 +24,7 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 extern const int OK;
+extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 KafkaSource::KafkaSource(
@@ -41,6 +46,7 @@ KafkaSource::KafkaSource(
     , read_buffer("", 0)
     , virtual_time_columns_calc(header.columns(), nullptr)
     , virtual_col_types(header.columns(), nullptr)
+    , ckpt_data(consume_ctx)
 {
     is_streaming = true;
 
@@ -65,6 +71,9 @@ Chunk KafkaSource::generate()
 {
     if (isCancelled())
         return {};
+
+    if (auto * current = ckpt_ctx.exchange(nullptr, std::memory_order_relaxed); current)
+        return doCheckpoint(CheckpointContextPtr{current});
 
     if (result_chunks.empty() || iter == result_chunks.end())
     {
@@ -115,6 +124,8 @@ void KafkaSource::doParseMessage(const rd_kafka_message_t * kmessage, size_t /*t
         parseFormat(kmessage);
     else
         parseRaw(kmessage);
+
+    ckpt_data.last_sn = kmessage->offset;
 }
 
 void KafkaSource::parseRaw(const rd_kafka_message_t * kmessage)
@@ -337,4 +348,72 @@ void KafkaSource::calculateColumnPositions()
         physical_header.insert({physical_column.type->createColumn(), physical_column.type, physical_column.name});
     }
 }
+
+
+/// It basically initiate a checkpoint
+/// Since the checkpoint method is called in a different thread (CheckpointCoordinator)
+/// We nee make sure it is thread safe
+void KafkaSource::checkpoint(CheckpointContextPtr ckpt_ctx_)
+{
+    /// We assume the previous ckpt is already done
+    /// Use std::atomic<std::shared_ptr<CheckpointContext>>
+    assert(!ckpt_ctx.load(std::memory_order_relaxed));
+    ckpt_ctx = new CheckpointContext(*ckpt_ctx_);
+}
+
+/// 1) Generate a checkpoint barrier
+/// 2) Checkpoint the sequence number just before the barrier
+Chunk KafkaSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
+{
+    /// Prepare checkpoint barrier chunk
+    auto result = header_chunk.clone();
+    auto chunk_ctx = std::make_shared<ChunkContext>();
+    chunk_ctx->setCheckpointContext(ckpt_ctx_);
+    result.setChunkContext(std::move(chunk_ctx));
+
+    ckpt_ctx_->coordinator->checkpoint(State::VERSION, getLogicID(), ckpt_ctx_, [&](WriteBuffer & wb) { ckpt_data.serialize(wb); });
+
+    /// FIXME, if commit failed ?
+    /// Propagate checkpoint barriers
+    return result;
+}
+
+void KafkaSource::recover(CheckpointContextPtr ckpt_ctx_)
+{
+    ckpt_ctx_->coordinator->recover(
+        getLogicID(), ckpt_ctx_, [&](VersionType version, ReadBuffer & rb) { ckpt_data.deserialize(version, rb); });
+
+    LOG_INFO(log, "Recovered last_sn={}", ckpt_data.last_sn);
+
+    /// Reset consume offset started from the next of last sn
+    if (ckpt_data.last_sn >= 0)
+        consume_ctx.offset = ckpt_data.last_sn + 1;
+}
+
+void KafkaSource::State::serialize(WriteBuffer & wb) const
+{
+    writeStringBinary(topic, wb);
+    writeIntBinary(partition, wb);
+    writeIntBinary(last_sn, wb);
+}
+
+void KafkaSource::State::deserialize(VersionType /*version*/, ReadBuffer & rb)
+{
+    String recovered_topic;
+    Int32 recovered_partition;
+    readStringBinary(recovered_topic, rb);
+    readIntBinary(recovered_partition, rb);
+
+    if (recovered_topic != topic || recovered_partition != partition)
+        throw Exception(
+            ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+            "Found mismatched kafka topic-partition. recovered={}-{}, current={}-{}",
+            recovered_topic,
+            recovered_partition,
+            topic,
+            partition);
+
+    readIntBinary(last_sn, rb);
+}
+
 }

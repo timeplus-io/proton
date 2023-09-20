@@ -1,3 +1,0 @@
-from tpexporter.tpexporter import TPExporter
-from tpexporter.tpexporter import OperateTrackingType
-from tpexporter.tpexporter import WorkspacePrivilege

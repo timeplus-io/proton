@@ -6,6 +6,7 @@ on: # yamllint disable-line rule:truthy
       - synchronize
       - reopened
       - opened
+      - ready_for_review
     branches:
       - develop
     paths-ignore:

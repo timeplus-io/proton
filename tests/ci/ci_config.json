@@ -5,7 +5,6 @@
             "build-type": "",
             "sanitizer": "",
             "package-type": "deb",
-            "bundled": "bundled",
             "splitted": "unsplitted",
             "alien_pkgs": true,
             "tidy": "disable",
@@ -16,7 +15,6 @@
             "build-type": "",
             "sanitizer": "",
             "package-type": "performance",
-            "bundled": "bundled",
             "splitted": "unsplitted",
             "tidy": "disable",
             "with_coverage": false
@@ -26,7 +24,6 @@
             "build-type": "",
             "sanitizer": "",
             "package-type": "binary",
-            "bundled": "bundled",
             "splitted": "unsplitted",
             "tidy": "disable",
             "with_coverage": false
@@ -36,7 +33,6 @@
             "build-type": "",
             "sanitizer": "",
             "package-type": "binary",
-            "bundled": "bundled",
             "splitted": "unsplitted",
             "tidy": "disable",
             "with_coverage": false
@@ -49,7 +45,6 @@
                 "package_type": "deb",
                 "build_type": "relwithdebuginfo",
                 "sanitizer": "none",
-                "bundled": "bundled",
                 "splitted": "unsplitted",
                 "clang-tidy": "disable",
                 "with_coverage": false
@@ -61,7 +56,6 @@
                 "package_type": "deb",
                 "build_type": "relwithdebuginfo",
                 "sanitizer": "none",
-                "bundled": "bundled",
                 "splitted": "unsplitted",
                 "clang-tidy": "disable",
                 "with_coverage": false
@@ -73,7 +67,6 @@
                 "package_type": "binary",
                 "build_type": "relwithdebuginfo",
                 "sanitizer": "none",
-                "bundled": "bundled",
                 "splitted": "unsplitted",
                 "clang-tidy": "disable",
                 "with_coverage": false
