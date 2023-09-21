@@ -8,6 +8,8 @@
 
 /// proton: starts.
 #include <Common/ProtonCommon.h>
+#include <Interpreters/Streaming/GetSampleBlockContext.h>
+#include <Storages/Streaming/storageUtil.h>
 /// proton: ends.
 
 namespace DB
@@ -84,13 +86,13 @@ static NamesAndTypesList getColumnsFromTableExpression(
     NamesAndTypesList & materialized,
     NamesAndTypesList & aliases,
     NamesAndTypesList & virtuals,
-    Streaming::DataStreamSemanticEx * output_data_stream_semantic)
+    Streaming::GetSampleBlockContext * get_sample_block_ctx)
 {
     NamesAndTypesList names_and_type_list;
     if (table_expression.subquery)
     {
         const auto & subquery = table_expression.subquery->children.at(0);
-        names_and_type_list = InterpreterSelectWithUnionQuery::getSampleBlock(subquery, context, true, output_data_stream_semantic).getNamesAndTypesList();
+        names_and_type_list = InterpreterSelectWithUnionQuery::getSampleBlock(subquery, context, true, get_sample_block_ctx).getNamesAndTypesList();
     }
     else if (table_expression.table_function)
     {
@@ -104,8 +106,11 @@ static NamesAndTypesList getColumnsFromTableExpression(
         virtuals = function_storage->getVirtuals();
 
         /// proton : starts. Calculate hash semantic
-        if (output_data_stream_semantic)
-            *output_data_stream_semantic = Streaming::getDataStreamSemantic(function_storage);
+        if (get_sample_block_ctx)
+        {
+            get_sample_block_ctx->output_data_stream_semantic = Streaming::getDataStreamSemantic(function_storage);
+            get_sample_block_ctx->is_streaming_output = isStreamingStorage(function_storage, context);
+        }
         /// proton : ends
     }
     else if (table_expression.database_and_table_name)
@@ -120,8 +125,11 @@ static NamesAndTypesList getColumnsFromTableExpression(
         virtuals = table->getVirtuals();
 
         /// proton : starts. Calculate hash semantic
-        if (output_data_stream_semantic)
-            *output_data_stream_semantic = Streaming::getDataStreamSemantic(table);
+        if (get_sample_block_ctx)
+        {
+            get_sample_block_ctx->output_data_stream_semantic = Streaming::getDataStreamSemantic(table);
+            get_sample_block_ctx->is_streaming_output = isStreamingStorage(table, context);
+        }
         /// proton : ends
     }
 
@@ -158,9 +166,9 @@ TablesWithColumns getDatabaseAndTablesWithColumns(
         NamesAndTypesList aliases;
         NamesAndTypesList virtuals;
         /// proton: starts.
-        Streaming::DataStreamSemanticEx output_data_stream_semantic;
+        Streaming::GetSampleBlockContext get_sample_block_ctx;
         NamesAndTypesList names_and_types = getColumnsFromTableExpression(
-            *table_expression, context, materialized, aliases, virtuals, &output_data_stream_semantic);
+            *table_expression, context, materialized, aliases, virtuals, &get_sample_block_ctx);
         /// proton: ends.
 
         removeDuplicateColumns(names_and_types);
@@ -184,7 +192,8 @@ TablesWithColumns getDatabaseAndTablesWithColumns(
             table.addMaterializedColumns(materialized);
 
         /// proton : starts
-        table.setOutputDataStreamSemantic(output_data_stream_semantic);
+        table.setOutputDataStreamSemantic(get_sample_block_ctx.output_data_stream_semantic);
+        table.setStreamingOutput(get_sample_block_ctx.is_streaming_output);
         /// proton : ends
     }
 

@@ -133,11 +133,17 @@ void ProxyStream::read(
                 ErrorCodes::NOT_IMPLEMENTED, "{} window can only work with streaming query.", magic_enum::enum_name(windowType()));
     }
 
-    /// Push down tracking changes
-    if (internal_name == "changelog" && canTrackChangesFromStorage(data_stream_semantic))
+    if (internal_name == "changelog")
     {
-        query_info.left_storage_tracking_changes = true;
-        query_info.changelog_query_drop_late_rows = std::any_cast<std::optional<bool>>(table_func_desc->func_ctx);
+        /// Push down tracking changes
+        if (canTrackChangesFromInput(data_stream_semantic))
+        {
+            query_info.left_input_tracking_changes = true;
+            query_info.changelog_query_drop_late_rows = std::any_cast<std::optional<bool>>(table_func_desc->func_ctx);
+        }
+        else
+            /// Add additional ChangelogConvertTransform, so the input doesn't need tracking changes, 
+            query_info.left_input_tracking_changes = false;
     }
 
     auto required_column_names_for_proxy_storage = getRequiredColumnsForProxyStorage(column_names);
@@ -186,7 +192,7 @@ void ProxyStream::doRead(
 
     if (current_subquery)
     {
-        if (query_info.left_storage_tracking_changes)
+        if (query_info.left_input_tracking_changes)
             Streaming::rewriteAsChangelogQuery(current_subquery->as<ASTSelectWithUnionQuery &>());
 
         auto sub_context = createProxySubqueryContext(context_, query_info, isStreaming());
@@ -372,7 +378,7 @@ void ProxyStream::processChangelogStep(QueryPlan & query_plan, const Names & req
 
     /// Everything shall be in-place already since versioned_vk.read(...) will take care of adding
     /// ChangelogTransform step
-    if (canTrackChangesFromStorage(data_stream_semantic))
+    if (canTrackChangesFromInput(data_stream_semantic))
         return;
 
     auto output_header = checkAndGetOutputHeader(required_columns, query_plan.getCurrentDataStream().header);

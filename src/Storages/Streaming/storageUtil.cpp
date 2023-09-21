@@ -1,7 +1,10 @@
 #include "storageUtil.h"
 
-#include <Storages/IStorage.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Storages/IStorage.h>
+#include <Storages/StorageView.h>
+#include <Storages/Streaming/ProxyStream.h>
 
 namespace DB
 {
@@ -25,5 +28,24 @@ String getStorageName(const ASTCreateQuery & create)
         return "RandomStream";
     else
         return "Stream";
+}
+
+bool isStreamingStorage(const StoragePtr & storage, ContextPtr context)
+{
+    if (!supportStreamingQuery(storage))
+        return false;
+
+    if (const auto * proxy = storage->as<Streaming::ProxyStream>())
+        return proxy->isStreaming();
+
+    if (storage->as<StorageView>())
+    {
+        auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
+        auto ctx = Context::createCopy(context);
+        ctx->setCollectRequiredColumns(false);
+        return InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().noModify().subquery().analyze()).isStreaming();
+    }
+
+    return true;
 }
 }

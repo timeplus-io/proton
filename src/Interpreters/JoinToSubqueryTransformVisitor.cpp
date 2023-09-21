@@ -83,13 +83,18 @@ public:
 
             /// proton: starts.
             assert(tables.size() > 2);
-            is_join_result_changelog
-                = Streaming::isJoinResultChangelog(tables[0].output_data_stream_semantic, tables[1].output_data_stream_semantic);
-
+            bool left_is_streaming = tables[0].is_streaming_output;
+            is_join_result_changelog = Streaming::isJoinResultChangelog(
+                tables[0].output_data_stream_semantic,
+                left_is_streaming,
+                tables[1].output_data_stream_semantic,
+                tables[1].is_streaming_output);
             for (size_t i = 2; i < tables.size(); ++i)
                 is_join_result_changelog = (Streaming::isJoinResultChangelog(
                     is_join_result_changelog ? Streaming::DataStreamSemantic::Changelog : Streaming::DataStreamSemantic::Append,
-                    tables[i].output_data_stream_semantic));
+                    left_is_streaming,
+                    tables[i].output_data_stream_semantic,
+                    tables[i].is_streaming_output));
             /// proton: ends.
         }
 

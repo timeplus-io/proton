@@ -314,7 +314,10 @@ void TranslateQualifiedNamesMatcher::visit(ASTExpressionList & node, const ASTPt
             /// proton: starts. For join query emit changelog, expand `_tp_delta` for `*`
             if (tables_with_columns.size() > 1
                 && Streaming::isJoinResultChangelog(
-                    tables_with_columns.front().output_data_stream_semantic, tables_with_columns.back().output_data_stream_semantic))
+                    tables_with_columns.front().output_data_stream_semantic,
+                    tables_with_columns.front().is_streaming_output,
+                    tables_with_columns.back().output_data_stream_semantic,
+                    tables_with_columns.back().is_streaming_output))
                 columns.emplace_back(std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
             /// proton: ends.
 

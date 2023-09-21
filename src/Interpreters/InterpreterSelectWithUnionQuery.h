@@ -47,7 +47,7 @@ public:
         const ASTPtr & query_ptr_,
         ContextPtr context_,
         bool is_subquery,
-        Streaming::DataStreamSemanticEx * output_data_stream_semantic = nullptr);
+        Streaming::GetSampleBlockContext * get_sample_block_ctx = nullptr);
 
     virtual void ignoreWithTotals() override;
 

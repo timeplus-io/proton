@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Interpreters/Context_fwd.h>
 #include <Storages/IStorage_fwd.h>
 #include <base/types.h>
 
@@ -10,4 +11,6 @@ bool supportStreamingQuery(const StoragePtr & storage);
 
 class ASTCreateQuery;
 String getStorageName(const ASTCreateQuery & create);
+
+bool isStreamingStorage(const StoragePtr & storage, ContextPtr context);
 }

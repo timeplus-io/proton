@@ -33,14 +33,14 @@ void ChangelogQueryVisitorMatcher::visit(ASTSelectQuery & select_query, ASTPtr &
     if (tables_with_columns.size() == 2)
     {
         /// Rewrite left input as a changelog subquery if required tracking changes
-        if (query_info.left_storage_tracking_changes)
-            rewritten |= rewriteAsChangelogSubquery(
+        if (query_info.left_input_tracking_changes)
+            input_rewritten |= rewriteAsChangelogSubquery(
                 tables->children[0]->as<ASTTablesInSelectQueryElement &>().table_expression->as<ASTTableExpression &>(),
                 /*only_rewrite_subqeury*/ false);
 
         /// Rewrite right input as a changelog subquery if required tracking changes
-        if (query_info.right_storage_tracking_changes)
-            rewritten |= rewriteAsChangelogSubquery(
+        if (query_info.right_input_tracking_changes)
+            input_rewritten |= rewriteAsChangelogSubquery(
                 tables->children[1]->as<ASTTablesInSelectQueryElement &>().table_expression->as<ASTTableExpression &>(),
                 /*only_rewrite_subqeury*/ false);
 
@@ -61,8 +61,8 @@ void ChangelogQueryVisitorMatcher::visit(ASTSelectQuery & select_query, ASTPtr &
 
         /// Rewrite `subquery` as a changelog query if required tracking changes
         /// Only rewrite the subquery emit changelog, since it shall already be converted to changelog in IStorage::read() if storage exists
-        if (query_info.left_storage_tracking_changes)
-            rewritten |= rewriteAsChangelogSubquery(
+        if (query_info.left_input_tracking_changes)
+            input_rewritten |= rewriteAsChangelogSubquery(
                 tables->children[0]->as<ASTTablesInSelectQueryElement &>().table_expression->as<ASTTableExpression &>(),
                 /*only_rewrite_subqeury*/ true);
 
@@ -136,35 +136,5 @@ void ChangelogQueryVisitorMatcher::addDeltaColumn(ASTSelectQuery & select_query,
         new_required_result_column_names.push_back(ProtonConsts::RESERVED_DELTA_FLAG);
 }
 
-ASTPtr makeTemporaryDeltaColumn()
-{
-    auto tmp_delta_col = std::make_shared<ASTLiteral>(Int8(1));
-    tmp_delta_col->setAlias(ProtonConsts::RESERVED_DELTA_FLAG);
-    return tmp_delta_col;
-}
-
-void rewriteTemporaryDeltaColumnInSelectQuery(ASTSelectQuery & select_query, bool emit_changelog)
-{
-    const auto select_expression_list = select_query.select();
-    for (auto iter = select_expression_list->children.begin(); iter != select_expression_list->children.end();)
-    {
-        if ((*iter)->as<ASTLiteral>() && (*iter)->tryGetAlias() == ProtonConsts::RESERVED_DELTA_FLAG)
-        {
-            if (emit_changelog)
-            {
-                /// Rewrite temporary column `1 as _tp_delta` to `_tp_delta`
-                *iter = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG);
-                ++iter;
-            }
-            else
-            {
-                /// Remove temporary column `1 as _tp_delta`
-                iter = select_expression_list->children.erase(iter);
-            }
-        }
-        else
-            ++iter;
-    }
-}
 }
 }
