@@ -1,0 +1,827 @@
+test_suite_name: changelog_stream12
+tag: smoke
+test_suite_config:
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: []
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+      cluster:
+        - view
+        - cluster_table_bug
+comments: Tests covering the single shard changelog stream query smoke cases.
+tests:
+  - id: 96
+    tags:
+      - versioned_kv
+      - multi_shard
+      - substream
+      - partition_by_primary_key
+      - streaming_tailing
+      - UDF
+    name: partition by primary key, streaming tailing, UDF, update
+    description: partition by primary key, streaming tailing, UDF, update
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000001'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: add_five
+              arguments:
+              - name: value
+                type: float32
+              return_type: float32
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard_12;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard_12(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
+
+          - client: python
+            query_id: '1496'
+            depends_on_stream: test14_multishard_12
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select add_five(i),
+                     k1,
+                     k2
+              from test14_multishard_12 partition by k2;
+
+          - client: python
+            query_type: table
+            depends_on: '1496'
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'a');
+
+          - client: python
+            query_type: table
+            kill: '1496'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test14_multishard_12;
+
+    expected_results:
+      - query_id: '1496'
+        expected_results:
+          - [6, 1, 'a']
+          - [7, 1, 'b']
+          - [8, 1, 'c']
+          - [6, 1, 'b']
+          - [7, 1, 'c']
+          - [8, 1, 'a']
+          - [6, 1, 'c']
+          - [7, 1, 'a']
+          - [8, 1, 'b']
+
+  - id: 97
+    tags:
+      - versioned_kv
+      - multi_shard
+      - substream
+      - partition_by_primary_key
+      - streaming_tailing
+      - stateless_function
+    name: partition by primary key, streaming tailing, stateless function, add
+    description: partition by primary key, streaming tailing, stateless function, add
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard_12;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard_12(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
+
+          - client: python
+            query_id: '1497'
+            depends_on_stream: test14_multishard_12
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select pow(10, i),
+                     k1,
+                     k2
+              from test14_multishard_12 partition by k2;
+
+          - client: python
+            query_type: table
+            depends_on: '1497'
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'b');
+
+          - client: python
+            query_type: table
+            kill: '1497'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test14_multishard_12;
+
+    expected_results:
+      - query_id: '1497'
+        expected_results:
+          - [10, 1, 'a']
+          - [100, 1, 'b']
+          - [1000, 1, 'c']
+
+  - id: 98
+    tags:
+      - versioned_kv
+      - multi_shard
+      - substream
+      - partition_by_primary_key
+      - streaming_tailing
+      - stateless_function
+    name: partition by primary key, streaming tailing, stateless function, update
+    description: partition by primary key, streaming tailing, stateless function, update
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard_12;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard_12(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
+
+          - client: python
+            query_id: '1498'
+            depends_on_stream: test14_multishard_12
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select pow(10, i),
+                     k1,
+                     k2
+              from test14_multishard_12 partition by k2;
+
+          - client: python
+            query_type: table
+            depends_on: '1498'
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'a');
+
+          - client: python
+            query_type: table
+            kill: '1498'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test14_multishard_12;
+
+    expected_results:
+      - query_id: '1498'
+        expected_results:
+          - [10, 1, 'a']
+          - [100, 1, 'b']
+          - [1000, 1, 'c']
+          - [10, 1, 'b']
+          - [100, 1, 'c']
+          - [1000, 1, 'a']
+          - [10, 1, 'c']
+          - [100, 1, 'a']
+          - [1000, 1, 'b']
+
+  - id: 99
+    tags:
+      - versioned_kv
+      - multi_shard
+      - substream
+      - partition_by_primary_key
+      - streaming_aggregation
+      - global_aggregation
+      - group_by
+      - primary_key
+      - stateful_function
+    name: add to versioned_kv and query with partition by primary key, group by, primary key and stateful function
+    description: add to versioned_kv and query with partition by primary key, group by, primary key and stateful function
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard_12;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard_12(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
+
+          - client: python
+            query_id: '1499'
+            depends_on_stream: test14_multishard_12
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select max(i),
+                     min(i),
+                     avg(i),
+                     count(i),
+                     k2
+              from test14_multishard_12 partition by k2
+              group by k2 emit periodic 200ms;
+
+          - client: python
+            query_type: table
+            depends_on: '1499'
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'b');
+
+          - client: python
+            query_type: table
+            kill: '1499'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test14_multishard_12;
+
+    expected_results:
+      - query_id: '1499'
+        expected_results:
+          - [1, 1, 1, 1, 'a']
+          - [2, 2, 2, 1, 'b']
+          - [3, 3, 3, 1, 'c']
+
+  - id: 100
+    tags:
+      - versioned_kv
+      - multi_shard
+      - substream
+      - partition_by_primary_key
+      - streaming_aggregation
+      - global_aggregation
+      - group_by
+      - primary_key
+      - stateful_function
+      - bug
+    name: update versioned_kv and query with partition by primary key, group by, primary key and stateful function
+    description: update versioned_kv and query with partition by primary key, group by, primary key and stateful function
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard_12;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard_12(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
+
+          - client: python
+            query_id: '14100'
+            depends_on_stream: test14_multishard_12
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select max(i),
+                     min(i),
+                     avg(i),
+                     count(i),
+                     k2
+              from test14_multishard_12 partition by k2
+              group by k2 emit periodic 200ms;
+
+          - client: python
+            query_type: table
+            depends_on: '14100'
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'a');
+
+          - client: python
+            query_type: table
+            kill: '14100'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test14_multishard_12;
+
+    expected_results:
+      - query_id: '14100'
+        expected_results:
+          - [1, 1, 1, 1, 'a']
+          - [2, 2, 2, 1, 'b']
+          - [3, 3, 3, 1, 'c']
+          - [1, 1, 1, 1, 'b']
+          - [2, 2, 2, 1, 'c']
+          - [3, 3, 3, 1, 'a']
+          - [1, 1, 1, 1, 'c']
+          - [2, 2, 2, 1, 'a']
+          - [3, 3, 3, 1, 'b']
+
+  - id: 101
+    tags:
+      - versioned_kv
+      - multi_shard
+      - substream
+      - partition_by_primary_key
+      - streaming_aggregation
+      - global_aggregation
+      - group_by
+      - primary_key
+      - UDA
+    name: add to versioned_kv and query with partition by primary key, group by, primary key and UDA
+    description: add to versioned_kv and query with partition by primary key, group by, primary key and UDA
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000002'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: sec_large
+              arguments:
+              - name: value
+                type: float32
+              is_aggregation: true
+              return_type: float32
+              source: |
+                {
+                  initialize: function() { 
+                    this.max = -1.0;
+                    this.sec = -1.0;
+                  },
+
+                  process: function(values) {
+                    for(let i=0; i<values.length; i++) {
+                      if(values[i] > this.max) {
+                        this.sec = this.max;
+                        this.max = values[i];
+                      }
+                      if(values[i] < this.max && values[i] > this.sec)
+                        this.sec = values[i];
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.sec;
+                  },
+
+                  serialize: function() {
+                    let s = {"max": this.max, "sec":this.sec };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.max = s["max"];
+                    this.sec = s["sec"];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    if (s["sec"] >= this.max) {
+                      this.max = s["max"];
+                      this.sec = s["sec"];
+                    } else if (s["max"] >= this.max) {
+                      this.sec = this.max;
+                      this.max = s["max"];
+                    } else if (s["max"] > this.sec) {
+                      this.sec = s["max"];
+                    }
+                  }
+                }
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard_12;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard_12(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
+
+          - client: python
+            query_id: '14101'
+            depends_on_stream: test14_multishard_12
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select sec_large(i),
+                     k2
+              from test14_multishard_12 partition by k2
+              group by k2 emit periodic 200ms;
+
+          - client: python
+            query_type: table
+            depends_on: '14101'
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'b');
+
+          - client: python
+            query_type: table
+            kill: '14101'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test14_multishard_12;
+
+    expected_results:
+      - query_id: '14101'
+        expected_results:
+          - [-1, 'a']
+          - [-1, 'b']
+          - [-1, 'c']
+
+  - id: 102
+    tags:
+      - versioned_kv
+      - multi_shard
+      - substream
+      - partition_by_primary_key
+      - streaming_aggregation
+      - global_aggregation
+      - group_by
+      - primary_key
+      - UDA
+      - bug
+    name: update versioned_kv and query with partition by primary key, group by, primary key and UDA
+    description: update versioned_kv and query with partition by primary key, group by, primary key and UDA
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_multishard_12;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test14_multishard_12(i float, k1 int, k2 string) primary key k2
+              settings mode='versioned_kv', shards=3;
+
+          - client: python
+            query_id: '14102'
+            depends_on_stream: test14_multishard_12
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              select max(i),
+                     min(i),
+                     avg(i),
+                     count(i),
+                     k2
+              from test14_multishard_12 partition by k2
+              group by k2 emit periodic 200ms;
+
+          - client: python
+            query_type: table
+            depends_on: '14102'
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'a');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (1, 1, 'c');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (2, 1, 'a');
+
+          - client: python
+            query_type: table
+            kill: '14102'
+            kill_wait: 3
+            wait: 1
+            query: |
+              insert into test14_multishard_12(i, k1, k2)
+              values (3, 1, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test14_multishard_12;
+
+    expected_results:
+      - query_id: '14102'
+        expected_results:
+          - [1, 1, 1, 1, 'a']
+          - [2, 2, 2, 1, 'b']
+          - [3, 3, 3, 1, 'c']
+          - [1, 1, 1, 1, 'b']
+          - [2, 2, 2, 1, 'c']
+          - [3, 3, 3, 1, 'a']
+          - [1, 1, 1, 1, 'c']
+          - [2, 2, 2, 1, 'a']
+          - [3, 3, 3, 1, 'b']
+

@@ -1,0 +1,1303 @@
+test_suite_name: changelog_stream5
+tag: smoke
+test_suite_config:
+  setup:
+    statements:
+      - client: python
+        query_type: table
+        wait: 2
+        query: DROP VIEW IF EXISTS test14_view2_5;
+
+      - client: python
+        query_type: table
+        wait: 2
+        query: DROP VIEW IF EXISTS test14_view1_5;
+
+      - client: python
+        query_type: table
+        wait: 2
+        query: DROP VIEW IF EXISTS test14_view_5;
+
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: []
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+      cluster:
+        - view
+        - cluster_table_bug
+comments: Tests covering the single shard changelog stream query smoke cases.
+
+tests:
+  - id: 12
+    tags:
+      - subquery/view/materilized_view_UDA
+      - group_by_primary_key
+      - to_support
+    name: subqury from subquery from subquery(not supported)
+    description: subqury from subquery from subquery(not supported)
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000002'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: sec_large
+              arguments:
+              - name: value
+                type: float32
+              is_aggregation: true
+              return_type: float32
+              source: |
+                {
+                  initialize: function() { 
+                    this.max = -1.0;
+                    this.sec = -1.0;
+                  },
+
+                  process: function(values) {
+                    for(let i=0; i<values.length; i++) {
+                      if(values[i] > this.max) {
+                        this.sec = this.max;
+                        this.max = values[i];
+                      }
+                      if(values[i] < this.max && values[i] > this.sec)
+                        this.sec = values[i];
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.sec;
+                  },
+
+                  serialize: function() {
+                    let s = {"max": this.max, "sec":this.sec };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.max = s["max"];
+                    this.sec = s["sec"];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    if (s["sec"] >= this.max) {
+                      this.max = s["max"];
+                      this.sec = s["sec"];
+                    } else if (s["max"] >= this.max) {
+                      this.sec = this.max;
+                      this.max = s["max"];
+                    } else if (s["max"] > this.sec) {
+                      this.sec = s["max"];
+                    }
+                  }
+                }
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_subquery_5(i float, k1 int, k2 string);
+
+          - client: python
+            query_id: '1412'
+            depends_on_stream: test14_subquery_5
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              with cte1 as (
+                with cte2 as (
+                  select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2)
+                )
+                select * from cte2
+              )
+              select sec_large(i), k2 from cte1 group by k2;
+
+          - client: python
+            query_type: table
+            depends_on: '1412'
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (5, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+          - client: python
+            query_type: table
+            kill: '1412'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop stream if exists test14_subquery_5;
+
+  - id: 13
+    tags:
+      - subquery/view/materilized_view_UDA
+      - group_by_primary_key
+    name: subquery from materlized view from view
+    description: subquery from materlized view from view
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000002'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: sec_large
+              arguments:
+              - name: value
+                type: float32
+              is_aggregation: true
+              return_type: float32
+              source: |
+                {
+                  initialize: function() { 
+                    this.max = -1.0;
+                    this.sec = -1.0;
+                  },
+
+                  process: function(values) {
+                    for(let i=0; i<values.length; i++) {
+                      if(values[i] > this.max) {
+                        this.sec = this.max;
+                        this.max = values[i];
+                      }
+                      if(values[i] < this.max && values[i] > this.sec)
+                        this.sec = values[i];
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.sec;
+                  },
+
+                  serialize: function() {
+                    let s = {"max": this.max, "sec":this.sec };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.max = s["max"];
+                    this.sec = s["sec"];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    if (s["sec"] >= this.max) {
+                      this.max = s["max"];
+                      this.sec = s["sec"];
+                    } else if (s["max"] >= this.max) {
+                      this.sec = this.max;
+                      this.max = s["max"];
+                    } else if (s["max"] > this.sec) {
+                      this.sec = s["max"];
+                    }
+                  }
+                }
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view2_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view1_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_subquery_5(i float, k1 int, k2 string);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              create view if not exists test14_view1_5 as (
+                select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2)
+              );
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              create materialized view if not exists test14_view2_5 as (
+                select i, k1, k2, _tp_delta from test14_view1_5
+              );
+
+          - client: python
+            query_id: '1413'
+            depends_on_stream: test14_subquery_5
+            query_end_timer: 12
+            query_type: stream
+            query: select sec_large(i), k2 from test14_view2_5 group by k2;
+
+          - client: python
+            query_type: table
+            depends_on: '1413'
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (5, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+          - client: python
+            query_type: table
+            kill: '1413'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop view if exists test14_view2_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view1_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+    expected_results:
+      - query_id: '1413'
+        expected_results:
+          - [-1, 'a']
+          - [2, 'a']
+          - [-1, 'b']
+          - [2, 'a']
+          - [-1, 'b']
+          - [2, 'a']
+          - [5, 'b']
+          - [2, 'a']
+
+  - id: 14
+    tags:
+      - subquery/view/materilized_view_UDA
+      - group_by_primary_key
+      - bug
+    name: subquery/view/materialized view/  group by no primary key
+    description: subquery/view/materialized view/  group by no primary key
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_subquery_5(i int, k1 int, k2 string);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              create view if not exists test14_view_5 as (
+                with cte as (select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2))
+                select * from cte
+              );
+
+          - client: python
+            query_id: '1414'
+            depends_on_stream: test14_subquery_5
+            query_end_timer: 12
+            query_type: stream
+            query: select max(i), min(i), avg(i), k1 from test14_view_5 group by k1;
+
+          - client: python
+            query_type: table
+            depends_on: '1414'
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (5, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 5, 'b');
+
+          - client: python
+            query_type: table
+            kill: '1414'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop view if exists test14_view_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+    expected_results:
+      - query_id: '1414'
+        expected_results:
+          - [4, 2, 3.33333, 3]
+          - [4, 2, 3.0, 3]
+          - [2, 2, 2.0, 2]
+          - [5, 5, 5.0, 5]
+          - [4, 2, 3.0, 3]
+          - [8, 2, 5.0, 2]
+          - [8, 5, 6.5, 5]
+
+  - id: 15
+    tags:
+      - subquery/view/materilized_view_UDA
+      - group_by_primary_key
+    name: subquery from materialized view from subquery
+    description: subquery from materialized view from subquery
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_subquery_5(i int, k1 int, k2 string);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              create materialized view if not exists test14_view_5 as (
+                with cte as (select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2))
+                select i, k1, k2, _tp_delta from cte
+              );
+
+          - client: python
+            query_id: '1415'
+            depends_on_stream: test14_subquery_5
+            query_end_timer: 12
+            query_type: stream
+            query: select max(i), min(i), avg(i), k1 from test14_view_5 group by k1;
+
+          - client: python
+            query_type: table
+            depends_on: '1415'
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (5, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 5, 'b');
+
+          - client: python
+            query_type: table
+            kill: '1415'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop view if exists test14_view_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+    expected_results:
+      - query_id: '1415'
+        expected_results:
+          - [4, 4, 4, 3]
+          - [4, 2, 3.33333, 3]
+          - [4, 2, 3.33333, 3]
+          - [5, 5, 5, 5]
+          - [4, 2, 3, 3]
+          - [2, 2, 2, 2]
+          - [5, 5, 5, 5]
+          - [4, 2, 3, 3]
+          - [2, 2, 2, 2]
+          - [8, 5, 6, 5]
+          - [4, 2, 3, 3]
+          - [8, 2, 5, 2]
+          - [8, 5, 6, 5]
+
+  - id: 16
+    tags:
+      - subquery/view/materilized_view_UDA
+      - group_by_primary_key
+      - bug
+    name: subquery from view from view
+    description: subquery from view from view
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view2_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view1_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_subquery_5(i int, k1 int, k2 string);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              create view if not exists test14_view1_5 as (
+                select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2)
+              );
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              create view if not exists test14_view2_5 as (
+                select * from test14_view1_5
+              );
+
+          - client: python
+            query_id: '1416'
+            depends_on_stream: test14_subquery_5
+            query_end_timer: 12
+            query_type: stream
+            query: select max(i), min(i), avg(i), k1 from test14_view2_5 group by k1;
+
+          - client: python
+            query_type: table
+            depends_on: '1416'
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (5, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 5, 'b');
+
+          - client: python
+            query_type: table
+            kill: '1416'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop view if exists test14_view2_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view1_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+    expected_results:
+      - query_id: '1416'
+        expected_results:
+          - [4, 4, 4.0, 3]
+          - [2, 2, 2.0, 3]
+          - [2, 2, 2.0, 3]
+          - [5, 5, 5.0, 5]
+          - [0, 0, nan, 3]
+          - [2, 2, 2.0, 2]
+          - [5, 5, 5.0, 5]
+          - [0, 0, nan, 3]
+          - [2, 2, 2.0, 2]
+          - [8, 8, 8.0, 5]
+          - [0, 0, nan, 3]
+          - [8, 2, 5.0, 2]
+          - [0, 0, nan, 5]
+
+  - id: 17
+    tags:
+      - subquery/view/materilized_view_UDA
+      - group_by_primary_key
+      - bug
+    name: subqury from subquery from subquery
+    description: subqury from subquery from subquery
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_subquery_5(i int, k1 int, k2 string);
+
+          - client: python
+            query_id: '1417'
+            depends_on_stream: test14_subquery_5
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              with cte1 as (with cte2 as (
+                select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2))
+                select * from cte2
+              ) 
+              select max(i), min(i), avg(i), k1 from cte1 group by k1;
+
+          - client: python
+            query_type: table
+            depends_on: '1417'
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (5, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 5, 'b');
+
+          - client: python
+            query_type: table
+            kill: '1417'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 2, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop stream if exists test14_subquery_5;
+
+    expected_results:
+      - query_id: '1417'
+        expected_results:
+          - [0, 0, nan, 3]
+          - [8, 2, 5, 2]
+          - [0, 0, nan, 5]
+
+  - id: 18
+    tags:
+      - subquery/view/materilized_view_UDA
+      - group_by_primary_key
+    name: subquery from materlized view from view
+    description: subquery from materlized view from view
+    steps:
+      - statements:
+          - client: rest
+            rest_type: raw
+            query_type: table
+            query_id: '10000001'
+            query_url: /proton/v1/udfs
+            http_method: POST
+            data:
+              type: javascript
+              name: add_five
+              arguments:
+              - name: value
+                type: float32
+              return_type: float32
+              source: |
+                function add_five(value) {
+                    for (let i = 0; i < value.length; i++) {
+                        value[i] = value[i] + 5;
+                    }
+                    return value;
+                }
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view2_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view1_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_subquery_5(i int, k1 int, k2 string);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              create view if not exists test14_view1_5 as (
+                select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2)
+              );
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              create materialized view if not exists test14_view2_5 as (
+                select i, k1, k2, _tp_delta from test14_view1_5
+              );
+
+          - client: python
+            query_id: '1418'
+            depends_on_stream: test14_subquery_5
+            query_end_timer: 12
+            query_type: stream
+            query: select add_five(i), k2, _tp_delta from test14_view2_5;
+
+          - client: python
+            query_type: table
+            depends_on: '1418'
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 5, 'b');
+
+          - client: python
+            query_type: table
+            kill: '1418'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop view if exists test14_view2_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view1_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+    expected_results:
+      - query_id: '1418'
+        expected_results:
+          - [9, 'a', 1]
+          - [9, 'a', -1]
+          - [7, 'a', 1]
+          - [7, 'b', 1]
+          - [7, 'a', -1]
+          - [7, 'a', 1]
+
+  - id: 19
+    tags:
+      - subquery/view/materialized_view/
+      - no_group_by
+      - bug
+    name: subquery from view from subquery
+    description: subquery from view from subquery
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_subquery_5(i float, k1 int, k2 string);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              create view if not exists test14_view_5 as (
+                with cte as (select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2))
+                select * from cte
+              );
+
+          - client: python
+            query_id: '1419'
+            depends_on_stream: test14_subquery_5
+            query_end_timer: 12
+            query_type: stream
+            query: select lag(i, 2), k2 from test14_view_5;
+
+          - client: python
+            query_type: table
+            depends_on: '1419'
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (5, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+          - client: python
+            query_type: table
+            kill: '1419'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop view if exists test14_view_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+    expected_results:
+      - query_id: '1419'
+        expected_results:
+          - [0, 'a']
+          - [4, 'a']
+          - [4, 'a']
+          - [2, 'b']
+          - [5, 'a']
+          - [2, 'a']
+          - [2, 'b']
+          - [5, 'b']
+
+  - id: 20
+    tags:
+      - subquery/view/materialized_view/
+      - no_group_by
+      - bug
+    name: subquery from materialized view from subquery
+    description: subquery from materialized view from subquery
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_subquery_5(i float, k1 int, k2 string);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              create materialized view if not exists test14_view_5 as (
+                with cte as (select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2))
+                select i, k1, k2, _tp_delta from cte
+              );
+
+          - client: python
+            query_id: '1420'
+            depends_on_stream: test14_subquery_5
+            query_end_timer: 12
+            query_type: stream
+            query: select lag(i, 2), k2 from test14_view_5;
+
+          - client: python
+            query_type: table
+            depends_on: '1420'
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (5, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+          - client: python
+            query_type: table
+            kill: '1420'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop view if exists test14_view_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+    expected_results:
+      - query_id: '1420'
+        expected_results:
+          - [0, 'a']
+          - [4, 'a']
+          - [4, 'a']
+          - [2, 'b']
+          - [5, 'a']
+          - [2, 'a']
+          - [2, 'b']
+          - [5, 'b']
+
+  - id: 21
+    tags:
+      - subquery/view/materialized_view/
+      - no_group_by
+      - bug
+    name: subquery from view from view
+    description: subquery from view from view
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view2_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view1_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_subquery_5(i float, k1 int, k2 string);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              create view if not exists test14_view1_5 as (
+                select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2)
+              );
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create view if not exists test14_view2_5 as (select * from test14_view1_5);
+
+          - client: python
+            query_id: '1421'
+            depends_on_stream: test14_subquery_5
+            query_end_timer: 12
+            query_type: stream
+            query: select lag(i, 2), k2 from test14_view2_5;
+
+          - client: python
+            query_type: table
+            depends_on: '1421'
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (5, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+          - client: python
+            query_type: table
+            kill: '1421'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop view if exists test14_view2_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view1_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+    expected_results:
+      - query_id: '1421'
+        expected_results:
+          - [0, 'a']
+          - [4, 'a']
+          - [4, 'a']
+          - [2, 'b']
+          - [5, 'a']
+          - [2, 'a']
+          - [2, 'b']
+          - [5, 'b']
+
+  - id: 22
+    tags:
+      - subquery/view/materialized_view/
+      - no_group_by
+      - bug
+    name: subqury from subquery from subquery(not supported)
+    description: subqury from subquery from subquery(not supported)
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_subquery_5(i float, k1 int, k2 string);
+
+          - client: python
+            query_id: '1422'
+            depends_on_stream: test14_subquery_5
+            query_end_timer: 12
+            query_type: stream
+            query: |
+              with cte1 as (
+                with cte2 as (select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2))
+                select * from cte2
+              )select lag(i, 2), k2 from cte1;
+
+          - client: python
+            query_type: table
+            depends_on: '1422'
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (5, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+          - client: python
+            query_type: table
+            kill: '1422'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop stream if exists test14_subquery_5;
+
+    expected_results:
+      - query_id: '1422'
+        expected_results:
+          - [0, 'a']
+          - [0, 'a']
+          - [4, 'a']
+          - [4, 'b']
+          - [2, 'a']
+          - [5, 'a']
+          - [2, 'b']
+          - [2, 'b']
+
+  - id: 23
+    tags:
+      - subquery/view/materialized_view/
+      - no_group_by
+      - bug
+    name: subquery from materlized view from view
+    description: subquery from materlized view from view
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view2_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view1_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test14_subquery_5(i float, k1 int, k2 string);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              create view if not exists test14_view1_5 as (
+                select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2)
+              );
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: |
+              create materialized view if not exists test14_view2_5 as (
+                select i, k1, k2, _tp_delta from test14_view1_5
+              );
+
+          - client: python
+            query_id: '1423'
+            depends_on_stream: test14_subquery_5
+            query_end_timer: 12
+            query_type: stream
+            query: select lag(i, 2), k2 from test14_view2_5;
+
+          - client: python
+            query_type: table
+            depends_on: '1423'
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (5, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+          - client: python
+            query_type: table
+            kill: '1423'
+            kill_wait: 2
+            wait: 2
+            query: insert into test14_subquery_5(i, k1, k2) values (8, 5, 'b');
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: drop view if exists test14_view2_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop view if exists test14_view1_5;
+
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_subquery_5;
+
+    expected_results:
+      - query_id: '1423'
+        expected_results:
+          - [0, 'a']
+          - [0, 'a']
+          - [4, 'a']
+          - [4, 'b']
+          - [2, 'a']
+          - [5, 'a']
+          - [2, 'b']
+          - [2, 'b']
+
