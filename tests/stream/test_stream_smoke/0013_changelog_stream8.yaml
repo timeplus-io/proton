@@ -128,9 +128,10 @@ tests:
     tags:
       - versioned_kv_subquery/view/materialized_view
       - global_aggregation
-      - gtoup_by_primary_key
-    name: subqury from subquery from subquery
-    description: subqury from subquery from subquery
+      - group_by_primary_key
+      - bug
+    name: subquery from subquery from subquery
+    description: subquery from subquery from subquery
     steps:
       - statements:
           - client: python
@@ -229,7 +230,7 @@ tests:
     tags:
       - versioned_kv_subquery/view/materialized_view
       - global_aggregation
-      - gtoup_by_primary_key
+      - group_by_primary_key
       - bug
     name: subquery from materlized view from view, bug
     description: subquery from materlized view from view, bug

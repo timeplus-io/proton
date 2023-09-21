@@ -870,6 +870,7 @@ tests:
     tags:
       - subquery/view/materilized_view_UDA 
       - group_by_primary_key
+      - bug
     name: subquery from view from subquery
     description: subquery from view from subquery
     steps:
@@ -1172,6 +1173,7 @@ tests:
     tags:
       - subquery/view/materilized_view_UDA
       - group_by_primary_key
+      - bug
     name: subquery from view from view
     description: subquery from view from view
     steps:
