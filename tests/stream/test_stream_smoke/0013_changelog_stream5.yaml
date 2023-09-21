@@ -839,7 +839,6 @@ tests:
     tags:
       - subquery/view/materialized_view/
       - no_group_by
-      - bug
     name: subquery from view from subquery
     description: subquery from view from subquery
     steps:
@@ -917,19 +916,18 @@ tests:
       - query_id: '1419'
         expected_results:
           - [0, 'a']
+          - [0, 'a']
           - [4, 'a']
-          - [4, 'a']
-          - [2, 'b']
-          - [5, 'a']
+          - [4, 'b']
           - [2, 'a']
+          - [5, 'a']
           - [2, 'b']
-          - [5, 'b']
+          - [2, 'b']
 
   - id: 20
     tags:
       - subquery/view/materialized_view/
       - no_group_by
-      - bug
     name: subquery from materialized view from subquery
     description: subquery from materialized view from subquery
     steps:
@@ -1007,19 +1005,18 @@ tests:
       - query_id: '1420'
         expected_results:
           - [0, 'a']
+          - [0, 'a']
           - [4, 'a']
-          - [4, 'a']
-          - [2, 'b']
-          - [5, 'a']
+          - [4, 'b']
           - [2, 'a']
+          - [5, 'a']
           - [2, 'b']
-          - [5, 'b']
+          - [2, 'b']
 
   - id: 21
     tags:
       - subquery/view/materialized_view/
       - no_group_by
-      - bug
     name: subquery from view from view
     description: subquery from view from view
     steps:
@@ -1111,19 +1108,18 @@ tests:
       - query_id: '1421'
         expected_results:
           - [0, 'a']
+          - [0, 'a']
           - [4, 'a']
-          - [4, 'a']
-          - [2, 'b']
-          - [5, 'a']
+          - [4, 'b']
           - [2, 'a']
+          - [5, 'a']
           - [2, 'b']
-          - [5, 'b']
+          - [2, 'b']
 
   - id: 22
     tags:
       - subquery/view/materialized_view/
       - no_group_by
-      - bug
     name: subqury from subquery from subquery(not supported)
     description: subqury from subquery from subquery(not supported)
     steps:
@@ -1198,7 +1194,6 @@ tests:
     tags:
       - subquery/view/materialized_view/
       - no_group_by
-      - bug
     name: subquery from materlized view from view
     description: subquery from materlized view from view
     steps:

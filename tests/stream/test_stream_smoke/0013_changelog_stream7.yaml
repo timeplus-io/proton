@@ -177,7 +177,6 @@ tests:
       - tumble(table)
       - group_by
       - primary_key
-      - bug
     name: global aggregation,  partition by no primary key, group by no primary key, UDA
     description: global aggregation,  partition by no primary key, group by no primary key, UDA
     steps:
@@ -1219,7 +1218,6 @@ tests:
       - versioned_kv_subquery/view/materialized_view
       - global_aggregation
       - gtoup_by_primary_key
-      - bug
     name: subquery from view from subquery
     description: subquery from view from subquery
     steps:
@@ -1249,49 +1247,29 @@ tests:
             depends_on_stream: test14_subquery_7
             query_end_timer: 12
             query_type: stream
-            query: select max(i), min(i), avg(i), k2 from test14_view_7 group by k2 insert into test14_subquery_7(i, k1, k2) values (1, 2, 'a');
+            query: select max(i), min(i), avg(i), k2 from test14_view_7 group by k2 emit periodic 1s;
 
           - client: python
             query_type: table
             depends_on: '1446'
-            wait: 2
-            query: insert into test14_subquery_7(i, k1, k2) values (3, 3, 'b');
+            wait: 1
+            query: insert into test14_subquery_7(i, k1, k2) values (1, 2, 'a') (3, 3, 'b') (5, 1, 'c');
 
           - client: python
             query_type: table
-            wait: 2
-            query: insert into test14_subquery_7(i, k1, k2) values (5, 1, 'c');
-
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test14_subquery_7(i, k1, k2) values (8, 2, 'a');
-
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test14_subquery_7(i, k1, k2) values (9, 3, 'b');
-
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test14_subquery_7(i, k1, k2) values (11, 2, 'b');
-
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test14_subquery_7(i, k1, k2) values (10, 1, 'c');
+            wait: 1
+            query: insert into test14_subquery_7(i, k1, k2) values (8, 2, 'a')(9, 3, 'b')(11, 2, 'b')(10, 1, 'c');
 
           - client: python
             query_type: table
             kill: '1446'
-            kill_wait: 3
-            wait: 2
+            kill_wait: 2
+            wait: 1
             query: insert into test14_subquery_7(i, k1, k2) values (14, 2, 'b');
 
           - client: python
             query_type: table
-            wait: 3
+            wait: 1
             query: drop view if exists test14_view_7;
 
           - client: python
@@ -1299,12 +1277,24 @@ tests:
             wait: 0
             query: drop stream if exists test14_subquery_7;
 
+    expected_results:
+      - query_id: '1446'
+        expected_results:
+          - [1, 1, 1, 'a']
+          - [3, 3, 3, 'b']
+          - [5, 5, 5, 'c']
+          - [8, 8, 8, 'a']
+          - [11, 11, 11, 'b']
+          - [10, 10, 10, 'c']
+          - [8, 8, 8, 'a']
+          - [14, 14, 14, 'b']
+          - [10, 10, 10, 'c']
+
   - id: 47
     tags:
       - versioned_kv_subquery/view/materialized_view
       - global_aggregation
       - gtoup_by_primary_key
-      - bug
     name: subquery from materialized view from subquery, bug
     description: subquery from materialized view from subquery, bug
     steps:
@@ -1321,16 +1311,26 @@ tests:
 
           - client: python
             query_type: table
+            wait: 0
+            query: drop stream if exists test14_target_changelog_kv_7;
+
+          - client: python
+            query_type: table
             wait: 2
             query: create stream if not exists test14_subquery_7(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv';
 
           - client: python
             query_type: table
+            wait: 0
+            query: create stream if not exists test14_target_changelog_kv_7(i float, k1 int, k2 string) primary key k2 settings mode='changelog_kv';
+
+          - client: python
+            query_type: table
             wait: 2
             query: |
-              create materialized view if not exists test14_view_7 as (
+              create materialized view if not exists test14_view_7 into test14_target_changelog_kv_7 as (
                 with cte as (select i, k1, k2 from test14_subquery_7)
-                select i, k1, k2 from cte
+                select i, k1, k2, _tp_delta from cte emit changelog
               );
 
           - client: python
@@ -1338,58 +1338,51 @@ tests:
             depends_on_stream: test14_subquery_7
             query_end_timer: 12
             query_type: stream
-            query: select max(i), min(i), avg(i) from test14_view_7 group by k2;
+            query: select max(i), min(i), avg(i), k2 from test14_view_7 group by k2 emit periodic 1s;
 
           - client: python
             query_type: table
             depends_on: '1447'
-            wait: 2
-            query: insert into test14_subquery_7(i, k1, k2) values (1, 2, 'a');
+            wait: 1
+            query: insert into test14_subquery_7(i, k1, k2) values (1, 2, 'a') (3, 3, 'b') (5, 1, 'c');
 
           - client: python
             query_type: table
-            wait: 2
-            query: insert into test14_subquery_7(i, k1, k2) values (3, 3, 'b');
-
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test14_subquery_7(i, k1, k2) values (5, 1, 'c');
-
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test14_subquery_7(i, k1, k2) values (8, 2, 'a');
-
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test14_subquery_7(i, k1, k2) values (9, 3, 'b');
-
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test14_subquery_7(i, k1, k2) values (11, 2, 'b');
-
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test14_subquery_7(i, k1, k2) values (10, 1, 'c');
+            wait: 1
+            query: insert into test14_subquery_7(i, k1, k2) values (8, 2, 'a')(9, 3, 'b')(11, 2, 'b')(10, 1, 'c');
 
           - client: python
             query_type: table
             kill: '1447'
-            kill_wait: 3
-            wait: 2
+            kill_wait: 2
+            wait: 1
             query: insert into test14_subquery_7(i, k1, k2) values (14, 2, 'b');
 
           - client: python
             query_type: table
-            wait: 3
+            wait: 1
             query: drop view if exists test14_view_7;
 
           - client: python
             query_type: table
             wait: 0
             query: drop stream if exists test14_subquery_7;
+  
+          - client: python
+            query_type: table
+            wait: 0
+            query: drop stream if exists test14_target_changelog_kv_7;
+
+    expected_results:
+      - query_id: '1447'
+        expected_results:
+          - [1, 1, 1, 'a']
+          - [3, 3, 3, 'b']
+          - [5, 5, 5, 'c']
+          - [8, 8, 8, 'a']
+          - [11, 11, 11, 'b']
+          - [10, 10, 10, 'c']
+          - [8, 8, 8, 'a']
+          - [14, 14, 14, 'b']
+          - [10, 10, 10, 'c']
 
