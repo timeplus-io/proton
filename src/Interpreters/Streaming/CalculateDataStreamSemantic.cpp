@@ -13,12 +13,13 @@ DataStreamSemanticEx calculateDataStreamSemanticForJoin(
     DataStreamSemanticEx left_input_data_stream_semantic,
     DataStreamSemanticEx right_input_data_stream_semantic,
     std::pair<JoinKind, JoinStrictness> kind_and_strictness,
-    bool right_input_is_streaming,
     SelectQueryInfo & query_info)
 {
+    assert(left_input_data_stream_semantic.streaming);
+
     /// Speical handling
     /// 1) for <stream> join <table>, the right inputs don't support changelog semantic
-    if (!right_input_is_streaming)
+    if (!right_input_data_stream_semantic.streaming)
     {
         /// Left stream semantic
         if (canTrackChangesFromInput(left_input_data_stream_semantic))
@@ -74,7 +75,10 @@ DataStreamSemanticEx calculateDataStreamSemanticForJoin(
         left_input_data_stream_semantic = DataStreamSemantic::Changelog;
     }
     else
+    {
         query_info.left_input_tracking_changes = false;
+        left_input_data_stream_semantic = DataStreamSemantic::Append;
+    }
 
     /// Right stream semantic
     if (canTrackChangesFromInput(right_input_data_stream_semantic))
@@ -83,7 +87,10 @@ DataStreamSemanticEx calculateDataStreamSemanticForJoin(
         right_input_data_stream_semantic = DataStreamSemantic::Changelog;
     }
     else
+    {
         query_info.right_input_tracking_changes = false;
+        right_input_data_stream_semantic = DataStreamSemantic::Append;
+    }
 
     if (isJoinResultChangelog(left_input_data_stream_semantic, right_input_data_stream_semantic))
         return DataStreamSemantic::Changelog;
@@ -100,34 +107,24 @@ bool canTrackChangesFromInput(DataStreamSemanticEx input_data_stream_semantic)
 
 bool isJoinResultChangelog(DataStreamSemanticEx left_data_stream_semantic, DataStreamSemanticEx right_data_stream_semantic)
 {
+    if (!left_data_stream_semantic.streaming)
+        return false;
+
+    /// <stream> join <table>
+    if (!right_data_stream_semantic.streaming)
+        return isChangelogDataStream(left_data_stream_semantic);
+
+    /// <stream> join <stream>
     if (!isAppendDataStream(left_data_stream_semantic) && !isAppendDataStream(right_data_stream_semantic))
         return true;
 
     return false;
 }
 
-bool isJoinResultChangelog(
-    DataStreamSemanticEx left_data_stream_semantic,
-    bool left_is_streaming,
-    DataStreamSemanticEx right_data_stream_semantic,
-    bool right_is_streaming)
-{
-    if (!left_is_streaming)
-        return false;
-
-    /// <stream> join <table>
-    if (!right_is_streaming)
-        return isChangelogDataStream(left_data_stream_semantic);
-
-    /// <stream> join <stream>
-    return isJoinResultChangelog(left_data_stream_semantic, right_data_stream_semantic);
-}
-
 DataStreamSemanticPair calculateDataStreamSemantic(
     DataStreamSemanticEx left_input_data_stream_semantic,
     std::optional<DataStreamSemanticEx> right_input_data_stream_semantic, /// Imply join
     std::optional<std::pair<JoinKind, JoinStrictness>> kind_and_strictness,
-    std::optional<bool> right_input_is_streaming,
     bool current_select_has_aggregates,
     SelectQueryInfo & query_info)
 {
@@ -150,11 +147,7 @@ DataStreamSemanticPair calculateDataStreamSemantic(
         {
             /// JOIN + aggregates
             semantic_pair.effective_input_data_stream_semantic = calculateDataStreamSemanticForJoin(
-                left_input_data_stream_semantic,
-                *right_input_data_stream_semantic,
-                *kind_and_strictness,
-                *right_input_is_streaming,
-                query_info);
+                left_input_data_stream_semantic, *right_input_data_stream_semantic, *kind_and_strictness, query_info);
         }
         else
         {
@@ -174,11 +167,7 @@ DataStreamSemanticPair calculateDataStreamSemantic(
     {
         /// JOIN only
         semantic_pair.effective_input_data_stream_semantic = calculateDataStreamSemanticForJoin(
-            left_input_data_stream_semantic,
-            *right_input_data_stream_semantic,
-            *kind_and_strictness,
-            *right_input_is_streaming,
-            query_info);
+            left_input_data_stream_semantic, *right_input_data_stream_semantic, *kind_and_strictness, query_info);
 
         if (query_info.force_emit_changelog && !Streaming::isChangelogDataStream(semantic_pair.effective_input_data_stream_semantic))
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for emit changelog from non-changelog join results");

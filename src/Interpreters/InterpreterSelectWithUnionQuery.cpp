@@ -20,7 +20,6 @@
 
 /// proton: starts.
 #include <DataTypes/ObjectUtils.h>
-#include <Interpreters/Streaming/GetSampleBlockContext.h>
 #include <Processors/QueryPlan/QueryExecuteMode.h>
 #include <Processors/QueryPlan/Streaming/LimitStep.h>
 #include <Processors/QueryPlan/Streaming/OffsetStep.h>
@@ -243,7 +242,7 @@ InterpreterSelectWithUnionQuery::buildCurrentChildInterpreter(const ASTPtr & ast
 InterpreterSelectWithUnionQuery::~InterpreterSelectWithUnionQuery() = default;
 
 /// proton : starts. Calculate data stream semantic for the underlying subquery as well
-Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_, ContextPtr context_, bool is_subquery, Streaming::GetSampleBlockContext * get_sample_block_ctx)
+Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_, ContextPtr context_, bool is_subquery, Streaming::DataStreamSemanticEx * output_data_stream_semantic)
 {
     SelectQueryOptions select_options;
     select_options.analyze();
@@ -254,11 +253,8 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
     if (!context_->hasQueryContext())
     {
         InterpreterSelectWithUnionQuery interpreter(query_ptr_, context_, std::move(select_options));
-        if (get_sample_block_ctx)
-        {
-            get_sample_block_ctx->output_data_stream_semantic = interpreter.getDataStreamSemantic();
-            get_sample_block_ctx->is_streaming_output = interpreter.isStreaming();
-        }
+        if (output_data_stream_semantic)
+            *output_data_stream_semantic = interpreter.getDataStreamSemantic();
 
         return interpreter.getSampleBlock();
     }
@@ -267,14 +263,11 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
     auto key = queryToString(query_ptr_);
 
     auto & data_stream_semantic_cache = context_->getDataStreamSemanticCache();
-    if (get_sample_block_ctx)
+    if (output_data_stream_semantic)
     {
         auto semantic_iter = data_stream_semantic_cache.find(key);
         if (semantic_iter != data_stream_semantic_cache.end())
-        {
-            get_sample_block_ctx->output_data_stream_semantic = semantic_iter->second.first;
-            get_sample_block_ctx->is_streaming_output = semantic_iter->second.second;
-        }
+            *output_data_stream_semantic = semantic_iter->second;
     }
 
     auto & cache = context_->getSampleBlockCache();
@@ -285,13 +278,9 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
     InterpreterSelectWithUnionQuery interpreter(query_ptr_, context_, std::move(select_options));
 
     auto data_stream_semantic = interpreter.getDataStreamSemantic();
-    bool is_streaming_output = interpreter.isStreaming();
-    data_stream_semantic_cache[key] = std::make_pair(data_stream_semantic, is_streaming_output);
-    if (get_sample_block_ctx)
-    {
-        get_sample_block_ctx->output_data_stream_semantic = data_stream_semantic;
-        get_sample_block_ctx->is_streaming_output = is_streaming_output;
-    }
+    data_stream_semantic_cache[key] = data_stream_semantic;
+    if (output_data_stream_semantic)
+        *output_data_stream_semantic = data_stream_semantic;
 
     return cache[key] = interpreter.getSampleBlock();
 }

@@ -9,11 +9,6 @@ namespace DB
 class InterpreterSelectQuery;
 class QueryPlan;
 
-namespace Streaming
-{
-struct GetSampleBlockContext;
-}
-
 /** Interprets one or multiple SELECT queries inside UNION/UNION ALL/UNION DISTINCT chain.
   */
 class InterpreterSelectWithUnionQuery : public IInterpreterUnionOrSelectQuery
@@ -47,7 +42,7 @@ public:
         const ASTPtr & query_ptr_,
         ContextPtr context_,
         bool is_subquery,
-        Streaming::GetSampleBlockContext * get_sample_block_ctx = nullptr);
+        Streaming::DataStreamSemanticEx * output_data_stream_semantic = nullptr);
 
     virtual void ignoreWithTotals() override;
 

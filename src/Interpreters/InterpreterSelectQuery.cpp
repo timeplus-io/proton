@@ -3178,7 +3178,7 @@ void InterpreterSelectQuery::resolveDataStreamSemantic(const JoinedTables & join
     if (tables_with_columns.size() == 1)
     {
         data_stream_semantic_pair = Streaming::calculateDataStreamSemantic(
-            tables_with_columns[0].output_data_stream_semantic, {}, {}, {}, current_select_has_aggregates, query_info);
+            tables_with_columns[0].output_data_stream_semantic, {}, {}, current_select_has_aggregates, query_info);
     }
     else if (tables_with_columns.size() == 2)
     {
@@ -3187,7 +3187,6 @@ void InterpreterSelectQuery::resolveDataStreamSemantic(const JoinedTables & join
             tables_with_columns[0].output_data_stream_semantic,
             tables_with_columns[1].output_data_stream_semantic,
             current_select_join_kind_and_strictness,
-            tables_with_columns[1].is_streaming_output,
             current_select_has_aggregates,
             query_info);
     }

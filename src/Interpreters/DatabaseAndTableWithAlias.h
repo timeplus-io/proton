@@ -59,14 +59,11 @@ struct TableWithColumnNamesAndTypes
     /// proton : starts. The data stream semantic bound to this storage or subquery
     /// Physical storage only has output data stream semantic and doesn't have input data stream semantic
     Streaming::DataStreamSemanticEx output_data_stream_semantic;
-    bool is_streaming_output = false;
 
     void setOutputDataStreamSemantic(Streaming::DataStreamSemanticEx data_stream_semantic_)
     {
         output_data_stream_semantic = data_stream_semantic_;
     }
-
-    void setStreamingOutput(bool is_streaming) { is_streaming_output = is_streaming; }
     /// proton : ends
 
     TableWithColumnNamesAndTypes(const DatabaseAndTableWithAlias & table_, const NamesAndTypesList & columns_)
