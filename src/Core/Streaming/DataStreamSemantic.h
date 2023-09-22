@@ -20,7 +20,7 @@ struct DataStreamSemanticEx
 {
     DataStreamSemantic semantic = DataStreamSemantic::Append;
     std::optional<StorageSemantic> storage_semantic; /// extra elem is used for join
-    bool streaming = false;
+    bool streaming = true;
 
     DataStreamSemanticEx() = default;
     DataStreamSemanticEx(const DataStreamSemanticEx &) = default;
