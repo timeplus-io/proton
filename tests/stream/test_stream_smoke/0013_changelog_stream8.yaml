@@ -354,7 +354,6 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000001'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
@@ -634,7 +633,6 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000001'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
@@ -763,14 +761,14 @@ tests:
           - client: python
             query_type: table
             wait: 1
-            query: insert into test14_substream_8(val, id, name) values (8, 2, 'a')(9, 3, 'b')(11, 2, 'b')(10, 1, 'c');
+            query: insert into test14_substream_8(val, id, name) values (8, 2, 'a')(9, 3, 'b')(11, 2, 'b');
 
           - client: python
             query_type: table
             kill: '1455'
             kill_wait: 3
             wait: 1
-            query: insert into test14_substream_8(val, id, name) values (14, 2, 'b');
+            query: insert into test14_substream_8(val, id, name) values (10, 1, 'c')(14, 2, 'b');
 
           - client: python
             query_type: table
@@ -786,9 +784,9 @@ tests:
           - [0, 0, nan, 2, 'a']
           - [11, 11, 11, 2, 'b']
           - [9, 9, 9, 3, 'b']
-          - [10, 10, 10, 1, 'c']
           - [14, 14, 14, 2, 'b']
           - [9, 9, 9, 3, 'b']
+          - [10, 10, 10, 1, 'c']
 
   - id: 56
     tags:
@@ -985,7 +983,6 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000001'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
@@ -1093,7 +1090,6 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000001'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
