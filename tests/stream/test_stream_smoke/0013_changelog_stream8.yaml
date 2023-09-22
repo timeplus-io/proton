@@ -470,56 +470,35 @@ tests:
           - client: python
             query_id: '1452'
             depends_on_stream: test14_substream_8
-            query_end_timer: 6
             query_type: stream
-            query: select max(val), min(val), avg(val), id from test14_substream_8 partition by id group by id;
+            query: select max(val), min(val), avg(val), id from test14_substream_8 partition by id group by id emit periodic 1s;
 
           - client: python
             query_type: table
             depends_on: '1452'
-            wait: 2
-            query: insert into test14_substream_8(val, id, name) values (1, 2, 'a');
+            wait: 1
+            query: insert into test14_substream_8(val, id, name) values (1, 2, 'a')(3, 3, 'b')(5, 1, 'c');
 
           - client: python
             query_type: table
-            wait: 2
-            query: insert into test14_substream_8(val, id, name) values (3, 3, 'b');
+            wait: 1
+            query: insert into test14_substream_8(val, id, name) values (8, 2, 'a')(9, 3, 'b');
 
           - client: python
             query_type: table
-            wait: 2
-            query: insert into test14_substream_8(val, id, name) values (5, 1, 'c');
-
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test14_substream_8(val, id, name) values (8, 2, 'a');
-
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test14_substream_8(val, id, name) values (9, 3, 'b');
-
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test14_substream_8(val, id, name) values (11, 2, 'b');
-
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test14_substream_8(val, id, name) values (10, 1, 'c');
+            wait: 1
+            query: insert into test14_substream_8(val, id, name) values (11, 2, 'b')(10, 1, 'c');
 
           - client: python
             query_type: table
             kill: '1452'
-            kill_wait: 6
-            wait: 2
+            kill_wait: 3
+            wait: 1
             query: insert into test14_substream_8(val, id, name) values (14, 2, 'b');
 
           - client: python
             query_type: table
-            wait: 3
+            wait: 1
             query: drop stream if exists test14_substream_8;
 
     expected_results:

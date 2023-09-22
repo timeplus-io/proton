@@ -213,11 +213,6 @@ public:
 
     ChunkContextPtr getChunkContext() const { return chunk_ctx; }
 
-    ChunkContextPtr cloneChunkContext() const
-    {
-        return chunk_ctx ? std::make_shared<ChunkContext>(*chunk_ctx) : std::make_shared<ChunkContext>();
-    }
-
     ChunkContextPtr getOrCreateChunkContext()
     {
         if (chunk_ctx)
