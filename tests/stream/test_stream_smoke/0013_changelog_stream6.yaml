@@ -224,13 +224,13 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_6_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_6_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -252,7 +252,7 @@ tests:
             depends_on_stream: test14_substream_6
             query_end_timer: 12
             query_type: stream
-            query: select val, id, add_five(val), _tp_delta from changelog(test14_substream_6, id) partition by id;
+            query: select val, id, test_14_6_add_five(val), _tp_delta from changelog(test14_substream_6, id) partition by id;
 
           - client: python
             query_type: table
@@ -517,7 +517,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_6_sec_large
               arguments:
               - name: value
                 type: float32
@@ -585,7 +585,7 @@ tests:
             depends_on_stream: test14_substream_6
             query_end_timer: 12
             query_type: stream
-            query: select sec_large(val), name from changelog(test14_substream_6, id) partition by id group by name;
+            query: select test_14_6_sec_large(val), name from changelog(test14_substream_6, id) partition by id group by name;
 
           - client: python
             query_type: table

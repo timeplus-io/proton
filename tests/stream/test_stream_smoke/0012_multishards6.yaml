@@ -40,7 +40,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_6_sec_large
               arguments:
               - name: value
                 type: float32
@@ -131,7 +131,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(to_float(speed)) as sec_l,
+              select test_13_6_sec_large(to_float(speed)) as sec_l,
                      window_start as s,
                      window_end as e
               from session(test13_view1_6, timestamp, 5m, [speed >= 60, speed < 60))
@@ -255,13 +255,13 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_13_6_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_13_6_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -321,7 +321,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select add_five(val),
+              select test_13_6_add_five(val),
                      f1,
                      f2
               from test13_view2_6;
@@ -409,13 +409,13 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_13_6_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_13_6_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -475,7 +475,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select add_five(add_five(val)),
+              select test_13_6_add_five(test_13_6_add_five(val)),
                      f1,
                      f2
               from test13_view2_6;

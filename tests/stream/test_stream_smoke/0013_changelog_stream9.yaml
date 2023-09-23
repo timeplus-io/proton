@@ -409,7 +409,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_9_sec_large
               arguments:
               - name: value
                 type: float32
@@ -481,7 +481,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(i),
+              select test_14_9_sec_large(i),
                      k2
               from test14_multishard_9
               group by k2
@@ -548,7 +548,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_9_sec_large
               arguments:
               - name: value
                 type: float32
@@ -620,7 +620,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(i),
+              select test_14_9_sec_large(i),
                      k2
               from test14_multishard_9
               group by k2
@@ -907,7 +907,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_9_sec_large
               arguments:
               - name: value
                 type: float32
@@ -979,7 +979,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(i),
+              select test_14_9_sec_large(i),
                      k1
               from test14_multishard_9
               group by k1
@@ -1043,7 +1043,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_9_sec_large
               arguments:
               - name: value
                 type: float32
@@ -1115,7 +1115,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(i),
+              select test_14_9_sec_large(i),
                      k1
               from test14_multishard_9
               group by k1

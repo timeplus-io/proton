@@ -39,7 +39,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_11_sec_large
               arguments:
               - name: value
                 type: float32
@@ -133,7 +133,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(i),
+              select test_14_11_sec_large(i),
                      k2
               from
                 (select i,
@@ -566,7 +566,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_11_sec_large
               arguments:
               - name: value
                 type: float32
@@ -660,7 +660,7 @@ tests:
             wait: 1
             query: |
               create materialized view if not exists test14_view2_11 as
-                (select sec_large(i) as sec_l,
+                (select test_14_11_sec_large(i) as sec_l,
                         k1
                  from
                    (select i,
@@ -792,7 +792,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_11_sec_large
               arguments:
               - name: value
                 type: float32
@@ -886,7 +886,7 @@ tests:
             wait: 1
             query: |
               create view if not exists test14_view2_11 as
-                (select sec_large(i) as sec_l,
+                (select test_14_11_sec_large(i) as sec_l,
                         k1
                  from
                    (select i,
@@ -1322,7 +1322,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_11_sec_large
               arguments:
               - name: value
                 type: float32
@@ -1416,7 +1416,7 @@ tests:
             wait: 1
             query: |
               create materialized view if not exists test14_view2_11 as
-                (select sec_large(i) as sec_l
+                (select test_14_11_sec_large(i) as sec_l
                  from
                    (select i,
                            k1,
@@ -1540,7 +1540,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_11_sec_large
               arguments:
               - name: value
                 type: float32
@@ -1634,7 +1634,7 @@ tests:
             wait: 1
             query: |
               create view if not exists test14_view2_11 as
-                (select sec_large(i) as sec_l
+                (select test_14_11_sec_large(i) as sec_l
                  from
                    (select i,
                            k1,
@@ -1942,13 +1942,13 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_11_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_11_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -1974,7 +1974,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select add_five(i),
+              select test_14_11_add_five(i),
                      k1,
                      k2
               from test14_multishard_11 partition by k2;

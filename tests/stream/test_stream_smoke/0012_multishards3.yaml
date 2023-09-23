@@ -36,7 +36,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_3_sec_large
               arguments:
               - name: value
                 type: float32
@@ -118,7 +118,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(i),
+              select test_13_3_sec_large(i),
                      k2
               from test13_multishard_3
               group by k2
@@ -310,7 +310,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_3_sec_large
               arguments:
               - name: value
                 type: float32
@@ -380,7 +380,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(i)
+              select test_13_3_sec_large(i)
               from test13_multishard_3 emit periodic 100ms;
 
           - client: python
@@ -606,7 +606,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_3_sec_large
               arguments:
               - name: value
                 type: float32
@@ -677,7 +677,7 @@ tests:
             query_type: stream
             query: |
               select k,
-                     sec_large(i),
+                     test_13_3_sec_large(i),
                      window_start as s,
                      window_end as e
               from tumble(test13_multishard_3 ,timestamp, 5s)
@@ -937,7 +937,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_3_sec_large
               arguments:
               - name: value
                 type: float32
@@ -1007,7 +1007,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(i),
+              select test_13_3_sec_large(i),
                      window_start as s,
                      window_end as e
               from tumble(test13_multishard_3 ,timestamp, 5s)
@@ -1315,7 +1315,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_3_sec_large
               arguments:
               - name: value
                 type: float32
@@ -1386,7 +1386,7 @@ tests:
             query_type: stream
             query: |
               select k2,
-                     sec_large(i),
+                     test_13_3_sec_large(i),
                      window_start as s,
                      window_end as e
               from hop(test13_multishard_3, timestamp, 2s, 5s)

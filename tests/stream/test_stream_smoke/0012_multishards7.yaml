@@ -168,13 +168,13 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_13_7_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_13_7_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -200,9 +200,9 @@ tests:
             query_type: stream
             query: |
               select i,
-                     add_five(i),
-                     add_five(add_five(i)),
-                     add_five(k1),
+                     test_13_7_add_five(i),
+                     test_13_7_add_five(test_13_7_add_five(i)),
+                     test_13_7_add_five(k1),
                      k2
               from test13_multishard_7;
 

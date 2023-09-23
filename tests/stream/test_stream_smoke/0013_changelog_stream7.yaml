@@ -52,7 +52,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_7_sec_large
               arguments:
               - name: value
                 type: float32
@@ -120,7 +120,7 @@ tests:
             depends_on_stream: test14_substream_7
             query_end_timer: 12
             query_type: stream
-            query: select sec_large(val), max(val), min(val), avg(val), name from changelog(test14_substream_7, id) partition by name group by id;
+            query: select test_14_7_sec_large(val), max(val), min(val), avg(val), name from changelog(test14_substream_7, id) partition by name group by id;
 
           - client: python
             query_type: table
@@ -279,7 +279,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_7_sec_large
               arguments:
               - name: value
                 type: float32
@@ -348,7 +348,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(val), max(val), min(val), avg(val), name from changelog(test14_substream_7, id)
+              select test_14_7_sec_large(val), max(val), min(val), avg(val), name from changelog(test14_substream_7, id)
               partition by name group by types;
 
           - client: python
@@ -591,13 +591,13 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_7_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_7_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -629,7 +629,7 @@ tests:
             depends_on_stream: test14_subquery_7
             query_end_timer: 12
             query_type: stream
-            query: select i, k1, k2, lag(i, 2), upper(k2), add_five(i) from test14_view_7;
+            query: select i, k1, k2, lag(i, 2), upper(k2), test_14_7_add_five(i) from test14_view_7;
 
           - client: python
             query_type: table
@@ -711,13 +711,13 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_7_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_7_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -753,7 +753,7 @@ tests:
             depends_on_stream: test14_subquery_7
             query_end_timer: 12
             query_type: stream
-            query: select i, k1, k2, lag(i, 2), upper(k2), add_five(i) from test14_view_7;
+            query: select i, k1, k2, lag(i, 2), upper(k2), test_14_7_add_five(i) from test14_view_7;
 
           - client: python
             query_type: table
@@ -835,13 +835,13 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_7_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_7_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -885,7 +885,7 @@ tests:
             depends_on_stream: test14_subquery_7
             query_end_timer: 12
             query_type: stream
-            query: select i, k1, k2, lag(i, 2), upper(k2), add_five(i) from test14_view2_7;
+            query: select i, k1, k2, lag(i, 2), upper(k2), test_14_7_add_five(i) from test14_view2_7;
 
           - client: python
             query_type: table
@@ -972,13 +972,13 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_7_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_7_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -1002,7 +1002,7 @@ tests:
             query_type: stream
             query: |
               with cte1 as (with cte2 as (select i, k1, k2, _tp_delta from test14_subquery_7) select * from cte2)
-              select i, k1, k2, lag(i, 2), upper(k2), add_five(i) from cte1;
+              select i, k1, k2, lag(i, 2), upper(k2), test_14_7_add_five(i) from cte1;
 
           - client: python
             query_type: table
@@ -1079,13 +1079,13 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_7_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_7_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -1134,7 +1134,7 @@ tests:
             depends_on_stream: test14_subquery_7
             query_end_timer: 12
             query_type: stream
-            query: select i, k1, k2, lag(i, 2), upper(k2), add_five(i) from test14_view2_7;
+            query: select i, k1, k2, lag(i, 2), upper(k2), test_14_7_add_five(i) from test14_view2_7;
 
           - client: python
             query_type: table

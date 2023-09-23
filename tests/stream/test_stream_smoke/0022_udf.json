@@ -53,13 +53,13 @@
               "http_method": "POST",
               "data": {
                 "type": "javascript",
-                "name": "add_five",
+                "name": "test_23_add_five",
                 "arguments": [{"name": "value", "type": "float32"}],
                 "return_type": "float32",
-                "source": "function add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}"
+                "source": "function test_23_add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}"
               }
             },
-            {"client":"python","query_id":"udf-0", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":7, "query_type": "stream", "query":"select add_five(f32) from udf_types"}
+            {"client":"python","query_id":"udf-0", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":7, "query_type": "stream", "query":"select test_23_add_five(f32) from udf_types"}
           ]
         },
 
@@ -82,7 +82,7 @@
       "id": 1,
       "tags": ["udf"],
       "name": "uda_without_emit_strategy",
-      "description": "sec_large - uda without emit strategy",
+      "description": "test_23_sec_large - uda without emit strategy",
       "steps":[
         {
           "statements": [
@@ -95,7 +95,7 @@
               "http_method": "POST",
               "data": {
                 "type": "javascript",
-                "name": "sec_large",
+                "name": "test_23_sec_large",
                 "arguments": [
                   {
                     "name": "value",
@@ -107,7 +107,7 @@
                 "source": "{ initialize: function() { this.max = -1.0; this.sec = -1.0; }, process: function(values) { for (let i=0; i<values.length; i++) { if (values[i] > this.max) { this.sec=this.max; this.max=values[i]; } if (values[i]<this.max && values[i]>this.sec) this.sec=values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {'max':this.max,'sec':this.sec}; return JSON.stringify(s);}, deserialize: function (state_str) { let s=JSON.parse(state_str); this.max=s['max']; this.sec=s['sec']; }, merge: function (state_str) { let s=JSON.parse(state_str); if(s['sec']>=this.max) { this.max=s['max']; this.sec=s['sec'];} else if(s['max']>=this.max) { this.sec=this.max; this.max=s['max'];} else if(s['max']>this.sec) { this.sec=s['max']; } } }"
               }
             },
-            {"client":"python","query_id":"udf-1", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":7, "query_type": "stream", "query":"select s, max(f32), sec_large(f32) from udf_types group by s order by s"}
+            {"client":"python","query_id":"udf-1", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":7, "query_type": "stream", "query":"select s, max(f32), test_23_sec_large(f32) from udf_types group by s order by s"}
           ]
         },
 
@@ -238,7 +238,7 @@
       "id": 4,
       "tags": ["udf"],
       "name": "uda_substream_without_emit_strategy",
-      "description": "sec_large - uda without emit strategy (substream), 8 bit key",
+      "description": "test_23_sec_large - uda without emit strategy (substream), 8 bit key",
       "steps":[
         {
           "statements": [
@@ -251,7 +251,7 @@
               "http_method": "POST",
               "data": {
                 "type": "javascript",
-                "name": "sec_large",
+                "name": "test_23_sec_large",
                 "arguments": [
                   {
                     "name": "value",
@@ -263,7 +263,7 @@
                 "source": "{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {'max': this.max, 'sec':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s['max']; this.sec = s['sec']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s['sec'] >= this.max) { this.max = s['max']; this.sec = s['sec'];} else if(s['max'] >= this.max) { this.sec = this.max; this.max = s['max'];} else if (s['max'] > this.sec) { this.sec = s['max']; } } }"
               }
             },
-            {"client":"python","query_id":"udf-4", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":7, "query_type": "stream", "query":"select i8, sec_large(f32) over (partition by i) from udf_types group by i8"}
+            {"client":"python","query_id":"udf-4", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":7, "query_type": "stream", "query":"select i8, test_23_sec_large(f32) over (partition by i) from udf_types group by i8"}
           ]
         },
 
@@ -819,13 +819,13 @@
               "http_method": "POST",
               "data": {
                 "type": "javascript",
-                "name": "add_five_e",
+                "name": "test_23_add_five_e",
                 "arguments": [{"name": "value", "type": "float32"}],
                 "return_type": "float32",
-                "source": "function add_five_e(value) { throw new Error('udf exception');}"
+                "source": "function test_23_add_five_e(value) { throw new Error('udf exception');}"
               }
             },
-            {"client":"python","query_id":"udf-16", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":7, "query_type": "stream", "query":"select add_five_e(3.0)"}
+            {"client":"python","query_id":"udf-16", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":7, "query_type": "stream", "query":"select test_23_add_five_e(3.0)"}
           ]
         }
       ],
@@ -853,13 +853,13 @@
               "http_method": "POST",
               "data": {
                 "type": "javascript",
-                "name": "add_five_no_ret",
+                "name": "test_23_add_five_no_ret",
                 "arguments": [{"name": "value", "type": "float32"}],
                 "return_type": "float32",
-                "source": "function add_five_no_ret(value) {}"
+                "source": "function test_23_add_five_no_ret(value) {}"
               }
             },
-            {"client":"python","query_id":"udf-17", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":7, "query_type": "stream", "query":"select add_five_no_ret(3.0)"}
+            {"client":"python","query_id":"udf-17", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":7, "query_type": "stream", "query":"select test_23_add_five_no_ret(3.0)"}
           ]
         }
       ],
@@ -921,13 +921,13 @@
               "http_method": "POST",
               "data": {
                 "type": "javascript",
-                "name": "add_five",
+                "name": "test_23_add_five",
                 "arguments": [{"name": "value", "type": "float32"}],
                 "return_type": "float32",
-                "source": "function add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}"
+                "source": "function test_23_add_five(value) { for(let i=0; i<value.length; i++) { value[i] = value[i]+5; } return value;}"
               }
             },
-            {"client":"python","query_id":"udf-19", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":7, "query_type": "stream", "query":"select add_five('s1')"}
+            {"client":"python","query_id":"udf-19", "depends_on_stream":"udf_types", "wait":5, "query_end_timer":7, "query_type": "stream", "query":"select test_23_add_five('s1')"}
           ]
         }
       ],

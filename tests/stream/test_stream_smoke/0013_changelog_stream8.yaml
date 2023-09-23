@@ -358,13 +358,13 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_8_add_five
               arguments:
                 - name: value
                 - type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_8_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -386,7 +386,7 @@ tests:
             depends_on_stream: test14_substream_8
             query_end_timer: 6
             query_type: stream
-            query: select val, id, lag(val, 2), add_five(val), name from test14_substream_8 partition by id;
+            query: select val, id, lag(val, 2), test_14_8_add_five(val), name from test14_substream_8 partition by id;
 
           - client: python
             query_type: table
@@ -616,13 +616,13 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_8_add_five
               arguments:
                 - name: value
                 - type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_8_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -644,7 +644,7 @@ tests:
             depends_on_stream: test14_substream_8
             query_end_timer: 6
             query_type: stream
-            query: select val, id, lag(val, 2), add_five(val), upper(name) from test14_substream_8 partition by name;
+            query: select val, id, lag(val, 2), test_14_8_add_five(val), upper(name) from test14_substream_8 partition by name;
 
           - client: python
             query_type: table
@@ -966,13 +966,13 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_8_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_8_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -998,7 +998,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select add_five(i),
+              select test_14_8_add_five(i),
                      k1,
                      k2
               from test14_multishard_8;
@@ -1073,13 +1073,13 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_8_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_8_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -1105,7 +1105,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select add_five(i),
+              select test_14_8_add_five(i),
                      k1,
                      k2
               from test14_multishard_8;

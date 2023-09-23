@@ -38,7 +38,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_4_sec_large
               arguments:
               - name: value
                 type: float32
@@ -108,7 +108,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(i),
+              select test_13_4_sec_large(i),
                      window_start as s,
                      window_end as e
               from hop(test13_multishard_4, timestamp, 2s, 5s)
@@ -397,7 +397,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_4_sec_large
               arguments:
               - name: value
                 type: float32
@@ -468,7 +468,7 @@ tests:
             query_type: stream
             query: |
               select id,
-                     sec_large(to_float(speed)),
+                     test_13_4_sec_large(to_float(speed)),
                      window_start as s,
                      window_end as e
               from session(test13_multishard_4, timestamp, 5m, [speed >= 60, speed < 60))
@@ -722,7 +722,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_4_sec_large
               arguments:
               - name: value
                 type: float32
@@ -792,7 +792,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(to_float(speed)),
+              select test_13_4_sec_large(to_float(speed)),
                      window_start as s,
                      window_end as e
               from session(test13_multishard_4, timestamp, 5m, [speed >= 60, speed < 60))
@@ -1039,7 +1039,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_4_sec_large
               arguments:
               - name: value
                 type: float32
@@ -1120,7 +1120,7 @@ tests:
             wait: 1
             query: |
               create view if not exists test13_view1_4 as
-              select sec_large(val) as sec_l,
+              select test_13_4_sec_large(val) as sec_l,
                      k
               from test13_subq_4
               group by k emit periodic 100ms;
@@ -1351,7 +1351,7 @@ tests:
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_4_sec_large
               arguments:
               - name: value
                 type: float32
@@ -1432,7 +1432,7 @@ tests:
             wait: 1
             query: |
               create materialized view if not exists test13_view1_4 as
-              select sec_large(val) as sec_l
+              select test_13_4_sec_large(val) as sec_l
               from test13_subq_4 emit periodic 100ms;
 
           - client: python
