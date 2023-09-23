@@ -3348,10 +3348,11 @@ class TestSuite(object):
                                                 "float"
                                                 in query_result_column_types[i][1]
                                             ):
-                                                if math.isclose(
+                                                if (math.isclose(
                                                     float(expected_result_field),
                                                     float(query_result_field),
-                                                    rel_tol=1e-2,
+                                                    rel_tol=1e-2,)
+                                                    or math.isnan(float(expected_result_field)) and math.isnan(float(query_result_field))
                                                 ):
                                                     expected_result_row_field_check_arry[
                                                         i

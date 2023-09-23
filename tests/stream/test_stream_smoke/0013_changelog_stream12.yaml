@@ -32,18 +32,17 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000001'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_12_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_12_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -69,7 +68,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select add_five(i),
+              select test_14_12_add_five(i),
                      k1,
                      k2
               from test14_multishard_12 partition by k2;
@@ -578,12 +577,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_12_sec_large
               arguments:
               - name: value
                 type: float32
@@ -655,7 +653,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(i),
+              select test_14_12_sec_large(i),
                      k2
               from test14_multishard_12 partition by k2
               group by k2 emit periodic 200ms;

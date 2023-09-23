@@ -15,50 +15,81 @@ DataStreamSemanticEx calculateDataStreamSemanticForJoin(
     std::pair<JoinKind, JoinStrictness> kind_and_strictness,
     SelectQueryInfo & query_info)
 {
-    HashJoin::validate(
-        {left_input_data_stream_semantic.toStorageSemantic(),
-         kind_and_strictness.first,
-         kind_and_strictness.second,
-         right_input_data_stream_semantic.toStorageSemantic()});
+    assert(left_input_data_stream_semantic.streaming);
 
-    /// Speical handling for asof / any join
-    if (kind_and_strictness.second == JoinStrictness::Asof || kind_and_strictness.second == JoinStrictness::Any)
+    /// Speical handling
+    /// 1) for <stream> join <table>, the right inputs don't support changelog semantic
+    if (!right_input_data_stream_semantic.streaming)
     {
-        /// Left stream semantic (Append or VersionedKV)
-        query_info.left_storage_tracking_changes = false;
-        if (unlikely(isChangelogDataStream(left_input_data_stream_semantic)))
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "The left data stream semantic of {} join is expected to be 'Append'",
-                kind_and_strictness.second);
-
-        /// Right stream semantic (Append or VersionedKV)
-        query_info.right_storage_tracking_changes = false;
-        if (unlikely(isChangelogDataStream(right_input_data_stream_semantic)))
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "The right data stream semantic of {} join is expected to be 'Append'",
-                kind_and_strictness.second);
-    }
-    else
-    {
-        /// Left stream semantic: tracking changelog for storage
-        if (canTrackChangesFromStorage(left_input_data_stream_semantic))
+        /// Left stream semantic
+        if (canTrackChangesFromInput(left_input_data_stream_semantic))
         {
-            query_info.left_storage_tracking_changes = true;
+            query_info.left_input_tracking_changes = true;
             left_input_data_stream_semantic = DataStreamSemantic::Changelog;
         }
         else
-            query_info.left_storage_tracking_changes = false;
+            query_info.left_input_tracking_changes = false;
 
-        /// Right stream semantic: tracking changelog for storage
-        if (canTrackChangesFromStorage(right_input_data_stream_semantic))
+        /// Right stream semantic (Append or VersionedKV or ChangelogKV)
+        query_info.right_input_tracking_changes = false;
+        if (unlikely(isChangelogDataStream(right_input_data_stream_semantic)))
         {
-            query_info.right_storage_tracking_changes = true;
-            right_input_data_stream_semantic = DataStreamSemantic::Changelog;
+            /// For table(changelog_kv), we can convert it to append, since its _tp_delta always is `+1`
+            if (isChangelogKeyedStorage(right_input_data_stream_semantic))
+                right_input_data_stream_semantic = DataStreamSemantic::Append;
+            else
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "The filled join data doesn't support changelog processing");
         }
-        else
-            query_info.right_storage_tracking_changes = false;
+
+        return left_input_data_stream_semantic.semantic;
+    }
+
+    /// 2) for asof / any join, the left and right inputs don't support changelog
+    if (kind_and_strictness.second == JoinStrictness::Asof || kind_and_strictness.second == JoinStrictness::Any)
+    {
+        /// Left stream semantic (Append or VersionedKV)
+        query_info.left_input_tracking_changes = false;
+        if (unlikely(isChangelogDataStream(left_input_data_stream_semantic)))
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                "The left data stream semantic of {} {} JOIN is expected to be 'Append', but got 'Changelog'",
+                kind_and_strictness.first,
+                kind_and_strictness.second);
+
+        /// Right stream semantic (Append or VersionedKV)
+        query_info.right_input_tracking_changes = false;
+        if (unlikely(isChangelogDataStream(right_input_data_stream_semantic)))
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                "The right data stream semantic of {} {} JOIN is expected to be 'Append', but got 'Changelog'",
+                kind_and_strictness.first,
+                kind_and_strictness.second);
+
+        return DataStreamSemantic::Append;
+    }
+
+    /// Left stream semantic
+    if (canTrackChangesFromInput(left_input_data_stream_semantic))
+    {
+        query_info.left_input_tracking_changes = true;
+        left_input_data_stream_semantic = DataStreamSemantic::Changelog;
+    }
+    else
+    {
+        query_info.left_input_tracking_changes = false;
+        left_input_data_stream_semantic = DataStreamSemantic::Append;
+    }
+
+    /// Right stream semantic
+    if (canTrackChangesFromInput(right_input_data_stream_semantic))
+    {
+        query_info.right_input_tracking_changes = true;
+        right_input_data_stream_semantic = DataStreamSemantic::Changelog;
+    }
+    else
+    {
+        query_info.right_input_tracking_changes = false;
+        right_input_data_stream_semantic = DataStreamSemantic::Append;
     }
 
     if (isJoinResultChangelog(left_input_data_stream_semantic, right_input_data_stream_semantic))
@@ -68,14 +99,22 @@ DataStreamSemanticEx calculateDataStreamSemanticForJoin(
 }
 }
 
-bool canTrackChangesFromStorage(DataStreamSemanticEx input_data_stream_semantic)
+bool canTrackChangesFromInput(DataStreamSemanticEx input_data_stream_semantic)
 {
-    return isVersionedKeyedStorage(input_data_stream_semantic) || isChangelogKeyedStorage(input_data_stream_semantic)
-        || isChangelogKeyedStorage(input_data_stream_semantic);
+    return isChangelogDataStream(input_data_stream_semantic) || isVersionedKeyedStorage(input_data_stream_semantic)
+        || isChangelogKeyedStorage(input_data_stream_semantic) || isChangelogKeyedStorage(input_data_stream_semantic);
 }
 
 bool isJoinResultChangelog(DataStreamSemanticEx left_data_stream_semantic, DataStreamSemanticEx right_data_stream_semantic)
 {
+    if (!left_data_stream_semantic.streaming)
+        return false;
+
+    /// <stream> join <table>
+    if (!right_data_stream_semantic.streaming)
+        return isChangelogDataStream(left_data_stream_semantic);
+
+    /// <stream> join <stream>
     if (!isAppendDataStream(left_data_stream_semantic) && !isAppendDataStream(right_data_stream_semantic))
         return true;
 
@@ -116,13 +155,12 @@ DataStreamSemanticPair calculateDataStreamSemantic(
             /// Only has aggregates. Calculate if tracking changes is required
             /// For changelog-kv / changelog stream / changelog(...) they are tracking changes natively, it just means read `_tp_delta` column for them.
             /// For versioned-kv stream, we will ask the source to add changelog transform to track the changes.
-            if (canTrackChangesFromStorage(left_input_data_stream_semantic))
+            semantic_pair.effective_input_data_stream_semantic = left_input_data_stream_semantic;
+            if (canTrackChangesFromInput(left_input_data_stream_semantic))
             {
-                query_info.left_storage_tracking_changes = true;
+                query_info.left_input_tracking_changes = true;
                 semantic_pair.effective_input_data_stream_semantic = DataStreamSemantic::Changelog;
             }
-            else
-                semantic_pair.effective_input_data_stream_semantic = left_input_data_stream_semantic;
         }
     }
     else if (right_input_data_stream_semantic)
@@ -139,19 +177,18 @@ DataStreamSemanticPair calculateDataStreamSemantic(
     else
     {
         /// Single stream. Flat transformation / filtering
+        semantic_pair.output_data_stream_semantic = semantic_pair.effective_input_data_stream_semantic = left_input_data_stream_semantic;
         if (query_info.force_emit_changelog)
         {
-            if (canTrackChangesFromStorage(left_input_data_stream_semantic))
+            if (canTrackChangesFromInput(left_input_data_stream_semantic))
             {
-                query_info.left_storage_tracking_changes = true;
+                query_info.left_input_tracking_changes = true;
                 semantic_pair.effective_input_data_stream_semantic = DataStreamSemantic::Changelog;
                 semantic_pair.output_data_stream_semantic = DataStreamSemantic::Changelog;
             }
-            else if (isAppendDataStream(left_input_data_stream_semantic))
+            else
                 throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for emit changelog from append stream");
         }
-        else
-            semantic_pair.output_data_stream_semantic = semantic_pair.effective_input_data_stream_semantic = left_input_data_stream_semantic;
     }
 
     return semantic_pair;

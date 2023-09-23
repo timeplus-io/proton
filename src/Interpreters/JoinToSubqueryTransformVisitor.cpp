@@ -82,14 +82,14 @@ public:
             }
 
             /// proton: starts.
-            assert(tables.size() > 2);
-            is_join_result_changelog
-                = Streaming::isJoinResultChangelog(tables[0].output_data_stream_semantic, tables[1].output_data_stream_semantic);
-
-            for (size_t i = 2; i < tables.size(); ++i)
-                is_join_result_changelog = (Streaming::isJoinResultChangelog(
-                    is_join_result_changelog ? Streaming::DataStreamSemantic::Changelog : Streaming::DataStreamSemantic::Append,
-                    tables[i].output_data_stream_semantic));
+            auto left_joined_result = tables[0].output_data_stream_semantic;
+            for (size_t i = 1; i < tables.size(); ++i)
+            {
+                is_join_result_changelog = Streaming::isJoinResultChangelog(left_joined_result, tables[i].output_data_stream_semantic);
+                left_joined_result.semantic
+                    = is_join_result_changelog ? Streaming::DataStreamSemantic::Changelog : Streaming::DataStreamSemantic::Append;
+                left_joined_result.storage_semantic.reset();
+            }
             /// proton: ends.
         }
 

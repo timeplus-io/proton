@@ -671,7 +671,7 @@ void StorageStream::read(
     }
 
     /// [LOCAL]
-    if (query_info.left_storage_tracking_changes)
+    if (query_info.left_input_tracking_changes)
     {
         return readChangelog(
             shards_to_read,

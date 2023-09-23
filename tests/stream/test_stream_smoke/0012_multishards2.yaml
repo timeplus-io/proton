@@ -220,12 +220,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_2_sec_large
               arguments:
               - name: value
                 type: float32
@@ -308,7 +307,7 @@ tests:
             query_type: stream
             query: |
               select k2,
-                     sec_large(i),
+                     test_13_2_sec_large(i),
                      window_start as s,
                      window_end as e
               from hop(test13_subst_2, timestamp, 2s, 5s) partition by k2
@@ -610,12 +609,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_2_sec_large
               arguments:
               - name: value
                 type: float32
@@ -698,7 +696,7 @@ tests:
             query_type: stream
             query: |
               select id,
-                     sec_large(speed),
+                     test_13_2_sec_large(speed),
                      window_start as s,
                      window_end as e
               from session(test13_multishard_2, timestamp, 5m, [speed >= 60, speed < 60)) partition by id
@@ -961,12 +959,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_2_sec_large
               arguments:
               - name: value
                 type: float32
@@ -1049,7 +1046,7 @@ tests:
             query_type: stream
             query: |
               select id,
-                     sec_large(speed),
+                     test_13_2_sec_large(speed),
                      window_start as s,
                      window_end as e
               from session(test13_multishard_2, timestamp, 5m, [speed >= 60, speed < 60)) partition by id
@@ -1162,18 +1159,17 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000001'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_13_2_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_13_2_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -1210,7 +1206,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select add_five(val),
+              select test_13_2_add_five(val),
                      k
               from test13_subst_2 partition by k;
 

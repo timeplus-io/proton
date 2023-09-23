@@ -9,11 +9,6 @@ namespace DB
 class InterpreterSelectQuery;
 class QueryPlan;
 
-namespace Streaming
-{
-struct GetSampleBlockContext;
-}
-
 /** Interprets one or multiple SELECT queries inside UNION/UNION ALL/UNION DISTINCT chain.
   */
 class InterpreterSelectWithUnionQuery : public IInterpreterUnionOrSelectQuery

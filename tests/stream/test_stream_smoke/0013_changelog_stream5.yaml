@@ -47,12 +47,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_5_sec_large
               arguments:
               - name: value
                 type: float32
@@ -127,7 +126,7 @@ tests:
                 )
                 select * from cte2
               )
-              select sec_large(i), k2 from cte1 group by k2;
+              select test_14_5_sec_large(i), k2 from cte1 group by k2;
 
           - client: python
             query_type: table
@@ -173,12 +172,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_5_sec_large
               arguments:
               - name: value
                 type: float32
@@ -272,7 +270,7 @@ tests:
             depends_on_stream: test14_subquery_5
             query_end_timer: 12
             query_type: stream
-            query: select sec_large(i), k2 from test14_view2_5 group by k2;
+            query: select test_14_5_sec_large(i), k2 from test14_view2_5 group by k2;
 
           - client: python
             query_type: table
@@ -726,18 +724,17 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000001'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_5_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_5_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -785,7 +782,7 @@ tests:
             depends_on_stream: test14_subquery_5
             query_end_timer: 12
             query_type: stream
-            query: select add_five(i), k2, _tp_delta from test14_view2_5;
+            query: select test_14_5_add_five(i), k2, _tp_delta from test14_view2_5;
 
           - client: python
             query_type: table
@@ -839,7 +836,6 @@ tests:
     tags:
       - subquery/view/materialized_view/
       - no_group_by
-      - bug
     name: subquery from view from subquery
     description: subquery from view from subquery
     steps:
@@ -917,19 +913,18 @@ tests:
       - query_id: '1419'
         expected_results:
           - [0, 'a']
+          - [0, 'a']
           - [4, 'a']
-          - [4, 'a']
-          - [2, 'b']
-          - [5, 'a']
+          - [4, 'b']
           - [2, 'a']
+          - [5, 'a']
           - [2, 'b']
-          - [5, 'b']
+          - [2, 'b']
 
   - id: 20
     tags:
       - subquery/view/materialized_view/
       - no_group_by
-      - bug
     name: subquery from materialized view from subquery
     description: subquery from materialized view from subquery
     steps:
@@ -1007,19 +1002,18 @@ tests:
       - query_id: '1420'
         expected_results:
           - [0, 'a']
+          - [0, 'a']
           - [4, 'a']
-          - [4, 'a']
-          - [2, 'b']
-          - [5, 'a']
+          - [4, 'b']
           - [2, 'a']
+          - [5, 'a']
           - [2, 'b']
-          - [5, 'b']
+          - [2, 'b']
 
   - id: 21
     tags:
       - subquery/view/materialized_view/
       - no_group_by
-      - bug
     name: subquery from view from view
     description: subquery from view from view
     steps:
@@ -1111,19 +1105,18 @@ tests:
       - query_id: '1421'
         expected_results:
           - [0, 'a']
+          - [0, 'a']
           - [4, 'a']
-          - [4, 'a']
-          - [2, 'b']
-          - [5, 'a']
+          - [4, 'b']
           - [2, 'a']
+          - [5, 'a']
           - [2, 'b']
-          - [5, 'b']
+          - [2, 'b']
 
   - id: 22
     tags:
       - subquery/view/materialized_view/
       - no_group_by
-      - bug
     name: subqury from subquery from subquery(not supported)
     description: subqury from subquery from subquery(not supported)
     steps:
@@ -1198,7 +1191,6 @@ tests:
     tags:
       - subquery/view/materialized_view/
       - no_group_by
-      - bug
     name: subquery from materlized view from view
     description: subquery from materlized view from view
     steps:

@@ -135,7 +135,7 @@ void StorageView::read(
     }
 
     /// proton: starts.
-    if (query_info.left_storage_tracking_changes)
+    if (query_info.left_input_tracking_changes)
         Streaming::rewriteAsChangelogQuery(current_inner_query->as<ASTSelectWithUnionQuery &>());
     /// proton: ends.
 
@@ -296,7 +296,7 @@ Streaming::DataStreamSemanticEx StorageView::dataStreamSemantic() const
 NamesAndTypesList StorageView::getVirtuals() const
 {
     /// We may emit _tp_delta on the fly
-    if (Streaming::isVersionedKeyedStorage(dataStreamSemantic()))
+    if (Streaming::canTrackChangesFromInput(dataStreamSemantic()))
         return {NameAndTypePair(ProtonConsts::RESERVED_DELTA_FLAG, DataTypeFactory::instance().get("int8"))};
 
     return {};

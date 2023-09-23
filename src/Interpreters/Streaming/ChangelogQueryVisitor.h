@@ -52,7 +52,7 @@ public:
 
     void visit(ASTSelectQuery & node, ASTPtr &);
 
-    bool queryIsRewritten() const noexcept { return rewritten; }
+    bool queryInputIsRewritten() const noexcept { return input_rewritten; }
 
     auto && newRequiredResultColumnNames() { return std::move(new_required_result_column_names); }
 
@@ -66,12 +66,9 @@ private:
     bool add_new_required_result_columns;
     bool is_subquery;
     const SelectQueryInfo & query_info;
-    bool rewritten = false;
+    bool input_rewritten = false;
 };
 
 using ChangelogQueryVisitor = ChangelogQueryVisitorMatcher::Visitor;
-
-ASTPtr makeTemporaryDeltaColumn();
-void rewriteTemporaryDeltaColumnInSelectQuery(ASTSelectQuery & select_query, bool emit_changelog);
 }
 }

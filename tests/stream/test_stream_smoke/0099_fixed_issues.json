@@ -432,6 +432,51 @@
           [2, 13.3]]
         }
       ]
+    },
+    {
+      "id": 16,
+      "tags": ["Changelog join table"],
+      "name": "#106",
+      "description": "Covering changelog global aggr processing over join",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query": "drop stream if exists left_test_stream_106_vk"},
+            {"client":"python", "query_type": "table", "query": "drop stream if exists right_test_stream_106_vk"},
+            {"client":"python", "query_type": "table", "exist": "left_test_stream_106_vk", "exist_wait":2, "wait":1, "query": "create stream left_test_stream_106_vk(id int, val float) primary key id settings mode='versioned_kv'"},
+            {"client":"python", "query_type": "table", "exist": "right_test_stream_106_vk", "exist_wait":2, "wait":1, "query": "create stream right_test_stream_106_vk(id int, val float) primary key id settings mode='versioned_kv'"},
+            {"client":"python", "query_type": "stream", "query_id":"9900", "depends_on_stream":"right_test_stream_106_vk", "wait":1, "query":"select id, count(*), sum(val), sum(b.val) from left_test_stream_106_vk as a join right_test_stream_106_vk as b on a.id = b.id group by id emit periodic 1ms"},
+            {"client":"python", "query_type": "table", "depends_on":"9900", "wait":1, "query": "insert into right_test_stream_106_vk(id, val) values (1, 1.1)(2, 2.2);"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_test_stream_106_vk(id, val) values (1, 1.1)(2, 2.2);"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into right_test_stream_106_vk(id, val) values (1, 11.1);"},
+            {"client":"python", "query_type": "table", "kill": "9900", "kill_wait":2, "wait":1, "query": "insert into left_test_stream_106_vk(id, val) values (1, 11.1);"}
+          ]
+        },
+        {
+          "statements": [
+            {"client":"python", "query_type": "stream", "query_id":"9901", "query_end_timer":2, "query":"select id, count(*), sum(val), sum(b.val) from left_test_stream_106_vk as a join table(right_test_stream_106_vk) as b on a.id = b.id group by id emit periodic 1ms"},
+            {"client":"python", "query_type": "table", "query_id":"9902", "query":"select id, count(*), sum(val), sum(b.val) from table(left_test_stream_106_vk) as a join table(right_test_stream_106_vk) as b on a.id = b.id group by id emit periodic 1ms"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":[
+          [1, 1, 1.1, 1.1],
+          [2, 1, 2.2, 2.2],
+          [1, 1, 1.1, 11.1],
+          [2, 1, 2.2, 2.2],
+          [1, 1, 11.1, 11.1],
+          [2, 1, 2.2, 2.2]]
+        },
+        {"query_id":"9901", "expected_results":[
+          [1, 1, 11.1, 11.1],
+          [2, 1, 2.2, 2.2]]
+        },
+        {"query_id":"9902", "expected_results":[
+          [1, 1, 11.1, 11.1],
+          [2, 1, 2.2, 2.2]]
+        }
+      ]
     }
   ]
 }

@@ -32,12 +32,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_10_sec_large
               arguments:
               - name: value
                 type: float32
@@ -109,7 +108,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(i)
+              select test_14_10_sec_large(i)
               from test14_multishard_10 emit periodic 100ms;
 
           - client: python
@@ -165,12 +164,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_10_sec_large
               arguments:
               - name: value
                 type: float32
@@ -242,7 +240,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(i)
+              select test_14_10_sec_large(i)
               from test14_multishard_10 emit periodic 100ms;
 
           - client: python
@@ -1504,12 +1502,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_10_sec_large
               arguments:
               - name: value
                 type: float32
@@ -1607,7 +1604,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(i),
+              select test_14_10_sec_large(i),
                      k2
               from test14_view2_10
               group by k2
