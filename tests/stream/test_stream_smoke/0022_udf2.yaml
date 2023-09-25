@@ -28,15 +28,15 @@ tests:
           - client: python
             query_type: table
             wait: 1
-            query: DROP FUNCTION IF EXISTS test_add_five;
+            query: DROP FUNCTION IF EXISTS test_add_five_5;
 
           - client: python
             query_type: table
             query_id: udf-21-0
             wait: 1
             query: |
-              CREATE OR REPLACE FUNCTION test_add_five(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
-                function test_add_five(value) {
+              CREATE OR REPLACE FUNCTION test_add_five_5(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+                function test_add_five_5(value) {
                   for(let i=0;i<value.length;i++) {
                     value[i]=value[i]+5;
                   }
@@ -51,7 +51,7 @@ tests:
             query_type: table
             wait: 5
             query: |
-              DESCRIBE (SELECT test_add_five(1) AS a);
+              DESCRIBE (SELECT test_add_five_5(1) AS a);
 
           - client: python
             query_type: table
@@ -59,7 +59,7 @@ tests:
             depends_on_done: udf-21-1
             wait: 1
             query: |
-              DROP FUNCTION test_add_five;
+              DROP FUNCTION test_add_five_5;
 
           - client: python
             query_id: udf-21-3
@@ -68,14 +68,14 @@ tests:
             depends_on_done: udf-21-2
             wait: 5
             query: |
-              SELECT test_add_five(1)
+              SELECT test_add_five_5(1)
 
     expected_results:
       - query_id: udf-21-1
         expected_results:
-          - [ 'a', 'float32', '', '', '', '', '' ] # DESCRIBE (SELECT test_add_five(1) AS a)
+          - [ 'a', 'float32', '', '', '', '', '' ] # DESCRIBE (SELECT test_add_five_5(1) AS a)
       - query_id: udf-21-3
-        expected_results: 'error_code:46' # SELECT test_add_five(1) after DROP FUNCTION
+        expected_results: 'error_code:46' # SELECT test_add_five_5(1) after DROP FUNCTION
 
   - id: 22
     tags:

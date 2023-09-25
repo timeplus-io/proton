@@ -10,7 +10,6 @@
 //#include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Functions/UserDefined/UDFHelper.h>
 #include <Functions/UserDefined/UserDefinedFunctionFactory.h>
-#include <Parsers/Streaming/ASTJavaScriptFunction.h>
 /// proton: ends
 
 namespace DB

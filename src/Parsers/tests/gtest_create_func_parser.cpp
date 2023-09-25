@@ -7,7 +7,7 @@
 #include <Parsers/ParserCreateFunctionQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserDropQuery.h>
-#include <Parsers/Streaming/ASTJavaScriptFunction.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
@@ -53,13 +53,13 @@ TEST(ParserCreateFunctionQuery, UDFFunction)
     String ret = astToString(create->return_type.get());
     EXPECT_EQ(ret, "float32");
 
-    ASTJavaScriptFunction * js_func = create->function_core->as<ASTJavaScriptFunction>();
-    EXPECT_EQ(js_func->source, " function add_five(value){for(let i=0;i<value.length;i++){value[i]=value[i]+5}return value}");
+    ASTLiteral * js_src = create->function_core->as<ASTLiteral>();
+    EXPECT_EQ(js_src->value.safeGet<String>(), " function add_five(value){for(let i=0;i<value.length;i++){value[i]=value[i]+5}return value}");
 
     String func_str = astToString(create);
     EXPECT_EQ(
         func_str,
-        "CREATE FUNCTION add_five(value float32) RETURNS float32 AS $$ \n function add_five(value){for(let "
+        "CREATE FUNCTION add_five(value float32) RETURNS float32 AS $$\n function add_five(value){for(let "
         "i=0;i<value.length;i++){value[i]=value[i]+5}return value}\n$$");
 
     auto json = create->toJSON();

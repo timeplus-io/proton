@@ -10,7 +10,6 @@
 /// proton: starts
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/Streaming/ParserArguments.h>
-#include <Parsers/Streaming/ParserJavaScriptFunction.h>
 /// proton: ends
 
 
@@ -28,7 +27,7 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     ParserKeyword s_javascript_type("LANGUAGE JAVASCRIPT");
     ParserArguments arguments_p;
     ParserDataType return_p;
-    ParserJavaScriptFunction js_func_p;
+    ParserStringLiteral js_src_p;
     /// proton: ends
 
     ParserKeyword s_or_replace("OR REPLACE");
@@ -98,7 +97,8 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
         if (!s_as.ignore(pos, expected))
             return false;
 
-        if (is_javascript_func && !js_func_p.parse(pos, function_core, expected))
+        /// Parse source code and function_core will be 'ASTLiteral'
+        if (is_javascript_func && !js_src_p.parse(pos, function_core, expected))
             return false;
     }
     else

@@ -43,7 +43,7 @@ void validateUDFName(const String & func_name)
         if (!std::isalnum(ch) && ch != '_')
             throw Exception(ErrorCodes::UDF_INVALID_NAME, "UDF name can contain only alphabetic, numbers and underscores");
 
-        has_alphabetic = std::isalpha(ch);
+        has_alphabetic |= std::isalpha(ch);
     }
 
     if (!has_alphabetic)

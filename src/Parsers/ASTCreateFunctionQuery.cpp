@@ -7,8 +7,7 @@
 /// proton: starts
 #include <Parsers/formatAST.h>
 #include <Parsers/ASTNameTypePair.h>
-#include <Parsers/ASTFunctionWithKeyValueArguments.h>
-#include <Parsers/Streaming/ASTJavaScriptFunction.h>
+#include <Parsers/ASTLiteral.h>
 /// proton: ends
 
 
@@ -64,7 +63,16 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
     formatOnCluster(settings);
 
     settings.ostr << (settings.hilite ? hilite_keyword : "") << " AS " << (settings.hilite ? hilite_none : "");
-    function_core->formatImpl(settings, state, frame);
+
+    /// proton: starts. Do not format the source of JavaScript UDF
+    if (is_javascript_func)
+    {
+        ASTLiteral * js_src = function_core->as<ASTLiteral>();
+        settings.ostr << fmt::format("$$\n{}\n$$", js_src->value.safeGet<String>());
+    }
+    else
+        function_core->formatImpl(settings, state, frame);
+    /// proton: starts
 }
 
 String ASTCreateFunctionQuery::getFunctionName() const
@@ -118,8 +126,8 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     inner_func->set("return_type", return_buf.str());
 
     /// source
-    ASTJavaScriptFunction * js_func = function_core->as<ASTJavaScriptFunction>();
-    inner_func->set("source", js_func->source);
+    ASTLiteral * js_src = function_core->as<ASTLiteral>();
+    inner_func->set("source", js_src->value.safeGet<String>());
 
     func->set("function", inner_func);
     return func;
