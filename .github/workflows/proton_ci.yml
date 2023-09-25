@@ -10,11 +10,10 @@ on: # yamllint disable-line rule:truthy
     branches:
       - develop
     paths-ignore:
-      - 'CHANGELOG.md'
-      - 'README.md'
-      - 'SECURITY.md'
+      - '**.md'
       - 'docker/docs/**'
       - 'docs/**'
+      - 'spec/**'
       - 'utils/check-style/aspell-ignore/**'
 
 jobs:
