@@ -9,7 +9,7 @@ on: # yamllint disable-line rule:truthy
 
 jobs:
   Build:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-042a37e33a285c22b
@@ -42,12 +42,10 @@ jobs:
         cd $GITHUB_WORKSPACE/docker/server
 
         # build docker image
-        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t ghcr.io/timeplus-io/proton:$GITHUB_SHA
-        docker tag ghcr.io/timeplus-io/proton:$GITHUB_SHA ghcr.io/timeplus-io/proton:amd64
+        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t ghcr.io/timeplus-io/proton:$GITHUB_SHA-amd64
 
         # push docker image
-        docker push ghcr.io/timeplus-io/proton:$GITHUB_SHA
-        docker push ghcr.io/timeplus-io/proton:amd64
+        docker push ghcr.io/timeplus-io/proton:$GITHUB_SHA-amd64
 
         # upload build cache
         tar -zcf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache .
@@ -61,7 +59,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   BuildArm:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ami-0f3dbc4cc9994fdee
@@ -88,12 +86,10 @@ jobs:
         cd $GITHUB_WORKSPACE/docker/server
 
         # build docker image
-        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t ghcr.io/timeplus-io/proton:$GITHUB_SHA
-        docker tag ghcr.io/timeplus-io/proton:$GITHUB_SHA ghcr.io/timeplus-io/proton:arm64v8
+        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t ghcr.io/timeplus-io/proton:$GITHUB_SHA-arm64v8
 
         # push docker image
-        docker push ghcr.io/timeplus-io/proton:$GITHUB_SHA
-        docker push ghcr.io/timeplus-io/proton:arm64v8
+        docker push ghcr.io/timeplus-io/proton:$GITHUB_SHA-arm64v8
 
         # upload build cache
         tar -zcf ./cache-arm.tar.gz -C $GITHUB_WORKSPACE/ccache .
@@ -108,7 +104,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   CommitTag:
     needs: [Build, BuildArm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-042a37e33a285c22b
@@ -120,29 +116,21 @@ jobs:
         git config user.name "proton-robot"
         git config user.email "proton_robot@timeplus.io"
         
-        docker pull ghcr.io/timeplus-io/proton:amd64
-        docker pull ghcr.io/timeplus-io/proton:arm64v8
+        docker pull ghcr.io/timeplus-io/proton:$GITHUB_SHA-amd64
+        docker pull ghcr.io/timeplus-io/proton:$GITHUB_SHA-arm64v8
 
-        docker manifest create ghcr.io/timeplus-io/proton:develop \
-          ghcr.io/timeplus-io/proton:amd64 \
-          ghcr.io/timeplus-io/proton:arm64v8
+        docker manifest create ghcr.io/timeplus-io/proton:latest \
+          ghcr.io/timeplus-io/proton:$GITHUB_SHA-amd64 \
+          ghcr.io/timeplus-io/proton:$GITHUB_SHA-arm64v8
 
-        docker manifest push ghcr.io/timeplus-io/proton:develop
+        docker manifest push ghcr.io/timeplus-io/proton:latest
 
-        PROTON_TAG="$(docker history --no-trunc ghcr.io/timeplus-io/proton:amd64 | grep -Eo 'ARG version=[0-9]+.[0-9]+.[0-9]+' -o | grep -Eo '[0-9]+.[0-9]+.[0-9]+')"
-        docker manifest create ghcr.io/timeplus-io/proton:$PROTON_TAG \
-          ghcr.io/timeplus-io/proton:amd64 \
-          ghcr.io/timeplus-io/proton:arm64v8
+        PROTON_TAG="$(docker history --no-trunc ghcr.io/timeplus-io/proton:$GITHUB_SHA-amd64 | grep -Eo 'ARG version=[0-9]+.[0-9]+.[0-9]+' -o | grep -Eo '[0-9]+.[0-9]+.[0-9]+')"
+        docker manifest create ghcr.io/timeplus-io/proton:$PROTON_TAG-rc \
+          ghcr.io/timeplus-io/proton:$GITHUB_SHA-amd64 \
+          ghcr.io/timeplus-io/proton:$GITHUB_SHA-arm64v8
 
-        docker manifest push ghcr.io/timeplus-io/proton:$PROTON_TAG
-
-        curl -L \
-          -X POST \
-          -H "Accept: application/vnd.github+json" \
-          -H "Authorization: token $GH_PERSONAL_ACCESS_TOKEN"\
-          -H "X-GitHub-Api-Version: 2022-11-28" \
-          https://api.github.com/repos/timeplus-io/proton/actions/workflows/manual_trigger_test.yml/dispatches \
-          -d "{\"ref\":\"develop\",\"inputs\":{\"arch\": \"x64\", \"tag\":\"$PROTON_TAG\"}}\""
+        docker manifest push ghcr.io/timeplus-io/proton:$PROTON_TAG-rc
 
         curl -L \
           -X POST \
@@ -150,7 +138,15 @@ jobs:
           -H "Authorization: token $GH_PERSONAL_ACCESS_TOKEN"\
           -H "X-GitHub-Api-Version: 2022-11-28" \
           https://api.github.com/repos/timeplus-io/proton/actions/workflows/manual_trigger_test.yml/dispatches \
-          -d "{\"ref\":\"develop\",\"inputs\":{\"arch\": \"arm\", \"tag\":\"$PROTON_TAG\"}}\""
+          -d "{\"ref\":\"develop\",\"inputs\":{\"arch\": \"x64\", \"tag\":\"$PROTON_TAG-rc\"}}\""
+
+        curl -L \
+          -X POST \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: token $GH_PERSONAL_ACCESS_TOKEN"\
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          https://api.github.com/repos/timeplus-io/proton/actions/workflows/manual_trigger_test.yml/dispatches \
+          -d "{\"ref\":\"develop\",\"inputs\":{\"arch\": \"arm\", \"tag\":\"$PROTON_TAG-rc\"}}\""
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
