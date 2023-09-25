@@ -378,14 +378,25 @@ public:
         block_idx_in_window = 0;
         max_full_block_count = events_per_second_ / block_size;
         partial_size = events_per_second_ % block_size;
-        /// calculate the number of interval during 1 sec
+        /**
+         * events_per_second means the number of data generated per second.
+         * In order to generate data evenly within one second, we have the the interval_time parameter.
+         * The following code is used to calculate the number of data generated per interval
+         * For example: events_per_second = 2000, interval_time = 80ms.
+         *              1s = 1000ms, 1000ms / 80ms = 12(int / int, omit decimals), 1000ms % 80ms = 40ms
+         *              80 * 11 + (80 + 40) = 1000ms
+         * So we have 12 intervals, 11 normal interval(80ms) and 1 special interval(80ms + 40ms = 120ms)
+         * 
+         * Now calculate the number of data generated per interval:
+         *              2000 / 12 = 166, 2000 % 12 = 8
+         * So the number of data generated per normal interval is 166, and the number of data generated in the special interval is 166 + 8 = 174
+         *              166 * 11 + 174 = 2000
+         * Total number of data generated per second is 2000.
+         */
         interval_count = 1000 / generate_interval;
-        /// special interval
         last_interval_time = generate_interval + 1000 % generate_interval;
         boundary_time = MonotonicMilliseconds::now() + last_interval_time;
-        /// calculate the number of data generated per interval
         normal_interval = events_per_second / interval_count;
-        /// calculate the number of data generated in the special interval
         last_interval_count = normal_interval + events_per_second % interval_count;
 
         for (const auto & elem : block_full)
