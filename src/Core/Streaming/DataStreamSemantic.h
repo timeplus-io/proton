@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <optional>
+
 namespace DB::Streaming
 {
 enum class StorageSemantic : uint8_t
