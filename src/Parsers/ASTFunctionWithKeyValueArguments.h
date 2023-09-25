@@ -52,7 +52,7 @@ public:
     /// proton: starts
     /// ignore function name when formating to string, for example, used as argument list like:
     ///     (value int64, price float32)
-    bool ignore_name;
+    bool ignore_name = false;
     /// proton: ends
 
     explicit ASTFunctionWithKeyValueArguments(bool has_brackets_ = true)
