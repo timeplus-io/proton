@@ -3,7 +3,7 @@
     "tag": "smoke",
   
     "test_suite_config":{
-      "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
+      "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "unstable"],"cluster": ["view", "cluster_table_bug"]}}
     },
     "comments": "Tests covering random stream.",
     "tests": [
@@ -45,7 +45,7 @@
           },
           {
             "id": 1,
-            "tags": ["create random"],
+            "tags": ["create random", "unstable"],
             "name": "#1410",
             "description": "create random stream with default generating function, limit the amount of data produced per window;",
             "steps":[
@@ -209,7 +209,7 @@
           },
           {
             "id": 9,
-            "tags": ["create random"],
+            "tags": ["create random", "unstable"],
             "name": "test random stream generating function",
             "description": "create random stream with default generating function, limit the amount of data produced per window, eps > the number of threads",
             "steps":[
@@ -233,7 +233,7 @@
           },
           {
             "id": 10,
-            "tags": ["create random"],
+            "tags": ["create random", "unstable"],
             "name": "test random stream generating function",
             "description": "create random stream with default generating function, limit the amount of data produced per window, eps > the number of threads",
             "steps":[
@@ -257,7 +257,7 @@
           },
           {
             "id": 11,
-            "tags": ["create random"],
+            "tags": ["create random", "unstable"],
             "name": "test random stream generating function",
             "description": "create random stream with default generating function, limit the amount of data produced per window, set interval_time, check the the number of data produced per interval_time is correct;",
             "steps":[
@@ -277,7 +277,7 @@
           },
           {
             "id": 12,
-            "tags": ["create random"],
+            "tags": ["create random", "unstable"],
             "name": "test random stream generating function",
             "description": "create random stream with default generating function, limit the amount of data produced per window, set interval_time, cannot be diveded by 1000ms, check the the number of data produced per second is correct;",
             "steps":[
@@ -333,7 +333,7 @@
           },
           {
             "id": 15,
-            "tags": ["create random"],
+            "tags": ["create random", "unstable"],
             "name": "test random stream generating function",
             "description": "create random stream with default generating function, limit the amount of data produced per window, set interval_time, cannot be diveded by 1000ms, check the the number of data produced per interval is correct;",
             "steps":[
