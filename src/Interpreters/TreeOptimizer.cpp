@@ -679,7 +679,7 @@ void optimizeSumIfFunctions(ASTPtr & query)
     RewriteSumIfFunctionVisitor(data).visit(query);
 }
 
-void optimizeCountConstantAndSumOne(ASTPtr & query)
+[[maybe_unused]] void optimizeCountConstantAndSumOne(ASTPtr & query)
 {
     RewriteCountVariantsVisitor::visit(query);
 }

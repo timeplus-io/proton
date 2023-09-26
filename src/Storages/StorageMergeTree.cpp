@@ -313,9 +313,9 @@ StorageMergeTree::write(const ASTPtr & /*query*/, const StorageMetadataPtr & met
 }
 
 /// proton: starts. Add views dependencies check
-void StorageMergeTree::checkTableCanBeDropped(ContextPtr context) const
+void StorageMergeTree::checkTableCanBeDropped(ContextPtr context_) const
 {
-    IStorage::checkTableCanBeDropped(context);
+    IStorage::checkTableCanBeDropped(context_);
 /// proton: ends.
 
     auto table_id = getStorageID();

@@ -676,15 +676,15 @@ WindowParams::WindowParams(TableFunctionDescriptionPtr window_desc) : desc(std::
     time_col_is_datetime64 = isDateTime64(desc->argument_types[0]);
     if (time_col_is_datetime64)
     {
-        const auto & type = assert_cast<const DataTypeDateTime64 &>(*desc->argument_types[0].get());
-        time_scale = type.getScale();
-        time_zone = &type.getTimeZone();
+        const auto & datetime64_type = assert_cast<const DataTypeDateTime64 &>(*desc->argument_types[0].get());
+        time_scale = datetime64_type.getScale();
+        time_zone = &datetime64_type.getTimeZone();
     }
     else if (isDateTime(desc->argument_types[0]))
     {
-        const auto & type = assert_cast<const DataTypeDateTime &>(*desc->argument_types[0].get());
+        const auto & datetime_type = assert_cast<const DataTypeDateTime &>(*desc->argument_types[0].get());
         time_scale = 0;
-        time_zone = &type.getTimeZone();
+        time_zone = &datetime_type.getTimeZone();
     }
     else
     {

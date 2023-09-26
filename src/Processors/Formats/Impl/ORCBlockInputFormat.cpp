@@ -47,9 +47,11 @@ Chunk ORCBlockInputFormat::generate()
     }
 
     std::shared_ptr<arrow::Table> table;
-    arrow::Status table_status = batch_reader->ReadAll(&table);
-    if (!table_status.ok())
-        throw ParsingException(ErrorCodes::CANNOT_READ_ALL_DATA, "Error while reading batch of ORC data: {}", table_status.ToString());
+    arrow::Result<std::shared_ptr<arrow::Table>> table_result = batch_reader->ToTable();
+    if (!table_result.ok())
+        throw ParsingException(ErrorCodes::CANNOT_READ_ALL_DATA, "Error while reading batch of ORC data: {}", table_result.status().ToString());
+
+    table = std::move(table_result).ValueOrDie();
 
     if (!table || !table->num_rows())
         return res;

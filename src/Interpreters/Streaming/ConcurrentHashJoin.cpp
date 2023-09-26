@@ -494,7 +494,7 @@ void ConcurrentHashJoin::deserialize(ReadBuffer & rb)
 
     Int64 num_shards;
     DB::readVarInt(num_shards, rb);
-    if (num_shards != hash_joins.size())
+    if (num_shards != static_cast<long>(hash_joins.size()))
         throw Exception(
             ErrorCodes::RECOVER_CHECKPOINT_FAILED,
             "Failed to recover concurrent hash join checkpoint. The concurrent number of hash join are not the same, checkpointed={}, "

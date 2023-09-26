@@ -146,9 +146,9 @@ StorageDictionary::~StorageDictionary()
 }
 
 /// proton: starts. Add views dependencies check
-void StorageDictionary::checkTableCanBeDropped(ContextPtr context) const
+void StorageDictionary::checkTableCanBeDropped(ContextPtr context_) const
 {
-    IStorage::checkTableCanBeDropped(context);
+    IStorage::checkTableCanBeDropped(context_);
 
     if (location == Location::SameDatabaseAndNameAsDictionary)
         throw Exception(ErrorCodes::CANNOT_DETACH_DICTIONARY_AS_STREAM,
@@ -162,9 +162,9 @@ void StorageDictionary::checkTableCanBeDropped(ContextPtr context) const
         /// proton: ends
 }
 
-void StorageDictionary::checkTableCanBeDetached(ContextPtr context) const
+void StorageDictionary::checkTableCanBeDetached(ContextPtr context_) const
 {
-    checkTableCanBeDropped(context);
+    checkTableCanBeDropped(context_);
 }
 /// proton: ends.
 

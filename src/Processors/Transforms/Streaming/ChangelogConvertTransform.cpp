@@ -27,7 +27,7 @@ ChangelogConvertTransform::ChangelogConvertTransform(
     const std::string & version_column_name)
     : IProcessor({input_header}, {output_header}, ProcessorID::ChangelogConvertTransformID)
     , output_chunk_header(outputs.front().getHeader().getColumns(), 0)
-    , source_chunks(metrics)
+    , source_chunks(cached_block_metrics)
     , last_log_ts(MonotonicMilliseconds::now())
     , logger(&Poco::Logger::get("ChangelogConvertTransform"))
 {
@@ -189,7 +189,7 @@ void ChangelogConvertTransform::work()
         LOG_INFO(
             logger,
             "source blocks metrics: {}; hash table metrics: hash_total_rows={} hash_total_bytes={} hash_total_buffer_size={}; late_rows={}",
-            metrics.string(),
+            cached_block_metrics.string(),
             total_row_count,
             total_bytes_count,
             total_buffer_size_in_cells,
@@ -401,7 +401,7 @@ void ChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
             wb);
 
         DB::writeIntBinary(late_rows, wb);
-        metrics.serialize(wb);
+        cached_block_metrics.serialize(wb);
     });
 }
 
@@ -421,7 +421,7 @@ void ChangelogConvertTransform::recover(CheckpointContextPtr ckpt_ctx)
             rb);
 
         DB::readIntBinary(late_rows, rb);
-        metrics.deserialize(rb);
+        cached_block_metrics.deserialize(rb);
     });
 }
 }

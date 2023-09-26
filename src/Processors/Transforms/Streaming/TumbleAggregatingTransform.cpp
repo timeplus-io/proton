@@ -29,9 +29,9 @@ TumbleAggregatingTransform::TumbleAggregatingTransform(
 {
 }
 
-WindowsWithBuckets TumbleAggregatingTransform::getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark) const
+WindowsWithBuckets TumbleAggregatingTransform::getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark_) const
 {
-    if (unlikely(watermark == INVALID_WATERMARK))
+    if (unlikely(watermark_ == INVALID_WATERMARK))
         return {}; /// No window
 
     WindowsWithBuckets windows_with_buckets;
@@ -41,7 +41,7 @@ WindowsWithBuckets TumbleAggregatingTransform::getLocalFinalizedWindowsWithBucke
     /// `last_finalized_window_start <=> current_window_start - window_interval`
     /// `last_finalized_window_end <=> current_window_start`
     auto current_window_start = toStartTime(
-        watermark, window_params.interval_kind, window_params.window_interval, *window_params.time_zone, window_params.time_scale);
+        watermark_, window_params.interval_kind, window_params.window_interval, *window_params.time_zone, window_params.time_scale);
     if (params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START)
     {
         auto max_finalized_bucket = addTime(
@@ -82,7 +82,7 @@ WindowsWithBuckets TumbleAggregatingTransform::getLocalFinalizedWindowsWithBucke
     return windows_with_buckets;
 }
 
-void TumbleAggregatingTransform::removeBucketsImpl(Int64 watermark)
+void TumbleAggregatingTransform::removeBucketsImpl(Int64 watermark_)
 {
     size_t max_time_bucket_can_be_removed = 0;
     /// When watermark reached to the current window, there may still be some events within the current window will arrive in future
@@ -90,7 +90,7 @@ void TumbleAggregatingTransform::removeBucketsImpl(Int64 watermark)
     /// `last_finalized_window_start <=> current_window_start - window_interval`
     /// `last_finalized_window_end <=> current_window_start`
     auto current_window_start = toStartTime(
-        watermark, window_params.interval_kind, window_params.window_interval, *window_params.time_zone, window_params.time_scale);
+        watermark_, window_params.interval_kind, window_params.window_interval, *window_params.time_zone, window_params.time_scale);
     if (params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START)
         max_time_bucket_can_be_removed = addTime(
             current_window_start,
