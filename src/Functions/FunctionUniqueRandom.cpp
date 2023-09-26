@@ -39,7 +39,7 @@ ColumnPtr generateUniqueIdColumn(size_t rows_num, size_t num_of_uniques)
 {
     auto unique_id_col = ColumnVector<UInt64>::create(rows_num);
     auto & unique_ids = unique_id_col->getData();
-    for (auto idx = 0; idx < rows_num; ++idx)
+    for (size_t idx = 0; idx < rows_num; ++idx)
         unique_ids[idx] = static_cast<UInt64>(rng() % num_of_uniques);
     return unique_id_col;
 }
@@ -64,7 +64,7 @@ DataGenerator createDataGenerator()
         {
             auto & data = assert_cast<DB::ColumnVector<TYPE> &>(*res).getData();
             data.resize(rows_num);
-            for (auto idx = 0; idx < rows_num; idx++)
+            for (size_t idx = 0; idx < rows_num; idx++)
                 data[idx] = static_cast<TYPE>(unique_ids[idx]);
         }
         else if constexpr (
@@ -73,18 +73,18 @@ DataGenerator createDataGenerator()
         {
             auto & data = assert_cast<DB::ColumnDecimal<TYPE> &>(*res).getData();
             data.resize(rows_num);
-            for (auto idx = 0; idx < rows_num; idx++)
+            for (size_t idx = 0; idx < rows_num; idx++)
                 data[idx] = static_cast<typename TYPE::NativeType>(unique_ids[idx]);
         }
         else if constexpr (TYPE_INDEX == TypeIndex::String)
         {
-            for (auto idx = 0; idx < rows_num; idx++)
+            for (size_t idx = 0; idx < rows_num; idx++)
                 res->insertData(reinterpret_cast<const char *>(&unique_ids[idx]), sizeof(UInt64));
         }
         else if constexpr (TYPE_INDEX == TypeIndex::FixedString)
         {
             size_t length = std::min(sizeof(UInt64), assert_cast<ColumnFixedString &>(*res).getN());
-            for (auto idx = 0; idx < rows_num; idx++)
+            for (size_t idx = 0; idx < rows_num; idx++)
                 res->insertData(reinterpret_cast<const char *>(&unique_ids[idx]), length);
         }
         else

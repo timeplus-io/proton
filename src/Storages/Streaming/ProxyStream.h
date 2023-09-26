@@ -134,7 +134,7 @@ private:
     ASTPtr subquery;
     bool has_global_aggr = false;
 
-    DataStreamSemanticEx data_stream_semantic;
+    DataStreamSemanticEx proxy_data_stream_semantic;
 
     bool streaming = false;
 
