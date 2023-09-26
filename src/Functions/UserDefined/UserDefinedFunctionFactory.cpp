@@ -72,7 +72,7 @@ AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
     if (load_result.object)
     {
         auto executable_function = std::static_pointer_cast<const UserDefinedExecutableFunction>(load_result.object);
-        const auto * config = executable_function->getConfiguration()->as<JavaScriptUserDefinedFunctionConfiguration>();
+        const auto config = std::dynamic_pointer_cast<JavaScriptUserDefinedFunctionConfiguration>(executable_function->getConfiguration());
 
         if (!config || !config->is_aggregation)
             return nullptr;
@@ -109,7 +109,7 @@ AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
         }
 
         return std::make_shared<AggregateFunctionJavaScriptAdapter>(
-            *config, types, parameters, query_context->getSettingsRef().javascript_max_memory_bytes);
+            config, types, parameters, query_context->getSettingsRef().javascript_max_memory_bytes);
     }
 
     return nullptr;

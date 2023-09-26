@@ -80,14 +80,14 @@ private:
     static Data & data(AggregateDataPtr __restrict place) { return *reinterpret_cast<Data *>(place); }
     static const Data & data(ConstAggregateDataPtr __restrict place) { return *reinterpret_cast<const Data *>(place); }
 
-    const JavaScriptUserDefinedFunctionConfiguration & config;
+    const JavaScriptUserDefinedFunctionConfigurationPtr config;
     size_t num_arguments;
     size_t max_v8_heap_size_in_bytes;
     JavaScriptBlueprint blueprint;
 
 public:
     AggregateFunctionJavaScriptAdapter(
-        const JavaScriptUserDefinedFunctionConfiguration & config_,
+        const JavaScriptUserDefinedFunctionConfigurationPtr config_,
         const DataTypes & types,
         const Array & params_,
         size_t max_v8_heap_size_in_bytes_);
