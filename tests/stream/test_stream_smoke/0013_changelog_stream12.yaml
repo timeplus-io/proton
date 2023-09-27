@@ -442,7 +442,6 @@ tests:
       - group_by
       - primary_key
       - stateful_function
-      - bug
     name: update versioned_kv and query with partition by primary key, group by, primary key and stateful function
     description: update versioned_kv and query with partition by primary key, group by, primary key and stateful function
     steps:

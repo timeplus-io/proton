@@ -1384,7 +1384,6 @@ tests:
       - substream
       - streaming_tailing
       - stateful_function
-      - bug
     name: substreaming tailing with stateful func
     description: substreaming tailing with stateful func
     steps:
@@ -1416,7 +1415,6 @@ tests:
           - client: python
             query_id: '1318'
             depends_on_stream: test13_subst_2
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(val, 1),

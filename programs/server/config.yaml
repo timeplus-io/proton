@@ -975,7 +975,7 @@ settings:
     stream:
         default_shards: 1
         default_replicas: 1
-        default_sharding_expr: "rand()"
+        default_sharding_expr: ""   # Default is `rand()`, or `sip_hash64(<primary_keys...>)` if has primary keys
         distributed_ingest_mode: "async"    # Data ingestion mode for Stream
         logstore: ""
         logstore_replication_factor: 1

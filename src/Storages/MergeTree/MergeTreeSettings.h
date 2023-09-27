@@ -168,7 +168,7 @@ struct Settings;
     /** Settings for Stream */ \
     M(UInt64, shards, 1, "Shards number for Stream", 0) \
     M(UInt64, replicas, 1, "Replicas number for Stream", 0) \
-    M(String, sharding_expr, "rand()", "Sharding method of Stream. Default is 'rand()'.", 0) \
+    M(String, sharding_expr, "", "Sharding method of Stream. Default is 'rand()', or 'sip_hash64(<primary_keys...>)' if has primary keys.", 0) \
     M(String, event_time_column, "now64(3, 'UTC')", "Event time expression of Stream. Default is '_tp_time'.", 0) \
     M(String, host_shards, "", "Stream shards the current proton instance is hosting", 0) \
     M(String, subtype, "tabular", "Engine subtype", 0) \
@@ -192,7 +192,7 @@ struct Settings;
 #define CONFIGURABLE_STREAM_SETTINGS(M) \
     M(UInt64, default_shards, 1, "Default shards number for Stream", 0) \
     M(UInt64, default_replicas, 1, "Default replicas number for Stream", 0) \
-    M(String, default_sharding_expr, "rand()", "Default sharding method of Stream", 0) \
+    M(String, default_sharding_expr, "", "Default sharding method of Stream", 0) \
     M(String, distributed_ingest_mode, "async", "Data ingestion mode for Stream", 0) \
     M(String, logstore, "", "Backend streaming storage for write ahead log implementation", 1) \
     M(Int64, logstore_replication_factor, 1, "Replication number of logstore", 0) \

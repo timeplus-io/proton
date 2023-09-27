@@ -1355,7 +1355,6 @@ tests:
       - group_by
       - primary_key
       - stateful_function
-      - bug
     name: subquery from subquery from view aggr with stateful function, update
     description: subquery from subquery from view aggr with stateful function, update
     steps:
@@ -1398,7 +1397,6 @@ tests:
           - client: python
             query_id: '1482'
             depends_on_stream: test14_multishard_10
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(i),
@@ -1484,6 +1482,16 @@ tests:
             wait: 1
             query: |
               drop stream if exists test14_multishard_10;
+
+    expected_results:
+      - query_id: '1482'
+        expected_results:
+          - [1, 1, 1, 1, 'a']
+          - [2, 2, 2, 1, 'a']
+          - [0, 0, nan, 0, 'a']
+          - [4, 4, 4, 1, 'a']
+          - [0, 0, nan, 0, 'a']
+          - [8, 8, 8, 1, 'a']
 
   - id: 83
     tags:
