@@ -7,7 +7,7 @@ volumes:
   redpanda: null
 services:
   proton:
-     image: ghcr.io/timeplus-io/proton:develop
+     image: ghcr.io/timeplus-io/proton:latest
      networks:
       - demo_network
 
