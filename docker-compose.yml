@@ -16,6 +16,7 @@ services:
 
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v23.2.8
+    profiles: ["owl_shop"]
     command:
       - redpanda start
       - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
@@ -30,6 +31,7 @@ services:
 
   console:
     image: docker.redpanda.com/redpandadata/console:v2.3.1
+    profiles: ["owl_shop"]
     entrypoint: /bin/sh
     command: -c "echo \"$$CONSOLE_CONFIG_FILE\" > /tmp/config.yml; /app/console"
     environment:
@@ -46,6 +48,7 @@ services:
 
   cardemo:
     image: timeplus/cardemo:latest
+    profiles: ["car_demo"]
     entrypoint: /bin/sh
     command: -c "sleep 15 && echo \"$$CONSOLE_CONFIG_FILE\" > /timeplus/sink.yaml;  /timeplus/cardemo --config /timeplus/.cardemo.yaml -f /timeplus/sink.yaml"
     environment:
@@ -62,6 +65,7 @@ services:
 
   owl-shop:
     image: quay.io/cloudhut/owl-shop:latest
+    profiles: ["owl_shop"]
     networks:
       - demo_network
     #platform: 'linux/amd64'
