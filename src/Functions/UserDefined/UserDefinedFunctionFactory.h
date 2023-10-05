@@ -33,10 +33,13 @@ public:
 
     static bool isOrdinaryFunctionName(const String & function_name);
 
+    /// Whether or not the UDA support changelog semantic
+    static bool supportChangelog(const String & function_name);
+
     bool registerFunction(
         ContextPtr context,
         const String & function_name,
-        const Poco::JSON::Object::Ptr & json_func,
+        Poco::JSON::Object::Ptr json_func,
         bool throw_if_exists,
         bool replace_if_exists);
 

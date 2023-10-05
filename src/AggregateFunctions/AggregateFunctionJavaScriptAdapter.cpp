@@ -86,10 +86,22 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
 
         {
             v8::Local<v8::Value> val;
-            if (!obj->Get(local_ctx, V8::to_v8(isolate_, "has_customized_emit")).ToLocal(&val) || !val->IsUndefined())
+            if (obj->Get(local_ctx, V8::to_v8(isolate_, "has_customized_emit")).ToLocal(&val) && !val->IsUndefined())
             {
-                LOG_INFO(&Poco::Logger::get("JavaScriptAggregateFunction"), "JavaScript UDA '{}' has defined its own emit strategy", name);
-                has_user_defined_emit_strategy = true;
+                has_user_defined_emit_strategy = V8::from_v8<bool>(isolate_, val);
+                if (has_user_defined_emit_strategy)
+                    LOG_INFO(
+                        &Poco::Logger::get("JavaScriptAggregateFunction"), "JavaScript UDA '{}' has defined its own emit strategy", name);
+            }
+        }
+
+        {
+            v8::Local<v8::Value> val;
+            if (obj->Get(local_ctx, V8::to_v8(isolate_, "support_changelog")).ToLocal(&val) && !val->IsUndefined())
+            {
+                support_changelog = V8::from_v8<bool>(isolate_, val);
+                if (support_changelog)
+                    LOG_INFO(&Poco::Logger::get("JavaScriptAggregateFunction"), "JavaScript UDA '{}' can work on changelog stream", name);
             }
         }
 
@@ -112,7 +124,17 @@ JavaScriptBlueprint::~JavaScriptBlueprint() noexcept
 JavaScriptAggrFunctionState::JavaScriptAggrFunctionState(
     const JavaScriptBlueprint & blueprint, const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments)
 {
+    support_changelog = blueprint.support_changelog;
     columns.reserve(arguments.size());
+
+    /// check _tp_delta column if UDA support to work on changelog
+    if (support_changelog)
+    {
+        if (unlikely(arguments.back().type->getTypeId() != TypeIndex::Int8))
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED, "Tha last argument of JavaScript UDA with changelog support should be 'int8'. Invalid type.");
+    }
+
     for (const auto & arg : arguments)
     {
         auto col = arg.type->createColumn();
@@ -206,11 +228,23 @@ JavaScriptAggrFunctionState::~JavaScriptAggrFunctionState()
 
 void JavaScriptAggrFunctionState::add(const IColumn ** src_columns, size_t row_num)
 {
-    for (size_t i = 0; auto & col : columns)
-    {
-        col->insertFrom(*src_columns[i], row_num);
-        i++;
-    }
+    size_t num_of_input_columns = support_changelog ? columns.size() - 1 : columns.size();
+
+    for (size_t i = 0; i < num_of_input_columns; i++)
+        columns[i]->insertFrom(*src_columns[i], row_num);
+
+    if (support_changelog)
+        columns[columns.size() - 1]->insert(1);
+}
+
+void JavaScriptAggrFunctionState::negate(const IColumn ** src_columns, size_t row_num)
+{
+    assert(support_changelog);
+
+    for (size_t i = 0; i < columns.size() - 1; i++)
+        columns[i]->insertFrom(*src_columns[i], row_num);
+
+    columns[columns.size() - 1]->insert(-1);
 }
 
 void JavaScriptAggrFunctionState::reinitCache()
@@ -305,6 +339,11 @@ void AggregateFunctionJavaScriptAdapter::addBatchLookupTable8(
 void AggregateFunctionJavaScriptAdapter::add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const
 {
     this->data(place).add(columns, row_num);
+}
+
+void AggregateFunctionJavaScriptAdapter::negate(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const
+{
+    this->data(place).negate(columns, row_num);
 }
 
 void AggregateFunctionJavaScriptAdapter::merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const

@@ -353,9 +353,10 @@ void validateFunctionSource(
         });
 }
 
-void validateAggregationFunctionSource(
+bool validateAggregationFunctionSource(
     const std::string & func_name, const std::vector<std::string> & required_member_funcs, const std::string & source)
 {
+    bool support_changelog = false;
     auto validate_member_functions =
         [&](v8::Isolate * isolate_, v8::Local<v8::Context> & local_ctx, v8::TryCatch &, v8::Local<v8::Value> & obj) {
             if (!obj->IsObject())
@@ -386,13 +387,19 @@ void validateAggregationFunctionSource(
                 auto property_name = property_names->Get(local_ctx, i).ToLocalChecked();
                 auto property = local_obj->Get(local_ctx, property_name).ToLocalChecked();
                 auto native_property_name = V8::from_v8<String>(isolate_, property_name);
-                if (!property->IsFunction() && native_property_name != "has_customized_emit")
+                if (!property->IsFunction() && native_property_name != "has_customized_emit" && native_property_name != "support_changelog")
                     throw Exception(
                         ErrorCodes::UDF_COMPILE_ERROR,
                         "the JavaScript UDA {} is invalid. It contains non-function data member : '{}'. JavaScript UDA can contain only "
                         "required data members and member functions. Please refer to the JavaScript UDA documents for details",
                         func_name,
                         native_property_name);
+            }
+
+            {
+                v8::Local<v8::Value> val;
+                if (local_obj->Get(local_ctx, V8::to_v8(isolate_, "support_changelog")).ToLocal(&val) && !val->IsUndefined())
+                    support_changelog = V8::from_v8<bool>(isolate_, val);
             }
         };
 
@@ -403,6 +410,8 @@ void validateAggregationFunctionSource(
     /// }
     auto src = fmt::format("var {}={};", func_name, source);
     validateFunctionSource(func_name, src, validate_member_functions);
+
+    return support_changelog;
 }
 
 void validateStatelessFunctionSource(const std::string & func_name, const std::string & source)

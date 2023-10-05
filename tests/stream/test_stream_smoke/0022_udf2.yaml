@@ -172,3 +172,496 @@ tests:
       - query_id: udf-22-1
         expected_results:
           - [ 8.0 ] # select test_sec_large(f32) from 02045_types;
+
+  - id: 23
+    tags:
+      - udf2
+    name: UDA on changelog with append-only stream
+    description: SQL - UDA
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP STREAM IF EXISTS 023_types;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: CREATE STREAM IF NOT EXISTS 023_types
+              (`f32` float);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP FUNCTION IF EXISTS test_count_23;
+
+          - client: python
+            query_type: table
+            query_id: udf-23-0
+            wait: 1
+            query: |
+              CREATE AGGREGATE FUNCTION test_count_23(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+                {
+                  support_changelog: true,
+
+                  initialize: function() {
+                    this.count = 0;
+                  },
+
+                  process: function(values, deltas) {
+                    for (let i = 0; i < values.length; i++) {
+                    if (deltas[i] === 1) {
+                      this.count += 1;
+                    }
+                    else if (deltas[i] === -1)
+                      this.count -= 1;
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.count;
+                  },
+
+                  serialize: function() {
+                    let s = {
+                      'count': this.count
+                    };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.count = s['count'];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.count += s['count'];
+                  }
+                }
+              $$;
+
+          - client: python
+            query_id: udf-23-1
+            depends_on_done: udf-23-0
+            depends_on_stream: udf_types
+            query_end_timer: 7
+            query_type: stream
+            wait: 5
+            query: |
+              select test_count_23(f32) from 023_types;
+
+          - client: python
+            query_type: table
+            depends_on: udf-23-1
+            wait: 1
+            kill: udf-23-1
+            kill_wait: 2
+            depends_on_stream: 023_types
+            query: INSERT INTO 023_types (f32) SELECT number FROM numbers(10);
+
+    expected_results:
+      - query_id: udf-23-1
+        expected_results:
+          - [ 10.0 ] # select test_sec_large(f32) from 02045_types;
+
+  - id: 24
+    tags:
+      - udf2
+    name: UDA on changelog with changelog stream
+    description: SQL - UDA (support changelog) with changelog stream
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP STREAM IF EXISTS 024_changelog_types;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: CREATE STREAM IF NOT EXISTS 024_changelog_types
+              (`f32` float) SETTINGS mode = 'changelog';
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP FUNCTION IF EXISTS test_count_24;
+
+          - client: python
+            query_type: table
+            query_id: udf-24-0
+            wait: 1
+            query: |
+              CREATE AGGREGATE FUNCTION test_count_24(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+                {
+                  support_changelog: true,
+
+                  initialize: function() {
+                    this.count = 0;
+                  },
+
+                  process: function(values, deltas) {
+                    for (let i = 0; i < values.length; i++) {
+                    if (deltas[i] === 1) {
+                      this.count += 1;
+                    }
+                    else if (deltas[i] === -1)
+                      this.count -= 1;
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.count;
+                  },
+
+                  serialize: function() {
+                    let s = {
+                      'count': this.count
+                    };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.count = s['count'];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.count += s['count'];
+                  }
+                }
+              $$;
+
+          - client: python
+            query_id: udf-24-1
+            depends_on_done: udf-24-0
+            depends_on_stream: 024_changelog_types
+            query_end_timer: 7
+            query_type: stream
+            wait: 5
+            query: |
+              select test_count_24(f32) from 024_changelog_types;
+
+          - client: python
+            query_type: table
+            depends_on: udf-24-1
+            wait: 1
+            depends_on_stream: udf_types
+            query: INSERT INTO 024_changelog_types (f32) SELECT number FROM numbers(10);
+
+          - client: python
+            query_type: table
+            depends_on: udf-24-1
+            kill: udf-24-1
+            kill_wait: 2
+            wait: 1
+            depends_on_stream: 024_changelog_types
+            query: INSERT INTO 024_changelog_types (f32, _tp_delta) VALUES (1, -1);
+
+    expected_results:
+      - query_id: udf-24-1
+        expected_results:
+          - [ 10.0 ] # INSERT INTO 024_changelog_types (f32) SELECT number FROM numbers(10);
+          - [ 9.0 ] # INSERT INTO 024_changelog_types (f32, _tp_delta) VALUES (1, -1);
+
+  - id: 25
+    tags:
+      - udf2
+    name: UDA support changelog with versioned kv stream
+    description: SQL - UDA (support changelog) with versioned kv stream
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP STREAM IF EXISTS 025_versioned_kv_types;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: CREATE STREAM IF NOT EXISTS 025_versioned_kv_types
+              (`i32` int32, `f32` float) primary key i32 SETTINGS mode='versioned_kv';
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP FUNCTION IF EXISTS test_count_25;
+
+          - client: python
+            query_type: table
+            query_id: udf-25-0
+            wait: 1
+            query: |
+              CREATE AGGREGATE FUNCTION test_count_25(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+                {
+                  support_changelog: true,
+
+                  initialize: function() {
+                    this.count = 0;
+                  },
+
+                  process: function(values, deltas) {
+                    for (let i = 0; i < values.length; i++) {
+                    if (deltas[i] === 1) {
+                      this.count += 1;
+                    }
+                    else if (deltas[i] === -1)
+                      this.count -= 1;
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.count;
+                  },
+
+                  serialize: function() {
+                    let s = {
+                      'count': this.count
+                    };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.count = s['count'];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.count += s['count'];
+                  }
+                }
+              $$;
+
+          - client: python
+            query_id: udf-25-1
+            depends_on_done: udf-25-0
+            depends_on_stream: 025_versioned_kv_types
+            query_end_timer: 7
+            query_type: stream
+            wait: 5
+            query: |
+              select test_count_25(f32) from 025_versioned_kv_types;
+
+          - client: python
+            query_type: table
+            depends_on: udf-25-1
+            wait: 1
+            depends_on_stream: 025_versioned_kv_types
+            query: INSERT INTO 025_versioned_kv_types (i32, f32) SELECT number, number * 10 FROM numbers(10);
+
+          - client: python
+            query_type: table
+            depends_on: udf-25-1
+            kill: udf-25-1
+            kill_wait: 2
+            wait: 1
+            depends_on_stream: 025_versioned_kv_types
+            query: INSERT INTO 025_versioned_kv_types (i32, f32) VALUES (1, 0.1);
+
+    expected_results:
+      - query_id: udf-25-1
+        expected_results:
+          - [ 10.0 ] # INSERT INTO 025_versioned_kv_types (i32, f32) SELECT number, number * 10 FROM numbers(10);
+          - [ 10.0 ] # INSERT INTO 025_versioned_kv_types (i32, f32) VALUES (1, 0.1);
+
+  - id: 26
+    tags:
+      - udf2
+    name: UDA (changelog) with changelog table function
+    description: SQL - UDA (changelog) with changelog table function
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP STREAM IF EXISTS 026_types;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: CREATE STREAM IF NOT EXISTS 026_types
+              (`i32` int32, `f32` float);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP FUNCTION IF EXISTS test_count_26;
+
+          - client: python
+            query_type: table
+            query_id: udf-26-0
+            wait: 1
+            query: |
+              CREATE AGGREGATE FUNCTION test_count_26(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+                {
+                  support_changelog: true,
+
+                  initialize: function() {
+                    this.count = 0;
+                  },
+
+                  process: function(values, deltas) {
+                    for (let i = 0; i < values.length; i++) {
+                    if (deltas[i] === 1) {
+                      this.count += 1;
+                    }
+                    else if (deltas[i] === -1)
+                      this.count -= 1;
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.count;
+                  },
+
+                  serialize: function() {
+                    let s = {
+                      'count': this.count
+                    };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.count = s['count'];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.count += s['count'];
+                  }
+                }
+              $$;
+
+          - client: python
+            query_id: udf-26-1
+            depends_on_done: udf-26-0
+            depends_on_stream: 026_types
+            query_end_timer: 7
+            query_type: stream
+            wait: 5
+            query: |
+              select test_count_26(f32) from changelog(026_types, i32);
+
+          - client: python
+            query_type: table
+            depends_on: udf-26-1
+            wait: 1
+            depends_on_stream: 026_types
+            query: INSERT INTO 026_types (i32, f32) SELECT number, number * 10 FROM numbers(10);
+
+          - client: python
+            query_type: table
+            depends_on: udf-26-1
+            wait: 1
+            kill: udf-26-1
+            kill_wait: 2
+            depends_on_stream: 026_types
+            query: INSERT INTO 026_types (i32, f32) VALUES (1, 0.1);
+
+    expected_results:
+      - query_id: udf-26-1
+        expected_results:
+          - [ 10.0 ] # INSERT INTO 026_types (i32, f32) SELECT number, number * 10 FROM numbers(10);
+          - [ 10.0 ] # INSERT INTO 026_types (i32, f32) VALUES (1, 0.1);
+
+  - id: 27
+    tags:
+      - udf2
+    name: UDA (changelog) with subquery (emit changelog)
+    description: SQL - UDA (changelog) with subquery (emit changelog)
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP STREAM IF EXISTS 027_types;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: CREATE STREAM IF NOT EXISTS 027_types
+              (`i32` int32, `f32` float);
+
+          - client: python
+            query_type: table
+            query_id: udf-27-0
+            wait: 1
+            query: |
+              CREATE AGGREGATE FUNCTION IF NOT EXISTS test_count_26(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+                {
+                  support_changelog: true,
+
+                  initialize: function() {
+                    this.count = 0;
+                  },
+
+                  process: function(values, deltas) {
+                    for (let i = 0; i < values.length; i++) {
+                    if (deltas[i] === 1) {
+                      this.count += 1;
+                    }
+                    else if (deltas[i] === -1)
+                      this.count -= 1;
+                    }
+                  },
+
+                  finalize: function() {
+                    return this.count;
+                  },
+
+                  serialize: function() {
+                    let s = {
+                      'count': this.count
+                    };
+                    return JSON.stringify(s);
+                  },
+
+                  deserialize: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.count = s['count'];
+                  },
+
+                  merge: function(state_str) {
+                    let s = JSON.parse(state_str);
+                    this.count += s['count'];
+                  }
+                }
+              $$;
+
+          - client: python
+            query_id: udf-27-1
+            depends_on_done: udf-27-0
+            depends_on_stream: 027_types
+            query_end_timer: 7
+            query_type: stream
+            wait: 5
+            query: |
+              select test_count_26(f32) 
+              from (select f32 from changelog(027_types, i32) where f32 > 2);
+
+          - client: python
+            query_type: table
+            depends_on: udf-27-1
+            wait: 1
+            depends_on_stream: 027_types
+            query: INSERT INTO 027_types (i32, f32) SELECT number, number * 10 FROM numbers(10);
+
+          - client: python
+            query_type: table
+            depends_on: udf-27-1
+            wait: 1
+            kill: udf-27-1
+            kill_wait: 2
+            depends_on_stream: 027_types
+            query: INSERT INTO 027_types (i32, f32) VALUES (1, 0.1);
+
+    expected_results:
+      - query_id: udf-27-1
+        expected_results:
+          - [ 9.0 ] # INSERT INTO 026_types (i32, f32) SELECT number, number * 10 FROM numbers(10);
+          - [ 8.0 ] # INSERT INTO 026_types (i32, f32) VALUES (1, 0.1);
