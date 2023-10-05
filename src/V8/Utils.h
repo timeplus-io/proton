@@ -64,8 +64,8 @@ inline void run(
     func(isolate, local_ctx, try_catch);
 }
 
-/// Validate UDA
-void validateAggregationFunctionSource(
+/// Validate UDA, return true if the UDA supports changelog
+bool validateAggregationFunctionSource(
     const std::string & func_name, const std::vector<std::string> & required_member_funcs, const std::string & source);
 
 /// Validate UDF

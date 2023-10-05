@@ -102,6 +102,9 @@ struct JavaScriptUserDefinedFunctionConfiguration : public UserDefinedFunctionCo
 {
     /// source code of function, only available when 'type' is 'javascript'
     std::string source;
+
+    /// Whether or not it support changelog only valid when UDF is an JavaScript aggregate function
+    bool support_changelog = false;
 };
 
 using UserDefinedFunctionConfigurationPtr = std::shared_ptr<UserDefinedFunctionConfiguration>;

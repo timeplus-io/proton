@@ -25,6 +25,9 @@ struct JavaScriptBlueprint
 
     /// If UDA has customized emit strategy
     bool has_user_defined_emit_strategy = false;
+
+    /// If UDA support changelog
+    bool support_changelog = false;
 };
 
 struct JavaScriptAggrFunctionState
@@ -36,6 +39,8 @@ struct JavaScriptAggrFunctionState
     v8::Persistent<v8::Function> merge_func;
     v8::Persistent<v8::Function> serialize_func;
     v8::Persistent<v8::Function> deserialize_func;
+
+    bool support_changelog = false;
 
     /// Cached rows
     MutableColumns columns;
@@ -60,6 +65,8 @@ struct JavaScriptAggrFunctionState
     ~JavaScriptAggrFunctionState();
 
     void add(const IColumn ** src_columns, size_t row_num);
+
+    void negate(const IColumn ** src_columns, size_t row_num);
 
     void reinitCache();
 };
@@ -112,6 +119,9 @@ public:
 
     /// get instance of UDF from AggregateData and execute UDF
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override;
+
+    /// for changelog processing, delete existing row from current aggregation result
+    void negate(AggregateDataPtr __restrict place, const IColumn ** columns, size_t /*row_num*/, Arena * /*arena*/) const override;
 
     /// Merge with other Aggregate Data, maybe used before finalize result
     void merge(AggregateDataPtr __restrict /*place*/, ConstAggregateDataPtr /*rhs*/, Arena *) const override;
