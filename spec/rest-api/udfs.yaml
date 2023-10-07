@@ -9,7 +9,7 @@ info:
 paths:
   /udfs:
     post:
-      summary: Create a user defined function
+      summary: Create a user defined function (UDF), the UDF will be created asynchronously
       requestBody:
         required: true
         content:
@@ -173,7 +173,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/errorResp"
     delete:
-      summary: Delete an existing function
+      summary: Delete an existing function, the function will be deleted asynchronously
       parameters:
         - name: function
           in: path
