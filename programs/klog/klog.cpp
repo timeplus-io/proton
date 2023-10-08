@@ -825,7 +825,7 @@ void consume(KafkaWALPtrs & wals, const BenchmarkSettings & bench_settings)
             // ctx.schemas.push_back(table_schema); ? error: no member named 'schemas' in 'DWAL::KafkaWALContext'
 
             atomic_uint64_t consumed = 0;
-            Int32 batch = 100;
+            uint64_t batch = 100;
             uint64_t max_messages = bench_settings.consumer_settings.max_messages;
 
             ConsumeContext cctx{stdout_mutex, consumed, ctx, wal, dumpdata};

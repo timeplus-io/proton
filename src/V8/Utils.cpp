@@ -81,7 +81,7 @@ fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableCo
         case TypeIndex::UInt8: {
             if (arg_type->getName() == "bool")
             {
-                for (int i = 0; i < size; i++)
+                for (uint64_t i = 0; i < size; i++)
                     result->Set(context, i, to_v8<bool>(isolate, column->getBool(offset + i))).FromJust();
             }
             else
@@ -93,7 +93,7 @@ fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableCo
         }
         case TypeIndex::String:
         case TypeIndex::FixedString: {
-            for (int i = 0; i < size; i++)
+            for (uint64_t i = 0; i < size; i++)
                 result->Set(context, i, to_v8(isolate, column->getDataAt(offset + i).data, (*column).getDataAt(offset + i).size))
                     .FromJust();
             break;
@@ -101,7 +101,7 @@ fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableCo
         case TypeIndex::DateTime64: {
             const auto * source = checkAndGetColumn<ColumnDecimal<DateTime64>>(column.get());
             const auto & scale = reinterpret_cast<const DataTypeDateTime64 *>(arg_type.get())->getScale();
-            for (int i = 0; i < size; i++)
+            for (uint64_t i = 0; i < size; i++)
             {
                 auto dt64 = static_cast<Int64>((*source).getElement(offset + i));
                 result->Set(context, i, toV8Date(isolate, toDateTime64(dt64, scale, 3).value)).FromJust();
@@ -112,7 +112,7 @@ fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableCo
             const auto * array_type_ptr = reinterpret_cast<const DataTypeArray *>(arg_type.get());
             const auto * col_arr = checkAndGetColumn<ColumnArray>(column.get());
             assert(col_arr && array_type_ptr);
-            for (int i = 0; i < size; i++)
+            for (uint64_t i = 0; i < size; i++)
             {
                 uint64_t elem_offset = col_arr->getOffsets()[offset + i - 1];
                 uint64_t elem_size = col_arr->getOffsets()[offset + i] - elem_offset;
@@ -126,7 +126,7 @@ fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableCo
 #define FOR_DATE(DATE_TYPE_ID, DATE_TYPE_INTERNAL) \
     case (TypeIndex::DATE_TYPE_ID): { \
         const auto * col_date = checkAndGetColumn<ColumnVector<DATE_TYPE_INTERNAL>>(column.get()); \
-        for (int i = 0; i < size; i++) \
+        for (uint64_t i = 0; i < size; i++) \
         { \
             auto d = toDateTime64<DATE_TYPE_INTERNAL>((*col_date).getElement(offset + i)); \
             result->Set(context, i, toV8Date(isolate, d)).FromJust(); \
