@@ -481,7 +481,7 @@ tests:
 
           - client: python
             query_id: '1486'
-            depends_on_stream: test14_multishard_11
+            depends_on_stream: test14_view2_11
             query_type: stream
             query: |
               select max_i,
@@ -1284,7 +1284,7 @@ tests:
 
           - client: python
             query_id: '1490'
-            depends_on_stream: test14_multishard_11
+            depends_on_stream: test14_view2_11
             query_type: stream
             query: |
               select max_i,

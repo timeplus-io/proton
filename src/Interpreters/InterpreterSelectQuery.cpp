@@ -3357,7 +3357,7 @@ void InterpreterSelectQuery::buildWatermarkQueryPlan(QueryPlan & query_plan) con
 
 void InterpreterSelectQuery::buildStreamingProcessingQueryPlanBeforeJoin(QueryPlan & query_plan)
 {
-    if (!isStreaming() || has_user_defined_emit_strategy || !hasStreamingWindowFunc())
+    if (!isStreaming() || query_info.has_non_aggregate_over || has_user_defined_emit_strategy || !hasStreamingWindowFunc())
         return;
 
     if (query_info.hasPartitionByKeys())

@@ -473,11 +473,12 @@ void StorageStream::readConcat(
     std::vector<QueryPlanPtr> plans;
     for (auto & stream_shard : shards_to_read)
     {
-        auto create_streaming_source = [this, header, storage_snapshot, stream_shard, &query_info, context_](Int64 & max_sn_in_parts) {
+        auto create_streaming_source = [this, header, storage_snapshot, stream_shard, seek_to_info = query_info.seek_to_info, context_](
+                                           Int64 & max_sn_in_parts) {
             if (max_sn_in_parts < 0)
             {
                 /// Fallback to seek streaming store
-                auto offsets = stream_shard->getOffsets(query_info.seek_to_info);
+                auto offsets = stream_shard->getOffsets(seek_to_info);
                 LOG_INFO(log, "Fused read fallbacks to seek stream for shard={} since there are no historical data", stream_shard->shard);
 
                 return std::make_shared<StreamingStoreSource>(
@@ -518,7 +519,7 @@ void StorageStream::readConcat(
             else
             {
                 /// Fallback to seek streaming store
-                auto offsets = stream_shard->getOffsets(query_info.seek_to_info);
+                auto offsets = stream_shard->getOffsets(seek_to_info);
                 LOG_INFO(
                     log,
                     "Fused read fallbacks to seek stream since sequence gaps are found for shard={}, max_sn_in_parts={}, "
@@ -540,7 +541,7 @@ void StorageStream::readConcat(
         stream_shard->storage->readConcat(
             *plan,
             column_names,
-            storage_snapshot,
+            stream_shard->storage->getStorageSnapshot(storage_snapshot->metadata, context_),
             query_info,
             context_,
             processed_stage,
@@ -740,7 +741,7 @@ void StorageStream::readChangelog(
         }
     };
 
-    if (Streaming::isChangelogDataStream(dataStreamSemantic()))
+    if (Streaming::isChangelogStorage(dataStreamSemantic()))
     {
         /// Add _tp_delta column if it is necessary
         if (std::find(column_names.begin(), column_names.end(), ProtonConsts::RESERVED_DELTA_FLAG) == column_names.end())
@@ -812,7 +813,7 @@ void StorageStream::readChangelog(
         }
     }
 
-    if (Streaming::isChangelogKeyedStorage(dataStreamSemantic()) || Streaming::isChangelogDataStream(dataStreamSemantic()))
+    if (Streaming::isChangelogKeyedStorage(dataStreamSemantic()) || Streaming::isChangelogStorage(dataStreamSemantic()))
     {
         auto output_header
             = storage_snapshot->getSampleBlockForColumns(original_required_columns.empty() ? column_names : original_required_columns);

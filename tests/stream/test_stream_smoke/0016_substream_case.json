@@ -229,7 +229,7 @@
     },
     {
       "id": 2,
-      "tags": ["non_aggregate_over"],
+      "tags": ["non_aggregate_over", "bug"],
       "name": "non_aggr_over",
       "description": "non-aggregation with over functions in same substream",
       "steps":[
