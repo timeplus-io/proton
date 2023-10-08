@@ -124,13 +124,16 @@ void ShufflingTransform::consume(Chunk chunk)
 {
     if (chunk.hasRows())
     {
+        auto chunk_ctx = chunk.getOrCreateChunkContext();
         auto split_chunks{chunk_splitter.split(chunk)};
         for (auto & chunk_with_id : split_chunks)
         {
             assert(chunk_with_id.chunk);
             auto output_idx = chunk_with_id.id.items[0] % outputs.size();
             /// Keep substream id for each sub-chunk, used for downstream processors
-            chunk_with_id.chunk.getOrCreateChunkContext()->setSubstreamID(std::move(chunk_with_id.id));
+            auto new_chunk_ctx = std::make_shared<ChunkContext>(*chunk_ctx);
+            new_chunk_ctx->setSubstreamID(std::move(chunk_with_id.id));
+            chunk_with_id.chunk.setChunkContext(std::move(new_chunk_ctx));
             shuffled_output_chunks[output_idx].push(std::move(chunk_with_id.chunk));
         }
     }

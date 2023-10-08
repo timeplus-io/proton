@@ -10,11 +10,10 @@ on: # yamllint disable-line rule:truthy
     branches:
       - develop
     paths-ignore:
-      - 'CHANGELOG.md'
-      - 'README.md'
-      - 'SECURITY.md'
+      - '**.md'
       - 'docker/docs/**'
       - 'docs/**'
+      - 'spec/**'
       - 'utils/check-style/aspell-ignore/**'
 
 jobs:
@@ -38,7 +37,7 @@ jobs:
 
   build_address_x64:
     needs: verify
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -96,7 +95,7 @@ jobs:
 
   unit_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -134,7 +133,7 @@ jobs:
 
   smoke_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -183,7 +182,7 @@ jobs:
 
   stateless_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -220,7 +219,7 @@ jobs:
 
   stateful_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-50-upload-to-ghcr
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}

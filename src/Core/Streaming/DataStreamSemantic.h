@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <optional>
+
 namespace DB::Streaming
 {
 enum class StorageSemantic : uint8_t
@@ -20,6 +23,7 @@ struct DataStreamSemanticEx
 {
     DataStreamSemantic semantic = DataStreamSemantic::Append;
     std::optional<StorageSemantic> storage_semantic; /// extra elem is used for join
+    bool streaming = true;
 
     DataStreamSemanticEx() = default;
     DataStreamSemanticEx(const DataStreamSemanticEx &) = default;

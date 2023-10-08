@@ -16,13 +16,6 @@ struct SelectQueryOptions;
 struct StorageInMemoryMetadata;
 using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 
-/// proton : starts
-namespace Streaming
-{
-struct GetSampleBlockContext;
-}
-/// proton : ends
-
 /// Joined tables' columns resolver.
 /// We want to get each table structure at most once per table occurrence. Or even better once per table.
 /// TODO: joins tree with costs to change joins order by CBO.

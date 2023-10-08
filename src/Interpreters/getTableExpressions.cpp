@@ -8,6 +8,7 @@
 
 /// proton: starts.
 #include <Common/ProtonCommon.h>
+#include <Storages/Streaming/storageUtil.h>
 /// proton: ends.
 
 namespace DB
@@ -105,7 +106,10 @@ static NamesAndTypesList getColumnsFromTableExpression(
 
         /// proton : starts. Calculate hash semantic
         if (output_data_stream_semantic)
-            *output_data_stream_semantic = Streaming::getDataStreamSemantic(function_storage);
+        {
+            *output_data_stream_semantic = function_storage->dataStreamSemantic();
+            output_data_stream_semantic->streaming = isStreamingStorage(function_storage, context);
+        }
         /// proton : ends
     }
     else if (table_expression.database_and_table_name)
@@ -121,7 +125,10 @@ static NamesAndTypesList getColumnsFromTableExpression(
 
         /// proton : starts. Calculate hash semantic
         if (output_data_stream_semantic)
-            *output_data_stream_semantic = Streaming::getDataStreamSemantic(table);
+        {
+            *output_data_stream_semantic = table->dataStreamSemantic();
+            output_data_stream_semantic->streaming = isStreamingStorage(table, context);
+        }
         /// proton : ends
     }
 
@@ -158,9 +165,9 @@ TablesWithColumns getDatabaseAndTablesWithColumns(
         NamesAndTypesList aliases;
         NamesAndTypesList virtuals;
         /// proton: starts.
-        Streaming::DataStreamSemanticEx output_data_stream_semantic;
+        Streaming::DataStreamSemanticEx output_date_stream_semantic;
         NamesAndTypesList names_and_types = getColumnsFromTableExpression(
-            *table_expression, context, materialized, aliases, virtuals, &output_data_stream_semantic);
+            *table_expression, context, materialized, aliases, virtuals, &output_date_stream_semantic);
         /// proton: ends.
 
         removeDuplicateColumns(names_and_types);
@@ -184,7 +191,7 @@ TablesWithColumns getDatabaseAndTablesWithColumns(
             table.addMaterializedColumns(materialized);
 
         /// proton : starts
-        table.setOutputDataStreamSemantic(output_data_stream_semantic);
+        table.setOutputDataStreamSemantic(output_date_stream_semantic);
         /// proton : ends
     }
 

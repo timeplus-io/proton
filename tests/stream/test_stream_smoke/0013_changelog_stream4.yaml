@@ -460,18 +460,17 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000001'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_4_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_4_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -507,7 +506,7 @@ tests:
             depends_on_stream: test14_subquery_4
             query_end_timer: 12
             query_type: stream
-            query: select add_five(i), k2, _tp_delta from test14_view_4;
+            query: select test_14_4_add_five(i), k2, _tp_delta from test14_view_4;
 
           - client: python
             query_type: table
@@ -563,18 +562,17 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000001'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_4_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_4_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -610,7 +608,7 @@ tests:
             depends_on_stream: test14_subquery_4
             query_end_timer: 12
             query_type: stream
-            query: select add_five(i), k2, _tp_delta from test14_view_4;
+            query: select test_14_4_add_five(i), k2, _tp_delta from test14_view_4;
 
           - client: python
             query_type: table
@@ -666,18 +664,17 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000001'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_4_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_4_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -706,7 +703,7 @@ tests:
                 )
                 select * from cte2
               )
-              select add_five(i), k2, _tp_delta from cte1;
+              select test_14_4_add_five(i), k2, _tp_delta from cte1;
 
           - client: python
             query_type: table
@@ -757,18 +754,17 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000001'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: add_five
+              name: test_14_4_add_five
               arguments:
               - name: value
                 type: float32
               return_type: float32
               source: |
-                function add_five(value) {
+                function test_14_4_add_five(value) {
                     for (let i = 0; i < value.length; i++) {
                         value[i] = value[i] + 5;
                     }
@@ -816,7 +812,7 @@ tests:
             depends_on_stream: test14_subquery_4
             query_end_timer: 12
             query_type: stream
-            query: select add_five(i), k2, _tp_delta from test14_view2_4;
+            query: select test_14_4_add_five(i), k2, _tp_delta from test14_view2_4;
 
           - client: python
             query_type: table
@@ -878,12 +874,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_4_sec_large
               arguments:
               - name: value
                 type: float32
@@ -965,7 +960,7 @@ tests:
             depends_on_stream: test14_subquery_4
             query_end_timer: 12
             query_type: stream
-            query: select sec_large(i), k2 from test14_view_4 group by k2;
+            query: select test_14_4_sec_large(i), k2 from test14_view_4 group by k2;
 
           - client: python
             query_type: table
@@ -1029,12 +1024,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_4_sec_large
               arguments:
               - name: value
                 type: float32
@@ -1116,7 +1110,7 @@ tests:
             depends_on_stream: test14_subquery_4
             query_end_timer: 12
             query_type: stream
-            query: select sec_large(i), k2 from test14_view_4 group by k2;
+            query: select test_14_4_sec_large(i), k2 from test14_view_4 group by k2;
 
           - client: python
             query_type: table
@@ -1181,12 +1175,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_14_4_sec_large
               arguments:
               - name: value
                 type: float32
@@ -1280,7 +1273,7 @@ tests:
             depends_on_stream: test14_subquery_4
             query_end_timer: 12
             query_type: stream
-            query: select sec_large(i), k2 from test14_view2_4 group by k2;
+            query: select test_14_4_sec_large(i), k2 from test14_view2_4 group by k2;
 
           - client: python
             query_type: table

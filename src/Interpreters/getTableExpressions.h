@@ -6,12 +6,6 @@
 
 namespace DB
 {
-
-namespace Streaming
-{
-struct GetSampleBlockContext;
-}
-
 struct ASTTableExpression;
 class ASTSelectQuery;
 

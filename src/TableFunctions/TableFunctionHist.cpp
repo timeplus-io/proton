@@ -55,6 +55,7 @@ StoragePtr TableFunctionHist::calculateColumnDescriptions(ContextPtr context)
                 storage_id.getNameForLogs());
 
         columns = ColumnsDescription{interpreter.getSampleBlock().getNamesAndTypesList()};
+        data_stream_semantic = interpreter.getDataStreamSemantic();
         return nullptr;
     }
     else
@@ -76,6 +77,7 @@ StoragePtr TableFunctionHist::calculateColumnDescriptions(ContextPtr context)
 
         underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
         columns = underlying_storage_snapshot->getMetadataForQuery()->getColumns();
+        data_stream_semantic = storage->dataStreamSemantic();
         return storage;
     }
 }

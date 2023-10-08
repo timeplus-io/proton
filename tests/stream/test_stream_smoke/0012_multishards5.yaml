@@ -36,12 +36,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_5_sec_large
               arguments:
               - name: value
                 type: float32
@@ -133,7 +132,7 @@ tests:
             query_type: stream
             query: |
               select k,
-                     sec_large(to_float(i)) as sec_l,
+                     test_13_5_sec_large(to_float(i)) as sec_l,
                      window_start as s,
                      window_end as e
               from tumble(test13_view1_5 ,timestamp, 5s)
@@ -427,12 +426,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_5_sec_large
               arguments:
               - name: value
                 type: float32
@@ -523,7 +521,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(to_float(i)) as sec_l,
+              select test_13_5_sec_large(to_float(i)) as sec_l,
                      window_start as s,
                      window_end as e
               from tumble(test13_view1_5 ,timestamp, 5s)
@@ -812,12 +810,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_5_sec_large
               arguments:
               - name: value
                 type: float32
@@ -920,7 +917,7 @@ tests:
             query_type: stream
             query: |
               select k2,
-                     sec_large(i) as sec_l,
+                     test_13_5_sec_large(i) as sec_l,
                      window_start as s,
                      window_end as e
               from hop(test13_view2_5, timestamp, 2s, 5s)
@@ -1193,12 +1190,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_5_sec_large
               arguments:
               - name: value
                 type: float32
@@ -1290,7 +1286,7 @@ tests:
             query_end_timer: 12
             query_type: stream
             query: |
-              select sec_large(i) as sec_l,
+              select test_13_5_sec_large(i) as sec_l,
                      window_start as s
               from hop(test13_view1_5, timestamp, 2s, 5s)
               group by window_start,
@@ -1577,12 +1573,11 @@ tests:
           - client: rest
             rest_type: raw
             query_type: table
-            query_id: '10000002'
             query_url: /proton/v1/udfs
             http_method: POST
             data:
               type: javascript
-              name: sec_large
+              name: test_13_5_sec_large
               arguments:
               - name: value
                 type: float32
@@ -1674,7 +1669,7 @@ tests:
             query_type: stream
             query: |
               select id,
-                     sec_large(to_float(speed)) as sec_l,
+                     test_13_5_sec_large(to_float(speed)) as sec_l,
                      window_start as s,
                      window_end as e
               from session(test13_view1_5, timestamp, 5m, [speed >= 60, speed < 60))

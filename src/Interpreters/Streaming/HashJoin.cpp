@@ -817,18 +817,6 @@ const HashJoin::SupportMatrix HashJoin::support_matrix = {
     {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
     {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
     {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::Changelog}, true},
-
-    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Asof, StorageSemantic::Append}, true},
-    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Asof, StorageSemantic::VersionedKV}, true},
-
-    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Any, StorageSemantic::Append}, true},
-    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Any, StorageSemantic::VersionedKV}, true},
-
-    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Asof, StorageSemantic::Append}, true},
-    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Asof, StorageSemantic::VersionedKV}, true},
-
-    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::Append}, true},
-    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::VersionedKV}, true},
 };
 
 void HashJoin::validate(const JoinCombinationType & join_combination)

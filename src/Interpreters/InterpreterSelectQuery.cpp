@@ -109,11 +109,8 @@
 #include <Processors/QueryPlan/Streaming/WatermarkStepWithSubstream.h>
 #include <Processors/QueryPlan/Streaming/WindowStep.h>
 #include <Processors/Transforms/Streaming/WatermarkStamper.h>
-#include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Storages/Streaming/ProxyStream.h>
-#include <Storages/Streaming/StorageMaterializedView.h>
-#include <Storages/Streaming/StorageRandom.h>
-#include <Storages/Streaming/StorageStream.h>
+#include <Storages/Streaming/storageUtil.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
 
@@ -582,7 +579,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
                 query_info);
 
             Streaming::ChangelogQueryVisitor(data).visit(query_ptr);
-            if (data.queryIsRewritten())
+            if (data.queryInputIsRewritten())
             {
                 clear_inits();
 
@@ -3514,32 +3511,9 @@ bool InterpreterSelectQuery::isStreaming() const
     /// `table join stream` case yet. When the left stream is streaming, then the whole query will be streaming.
     bool streaming = false;
     if (context->getSettingsRef().query_mode.value == "table")
-    {
         streaming = false; /// force table mode
-    }
     else if (storage)
-    {
-        if (const auto * proxy = storage->as<Streaming::ProxyStream>())
-        {
-            if (proxy->isStreaming())
-                streaming = true;
-        }
-        else if (storage->as<StorageView>())
-        {
-            auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
-            auto ctx = Context::createCopy(context);
-            ctx->setCollectRequiredColumns(false);
-            streaming = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().analyze()).isStreaming();
-        }
-        else if (storage->as<StorageStream>())
-            streaming = true;
-        else if (storage->as<StorageMaterializedView>())
-            streaming = true;
-        else if (storage->as<StorageExternalStream>())
-            streaming = true;
-        else if (storage->as<StorageRandom>())
-            streaming = true;
-    }
+        streaming = isStreamingStorage(storage, context);
     else if (interpreter_subquery)
         streaming = interpreter_subquery->isStreaming();
 
