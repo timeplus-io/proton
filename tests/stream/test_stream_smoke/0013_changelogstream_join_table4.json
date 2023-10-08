@@ -4,30 +4,7 @@
     "test_suite_config": {
         "setup": {
             "statements": [
-                {
-                    "client": "python",
-                    "query_type": "table",
-                    "wait": 1,
-                    "query": "drop stream if exists changelog_stream"
-                },
-                {
-                    "client": "python",
-                    "query_type": "table",
-                    "wait": 2,
-                    "query": "create stream if not exists changelog_stream(i int) settings mode='changelog'"
-                },
-                {
-                    "client": "python",
-                    "query_type": "table",
-                    "wait": 1,
-                    "query": "drop stream if exists test14_changelog_kv_stream"
-                },
-                {
-                    "client": "python",
-                    "query_type": "table",
-                    "wait": 2,
-                    "query": "create stream if not exists test14_changelog_kv_stream(i int, s string) primary key s settings mode='changelog_kv'"
-                }
+
             ]
         },
         "tests_2_run": {
@@ -75,62 +52,62 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string) settings mode='changelog';"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string) settings mode='changelog';"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 2, 'e');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3, _tp_delta) values(4, 2, 'c',-1);"
+                            "query": "insert into test14_stream3_4(i3, j3, k3, _tp_delta) values(4, 2, 'c',-1);"
                         },
                         {
                             "client": "python",
@@ -138,38 +115,38 @@
                             "query_id": "1460",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 join test14_table2 on test14_stream1.j = test14_table2.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1460",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 3, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 3, 'b');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(5, 5, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(5, 5, 'a');"
                         },
                         {
                             "client": "python",
@@ -177,7 +154,7 @@
                             "kill": "1460",
                             "kill_wait": 3,
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         }
                     ]
                 }
@@ -266,80 +243,80 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string) settings mode='changelog';"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string) settings mode='changelog';"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 2, 'e');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3, _tp_delta) values(4, 2, 'c',-1);"
+                            "query": "insert into test14_stream3_4(i3, j3, k3, _tp_delta) values(4, 2, 'c',-1);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 3, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 3, 'b');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         },
                         {
                             "client": "python",
@@ -347,14 +324,14 @@
                             "query_id": "1461",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 as a join table(test14_table2) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1461",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
@@ -362,7 +339,7 @@
                             "kill": "1461",
                             "kill_wait": 3,
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         }
                     ]
                 }
@@ -440,80 +417,80 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string) settings mode='changelog';"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string) settings mode='changelog';"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 2, 'e');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3, _tp_delta) values(4, 2, 'c',-1);"
+                            "query": "insert into test14_stream3_4(i3, j3, k3, _tp_delta) values(4, 2, 'c',-1);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 3, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 3, 'b');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         },
                         {
                             "client": "python",
@@ -521,20 +498,20 @@
                             "query_id": "1462",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 as a left join table(test14_table2) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a left join table(test14_table2_4) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1462",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
@@ -542,7 +519,7 @@
                             "kill": "1462",
                             "kill_wait": 3,
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 5, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 5, 'a');"
                         }
                     ]
                 }
@@ -632,86 +609,86 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string) settings mode='changelog';"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string) settings mode='changelog';"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 3, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 3, 'b');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 2, 'e');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3, _tp_delta) values(4, 2, 'c',-1);"
+                            "query": "insert into test14_stream3_4(i3, j3, k3, _tp_delta) values(4, 2, 'c',-1);"
                         },
                         {
                             "client": "python",
@@ -726,7 +703,7 @@
                             "query_id": "1463",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "select * from test14_stream1 as a join table(test14_table2) as b on a.j = b.j2"
+                            "query": "select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2"
                         },
                         {
                             "client": "python",
@@ -734,32 +711,32 @@
                             "query_id": "1463",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "select * from test14_view join table(test14_stream3) as c on test14_view.j = c.j3;"
+                            "query": "select * from test14_view join table(test14_stream3_4) as c on test14_view.j = c.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1463",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 5, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 5, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(5, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(5, 2, 'a');"
                         }
                     ]
                 }
@@ -782,62 +759,62 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string);"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 2, 'e');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(5, 3, 'h');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(5, 3, 'h');"
                         },
                         {
                             "client": "python",
@@ -845,56 +822,56 @@
                             "query_id": "1464",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 join test14_table2 on test14_stream1.j = test14_table2.j2)select * from t join changelog(table(test14_stream3), j3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select * from t join changelog(table(test14_stream3_4), j3) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1464",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(8, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(8, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(6, 3, 'f');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(6, 3, 'f');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(5, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(5, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(4, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(4, 2, 'a');"
                         }
                     ]
                 }
@@ -922,62 +899,62 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string);"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 2, 'e');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(5, 3, 'h');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(5, 3, 'h');"
                         },
                         {
                             "client": "python",
@@ -985,50 +962,50 @@
                             "query_id": "1465",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 join test14_table2 on test14_stream1.j = test14_table2.j2)select * from t left join changelog(table(test14_stream3), j3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select * from t left join changelog(table(test14_stream3_4), j3) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1465",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(8, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(8, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(6, 3, 'f');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(6, 3, 'f');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(5, 5, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(5, 5, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         }
                     ]
                 }
@@ -1056,80 +1033,80 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string);"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 2, 'e');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(8, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(8, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(6, 3, 'f');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(6, 3, 'f');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         },
                         {
                             "client": "python",
@@ -1137,26 +1114,26 @@
                             "query_id": "1466",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 as a join table(test14_table2) as b on a.j = b.j2)select * from t join changelog(table(test14_stream3), j3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2)select * from t join changelog(table(test14_stream3_4), j3) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1466",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(5, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(5, 2, 'a');"
                         }
                     ]
                 }
@@ -1179,80 +1156,80 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string);"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 2, 'e');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(8, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(8, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(6, 3, 'f');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(6, 3, 'f');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         },
                         {
                             "client": "python",
@@ -1260,26 +1237,26 @@
                             "query_id": "1467",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 as a left join table(test14_table2) as b on a.j = b.j2)select * from t left join changelog(table(test14_stream3), j3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a left join table(test14_table2_4) as b on a.j = b.j2)select * from t left join changelog(table(test14_stream3_4), j3) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1467",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(5, 5, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(5, 5, 'a');"
                         }
                     ]
                 }
@@ -1308,93 +1285,93 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string);"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(1, 7, 'a');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(1, 7, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 2, 'e');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 3, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 3, 'b');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "exist": "not",
                             "exist_wait": 1,
-                            "query": "create  materialized view if not exists test14_view as (select * from test14_stream1 as a join table(test14_table2) as b on a.j = b.j2);"
+                            "query": "create  materialized view if not exists test14_view as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2);"
                         },
                         {
                             "client": "python",
@@ -1402,38 +1379,38 @@
                             "query_id": "1468",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "select * from test14_view join changelog(table(test14_stream3), j3) as c on test14_view.j = c.j3;"
+                            "query": "select * from test14_view join changelog(table(test14_stream3_4), j3) as c on test14_view.j = c.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1468",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(5, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(5, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 7, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 7, 'a');"
                         }
                     ]
                 }
@@ -1460,68 +1437,68 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string) primary key j3 settings mode='versioned_kv';"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string) primary key j3 settings mode='versioned_kv';"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(1, 7, 'a');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(1, 7, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 2, 'e');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 7, 'd');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 7, 'd');"
                         },
                         {
                             "client": "python",
@@ -1529,50 +1506,50 @@
                             "query_id": "1469",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 join test14_table2 on test14_stream1.j = test14_table2.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1469",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(8, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(8, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(6, 3, 'f');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(6, 3, 'f');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 7, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 7, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         },
                         {
                             "client": "python",
@@ -1580,7 +1557,7 @@
                             "kill": "1469",
                             "kill_wait": 3,
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(4, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(4, 2, 'a');"
                         }
                     ]
                 }
@@ -1668,68 +1645,68 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string) primary key j3 settings mode='versioned_kv';"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string) primary key j3 settings mode='versioned_kv';"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(1, 7, 'a');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(1, 7, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 2, 'e');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 7, 'd');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 7, 'd');"
                         },
                         {
                             "client": "python",
@@ -1737,50 +1714,50 @@
                             "query_id": "1470",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 join test14_table2 on test14_stream1.j = test14_table2.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1470",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(8, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(8, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(6, 3, 'f');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(6, 3, 'f');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 5, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 5, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         },
                         {
                             "client": "python",
@@ -1788,7 +1765,7 @@
                             "kill": "1470",
                             "kill_wait": 3,
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(4, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(4, 2, 'a');"
                         }
                     ]
                 }
@@ -1887,86 +1864,86 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string) primary key j3 settings mode='versioned_kv';"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string) primary key j3 settings mode='versioned_kv';"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 2, 'e');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 7, 'd');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 7, 'd');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(8, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(8, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(6, 3, 'f');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(6, 3, 'f');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(4, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(4, 2, 'a');"
                         },
                         {
                             "client": "python",
@@ -1974,26 +1951,26 @@
                             "query_id": "1471",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 as a join table(test14_table2) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1471",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
@@ -2001,7 +1978,7 @@
                             "kill": "1471",
                             "kill_wait": 3,
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 5, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 5, 'a');"
                         }
                     ]
                 }
@@ -2089,86 +2066,86 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string) primary key j3 settings mode='versioned_kv';"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string) primary key j3 settings mode='versioned_kv';"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 2, 'e');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 7, 'd');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 7, 'd');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(8, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(8, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(6, 3, 'f');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(6, 3, 'f');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(4, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(4, 2, 'a');"
                         },
                         {
                             "client": "python",
@@ -2176,26 +2153,26 @@
                             "query_id": "1472",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 as a join table(test14_table2) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1472",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
@@ -2203,7 +2180,7 @@
                             "kill": "1472",
                             "kill_wait": 3,
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 5, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 5, 'a');"
                         }
                     ]
                 }
@@ -2304,93 +2281,93 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string);"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(1, 7, 'a');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(1, 7, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(3, 2, 'e');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 3, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 3, 'b');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "exist": "not",
                             "exist_wait": 1,
-                            "query": "create  materialized view if not exists test14_view as (select * from test14_stream1 as a join table(test14_table2) as b on a.j = b.j2);"
+                            "query": "create  materialized view if not exists test14_view as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2);"
                         },
                         {
                             "client": "python",
@@ -2398,38 +2375,38 @@
                             "query_id": "1473",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "select * from test14_view join changelog(table(test14_stream3), j3) as c on test14_view.j = c.j3;"
+                            "query": "select * from test14_view join changelog(table(test14_stream3_4), j3) as c on test14_view.j = c.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1473",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(5, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(5, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 7, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 7, 'a');"
                         }
                     ]
                 }
@@ -2457,56 +2434,56 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string);"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(1, 7, 'a');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(1, 7, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(5, 2, 'h');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(5, 2, 'h');"
                         },
                         {
                             "client": "python",
@@ -2514,44 +2491,44 @@
                             "query_id": "1474",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 join test14_table2 on test14_stream1.j = test14_table2.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1474",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(8, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(8, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(6, 3, 'f');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(6, 3, 'f');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 7, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 7, 'a');"
                         },
                         {
                             "client": "python",
@@ -2559,7 +2536,7 @@
                             "kill": "1474",
                             "kill_wait": 3,
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         }
                     ]
                 }
@@ -2637,56 +2614,56 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string);"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(1, 7, 'a');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(1, 7, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(5, 2, 'h');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(5, 2, 'h');"
                         },
                         {
                             "client": "python",
@@ -2694,44 +2671,44 @@
                             "query_id": "1475",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 join test14_table2 on test14_stream1.j = test14_table2.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1475",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(8, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(8, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(6, 3, 'f');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(6, 3, 'f');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 7, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 7, 'a');"
                         },
                         {
                             "client": "python",
@@ -2739,7 +2716,7 @@
                             "kill": "1475",
                             "kill_wait": 3,
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         }
                     ]
                 }
@@ -2828,74 +2805,74 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string);"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(1, 7, 'a');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(1, 7, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(5, 2, 'h');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(5, 2, 'h');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(8, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(8, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(6, 3, 'f');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(6, 3, 'f');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         },
                         {
                             "client": "python",
@@ -2903,26 +2880,26 @@
                             "query_id": "1476",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 as a join table(test14_table2) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1476",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
@@ -2930,7 +2907,7 @@
                             "kill": "1476",
                             "kill_wait": 3,
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 7, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 7, 'a');"
                         }
                     ]
                 }
@@ -3008,74 +2985,74 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string);"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(1, 7, 'a');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(1, 7, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(5, 2, 'h');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(5, 2, 'h');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(8, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(8, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(6, 3, 'f');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(6, 3, 'f');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 7, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 7, 'b');"
                         },
                         {
                             "client": "python",
@@ -3083,26 +3060,26 @@
                             "query_id": "1477",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 as a left join table(test14_table2) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a left join table(test14_table2_4) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1477",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
@@ -3110,7 +3087,7 @@
                             "kill": "1477",
                             "kill_wait": 3,
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 7, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 7, 'a');"
                         }
                     ]
                 }
@@ -3211,93 +3188,93 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string);"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(6, 3, '7');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(1, 7, 'a');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(1, 7, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(5, 2, 'h');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(5, 2, 'h');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 3, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 3, 'b');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "exist": "not",
                             "exist_wait": 1,
-                            "query": "create  materialized view if not exists test14_view as (select * from test14_stream1 as a join table(test14_table2) as b on a.j = b.j2);"
+                            "query": "create  materialized view if not exists test14_view as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2);"
                         },
                         {
                             "client": "python",
@@ -3305,32 +3282,32 @@
                             "query_id": "1478",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "select * from test14_view join changelog(table(test14_stream3), j3) as c on test14_view.j = c.j3;"
+                            "query": "select * from test14_view join changelog(table(test14_stream3_4), j3) as c on test14_view.j = c.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1478",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 7, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 7, 'a');"
                         }
                     ]
                 }
@@ -3358,68 +3335,68 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream1;"
+                            "query": "drop stream if exists test14_stream1_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_table2;"
+                            "query": "drop stream if exists test14_table2_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test14_stream3;"
+                            "query": "drop stream if exists test14_stream3_4;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream1",
+                            "exist": "test14_stream1_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream1(i int, j int, k string);"
+                            "query": "create stream if not exists test14_stream1_4(i int, j int, k string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_table2",
+                            "exist": "test14_table2_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_table2(i2 int, j2 int, k2 string);"
+                            "query": "create stream if not exists test14_table2_4(i2 int, j2 int, k2 string);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "exist": "test14_stream3",
+                            "exist": "test14_stream3_4",
                             "exist_wait": 1,
-                            "query": "create stream if not exists test14_stream3(i3 int, j3 int, k3 string) primary key j3 settings mode='changelog_kv';"
+                            "query": "create stream if not exists test14_stream3_4(i3 int, j3 int, k3 string) primary key j3 settings mode='changelog_kv';"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(4, 2, 'c');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(1, 7, 'a');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(1, 7, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3, _tp_delta) values(5, 2, 'h', -1);"
+                            "query": "insert into test14_stream3_4(i3, j3, k3, _tp_delta) values(5, 2, 'h', -1);"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(1, 3, 'a');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream3(i3, j3, k3) values(5, 2, 's');"
+                            "query": "insert into test14_stream3_4(i3, j3, k3) values(5, 2, 's');"
                         },
                         {
                             "client": "python",
@@ -3427,44 +3404,44 @@
                             "query_id": "1479",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1 join test14_table2 on test14_stream1.j = test14_table2.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "depends_on": "1479",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(8, 2, 'a');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(8, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 3, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 3, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(6, 3, 'f');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(6, 3, 'f');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(5, 2, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(5, 2, 'a');"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_stream1(i, j, k) values(1, 7, 'a');"
+                            "query": "insert into test14_stream1_4(i, j, k) values(1, 7, 'a');"
                         },
                         {
                             "client": "python",
@@ -3472,7 +3449,7 @@
                             "kill": "1479",
                             "kill_wait": 3,
                             "wait": 1,
-                            "query": "insert into test14_table2(i2, j2, k2) values(1, 5, 'b');"
+                            "query": "insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');"
                         }
                     ]
                 }
