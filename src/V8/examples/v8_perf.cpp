@@ -306,7 +306,7 @@ void run(v8::Isolate * isolate, const v8::Persistent<v8::Context> & obj_blue_pri
     LOG_INFO(v8_log, "took {}us to run {} uda script, us_per_iteration={}", duration, all_states.size(), duration / all_states.size());
 
     /// validate the results
-    auto sum = std::accumulate(values.begin(), values.end(), 0);
+    size_t sum = std::accumulate(values.begin(), values.end(), 0);
     for (auto s : results)
     {
         if (s != sum)

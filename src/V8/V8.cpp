@@ -38,10 +38,9 @@ void gcEpilogueCallback(v8::Isolate * isolate, v8::GCType type, v8::GCCallbackFl
     (void)flags;
 }
 
-void oomHandler(const char * location, bool is_heap_oom)
-{
+void OOMCallback(const char* location, const v8::OOMDetails& oom_details) {
     (void)location;
-    (void)is_heap_oom;
+    (void)oom_details;
 }
 
 void fatalErrorHandler(const char * location, const char * message)
@@ -76,7 +75,7 @@ void V8::shutdown()
         return;
 
     v8::V8::Dispose();
-    v8::V8::ShutdownPlatform();
+    v8::V8::DisposePlatform();
 
     platform.reset();
     allocator.reset();
@@ -92,7 +91,7 @@ v8::Isolate * V8::createIsolate()
 
     auto * isolate = v8::Isolate::New(isolate_params);
     assert(isolate);
-    isolate->SetOOMErrorHandler(oomHandler);
+    isolate->SetOOMErrorHandler(OOMCallback);
     isolate->SetFatalErrorHandler(fatalErrorHandler);
     isolate->AddGCPrologueCallback(gcPrologueCallback);
     isolate->AddGCEpilogueCallback(gcEpilogueCallback);
