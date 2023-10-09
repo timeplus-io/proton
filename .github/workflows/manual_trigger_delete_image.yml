@@ -1,4 +1,4 @@
-name: manual_trigger_delete_image_version
+name: manual_trigger_delete_image
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
         type: string
         default: 'manual'
 jobs:
-  delete_image_version:
+  delete_image:
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -25,6 +25,6 @@ jobs:
       - name: delete image
         run: python tests/proton_ci/delete_image.py
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           PROTON_VERSION: ${{ github.event.inputs.tag }}
 
