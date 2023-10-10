@@ -1,4 +1,4 @@
-name: manual_trigger_mark_stable
+name: mark_stable
 
 on:
   workflow_dispatch:
@@ -14,12 +14,6 @@ jobs:
     permissions:
       packages: write
     steps:
-      - name: Login to ghcr.io
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: proton_robot
-          password: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       - name: Check if tag ends with "-rc"
         run: |
           if [[ ${TAG: -3} != "-rc" ]];
@@ -42,4 +36,5 @@ jobs:
           repository: ${{ github.repository }}
           target: ${{ github.event.inputs.tag }}
           tags: ${{ steps.generate_new_tag.outputs.new_tag }}
+          token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
 
