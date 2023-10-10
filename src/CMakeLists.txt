@@ -429,6 +429,11 @@ if (TARGET ch_contrib::v8_libbase)
     dbms_target_link_libraries(PUBLIC V8)
     dbms_target_link_libraries(PUBLIC ${CMAKE_DL_LIBS})
 endif()
+
+if (TARGET ch_contrib::benchmark)
+    dbms_target_link_libraries(PUBLIC ch_contrib::benchmark)
+endif()
+
 # proton: ends
 
 dbms_target_link_libraries (

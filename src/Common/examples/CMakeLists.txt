@@ -85,3 +85,8 @@ endif()
 
 proton_add_executable (interval_tree interval_tree.cpp)
 target_link_libraries (interval_tree PRIVATE dbms)
+
+if (ENABLE_BENCHMARK)
+    proton_add_executable (benchmark_string_copy benchmark_string_copy.cpp)
+    target_link_libraries (benchmark_string_copy PRIVATE dbms)
+endif()
