@@ -1,0 +1,30 @@
+name: manual_trigger_delete_image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Docker image tag'
+        required: true
+        type: string
+        default: 'manual'
+jobs:
+  delete_image:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Python ENV
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: pip install requests
+        run: pip install requests
+      - name: delete image
+        run: python tests/proton_ci/delete_image.py
+        env:
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          PROTON_VERSION: ${{ github.event.inputs.tag }}
+
