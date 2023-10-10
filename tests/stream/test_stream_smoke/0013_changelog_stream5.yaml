@@ -117,7 +117,6 @@ tests:
           - client: python
             query_id: '1412'
             depends_on_stream: test14_subquery_5
-            query_end_timer: 12
             query_type: stream
             query: |
               with cte1 as (
@@ -268,7 +267,6 @@ tests:
           - client: python
             query_id: '1413'
             depends_on_stream: test14_subquery_5
-            query_end_timer: 12
             query_type: stream
             query: select test_14_5_sec_large(i), k2 from test14_view2_5 group by k2;
 
@@ -363,7 +361,6 @@ tests:
           - client: python
             query_id: '1414'
             depends_on_stream: test14_subquery_5
-            query_end_timer: 12
             query_type: stream
             query: select max(i), min(i), avg(i), k1 from test14_view_5 group by k1;
 
@@ -456,7 +453,6 @@ tests:
           - client: python
             query_id: '1415'
             depends_on_stream: test14_subquery_5
-            query_end_timer: 12
             query_type: stream
             query: select max(i), min(i), avg(i), k1 from test14_view_5 group by k1;
 
@@ -568,7 +564,6 @@ tests:
           - client: python
             query_id: '1416'
             depends_on_stream: test14_subquery_5
-            query_end_timer: 12
             query_type: stream
             query: select max(i), min(i), avg(i), k1 from test14_view2_5 group by k1;
 
@@ -659,7 +654,6 @@ tests:
           - client: python
             query_id: '1417'
             depends_on_stream: test14_subquery_5
-            query_end_timer: 12
             query_type: stream
             query: |
               with cte1 as (with cte2 as (
@@ -780,7 +774,6 @@ tests:
           - client: python
             query_id: '1418'
             depends_on_stream: test14_subquery_5
-            query_end_timer: 12
             query_type: stream
             query: select test_14_5_add_five(i), k2, _tp_delta from test14_view2_5;
 
@@ -867,7 +860,6 @@ tests:
           - client: python
             query_id: '1419'
             depends_on_stream: test14_subquery_5
-            query_end_timer: 12
             query_type: stream
             query: select lag(i, 2), k2 from test14_view_5;
 
@@ -956,7 +948,6 @@ tests:
           - client: python
             query_id: '1420'
             depends_on_stream: test14_subquery_5
-            query_end_timer: 12
             query_type: stream
             query: select lag(i, 2), k2 from test14_view_5;
 
@@ -1054,7 +1045,6 @@ tests:
           - client: python
             query_id: '1421'
             depends_on_stream: test14_subquery_5
-            query_end_timer: 12
             query_type: stream
             query: select lag(i, 2), k2 from test14_view2_5;
 
@@ -1134,7 +1124,6 @@ tests:
           - client: python
             query_id: '1422'
             depends_on_stream: test14_subquery_5
-            query_end_timer: 12
             query_type: stream
             query: |
               with cte1 as (
@@ -1234,7 +1223,6 @@ tests:
           - client: python
             query_id: '1423'
             depends_on_stream: test14_subquery_5
-            query_end_timer: 12
             query_type: stream
             query: select lag(i, 2), k2 from test14_view2_5;
 

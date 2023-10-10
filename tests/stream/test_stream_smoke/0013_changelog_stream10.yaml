@@ -105,7 +105,6 @@ tests:
           - client: python
             query_id: '1472'
             depends_on_stream: test14_multishard_10
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_14_10_sec_large(i)
@@ -237,7 +236,6 @@ tests:
           - client: python
             query_id: '1473'
             depends_on_stream: test14_multishard_10
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_14_10_sec_large(i)
@@ -322,7 +320,6 @@ tests:
           - client: python
             query_id: '1474'
             depends_on_stream: test14_multishard_10
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(i, 1),
@@ -430,7 +427,6 @@ tests:
           - client: python
             query_id: '1475'
             depends_on_stream: test14_multishard_10
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(i, 1),
@@ -539,7 +535,6 @@ tests:
           - client: python
             query_id: '1476'
             depends_on_stream: test14_multishard_10
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(i, 1),
@@ -663,7 +658,6 @@ tests:
           - client: python
             query_id: '1477'
             depends_on_stream: test14_multishard_10
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(i, 1),
@@ -808,7 +802,6 @@ tests:
           - client: python
             query_id: '1478'
             depends_on_stream: test14_multishard_10
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(i, 1),
@@ -953,7 +946,6 @@ tests:
           - client: python
             query_id: '1479'
             depends_on_stream: test14_multishard_10
-            query_end_timer: 12
             query_type: stream
             query: |
               select power(10, log2(i)),
@@ -1104,7 +1096,6 @@ tests:
           - client: python
             query_id: '1480'
             depends_on_stream: test14_multishard_10
-            query_end_timer: 12
             query_type: stream
             query: |
               select power(10, log2(i)),
@@ -1252,7 +1243,6 @@ tests:
           - client: python
             query_id: '1481'
             depends_on_stream: test14_multishard_10
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(i),
@@ -1609,7 +1599,6 @@ tests:
           - client: python
             query_id: '1483'
             depends_on_stream: test14_multishard_10
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_14_10_sec_large(i),

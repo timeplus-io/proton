@@ -118,7 +118,6 @@ tests:
           - client: python
             query_id: '1436'
             depends_on_stream: test14_substream_7
-            query_end_timer: 12
             query_type: stream
             query: select test_14_7_sec_large(val), max(val), min(val), avg(val), name from changelog(test14_substream_7, id) partition by name group by id;
 
@@ -193,56 +192,55 @@ tests:
           - client: python
             query_id: '1437'
             depends_on_stream: test14_substream_7
-            query_end_timer: 12
             query_type: stream
-            query: select max(val), min(val), avg(val), name from changelog(test14_substream_7, id) partition by name group by types;
+            query: select max(val), min(val), avg(val), name from changelog(test14_substream_7, id) partition by name group by types emit periodic 1s;
 
           - client: python
             query_type: table
             depends_on: '1437'
-            wait: 2
+            wait: 1
             query: insert into test14_substream_7(val, types, id, name) values (1, 'c', 2, 'a');
 
           - client: python
             query_type: table
-            wait: 2
+            wait: 1
             query: insert into test14_substream_7(val, types, id, name) values (3, 'b', 3, 'b');
 
           - client: python
             query_type: table
-            wait: 2
+            wait: 1
             query: insert into test14_substream_7(val, types, id, name) values (5, 'a', 1, 'c');
 
           - client: python
             query_type: table
-            wait: 2
+            wait: 1
             query: insert into test14_substream_7(val, types, id, name) values (8, 'c', 12, 'a');
 
           - client: python
             query_type: table
-            wait: 2
+            wait: 1
             query: insert into test14_substream_7(val, types, id, name) values (9, 'b', 3, 'b');
 
           - client: python
             query_type: table
-            wait: 2
+            wait: 1
             query: insert into test14_substream_7(val, types, id, name) values (11, 'a', 2, 'b');
 
           - client: python
             query_type: table
-            wait: 2
+            wait: 1
             query: insert into test14_substream_7(val, types, id, name) values (10, 'c', 1, 'c');
 
           - client: python
             query_type: table
             kill: '1437'
-            kill_wait: 2
-            wait: 2
+            kill_wait: 3
+            wait: 1
             query: insert into test14_substream_7(val, types, id, name) values (14, 'b', 2, 'b');
 
           - client: python
             query_type: table
-            wait: 3
+            wait: 1
             query: drop stream if exists test14_substream_7;
 
     expected_results:
@@ -345,7 +343,6 @@ tests:
           - client: python
             query_id: '1438'
             depends_on_stream: test14_substream_7
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_14_7_sec_large(val), max(val), min(val), avg(val), name from changelog(test14_substream_7, id)
@@ -423,7 +420,6 @@ tests:
           - client: python
             query_id: '1439'
             depends_on_stream: test14_substream_7
-            query_end_timer: 12
             query_type: stream
             query: select max(val), min(val), avg(val), count(*), sum(val), window_start from tumble(test14_stream, ts, 5s) group by window_start;
 
@@ -512,7 +508,6 @@ tests:
           - client: python
             query_id: '1440'
             depends_on_stream: test14_substream_7
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(val), min(val), avg(val), count(*), sum(val), window_start from hop(test14_stream, ts, 2s, 5s)
@@ -627,7 +622,6 @@ tests:
           - client: python
             query_id: '1441'
             depends_on_stream: test14_subquery_7
-            query_end_timer: 12
             query_type: stream
             query: select i, k1, k2, lag(i, 2), upper(k2), test_14_7_add_five(i) from test14_view_7;
 
@@ -751,7 +745,6 @@ tests:
           - client: python
             query_id: '1442'
             depends_on_stream: test14_subquery_7
-            query_end_timer: 12
             query_type: stream
             query: select i, k1, k2, lag(i, 2), upper(k2), test_14_7_add_five(i) from test14_view_7;
 
@@ -883,7 +876,6 @@ tests:
           - client: python
             query_id: '1443'
             depends_on_stream: test14_subquery_7
-            query_end_timer: 12
             query_type: stream
             query: select i, k1, k2, lag(i, 2), upper(k2), test_14_7_add_five(i) from test14_view2_7;
 
@@ -998,7 +990,6 @@ tests:
           - client: python
             query_id: '1444'
             depends_on_stream: test14_subquery_7
-            query_end_timer: 12
             query_type: stream
             query: |
               with cte1 as (with cte2 as (select i, k1, k2, _tp_delta from test14_subquery_7) select * from cte2)
@@ -1132,7 +1123,6 @@ tests:
           - client: python
             query_id: '1445'
             depends_on_stream: test14_subquery_7
-            query_end_timer: 12
             query_type: stream
             query: select i, k1, k2, lag(i, 2), upper(k2), test_14_7_add_five(i) from test14_view2_7;
 
@@ -1238,7 +1228,6 @@ tests:
           - client: python
             query_id: '1446'
             depends_on_stream: test14_subquery_7
-            query_end_timer: 12
             query_type: stream
             query: select max(i), min(i), avg(i), k2 from test14_view_7 group by k2 emit periodic 1s;
 
@@ -1329,7 +1318,6 @@ tests:
           - client: python
             query_id: '1447'
             depends_on_stream: test14_subquery_7
-            query_end_timer: 12
             query_type: stream
             query: select max(i), min(i), avg(i), k2 from test14_view_7 group by k2 emit periodic 1s;
 
