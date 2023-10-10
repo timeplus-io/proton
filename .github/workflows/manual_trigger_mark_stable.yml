@@ -1,0 +1,41 @@
+name: manual_trigger_mark_stable
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Docker image tag"
+        required: true
+        type: string
+        default: "manual"
+jobs:
+  mark_stable:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Log in to registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
+      - name: Check if tag ends with "-rc"
+        run: |
+          if [[ ${TAG: -3} != "-rc" ]];
+          then
+              echo "tag '$TAG' isn't end with '-rc'"
+              exit 1
+          fi
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+      - name: Generate new tag
+        id: generate_new_tag
+        run: |
+          echo "new_tag=${TAG: : -3}" >> $GITHUB_OUTPUT
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+      - name: Add tag to image
+        uses: shrink/actions-docker-registry-tag@v3
+        with:
+          registry: ghcr.io
+          repository: ${{ github.repository }}
+          target: ${{ github.event.inputs.tag }}
+          tags: ${{ steps.generate_new_tag.outputs.new_tag }}
+
