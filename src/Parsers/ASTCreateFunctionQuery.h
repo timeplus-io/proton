@@ -21,7 +21,7 @@ public:
 
     /// proton: starts
     bool is_aggregation = false;
-    bool is_javascript_func = false;
+    String lang = "SQL";
     ASTPtr arguments;
     ASTPtr return_type;
     /// proton: ends
@@ -38,6 +38,9 @@ public:
 
     /// proton: starts
     Poco::JSON::Object::Ptr toJSON() const;
+
+    /// If it is a JavaScript UDF
+    bool isJavaScript() const noexcept { return lang == "JavaScript"; }
     /// proton: ends
 };
 

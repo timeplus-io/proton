@@ -127,7 +127,7 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
 
     /// proton: starts
     create_function_query->is_aggregation = is_aggregation;
-    create_function_query->is_javascript_func = is_javascript_func;
+    create_function_query->lang = is_javascript_func ? "JavaScript" : "SQL";
     create_function_query->arguments = std::move(arguments);
     create_function_query->return_type = std::move(return_type);
     /// proton: ends

@@ -234,7 +234,10 @@ void JavaScriptAggrFunctionState::reinitCache()
 }
 
 AggregateFunctionJavaScriptAdapter::AggregateFunctionJavaScriptAdapter(
-    const JavaScriptUserDefinedFunctionConfigurationPtr config_, const DataTypes & types, const Array & params_, size_t max_v8_heap_size_in_bytes_)
+    JavaScriptUserDefinedFunctionConfigurationPtr config_,
+    const DataTypes & types,
+    const Array & params_,
+    size_t max_v8_heap_size_in_bytes_)
     : IAggregateFunctionHelper<AggregateFunctionJavaScriptAdapter>(types, params_)
     , config(config_)
     , num_arguments(types.size())

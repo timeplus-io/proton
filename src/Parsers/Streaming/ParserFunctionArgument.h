@@ -8,7 +8,7 @@ namespace DB
 /** Query like this used as UDF argument list:
   *     complex tuple(float32, datetime64(3))
   */
-class ParserFuncArgument : public IParserBase
+class ParserFunctionArgument : public IParserBase
 {
 private:
     const char * getName() const override { return "Function Argument query"; }

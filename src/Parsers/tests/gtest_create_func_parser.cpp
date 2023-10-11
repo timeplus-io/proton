@@ -11,21 +11,13 @@
 #include <Parsers/TablePropertiesQueriesASTs.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
+#include <Parsers/queryToString.h>
 #include <base/types.h>
 
 #include <gtest/gtest.h>
 #include <Poco/JSON/Parser.h>
 
 using namespace DB;
-
-[[maybe_unused]] static String astToString(IAST * ast)
-{
-    WriteBufferFromOwnString buf;
-    formatAST(*ast, buf, false);
-    return buf.str();
-}
-
-/// Tests for external dictionaries DDL parser
 
 TEST(ParserCreateFunctionQuery, UDFFunction)
 {
@@ -41,22 +33,22 @@ TEST(ParserCreateFunctionQuery, UDFFunction)
     ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
     ASTCreateFunctionQuery * create = ast->as<ASTCreateFunctionQuery>();
     EXPECT_EQ(create->getFunctionName(), "add_five");
-    EXPECT_EQ(create->is_javascript_func, true);
+    EXPECT_EQ(create->lang, "JavaScript");
     EXPECT_NE(create->function_core, nullptr);
     EXPECT_NE(create->arguments, nullptr);
 
     /// Check arguments
-    String args = astToString(create->arguments.get());
+    String args = queryToString(*create->arguments.get(), true);
     EXPECT_EQ(args, "(value float32)");
 
     /// Check return type
-    String ret = astToString(create->return_type.get());
+    String ret = queryToString(*create->return_type.get(), true);
     EXPECT_EQ(ret, "float32");
 
     ASTLiteral * js_src = create->function_core->as<ASTLiteral>();
     EXPECT_EQ(js_src->value.safeGet<String>(), " function add_five(value){for(let i=0;i<value.length;i++){value[i]=value[i]+5}return value}");
 
-    String func_str = astToString(create);
+    String func_str = queryToString(*create, true);
     EXPECT_EQ(
         func_str,
         "CREATE FUNCTION add_five(value float32) RETURNS float32 AS $$\n function add_five(value){for(let "
@@ -107,11 +99,11 @@ TEST(ParserCreateFunctionQuery, ArgTypes)
     EXPECT_NE(create->arguments, nullptr);
 
     /// Check arguments
-    String args = astToString(create->arguments.get());
+    String args = queryToString(*create->arguments.get(), true);
     EXPECT_EQ(args, "(value float32, complex array(datetime64(3)), t tuple(i int64, f float32))");
 
     /// Check return type
-    String ret = astToString(create->return_type.get());
+    String ret = queryToString(*create->return_type.get(), true);
     EXPECT_EQ(ret, "array(float64)");
 
     auto json = create->toJSON();
@@ -141,11 +133,11 @@ TEST(ParserCreateFunctionQuery, ReturnType)
     EXPECT_NE(create->arguments, nullptr);
 
     /// Check arguments
-    String args = astToString(create->arguments.get());
+    String args = queryToString(*create->arguments.get(), true);
     EXPECT_EQ(args, "(value float32, dt datetime64(3))");
 
     /// Check return type
-    String ret = astToString(create->return_type.get());
+    String ret = queryToString(*create->return_type.get(), true);
     EXPECT_EQ(ret, "tuple(v float64, dt datetime64(1), id string)");
 
     auto json = create->toJSON();

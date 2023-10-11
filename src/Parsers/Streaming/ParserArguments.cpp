@@ -1,6 +1,6 @@
 #include <Parsers/Streaming/ParserArguments.h>
 
-#include <Parsers/Streaming/ParserFuncArgument.h>
+#include <Parsers/Streaming/ParserFunctionArgument.h>
 
 #include <Parsers/ASTFunctionWithKeyValueArguments.h>
 #include <Parsers/CommonParsers.h>
@@ -24,7 +24,7 @@ bool ParserArguments::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [
 
     ++pos;
 
-    ParserList arg_list_parser(std::make_unique<ParserFuncArgument>(), std::make_unique<ParserToken>(TokenType::Comma), false);
+    ParserList arg_list_parser(std::make_unique<ParserFunctionArgument>(), std::make_unique<ParserToken>(TokenType::Comma), false);
 
     ASTPtr expr_list_args;
     if (!arg_list_parser.parse(pos, expr_list_args, expected))

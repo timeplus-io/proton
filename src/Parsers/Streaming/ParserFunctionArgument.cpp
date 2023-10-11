@@ -1,4 +1,4 @@
-#include <Parsers/Streaming/ParserFuncArgument.h>
+#include <Parsers/Streaming/ParserFunctionArgument.h>
 
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTNameTypePair.h>
@@ -9,7 +9,7 @@
 namespace DB
 {
 
-bool ParserFuncArgument::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[maybe_unused]] bool hint)
+bool ParserFunctionArgument::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[maybe_unused]] bool hint)
 {
     if (!pos.isValid())
         return false;

@@ -54,7 +54,7 @@ BlockIO InterpreterCreateFunctionQuery::execute()
     bool replace_if_exists = create_function_query.or_replace;
 
     /// proton: starts. Handle javascript UDF
-    if (create_function_query.is_javascript_func)
+    if (create_function_query.isJavaScript())
         return handleJavaScriptUDF(throw_if_exists, replace_if_exists);
     /// proton: ends
 
@@ -67,7 +67,7 @@ BlockIO InterpreterCreateFunctionQuery::execute()
 BlockIO InterpreterCreateFunctionQuery::handleJavaScriptUDF(bool throw_if_exists, bool replace_if_exists)
 {
     ASTCreateFunctionQuery & create = query_ptr->as<ASTCreateFunctionQuery &>();
-    assert(create.is_javascript_func);
+    assert(create.isJavaScript());
 
     const auto func_name = create.getFunctionName();
     Poco::JSON::Object::Ptr func = create.toJSON();

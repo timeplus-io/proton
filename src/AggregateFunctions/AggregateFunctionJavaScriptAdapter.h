@@ -87,7 +87,7 @@ private:
 
 public:
     AggregateFunctionJavaScriptAdapter(
-        const JavaScriptUserDefinedFunctionConfigurationPtr config_,
+        JavaScriptUserDefinedFunctionConfigurationPtr config_,
         const DataTypes & types,
         const Array & params_,
         size_t max_v8_heap_size_in_bytes_);

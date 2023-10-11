@@ -49,6 +49,7 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
     settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(getFunctionName()) << (settings.hilite ? hilite_none : "");
 
     /// proton: starts
+    bool is_javascript_func = isJavaScript();
     if (is_javascript_func)
     {
         /// arguments
@@ -88,7 +89,7 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     Poco::JSON::Object::Ptr func = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
     Poco::JSON::Object::Ptr inner_func = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
     inner_func->set("name", getFunctionName());
-    if (!is_javascript_func)
+    if (!isJavaScript())
     {
         WriteBufferFromOwnString source_buf;
         formatAST(*function_core, source_buf, false);
