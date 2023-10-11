@@ -80,7 +80,6 @@ tests:
           - client: python
             query_id: '1360'
             depends_on_stream: test13_subq_7
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(val),
@@ -196,7 +195,6 @@ tests:
           - client: python
             query_id: '1361'
             depends_on_stream: test13_multishard_7
-            query_end_timer: 12
             query_type: stream
             query: |
               select i,
@@ -292,7 +290,6 @@ tests:
           - client: python
             query_id: '1362'
             depends_on_stream: test13_multishard_7
-            query_end_timer: 12
             query_type: stream
             query: |
               select if(i > k1, i, k1),
@@ -387,7 +384,6 @@ tests:
           - client: python
             query_id: '1363'
             depends_on_stream: test13_multishard_7
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(i),

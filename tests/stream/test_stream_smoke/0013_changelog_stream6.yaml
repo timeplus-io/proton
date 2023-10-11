@@ -72,7 +72,6 @@ tests:
           - client: python
             query_id: '1424'
             depends_on_stream: test14_subquery_6
-            query_end_timer: 12
             query_type: stream
             query: select max(i), min(i), avg(i) from test14_view_6 group by k2;
 
@@ -137,7 +136,6 @@ tests:
           - client: python
             query_id: '1425'
             depends_on_stream: test14_substream_6
-            query_end_timer: 12
             query_type: stream
             query: select val, id, lag(val, 2), _tp_delta from changelog(test14_substream_6, id) partition by id;
 
@@ -250,7 +248,6 @@ tests:
           - client: python
             query_id: '1426'
             depends_on_stream: test14_substream_6
-            query_end_timer: 12
             query_type: stream
             query: select val, id, test_14_6_add_five(val), _tp_delta from changelog(test14_substream_6, id) partition by id;
 
@@ -342,7 +339,6 @@ tests:
           - client: python
             query_id: '1427'
             depends_on_stream: test14_substream_6
-            query_end_timer: 12
             query_type: stream
             query: select val, id, upper(name), _tp_delta from changelog(test14_substream_6, id) partition by id;
 
@@ -435,7 +431,6 @@ tests:
           - client: python
             query_id: '1428'
             depends_on_stream: test14_substream_6
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(val), min(val), avg(val), id from changelog(test14_substream_6, id)
@@ -583,7 +578,6 @@ tests:
           - client: python
             query_id: '1429'
             depends_on_stream: test14_substream_6
-            query_end_timer: 12
             query_type: stream
             query: select test_14_6_sec_large(val), name from changelog(test14_substream_6, id) partition by id group by name;
 
@@ -748,7 +742,6 @@ tests:
           - client: python
             query_id: '1431'
             depends_on_stream: test14_substream_6
-            query_end_timer: 12
             query_type: stream
             query: select lag(val, 1), val, id, name from changelog(test14_substream_6, id) partition by id;
 
@@ -841,7 +834,6 @@ tests:
           - client: python
             query_id: '1432'
             depends_on_stream: test14_substream_6
-            query_end_timer: 12
             query_type: stream
             query: select (val), id from changelog(test14_substream_6, id) partition by id;
 
@@ -917,7 +909,6 @@ tests:
           - client: python
             query_id: '1433'
             depends_on_stream: test14_substream_6
-            query_end_timer: 12
             query_type: stream
             query: |
               with cte as (select * from tumble(test14_substream_6, ts, 3s))
@@ -1081,7 +1072,6 @@ tests:
           - client: python
             query_id: '1435'
             depends_on_stream: test14_substream_6
-            query_end_timer: 12
             query_type: stream
             query: select max(val), min(val), avg(val), name from changelog(test14_substream_6, id) partition by name group by id emit periodic 1s;
 

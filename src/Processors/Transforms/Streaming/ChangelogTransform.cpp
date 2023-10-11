@@ -132,9 +132,15 @@ void ChangelogTransform::work()
     const auto & chunk_columns = input_data.chunk.getColumns();
     const auto & delta_flags = assert_cast<const ColumnInt8 &>(chunk_columns[delta_column_position]->assumeMutableRef()).getData();
 
-    if (std::all_of(delta_flags.begin(), delta_flags.end(), [](auto delta) { return delta > 0; })
-        || std::all_of(delta_flags.begin(), delta_flags.end(), [](auto delta) { return delta < 0; }))
+    /// Fast path: process all same `_tp_delta` chunk
+    if (std::all_of(delta_flags.begin(), delta_flags.end(), [](auto delta) { return delta > 0; }))
     {
+        transformChunk(input_data.chunk);
+        return;
+    }
+    else if (std::all_of(delta_flags.begin(), delta_flags.end(), [](auto delta) { return delta < 0; }))
+    {
+        input_data.chunk.getOrCreateChunkContext()->setRetractedDataFlag();
         transformChunk(input_data.chunk);
         return;
     }

@@ -115,7 +115,6 @@ tests:
           - client: python
             query_id: '1320'
             depends_on_stream: test13_multishard_3
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_13_3_sec_large(i),
@@ -221,7 +220,6 @@ tests:
           - client: python
             query_id: '1321'
             depends_on_stream: test13_multishard_3
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(i),
@@ -377,7 +375,6 @@ tests:
           - client: python
             query_id: '1322'
             depends_on_stream: test13_multishard_3
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_13_3_sec_large(i)
@@ -473,7 +470,6 @@ tests:
           - client: python
             query_id: '1323'
             depends_on_stream: test13_multishard_3
-            query_end_timer: 12
             query_type: stream
             query: |
               select k,
@@ -673,7 +669,6 @@ tests:
           - client: python
             query_id: '1324'
             depends_on_stream: test13_multishard_3
-            query_end_timer: 12
             query_type: stream
             query: |
               select k,
@@ -809,7 +804,6 @@ tests:
           - client: python
             query_id: '1325'
             depends_on_stream: test13_multishard_3
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(i),
@@ -1004,7 +998,6 @@ tests:
           - client: python
             query_id: '1326'
             depends_on_stream: test13_multishard_3
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_13_3_sec_large(i),
@@ -1147,7 +1140,6 @@ tests:
           - client: python
             query_id: '1327'
             depends_on_stream: test13_multishard_3
-            query_end_timer: 12
             query_type: stream
             query: |
               select k2,
@@ -1382,7 +1374,6 @@ tests:
           - client: python
             query_id: '1328'
             depends_on_stream: test13_multishard_3
-            query_end_timer: 12
             query_type: stream
             query: |
               select k2,
@@ -1555,7 +1546,6 @@ tests:
           - client: python
             query_id: '1329'
             depends_on_stream: test13_multishard_3
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(i),
