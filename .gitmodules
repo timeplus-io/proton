@@ -224,7 +224,7 @@
 	url = https://github.com/axboe/liburing.git
 [submodule "contrib/c-ares"]
 	path = contrib/c-ares
-	url = https://github.com/ClickHouse/c-ares.git
+	url = https://github.com/c-ares/c-ares.git
 [submodule "contrib/morton-nd"]
 	path = contrib/morton-nd
 	url = https://github.com/morton-nd/morton-nd

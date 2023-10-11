@@ -1,4 +1,4 @@
-set(LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/c-ares")
+set(LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/c-ares")
 
 # Generated from contrib/c-ares/src/lib/Makefile.inc
 SET(SRCS
@@ -6,8 +6,14 @@ SET(SRCS
     "${LIBRARY_DIR}/src/lib/ares__addrinfo_localhost.c"
     "${LIBRARY_DIR}/src/lib/ares__close_sockets.c"
     "${LIBRARY_DIR}/src/lib/ares__get_hostent.c"
+    "${LIBRARY_DIR}/src/lib/ares__htable.c"
+    "${LIBRARY_DIR}/src/lib/ares__htable_asvp.c"
+    "${LIBRARY_DIR}/src/lib/ares__htable_stvp.c"
+    "${LIBRARY_DIR}/src/lib/ares__llist.c"
     "${LIBRARY_DIR}/src/lib/ares__parse_into_addrinfo.c"
+    "${LIBRARY_DIR}/src/lib/ares__buf.c"
     "${LIBRARY_DIR}/src/lib/ares__readaddrinfo.c"
+    "${LIBRARY_DIR}/src/lib/ares__slist.c"
     "${LIBRARY_DIR}/src/lib/ares__sortaddrinfo.c"
     "${LIBRARY_DIR}/src/lib/ares__read_line.c"
     "${LIBRARY_DIR}/src/lib/ares__timeval.c"
@@ -29,7 +35,6 @@ SET(SRCS
     "${LIBRARY_DIR}/src/lib/ares_getsock.c"
     "${LIBRARY_DIR}/src/lib/ares_init.c"
     "${LIBRARY_DIR}/src/lib/ares_library_init.c"
-    "${LIBRARY_DIR}/src/lib/ares_llist.c"
     "${LIBRARY_DIR}/src/lib/ares_mkquery.c"
     "${LIBRARY_DIR}/src/lib/ares_create_query.c"
     "${LIBRARY_DIR}/src/lib/ares_nowarn.c"
@@ -48,6 +53,7 @@ SET(SRCS
     "${LIBRARY_DIR}/src/lib/ares_platform.c"
     "${LIBRARY_DIR}/src/lib/ares_process.c"
     "${LIBRARY_DIR}/src/lib/ares_query.c"
+    "${LIBRARY_DIR}/src/lib/ares_rand.c"
     "${LIBRARY_DIR}/src/lib/ares_search.c"
     "${LIBRARY_DIR}/src/lib/ares_send.c"
     "${LIBRARY_DIR}/src/lib/ares_strcasecmp.c"
@@ -56,7 +62,6 @@ SET(SRCS
     "${LIBRARY_DIR}/src/lib/ares_strsplit.c"
     "${LIBRARY_DIR}/src/lib/ares_timeout.c"
     "${LIBRARY_DIR}/src/lib/ares_version.c"
-    "${LIBRARY_DIR}/src/lib/ares_writev.c"
     "${LIBRARY_DIR}/src/lib/bitncmp.c"
     "${LIBRARY_DIR}/src/lib/inet_net_pton.c"
     "${LIBRARY_DIR}/src/lib/inet_ntop.c"
@@ -83,13 +88,13 @@ target_include_directories(_c-ares SYSTEM PUBLIC
 # platform-specific folder.
 # For the platform-specific compile definitions, see c-ares top-level CMakeLists.txt.
 if (OS_LINUX)
-    target_include_directories(_c-ares SYSTEM PUBLIC "${ClickHouse_SOURCE_DIR}/contrib/c-ares-cmake/linux")
+    target_include_directories(_c-ares SYSTEM PUBLIC "${proton_SOURCE_DIR}/contrib/c-ares-cmake/linux")
     target_compile_definitions(_c-ares PRIVATE -D_GNU_SOURCE -D_POSIX_C_SOURCE=199309L -D_XOPEN_SOURCE=600)
 elseif (OS_DARWIN)
-    target_include_directories(_c-ares SYSTEM PUBLIC "${ClickHouse_SOURCE_DIR}/contrib/c-ares-cmake/darwin")
+    target_include_directories(_c-ares SYSTEM PUBLIC "${proton_SOURCE_DIR}/contrib/c-ares-cmake/darwin")
     target_compile_definitions(_c-ares PRIVATE -D_DARWIN_C_SOURCE)
 elseif (OS_FREEBSD)
-    target_include_directories(_c-ares SYSTEM PUBLIC "${ClickHouse_SOURCE_DIR}/contrib/c-ares-cmake/freebsd")
+    target_include_directories(_c-ares SYSTEM PUBLIC "${proton_SOURCE_DIR}/contrib/c-ares-cmake/freebsd")
 endif()
 
 add_library(ch_contrib::c-ares ALIAS _c-ares)
