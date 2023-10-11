@@ -125,7 +125,7 @@ add_contrib (rapidjson-cmake rapidjson)
 add_contrib (fastops-cmake fastops)
 add_contrib (liburing-cmake liburing)
 
-if (ENABLE_CURL_BUILD)
+if (NOT OS_DARWIN)
     add_contrib (curl-cmake curl)
     add_contrib (azure-cmake azure)
     add_contrib (sentry-native-cmake sentry-native) # requires: curl
