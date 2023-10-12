@@ -1,0 +1,9 @@
+services:
+  proton:
+    image: ghcr.io/timeplus-io/proton:latest
+  hackernews_bytewax:
+    image: timeplus/hackernews_bytewax:latest
+    environment:
+      - PROTON_HOST=proton
+    depends_on:
+      - proton
