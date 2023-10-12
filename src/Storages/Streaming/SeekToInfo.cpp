@@ -136,12 +136,12 @@ std::pair<SeekToType, int64_t> doParse(const String & seek_to, bool utc)
     else if (seek_to == "earliest")
         return {SeekToType::SEQUENCE_NUMBER, nlog::EARLIEST_SN};
 
-    if (auto [seek_point, valid] = tryParseRelativeTimeSeek(seek_to, utc); valid)
-        return {SeekToType::RELATIVE_TIME, seek_point};
-    else if (auto [seek_point, valid] = tryParseAbsoluteTimeSeek(seek_to); valid) /// 2020-01-01T01:12:45.123
-        return {SeekToType::ABSOLUTE_TIME, seek_point};
-    else if (auto [seek_point, valid] = tryParseSequenceBasedSeek(seek_to); valid)
-        return {SeekToType::SEQUENCE_NUMBER, seek_point};
+    if (auto [relative_seek_point, relative_valid] = tryParseRelativeTimeSeek(seek_to, utc); relative_valid)
+        return {SeekToType::RELATIVE_TIME, relative_seek_point};
+    else if (auto [absolute_seek_point, absolute_valid] = tryParseAbsoluteTimeSeek(seek_to); absolute_valid)
+        return {SeekToType::ABSOLUTE_TIME, absolute_seek_point};
+    else if (auto [sequence_seek_point, sequence_valid] = tryParseSequenceBasedSeek(seek_to); sequence_valid)
+        return {SeekToType::SEQUENCE_NUMBER, sequence_seek_point};
     else
         throw Exception(
             ErrorCodes::BAD_ARGUMENTS,

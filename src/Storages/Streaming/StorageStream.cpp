@@ -1120,13 +1120,13 @@ SinkToStoragePtr StorageStream::write(const ASTPtr & /*query*/, const StorageMet
     return std::make_shared<StreamSink>(*this, metadata_snapshot, context_);
 }
 
-void StorageStream::checkTableCanBeDropped(ContextPtr context) const
+void StorageStream::checkTableCanBeDropped(ContextPtr context_) const
 {
-    IStorage::checkTableCanBeDropped(context);
+    IStorage::checkTableCanBeDropped(context_);
 
     for (const auto & stream_shard : stream_shards)
         if (stream_shard->storage)
-            stream_shard->storage->checkTableCanBeDropped(context);
+            stream_shard->storage->checkTableCanBeDropped(context_);
 }
 
 void StorageStream::preDrop()

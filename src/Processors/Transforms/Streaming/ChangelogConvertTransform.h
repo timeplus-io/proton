@@ -83,7 +83,7 @@ private:
     /// std::mutex mutex;
 
     SERDE size_t late_rows = 0;
-    SERDE CachedBlockMetrics metrics;
+    SERDE CachedBlockMetrics cached_block_metrics;
     SERDE RefCountBlockList<LightChunk> source_chunks;
 
     Port::Data input_data;

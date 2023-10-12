@@ -26,7 +26,7 @@ public:
     {
     }
 
-    virtual ~UserDefinedFunctionBase() = default;
+    virtual ~UserDefinedFunctionBase() override = default;
 
     String getName() const override { return executable_function->getLoadableName(); }
 

@@ -147,7 +147,7 @@ AccessType getRequiredAccessType(StorageActionBlockType action_type)
 }
 
 /// proton: starts.
-bool shouldBeDistributed(ASTSystemQuery & system, ContextMutablePtr & ctx)
+[[maybe_unused]] bool shouldBeDistributed(ASTSystemQuery & system, ContextMutablePtr & ctx)
 {
     if (system.replica != ctx->getNodeIdentity())
         return true;

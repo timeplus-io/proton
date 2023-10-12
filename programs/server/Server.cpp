@@ -533,7 +533,7 @@ void Server::initV8()
 void Server::disposeV8()
 {
     v8::V8::Dispose();
-    v8::V8::ShutdownPlatform();
+    v8::V8::DisposePlatform();
 }
 /// proton: ends
 
