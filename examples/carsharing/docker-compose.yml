@@ -1,0 +1,19 @@
+version: '3.7'
+name: proton-demo-carsharing
+services:
+  proton:
+     image: ghcr.io/timeplus-io/proton:latest
+
+  carsharing_datagen:
+    image: timeplus/cardemo:latest
+    entrypoint: /bin/sh
+    command: -c "sleep 15 && echo \"$$CONSOLE_CONFIG_FILE\" > /timeplus/sink.yaml;  /timeplus/cardemo --config /timeplus/.cardemo.yaml -f /timeplus/sink.yaml"
+    environment:
+      CONSOLE_CONFIG_FILE: |
+        sinks:
+          - type: proton
+            properties:
+              interval: 200
+              host: proton
+    depends_on:
+      - proton
