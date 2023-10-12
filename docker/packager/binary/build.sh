@@ -2,6 +2,11 @@
 
 set -x -e
 
+# fatal: detected dubious ownership in repository at '/build'
+# To add an exception for this directory, call:
+# git config --global --add safe.directory /build
+git config --global --add safe.directory /build
+
 mkdir -p build/cmake/toolchain/darwin-x86_64
 tar xJf MacOSX11.0.sdk.tar.xz -C build/cmake/toolchain/darwin-x86_64 --strip-components=1
 ln -sf darwin-x86_64 build/cmake/toolchain/darwin-aarch64
