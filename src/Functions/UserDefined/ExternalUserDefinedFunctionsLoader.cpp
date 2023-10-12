@@ -56,9 +56,9 @@ void ExternalUserDefinedFunctionsLoader::reloadFunction(const std::string & user
 }
 
 /// proton: starts
-ExternalUserDefinedFunctionsLoader & ExternalUserDefinedFunctionsLoader::instance(ContextPtr context)
+ExternalUserDefinedFunctionsLoader & ExternalUserDefinedFunctionsLoader::instance(ContextPtr context_)
 {
-    static ExternalUserDefinedFunctionsLoader loader{context};
+    static ExternalUserDefinedFunctionsLoader loader{context_};
     return loader;
 }
 /// proton: ends

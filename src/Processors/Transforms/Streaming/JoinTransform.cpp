@@ -148,9 +148,9 @@ void JoinTransform::work()
 
                 if (input_chunk.hasWatermark())
                 {
-                    auto watermark = input_chunk.getChunkContext()->getWatermark();
+                    auto input_chunk_watermark = input_chunk.getChunkContext()->getWatermark();
 
-                    local_watermark = std::min(local_watermark, watermark);
+                    local_watermark = std::min(local_watermark, input_chunk_watermark);
                     has_watermark = true;
                 }
                 else if (input_chunk.requestCheckpoint())

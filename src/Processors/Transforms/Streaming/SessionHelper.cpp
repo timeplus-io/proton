@@ -222,9 +222,9 @@ void assignWindow(
     /// Then the window start/end will be rewrited by session_id later
     for (size_t pos = 0; auto & column : columns)
     {
-        if (pos == wstart_col_pos)
+        if (pos == static_cast<size_t>(wstart_col_pos))
             column = IColumn::mutate(session_id_array.getDataPtr());
-        else if (pos == wend_col_pos)
+        else if (pos == static_cast<size_t>(wend_col_pos))
             column = IColumn::mutate(session_id_array.getDataPtr());
         else
             column = column->replicate(session_id_offsets);

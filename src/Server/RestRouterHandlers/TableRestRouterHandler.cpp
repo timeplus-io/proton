@@ -341,12 +341,12 @@ std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON:
     return {processQuery(query), HTTPResponse::HTTP_OK};
 }
 
-void TableRestRouterHandler::buildRetentionSettings(Poco::JSON::Object & resp_table, const String & database, const String & table) const
+void TableRestRouterHandler::buildRetentionSettings(Poco::JSON::Object & resp_table, const String & database_, const String & table) const
 {
-    auto table_id = query_context->resolveStorageID(StorageID(database, table), Context::ResolveOrdinary);
+    auto table_id = query_context->resolveStorageID(StorageID(database_, table), Context::ResolveOrdinary);
     if (nlog::NativeLog::instance(query_context).enabled())
     {
-        auto storage = DatabaseCatalog::instance().tryGetTable(StorageID(database, table), query_context);
+        auto storage = DatabaseCatalog::instance().tryGetTable(StorageID(database_, table), query_context);
         if (storage)
         {
             MergeTreeSettingsPtr settings;

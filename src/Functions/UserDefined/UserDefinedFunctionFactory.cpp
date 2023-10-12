@@ -86,7 +86,7 @@ AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
                 types.size(),
                 config->name);
 
-        for (int i = 0; i < config->arguments.size(); i++)
+        for (size_t i = 0; i < config->arguments.size(); i++)
         {
             if (types[i]->getTypeId() != config->arguments[i].type->getTypeId())
                 throw Exception(

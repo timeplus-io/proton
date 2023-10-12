@@ -444,9 +444,9 @@ protected:
             return doGenerate(block_size);
     }
 
-    Chunk doGenerate(UInt64 block_size)
+    Chunk doGenerate(UInt64 block_size_)
     {
-        if (block_size == 0)
+        if (block_size_ == 0)
             return header_chunk.clone();
 
         Columns columns;
@@ -455,7 +455,7 @@ protected:
         Block block_to_fill_as_result(block_to_fill.cloneEmpty());
 
         for (const auto & elem : block_to_fill_as_result)
-            columns.emplace_back(fillColumnWithRandomData(elem.type, block_size, rng, context));
+            columns.emplace_back(fillColumnWithRandomData(elem.type, block_size_, rng, context));
 
         block_to_fill_as_result.setColumns(columns);
 
@@ -464,7 +464,7 @@ protected:
 
         if (block_to_fill_as_result.columns() == 0)
             block_to_fill_as_result.insert(
-                {ColumnConst::create(ColumnUInt8::create(1, 0), block_size), std::make_shared<DataTypeUInt8>(), "_dummy"});
+                {ColumnConst::create(ColumnUInt8::create(1, 0), block_size_), std::make_shared<DataTypeUInt8>(), "_dummy"});
 
         auto dag = evaluateMissingDefaults(block_to_fill_as_result, block_full.getNamesAndTypesList(), our_columns, context);
         if (dag)
@@ -477,12 +477,12 @@ protected:
         if (block_to_fill_as_result.has(ProtonConsts::RESERVED_COLUMN_NAMES[0])
             && block_to_fill_as_result.has(ProtonConsts::RESERVED_COLUMN_NAMES[1]))
             block_to_fill_as_result.getByName(ProtonConsts::RESERVED_COLUMN_NAMES[1]).column
-                = block_to_fill_as_result.getByName(ProtonConsts::RESERVED_COLUMN_NAMES[0]).column->cloneResized(block_size);
+                = block_to_fill_as_result.getByName(ProtonConsts::RESERVED_COLUMN_NAMES[0]).column->cloneResized(block_size_);
         if (block_to_fill_as_result.has("_dummy"))
             block_to_fill_as_result.erase("_dummy");
 
         columns = Nested::flatten(block_to_fill_as_result).getColumns();
-        return {std::move(columns), block_size};
+        return {std::move(columns), block_size_};
     }
 
 private:
@@ -492,7 +492,7 @@ private:
     const ColumnsDescription our_columns;
     pcg64 rng;
     ContextPtr context;
-    UInt64 boundary_time;
+    Int64 boundary_time;
     UInt64 block_idx_in_window;
     UInt64 events_per_second;
     UInt64 max_full_block_count;

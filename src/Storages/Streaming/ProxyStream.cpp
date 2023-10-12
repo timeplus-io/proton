@@ -71,7 +71,7 @@ ProxyStream::ProxyStream(
     , internal_name(std::move(internal_name_))
     , storage(storage_)
     , subquery(subquery_)
-    , data_stream_semantic(data_stream_semantic_)
+    , proxy_data_stream_semantic(data_stream_semantic_)
     , streaming(streaming_)
     , log(&Poco::Logger::get(id_.getNameForLogs()))
 {
@@ -136,7 +136,7 @@ void ProxyStream::read(
     if (internal_name == "changelog")
     {
         /// Push down tracking changes
-        if (canTrackChangesFromInput(data_stream_semantic))
+        if (canTrackChangesFromInput(proxy_data_stream_semantic))
         {
             query_info.left_input_tracking_changes = true;
             query_info.changelog_query_drop_late_rows = std::any_cast<std::optional<bool>>(table_func_desc->func_ctx);
@@ -299,10 +299,10 @@ Block ProxyStream::checkAndGetOutputHeader(const Names & required_columns, const
     output_header.reserve(required_columns.size());
     for (const auto & name : required_columns)
     {
-        if (auto * col = input_header.findByName(name))
-            output_header.insert(*col);
-        else if (auto col = table_func_desc->additional_result_columns.tryGetByName(name); col.has_value())
-            output_header.insert(ColumnWithTypeAndName{col->type->createColumn(), col->type, col->name});
+        if (auto * input_col = input_header.findByName(name))
+            output_header.insert(*input_col);
+        else if (auto new_col = table_func_desc->additional_result_columns.tryGetByName(name); new_col.has_value())
+            output_header.insert(ColumnWithTypeAndName{new_col->type->createColumn(), new_col->type, new_col->name});
         else
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown input column '{}' of {} step", name, internal_name);
     }
@@ -378,7 +378,7 @@ void ProxyStream::processChangelogStep(QueryPlan & query_plan, const Names & req
 
     /// Everything shall be in-place already since versioned_vk.read(...) will take care of adding
     /// ChangelogTransform step
-    if (canTrackChangesFromInput(data_stream_semantic))
+    if (canTrackChangesFromInput(proxy_data_stream_semantic))
         return;
 
     auto output_header = checkAndGetOutputHeader(required_columns, query_plan.getCurrentDataStream().header);
@@ -539,7 +539,7 @@ DataStreamSemanticEx ProxyStream::dataStreamSemantic() const
     if (internal_name == "changelog")
         return DataStreamSemantic::Changelog;
 
-    return data_stream_semantic; /// proxy data stream semantic
+    return proxy_data_stream_semantic; /// proxy data stream semantic
 }
 
 }
