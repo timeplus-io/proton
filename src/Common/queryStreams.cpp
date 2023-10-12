@@ -29,7 +29,7 @@ void queryOneStream(ContextMutablePtr query_context, const String &database_name
     String cols = "database, name, engine, mode, uuid, dependencies_table, create_table_query, engine_full, partition_key, sorting_key, "
                   "primary_key, sampling_key, storage_policy";
     String query = fmt::format(
-        "SELECT {} FROM system.tables WHERE database = '{}' AND name = '{}' settings "
+        "SELECT {} FROM system.tables WHERE database = '{}' AND name = '{}' AND engine != 'Dictionary' settings " /// 'Dictionary' does not have columns which will cause REST api crashes.
         "show_table_uuid_in_table_create_query_if_not_nil = 1, _tp_internal_system_open_sesame=true",
         cols,
         database_name,name);
@@ -42,7 +42,7 @@ void queryStreamsByDatabasse(ContextMutablePtr query_context, const String &data
     String cols = "database, name, engine, mode, uuid, dependencies_table, create_table_query, engine_full, partition_key, sorting_key, "
                   "primary_key, sampling_key, storage_policy";
     String query = fmt::format(
-        "SELECT {} FROM system.tables WHERE database = '{}' settings "
+        "SELECT {} FROM system.tables WHERE database = '{}' AND engine != 'Dictionary' settings " /// 'Dictionary' does not have columns which will cause REST api crashes.
         "show_table_uuid_in_table_create_query_if_not_nil = 1, _tp_internal_system_open_sesame=true",
         cols,
         database_name);

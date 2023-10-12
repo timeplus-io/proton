@@ -70,7 +70,10 @@ ASTPtr ASTFunctionWithKeyValueArguments::clone() const
 
 void ASTFunctionWithKeyValueArguments::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
-    settings.ostr << (settings.hilite ? hilite_keyword : "") << Poco::toUpper(name) << (settings.hilite ? hilite_none : "") << (has_brackets ? "(" : "");
+    /// proton: starts. ignore function name if required
+    settings.ostr << (settings.hilite ? hilite_keyword : "") << (ignore_name ? "" : Poco::toUpper(name))
+                  << (settings.hilite ? hilite_none : "") << (has_brackets ? "(" : "");
+    /// proton: ends
     elements->formatImpl(settings, state, frame);
     settings.ostr << (has_brackets ? ")" : "");
     settings.ostr << (settings.hilite ? hilite_none : "");
