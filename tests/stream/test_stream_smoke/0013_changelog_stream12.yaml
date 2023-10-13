@@ -65,7 +65,6 @@ tests:
           - client: python
             query_id: '1496'
             depends_on_stream: test14_multishard_12
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_14_12_add_five(i),
@@ -186,7 +185,6 @@ tests:
           - client: python
             query_id: '1497'
             depends_on_stream: test14_multishard_12
-            query_end_timer: 12
             query_type: stream
             query: |
               select pow(10, i),
@@ -259,7 +257,6 @@ tests:
           - client: python
             query_id: '1498'
             depends_on_stream: test14_multishard_12
-            query_end_timer: 12
             query_type: stream
             query: |
               select pow(10, i),
@@ -383,7 +380,6 @@ tests:
           - client: python
             query_id: '1499'
             depends_on_stream: test14_multishard_12
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(i),
@@ -442,7 +438,6 @@ tests:
       - group_by
       - primary_key
       - stateful_function
-      - bug
     name: update versioned_kv and query with partition by primary key, group by, primary key and stateful function
     description: update versioned_kv and query with partition by primary key, group by, primary key and stateful function
     steps:
@@ -463,7 +458,6 @@ tests:
           - client: python
             query_id: '14100'
             depends_on_stream: test14_multishard_12
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(i),
@@ -650,7 +644,6 @@ tests:
           - client: python
             query_id: '14101'
             depends_on_stream: test14_multishard_12
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_14_12_sec_large(i),
@@ -727,7 +720,6 @@ tests:
           - client: python
             query_id: '14102'
             depends_on_stream: test14_multishard_12
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(i),

@@ -130,7 +130,6 @@ tests:
           - client: python
             query_id: '1484'
             depends_on_stream: test14_multishard_11
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_14_11_sec_large(i),
@@ -214,6 +213,18 @@ tests:
             query: |
               drop stream if exists test14_multishard_11;
 
+    expected_results:
+      - query_id: '1484'
+        expected_results:
+          - [1, 1, 1, 1, 1]
+          - [2, 1, 1.5, 2, 1]
+          - [2, 1, 1.5, 2, 1]
+          - [6, 6, 6, 1, 2]
+          - [2, 1, 1.5, 2, 1]
+          - [7, 6, 6.5, 2, 2]
+          - [8, 1, 3.6666666666666665, 3, 1]
+          - [7, 6, 6.5, 2, 2]
+
   - id: 85
     tags:
       - versioned_kv
@@ -286,7 +297,6 @@ tests:
           - client: python
             query_id: '1485'
             depends_on_stream: test14_multishard_11
-            query_end_timer: 12
             query_type: stream
             query: |
               select max_i,
@@ -395,7 +405,6 @@ tests:
       - group_by
       - no_primary_key
       - stateful_function
-      - bug
     name: subquery from view from subquery aggr with stateful function, update
     description: subquery from view from subquery aggr with stateful function, update
     steps:
@@ -416,6 +425,12 @@ tests:
             query_type: table
             wait: 1
             query: |
+              drop stream if exists test14_target_multishard_changelog_kv_11;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
               drop stream if exists test14_multishard_11;
 
           - client: python
@@ -429,7 +444,14 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create materialized view if not exists test14_view1_11 as
+              create stream if not exists test14_target_multishard_changelog_kv_11(i float, k1 int, k2 string) primary key k2
+              settings mode='changelog_kv', shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test14_view1_11 into test14_target_multishard_changelog_kv_11 as
                 (select i,
                         k1,
                         k2
@@ -439,7 +461,7 @@ tests:
                            k2
                     from test14_multishard_11
                     where k1 <> 0 )
-                 where k2 <> 'd' );
+                 where k2 <> 'd' emit changelog);
 
           - client: python
             query_type: table
@@ -457,8 +479,7 @@ tests:
 
           - client: python
             query_id: '1486'
-            depends_on_stream: test14_multishard_11
-            query_end_timer: 12
+            depends_on_stream: test14_view2_11
             query_type: stream
             query: |
               select max_i,
@@ -543,7 +564,29 @@ tests:
             query_type: table
             wait: 1
             query: |
+              drop stream if exists test14_target_multishard_changelog_kv_11;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
               drop stream if exists test14_multishard_11;
+
+    expected_results:
+      - query_id: '1486'
+        expected_results:
+          - [1, 1, 1, 1, 1]
+          - [2, 2, 2, 1, 1]
+          - [0, 0, nan, 0, 1]
+          - [4, 4, 4, 1, 1]
+          - [4, 4, 4, 1, 1]
+          - [5, 5, 5, 1, 2]
+          - [4, 4, 4, 1, 1]
+          - [6, 5, 5.5, 2, 2]
+          - [4, 4, 4, 1, 1]
+          - [7, 5, 6, 2, 2]
+          - [8, 8, 8, 1, 1]
+          - [7, 5, 6, 2, 2]
 
   - id: 87
     tags:
@@ -674,7 +717,6 @@ tests:
           - client: python
             query_id: '1487'
             depends_on_stream: test14_multishard_11
-            query_end_timer: 12
             query_type: stream
             query: |
               select sec_l,
@@ -900,7 +942,6 @@ tests:
           - client: python
             query_id: '1488'
             depends_on_stream: test14_multishard_11
-            query_end_timer: 12
             query_type: stream
             query: |
               select sec_l,
@@ -984,6 +1025,18 @@ tests:
             query: |
               drop stream if exists test14_multishard_11;
 
+    expected_results:
+      - query_id: '1488'
+        expected_results:
+          - [1, 1, 1, 1, 1]
+          - [2, 1, 1.5, 2, 1]
+          - [2, 1, 1.5, 2, 1]
+          - [6, 6, 6, 1, 2]
+          - [2, 1, 1.5, 2, 1]
+          - [7, 6, 6.5, 2, 2]
+          - [8, 1, 3.6666666666666665, 3, 1]
+          - [7, 6, 6.5, 2, 2]
+
   - id: 89
     tags:
       - versioned_kv
@@ -1052,7 +1105,6 @@ tests:
           - client: python
             query_id: '1489'
             depends_on_stream: test14_multishard_11
-            query_end_timer: 12
             query_type: stream
             query: |
               select max_i,
@@ -1156,7 +1208,6 @@ tests:
       - tail/aggr
       - no_group_by
       - stateful_function
-      - bug
     name: subquery from view from subquery aggr with stateful function, update
     description: subquery from view from subquery aggr with stateful function, update
     steps:
@@ -1183,6 +1234,12 @@ tests:
             query_type: table
             wait: 1
             query: |
+              drop stream if exists test14_target_changelog_kv_multishard_11;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
               create stream if not exists test14_multishard_11(i float, k1 int, k2 string) primary key k2
               settings mode='versioned_kv', shards=3;
 
@@ -1190,7 +1247,14 @@ tests:
             query_type: table
             wait: 1
             query: |
-              create materialized view if not exists test14_view1_11 as
+              create stream if not exists test14_target_changelog_kv_multishard_11(i float, k1 int, k2 string) primary key k2
+              settings mode='changelog_kv', shards=3;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create materialized view if not exists test14_view1_11 into test14_target_changelog_kv_multishard_11 as
                 (select i,
                         k1,
                         k2
@@ -1200,7 +1264,7 @@ tests:
                            k2
                     from test14_multishard_11
                     where k1 <> 0 )
-                 where k2 <> 'd' );
+                 where k2 <> 'd' emit changelog);
 
           - client: python
             query_type: table
@@ -1215,8 +1279,7 @@ tests:
 
           - client: python
             query_id: '1490'
-            depends_on_stream: test14_multishard_11
-            query_end_timer: 12
+            depends_on_stream: test14_view2_11
             query_type: stream
             query: |
               select max_i,
@@ -1301,6 +1364,24 @@ tests:
             wait: 1
             query: |
               drop stream if exists test14_multishard_11;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test14_target_changelog_kv_multishard_11;
+
+    expected_results:
+      - query_id: '1490'
+        expected_results:
+          - [1, 1, 1, 1]
+          - [2, 2, 2, 1]
+          - [0, 0, nan, 0]
+          - [4, 4, 4, 1]
+          - [5, 4, 4.5, 2]
+          - [6, 4, 5, 3]
+          - [7, 4, 5.333, 3]
+          - [8, 5, 6.666, 3]
 
   - id: 91
     tags:
@@ -1427,7 +1508,6 @@ tests:
           - client: python
             query_id: '1491'
             depends_on_stream: test14_multishard_11
-            query_end_timer: 12
             query_type: stream
             query: |
               select sec_l
@@ -1645,7 +1725,6 @@ tests:
           - client: python
             query_id: '1492'
             depends_on_stream: test14_multishard_11
-            query_end_timer: 12
             query_type: stream
             query: |
               select sec_l
@@ -1756,7 +1835,6 @@ tests:
           - client: python
             query_id: '1493'
             depends_on_stream: test14_multishard_11
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(i, 1),
@@ -1809,7 +1887,6 @@ tests:
       - partition_by_primary_key
       - streaming_tailing
       - stateful_function
-      - bug
     name: partition by primary key, streaming tailing, stateful function, update
     description: partition by primary key, streaming tailing, stateful function, update
     steps:
@@ -1830,7 +1907,6 @@ tests:
           - client: python
             query_id: '1494'
             depends_on_stream: test14_multishard_11
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(i, 1),
@@ -1971,7 +2047,6 @@ tests:
           - client: python
             query_id: '1495'
             depends_on_stream: test14_multishard_11
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_14_11_add_five(i),

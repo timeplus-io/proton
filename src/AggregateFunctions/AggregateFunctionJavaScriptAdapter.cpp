@@ -234,30 +234,33 @@ void JavaScriptAggrFunctionState::reinitCache()
 }
 
 AggregateFunctionJavaScriptAdapter::AggregateFunctionJavaScriptAdapter(
-    const JavaScriptUserDefinedFunctionConfiguration & config_, const DataTypes & types, const Array & params_, size_t max_v8_heap_size_in_bytes_)
+    JavaScriptUserDefinedFunctionConfigurationPtr config_,
+    const DataTypes & types,
+    const Array & params_,
+    size_t max_v8_heap_size_in_bytes_)
     : IAggregateFunctionHelper<AggregateFunctionJavaScriptAdapter>(types, params_)
     , config(config_)
     , num_arguments(types.size())
     , max_v8_heap_size_in_bytes(max_v8_heap_size_in_bytes_)
-    , blueprint(config.name, config.source)
+    , blueprint(config->name, config->source)
 {
 }
 
 String AggregateFunctionJavaScriptAdapter::getName() const
 {
-    return config.name;
+    return config->name;
 }
 
 DataTypePtr AggregateFunctionJavaScriptAdapter::getReturnType() const
 {
-    return config.result_type;
+    return config->result_type;
 }
 
 /// create instance of UDF via function_builder
 void AggregateFunctionJavaScriptAdapter::create(AggregateDataPtr __restrict place) const
 {
     V8::checkHeapLimit(blueprint.isolate.get(), max_v8_heap_size_in_bytes);
-    new (place) Data(blueprint, config.arguments);
+    new (place) Data(blueprint, config->arguments);
 }
 
 /// destroy instance of UDF
@@ -372,17 +375,17 @@ size_t AggregateFunctionJavaScriptAdapter::flush(AggregateDataPtr __restrict pla
         v8::Local<v8::Function> local_func = v8::Local<v8::Function>::New(isolate_, data.process_func);
 
         /// Second, convert the input column into the corresponding object used by UDF
-        auto argv = V8::prepareArguments(isolate_, config.arguments, data.columns);
+        auto argv = V8::prepareArguments(isolate_, config->arguments, data.columns);
 
         /// Third, execute the UDF and get aggregate state (only support the final state now, intermediate state is not supported
         v8::Local<v8::Value> res;
-        if (!local_func->Call(ctx, local_obj, static_cast<int>(config.arguments.size()), argv.data()).ToLocal(&res))
+        if (!local_func->Call(ctx, local_obj, static_cast<int>(config->arguments.size()), argv.data()).ToLocal(&res))
             V8::throwException(
                 isolate_,
                 try_catch,
                 ErrorCodes::AGGREGATE_FUNCTION_THROW,
                 "Failed to invoke JavaScript user defined aggregation function : {}",
-                config.name);
+                config->name);
 
         /// Forth, check if the UDA should emit only it has emit strategy
         if (blueprint.has_user_defined_emit_strategy && !res->IsUndefined())
@@ -497,7 +500,7 @@ void AggregateFunctionJavaScriptAdapter::insertResultInto(AggregateDataPtr __res
                     num_of_results);
         }
 
-        V8::insertResult(isolate_, to, config.result_type, res, hasUserDefinedEmit());
+        V8::insertResult(isolate_, to, config->result_type, res, hasUserDefinedEmit());
     };
 
     V8::run(blueprint.isolate.get(), blueprint.global_context, std::move(finalize_func));

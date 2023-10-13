@@ -3357,7 +3357,7 @@ void InterpreterSelectQuery::buildWatermarkQueryPlan(QueryPlan & query_plan) con
 
 void InterpreterSelectQuery::buildStreamingProcessingQueryPlanBeforeJoin(QueryPlan & query_plan)
 {
-    if (!isStreaming() || has_user_defined_emit_strategy || !hasStreamingWindowFunc())
+    if (!isStreaming() || query_info.has_non_aggregate_over || has_user_defined_emit_strategy || !hasStreamingWindowFunc())
         return;
 
     if (query_info.hasPartitionByKeys())
@@ -3631,7 +3631,7 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
             /// Precached ahead partition keys before analyzing AST to avoid keys missing,
             /// in special case when `select i, max(i) over (partition by id) from test group by i`,
             /// it will be optimized to `select i, i from test group by i`
-            if (query_info.has_aggregate_over)
+            if (query_info.has_aggregate_over || query_info.has_non_aggregate_over)
             {
                 query_info.partition_by_keys.reserve(definition.partition_by->children.size());
                 for (const auto & column_ast : definition.partition_by->children)

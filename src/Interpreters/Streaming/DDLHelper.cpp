@@ -170,7 +170,20 @@ void prepareEngine(ASTCreateQuery & create, ContextPtr ctx)
     }
 
     sharding_expr_field.tryGet<String>(expr);
-    ASTPtr sharding_expr = functionToAST(expr);
+
+    ASTPtr sharding_expr;
+    if (expr.empty())
+    {
+        /// Default sharding expr:
+        /// 1) If has primary keys, default is `sip_hash64(<primary_keys>)`
+        /// 2) Otherwise, default is `rand()`
+        if (create.storage->primary_key)
+            sharding_expr = makeASTFunction("sip_hash64", create.storage->primary_key->clone());
+        else
+            sharding_expr = makeASTFunction("rand");
+    }
+    else
+        sharding_expr = functionToAST(expr);
 
     auto engine = makeASTFunction("Stream", std::make_shared<ASTLiteral>(shards), std::make_shared<ASTLiteral>(replicas), sharding_expr);
     create.storage->set(create.storage->engine, engine);

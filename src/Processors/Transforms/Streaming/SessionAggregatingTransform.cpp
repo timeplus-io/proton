@@ -69,15 +69,15 @@ std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk &
     return result;
 }
 
-WindowsWithBuckets SessionAggregatingTransform::getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark) const
+WindowsWithBuckets SessionAggregatingTransform::getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark_) const
 {
     auto & sessions = many_data->getField<SessionInfoQueue>();
     WindowsWithBuckets windows_with_buckets;
     for (const auto & session : sessions)
     {
-        if (session->id <= watermark)
+        if (session->id <= watermark_)
         {
-            assert(!session->active || watermark == TIMEOUT_WATERMARK);
+            assert(!session->active || watermark_ == TIMEOUT_WATERMARK);
             windows_with_buckets.emplace_back(WindowWithBuckets{{session->win_start, session->win_end}, {session->id}});
         }
     }
@@ -85,18 +85,18 @@ WindowsWithBuckets SessionAggregatingTransform::getLocalFinalizedWindowsWithBuck
     return windows_with_buckets;
 }
 
-void SessionAggregatingTransform::removeBucketsImpl(Int64 watermark)
+void SessionAggregatingTransform::removeBucketsImpl(Int64 watermark_)
 {
     auto & sessions = many_data->getField<SessionInfoQueue>();
     for (auto iter = sessions.begin(); iter != sessions.end();)
     {
-        if ((*iter)->id > watermark)
+        if ((*iter)->id > watermark_)
             break;
 
         iter = sessions.erase(iter);
     }
 
-    params->aggregator.removeBucketsBefore(variants, watermark);
+    params->aggregator.removeBucketsBefore(variants, watermark_);
 }
 
 }

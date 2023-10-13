@@ -105,4 +105,5 @@ struct JavaScriptUserDefinedFunctionConfiguration : public UserDefinedFunctionCo
 };
 
 using UserDefinedFunctionConfigurationPtr = std::shared_ptr<UserDefinedFunctionConfiguration>;
+using JavaScriptUserDefinedFunctionConfigurationPtr = std::shared_ptr<JavaScriptUserDefinedFunctionConfiguration>;
 }

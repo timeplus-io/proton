@@ -1,15 +1,10 @@
 version: '3.7'
 name: proton-demo
-networks:
-  demo_network:
-    driver: bridge
 volumes:
   redpanda: null
 services:
   proton:
      image: ghcr.io/timeplus-io/proton:latest
-     networks:
-      - demo_network
 
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v23.2.8
@@ -22,8 +17,6 @@ services:
       - --mode dev-container
     volumes:
       - redpanda:/var/lib/redpanda/data
-    networks:
-      - demo_network
 
   console:
     image: docker.redpanda.com/redpandadata/console:v2.3.1
@@ -36,15 +29,11 @@ services:
           brokers: ["redpanda:9092"]
     ports:
       - 8080:8080
-    networks:
-      - demo_network
     depends_on:
       - redpanda
 
   owl-shop:
     image: quay.io/cloudhut/owl-shop:latest
-    networks:
-      - demo_network
     #platform: 'linux/amd64'
     environment:
       - SHOP_KAFKA_BROKERS=redpanda:9092

@@ -57,7 +57,6 @@ tests:
           - client: python
             query_id: '1300'
             depends_on_stream: test13_subst_1
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(val),
@@ -228,7 +227,6 @@ tests:
           - client: python
             query_id: '1301'
             depends_on_stream: test13_subst_1
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_13_1_sec_large(val),
@@ -337,7 +335,6 @@ tests:
           - client: python
             query_id: '1302'
             depends_on_stream: test13_subst_1
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(val),
@@ -506,7 +503,6 @@ tests:
           - client: python
             query_id: '1303'
             depends_on_stream: test13_subst_1
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_13_1_sec_large(val)
@@ -602,7 +598,6 @@ tests:
           - client: python
             query_id: '1304'
             depends_on_stream: test13_multishard_1
-            query_end_timer: 12
             query_type: stream
             query: |
               select k,
@@ -802,7 +797,6 @@ tests:
           - client: python
             query_id: '1305'
             depends_on_stream: test13_multishard_1
-            query_end_timer: 12
             query_type: stream
             query: |
               select k,
@@ -938,7 +932,6 @@ tests:
           - client: python
             query_id: '1306'
             depends_on_stream: test13_multishard_1
-            query_end_timer: 12
             query_type: stream
             query: |
               select k,
@@ -1137,7 +1130,6 @@ tests:
           - client: python
             query_id: '1307'
             depends_on_stream: test13_multishard_1
-            query_end_timer: 12
             query_type: stream
             query: |
               select k,
@@ -1284,7 +1276,6 @@ tests:
           - client: python
             query_id: '1308'
             depends_on_stream: test13_subst_1
-            query_end_timer: 12
             query_type: stream
             query: |
               select k2,
@@ -1530,7 +1521,6 @@ tests:
           - client: python
             query_id: '1309'
             depends_on_stream: test13_subst_1
-            query_end_timer: 12
             query_type: stream
             query: |
               select k2,

@@ -20,6 +20,10 @@ public:
 
 private:
     ASTPtr query_ptr;
+
+    /// proton: starts
+    BlockIO handleJavaScriptUDF(bool throw_if_exists, bool replace_if_exists);
+    /// proton: ends
 };
 
 }
