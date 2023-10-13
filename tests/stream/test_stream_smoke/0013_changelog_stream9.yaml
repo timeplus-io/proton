@@ -43,7 +43,6 @@ tests:
           - client: python
             query_id: '1460'
             depends_on_stream: test14_multishard_9
-            query_end_timer: 12
             query_type: stream
             query: |
               select concat(upper(k2), to_string(i)),
@@ -130,7 +129,6 @@ tests:
           - client: python
             query_id: '1461'
             depends_on_stream: test14_multishard_9
-            query_end_timer: 12
             query_type: stream
             query: |
               select concat(upper(k2), to_string(i)),
@@ -228,7 +226,6 @@ tests:
           - client: python
             query_id: '1462'
             depends_on_stream: test14_multishard_9
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(i),
@@ -289,7 +286,6 @@ tests:
       - group_by
       - primary_key
       - stateful_function
-      - bug
     name: update rows to multi_shard versioned_kv and query with streaming aggreagation by primary key
     description: update rows to multi_shard versioned_kv and query with streaming aggreagation by primary key
     steps:
@@ -310,7 +306,6 @@ tests:
           - client: python
             query_id: '1463'
             depends_on_stream: test14_multishard_9
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(i),
@@ -478,7 +473,6 @@ tests:
           - client: python
             query_id: '1464'
             depends_on_stream: test14_multishard_9
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_14_9_sec_large(i),
@@ -617,7 +611,6 @@ tests:
           - client: python
             query_id: '1465'
             depends_on_stream: test14_multishard_9
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_14_9_sec_large(i),
@@ -706,7 +699,6 @@ tests:
           - client: python
             query_id: '1466'
             depends_on_stream: test14_multishard_9
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(i),
@@ -791,7 +783,6 @@ tests:
       - group_by
       - no_primary_key
       - stateful_function
-      - bug
     name: update rows to multi_shard versioned_kv and query with streaming aggreagation by primary key
     description: update rows to multi_shard versioned_kv and query with streaming aggreagation by primary key
     steps:
@@ -812,7 +803,6 @@ tests:
           - client: python
             query_id: '1467'
             depends_on_stream: test14_multishard_9
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(i),
@@ -885,6 +875,7 @@ tests:
           - [4, 4, 4, 1, 2]
           - [2, 2, 2, 1, 1]
           - [5, 4, 4.5, 2, 2]
+          - [0, 0, nan, 0, 1]
           - [6, 4, 5, 3, 2]
 
   - id: 68
@@ -976,7 +967,6 @@ tests:
           - client: python
             query_id: '1468'
             depends_on_stream: test14_multishard_9
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_14_9_sec_large(i),
@@ -1112,7 +1102,6 @@ tests:
           - client: python
             query_id: '1469'
             depends_on_stream: test14_multishard_9
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_14_9_sec_large(i),
@@ -1200,7 +1189,6 @@ tests:
           - client: python
             query_id: '1470'
             depends_on_stream: test14_multishard_9
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(i),
@@ -1254,7 +1242,6 @@ tests:
       - global_aggregation
       - no_group_by
       - stateful_function
-      - bug
     name: update rows of multi_shard versioned_kv no group_by with stateful function
     description: update rows of multi_shard versioned_kv no group_by with stateful function
     steps:
@@ -1275,7 +1262,6 @@ tests:
           - client: python
             query_id: '1471'
             depends_on_stream: test14_multishard_9
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(i),

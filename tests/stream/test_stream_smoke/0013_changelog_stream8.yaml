@@ -793,7 +793,6 @@ tests:
           - client: python
             query_id: '1456'
             depends_on_stream: test14_multishard_8
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(i, 2),
@@ -880,7 +879,6 @@ tests:
           - client: python
             query_id: '1457'
             depends_on_stream: test14_multishard_8
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(i, 2),
@@ -995,7 +993,6 @@ tests:
           - client: python
             query_id: '1458'
             depends_on_stream: test14_multishard_8
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_14_8_add_five(i),
@@ -1102,7 +1099,6 @@ tests:
           - client: python
             query_id: '1459'
             depends_on_stream: test14_multishard_8
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_14_8_add_five(i),

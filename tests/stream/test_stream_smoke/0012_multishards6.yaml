@@ -128,7 +128,6 @@ tests:
           - client: python
             query_id: '1350'
             depends_on_stream: test13_multishard_6
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_13_6_sec_large(to_float(speed)) as sec_l,
@@ -318,7 +317,6 @@ tests:
           - client: python
             query_id: '1351'
             depends_on_stream: test13_subq_6
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_13_6_add_five(val),
@@ -472,7 +470,6 @@ tests:
           - client: python
             query_id: '1352'
             depends_on_stream: test13_subq_6
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_13_6_add_five(test_13_6_add_five(val)),
@@ -594,7 +591,6 @@ tests:
           - client: python
             query_id: '1353'
             depends_on_stream: test13_subq_6
-            query_end_timer: 12
             query_type: stream
             query: |
               select format('val: {}', to_string(val)),
@@ -705,7 +701,6 @@ tests:
           - client: python
             query_id: '1354'
             depends_on_stream: test13_subq_6
-            query_end_timer: 12
             query_type: stream
             query: |
               select pow(plus(val, f1), 2),
@@ -826,7 +821,6 @@ tests:
           - client: python
             query_id: '1355'
             depends_on_stream: test13_subq_6
-            query_end_timer: 12
             query_type: stream
             query: |
               select pow(2, val),
@@ -954,7 +948,6 @@ tests:
           - client: python
             query_id: '1356'
             depends_on_stream: test13_subq_6
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(val),
@@ -1059,7 +1052,6 @@ tests:
           - client: python
             query_id: '1357'
             depends_on_stream: test13_subq_6
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(val),
@@ -1192,7 +1184,6 @@ tests:
           - client: python
             query_id: '1358'
             depends_on_stream: test13_subq_6
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(val),
@@ -1320,7 +1311,6 @@ tests:
           - client: python
             query_id: '1359'
             depends_on_stream: test13_subq_6
-            query_end_timer: 12
             query_type: stream
             query: |
               select lag(val),

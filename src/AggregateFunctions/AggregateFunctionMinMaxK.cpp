@@ -14,6 +14,9 @@
 #include <IO/ReadBufferFromString.h>
 #include <Common/FieldVisitorConvertToNumber.h>
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
+
 namespace DB
 {
 struct Settings;
@@ -506,3 +509,5 @@ void registerAggregateFunctionMinMaxK(AggregateFunctionFactory & factory)
 }
 
 }
+
+#pragma clang diagnostic pop

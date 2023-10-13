@@ -22,5 +22,3 @@ static void StringCopy(benchmark::State& state) {
 }
 
 BENCHMARK(StringCopy);
-
-BENCHMARK_MAIN();

@@ -30,18 +30,18 @@ HopAggregatingTransform::HopAggregatingTransform(
 {
 }
 
-WindowsWithBuckets HopAggregatingTransform::getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark) const
+WindowsWithBuckets HopAggregatingTransform::getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark_) const
 {
     return HopHelper::getFinalizedWindowsWithBuckets(
-        watermark, window_params, params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START, [this](Int64 max_bucket) {
+        watermark_, window_params, params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START, [this](Int64 max_bucket) {
             return getBucketsBefore(max_bucket);
         });
 }
 
-void HopAggregatingTransform::removeBucketsImpl(Int64 watermark)
+void HopAggregatingTransform::removeBucketsImpl(Int64 watermark_)
 {
     auto last_expired_time_bucket = HopHelper::getLastExpiredTimeBucket(
-        watermark, window_params, params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START);
+        watermark_, window_params, params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START);
     params->aggregator.removeBucketsBefore(variants, last_expired_time_bucket);
 }
 

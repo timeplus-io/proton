@@ -1083,8 +1083,8 @@ void NO_INLINE Aggregator::executeImplBatch(
             AggregateDataPtr * places_ptr = places.get();
 
             /// It is ok to re-flush if it is flush already, then we don't need maintain a map to check if it is ready flushed
-            for (size_t i = row_begin; i < row_end; ++i)
-                inst->batch_that->flush(places_ptr[i] + inst->state_offset);
+            for (size_t idx = row_begin; idx < row_end; ++idx)
+                inst->batch_that->flush(places_ptr[idx] + inst->state_offset);
         }
         /// proton : ends
     }

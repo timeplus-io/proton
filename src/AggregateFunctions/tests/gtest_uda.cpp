@@ -145,7 +145,7 @@ v8::Local<v8::Value> createV8Array(v8::Isolate * isolate, bool is_empty_array)
     return scope.Escape(result);
 }
 
-JavaScriptUserDefinedFunctionConfiguration
+JavaScriptUserDefinedFunctionConfigurationPtr
 createUDFConfig(const String & name, const String & arg_str, const String & return_type, const String & source)
 {
     DataTypePtr result_type = DataTypeFactory::instance().get(return_type);
@@ -172,13 +172,13 @@ createUDFConfig(const String & name, const String & arg_str, const String & retu
         }
     }
 
-    JavaScriptUserDefinedFunctionConfiguration function_configuration;
-    function_configuration.source = source;
-    function_configuration.is_aggregation = true;
-    function_configuration.name = name;
-    function_configuration.result_type = std::move(result_type);
-    function_configuration.type = UserDefinedFunctionConfiguration::FuncType::JAVASCRIPT;
-    function_configuration.arguments = std::move(arguments);
+    auto function_configuration = std::make_shared<JavaScriptUserDefinedFunctionConfiguration>();
+    function_configuration->source = source;
+    function_configuration->is_aggregation = true;
+    function_configuration->name = name;
+    function_configuration->result_type = std::move(result_type);
+    function_configuration->type = UserDefinedFunctionConfiguration::FuncType::JAVASCRIPT;
+    function_configuration->arguments = std::move(arguments);
 
     return function_configuration;
 };
@@ -542,7 +542,7 @@ void checkPrepareArguments(String type, CREATE_DATA_FUNC create_fn, CHECK_V8_DAT
 
     MutableColumns columns;
     columns.emplace_back(std::move(col_ptr));
-    auto argv = V8::prepareArguments(isolate, config.arguments, columns);
+    auto argv = V8::prepareArguments(isolate, config->arguments, columns);
 
     ASSERT_EQ(argv.size(), 1);
     v8::Local<v8::Array> v8_arr = argv[0].As<v8::Array>();

@@ -105,7 +105,6 @@ tests:
           - client: python
             query_id: '1330'
             depends_on_stream: test13_multishard_4
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_13_4_sec_large(i),
@@ -269,7 +268,6 @@ tests:
           - client: python
             query_id: '1331'
             depends_on_stream: test13_multishard_4
-            query_end_timer: 12
             query_type: stream
             query: |
               select id,
@@ -464,7 +462,6 @@ tests:
           - client: python
             query_id: '1332'
             depends_on_stream: test13_multishard_4
-            query_end_timer: 12
             query_type: stream
             query: |
               select id,
@@ -598,7 +595,6 @@ tests:
           - client: python
             query_id: '1333'
             depends_on_stream: test13_multishard_4
-            query_end_timer: 12
             query_type: stream
             query: |
               select max(speed),
@@ -789,7 +785,6 @@ tests:
           - client: python
             query_id: '1334'
             depends_on_stream: test13_multishard_4
-            query_end_timer: 12
             query_type: stream
             query: |
               select test_13_4_sec_large(to_float(speed)),
@@ -942,7 +937,6 @@ tests:
           - client: python
             query_id: '1335'
             depends_on_stream: test13_subq_4
-            query_end_timer: 12
             query_type: stream
             query: |
               select cnt,
@@ -1128,7 +1122,6 @@ tests:
           - client: python
             query_id: '1336'
             depends_on_stream: test13_subq_4
-            query_end_timer: 12
             query_type: stream
             query: |
               select sec_l,
@@ -1256,7 +1249,6 @@ tests:
           - client: python
             query_id: '1337'
             depends_on_stream: test13_subq_4
-            query_end_timer: 12
             query_type: stream
             query: |
               select mx,
@@ -1438,7 +1430,6 @@ tests:
           - client: python
             query_id: '1338'
             depends_on_stream: test13_subq_4
-            query_end_timer: 12
             query_type: stream
             query: |
               select sec_l
@@ -1563,7 +1554,6 @@ tests:
           - client: python
             query_id: '1339'
             depends_on_stream: test13_multishard_4
-            query_end_timer: 12
             query_type: stream
             query: |
               select k,

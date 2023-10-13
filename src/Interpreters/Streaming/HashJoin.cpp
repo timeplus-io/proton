@@ -743,7 +743,7 @@ size_t insertFromBlockImpl(
     }
 }
 
-inline void addDeltaColumn(Block & block, size_t rows)
+[[maybe_unused]] inline void addDeltaColumn(Block & block, size_t rows)
 {
     /// Add _tp_delta = 1 column to result block
     auto delta_type = DataTypeFactory::instance().get(TypeIndex::Int8);
