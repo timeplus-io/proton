@@ -3,28 +3,28 @@ if (NOT ENABLE_BENCHMARKS)
     return()
 endif()
 
-set (SRC_DIR "${proton_SOURCE_DIR}/contrib/benchmark")
+set (SRC_DIR "${proton_SOURCE_DIR}/contrib/google-benchmark/src")
 
 set(SRCS
-    ${SRC_DIR}/src/benchmark_api_internal.cc
-    ${SRC_DIR}/src/benchmark.cc
-    ${SRC_DIR}/src/benchmark_name.cc
-    ${SRC_DIR}/src/benchmark_register.cc
-    ${SRC_DIR}/src/benchmark_runner.cc
-    ${SRC_DIR}/src/check.cc
-    ${SRC_DIR}/src/colorprint.cc
-    ${SRC_DIR}/src/commandlineflags.cc
-    ${SRC_DIR}/src/complexity.cc
-    ${SRC_DIR}/src/console_reporter.cc
-    ${SRC_DIR}/src/counter.cc
-    ${SRC_DIR}/src/csv_reporter.cc
-    ${SRC_DIR}/src/json_reporter.cc
-    ${SRC_DIR}/src/perf_counters.cc
-    ${SRC_DIR}/src/reporter.cc
-    ${SRC_DIR}/src/statistics.cc
-    ${SRC_DIR}/src/string_util.cc
-    ${SRC_DIR}/src/sysinfo.cc
-    ${SRC_DIR}/src/timers.cc
+    "${SRC_DIR}/benchmark_api_internal.cc"
+    "${SRC_DIR}/benchmark.cc"
+    "${SRC_DIR}/benchmark_name.cc"
+    "${SRC_DIR}/benchmark_register.cc"
+    "${SRC_DIR}/benchmark_runner.cc"
+    "${SRC_DIR}/check.cc"
+    "${SRC_DIR}/colorprint.cc"
+    "${SRC_DIR}/commandlineflags.cc"
+    "${SRC_DIR}/complexity.cc"
+    "${SRC_DIR}/console_reporter.cc"
+    "${SRC_DIR}/counter.cc"
+    "${SRC_DIR}/csv_reporter.cc"
+    "${SRC_DIR}/json_reporter.cc"
+    "${SRC_DIR}/perf_counters.cc"
+    "${SRC_DIR}/reporter.cc"
+    "${SRC_DIR}/statistics.cc"
+    "${SRC_DIR}/string_util.cc"
+    "${SRC_DIR}/sysinfo.cc"
+    "${SRC_DIR}/timers.cc"
 )
 
 add_library(google_benchmark "${SRCS}")
