@@ -85,7 +85,7 @@ std::pair<bool, String> StreamingFunctionData::supportChangelog(const String & f
     {
         if (auto combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix(nested_func_name))
         {
-            const std::string & combinator_name = combinator->getName();
+            const std::string combinator_name = combinator->getName();
             /// TODO: support more combinators
             if (combinator_name != "_if")
                 throw Exception(
