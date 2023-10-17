@@ -279,3 +279,6 @@
 [submodule "contrib/aws-s2n-tls"]
 	path = contrib/aws-s2n-tls
 	url = https://github.com/ClickHouse/s2n-tls.git
+[submodule "contrib/google-benchmark"]
+	path = contrib/google-benchmark
+	url = https://github.com/google/benchmark.git
