@@ -56,6 +56,9 @@
 #include <base/range.h>
 #include <base/bit_cast.h>
 
+/// proton: starts.
+#include <Common/WeakHash.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -1495,6 +1498,49 @@ struct ImplWyHash64
 
     static constexpr bool use_int_hash_for_pods = false;
 };
+
+/// proton: starts.
+class FunctionWeakHash32 : public IFunction
+{
+public:
+    static constexpr auto name = "weak_hash32";
+    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionWeakHash32>(); }
+
+public:
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        try
+        {
+            WeakHash32 hash(0);
+            arguments[0]->createColumn()->updateWeakHash32(hash);
+        }
+        catch (...)
+        {
+            throw Exception(
+                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+
+        return std::make_shared<DataTypeNumber<UInt32>>();
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
+
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
+    {
+        auto result = ColumnUInt32::create(input_rows_count);
+        WeakHash32 hash(input_rows_count);
+        arguments[0].column->updateWeakHash32(hash);
+        result->getData() = std::move(hash.getData());
+        return std::move(result);
+    }
+};
+/// proton: ends.
 
 struct NameIntHash32 { static constexpr auto name = "int_hash32"; };
 struct NameIntHash64 { static constexpr auto name = "int_hash64"; };
