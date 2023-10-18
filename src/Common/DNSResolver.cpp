@@ -129,7 +129,7 @@ static DNSResolver::IPAddresses resolveIPAddressImpl(const std::string & host)
     return addresses;
 }
 
-static Strings reverseResolveImpl(const Poco::Net::IPAddress & address)
+static std::unordered_set<String> reverseResolveImpl(const Poco::Net::IPAddress & address)
 {
     auto ptr_resolver = DB::DNSPTRResolverProvider::get();
 
@@ -204,7 +204,7 @@ Poco::Net::SocketAddress DNSResolver::resolveAddress(const std::string & host, U
     return  Poco::Net::SocketAddress(impl->cache_host(host).front(), port);
 }
 
-Strings DNSResolver::reverseResolve(const Poco::Net::IPAddress & address)
+std::unordered_set<String> DNSResolver::reverseResolve(const Poco::Net::IPAddress & address)
 {
     if (impl->disable_cache)
         return reverseResolveImpl(address);
