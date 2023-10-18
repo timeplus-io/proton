@@ -101,10 +101,7 @@ AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
 
         /// check arguments
         size_t num_of_args = config->arguments.size();
-        if (!config->support_changelog)
-            validate_arguments(num_of_args);
-        else
-            validate_arguments(types.back()->getName() == "int8" ? num_of_args : num_of_args - 1);
+        validate_arguments(types.back()->getName() == "int8" ? num_of_args : num_of_args - 1);
 
         ContextPtr query_context;
         if (CurrentThread::isInitialized())
@@ -149,22 +146,6 @@ bool UserDefinedFunctionFactory::isOrdinaryFunctionName(const String & function_
         const auto & config = executable_function->getConfiguration();
 
         return !config->is_aggregation;
-    }
-    return false;
-}
-
-bool UserDefinedFunctionFactory::supportChangelog(const String & function_name)
-{
-    const auto & loader = ExternalUserDefinedFunctionsLoader::instance(nullptr);
-    auto load_result = loader.getLoadResult(function_name);
-
-    if (load_result.object)
-    {
-        const auto executable_function = std::static_pointer_cast<const UserDefinedExecutableFunction>(load_result.object);
-        const auto config = std::dynamic_pointer_cast<JavaScriptUserDefinedFunctionConfiguration>(executable_function->getConfiguration());
-
-        if (config && config->support_changelog)
-            return true;
     }
     return false;
 }
@@ -233,38 +214,32 @@ bool UserDefinedFunctionFactory::registerFunction(
         if (config->has("is_aggregation") && config->getValue<bool>("is_aggregation"))
         {
             /// UDA
-            bool support_changelog
-                = V8::validateAggregationFunctionSource(function_name, {"initialize", "process", "finalize"}, config->get("source"));
+            V8::validateAggregationFunctionSource(function_name, {"initialize", "process", "finalize"}, config->get("source"));
 
-            config->set("support_changelog", support_changelog);
+            /// add _tp_delta column as the last argument
+            assert(config->has("arguments"));
+            assert(config->isArray("arguments"));
 
-            /// add _tp_delta column as the last argument if UDA support changelog
-            if (support_changelog)
+            bool has_delta_column = false;
+            /// Below is a workaround, because Poco::JSON::Object::getArray cannot work well
+            Poco::JSON::Array json_arguments = config->get("arguments").extract<Poco::JSON::Array>();
+            for (unsigned int i = 0; i < json_arguments.size(); i++)
             {
-                assert(config->has("arguments"));
-                assert(config->isArray("arguments"));
-
-                bool has_delta_column = false;
-                /// Below is a workaround, because Poco::JSON::Object::getArray cannot work well
-                Poco::JSON::Array json_arguments = config->get("arguments").extract<Poco::JSON::Array>();
-                for (unsigned int i = 0; i < json_arguments.size(); i++)
+                const auto & arg = json_arguments.getObject(i);
+                if (arg->has("name") && arg->get("name") == "_tp_delta")
                 {
-                    const auto & arg = json_arguments.getObject(i);
-                    if (arg->has("name") && arg->get("name") == "_tp_delta")
-                    {
-                        has_delta_column = true;
-                        break;
-                    }
+                    has_delta_column = true;
+                    break;
                 }
+            }
 
-                if (!has_delta_column)
-                {
-                    Poco::JSON::Object delta_col;
-                    delta_col.set("name", "_tp_delta");
-                    delta_col.set("type", "int8");
-                    json_arguments.add(delta_col);
-                    config->set("arguments", json_arguments);
-                }
+            if (!has_delta_column)
+            {
+                Poco::JSON::Object delta_col;
+                delta_col.set("name", "_tp_delta");
+                delta_col.set("type", "int8");
+                json_arguments.add(delta_col);
+                config->set("arguments", json_arguments);
             }
         }
         else

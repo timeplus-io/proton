@@ -272,7 +272,6 @@ createUserDefinedExecutableFunction(ContextPtr context, const std::string & name
             init_config(udf_config);
             String source = get_or_throw("source");
             udf_config->source = std::move(source);
-            udf_config->support_changelog = config.getBool(key_in_config + ".support_changelog", false);
             return std::make_shared<UserDefinedExecutableFunction>(std::move(udf_config), lifetime);
         }
         case UserDefinedFunctionConfiguration::FuncType::UNKNOWN:

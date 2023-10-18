@@ -108,8 +108,8 @@ std::pair<bool, String> StreamingFunctionData::supportChangelog(const String & f
                 ErrorCodes::NOT_IMPLEMENTED, "{} aggregation function is not supported in changelog query processing", function_name);
     }
 
-    /// UDA support changelog
-    if (UserDefinedFunctionFactory::supportChangelog(function_name))
+    /// UDA by default support changelog
+    if (UserDefinedFunctionFactory::isAggregateFunctionName(function_name))
         return {true, function_name};
 
     return {false, ""};

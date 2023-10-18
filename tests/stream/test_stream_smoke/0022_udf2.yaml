@@ -203,8 +203,6 @@ tests:
             query: |
               CREATE AGGREGATE FUNCTION test_count_23(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
                 {
-                  support_changelog: true,
-
                   initialize: function() {
                     this.count = 0;
                   },
@@ -296,8 +294,6 @@ tests:
             query: |
               CREATE AGGREGATE FUNCTION test_count_24(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
                 {
-                  support_changelog: true,
-
                   initialize: function() {
                     this.count = 0;
                   },
@@ -397,8 +393,6 @@ tests:
             query: |
               CREATE AGGREGATE FUNCTION test_count_25(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
                 {
-                  support_changelog: true,
-
                   initialize: function() {
                     this.count = 0;
                   },
@@ -498,8 +492,6 @@ tests:
             query: |
               CREATE AGGREGATE FUNCTION test_count_26(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
                 {
-                  support_changelog: true,
-
                   initialize: function() {
                     this.count = 0;
                   },
@@ -594,8 +586,6 @@ tests:
             query: |
               CREATE AGGREGATE FUNCTION IF NOT EXISTS test_count_26(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
                 {
-                  support_changelog: true,
-
                   initialize: function() {
                     this.count = 0;
                   },
