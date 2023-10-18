@@ -19,7 +19,7 @@ using namespace DB;
 
 std::unique_ptr<v8::Platform> platform;
 
-String ARGS_CEP1 = R"###([{ "name": "value","type": "int64"}])###";
+String ARGS_CEP1 = R"###([{ "name": "value","type": "int64"}, {"name": "_tp_delta", "type": "int8"}])###";
 String RETURN_CEP1 = "uint32";
 String UDA_CEP1 = R"###(
 {
@@ -49,7 +49,7 @@ String UDA_CEP1 = R"###(
     has_customized_emit : true
 })###";
 
-String ARGS_UDA1 = R"###([{ "name": "value","type": "int64"}])###";
+String ARGS_UDA1 = R"###([{ "name": "value","type": "int64"}, {"name": "_tp_delta", "type": "int8"}])###";
 String RETURN_UDA1 = "float32";
 String UDA1 = R"###(
 {
