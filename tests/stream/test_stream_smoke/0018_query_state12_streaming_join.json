@@ -273,7 +273,7 @@
         },
         {
             "id": 356,
-            "tags": ["query_state", "data_enrichment_join", "left-join"],
+            "tags": ["query_state", "bidirectional join", "left-join", "native_not_support"],
             "name": "append-only_left_all_join_append-only",
             "description": "append-only left all JOIN append-only state checkpoint",
             "steps":[

@@ -12,7 +12,7 @@
         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test21_limit_by_stream(i, s, t) values (4, 's4', '2022-12-01 00:00:04.111')"}
       ]
     },
-    "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
+    "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "not_supported"],"cluster": ["view", "cluster_table_bug"]}}
   },
   "comments": "Tests covering seek_to by sequence number",
   "tests": [
@@ -354,8 +354,8 @@
             {"client":"python", "depends_on_stream":"test21_limit_by_stream_2", "query_type": "table", "query":"insert into test21_limit_by_stream_2(i, s, t) values (2, 's2', '2022-12-01 00:00:04.111')"},
             {"client":"python", "wait":2, "query_id":"2100", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":3, "query_type": "stream", "query":"select a.i, b.s, c.t from test21_limit_by_stream as a join test21_limit_by_stream as b on a.i = b.i join test21_limit_by_stream as c on b.i = c.i where a._tp_time >= '2022-12-01 00:00:01.111' and b._tp_time >= '2022-12-01 00:00:02.111' and c._tp_time >= '2022-12-01 00:00:03.111'"},
             {"client":"python", "wait":2, "query_id":"2101", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":3, "query_type": "stream", "query":"select a.i, count() from test21_limit_by_stream as a join test21_limit_by_stream as b on a.i = b.i where a._tp_time >= '2022-12-01 00:00:01.111' and b._tp_time >= '2022-12-01 00:00:02.111' group by a.i emit periodic 1s"},
-            {"client":"python", "wait":2, "query_id":"2102", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":3, "query_type": "stream", "query":"select i, s from test21_limit_by_stream as a left join test21_limit_by_stream_2 as b on a.i = b.i where test21_limit_by_stream._tp_sn > 1 and default.test21_limit_by_stream_2._tp_sn > 2"},
-            {"client":"python", "wait":2, "query_id":"2103", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":3, "query_type": "stream", "query":"select count() from test21_limit_by_stream as a left join test21_limit_by_stream_2 as b on a.i = b.i where test21_limit_by_stream._tp_sn > 0 and default.test21_limit_by_stream_2._tp_sn < 4 emit periodic 1s"}
+            {"client":"python", "wait":2, "query_id":"2102", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":3, "query_type": "stream", "query":"select i, s from test21_limit_by_stream as a  join test21_limit_by_stream_2 as b on a.i = b.i where test21_limit_by_stream._tp_sn > 1 and default.test21_limit_by_stream_2._tp_sn > 2"},
+            {"client":"python", "wait":2, "query_id":"2103", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":3, "query_type": "stream", "query":"select count() from test21_limit_by_stream as a  join test21_limit_by_stream_2 as b on a.i = b.i where test21_limit_by_stream._tp_sn > 0 and default.test21_limit_by_stream_2._tp_sn < 4 emit periodic 1s"}
           ]
         }
       ],
@@ -373,17 +373,17 @@
           ]
         },
         {
-          "query_id":"2102",
-          "expected_results":[
-            [2, "s2"]
-          ]
-        },
-        {
-          "query_id":"2103",
-          "expected_results":[
-            [3]
-          ]
-        }
+            "query_id":"2102",
+            "expected_results":[
+              [2, "s2"]
+            ]
+          },
+          {
+            "query_id":"2103",
+            "expected_results":[
+              [3]
+            ]
+          }
       ]
     },
     {
