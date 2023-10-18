@@ -95,16 +95,6 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
             }
         }
 
-        {
-            v8::Local<v8::Value> val;
-            if (obj->Get(local_ctx, V8::to_v8(isolate_, "support_changelog")).ToLocal(&val) && !val->IsUndefined())
-            {
-                support_changelog = V8::from_v8<bool>(isolate_, val);
-                if (support_changelog)
-                    LOG_INFO(&Poco::Logger::get("JavaScriptAggregateFunction"), "JavaScript UDA '{}' can work on changelog stream", name);
-            }
-        }
-
         global_context.Reset(isolate_, local_ctx);
         assert(!global_context.IsEmpty());
         uda_object_blueprint.Reset(isolate_, obj);
@@ -124,16 +114,13 @@ JavaScriptBlueprint::~JavaScriptBlueprint() noexcept
 JavaScriptAggrFunctionState::JavaScriptAggrFunctionState(
     const JavaScriptBlueprint & blueprint, const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments)
 {
-    support_changelog = blueprint.support_changelog;
     columns.reserve(arguments.size());
 
-    /// check _tp_delta column if UDA support to work on changelog
-    if (support_changelog)
-    {
-        if (unlikely(arguments.back().type->getTypeId() != TypeIndex::Int8))
-            throw Exception(
-                ErrorCodes::NOT_IMPLEMENTED, "Tha last argument of JavaScript UDA with changelog support should be 'int8'. Invalid type.");
-    }
+    /// check _tp_delta column
+    if (unlikely(arguments.back().type->getTypeId() != TypeIndex::Int8))
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "Tha last argument of JavaScript UDA is '_tp_delta' column, which should be 'int8'. Invalid type.");
 
     for (const auto & arg : arguments)
     {
@@ -228,23 +215,24 @@ JavaScriptAggrFunctionState::~JavaScriptAggrFunctionState()
 
 void JavaScriptAggrFunctionState::add(const IColumn ** src_columns, size_t row_num)
 {
-    size_t num_of_input_columns = support_changelog ? columns.size() - 1 : columns.size();
+    size_t num_of_input_columns = columns.size() - 1;
 
     for (size_t i = 0; i < num_of_input_columns; i++)
         columns[i]->insertFrom(*src_columns[i], row_num);
 
-    if (support_changelog)
-        columns[columns.size() - 1]->insert(1);
+    /// _tp_delta column
+    columns[columns.size() - 1]->insert(1);
 }
 
 void JavaScriptAggrFunctionState::negate(const IColumn ** src_columns, size_t row_num)
 {
-    assert(support_changelog);
+    size_t num_of_input_columns = columns.size() - 1;
 
-    for (size_t i = 0; i < columns.size() - 1; i++)
+    for (size_t i = 0; i < num_of_input_columns; i++)
         columns[i]->insertFrom(*src_columns[i], row_num);
 
-    columns[columns.size() - 1]->insert(-1);
+    /// _tp_delta column
+    columns[num_of_input_columns]->insert(-1);
 }
 
 void JavaScriptAggrFunctionState::reinitCache()

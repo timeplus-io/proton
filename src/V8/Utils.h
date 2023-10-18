@@ -65,7 +65,7 @@ inline void run(
 }
 
 /// Validate UDA, return true if the UDA supports changelog
-bool validateAggregationFunctionSource(
+void validateAggregationFunctionSource(
     const std::string & func_name, const std::vector<std::string> & required_member_funcs, const std::string & source);
 
 /// Validate UDF

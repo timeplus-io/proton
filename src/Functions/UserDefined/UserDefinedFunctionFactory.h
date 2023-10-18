@@ -33,9 +33,6 @@ public:
 
     static bool isOrdinaryFunctionName(const String & function_name);
 
-    /// Whether or not the UDA support changelog semantic
-    static bool supportChangelog(const String & function_name);
-
     bool registerFunction(
         ContextPtr context,
         const String & function_name,
