@@ -10,7 +10,7 @@
         {"client":"python", "query_type": "table", "wait":4, "exist":"test10_right_stream", "exist_wait":2, "query":"create stream if not exists test10_right_stream (ii int, ss string, tts datetime)"}
       ]
     },
-    "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["cluster_table_bug"]}}
+    "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "not_supported"],"cluster": ["cluster_table_bug"]}}
   },
   "comments": "Tests covering the stream query smoke cases.",
   "tests": [
@@ -67,7 +67,7 @@
     },
     {
       "id": 2,
-      "tags": ["stream_join_stream"],
+      "tags": ["stream_join_stream", "not_supported"],
       "name": "date_diff_within-left-join",
       "description": "stream to stream left join",
       "steps":[

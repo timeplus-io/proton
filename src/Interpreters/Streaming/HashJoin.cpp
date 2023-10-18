@@ -781,7 +781,6 @@ size_t insertFromBlockImpl(
 const HashJoin::SupportMatrix HashJoin::support_matrix = {
     /// <left_stroage_semantic, join_kind, join_strictness, right_storage_semantic> - supported
     /// Append ...
-    {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::All, StorageSemantic::Append}, true},
     {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
     {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
     {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::All, StorageSemantic::Changelog}, true},
