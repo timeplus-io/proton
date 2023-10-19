@@ -1,7 +1,6 @@
 #include "WriteBufferFromKafka.h"
-#include <cmath>
-#include <utility>
-#include "Common/logger_useful.h"
+
+#include <Common/logger_useful.h>
 
 namespace DB
 {
@@ -11,8 +10,8 @@ namespace ErrorCodes
 extern const int CANNOT_WRITE_TO_KAFKA;
 }
 
-WriteBufferFromKafka::WriteBufferFromKafka(const Poco::Logger * logger, RdKafkaTopicPtr topic_, size_t buffer_size)
-    : BufferWithOwnMemory<WriteBuffer>(buffer_size), log(logger), topic(std::move(topic_))
+WriteBufferFromKafka::WriteBufferFromKafka(klog::KTopicPtr topic_, Poco::Logger * logger, size_t buffer_size)
+    : BufferWithOwnMemory<WriteBuffer>(buffer_size), topic(std::move(topic_)), log(logger)
 {
 }
 
@@ -39,42 +38,22 @@ void WriteBufferFromKafka::nextImpl()
     ++state.outstandings;
 }
 
-void WriteBufferFromKafka::finalizeImpl()
-{
-    LOG_INFO(log, "finalizeImpl is called, offset={}", offset());
-}
-
-void WriteBufferFromKafka::onDrMsg(const rd_kafka_message_t * msg)
+void WriteBufferFromKafka::onMessageDelivery(const rd_kafka_message_t * msg)
 {
     if (msg->err)
-        state.errorCode.store(msg->err);
+    {
+        state.last_error_code.store(msg->err);
+        ++state.error_count;
+    }
     else
         ++state.acked;
 }
 
-bool WriteBufferFromKafka::fullyAcked() const
+void WriteBufferFromKafka::State::reset()
 {
-    return state.acked == state.outstandings;
-}
-
-rd_kafka_resp_err_t WriteBufferFromKafka::deliveryError() const
-{
-    return static_cast<rd_kafka_resp_err_t>(state.errorCode.load());
-}
-
-size_t WriteBufferFromKafka::outstandings() const
-{
-    return state.outstandings.load();
-}
-size_t WriteBufferFromKafka::acked() const
-{
-    return state.acked.load();
-}
-
-void WriteBufferFromKafka::resetState()
-{
-    state.outstandings.store(0);
-    state.acked.store(0);
-    state.errorCode.store(0);
+    outstandings.store(0);
+    acked.store(0);
+    error_count.store(0);
+    last_error_code.store(0);
 }
 }

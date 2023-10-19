@@ -1,22 +1,19 @@
 #include "Kafka.h"
-#include <fmt/core.h>
-#include <memory>
-#include <vector>
 #include "KafkaSink.h"
 #include "KafkaSource.h"
 
-#include <Common/ProtonCommon.h>
-#include <Common/logger_useful.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <KafkaLog/KafkaWALPool.h>
-#include <KafkaLog/KafkaWALSettings.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Common/ProtonCommon.h>
+#include <Common/logger_useful.h>
+
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/trim.hpp>
 
 namespace DB
 {
@@ -27,61 +24,39 @@ extern const int OK;
 extern const int RESOURCE_NOT_FOUND;
 }
 
-std::vector<std::pair<std::string, std::string>> Kafka::parseProperties(std::string properties)
+KConfParams Kafka::parseProperties(String properties)
 {
-    std::vector<std::pair<std::string, std::string>> result;
+    KConfParams result;
+
     if (properties.empty())
         return result;
-
-    static auto ltrim = [](std::string &s)
-    {
-        s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
-            return !std::isspace(ch);
-        }));
-    };
-
-    static auto rtrim = [](std::string &s)
-    {
-        s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
-            return !std::isspace(ch);
-        }).base(), s.end());
-    };
 
     /// properties example:
     /// message.max.bytes=1024;max.in.flight=1000;group.id=my-group
 
-    std::vector<std::string> parts;
+    std::vector<String> parts;
     boost::split(parts, properties, boost::is_any_of(";"));
     result.reserve(parts.size());
 
-    std::vector<std::string> kv{2};
-    for (const auto& part : parts)
+    for (const auto & part : parts)
     {
-        boost::split(kv, part, boost::is_any_of("="));
-        if (unlikely(kv.empty())) /* redundant/trailing semi-colon */
+        if (unlikely(part.empty())) /* redundant / trailing ';' */
             continue;
 
-        if (unlikely(kv.size() == 1))
-        {
-            if (kv.at(0).empty()) /* something like `;;;` */
-                continue;
+        auto equal_pos = part.find('=');
+        if (unlikely(equal_pos == std::string::npos || equal_pos == 0 || equal_pos == part.size() - 1))
+            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Invalid property `{}`, expected format: <key>=<value>.", part);
 
-            throw Exception(fmt::format("Invalid property `{}`, missing value.", part), ErrorCodes::INVALID_SETTING_VALUE);
-        }
-
-        /// in case the property value actually contains `=`, this should be vary rare
-        if (unlikely(kv.size() > 2))
-            kv[1] = boost::join(std::vector(kv.begin() + 1, kv.end()), "=");
-
-        if (unlikely(kv.at(0).empty()))
-            throw Exception(fmt::format("Invalid property `{}`, empty property name.", part), ErrorCodes::INVALID_SETTING_VALUE);
+        auto key = part.substr(0, equal_pos);
+        auto value = part.substr(equal_pos + 1);
 
         /// no spaces are supposed be around `=`, thus only need to
         /// remove the leading spaces of keys and trailing spaces of values
-        ltrim(kv.at(0));
-        rtrim(kv.at(1));
-        result.push_back(std::make_pair(kv.at(0), kv.at(1)));
+        boost::trim_left(key);
+        boost::trim_right(value);
+        result.push_back(std::make_pair(key, value));
     }
+
     return result;
 }
 
@@ -98,6 +73,8 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
 
     if (settings->topic.value.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", settings->type.value);
+
+    parsed_properties = parseProperties(settings->properties);
 
     calculateDataFormat(storage);
 

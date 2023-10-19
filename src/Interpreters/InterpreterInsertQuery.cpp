@@ -257,7 +257,7 @@ Chain InterpreterInsertQuery::buildChainImpl(
     /// proton: Do not squash if the table storage does not require it.
     /// Do not squash blocks if it is a sync INSERT into Distributed, since it lead to double bufferization on client and server side.
     /// Client-side bufferization might cause excessive timeouts (especially in case of big blocks).
-    if (/* proton: start */ !table->insertWithoutSquash() /* proton: end */
+    if (/* proton: start */ table->squashInsert() /* proton: end */
         && !(settings.insert_distributed_sync && table->isRemote()) && !no_squash && !(query && query->watch))
     {
         bool table_prefers_large_blocks = table->prefersLargeBlocks();

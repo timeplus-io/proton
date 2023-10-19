@@ -115,11 +115,6 @@ Pipe FileLog::read(
         this, std::move(header), std::move(context), max_block_size, saved_start_timestamp, searchForCandidates(), log));
 }
 
-SinkToStoragePtr FileLog::write(const ASTPtr & /*query*/, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr /*context*/)
-{
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Ingesting data to external stream of 'log' type is not supported");
-}
-
 FileLogSource::FileContainer FileLog::searchForCandidates()
 {
     FileLogSource::FileContainer candidates;

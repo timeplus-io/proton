@@ -1,27 +1,9 @@
-#include <boost/algorithm/string/predicate.hpp>
-#include <chrono>
-#include <fmt/core.h>
-#include <memory>
-#include <thread>
-#include <unordered_set>
-#include <utility>
-#include <vector>
-
-#include "Common/Exception.h"
-#include "Common/logger_useful.h"
-#include "Checkpoint/CheckpointContext.h"
-#include "Checkpoint/CheckpointContextFwd.h"
-#include "Core/Block.h"
-#include "Formats/FormatFactory.h"
-#include "Interpreters/Context.h"
-#include "KafkaLog/KafkaWALCommon.h"
 #include "KafkaSink.h"
-#include "Processors/Chunk.h"
-#include "Processors/Formats/IOutputFormat.h"
-#include "Processors/ProcessorID.h"
-#include "Storages/ExternalStream/ExternalStreamTypes.h"
-#include "Storages/ExternalStream/Kafka/Kafka.h"
-#include "Storages/ExternalStream/Kafka/WriteBufferFromKafka.h"
+
+#include <Processors/Formats/IOutputFormat.h>
+#include <Common/logger_useful.h>
+
+#include <boost/algorithm/string/predicate.hpp>
 
 namespace DB
 {
@@ -32,18 +14,16 @@ extern const int MISSING_ACKNOWLEDGEMENT;
 extern const int INVALID_CONFIG_PARAMETER;
 }
 
-KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr context, const Poco::Logger * logger)
-    : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID), log(logger), producer(nullptr, nullptr)
+KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr context, Poco::Logger * logger)
+    : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID), producer(nullptr, nullptr), log(logger)
 {
-    is_streaming = true;
-
     /// default values
-    std::vector<std::pair<std::string, std::string>> producer_params{
-        std::make_pair("enable.idempotence", "true"),
-        std::make_pair("message.timeout.ms", "0" /* infinite */),
+    std::vector<std::pair<String, String>> producer_params{
+        {"enable.idempotence", "true"},
+        {"message.timeout.ms", "0" /* infinite */},
     };
 
-    static const std::unordered_set<std::string> allowed_properties{
+    static const std::unordered_set<String> allowed_properties{
         "enable.idempotence",
         "message.timeout.ms",
         "queue.buffering.max.messages",
@@ -68,9 +48,8 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
             producer_params.emplace_back(pair.first, pair.second);
             continue;
         }
-        throw Exception("Unsupported property: " + pair.first, ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Unsupported property {}", pair.first);
     }
-
 
     /// properies from settings have higher priority
     producer_params.emplace_back("bootstrap.servers", kafka->brokers());
@@ -83,24 +62,27 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
     }
 
     auto * conf = rd_kafka_conf_new();
-
-    char errstr[512] = {'\0'};
+    char errstr[512]{'\0'};
     for (const auto & param : producer_params)
     {
         auto ret = rd_kafka_conf_set(conf, param.first.c_str(), param.second.c_str(), errstr, sizeof(errstr));
         if (ret != RD_KAFKA_CONF_OK)
         {
             rd_kafka_conf_destroy(conf);
-            LOG_ERROR(log, "Failed to set kafka config `{}` with value `{}` error={}", param.first, param.second, ret);
-            throw Exception("Failed to create kafka config", ErrorCodes::INVALID_CONFIG_PARAMETER);
+            throw Exception(
+                ErrorCodes::INVALID_CONFIG_PARAMETER,
+                "Failed to set kafka config `{}` with value `{}` error={}",
+                param.first,
+                param.second,
+                ret);
         }
     }
 
     rd_kafka_conf_set_dr_msg_cb(conf, [](rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void * /* opaque */) {
-        static_cast<WriteBufferFromKafka *>(msg->_private)->onDrMsg(msg);
+        static_cast<WriteBufferFromKafka *>(msg->_private)->onMessageDelivery(msg);
     });
 
-    producer = RdKafkaPtr(rd_kafka_new(RD_KAFKA_PRODUCER, conf, errstr, sizeof(errstr)), rd_kafka_destroy);
+    producer = klog::KafkaPtr(rd_kafka_new(RD_KAFKA_PRODUCER, conf, errstr, sizeof(errstr)), rd_kafka_destroy);
     if (!producer)
     {
         // librdkafka will take the ownership of `conf` if `rd_kafka_new` succeeds,
@@ -109,11 +91,11 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
         throw Exception("Failed to create kafka handle", klog::mapErrorCode(rd_kafka_last_error()));
     }
 
-    auto topic = RdKafkaTopicPtr(rd_kafka_topic_new(producer.get(), kafka->topic().c_str(), nullptr), rd_kafka_topic_destroy);
+    auto topic = klog::KTopicPtr(rd_kafka_topic_new(producer.get(), kafka->topic().c_str(), nullptr), rd_kafka_topic_destroy);
 
-    wb = std::make_unique<WriteBufferFromKafka>(log, std::move(topic));
+    wb = std::make_unique<WriteBufferFromKafka>(std::move(topic), log);
 
-    std::string data_format = kafka->dataFormat();
+    String data_format = kafka->dataFormat();
     if (data_format.empty())
         data_format = "JSONEachRow";
 
@@ -121,11 +103,9 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
     writer->setAutoFlush();
 
     pollingThread = std::thread([this]() {
-        while (!isFinished)
-        {
-            auto n = rd_kafka_poll(producer.get(), 500 /* ms */);
-            LOG_TRACE(log, "polled {} events", n);
-        }
+        while (!is_finished.test())
+            if (auto n = rd_kafka_poll(producer.get(), POLL_TIMEOUT_MS))
+                LOG_TRACE(log, "polled {} events", n);
     });
 }
 
@@ -134,29 +114,32 @@ void KafkaSink::consume(Chunk chunk)
     if (!chunk.hasRows())
         return;
 
-    auto blk = Block(getHeader());
-    blk.setColumns(chunk.getColumns());
-    writer->write(blk);
+    auto block = getHeader().cloneWithColumns(chunk.detachColumns());
+    writer->write(block);
 }
 
 void KafkaSink::onFinish()
 {
-    isFinished = true;
+    if (is_finished.test_and_set())
+        return;
+
     if (pollingThread.joinable())
         pollingThread.join();
 
-    // Make sure all outstanding requests are transmitted and handled.
+    /// if there are no outstandings, no need to do flushing
+    if (wb->hasNoOutstandings())
+        return;
+
+    /// Make sure all outstanding requests are transmitted and handled.
     if (auto err = rd_kafka_flush(producer.get(), -1 /* blocks */); err)
-        throw Exception(std::string("Failed to flush kafka producer: ") + rd_kafka_err2str(err), klog::mapErrorCode(err));
+        LOG_ERROR(log, "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
 
-    if (auto err = wb->deliveryError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
-        throw Exception(std::string("Failed to send messages: ") + rd_kafka_err2str(err), klog::mapErrorCode(err));
+    if (auto err = wb->lastDeliveryError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
+        LOG_ERROR(log, "Failed to send messages, error={}", rd_kafka_err2str(err));
 
-    // if flush does not return an error, the delivery report queue should be empty
-    if (!wb->fullyAcked())
-        throw Exception(
-            fmt::format("Not all messsages are acked, expected={} actual={}", wb->outstandings(), wb->acked()),
-            ErrorCodes::MISSING_ACKNOWLEDGEMENT);
+    /// if flush does not return an error, the delivery report queue should be empty
+    if (!wb->hasNoOutstandings())
+        LOG_ERROR(log, "Not all messsages are acked, expected={} actual={}", wb->outstandings(), wb->acked());
 }
 
 KafkaSink::~KafkaSink()
@@ -168,14 +151,15 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
 {
     do
     {
-        if (auto err = wb->deliveryError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
-            throw Exception(std::string("Failed to send messages: ") + rd_kafka_err2str(err), klog::mapErrorCode(err));
+        if (auto err = wb->lastDeliveryError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
+            throw Exception(
+                klog::mapErrorCode(err), "Failed to send messages, error_cout={} last_error={}", wb->error_count(), rd_kafka_err2str(err));
 
-        if (wb->fullyAcked())
+        if (wb->hasNoOutstandings())
             break;
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    } while (true);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    } while (!is_finished.test());
 
     wb->resetState();
     IProcessor::checkpoint(context);

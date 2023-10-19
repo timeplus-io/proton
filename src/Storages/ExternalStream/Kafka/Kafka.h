@@ -1,9 +1,8 @@
 #pragma once
 
-#include <vector>
+#include <KafkaLog/KafkaWALCommon.h>
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
-
 #include <Storages/Streaming/SeekToInfo.h>
 
 namespace DB
@@ -40,14 +39,15 @@ public:
     const String & securityProtocol() const { return settings->security_protocol.value; }
     const String & username() const { return settings->username.value; }
     const String & password() const { return settings->password.value; }
-    std::vector<std::pair<std::string, std::string>> properties() const { return parseProperties(settings->properties.value); }
+    const klog::KConfParams & properties() const { return parsed_properties; }
 
 private:
+    static klog::KConfParams parseProperties(String properties);
+
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
     std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info) const;
     void validate();
-    static std::vector<std::pair<std::string, std::string>> parseProperties(std::string properties);
 
 private:
     StorageID storage_id;
@@ -57,6 +57,7 @@ private:
     Poco::Logger * log;
 
     NamesAndTypesList virtual_column_names_and_types;
+    klog::KConfParams parsed_properties;
 
     Int32 shards = -1;
 };

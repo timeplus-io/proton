@@ -21,7 +21,7 @@ public:
     void startup() override;
     void shutdown() override;
     bool supportsSubcolumns() const override;
-    bool insertWithoutSquash() const override { return true; }
+    bool squashInsert() const noexcept override { return false; }
     NamesAndTypesList getVirtuals() const override;
 
     Pipe read(
