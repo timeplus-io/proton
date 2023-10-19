@@ -228,7 +228,7 @@ public:
     /// to skip using squashing.
     virtual bool squashInsert() const noexcept { return true; }
 
-    virtual bool supportsStreamingQuery() const { return true; }
+    virtual bool supportsStreamingQuery() const { return false; }
     /// proton: ends.
 
     /// Return list of virtual columns (like _part, _table, etc). In the vast

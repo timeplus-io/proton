@@ -20,8 +20,6 @@ public:
 
     static NamesAndTypesList getNamesAndTypes();
 
-    bool supportsStreamingQuery() const override { return false;}
-
 protected:
     using IStorageSystemOneBlock::IStorageSystemOneBlock;
 

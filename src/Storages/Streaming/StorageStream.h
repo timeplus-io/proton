@@ -265,6 +265,8 @@ public:
 
     std::vector<nlog::RecordSN> getLastSNs() const;
 
+    bool supportsStreamingQuery() const override { return true; }
+
     friend class StreamSink;
     friend class MergeTreeData;
 

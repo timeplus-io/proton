@@ -94,6 +94,8 @@ public:
 
     static SchemaCache & getSchemaCache(const ContextPtr & context);
 
+    bool supportsStreamingQuery() const override { return true; }
+
 protected:
     friend class StorageFileSource;
     friend class StorageFileSink;

@@ -109,8 +109,6 @@ public:
 
     MergeTreeDeduplicationLog * getDeduplicationLog() { return deduplication_log.get(); }
 
-    bool supportsStreamingQuery() const override { return false; }
-
 private:
 
     /// Mutex and condvar for synchronous mutations wait
