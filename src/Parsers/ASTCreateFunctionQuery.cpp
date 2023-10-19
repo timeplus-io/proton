@@ -101,7 +101,7 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
 
     assert(arguments && !arguments->children.empty());
 
-    Poco::JSON::Array json_args(Poco::JSON_PRESERVE_KEY_ORDER);
+    Poco::JSON::Array::Ptr json_args = new Poco::JSON::Array(Poco::JSON_PRESERVE_KEY_ORDER);
     for (auto ast : arguments->children[0]->children)
     {
         Poco::JSON::Object::Ptr json_arg = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
@@ -111,7 +111,7 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
         WriteBufferFromOwnString buf;
         formatAST(*(arg->type), buf, false);
         json_arg->set("type", buf.str());
-        json_args.add(json_arg);
+        json_args->add(json_arg);
     }
     inner_func->set("arguments", json_args);
 

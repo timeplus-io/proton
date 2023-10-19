@@ -222,10 +222,10 @@ bool UserDefinedFunctionFactory::registerFunction(
 
             bool has_delta_column = false;
             /// Below is a workaround, because Poco::JSON::Object::getArray cannot work well
-            Poco::JSON::Array json_arguments = config->get("arguments").extract<Poco::JSON::Array>();
-            for (unsigned int i = 0; i < json_arguments.size(); i++)
+            Poco::JSON::Array::Ptr json_arguments = config->get("arguments").extract<Poco::JSON::Array::Ptr>();
+            for (size_t i = 0; i < json_arguments->size(); i++)
             {
-                const auto & arg = json_arguments.getObject(i);
+                const auto & arg = json_arguments->getObject(i);
                 if (arg->has("name") && arg->get("name") == "_tp_delta")
                 {
                     has_delta_column = true;
@@ -238,7 +238,7 @@ bool UserDefinedFunctionFactory::registerFunction(
                 Poco::JSON::Object delta_col;
                 delta_col.set("name", "_tp_delta");
                 delta_col.set("type", "int8");
-                json_arguments.add(delta_col);
+                json_arguments->add(delta_col);
                 config->set("arguments", json_arguments);
             }
         }

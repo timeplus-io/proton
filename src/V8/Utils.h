@@ -64,11 +64,9 @@ inline void run(
     func(isolate, local_ctx, try_catch);
 }
 
-/// Validate UDA, return true if the UDA supports changelog
 void validateAggregationFunctionSource(
     const std::string & func_name, const std::vector<std::string> & required_member_funcs, const std::string & source);
 
-/// Validate UDF
 void validateStatelessFunctionSource(const std::string & func_name, const std::string & source);
 
 /// Check v8 heap size and throw exception if exceeds limit

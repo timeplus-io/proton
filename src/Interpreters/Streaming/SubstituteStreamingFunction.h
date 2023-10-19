@@ -32,7 +32,7 @@ private:
     /// check whether or not the function support 'retract' for changelog:
     /// the 1st return value: indicates whether or not it support retract
     /// the 2nd return value: the alias name of function should be rewritten in the query, empty if not support changelog
-    std::pair<bool, String> supportChangelog(const String & function_name);
+    std::optional<String> supportChangelog(const String & function_name);
 };
 
 using SubstituteStreamingFunctionVisitor = InDepthNodeVisitor<OneTypeMatcher<StreamingFunctionData, StreamingFunctionData::ignoreSubquery>, false>;
