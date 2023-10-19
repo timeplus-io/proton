@@ -3,8 +3,7 @@
     "tag": "smoke",
     "test_suite_config": {
         "setup": {
-            "statements": [
-            ]
+            "statements": []
         },
         "tests_2_run": {
             "ids_2_run": [
@@ -31,7 +30,7 @@
     "comments": "Tests covering the changelog stream join tables.",
     "tests": [
         {
-            "id": 80,
+            "id": 183,
             "tags": [
                 "append_only",
                 "table(changelog_kv)",
@@ -105,7 +104,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1480",
+                            "query_id": "14183",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 join test14_table2_5 on test14_stream1_5.j = test14_table2_5.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_5) as k on t.j = k.j3;"
@@ -113,7 +112,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1480",
+                            "depends_on": "14183",
                             "wait": 1,
                             "query": "insert into test14_table2_5(i2, j2, k2) values(8, 2, 'a');"
                         },
@@ -150,7 +149,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "1480",
+                            "kill": "14183",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_table2_5(i2, j2, k2) values(1, 5, 'b');"
@@ -160,7 +159,7 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "1480",
+                    "query_id": "14183",
                     "expected_results": [
                         [
                             "1",
@@ -200,7 +199,7 @@
             ]
         },
         {
-            "id": 81,
+            "id": 184,
             "tags": [
                 "append_only",
                 "table(changelog_kv)",
@@ -298,7 +297,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1481",
+                            "query_id": "14184",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 as a join table(test14_table2_5) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_5) as k on t.j = k.j3;"
@@ -306,7 +305,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1481",
+                            "depends_on": "14184",
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(1, 2, 'a');"
                         },
@@ -325,7 +324,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "1481",
+                            "kill": "14184",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(1, 7, 'a');"
@@ -335,7 +334,7 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "1481",
+                    "query_id": "14184",
                     "expected_results": [
                         [
                             "1",
@@ -375,7 +374,7 @@
             ]
         },
         {
-            "id": 82,
+            "id": 185,
             "tags": [
                 "append_only",
                 "table(changelog_kv)",
@@ -467,7 +466,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1482",
+                            "query_id": "14185",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 as a join table(test14_table2_5) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_5) as k on t.j = k.j3;"
@@ -475,7 +474,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1482",
+                            "depends_on": "14185",
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(1, 2, 'a');"
                         },
@@ -488,7 +487,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "1482",
+                            "kill": "14185",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(1, 7, 'a');"
@@ -498,7 +497,7 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "1482",
+                    "query_id": "14185",
                     "expected_results": [
                         [
                             "1",
@@ -538,7 +537,7 @@
             ]
         },
         {
-            "id": 83,
+            "id": 186,
             "tags": [
                 "append_only",
                 "changelog_kv",
@@ -650,7 +649,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1483",
+                            "query_id": "14186",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "select * from test14_view_5 join changelog(table(test14_stream3_5), j3) as c on test14_view_5.j = c.j3;"
@@ -658,7 +657,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1483",
+                            "depends_on": "14186",
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(1, 2, 'a');"
                         },
@@ -686,7 +685,7 @@
             "expected_results": []
         },
         {
-            "id": 84,
+            "id": 187,
             "tags": [
                 "changelog",
                 "changelog",
@@ -761,7 +760,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1484",
+                            "query_id": "14187",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 as a join changelog(test14_stream2_5, j2) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3, _tp_delta from t join table(test14_stream3_5) as k on t.j = k.j3;"
@@ -769,7 +768,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1484",
+                            "depends_on": "14187",
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(1, 2, 'a');"
                         },
@@ -809,7 +808,7 @@
             "expected_results": []
         },
         {
-            "id": 85,
+            "id": 188,
             "tags": [
                 "changelog",
                 "changelog",
@@ -884,7 +883,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1485",
+                            "query_id": "14188",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 as a join changelog(test14_stream2_5, j2) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3, _tp_delta from t left join table(test14_stream3_5) as k on t.j = k.j3;"
@@ -892,7 +891,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1485",
+                            "depends_on": "14188",
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(1, 2, 'a');"
                         },
@@ -932,7 +931,7 @@
             "expected_results": []
         },
         {
-            "id": 86,
+            "id": 189,
             "tags": [
                 "changelog",
                 "versioned_kv",
@@ -1011,7 +1010,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1486",
+                            "query_id": "14189",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 as a join changelog(test14_stream2_5, j2) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3, _tp_delta from t inner join table(test14_stream3_5) as k on t.j = k.j3;"
@@ -1019,7 +1018,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1486",
+                            "depends_on": "14189",
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(1, 2, 'a');"
                         },
@@ -1050,7 +1049,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "1486",
+                            "kill": "14189",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(1, 5, 'b');"
@@ -1060,7 +1059,7 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "1486",
+                    "query_id": "14189",
                     "expected_results": [
                         [
                             "1",
@@ -1115,7 +1114,7 @@
             ]
         },
         {
-            "id": 87,
+            "id": 190,
             "tags": [
                 "changelog",
                 "versioned_kv",
@@ -1194,7 +1193,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1487",
+                            "query_id": "14190",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 as a join changelog(test14_stream2_5, j2) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3, _tp_delta from t left join table(test14_stream3_5) as k on t.j = k.j3;"
@@ -1202,7 +1201,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1487",
+                            "depends_on": "14190",
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(1, 2, 'a');"
                         },
@@ -1233,7 +1232,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "1487",
+                            "kill": "14190",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(1, 5, 'b');"
@@ -1243,7 +1242,7 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "1487",
+                    "query_id": "14190",
                     "expected_results": [
                         [
                             "1",
@@ -1298,7 +1297,7 @@
             ]
         },
         {
-            "id": 88,
+            "id": 191,
             "tags": [
                 "changelog",
                 "versioned_kv",
@@ -1385,7 +1384,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1488",
+                            "query_id": "14191",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "select i, j, k, i2, j2, k2, i3, j3, k3 from test14_view_5 join table(test14_stream3_5) as c on test14_view_5.j = c.j3;"
@@ -1393,7 +1392,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1488",
+                            "depends_on": "14191",
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(1, 2, 'a');"
                         },
@@ -1436,7 +1435,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "1488",
+                            "kill": "14191",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(5, 2, 'a');"
@@ -1446,7 +1445,7 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "1488",
+                    "query_id": "14191",
                     "expected_results": [
                         [
                             "1",
@@ -1508,7 +1507,7 @@
             ]
         },
         {
-            "id": 89,
+            "id": 192,
             "tags": [
                 "changelog",
                 "table(append-only)",
@@ -1588,7 +1587,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1489",
+                            "query_id": "14192",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 as a join changelog(test14_stream2_5, j2) as b on a.j = b.j2)select * from t join table(test14_stream3_5) as k on t.j = k.j3;"
@@ -1596,7 +1595,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1489",
+                            "depends_on": "14192",
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(1, 2, 'a');"
                         },
@@ -1627,7 +1626,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "1489",
+                            "kill": "14192",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(1, 5, 'b');"
@@ -1638,7 +1637,7 @@
             "expected_results": []
         },
         {
-            "id": 90,
+            "id": 193,
             "tags": [
                 "changelog",
                 "table(append-only)",
@@ -1718,7 +1717,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1490",
+                            "query_id": "14193",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 as a join changelog(test14_stream2_5, j2) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3, _tp_delta from t left join table(test14_stream3_5) as k on t.j = k.j3;"
@@ -1726,7 +1725,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1490",
+                            "depends_on": "14193",
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(1, 2, 'a');"
                         },
@@ -1757,7 +1756,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "1490",
+                            "kill": "14193",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(1, 5, 'b');"
@@ -1767,7 +1766,7 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "1490",
+                    "query_id": "14193",
                     "expected_results": [
                         [
                             "1",
@@ -1858,7 +1857,7 @@
             ]
         },
         {
-            "id": 91,
+            "id": 194,
             "tags": [
                 "changelog",
                 "changelog(table(stream))",
@@ -1956,7 +1955,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1491",
+                            "query_id": "14194",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 as a join changelog(test14_stream2_5, j2) as b on a.j = b.j2)select * from t join changelog(table(test14_stream3_5), j3) as k on t.j = k.j3;"
@@ -1964,7 +1963,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1491",
+                            "depends_on": "14194",
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(1, 3, 'a');"
                         },
@@ -1986,7 +1985,7 @@
             "expected_results": []
         },
         {
-            "id": 92,
+            "id": 195,
             "tags": [
                 "changelog",
                 "changelog(table(stream))",
@@ -2084,7 +2083,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1492",
+                            "query_id": "14195",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 as a join changelog(test14_stream2_5, j2) as b on a.j = b.j2)select * from t left join changelog(table(test14_stream3_5), j3) as k on t.j = k.j3;"
@@ -2092,7 +2091,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1492",
+                            "depends_on": "14195",
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(1, 3, 'a');"
                         },
@@ -2114,7 +2113,7 @@
             "expected_results": []
         },
         {
-            "id": 93,
+            "id": 196,
             "tags": [
                 "changelog",
                 "changelog",
@@ -2244,7 +2243,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1493",
+                            "query_id": "14196",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "select * from test14_view_5 join changelog(table(test14_stream3_5), j3) as c on test14_view_5.j = c.j3;"
@@ -2252,7 +2251,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1493",
+                            "depends_on": "14196",
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(1, 2, 'a');"
                         },
@@ -2286,7 +2285,7 @@
             "expected_results": []
         },
         {
-            "id": 94,
+            "id": 197,
             "tags": [
                 "changelog",
                 "table(changelog_kv)",
@@ -2371,7 +2370,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1494",
+                            "query_id": "14197",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 as a join changelog(test14_stream2_5, j2) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3, _tp_delta from t join table(test14_stream3_5) as k on t.j = k.j3;"
@@ -2379,7 +2378,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1494",
+                            "depends_on": "14197",
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(8, 2, 'a');"
                         },
@@ -2422,7 +2421,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "1494",
+                            "kill": "14197",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(4, 2, 'a');"
@@ -2432,7 +2431,7 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "1494",
+                    "query_id": "14197",
                     "expected_results": [
                         [
                             "1",
@@ -2559,7 +2558,7 @@
             ]
         },
         {
-            "id": 95,
+            "id": 198,
             "tags": [
                 "changelog",
                 "table(changelog_kv)",
@@ -2644,7 +2643,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1495",
+                            "query_id": "14198",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 as a join changelog(test14_stream2_5, j2) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3, _tp_delta from t left join table(test14_stream3_5) as k on t.j = k.j3;"
@@ -2652,7 +2651,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1495",
+                            "depends_on": "14198",
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(8, 2, 'a');"
                         },
@@ -2695,7 +2694,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "1495",
+                            "kill": "14198",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(4, 2, 'a');"
@@ -2705,7 +2704,7 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "1495",
+                    "query_id": "14198",
                     "expected_results": [
                         [
                             "1",
@@ -2844,7 +2843,7 @@
             ]
         },
         {
-            "id": 96,
+            "id": 199,
             "tags": [
                 "changelog",
                 "table(versioned_kv)",
@@ -2947,7 +2946,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1496",
+                            "query_id": "14199",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 as a join table(test14_stream2_5) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_5) as k on t.j = k.j3;"
@@ -2955,7 +2954,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1496",
+                            "depends_on": "14199",
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(1, 2, 'a');"
                         },
@@ -2974,7 +2973,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "1496",
+                            "kill": "14199",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(1, 5, 'a');"
@@ -2984,7 +2983,7 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "1496",
+                    "query_id": "14199",
                     "expected_results": [
                         [
                             "1",
@@ -3035,7 +3034,7 @@
             ]
         },
         {
-            "id": 97,
+            "id": 200,
             "tags": [
                 "changelog",
                 "table(versioned_kv)",
@@ -3138,7 +3137,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1497",
+                            "query_id": "14200",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 as a join table(test14_stream2_5) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_5) as k on t.j = k.j3;"
@@ -3146,7 +3145,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1497",
+                            "depends_on": "14200",
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(1, 2, 'a');"
                         },
@@ -3165,7 +3164,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "1497",
+                            "kill": "14200",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(1, 5, 'a');"
@@ -3175,7 +3174,7 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "1497",
+                    "query_id": "14200",
                     "expected_results": [
                         [
                             "1",
@@ -3237,7 +3236,7 @@
             ]
         },
         {
-            "id": 98,
+            "id": 201,
             "tags": [
                 "changelog",
                 "changelog",
@@ -3360,7 +3359,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1498",
+                            "query_id": "14201",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "select * from test14_view_5 join changelog(table(test14_stream3_5), j3) as c on test14_view_5.j = c.j3;"
@@ -3368,7 +3367,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1498",
+                            "depends_on": "14201",
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(1, 2, 'a');"
                         },
@@ -3402,7 +3401,7 @@
             "expected_results": []
         },
         {
-            "id": 99,
+            "id": 202,
             "tags": [
                 "changelog",
                 "table(appendonly)",
@@ -3476,7 +3475,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "1499",
+                            "query_id": "14202",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 join test14_stream2_5 on test14_stream1_5.j = test14_stream2_5.j2)select i, j, k, i2, j2, k2, i3, j3, k3, _tp_delta from t join table(test14_stream3_5) as k on t.j = k.j3;"
@@ -3484,7 +3483,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "1499",
+                            "depends_on": "14202",
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(8, 2, 'a');"
                         },
@@ -3521,7 +3520,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "1499",
+                            "kill": "14202",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(1, 5, 'b');"
@@ -3531,7 +3530,7 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "1499",
+                    "query_id": "14202",
                     "expected_results": [
                         [
                             "1",
@@ -3610,7 +3609,7 @@
             ]
         },
         {
-            "id": 100,
+            "id": 203,
             "tags": [
                 "aggregation"
             ],
@@ -3664,7 +3663,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "14100",
+                            "query_id": "14203",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "select count(1), a.i from test14_stream as a inner join table(test14_table_5) as b on a.i = b.ii group by a.i;"
@@ -3672,7 +3671,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "14100",
+                            "depends_on": "14203",
                             "wait": 1,
                             "query": "insert into test14_stream(i, j, k) values(1, 2, 'a');"
                         },
@@ -3703,7 +3702,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "14100",
+                            "kill": "14203",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_stream(i, j, k) values(1, 7, 'a');"
@@ -3713,7 +3712,7 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "14100",
+                    "query_id": "14203",
                     "expected_results": [
                         [
                             "1",
@@ -3740,7 +3739,7 @@
             ]
         },
         {
-            "id": 101,
+            "id": 204,
             "tags": [
                 "aggregation",
                 "join",
@@ -3820,7 +3819,7 @@
                         {
                             "client": "python",
                             "query_type": "stream",
-                            "query_id": "14101",
+                            "query_id": "14204",
                             "wait": 5,
                             "terminate": "manuel",
                             "query": "with t as (select * from test14_stream1_5 join test14_stream2_5 on test14_stream1_5.i = test14_stream2_5.i2) select count(1), max(i), min(i), avg(i), k.i3 from t  join table(test14_stream3_5) as k on t.i = k.i3 group by k.i3;"
@@ -3828,7 +3827,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "depends_on": "14101",
+                            "depends_on": "14204",
                             "wait": 1,
                             "query": "insert into test14_stream2_5(i2, j2, k2) values(1, 3, 'a');"
                         },
@@ -3865,7 +3864,7 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "kill": "14101",
+                            "kill": "14204",
                             "kill_wait": 3,
                             "wait": 1,
                             "query": "insert into test14_stream1_5(i, j, k) values(5, 8, 'a');"
@@ -3875,7 +3874,7 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "14101",
+                    "query_id": "14204",
                     "expected_results": [
                         [
                             "1",
