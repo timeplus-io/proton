@@ -113,6 +113,7 @@ if (ENABLE_FUZZING)
     set (ENABLE_JEMALLOC 0)
     set (ENABLE_CHECK_HEAVY_BUILDS 1)
     set (GLIBC_COMPATIBILITY OFF)
+    set (ENABLE_BENCHMARKS 0)
 
     # For codegen_select_fuzzer
     set (ENABLE_PROTOBUF 1)
@@ -168,6 +169,7 @@ endif ()
 
 option(ENABLE_TESTS "Provide unit_test_dbms target with Google.Test unit tests" ON)
 option(ENABLE_EXAMPLES "Build all example programs in 'examples' subdirectories" OFF)
+option(ENABLE_BENCHMARKS "Build all benchmark programs in 'benchmarks' subdirectories" OFF)
 
 if (OS_LINUX AND (ARCH_AMD64 OR ARCH_AARCH64) AND USE_STATIC_LIBRARIES AND NOT SPLIT_SHARED_LIBRARIES AND NOT USE_MUSL)
     # Only for Linux, x86_64 or aarch64.
@@ -338,9 +340,9 @@ if (COMPILER_CLANG)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fdiagnostics-absolute-paths")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fdiagnostics-absolute-paths")
 
-    if (NOT ENABLE_TESTS AND NOT SANITIZE)
+    if (NOT ENABLE_TESTS AND NOT SANITIZE AND OS_LINUX)
         # https://clang.llvm.org/docs/ThinLTO.html
-        # Applies to clang only.
+        # Applies to clang and linux only.
         # Disabled when building with tests or sanitizers.
         option(ENABLE_THINLTO "Clang-specific link time optimization" ON)
     endif()

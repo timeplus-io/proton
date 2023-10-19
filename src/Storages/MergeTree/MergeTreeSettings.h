@@ -168,7 +168,7 @@ struct Settings;
     /** Settings for Stream */ \
     M(UInt64, shards, 1, "Shards number for Stream", 0) \
     M(UInt64, replicas, 1, "Replicas number for Stream", 0) \
-    M(String, sharding_expr, "", "Sharding method of Stream. Empty string means `rand()` or `sip_hash64() if primary key set", 0) \
+    M(String, sharding_expr, "", "Sharding method of Stream. Empty string means `rand()` or `weak_hash32() if primary key set", 0) \
     M(String, event_time_column, "now64(3, 'UTC')", "Event time expression of Stream. Default is '_tp_time'.", 0) \
     M(String, host_shards, "", "Stream shards the current proton instance is hosting", 0) \
     M(String, subtype, "tabular", "Engine subtype", 0) \

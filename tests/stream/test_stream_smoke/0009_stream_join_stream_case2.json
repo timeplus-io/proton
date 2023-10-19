@@ -2,7 +2,7 @@
     "test_suite_name": "stream_join_stream2",
     "tag":"smoke",
     "test_suite_config":{
-        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "not_supported"],"cluster": ["view", "cluster_table_bug"]}}
     },
     "comments": "Tests covering the stream query smoke cases.",
     "tests": [
@@ -190,7 +190,7 @@
         },
         {
             "id": 56,
-            "tags": ["data_enrichment_join", "left-join"],
+            "tags": ["bidirectional join", "left-join"],
             "name": "append-only_left_all_join_append-only",
             "description": "append-only left all join append-only",
             "steps":[
@@ -211,11 +211,7 @@
             "expected_results": [
                 {
                     "query_id":"1056",
-                    "expected_results":[
-                        [2, "a", 1, "a"],
-                        [2, "b", 1, "b"],
-                        [2, "c", 0, ""]
-                    ]
+                    "expected_results": "error_code:48"
                 }
             ]
         },

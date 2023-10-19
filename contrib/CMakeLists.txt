@@ -160,6 +160,8 @@ add_contrib (morton-nd-cmake morton-nd)
 
 add_contrib (xxHash-cmake xxHash)
 
+add_contrib (google-benchmark-cmake google-benchmark)
+
 # proton: starts
 option(ENABLE_MUDUO "Enable muduo lib" YES)
 add_contrib (muduo-cmake muduo)

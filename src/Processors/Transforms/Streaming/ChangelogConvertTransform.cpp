@@ -2,7 +2,7 @@
 
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
-#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Streaming/ChooseHashMethod.h>
@@ -358,13 +358,19 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
 
 Block ChangelogConvertTransform::transformOutputHeader(const DB::Block & output_header)
 {
-    if (output_header.has(ProtonConsts::RESERVED_DELTA_FLAG))
-        return output_header;
-
+    /// Always add _tp_delta at the back of header
     Block transformed_output{output_header};
-    auto delta_column_type = DataTypeFactory::instance().get(TypeIndex::Int8);
-    transformed_output.insert(
-        ColumnWithTypeAndName{delta_column_type->createColumn(), delta_column_type, ProtonConsts::RESERVED_DELTA_FLAG});
+    if (output_header.has(ProtonConsts::RESERVED_DELTA_FLAG))
+    {
+        auto pos = output_header.getPositionByName(ProtonConsts::RESERVED_DELTA_FLAG);
+        if (pos == output_header.columns() - 1)
+            return transformed_output;
+
+        /// remove _tp_delta if not be at back
+        transformed_output.erase(pos);
+    }
+
+    transformed_output.insert(ColumnWithTypeAndName{std::make_shared<DataTypeInt8>(), ProtonConsts::RESERVED_DELTA_FLAG});
     return transformed_output;
 }
 

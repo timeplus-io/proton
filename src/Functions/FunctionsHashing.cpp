@@ -63,5 +63,9 @@ It returns a blake3 hash as a byte array with type FixedString(32).
         Documentation::Categories{"Hash"}
     },
     FunctionFactory::CaseSensitive);
+
+    /// proton: starts.
+    factory.registerFunction<FunctionWeakHash32>();
+    /// proton: ends.
 }
 }
