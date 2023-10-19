@@ -536,14 +536,12 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             {
                 source_header = interpreter_subquery->getSampleBlock();
 
-                /// proton: starts. Add subcolumns of the extended dynamic objects for subquery
-                auto object_names = getNamesOfObjectColumns(source_header.getNamesAndTypesList());
-                auto extended_objects = interpreter_subquery->getExtendedObjects();
-                for (const auto & object_name : object_names)
+                /// proton: starts. Add extended subcolumns for subquery inputs
+                auto subcolumns = ColumnsDescription::getSubcolumns(source_header.getNamesAndTypesList());
+                for (auto & [name, type] : subcolumns)
                 {
-                    auto subcolumns = extended_objects->getSubcolumns(object_name);
-                    for (const auto & [name, type] : subcolumns)
-                        source_header.insert({nullptr, type, name});
+                    if (!source_header.has(name))
+                        source_header.insert({nullptr, std::move(type), std::move(name)});
                 }
                 /// proton: ends.
             }
@@ -3520,16 +3518,6 @@ bool InterpreterSelectQuery::isStreaming() const
     is_streaming = streaming;
 
     return streaming;
-}
-
-ColumnsDescriptionPtr InterpreterSelectQuery::getExtendedObjects() const
-{
-    if (interpreter_subquery)
-        return interpreter_subquery->getExtendedObjects();
-    else if (storage)
-        return storage_snapshot->object_columns.get();
-    else
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "not implemented"); /// input_pipe
 }
 
 void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()

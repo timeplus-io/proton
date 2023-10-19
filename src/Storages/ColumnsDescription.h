@@ -141,6 +141,8 @@ public:
     void updateColumn(const String & column_name, const DataTypePtr & new_type);
 
     void addOrUpdateSubcolumns(const String & name_in_storage, const DataTypePtr & type_in_storage, const NamesAndTypes & subcolumns_list);
+
+    static NamesAndTypesList getSubcolumns(const NamesAndTypesList & name_and_type_list);
     /// proton: ends.
 
     template <typename F>
