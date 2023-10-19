@@ -1,4 +1,4 @@
-#include "EmitInterpreter.h"
+#include <Interpreters/Streaming/EmitInterpreter.h>
 
 #include <Interpreters/GetAggregatesVisitor.h>
 #include <Interpreters/InterpreterSetQuery.h>

@@ -1,4 +1,4 @@
-#include "Aggregator.h"
+#include <Interpreters/Streaming/Aggregator.h>
 
 #include <future>
 #include <Poco/Util/Application.h>
@@ -25,15 +25,12 @@
 #include <Common/typeid_cast.h>
 
 /// proton: starts
-#include <Columns/ColumnDecimal.h>
 #include <Core/LightChunk.h>
-#include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Formats/SimpleNativeReader.h>
 #include <Formats/SimpleNativeWriter.h>
 #include <Interpreters/CompiledAggregateFunctionsHolder.h>
 #include <Common/HashMapsTemplate.h>
-#include <Common/ProtonCommon.h>
 #include <Common/VersionRevision.h>
 #include <Common/logger_useful.h>
 /// proton: ends
@@ -1608,6 +1605,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
             /// duplicate key for each emit
             for (size_t i = 0; i < emit_times; i++)
                 method.insertKeyIntoColumns(key, key_columns, key_sizes_ref);
+
             places.emplace_back(mapped);
 
             /// Mark the cell as destroyed so it will not be destroyed in destructor.
@@ -1815,7 +1813,7 @@ Block Aggregator::prepareBlockAndFill(
             ColumnAggregateFunction & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
 
             /// proton: starts
-            column_aggregate_func.setStreaming(params.keep_state);
+            column_aggregate_func.setKeepState(params.keep_state);
             /// proton: ends
 
             /// Add arenas to ColumnAggregateFunction, which can result in moving ownership to it if reference count

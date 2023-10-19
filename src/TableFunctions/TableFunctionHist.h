@@ -1,6 +1,6 @@
 #pragma once
 
-#include "TableFunctionProxyBase.h"
+#include <TableFunctions/TableFunctionProxyBase.h>
 
 namespace DB
 {
@@ -15,6 +15,7 @@ private:
     const char * getStorageTypeName() const override { return "table"; }
     void parseArguments(const ASTPtr & func_ast, ContextPtr context) override;
     StoragePtr calculateColumnDescriptions(ContextPtr context) override;
+    bool supportsStreamingQuery() const { return false; }
 
 private:
     String help_message;

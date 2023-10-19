@@ -39,7 +39,7 @@ void TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPtr con
         const auto & function_storage = query_context->executeTableFunction(arg);
         if (auto * stream_storage = function_storage->as<ProxyStream>())
         {
-            streaming = stream_storage->isStreaming();
+            streaming = stream_storage->isStreamingQuery();
             nested_proxy_storage = function_storage;
 
             auto proxy = stream_storage->getProxyStorageOrSubquery();
@@ -83,14 +83,12 @@ StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr contex
         columns = ColumnsDescription(source_header.getNamesAndTypesList());
 
         /// determine whether it is a streaming query
-        streaming = interpreter_subquery->isStreaming();
+        streaming = interpreter_subquery->isStreamingQuery();
         data_stream_semantic = interpreter_subquery->getDataStreamSemantic();
     }
     else
     {
         assert(storage);
-        if (!supportStreamingQuery(storage))
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Doesn't support apply {} to storage '{}'", getName(), storage->getName());
 
         if (storage->as<StorageView>())
         {
@@ -102,14 +100,18 @@ StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr contex
             columns = ColumnsDescription(source_header.getNamesAndTypesList());
 
             /// determine whether it is a streaming query
-            streaming = interpreter_subquery->isStreaming();
+            streaming = interpreter_subquery->isStreamingQuery();
             data_stream_semantic = interpreter_subquery->getDataStreamSemantic();
         }
-        else
+        else if (storage->supportsStreamingQuery())
         {
             underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
             columns = underlying_storage_snapshot->metadata->getColumns();
             data_stream_semantic = storage->dataStreamSemantic();
+        }
+        else
+        {
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Doesn't support apply {} to storage '{}'", getName(), storage->getName());
         }
     }
 

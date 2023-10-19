@@ -96,7 +96,7 @@ ProxyStream::ProxyStream(
 
         auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(subquery->children[0], context_, options);
 
-        has_global_aggr = interpreter_subquery->hasGlobalAggregation();
+        has_global_aggr = interpreter_subquery->hasStreamingGlobalAggregation();
     }
 
     StorageInMemoryMetadata storage_metadata = storage ? storage->getInMemoryMetadata() : StorageInMemoryMetadata();
@@ -196,7 +196,7 @@ void ProxyStream::doRead(
         if (query_info.left_input_tracking_changes)
             Streaming::rewriteAsChangelogQuery(current_subquery->as<ASTSelectWithUnionQuery &>());
 
-        auto sub_context = createProxySubqueryContext(context_, query_info, isStreaming());
+        auto sub_context = createProxySubqueryContext(context_, query_info, isStreamingQuery());
         auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(
             current_subquery, sub_context, SelectQueryOptions().subquery().noModify(), column_names);
 
@@ -208,7 +208,7 @@ void ProxyStream::doRead(
 
     if (auto * view = storage->as<StorageView>())
     {
-        auto view_context = createProxySubqueryContext(context_, query_info, isStreaming());
+        auto view_context = createProxySubqueryContext(context_, query_info, isStreamingQuery());
         view->read(query_plan, column_names, storage_snapshot, query_info, view_context, processed_stage, max_block_size, num_streams);
         query_plan.addInterpreterContext(view_context);
         return;
@@ -520,6 +520,14 @@ bool ProxyStream::supportsSubcolumns() const
         return storage->supportsSubcolumns();
 
     return IStorage::supportsSubcolumns();
+}
+
+bool ProxyStream::supportsStreamingQuery() const
+{
+    if (storage)
+        return storage->supportsStreamingQuery();
+
+    return IStorage::supportsStreamingQuery();
 }
 
 std::variant<StoragePtr, ASTPtr> ProxyStream::getProxyStorageOrSubquery() const

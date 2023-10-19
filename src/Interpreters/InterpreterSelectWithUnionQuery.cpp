@@ -352,7 +352,7 @@ void InterpreterSelectWithUnionQuery::buildQueryPlan(QueryPlan & query_plan)
     if (settings_limit_offset_needed && !options.settings_limit_offset_done)
     {
         /// proton: starts
-        if (isStreaming())
+        if (isStreamingQuery())
         {
             if (settings.limit > 0)
             {
@@ -425,21 +425,21 @@ bool InterpreterSelectWithUnionQuery::hasAggregation() const
     return false;
 }
 
-bool InterpreterSelectWithUnionQuery::isStreaming() const
+bool InterpreterSelectWithUnionQuery::isStreamingQuery() const
 {
     for (const auto & interpreter : nested_interpreters)
     {
-        if (interpreter->isStreaming())
+        if (interpreter->isStreamingQuery())
             return true;
     }
     return false;
 }
 
-bool InterpreterSelectWithUnionQuery::hasGlobalAggregation() const
+bool InterpreterSelectWithUnionQuery::hasStreamingGlobalAggregation() const
 {
     for (const auto & interpreter : nested_interpreters)
     {
-        if (interpreter->hasGlobalAggregation())
+        if (interpreter->hasStreamingGlobalAggregation())
             return true;
     }
     return false;

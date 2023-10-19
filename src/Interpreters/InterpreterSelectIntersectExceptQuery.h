@@ -37,8 +37,8 @@ public:
 
     /// proton: starts
     bool hasAggregation() const override;
-    bool isStreaming() const override;
-    bool hasGlobalAggregation() const override;
+    bool isStreamingQuery() const override;
+    bool hasStreamingGlobalAggregation() const override;
     bool hasStreamingWindowFunc() const override;
     Streaming::DataStreamSemanticEx getDataStreamSemantic() const override;
 
