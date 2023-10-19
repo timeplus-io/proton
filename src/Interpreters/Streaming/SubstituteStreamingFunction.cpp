@@ -70,7 +70,7 @@ std::unordered_map<String, String> StreamingFunctionData::changelog_func_map = {
     {"moving_sum", ""},
 };
 
-std::pair<bool, String> StreamingFunctionData::supportChangelog(const String & function_name)
+std::optional<String> StreamingFunctionData::supportChangelog(const String & function_name)
 {
     auto iter = changelog_func_map.find(function_name);
 
@@ -102,7 +102,7 @@ std::pair<bool, String> StreamingFunctionData::supportChangelog(const String & f
     if (iter != changelog_func_map.end())
     {
         if (!iter->second.empty())
-            return {true, iter->second + combinator_suffix};
+            return iter->second + combinator_suffix;
         else
             throw Exception(
                 ErrorCodes::NOT_IMPLEMENTED, "{} aggregation function is not supported in changelog query processing", function_name);
@@ -110,9 +110,9 @@ std::pair<bool, String> StreamingFunctionData::supportChangelog(const String & f
 
     /// UDA by default support changelog
     if (UserDefinedFunctionFactory::isAggregateFunctionName(function_name))
-        return {true, function_name};
+        return function_name;
 
-    return {false, ""};
+    return {};
 }
 
 void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
@@ -138,15 +138,15 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
         {
             /// Whether the function support 'retract' for changelog, also return the alias name of
             /// function used in rewritten query
-            auto [support_changelog, func_alias_name] = supportChangelog(func.name);
-            if (support_changelog)
+            auto func_alias_name = supportChangelog(func.name);
+            if (func_alias_name.has_value())
             {
-                if (!func_alias_name.empty())
+                if (!func_alias_name->empty())
                 {
                     /// Always show original function
                     func.code_name = DB::serializeAST(func);
 
-                    func.name = func_alias_name;
+                    func.name = *func_alias_name;
                     if (!func.arguments)
                         func.arguments = std::make_shared<ASTExpressionList>();
 

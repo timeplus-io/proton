@@ -215,24 +215,26 @@ JavaScriptAggrFunctionState::~JavaScriptAggrFunctionState()
 
 void JavaScriptAggrFunctionState::add(const IColumn ** src_columns, size_t row_num)
 {
+    assert(columns.size() >= 1);
     size_t num_of_input_columns = columns.size() - 1;
 
     for (size_t i = 0; i < num_of_input_columns; i++)
         columns[i]->insertFrom(*src_columns[i], row_num);
 
     /// _tp_delta column
-    columns[columns.size() - 1]->insert(1);
+    columns.back()->insert(1);
 }
 
 void JavaScriptAggrFunctionState::negate(const IColumn ** src_columns, size_t row_num)
 {
+    assert(columns.size() >= 1);
     size_t num_of_input_columns = columns.size() - 1;
 
     for (size_t i = 0; i < num_of_input_columns; i++)
         columns[i]->insertFrom(*src_columns[i], row_num);
 
     /// _tp_delta column
-    columns[num_of_input_columns]->insert(-1);
+    columns.back()->insert(-1);
 }
 
 void JavaScriptAggrFunctionState::reinitCache()
