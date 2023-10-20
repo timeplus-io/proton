@@ -28,6 +28,7 @@
 #include <Common/ProtonCommon.h>
 #include <Common/checkStackSize.h>
 #include <Common/setThreadName.h>
+#include <Storages/ExternalStream/StorageExternalStream.h>
 
 #include <ranges>
 
@@ -199,10 +200,8 @@ StorageMaterializedView::StorageMaterializedView(
             if (!target_table)
                 throw Exception(ErrorCodes::INCORRECT_QUERY, "Target stream is not found", target_table_id.getFullTableName());
 
-            auto * stream = target_table->as<StorageStream>();
-            if (stream == nullptr)
-                throw Exception(
-                    ErrorCodes::NOT_IMPLEMENTED, "MaterializedView doesn't support target storage is {}", target_table->getName());
+            if (!target_table->as<StorageStream>() && !target_table->as<StorageExternalStream>())
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "MaterializedView doesn't support target storage is {}", target_table->getName());
         }
     }
     else if (attach_)

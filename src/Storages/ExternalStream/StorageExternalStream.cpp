@@ -32,7 +32,7 @@ namespace
 std::unique_ptr<StorageExternalStreamImpl> createExternalStream(
     IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr & context [[maybe_unused]], bool attach)
 {
-    if (settings->type.value == "")
+    if (settings->type.value.empty())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream type is required in settings");
 
     if (settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA)
@@ -99,10 +99,9 @@ void StorageExternalStream::read(
     query_plan.addStep(std::move(read_step));
 }
 
-SinkToStoragePtr
-StorageExternalStream::write(const ASTPtr & /*query*/, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr /*context*/)
+SinkToStoragePtr StorageExternalStream::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_)
 {
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Ingesting data to external stream is not supported");
+    return external_stream->write(query, metadata_snapshot, context_);
 }
 
 StorageExternalStream::StorageExternalStream(

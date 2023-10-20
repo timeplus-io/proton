@@ -1,15 +1,19 @@
 #include "Kafka.h"
+#include "KafkaSink.h"
 #include "KafkaSource.h"
 
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <KafkaLog/KafkaWALPool.h>
-#include <KafkaLog/KafkaWALSettings.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
-#include <Common/logger_useful.h>
 #include <Common/ProtonCommon.h>
+#include <Common/logger_useful.h>
+
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/trim.hpp>
 
 namespace DB
 {
@@ -18,6 +22,42 @@ namespace ErrorCodes
 extern const int INVALID_SETTING_VALUE;
 extern const int OK;
 extern const int RESOURCE_NOT_FOUND;
+}
+
+klog::KConfParams Kafka::parseProperties(String & properties)
+{
+    klog::KConfParams result;
+
+    if (properties.empty())
+        return result;
+
+    /// properties example:
+    /// message.max.bytes=1024;max.in.flight=1000;group.id=my-group
+
+    std::vector<String> parts;
+    boost::split(parts, properties, boost::is_any_of(";"));
+    result.reserve(parts.size());
+
+    for (const auto & part : parts)
+    {
+        if (unlikely(part.empty())) /* redundant / trailing ';' */
+            continue;
+
+        auto equal_pos = part.find('=');
+        if (unlikely(equal_pos == std::string::npos || equal_pos == 0 || equal_pos == part.size() - 1))
+            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Invalid property `{}`, expected format: <key>=<value>.", part);
+
+        auto key = part.substr(0, equal_pos);
+        auto value = part.substr(equal_pos + 1);
+
+        /// no spaces are supposed be around `=`, thus only need to
+        /// remove the leading spaces of keys and trailing spaces of values
+        boost::trim_left(key);
+        boost::trim_right(value);
+        result.push_back(std::make_pair(key, value));
+    }
+
+    return result;
 }
 
 Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, bool attach)
@@ -33,6 +73,8 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
 
     if (settings->topic.value.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", settings->type.value);
+
+    kafka_properties = parseProperties(settings->properties.value);
 
     calculateDataFormat(storage);
 
@@ -85,7 +127,11 @@ Pipe Kafka::read(
             pipes.emplace_back(std::make_shared<KafkaSource>(this, header, storage_snapshot, context, i, offsets[i], max_block_size, log));
     }
 
-    LOG_INFO(log, "Starting reading {} streams by seeking to {} in dedicated resource group", pipes.size(), query_info.seek_to_info->getSeekTo());
+    LOG_INFO(
+        log,
+        "Starting reading {} streams by seeking to {} in dedicated resource group",
+        pipes.size(),
+        query_info.seek_to_info->getSeekTo());
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
     auto min_threads = context->getSettingsRef().min_threads.value;
@@ -165,5 +211,10 @@ void Kafka::validate()
         throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "{} topic doesn't exist", settings->topic.value);
 
     shards = result.partitions;
+}
+
+SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
+{
+    return std::make_shared<KafkaSink>(this, metadata_snapshot->getSampleBlock(), context, log);
 }
 }
