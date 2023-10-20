@@ -39,7 +39,7 @@ public:
     const String & securityProtocol() const { return settings->security_protocol.value; }
     const String & username() const { return settings->username.value; }
     const String & password() const { return settings->password.value; }
-    const klog::KConfParams & properties() const { return properties_; }
+    const klog::KConfParams & properties() const { return kafka_properties; }
 
 private:
     static klog::KConfParams parseProperties(String & properties);
@@ -57,8 +57,7 @@ private:
     Poco::Logger * log;
 
     NamesAndTypesList virtual_column_names_and_types;
-    /// This is exposed via the `properties` function, thus named with a `_` suffix.
-    klog::KConfParams properties_;
+    klog::KConfParams kafka_properties;
 
     Int32 shards = -1;
 };

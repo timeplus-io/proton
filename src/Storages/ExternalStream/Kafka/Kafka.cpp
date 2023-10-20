@@ -74,7 +74,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     if (settings->topic.value.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", settings->type.value);
 
-    properties_ = parseProperties(settings->properties.value);
+    kafka_properties = parseProperties(settings->properties.value);
 
     calculateDataFormat(storage);
 
