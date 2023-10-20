@@ -226,7 +226,7 @@ public:
     /// However, not all storages need this feature, for example, external streams
     /// likely have their own ways to do buffering. This function allows an implementation
     /// to skip using squashing.
-    virtual bool squashInsert() const noexcept { return false; }
+    virtual bool squashInsert() const noexcept { return true; }
     /// proton: ends.
 
     /// Return list of virtual columns (like _part, _table, etc). In the vast
