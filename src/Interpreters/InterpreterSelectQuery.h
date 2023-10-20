@@ -206,7 +206,6 @@ private:
     void checkAndPrepareStreamingFunctions();
     void checkUDA();
 
-    ColumnsDescriptionPtr getExtendedObjects() const override;
     void resolveDataStreamSemantic(const JoinedTables & joined_tables);
     /// proton: ends
 
