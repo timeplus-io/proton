@@ -947,6 +947,13 @@ void TreeRewriterResult::collectSourceColumns(bool add_special)
         else
             source_columns.insert(source_columns.end(), columns_from_storage.begin(), columns_from_storage.end());
     }
+    /// proton: starts. Add extended subcolumns for subquery inputs
+    else
+    {
+        if (!source_columns.empty())
+            source_columns.splice(source_columns.end(), ColumnsDescription::getSubcolumns(source_columns));
+    }
+    /// proton: ends.
 
     source_columns_set = removeDuplicateColumns(source_columns);
 }

@@ -533,18 +533,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         {
             interpreter_subquery = joined_tables.makeLeftTableSubquery(options.subquery());
             if (interpreter_subquery)
-            {
                 source_header = interpreter_subquery->getSampleBlock();
-
-                /// proton: starts. Add extended subcolumns for subquery inputs
-                auto subcolumns = ColumnsDescription::getSubcolumns(source_header.getNamesAndTypesList());
-                for (auto & [name, type] : subcolumns)
-                {
-                    if (!source_header.has(name))
-                        source_header.insert({nullptr, std::move(type), std::move(name)});
-                }
-                /// proton: ends.
-            }
         }
 
         /// proton : starts. After resolving the tables and rewrite multiple joins
