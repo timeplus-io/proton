@@ -39,10 +39,10 @@ public:
     const String & securityProtocol() const { return settings->security_protocol.value; }
     const String & username() const { return settings->username.value; }
     const String & password() const { return settings->password.value; }
-    const klog::KConfParams & properties() const { return parsed_properties; }
+    const klog::KConfParams & properties() const { return properties_; }
 
 private:
-    static klog::KConfParams parseProperties(String properties);
+    static klog::KConfParams parseProperties(String & properties);
 
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
@@ -57,7 +57,8 @@ private:
     Poco::Logger * log;
 
     NamesAndTypesList virtual_column_names_and_types;
-    klog::KConfParams parsed_properties;
+    /// This is exposed via the `properties` function, thus named with a `_` suffix.
+    klog::KConfParams properties_;
 
     Int32 shards = -1;
 };

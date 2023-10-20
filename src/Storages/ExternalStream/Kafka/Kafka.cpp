@@ -24,9 +24,9 @@ extern const int OK;
 extern const int RESOURCE_NOT_FOUND;
 }
 
-KConfParams Kafka::parseProperties(String properties)
+klog::KConfParams Kafka::parseProperties(String & properties)
 {
-    KConfParams result;
+    klog::KConfParams result;
 
     if (properties.empty())
         return result;
@@ -74,7 +74,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     if (settings->topic.value.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", settings->type.value);
 
-    parsed_properties = parseProperties(settings->properties);
+    properties_ = parseProperties(settings->properties.value);
 
     calculateDataFormat(storage);
 

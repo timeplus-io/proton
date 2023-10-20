@@ -10,8 +10,8 @@ namespace ErrorCodes
 extern const int CANNOT_WRITE_TO_KAFKA;
 }
 
-WriteBufferFromKafka::WriteBufferFromKafka(klog::KTopicPtr topic_, Poco::Logger * logger, size_t buffer_size)
-    : BufferWithOwnMemory<WriteBuffer>(buffer_size), topic(std::move(topic_)), log(logger)
+WriteBufferFromKafka::WriteBufferFromKafka(klog::KTopicPtr topic_, size_t buffer_size)
+    : BufferWithOwnMemory<WriteBuffer>(buffer_size), topic(std::move(topic_))
 {
 }
 

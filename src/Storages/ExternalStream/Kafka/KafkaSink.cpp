@@ -14,8 +14,8 @@ extern const int MISSING_ACKNOWLEDGEMENT;
 extern const int INVALID_CONFIG_PARAMETER;
 }
 
-KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr context, Poco::Logger * logger)
-    : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID), producer(nullptr, nullptr), log(logger)
+KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr context, Poco::Logger * log_)
+    : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID), producer(nullptr, nullptr), polling_threads(1), log(log_)
 {
     /// default values
     std::vector<std::pair<String, String>> producer_params{
@@ -93,7 +93,7 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
 
     auto topic = klog::KTopicPtr(rd_kafka_topic_new(producer.get(), kafka->topic().c_str(), nullptr), rd_kafka_topic_destroy);
 
-    wb = std::make_unique<WriteBufferFromKafka>(std::move(topic), log);
+    wb = std::make_unique<WriteBufferFromKafka>(std::move(topic));
 
     String data_format = kafka->dataFormat();
     if (data_format.empty())
@@ -102,7 +102,7 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
     writer = FormatFactory::instance().getOutputFormat(data_format, *wb, header, context);
     writer->setAutoFlush();
 
-    pollingThread = std::thread([this]() {
+    polling_threads.scheduleOrThrowOnError([this]() {
         while (!is_finished.test())
             if (auto n = rd_kafka_poll(producer.get(), POLL_TIMEOUT_MS))
                 LOG_TRACE(log, "polled {} events", n);
@@ -123,8 +123,7 @@ void KafkaSink::onFinish()
     if (is_finished.test_and_set())
         return;
 
-    if (pollingThread.joinable())
-        pollingThread.join();
+    polling_threads.wait();
 
     /// if there are no outstandings, no need to do flushing
     if (wb->hasNoOutstandings())
@@ -134,12 +133,12 @@ void KafkaSink::onFinish()
     if (auto err = rd_kafka_flush(producer.get(), -1 /* blocks */); err)
         LOG_ERROR(log, "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
 
-    if (auto err = wb->lastDeliveryError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
-        LOG_ERROR(log, "Failed to send messages, error={}", rd_kafka_err2str(err));
+    if (auto err = wb->lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
+        LOG_ERROR(log, "Failed to send messages, last_seen_error={}", rd_kafka_err2str(err));
 
     /// if flush does not return an error, the delivery report queue should be empty
     if (!wb->hasNoOutstandings())
-        LOG_ERROR(log, "Not all messsages are acked, expected={} actual={}", wb->outstandings(), wb->acked());
+        LOG_ERROR(log, "Not all messsages are sent successfully, expected={} actual={}", wb->outstandings(), wb->acked());
 }
 
 KafkaSink::~KafkaSink()
@@ -151,7 +150,7 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
 {
     do
     {
-        if (auto err = wb->lastDeliveryError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
+        if (auto err = wb->lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
             throw Exception(
                 klog::mapErrorCode(err), "Failed to send messages, error_cout={} last_error={}", wb->error_count(), rd_kafka_err2str(err));
 
