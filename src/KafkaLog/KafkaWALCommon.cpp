@@ -2,9 +2,9 @@
 #include "KafkaWALStats.h"
 
 #include <base/ClockUtils.h>
-#include <Common/logger_useful.h>
 #include <Common/Exception.h>
 #include <Common/hex.h>
+#include <Common/logger_useful.h>
 #include <Common/parseIntStrict.h>
 
 #include <cstring>

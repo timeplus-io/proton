@@ -1,8 +1,8 @@
 #pragma once
 
+#include <KafkaLog/KafkaWALCommon.h>
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
-
 #include <Storages/Streaming/SeekToInfo.h>
 
 namespace DB
@@ -30,6 +30,8 @@ public:
         size_t max_block_size,
         size_t num_streams) override;
 
+    SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
+
     const String & brokers() const { return settings->brokers.value; }
     const String & dataFormat() const { return data_format; }
     const String & dataSchema() const { return settings->data_schema.value; }
@@ -37,8 +39,11 @@ public:
     const String & securityProtocol() const { return settings->security_protocol.value; }
     const String & username() const { return settings->username.value; }
     const String & password() const { return settings->password.value; }
+    const klog::KConfParams & properties() const { return kafka_properties; }
 
 private:
+    static klog::KConfParams parseProperties(String & properties);
+
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
     std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info) const;
@@ -52,6 +57,7 @@ private:
     Poco::Logger * log;
 
     NamesAndTypesList virtual_column_names_and_types;
+    klog::KConfParams kafka_properties;
 
     Int32 shards = -1;
 };

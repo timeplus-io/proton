@@ -1,4 +1,5 @@
 #include "KafkaWALPool.h"
+#include <vector>
 
 #include <Interpreters/Context.h>
 #include <Common/logger_useful.h>
