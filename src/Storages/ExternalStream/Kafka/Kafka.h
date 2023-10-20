@@ -42,8 +42,6 @@ public:
     const klog::KConfParams & properties() const { return kafka_properties; }
 
 private:
-    static klog::KConfParams parseProperties(String & properties);
-
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
     std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info) const;
