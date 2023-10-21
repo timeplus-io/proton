@@ -623,6 +623,11 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(TransactionsWaitCSNMode, wait_changes_become_visible_after_commit_mode, TransactionsWaitCSNMode::WAIT_UNKNOWN, "Wait for committed changes to become actually visible in the latest snapshot", 0) \
     M(Bool, optimize_distinct_in_order, true, "Enable DISTINCT optimization if some columns in DISTINCT form a prefix of sorting. For example, prefix of sorting key in merge tree or ORDER BY statement", 0) \
     M(Bool, optimize_sorting_by_input_stream_properties, true, "Optimize sorting by sorting properties of input stream", 0) \
+    \
+    /** proton: starts */                       \
+    M(String, shards, "", "If not empty, only the specified shard IDs (or partition IDs if the target stream is a Kafka external stream) will be selected to be read data from. IDs are separated by comma. Example: shards='0,2'", 0) \
+    \
+    /** proton: ends */                       \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS and move obsolete settings to OBSOLETE_SETTINGS.

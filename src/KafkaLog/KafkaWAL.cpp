@@ -800,8 +800,17 @@ KafkaWALClusterPtr KafkaWAL::cluster(const KafkaWALContext & ctx) const
 }
 
 /// https://cwiki.apache.org/confluence/display/KAFKA/KIP-33+-+Add+a+time+based+log+index
+std::vector<int64_t> KafkaWAL::offsetsForTimestamps(const std::string & topic, const std::vector<PartitionTimestampPair> & partitionTimestamps, int32_t timeout_ms) const
+{
+    return getOffsetsForTimestamps(producer_handle.get(), topic, partitionTimestamps, timeout_ms);
+}
+
 std::vector<int64_t> KafkaWAL::offsetsForTimestamps(const std::string & topic, const std::vector<int64_t> & timestamps, int32_t timeout_ms) const
 {
-    return getOffsetsForTimestamps(producer_handle.get(), topic, timestamps, timeout_ms);
+    std::vector<PartitionTimestampPair> partitionTimestamps{timestamps.size()};
+    for (size_t i{0}; i < timestamps.size(); ++i)
+        partitionTimestamps.emplace_back(i, timestamps.at(i));
+
+    return offsetsForTimestamps(topic, partitionTimestamps, timeout_ms);
 }
 }

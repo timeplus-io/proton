@@ -8,8 +8,8 @@
 
 #include <boost/noncopyable.hpp>
 
-#include <memory>
 #include <atomic>
+#include <memory>
 
 struct rd_kafka_s;
 struct rd_kafka_topic_s;
@@ -17,6 +17,7 @@ struct rd_kafka_message_s;
 
 namespace klog
 {
+struct PartitionTimestampPair;
 struct KafkaWALContext;
 
 /// KafkaWALSimpleConsumer consumes data from a specific single partition of a topic
@@ -30,7 +31,7 @@ struct KafkaWALContext;
 /// 5. commit offset by calling `consumer->commit(..., ctx)`
 /// 6. stop consuming by calling `consumer->stopConsume(..., ctx)`
 /// 7. dtor `consumer`
-class KafkaWALSimpleConsumer final: private boost::noncopyable
+class KafkaWALSimpleConsumer final : private boost::noncopyable
 {
 public:
     explicit KafkaWALSimpleConsumer(std::unique_ptr<KafkaWALSettings> settings_);
@@ -60,7 +61,8 @@ public:
 
     DescribeResult describe(const String & name) const;
 
-    std::vector<int64_t> offsetsForTimestamps(const std::string & topic, const std::vector<int64_t> & timestamps, int32_t timeout_ms=5000) const;
+    std::vector<int64_t> offsetsForTimestamps(
+        const std::string & topic, const std::vector<PartitionTimestampPair> & partitionTimestamps, int32_t timeout_ms = 5000) const;
 
     const KafkaWALSettings & getSettings() const { return *settings; }
 

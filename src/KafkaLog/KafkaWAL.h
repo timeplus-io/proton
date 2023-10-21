@@ -99,7 +99,9 @@ public:
 
     KafkaWALClusterPtr cluster(const KafkaWALContext & ctx) const;
 
+    std::vector<int64_t> offsetsForTimestamps(const std::string & topic, const std::vector<PartitionTimestampPair> & partitionTimestamps, int32_t timeout_ms=5000) const;
     std::vector<int64_t> offsetsForTimestamps(const std::string & topic, const std::vector<int64_t> & timestamps, int32_t timeout_ms=5000) const;
+
 
 private:
     using FreeRdKafka = void (*)(struct rd_kafka_s *);

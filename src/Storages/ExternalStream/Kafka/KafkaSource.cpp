@@ -16,12 +16,15 @@
 #include <Common/logger_useful.h>
 #include <Common/parseIntStrict.h>
 
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <librdkafka/rdkafka.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
+extern const int INVALID_SETTING_VALUE;
 extern const int LOGICAL_ERROR;
 extern const int OK;
 extern const int RECOVER_CHECKPOINT_FAILED;
@@ -245,11 +248,13 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
 
 void KafkaSource::initConsumer(const Kafka * kafka)
 {
-    if (query_context->getSettingsRef().record_consume_batch_count != 0)
-        record_consume_batch_count = static_cast<uint32_t>(query_context->getSettingsRef().record_consume_batch_count.value);
+    const auto & settings_ref = query_context->getSettingsRef();
 
-    if (query_context->getSettingsRef().record_consume_timeout != 0)
-        record_consume_timeout = static_cast<int32_t>(query_context->getSettingsRef().record_consume_timeout.value);
+    if (settings_ref.record_consume_batch_count != 0)
+        record_consume_batch_count = static_cast<uint32_t>(settings_ref.record_consume_batch_count.value);
+
+    if (settings_ref.record_consume_timeout != 0)
+        record_consume_timeout = static_cast<int32_t>(settings_ref.record_consume_timeout.value);
 
     if (consume_ctx.offset == -1)
         consume_ctx.auto_offset_reset = "latest";

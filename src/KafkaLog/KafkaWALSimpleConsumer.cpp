@@ -11,10 +11,10 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int OK;
-    extern const int RESOURCE_NOT_INITED;
-    extern const int RESOURCE_NOT_FOUND;
-    extern const int DWAL_FATAL_ERROR;
+extern const int OK;
+extern const int RESOURCE_NOT_INITED;
+extern const int RESOURCE_NOT_FOUND;
+extern const int DWAL_FATAL_ERROR;
 }
 }
 
@@ -530,8 +530,9 @@ DescribeResult KafkaWALSimpleConsumer::describe(const String & name) const
     return describeTopic(name, consumer_handle.get(), log);
 }
 
-std::vector<int64_t> KafkaWALSimpleConsumer::offsetsForTimestamps(const std::string & topic, const std::vector<int64_t> & timestamps, int32_t timeout_ms) const
+std::vector<int64_t> KafkaWALSimpleConsumer::offsetsForTimestamps(
+    const std::string & topic, const std::vector<PartitionTimestampPair> & partitionTimestamps, int32_t timeout_ms) const
 {
-    return getOffsetsForTimestamps(consumer_handle.get(), topic, timestamps, timeout_ms);
+    return getOffsetsForTimestamps(consumer_handle.get(), topic, partitionTimestamps, timeout_ms);
 }
 }
