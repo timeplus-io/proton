@@ -201,7 +201,6 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_PROTON_INSTALL=ON')
         cmake_flags.append('-DENABLE_PROTON_METASTORE=ON')
         cmake_flags.append('-DUSE_STATIC_LIBRARIES=ON')
-        cmake_flags.append('-DUSE_UNWIND=ON')
         cmake_flags.append('-DUSE_DEBUG_HELPERS=ON')
         cmake_flags.append('-DENABLE_LIBRARIES=OFF')
         cmake_flags.append('-DENABLE_KAFKA=ON')
