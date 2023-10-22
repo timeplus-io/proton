@@ -252,18 +252,6 @@ void KafkaSource::initConsumer(const Kafka * kafka)
     if (settings_ref.record_consume_timeout_ms != 0)
         record_consume_timeout_ms = static_cast<int32_t>(settings_ref.record_consume_timeout_ms.value);
 
-    if (settings_ref.kafka_fetch_wait_max_ms != 0)
-        consume_ctx.fetch_wait_max_ms = static_cast<int32_t>(settings_ref.kafka_fetch_wait_max_ms);
-
-    if (settings_ref.kafka_fetch_max_bytes != 0)
-        consume_ctx.fetch_max_bytes= static_cast<int32_t>(settings_ref.kafka_fetch_max_bytes);
-
-    if (settings_ref.kafka_client_queued_min_message != 0)
-        consume_ctx.client_queued_min_message = static_cast<int32_t>(settings_ref.kafka_client_queued_min_message);
-
-    if (settings_ref.kafka_client_queued_max_bytes != 0)
-        consume_ctx.client_queued_max_bytes = static_cast<int32_t>(settings_ref.kafka_client_queued_max_bytes);
-
     if (consume_ctx.offset == -1)
         consume_ctx.auto_offset_reset = "latest";
     else if (consume_ctx.offset == -2)

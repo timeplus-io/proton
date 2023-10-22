@@ -69,19 +69,7 @@ struct KafkaWALContext
     /// Per topic consumer settings
     std::string auto_offset_reset = "earliest";
 
-    ///  When reading from Kafka, max wait time
-    int32_t fetch_wait_max_ms = 100;
-
-    /// When reading from Kafka, max bytes to fetch per read
-    int32_t fetch_max_bytes =  52428800;
-
     /// Per topic librdkafka client side settings for consumer
-
-    /// Minimum number of messages per topic partition to buffer on librdkafka client queue
-    int64_t client_queued_min_message = 100000;
-    /// Maximum bytes per topic partition to buffer on librdkafka client queue
-    int64_t client_queued_max_bytes = 1024 * 1024 * 1024;
-
     int32_t consume_callback_max_messages = 0;
     int32_t consume_callback_max_rows = 1000000;
     int32_t consume_callback_max_bytes = 33554432; /// 32 MB
@@ -116,10 +104,6 @@ struct KafkaWALContext
         ctxes.push_back(fmt::format("request_required_acks={}", request_required_acks));
         ctxes.push_back(fmt::format("request_timeout_ms={}", request_timeout_ms));
         ctxes.push_back(fmt::format("auto_offset_reset={}", auto_offset_reset));
-        ctxes.push_back(fmt::format("fetch_wait_max_ms={}", fetch_wait_max_ms));
-        ctxes.push_back(fmt::format("fetch_max_bytes={}", fetch_max_bytes));
-        ctxes.push_back(fmt::format("client_queued_min_message={}", client_queued_min_message));
-        ctxes.push_back(fmt::format("client_queued_max_bytes={}", client_queued_max_bytes));
         ctxes.push_back(fmt::format("consume_callback_max_messages={}", consume_callback_max_messages));
         ctxes.push_back(fmt::format("consume_callback_max_rows={}", consume_callback_max_rows));
         ctxes.push_back(fmt::format("consume_callback_max_bytes={}", consume_callback_max_bytes));
