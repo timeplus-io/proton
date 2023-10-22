@@ -149,8 +149,6 @@ void KafkaWALSimpleConsumer::initTopicHandle(KafkaWALContext & ctx) const
     };
 
     ctx.topic_handle = initRdKafkaTopicHandle(ctx.topic, topic_params, consumer_handle.get(), stats.get());
-
-    LOG_INFO(log, "Init consumer for topic={} params={{{}}}", ctx.topic, ctx.string());
 }
 
 inline int32_t KafkaWALSimpleConsumer::startConsumingIfNotYet(const KafkaWALContext & ctx) const
