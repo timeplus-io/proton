@@ -15,12 +15,14 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
 
+#include <ranges>
+
 namespace DB
 {
 namespace ErrorCodes
 {
-extern const int INVALID_SETTING_VALUE;
 extern const int OK;
+extern const int INVALID_SETTING_VALUE;
 extern const int RESOURCE_NOT_FOUND;
 }
 
@@ -38,15 +40,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     if (settings->topic.value.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", settings->type.value);
 
-    try
-    {
-        kafka_properties = klog::parseProperties(settings->properties.value);
-    }
-    catch (std::invalid_argument const & ex)
-    {
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, ex.what());
-    }
-
+    kafka_properties = klog::parseProperties(settings->properties.value);
 
     calculateDataFormat(storage);
 
@@ -66,7 +60,15 @@ Pipe Kafka::read(
     size_t max_block_size,
     size_t /*num_streams*/)
 {
-    validate(context);
+    /// User can explicitly consume specific kafka partitions by specifying `shards=` setting
+    /// `SELECT * FROM kafka_stream SETTINGS shards=0,3`
+    if (!context->getSettingsRef().shards.value.empty())
+    {
+        shards = parseShards(context->getSettingsRef().shards.value);
+        LOG_INFO(log, "reading from {} partitions", shards.size());
+    }
+
+    validate();
 
     Pipes pipes;
     pipes.reserve(shards.size());
@@ -95,8 +97,9 @@ Pipe Kafka::read(
 
         auto offsets = getOffsets(query_info.seek_to_info);
 
-        for (Int32 i : shards)
-            pipes.emplace_back(std::make_shared<KafkaSource>(this, header, storage_snapshot, context, i, offsets[i], max_block_size, log));
+        for (auto shard : shards)
+            pipes.emplace_back(
+                std::make_shared<KafkaSource>(this, header, storage_snapshot, context, shard, offsets[shard], max_block_size, log));
     }
 
     LOG_INFO(
@@ -107,8 +110,9 @@ Pipe Kafka::read(
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
     auto min_threads = context->getSettingsRef().min_threads.value;
-    if (min_threads > static_cast<UInt64>(shards.size()))
+    if (min_threads > shards.size())
         pipe.resize(min_threads);
+
     return pipe;
 }
 
@@ -141,12 +145,18 @@ std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info) const
             .username = username(),
             .password = password(),
         };
+
         auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
-        std::vector<klog::PartitionTimestampPair> partitionTimestamps{shards.size()};
-        auto timestamps{seek_to_info->getSeekPoints()};
-        for (size_t i{0}; i < shards.size(); ++i)
-            partitionTimestamps.emplace_back(shards.at(i), timestamps.at(i));
-        return consumer->offsetsForTimestamps(settings->topic.value, partitionTimestamps);
+
+        std::vector<klog::PartitionTimestamp> partition_timestamps;
+        partition_timestamps.reserve(shards.size());
+        auto seek_timestamps{seek_to_info->getSeekPoints()};
+        assert(shards.size() == seek_timestamps.size());
+
+        for (auto [shard, timestamp] : std::ranges::views::zip(shards, seek_timestamps))
+            partition_timestamps.emplace_back(shard, timestamp);
+
+        return consumer->offsetsForTimestamps(settings->topic.value, partition_timestamps);
     }
 }
 
@@ -175,42 +185,42 @@ void Kafka::calculateDataFormat(const IStorage * storage)
             ErrorCodes::NOT_IMPLEMENTED, "Automatically converting Kafka message to {} type is not supported yet", type->getName());
 }
 
-void Kafka::validate(ContextPtr context)
+/// FIXME, refactor out as util and unit test it
+std::vector<int32_t> Kafka::parseShards(const std::string & shards_setting)
 {
-    if (!shards.empty())
-        /// Already validated
-        return;
+    std::vector<String> shard_strings;
+    boost::split(shard_strings, shards_setting, boost::is_any_of(","));
 
-    /// the `shards` setting is provided, use the specified partitions
-    if (context)
+    std::vector<int32_t> specified_shards;
+    specified_shards.reserve(shard_strings.size());
+    for (const auto & shard_string : shard_strings)
     {
-        if (auto shards_setting = context->getSettingsRef().shards.value; !shards_setting.empty())
+        try
         {
-            std::vector<String> ps;
-            auto shard_strings = boost::split(ps, shards_setting, boost::is_any_of(","));
-            shards.reserve(shard_strings.size());
-            for (const auto & p : shard_strings)
-            {
-                try
-                {
-                    shards.push_back(std::stoi(p));
-                }
-                catch (std::invalid_argument &)
-                {
-                    throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Invalid shard ID: {}", p);
-                }
-                catch (std::out_of_range &)
-                {
-                    throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Shard ID {} is too big", p);
-                }
-            }
-
-            return;
+            specified_shards.push_back(std::stoi(shard_string));
         }
-        LOG_INFO(log, "reading from {} partitions", shards.size());
+        catch (std::invalid_argument &)
+        {
+            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Invalid shard : {}", shard_string);
+        }
+        catch (std::out_of_range &)
+        {
+            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Shard {} is too big", shard_string);
+        }
+
+        if (specified_shards.back() < 0)
+            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Invalid shard: {}", shard_string);
     }
 
-    /// otherwise, use all partitions
+    return specified_shards;
+}
+
+/// Validate the topic still exists, specified partitions are still valid etc
+void Kafka::validate()
+{
+    if (validated)
+        return;
+
     klog::KafkaWALAuth auth = {
         .security_protocol = settings->security_protocol.value, .username = settings->username.value, .password = settings->password.value};
 
@@ -220,9 +230,30 @@ void Kafka::validate(ContextPtr context)
     if (result.err != ErrorCodes::OK)
         throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "{} topic doesn't exist", settings->topic.value);
 
-    shards.reserve(result.partitions);
-    for (Int32 i{0}; i < result.partitions; ++i)
-        shards.push_back(i);
+    if (shards.empty())
+    {
+        /// User doesn't specify specific partitions to consume
+        shards.reserve(result.partitions);
+        for (Int32 i = 0; i < result.partitions; ++i)
+            shards.push_back(i);
+    }
+    else
+    {
+        /// User specified specific partitions to consume.
+        /// Make sure they are valid.
+        for (auto shard : shards)
+        {
+            if (shard > result.partitions)
+                throw Exception(
+                    ErrorCodes::INVALID_SETTING_VALUE,
+                    "Invalid topic partition {} for topic {}, biggest partition is {}",
+                    shard,
+                    settings->topic.value,
+                    result.partitions);
+        }
+    }
+
+    validated = true;
 }
 
 SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)

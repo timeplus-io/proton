@@ -17,7 +17,7 @@ struct rd_kafka_message_s;
 
 namespace klog
 {
-struct PartitionTimestampPair;
+struct PartitionTimestamp;
 struct KafkaWALContext;
 
 /// KafkaWALSimpleConsumer consumes data from a specific single partition of a topic
@@ -62,7 +62,7 @@ public:
     DescribeResult describe(const String & name) const;
 
     std::vector<int64_t> offsetsForTimestamps(
-        const std::string & topic, const std::vector<PartitionTimestampPair> & partitionTimestamps, int32_t timeout_ms = 5000) const;
+        const std::string & topic, const std::vector<PartitionTimestamp> & partition_timestamps, int32_t timeout_ms = 5000) const;
 
     const KafkaWALSettings & getSettings() const { return *settings; }
 

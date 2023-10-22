@@ -16,8 +16,6 @@
 #include <Common/logger_useful.h>
 #include <Common/parseIntStrict.h>
 
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <librdkafka/rdkafka.h>
 
 namespace DB
@@ -51,8 +49,6 @@ KafkaSource::KafkaSource(
     , virtual_col_types(header.columns(), nullptr)
     , ckpt_data(consume_ctx)
 {
-    is_streaming = true;
-
     calculateColumnPositions();
     initConsumer(kafka);
     initFormatExecutor(kafka);

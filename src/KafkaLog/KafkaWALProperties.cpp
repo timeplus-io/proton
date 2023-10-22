@@ -1,9 +1,16 @@
-#include "KafkaWALProperties.h"
+#include <KafkaLog/KafkaWALProperties.h>
 
 #include <base/defines.h>
+#include <Common/Exception.h>
+
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
+
+namespace DB::ErrorCodes
+{
+extern const int INVALID_SETTING_VALUE;
+}
 
 namespace klog
 {
@@ -26,7 +33,7 @@ KConfParams parseProperties(const String & properties)
 
         auto equal_pos = part.find('=');
         if (unlikely(equal_pos == std::string::npos || equal_pos == 0 || equal_pos == part.size() - 1))
-            throw std::invalid_argument("Invalid property `" + part + "`, expected format: <key>=<value>.");
+            throw DB::Exception(DB::ErrorCodes::INVALID_SETTING_VALUE, "Invalid property `{}`, expected format: <key>=<value>.", part);
 
         auto key = part.substr(0, equal_pos);
         auto value = part.substr(equal_pos + 1);
@@ -35,7 +42,7 @@ KConfParams parseProperties(const String & properties)
         /// remove the leading spaces of keys and trailing spaces of values
         boost::trim_left(key);
         boost::trim_right(value);
-        result.push_back(std::make_pair(key, value));
+        result.emplace_back(std::move(key), std::move(value));
     }
 
     return result;
