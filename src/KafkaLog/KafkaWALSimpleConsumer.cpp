@@ -142,13 +142,19 @@ void KafkaWALSimpleConsumer::initTopicHandle(KafkaWALContext & ctx) const
 
     KConfParams topic_params = {
         /// enable auto offset commit
-        std::make_pair("enable.auto.commit", "true"), /// LEGACY topic settings
-        std::make_pair("auto.commit.interval.ms", std::to_string(settings->auto_commit_interval_ms)), /// LEGACY topic settings
-        std::make_pair("auto.offset.reset", ctx.auto_offset_reset),
-        std::make_pair("consume.callback.max.messages", std::to_string(ctx.consume_callback_max_messages)),
+        {"enable.auto.commit", "true"}, /// LEGACY topic settings
+        {"auto.commit.interval.ms", std::to_string(settings->auto_commit_interval_ms)}, /// LEGACY topic settings
+        {"auto.offset.reset", ctx.auto_offset_reset},
+        {"fetch.wait.max.ms", std::to_string(ctx.fetch_wait_max_ms)},
+        {"fetch.max.bytes", std::to_string(ctx.fetch_max_bytes)},
+        {"queued.min.messages", std::to_string(ctx.client_queued_min_message)},
+        {"queued.max.messages.kbytes", std::to_string(ctx.client_queued_max_bytes / 1024)},
+        {"callback.max.messages", std::to_string(ctx.consume_callback_max_messages)},
     };
 
     ctx.topic_handle = initRdKafkaTopicHandle(ctx.topic, topic_params, consumer_handle.get(), stats.get());
+
+    LOG_INFO(log, "Init consumer for topic={} params={{{}}}", ctx.topic, ctx.string());
 }
 
 inline int32_t KafkaWALSimpleConsumer::startConsumingIfNotYet(const KafkaWALContext & ctx) const

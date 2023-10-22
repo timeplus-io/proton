@@ -18,11 +18,12 @@ StreamingStoreSource::StreamingStoreSource(
     Poco::Logger * log_)
     : StreamingStoreSourceBase(header, storage_snapshot_, std::move(context_), log_, ProcessorID::StreamingStoreSourceID)
 {
-    if (query_context->getSettingsRef().record_consume_batch_count.value != 0)
-        record_consume_batch_count = static_cast<UInt32>(query_context->getSettingsRef().record_consume_batch_count.value);
+    const auto & settings = query_context->getSettingsRef();
+    if (settings.record_consume_batch_count.value != 0)
+        record_consume_batch_count = static_cast<UInt32>(settings.record_consume_batch_count.value);
 
-    if (query_context->getSettingsRef().record_consume_timeout.value != 0)
-        record_consume_timeout = static_cast<Int32>(query_context->getSettingsRef().record_consume_timeout.value);
+    if (settings.record_consume_timeout_ms.value != 0)
+        record_consume_timeout_ms = static_cast<Int32>(settings.record_consume_timeout_ms.value);
 
     if (stream_shard_->isLogStoreKafka())
     {
@@ -40,7 +41,7 @@ StreamingStoreSource::StreamingStoreSource(
         nativelog_reader = std::make_unique<StreamingBlockReaderNativeLog>(
             std::move(stream_shard_),
             sn,
-            record_consume_timeout,
+            record_consume_timeout_ms,
             fetch_buffer_size,
             /*schema_provider*/ nullptr,
             /*schema_version*/ 0,
@@ -54,7 +55,7 @@ nlog::RecordPtrs StreamingStoreSource::read()
     if (nativelog_reader)
         return nativelog_reader->read();
     else
-        return kafka_reader->read(record_consume_batch_count, record_consume_timeout);
+        return kafka_reader->read(record_consume_batch_count, record_consume_timeout_ms);
 }
 
 void StreamingStoreSource::readAndProcess()

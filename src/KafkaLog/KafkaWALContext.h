@@ -3,6 +3,7 @@
 #include "NativeLog/Record/SchemaProvider.h"
 
 #include <boost/algorithm/string/join.hpp>
+#include <fmt/format.h>
 
 #include <string>
 #include <vector>
@@ -68,8 +69,20 @@ struct KafkaWALContext
     /// Per topic consumer settings
     std::string auto_offset_reset = "earliest";
 
+    ///  When reading from Kafka, max wait time
+    int32_t fetch_wait_max_ms = 100;
+
+    /// When reading from Kafka, max bytes to fetch per read
+    int32_t fetch_max_bytes =  52428800;
+
     /// Per topic librdkafka client side settings for consumer
-    int32_t consume_callback_max_messages = 100000;
+
+    /// Minimum number of messages per topic partition to buffer on librdkafka client queue
+    int64_t client_queued_min_message = 100000;
+    /// Maximum bytes per topic partition to buffer on librdkafka client queue
+    int64_t client_queued_max_bytes = 1024 * 1024 * 1024;
+
+    int32_t consume_callback_max_messages = 0;
     int32_t consume_callback_max_rows = 1000000;
     int32_t consume_callback_max_bytes = 33554432; /// 32 MB
     int32_t consume_callback_timeout_ms = 1000;
@@ -86,28 +99,32 @@ struct KafkaWALContext
     std::string string() const
     {
         std::vector<std::string> ctxes;
-        ctxes.push_back("topic=" + topic);
-        ctxes.push_back("partition=" + std::to_string(partition));
-        ctxes.push_back("offset=" + std::to_string(offset));
-        ctxes.push_back("partitions=" + std::to_string(partitions));
-        ctxes.push_back("replication_factor=" + std::to_string(replication_factor));
-        ctxes.push_back("compression_codec=" + compression_codec);
-        ctxes.push_back("client_side_compression=" + std::to_string(client_side_compression));
-        ctxes.push_back("retention_ms=" + std::to_string(retention_ms));
-        ctxes.push_back("retention_bytes=" + std::to_string(retention_bytes));
-        ctxes.push_back("segment_bytes=" + std::to_string(segment_bytes));
-        ctxes.push_back("segment_ms=" + std::to_string(segment_ms));
-        ctxes.push_back("flush_messages=" + std::to_string(flush_messages));
-        ctxes.push_back("flush_ms=" + std::to_string(flush_ms));
-        ctxes.push_back("cleanup_policy=" + cleanup_policy);
-        ctxes.push_back("request_required_acks=" + std::to_string(request_required_acks));
-        ctxes.push_back("request_timeout_ms=" + std::to_string(request_timeout_ms));
-        ctxes.push_back("auto_offset_reset=" + auto_offset_reset);
-        ctxes.push_back("consume_callback_max_messages=" + std::to_string(consume_callback_max_messages));
-        ctxes.push_back("consume_callback_max_rows=" + std::to_string(consume_callback_max_rows));
-        ctxes.push_back("consume_callback_max_bytes=" + std::to_string(consume_callback_max_bytes));
-        ctxes.push_back("consume_callback_timeout_ms=" + std::to_string(consume_callback_timeout_ms));
-        ctxes.push_back("message_max_bytes=" + std::to_string(message_max_bytes));
+        ctxes.push_back(fmt::format("topic={}", topic));
+        ctxes.push_back(fmt::format("partition={}", partition));
+        ctxes.push_back(fmt::format("offset={}", offset));
+        ctxes.push_back(fmt::format("partitions={}", partitions));
+        ctxes.push_back(fmt::format("replication_factor={}", replication_factor));
+        ctxes.push_back(fmt::format("compression_codec={}", compression_codec));
+        ctxes.push_back(fmt::format("client_side_compression={}", client_side_compression));
+        ctxes.push_back(fmt::format("retention_ms={}", retention_ms));
+        ctxes.push_back(fmt::format("retention_bytes={}", retention_bytes));
+        ctxes.push_back(fmt::format("segment_bytes={}", segment_bytes));
+        ctxes.push_back(fmt::format("segment_ms={}", segment_ms));
+        ctxes.push_back(fmt::format("flush_messages={}", flush_messages));
+        ctxes.push_back(fmt::format("flush_ms={}", flush_ms));
+        ctxes.push_back(fmt::format("cleanup_policy={}", cleanup_policy));
+        ctxes.push_back(fmt::format("request_required_acks={}", request_required_acks));
+        ctxes.push_back(fmt::format("request_timeout_ms={}", request_timeout_ms));
+        ctxes.push_back(fmt::format("auto_offset_reset={}", auto_offset_reset));
+        ctxes.push_back(fmt::format("fetch_wait_max_ms={}", fetch_wait_max_ms));
+        ctxes.push_back(fmt::format("fetch_max_bytes={}", fetch_max_bytes));
+        ctxes.push_back(fmt::format("client_queued_min_message={}", client_queued_min_message));
+        ctxes.push_back(fmt::format("client_queued_max_bytes={}", client_queued_max_bytes));
+        ctxes.push_back(fmt::format("consume_callback_max_messages={}", consume_callback_max_messages));
+        ctxes.push_back(fmt::format("consume_callback_max_rows={}", consume_callback_max_rows));
+        ctxes.push_back(fmt::format("consume_callback_max_bytes={}", consume_callback_max_bytes));
+        ctxes.push_back(fmt::format("consume_callback_timeout_ms={}", consume_callback_timeout_ms));
+        ctxes.push_back(fmt::format("message_max_bytes={}", message_max_bytes));
 
         return boost::algorithm::join(ctxes, " ");
     }
