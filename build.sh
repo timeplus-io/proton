@@ -31,7 +31,6 @@ cmake .. \
     -DENABLE_YAML_CPP=ON \
     -DENABLE_SIMDJSON=ON \
     -DENABLE_ROCKSDB=ON \
-    -DENABLE_REPLXX=ON \
     -DENABLE_JEMALLOC=${enable_jemalloc} \
     -DENABLE_SSL=ON \
     -DENABLE_BZIP2=ON \
