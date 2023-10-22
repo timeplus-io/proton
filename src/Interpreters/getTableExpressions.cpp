@@ -191,6 +191,7 @@ TablesWithColumns getDatabaseAndTablesWithColumns(
             table.addMaterializedColumns(materialized);
 
         /// proton : starts
+        table.addHiddenColumns(ColumnsDescription::getSubcolumns(table.columns));
         table.setOutputDataStreamSemantic(output_date_stream_semantic);
         /// proton : ends
     }

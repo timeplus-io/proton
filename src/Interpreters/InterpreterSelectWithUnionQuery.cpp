@@ -469,30 +469,6 @@ Streaming::DataStreamSemanticEx InterpreterSelectWithUnionQuery::getDataStreamSe
     return data_semantic;
 }
 
-ColumnsDescriptionPtr InterpreterSelectWithUnionQuery::getExtendedObjects() const
-{
-    if (nested_interpreters.size() == 1)
-        return nested_interpreters.front()->getExtendedObjects();
-
-    std::vector<ColumnsDescriptionPtr> object_columns_list;
-    object_columns_list.reserve(nested_interpreters.size());
-    for (const auto & interpreter : nested_interpreters)
-        object_columns_list.emplace_back(interpreter->getExtendedObjects());
-
-    /// We only merged the same objects based on the first interpreter objects, and get the least common type,
-    /// because union/intersect/except must be same output for each interpreter, for example:
-    /// interpreter-1 objects:
-    /// json a => tuple(x int, y int), json b => tuple(m string)
-    /// interpreter-2 objects:
-    /// json a => tuple(x double, y int64), json b => tuple(m int), json c => tuple(n string)
-    /// merged:
-    /// json a => tuple(x double, y int64), json b => tuple(m string)
-    auto merged_object_columns = std::make_shared<ColumnsDescription>(*object_columns_list.front());
-    for (size_t i = 1; i < object_columns_list.size(); ++i)
-        DB::updateObjectColumns(*merged_object_columns, object_columns_list[i]->getAllPhysical());
-    return merged_object_columns;
-}
-
 std::set<String> InterpreterSelectWithUnionQuery::getGroupByColumns() const
 {
     std::set<String> group_by_columns;

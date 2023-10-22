@@ -491,11 +491,25 @@
             {"client":"python", "query_type": "table", "depends_on_stream":"test_stream_17", "wait":1, "query": "insert into test_stream_17(id, raw) values (1, '{\"projectId\": \"111\"}')"},
             {"client":"python", "query_type": "stream", "query_id":"9900", "wait":1, "query_end_timer":3, "query":"select id, raw.projectId AS projectId_json, _tp_delta from changelog(test_stream_17, id) where _tp_time > earliest_ts()"}
           ]
+        },
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query": "drop stream if exists test_stream_17_vk"},
+            {"client":"python", "query_type": "table", "exist": "test_stream_17_vk", "exist_wait":2, "wait":1, "query": "create stream test_stream_17_vk(id int, raw json) primary key id settings mode='versioned_kv'"},
+            {"client":"python", "query_type": "table", "depends_on_stream":"test_stream_17_vk", "wait":1, "query": "insert into test_stream_17_vk(id, raw) values (1, '{\"projectId\": \"111\"}')"},
+            {"client":"python", "query_type": "stream", "query_id":"9901", "wait":1, "query":"select t1.id, t1.raw.projectId, t2.raw.projectId, _tp_delta from changelog(test_stream_17, id) as t1 join changelog(test_stream_17_vk) as t2 on t1.id = t2.id where t1._tp_time > earliest_ts()"},
+            {"client":"python", "query_type": "table", "depends_on":"9901", "wait":1, "kill":"9901", "kill_wait":3, "query": "insert into test_stream_17_vk(id, raw) values (1, '{\"projectId\": \"222\"}')"}
+          ]
         }
       ],
       "expected_results": [
         {"query_id":"9900", "expected_results":[
           [1, "111", 1]
+        ]},
+        {"query_id":"9901", "expected_results":[
+          [1, "111", "111", 1],
+          [1, "111", "111", -1],
+          [1, "111", "222", 1]
         ]}
       ]
     }

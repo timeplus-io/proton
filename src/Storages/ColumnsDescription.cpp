@@ -827,5 +827,20 @@ void ColumnsDescription::addOrUpdateSubcolumns(
                 it, [moved_subcolumn = std::move(subcolumn)](auto & column) { column = std::move(moved_subcolumn); }); /// NOLINT(performance-move-const-arg)
     }
 }
+
+NamesAndTypesList ColumnsDescription::getSubcolumns(const NamesAndTypesList & name_and_type_list)
+{
+    NamesAndTypesList res;
+    for (const auto & name_and_type : name_and_type_list)
+    {
+        auto type_in_storage = name_and_type.getTypeInStorage();
+        IDataType::forEachSubcolumn(
+            [&](const auto &, const auto & subname, const auto & subdata) {
+                res.push_back(NameAndTypePair(name_and_type.getNameInStorage(), subname, type_in_storage, subdata.type));
+            },
+            ISerialization::SubstreamData(type_in_storage->getDefaultSerialization()).withType(type_in_storage));
+    }
+    return res;
+}
 /// proton: ends.
 }

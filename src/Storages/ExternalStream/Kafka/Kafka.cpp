@@ -24,42 +24,6 @@ extern const int OK;
 extern const int RESOURCE_NOT_FOUND;
 }
 
-klog::KConfParams Kafka::parseProperties(String & properties)
-{
-    klog::KConfParams result;
-
-    if (properties.empty())
-        return result;
-
-    /// properties example:
-    /// message.max.bytes=1024;max.in.flight=1000;group.id=my-group
-
-    std::vector<String> parts;
-    boost::split(parts, properties, boost::is_any_of(";"));
-    result.reserve(parts.size());
-
-    for (const auto & part : parts)
-    {
-        if (unlikely(part.empty())) /* redundant / trailing ';' */
-            continue;
-
-        auto equal_pos = part.find('=');
-        if (unlikely(equal_pos == std::string::npos || equal_pos == 0 || equal_pos == part.size() - 1))
-            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Invalid property `{}`, expected format: <key>=<value>.", part);
-
-        auto key = part.substr(0, equal_pos);
-        auto value = part.substr(equal_pos + 1);
-
-        /// no spaces are supposed be around `=`, thus only need to
-        /// remove the leading spaces of keys and trailing spaces of values
-        boost::trim_left(key);
-        boost::trim_right(value);
-        result.push_back(std::make_pair(key, value));
-    }
-
-    return result;
-}
-
 Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, bool attach)
     : storage_id(storage->getStorageID())
     , settings(std::move(settings_))
@@ -74,7 +38,15 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     if (settings->topic.value.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", settings->type.value);
 
-    kafka_properties = parseProperties(settings->properties.value);
+    try
+    {
+        kafka_properties = klog::parseProperties(settings->properties.value);
+    }
+    catch (std::invalid_argument const& ex)
+    {
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, ex.what());
+    }
+
 
     calculateDataFormat(storage);
 
