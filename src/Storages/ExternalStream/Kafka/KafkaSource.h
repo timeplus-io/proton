@@ -81,7 +81,7 @@ private:
     MutableColumns current_batch;
 
     UInt32 record_consume_batch_count = 1000;
-    Int32 record_consume_timeout = 100;
+    Int32 record_consume_timeout_ms = 100;
 
     /// For checkpoint
     /// FIXME, switch to llvm-15

@@ -1,4 +1,5 @@
 #include <KafkaLog/KafkaWALProperties.h>
+#include <Common/Exception.h>
 
 #include <gtest/gtest.h>
 
@@ -77,7 +78,5 @@ TEST(ParseProperties, errorCases)
     };
 
     for (const auto & exp : cases)
-    {
-        EXPECT_THROW(klog::parseProperties(exp), std::invalid_argument);
-    }
+        EXPECT_THROW(klog::parseProperties(exp), DB::Exception);
 }

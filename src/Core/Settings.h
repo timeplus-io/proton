@@ -623,6 +623,11 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(TransactionsWaitCSNMode, wait_changes_become_visible_after_commit_mode, TransactionsWaitCSNMode::WAIT_UNKNOWN, "Wait for committed changes to become actually visible in the latest snapshot", 0) \
     M(Bool, optimize_distinct_in_order, true, "Enable DISTINCT optimization if some columns in DISTINCT form a prefix of sorting. For example, prefix of sorting key in merge tree or ORDER BY statement", 0) \
     M(Bool, optimize_sorting_by_input_stream_properties, true, "Optimize sorting by sorting properties of input stream", 0) \
+    \
+    /** proton: starts */                       \
+    M(String, shards, "", "If not empty, only the specified shard IDs (or partition IDs if the target stream is a Kafka external stream) will be selected to be read data from. IDs are separated by comma. Example: shards='0,2'", 0) \
+    \
+    /** proton: ends */                       \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS and move obsolete settings to OBSOLETE_SETTINGS.
@@ -784,7 +789,11 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(UInt64, max_windows, 1000, "Maximum number of streaming windows in one streaming query.", 0) \
     M(UInt64, fetch_buffer_size, 4 * 1024 * 1024, "Fetch buffer per query", 0) \
     M(UInt64, record_consume_batch_count, 1000, "Maximum number for consuming records at once", 0) \
-    M(Int64, record_consume_timeout, 100, "Timeout of consuming record", 0) \
+    M(Int64, record_consume_timeout_ms, 100, "Timeout of consuming record", 0) \
+    M(Int64, kafka_fetch_wait_max_ms, 100, "When reading from Kafka, max wait time", 0) \
+    M(Int64, kafka_fetch_max_bytes, 52428800, "When reading from Kafka, max bytes to fetch per read", 0) \
+    M(Int64, kafka_client_queued_min_message, 100000, "Minimum number of messages per topic partition to buffer on librdkafka client queue ", 0) \
+    M(Int64, kafka_client_queued_max_bytes, 1024 * 1024 * 1024, "Maximum bytes per topic partition to buffer on librdkafka client queue ", 0) \
     M(UInt64, max_streaming_view_cached_block_count, 100, "Maximum count of block cached in streaming view", 0) \
     M(UInt64, max_streaming_view_cached_block_bytes, 100 * 1024 * 1024, "Maximum bytes of block cached in streaming view", 0) \
     M(UInt64, keep_windows, 0, "How many streaming windows to keep from recycling", 0) \

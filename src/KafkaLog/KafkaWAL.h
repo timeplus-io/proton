@@ -76,7 +76,7 @@ public:
     int32_t stopConsume(const KafkaWALContext & ctx) const;
 
     /// `commit` doesn't really commit offsets to Kafka brokers instead it stores offsets in
-    /// memory and will be later committed in batch (every `auto_commit_internval_ms`). It doesn't
+    /// memory and will be later committed in batch (every `auto_commit_interval_ms`). It doesn't
     /// commit offset synchronously because of performance concerns
     int32_t commit(nlog::RecordSN sn, const KafkaWALContext & ctx) const;
 
@@ -99,7 +99,12 @@ public:
 
     KafkaWALClusterPtr cluster(const KafkaWALContext & ctx) const;
 
-    std::vector<int64_t> offsetsForTimestamps(const std::string & topic, const std::vector<int64_t> & timestamps, int32_t timeout_ms=5000) const;
+    std::vector<int64_t> offsetsForTimestamps(
+        const std::string & topic, const std::vector<PartitionTimestamp> & partition_timestamps, int32_t timeout_ms = 5000) const;
+
+    std::vector<int64_t>
+    offsetsForTimestamps(const std::string & topic, const std::vector<int64_t> & timestamps, int32_t timeout_ms = 5000) const;
+
 
 private:
     using FreeRdKafka = void (*)(struct rd_kafka_s *);
