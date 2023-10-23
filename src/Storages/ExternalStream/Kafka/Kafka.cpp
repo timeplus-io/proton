@@ -74,6 +74,7 @@ Pipe Kafka::read(
         validate();
 
         /// Query all shards / partitions
+        shards_to_query.reserve(shards);
         for (int32_t i = 0; i < shards; ++i)
             shards_to_query.push_back(i);
     }
