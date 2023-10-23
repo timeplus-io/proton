@@ -13,7 +13,6 @@
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/trim.hpp>
 
 #include <ranges>
 
@@ -62,16 +61,27 @@ Pipe Kafka::read(
 {
     /// User can explicitly consume specific kafka partitions by specifying `shards=` setting
     /// `SELECT * FROM kafka_stream SETTINGS shards=0,3`
+    std::vector<int32_t> shards_to_query;
     if (!context->getSettingsRef().shards.value.empty())
     {
-        shards = parseShards(context->getSettingsRef().shards.value);
-        LOG_INFO(log, "reading from {} partitions", shards.size());
+        shards_to_query = parseShards(context->getSettingsRef().shards.value);
+        validate(shards_to_query);
+        LOG_INFO(log, "reading from [{}] partitions for topic={}", fmt::join(shards_to_query, ","), settings->topic.value);
+    }
+    else
+    {
+        /// We still like to validate / describe the topic if we haven't yet
+        validate();
+
+        /// Query all shards / partitions
+        for (int32_t i = 0; i < shards; ++i)
+            shards_to_query.push_back(i);
     }
 
-    validate();
+    assert(!shards_to_query.empty());
 
     Pipes pipes;
-    pipes.reserve(shards.size());
+    pipes.reserve(shards_to_query.size());
 
     // const auto & settings_ref = context->getSettingsRef();
     /*auto share_resource_group = (settings_ref.query_resource_group.value == "shared") && (settings_ref.seek_to.value == "latest");
@@ -95,11 +105,11 @@ Pipe Kafka::read(
         else
             header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_APPEND_TIME});
 
-        auto offsets = getOffsets(query_info.seek_to_info);
-
-        for (auto shard : shards)
+        auto offsets = getOffsets(query_info.seek_to_info, shards_to_query);
+        assert(offsets.size() == shards_to_query.size());
+        for (auto [shard, offset] : std::ranges::views::zip(shards_to_query, offsets))
             pipes.emplace_back(
-                std::make_shared<KafkaSource>(this, header, storage_snapshot, context, shard, offsets[shard], max_block_size, log));
+                std::make_shared<KafkaSource>(this, header, storage_snapshot, context, shard, offset, max_block_size, log));
     }
 
     LOG_INFO(
@@ -110,7 +120,7 @@ Pipe Kafka::read(
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
     auto min_threads = context->getSettingsRef().min_threads.value;
-    if (min_threads > shards.size())
+    if (min_threads > shards_to_query.size())
         pipe.resize(min_threads);
 
     return pipe;
@@ -130,10 +140,10 @@ void Kafka::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()));
 }
 
-std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info) const
+std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const
 {
     assert(seek_to_info);
-    seek_to_info->replicateForShards(shards.size());
+    seek_to_info->replicateForShards(shards_to_query.size());
     if (!seek_to_info->isTimeBased())
     {
         return seek_to_info->getSeekPoints();
@@ -149,11 +159,11 @@ std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info) const
         auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
 
         std::vector<klog::PartitionTimestamp> partition_timestamps;
-        partition_timestamps.reserve(shards.size());
+        partition_timestamps.reserve(shards_to_query.size());
         auto seek_timestamps{seek_to_info->getSeekPoints()};
-        assert(shards.size() == seek_timestamps.size());
+        assert(shards_to_query.size() == seek_timestamps.size());
 
-        for (auto [shard, timestamp] : std::ranges::views::zip(shards, seek_timestamps))
+        for (auto [shard, timestamp] : std::ranges::views::zip(shards_to_query, seek_timestamps))
             partition_timestamps.emplace_back(shard, timestamp);
 
         return consumer->offsetsForTimestamps(settings->topic.value, partition_timestamps);
@@ -216,44 +226,43 @@ std::vector<int32_t> Kafka::parseShards(const std::string & shards_setting)
 }
 
 /// Validate the topic still exists, specified partitions are still valid etc
-void Kafka::validate()
+void Kafka::validate(const std::vector<int32_t> & shards_to_query)
 {
-    if (validated)
-        return;
-
-    klog::KafkaWALAuth auth = {
-        .security_protocol = settings->security_protocol.value, .username = settings->username.value, .password = settings->password.value};
-
-    auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
-
-    auto result = consumer->describe(settings->topic.value);
-    if (result.err != ErrorCodes::OK)
-        throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "{} topic doesn't exist", settings->topic.value);
-
-    if (shards.empty())
+    if (shards == 0)
     {
-        /// User doesn't specify specific partitions to consume
-        shards.reserve(result.partitions);
-        for (Int32 i = 0; i < result.partitions; ++i)
-            shards.push_back(i);
+        std::scoped_lock lock(shards_mutex);
+        /// Recheck again in case in-parallel query chimes in and init the shards already
+        if (shards == 0)
+        {
+            /// We haven't describe the topic yet
+            klog::KafkaWALAuth auth = {
+                .security_protocol = settings->security_protocol.value, .username = settings->username.value, .password = settings->password.value};
+
+            auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
+
+            auto result = consumer->describe(settings->topic.value);
+            if (result.err != ErrorCodes::OK)
+                throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "{} topic doesn't exist", settings->topic.value);
+
+            shards = result.partitions;
+        }
     }
-    else
+
+    if (!shards_to_query.empty())
     {
         /// User specified specific partitions to consume.
         /// Make sure they are valid.
-        for (auto shard : shards)
+        for (auto shard : shards_to_query)
         {
-            if (shard > result.partitions)
+            if (shard >= shards)
                 throw Exception(
                     ErrorCodes::INVALID_SETTING_VALUE,
                     "Invalid topic partition {} for topic {}, biggest partition is {}",
                     shard,
                     settings->topic.value,
-                    result.partitions);
+                    shards);
         }
     }
-
-    validated = true;
 }
 
 SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
