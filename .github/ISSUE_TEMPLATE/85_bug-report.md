@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Wrong behaviour (visible to users) in official proton release.
+about: Wrong behaviour (visible to users) in official Proton release.
 title: ''
 labels: 'bug'
 assignees: ''
