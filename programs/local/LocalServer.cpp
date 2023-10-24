@@ -282,6 +282,12 @@ void LocalServer::tryInitPath()
     if (path.back() != '/')
         path += '/';
 
+
+    fs::create_directories(fs::path(path) / "user_defined/");
+    fs::create_directories(fs::path(path) / "data/");
+    fs::create_directories(fs::path(path) / "metadata/");
+    fs::create_directories(fs::path(path) / "metadata_dropped/");
+
     global_context->setPath(path);
 
     global_context->setTemporaryStorage(path + "tmp");
@@ -663,8 +669,6 @@ void LocalServer::processConfig()
         status.emplace(fs::path(path) / "status", StatusFile::write_full_info);
 
         LOG_DEBUG(log, "Loading metadata from {}", path);
-        fs::create_directories(fs::path(path) / "data/");
-        fs::create_directories(fs::path(path) / "metadata/");
 
         loadMetadataSystem(global_context);
         attachSystemTablesLocal(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::SYSTEM_DATABASE));
