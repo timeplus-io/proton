@@ -93,6 +93,7 @@ protected:
         std::optional<ProgramOptionsDescription> external_description;
     };
 
+    virtual void updateLoggerLevel(const String &) {}
     virtual void printHelpMessage(const OptionsDescription & options_description) = 0;
     virtual void addOptions(OptionsDescription & options_description) = 0;
     virtual void processOptions(const OptionsDescription & options_description,
@@ -245,6 +246,8 @@ protected:
     QueryProcessingStage::Enum query_processing_stage;
 
     bool cancelled = false;
+
+    bool logging_initialized = false;
 };
 
 }
