@@ -140,6 +140,9 @@ private:
     void updateSuggest(const ASTCreateQuery & ast_create);
 
 protected:
+    SharedContextHolder shared_context;
+    ContextMutablePtr global_context;
+
     bool is_interactive = false; /// Use either interactive line editing interface or batch mode.
     bool is_multiquery = false;
     bool delayed_interactive = false;
@@ -174,9 +177,6 @@ protected:
 
     /// Settings specified via command line args
     Settings cmd_settings;
-
-    SharedContextHolder shared_context;
-    ContextMutablePtr global_context;
 
     /// thread status should be destructed before shared context because it relies on process list.
     std::optional<ThreadStatus> thread_status;
