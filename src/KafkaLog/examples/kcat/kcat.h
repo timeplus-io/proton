@@ -87,7 +87,7 @@ typedef enum
 
 struct conf
 {
-    int run;
+    _Atomic int run;
     int verbosity;
     int exitcode;
     int exitonerror;
@@ -169,14 +169,16 @@ struct conf
 #endif
 
     int show_perf_metric_only;
+    int multiple_threads;
     time_t start;
     time_t last_print;
     size_t last_total_messages;
     size_t last_total_data_size;
     size_t last_total_key_size;
-    size_t total_messages;
-    size_t total_data_size;
-    size_t total_key_size;
+    _Atomic uint64_t total_messages;
+    _Atomic uint64_t total_data_size;
+    _Atomic uint64_t total_key_size;
+    _Atomic int32_t outstanding;
 };
 
 extern struct conf conf;

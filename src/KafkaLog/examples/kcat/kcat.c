@@ -31,14 +31,14 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <syslog.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/time.h>
 
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <sys/types.h>
+
+#include <tinycthread.h>
 
 #include "input.h"
 #include "kcat.h"
@@ -69,6 +69,7 @@ struct conf conf = {
     .metadata_timeout = 5,
     .offset = RD_KAFKA_OFFSET_INVALID,
     .show_perf_metric_only = 0,
+    .multiple_threads = 0,
     .start = 0,
     .last_print = 0,
     .last_total_messages = 0,
@@ -86,7 +87,7 @@ static struct stats
     uint64_t tx_err_dr;
     uint64_t tx_delivered;
 
-    uint64_t rx;
+    _Atomic uint64_t rx;
 } stats;
 
 
@@ -630,14 +631,10 @@ static void partition_at_eof(rd_kafka_message_t * rkmessage)
 /**
  * @brief Track messages count / size produced / consumed
  */
-static void track_and_print_metrics(FILE * fp, const rd_kafka_message_t * rkmessage)
+static void print_metrics(FILE * fp)
 {
     struct timeval tv;
     time_t delta_time;
-
-    ++conf.total_messages;
-    conf.total_data_size += rkmessage->len;
-    conf.total_key_size += rkmessage->key_len;
 
     rd_gettimeofday(&tv, NULL);
     delta_time = tv.tv_sec - conf.last_print;
@@ -665,6 +662,18 @@ static void track_and_print_metrics(FILE * fp, const rd_kafka_message_t * rkmess
 
         conf.last_print = tv.tv_sec;
     }
+}
+
+static void track_and_print_metrics(FILE * fp, const rd_kafka_message_t * rkmessage)
+{
+    ++conf.total_messages;
+    conf.total_data_size += rkmessage->len;
+    conf.total_key_size += rkmessage->key_len;
+
+    if (fp == NULL)
+        return;
+
+    print_metrics(fp);
 }
 
 /**
@@ -721,7 +730,7 @@ static void consume_cb(rd_kafka_message_t * rkmessage, void * opaque)
     track_and_print_metrics(fp, rkmessage);
 
     /* Print message */
-    if (!conf.show_perf_metric_only)
+    if (!conf.show_perf_metric_only && fp)
         fmt_msg_output(fp, rkmessage);
 
     if (conf.mode == 'C')
@@ -1004,6 +1013,16 @@ static int64_t * get_offsets(rd_kafka_metadata_topic_t * topic)
     return offsets;
 }
 
+static int thread_consume(void * arg)
+{
+    int32_t partition = (int32_t)arg;
+    /* Read messages from Kafka, write to 'fp'. */
+    while (conf.run)
+    {
+        rd_kafka_consume_callback(conf.rkt, partition, 100, consume_cb, NULL);
+    }
+}
+
 /**
  * Run consumer, consuming messages from Kafka and writing to 'fp'.
  */
@@ -1014,7 +1033,7 @@ static void consumer_run(FILE * fp)
     const rd_kafka_metadata_t * metadata;
     int i;
     int64_t * offsets = NULL;
-    rd_kafka_queue_t * rkqu;
+    rd_kafka_queue_t * rkqu = NULL;
 
     /* Create consumer */
     if (!(conf.rk = rd_kafka_new(RD_KAFKA_CONSUMER, conf.rk_conf, errstr, sizeof(errstr))))
@@ -1035,7 +1054,6 @@ static void consumer_run(FILE * fp)
 
     conf.rk_conf = NULL;
     conf.rkt_conf = NULL;
-
 
     /* Query broker for topic + partition information. */
     if ((err = rd_kafka_metadata(conf.rk, 0, conf.rkt, &metadata, conf.metadata_timeout * 1000)))
@@ -1070,56 +1088,104 @@ static void consumer_run(FILE * fp)
     }
 #endif
 
-    /* Create a shared queue that combines messages from
+    if (conf.multiple_threads)
+    {
+        /// Each thread consume one partition
+        /* Start consuming from all wanted partitions. */
+        for (i = 0; i < metadata->topics[0].partition_cnt; i++)
+        {
+            thrd_t thrd;
+            int32_t partition = metadata->topics[0].partitions[i].id;
+
+            /* If -p <part> was specified: skip unwanted partitions */
+            if (conf.partition != RD_KAFKA_PARTITION_UA && conf.partition != partition)
+                continue;
+
+            /* Start consumer for this partition */
+            if (rd_kafka_consume_start(
+                    conf.rkt,
+                    partition,
+                    offsets ? offsets[i] : (conf.offset == RD_KAFKA_OFFSET_INVALID ? RD_KAFKA_OFFSET_BEGINNING : conf.offset))
+                == -1)
+                KC_FATAL(
+                    "Failed to start consuming "
+                    "topic %s [%" PRId32 "]: %s",
+                    conf.topic,
+                    partition,
+                    rd_kafka_err2str(rd_kafka_last_error()));
+
+            ++conf.outstanding;
+            if (rdk_thread_create(&thrd, thread_consume, (void *)partition) == -1)
+                KC_FATAL(
+                    "Failed to start consuming "
+                    "topic %s [%" PRId32 "]: %s",
+                    conf.topic,
+                    partition,
+                    rd_kafka_err2str(rd_kafka_last_error()));
+
+            if (conf.partition != RD_KAFKA_PARTITION_UA)
+                break;
+        }
+
+        /// Main thread print the metrics
+        while (conf.run)
+        {
+            print_metrics(fp);
+            sleep(2);
+        }
+    }
+    else
+    {
+        /* Create a shared queue that combines messages from
          * all wanted partitions. */
-    rkqu = rd_kafka_queue_new(conf.rk);
+        rkqu = rd_kafka_queue_new(conf.rk);
 
-    /* Start consuming from all wanted partitions. */
-    for (i = 0; i < metadata->topics[0].partition_cnt; i++)
-    {
-        int32_t partition = metadata->topics[0].partitions[i].id;
+        /* Start consuming from all wanted partitions. */
+        for (i = 0; i < metadata->topics[0].partition_cnt; i++)
+        {
+            int32_t partition = metadata->topics[0].partitions[i].id;
 
-        /* If -p <part> was specified: skip unwanted partitions */
-        if (conf.partition != RD_KAFKA_PARTITION_UA && conf.partition != partition)
-            continue;
+            /* If -p <part> was specified: skip unwanted partitions */
+            if (conf.partition != RD_KAFKA_PARTITION_UA && conf.partition != partition)
+                continue;
 
-        /* Start consumer for this partition */
-        if (rd_kafka_consume_start_queue(
-                conf.rkt,
-                partition,
-                offsets ? offsets[i] : (conf.offset == RD_KAFKA_OFFSET_INVALID ? RD_KAFKA_OFFSET_BEGINNING : conf.offset),
-                rkqu)
-            == -1)
+            /* Start consumer for this partition */
+            if (rd_kafka_consume_start_queue(
+                    conf.rkt,
+                    partition,
+                    offsets ? offsets[i] : (conf.offset == RD_KAFKA_OFFSET_INVALID ? RD_KAFKA_OFFSET_BEGINNING : conf.offset),
+                    rkqu)
+                == -1)
+                KC_FATAL(
+                    "Failed to start consuming "
+                    "topic %s [%" PRId32 "]: %s",
+                    conf.topic,
+                    partition,
+                    rd_kafka_err2str(rd_kafka_last_error()));
+
+            if (conf.partition != RD_KAFKA_PARTITION_UA)
+                break;
+        }
+
+        if (conf.partition != RD_KAFKA_PARTITION_UA && i == metadata->topics[0].partition_cnt)
             KC_FATAL(
-                "Failed to start consuming "
-                "topic %s [%" PRId32 "]: %s",
-                conf.topic,
-                partition,
-                rd_kafka_err2str(rd_kafka_last_error()));
+                "Topic %s (with partitions 0..%i): "
+                "partition %i does not exist",
+                rd_kafka_topic_name(conf.rkt),
+                metadata->topics[0].partition_cnt - 1,
+                conf.partition);
 
-        if (conf.partition != RD_KAFKA_PARTITION_UA)
-            break;
+        /* Read messages from Kafka, write to 'fp'. */
+        while (conf.run)
+        {
+            rd_kafka_consume_callback_queue(rkqu, 100, consume_cb, fp);
+
+            /* Poll for errors, etc */
+            rd_kafka_poll(conf.rk, 0);
+        }
     }
+
     free(offsets);
-
-    if (conf.partition != RD_KAFKA_PARTITION_UA && i == metadata->topics[0].partition_cnt)
-        KC_FATAL(
-            "Topic %s (with partitions 0..%i): "
-            "partition %i does not exist",
-            rd_kafka_topic_name(conf.rkt),
-            metadata->topics[0].partition_cnt - 1,
-            conf.partition);
-
-
-    /* Read messages from Kafka, write to 'fp'. */
-    while (conf.run)
-    {
-        rd_kafka_consume_callback_queue(rkqu, 100, consume_cb, fp);
-
-        /* Poll for errors, etc */
-        rd_kafka_poll(conf.rk, 0);
-    }
-
     /* Stop consuming */
     for (i = 0; i < metadata->topics[0].partition_cnt; i++)
     {
@@ -1137,7 +1203,8 @@ static void consumer_run(FILE * fp)
     }
 
     /* Destroy shared queue */
-    rd_kafka_queue_destroy(rkqu);
+    if (rkqu)
+        rd_kafka_queue_destroy(rkqu);
 
     /* Wait for outstanding requests to finish. */
     conf.run = 1;
@@ -1151,7 +1218,6 @@ static void consumer_run(FILE * fp)
     rd_kafka_topic_destroy(conf.rkt);
     rd_kafka_destroy(conf.rk);
 }
-
 
 #if ENABLE_MOCK
 /**
@@ -2160,7 +2226,7 @@ static int argparse(int argc, char ** argv, rd_kafka_topic_partition_list_t ** r
                 argc,
                 argv,
                 ":PCG:LQM:t:p:b:z:o:eED:K:k:H:Od:qvF:X:c:Tuf:ZlVh"
-                "s:r:Jm:Ux"))
+                "s:r:Jm:Uxa"))
            != -1)
     {
         switch (opt)
@@ -2406,6 +2472,10 @@ static int argparse(int argc, char ** argv, rd_kafka_topic_partition_list_t ** r
 
             case 'x':
                 conf.show_perf_metric_only = 1;
+                break;
+
+            case 'a':
+                conf.multiple_threads = 1;
                 break;
 
             case 'U':
@@ -2688,6 +2758,7 @@ int kcat(int argc, char ** argv)
     switch (conf.mode)
     {
         case 'C':
+            KC_INFO(1, "Using multiple_threads=%d\n", conf.multiple_threads);
             consumer_run(stdout);
             break;
 
