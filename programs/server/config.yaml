@@ -15,8 +15,8 @@ logger:
     # - trace
     # [1]: https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/Logger.h#L105-L114
     level: information
-    log: /home/haohang/tpdata/var/log/proton-server/proton-server.log
-    errorlog: /home/haohang/tpdata/var/log/proton-server/proton-server.err.log
+    log: /var/log/proton-server/proton-server.log
+    errorlog: /var/log/proton-server/proton-server.err.log
     # Rotation policy
     # See https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/FileChannel.h#L54-L85
     size: 1000M
@@ -291,16 +291,16 @@ mmap_cache_size: 1000
 compiled_expression_cache_size: 134217728
 
 # Path to data directory, with trailing slash.
-path: /home/haohang/tpdata/var/lib/proton/
+path: /var/lib/proton/
 
 # Path to temporary data for processing hard queries.
-tmp_path: /home/haohang/tpdata/var/lib/proton/tmp/
+tmp_path: /var/lib/proton/tmp/
 
 checkpoint:
     # Checkpoint storage type
     storage_type : local_file_system
     # Path to state checkpoint
-    path: /home/haohang/tpdata/var/lib/proton/checkpoint/
+    path: /var/lib/proton/checkpoint/
     # State checkpoint interval in seconds
     interval: 900
     # Checkpoint expired if not accessed after `ttl` seconds
@@ -327,7 +327,7 @@ checkpoint:
 # tmp_policy: tmp
 
 # Directory with user provided files that are accessible by 'file' table function.
-user_files_path: /home/haohang/tpdata/var/lib/proton/user_files/
+user_files_path: /var/lib/proton/user_files/
 
 # LDAP server definitions.
 ldap_servers: ''
@@ -422,7 +422,7 @@ user_directories:
         path: users.yaml
     local_directory:
         # Path to folder where users created by SQL commands are stored.
-        path: /home/haohang/tpdata/var/lib/proton/access/
+        path: /var/lib/proton/access/
 
 #   # To add an LDAP server as a remote user directory of users that are not defined locally, define a single 'ldap' section
 #   # with the following parameters:
@@ -785,7 +785,7 @@ processors_profile_log:
 # path_to_regions_names_files: /opt/geo/
 
 
-# top_level_domains_path: /home/haohang/tpdata/var/lib/proton/top_level_domains/
+# top_level_domains_path: /var/lib/proton/top_level_domains/
 # Custom TLD lists.
 # Format: name: /path/to/file
 
@@ -870,7 +870,7 @@ graphite_rollup_example:
 
 # Directory in <proton-path> containing schema files for various input formats.
 # The directory will be created if it doesn't exist.
-format_schema_path: /home/haohang/tpdata/var/lib/proton/format_schemas/
+format_schema_path: /var/lib/proton/format_schemas/
 
 # Default query masking rules, matching lines would be replaced with something else in the logs
 # (both text logs and system.query_log).
@@ -1038,10 +1038,10 @@ cluster_settings:
             check_crcs: false
             max_schedule_threads: 8
             max_adhoc_schedule_threads: 8
-            metastore_data_dir: /home/haohang/tpdata/var/lib/proton/nativelog/meta/
+            metastore_data_dir: /var/lib/proton/nativelog/meta/
             log_data_dirs:
                 # Proton doesn't support normal yaml list yet
-                dir1: /home/haohang/tpdata/var/lib/proton/nativelog/log/
+                dir1: /var/lib/proton/nativelog/log/
             fetch_max_wait_ms: 500 # max wait time if no records are available
             fetch_max_bytes: 65536 # max bytes to fetch per request
             log_max_record_size: 10485760
