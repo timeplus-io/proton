@@ -56,6 +56,7 @@ struct TreeRewriterResult
 
     /// proton: starts
     bool streaming = true;
+    bool emit_changelog = false;
     bool has_group_by = false;
     bool hasAggregation() const noexcept { return has_group_by || !aggregates.empty(); }
 

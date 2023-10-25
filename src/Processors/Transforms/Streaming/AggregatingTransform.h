@@ -20,28 +20,36 @@ struct AggregatingTransformParams
     bool final;
     bool only_merge = false;
     bool emit_version = false;
+    bool emit_changelog = false;
     DataTypePtr version_type;
 
-    AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool emit_version_)
+    AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool emit_version_, bool emit_changelog_)
         : aggregator(params_)
         , params(aggregator.getParams())
         , final(final_)
         , emit_version(emit_version_)
+        , emit_changelog(emit_changelog_)
     {
         if (emit_version)
             version_type = DataTypeFactory::instance().get("int64");
     }
 
-    static Block getHeader(const Aggregator::Params & params, bool final, bool emit_version)
+    static Block getHeader(const Aggregator::Params & params, bool final, bool emit_version, bool emit_changelog)
     {
         auto res = params.getHeader(final);
-        if (final && emit_version)
-            res.insert({DataTypeFactory::instance().get("int64"), ProtonConsts::RESERVED_EMIT_VERSION});
+        if (final)
+        {
+            if (emit_version)
+                res.insert({DataTypeFactory::instance().get("int64"), ProtonConsts::RESERVED_EMIT_VERSION});
+
+            if (emit_changelog)
+                res.insert({DataTypeFactory::instance().get("int8"), ProtonConsts::RESERVED_DELTA_FLAG});
+        }
 
         return res;
     }
 
-    Block getHeader() const { return getHeader(params, final, emit_version); }
+    Block getHeader() const { return getHeader(params, final, emit_version, emit_changelog); }
 };
 
 class AggregatingTransform;
@@ -179,10 +187,10 @@ private:
     bool propagateHeartbeatChunk();
 
 protected:
-    void emitVersion(Block & block);
+    void emitVersion(Chunk & chunk);
     /// return {should_abort, need_finalization} pair
     virtual std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, size_t num_rows);
-    void setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx);
+    void setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx, Chunk retracted_chunk = {});
 
     /// Quickly check if need finalization
     virtual bool needFinalization(Int64 /*min_watermark*/) const { return true; }
@@ -238,6 +246,7 @@ protected:
     bool read_current_chunk = false;
 
     /// Aggregated result which is pushed to downstream output
+    Chunk current_chunk_retracted;
     Chunk current_chunk_aggregated;
     bool has_input = false;
 

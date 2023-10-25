@@ -136,13 +136,6 @@ DataStreamSemanticPair calculateDataStreamSemantic(
     /// Otherwise we will also need look at the parent SELECT
     if (current_select_has_aggregates)
     {
-        /// If current layer of select has aggregates, the output stream for now will be an append only stream
-        /// TODO, in future, we can emit changelog when `EMIT changelog` clause is supported
-        if (query_info.force_emit_changelog)
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for aggregates emit changelog");
-
-        semantic_pair.output_data_stream_semantic = DataStreamSemantic::Append;
-
         if (right_input_data_stream_semantic)
         {
             /// JOIN + aggregates
@@ -162,6 +155,9 @@ DataStreamSemanticPair calculateDataStreamSemantic(
                 semantic_pair.effective_input_data_stream_semantic = DataStreamSemantic::Changelog;
             }
         }
+
+        semantic_pair.output_data_stream_semantic
+            = query_info.force_emit_changelog ? DataStreamSemantic::Changelog : DataStreamSemantic::Append;
     }
     else if (right_input_data_stream_semantic)
     {

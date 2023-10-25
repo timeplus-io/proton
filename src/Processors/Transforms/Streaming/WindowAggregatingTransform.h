@@ -42,6 +42,9 @@ private:
 
     /// Prepared windows to finalize in `prepareFinalization`
     WindowsWithBuckets prepared_windows_with_buckets;
+
+    std::optional<size_t> window_start_col_pos;
+    std::optional<size_t> window_end_col_pos;
 };
 }
 }

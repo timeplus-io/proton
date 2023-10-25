@@ -1,9 +1,16 @@
-#include "GlobalAggregatingTransform.h"
+#include <Processors/Transforms/Streaming/GlobalAggregatingTransform.h>
 
+#include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/convertToChunk.h>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int NOT_IMPLEMENTED;
+extern const int UNSUPPORTED;
+}
+
 namespace Streaming
 {
 GlobalAggregatingTransform::GlobalAggregatingTransform(Block header, AggregatingTransformParamsPtr params_)
@@ -29,6 +36,42 @@ GlobalAggregatingTransform::GlobalAggregatingTransform(
         ProcessorID::GlobalAggregatingTransformID)
 {
     assert(params->params.group_by == Aggregator::Params::GroupBy::OTHER);
+
+    if (unlikely(params->params.overflow_row))
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Overflow row processing is not implemented in global aggregation");
+
+    /// Need extra retracted data
+    if (params->emit_changelog)
+    {
+        if (params->emit_version)
+            throw Exception(ErrorCodes::UNSUPPORTED, "'emit_version()' is not supported in global aggregation emit changelog");
+
+        ManyRetractedDataVariants retracted_data(many_data->variants.size());
+        for (auto & elem : retracted_data)
+            elem = std::make_shared<AggregatedDataVariants>();
+
+        many_data->setField(
+            {std::move(retracted_data),
+             /// Field serializer
+             [this](const std::any & field, WriteBuffer & wb) {
+                 const auto & data = std::any_cast<const ManyRetractedDataVariants &>(field);
+                 DB::writeIntBinary(data.size(), wb);
+                 for (const auto & elem : data)
+                     params->aggregator.checkpoint(*elem, wb);
+             },
+             /// Field deserializer
+             [this](std::any & field, ReadBuffer & rb) {
+                 auto & data = std::any_cast<ManyRetractedDataVariants &>(field);
+                 size_t num;
+                 DB::readIntBinary(num, rb);
+                 data.resize(num);
+                 for (auto & elem : data)
+                 {
+                     elem = std::make_shared<AggregatedDataVariants>();
+                     params->aggregator.recover(*elem, rb);
+                 }
+             }});
+    }
 }
 
 bool GlobalAggregatingTransform::needFinalization(Int64 min_watermark) const
@@ -55,6 +98,24 @@ bool GlobalAggregatingTransform::prepareFinalization(Int64 min_watermark)
     return false;
 }
 
+std::pair<bool, bool> GlobalAggregatingTransform::executeOrMergeColumns(Chunk & chunk, size_t num_rows)
+{
+    if (params->emit_changelog)
+    {
+        assert(!params->only_merge);
+
+        auto & retracted_variants = many_data->getField<ManyRetractedDataVariants>()[current_variant];
+        auto & aggregated_variants = many_data->variants[current_variant];
+
+        /// Blocking finalization during execution on current variant
+        std::lock_guard lock(variants_mutex);
+        return params->aggregator.executeAndRetractOnBlock(
+            chunk.detachColumns(), 0, num_rows, *aggregated_variants, *retracted_variants, key_columns, aggregate_columns, no_more_keys);
+    }
+    else
+        return AggregatingTransform::executeOrMergeColumns(chunk, num_rows);
+}
+
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
 void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
@@ -64,79 +125,47 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
         many_data->finalized_watermark.store(chunk_ctx->getWatermark(), std::memory_order_relaxed);
     });
 
-    /// FIXME spill to disk, overflow_row etc cases
-    auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(many_data->variants);
-    if (prepared_data_ptr->empty())
-        return;
-
-    if (initialize(prepared_data_ptr, chunk_ctx))
-        /// Processed
-        return;
-
-    if (prepared_data_ptr->at(0)->isTwoLevel())
-        convertTwoLevel(prepared_data_ptr, chunk_ctx);
-    else
-        convertSingleLevel(prepared_data_ptr, chunk_ctx);
-}
-
-/// Logic borrowed from ConvertingAggregatedToChunksTransform::initialize
-bool GlobalAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx)
-{
-    AggregatedDataVariantsPtr & first = data->at(0);
-
-    /// At least we need one arena in first data item per thread. FIXME, we are using 1 thread to do state merge
-    //    Arenas & first_pool = first->aggregates_pools;
-    //    for (size_t j = first_pool.size(); j < max_threads; j++)
-    //        first_pool.emplace_back(std::make_shared<Arena>());
-
-    if (first->type == AggregatedDataVariants::Type::without_key || params->params.overflow_row)
-    {
-        params->aggregator.mergeWithoutKeyDataImpl(*data);
-        auto block = params->aggregator.prepareBlockAndFillWithoutKey(
-            *first, params->final, first->type != AggregatedDataVariants::Type::without_key, ConvertAction::STREAMING_EMIT);
-
-        if (params->emit_version)
-            emitVersion(block);
-
-        setCurrentChunk(convertToChunk(block), chunk_ctx);
-        return true;
-    }
-
-    return false;
-}
-
-/// Logic borrowed from ConvertingAggregatedToChunksTransform::mergeSingleLevel
-void GlobalAggregatingTransform::convertSingleLevel(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx)
-{
-    AggregatedDataVariantsPtr & first = data->at(0);
-
-    /// Without key aggregation is already handled in `::initialize(...)`
-    assert(first->type != AggregatedDataVariants::Type::without_key);
-
-#define M(NAME) \
-    else if (first->type == AggregatedDataVariants::Type::NAME) \
-        params->aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(*data, ConvertAction::STREAMING_EMIT);
-    if (false)
-    {
-    } // NOLINT
-    APPLY_FOR_VARIANTS_SINGLE_LEVEL_STREAMING(M)
-#undef M
-    else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
-
-    auto block = params->aggregator.prepareBlockAndFillSingleLevel(*first, params->final, ConvertAction::STREAMING_EMIT);
-
-    if (params->emit_version)
-        emitVersion(block);
-
-    setCurrentChunk(convertToChunk(block), chunk_ctx);
-}
-
-void GlobalAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx)
-{
-    /// FIXME
-    (void)chunk_ctx;
-    if (data)
+    auto first = many_data->variants.at(0);
+    if (unlikely(first->isTwoLevel()))
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Two level merge is not implemented in global aggregation");
+
+    if (first->type == AggregatedDataVariants::Type::without_key)
+    {
+        /// Without key
+        if (params->emit_changelog)
+        {
+            auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertWithoutKeyToChangelog(
+                many_data->variants, many_data->getField<ManyRetractedDataVariants>(), *params);
+
+                setCurrentChunk(std::move(chunk), chunk_ctx, std::move(retracted_chunk));
+        }
+        else
+        {
+            auto chunk = AggregatingHelper::AggregatingHelper::mergeAndConvertWithoutKey(many_data->variants, *params);
+            if (params->emit_version && params->final)
+                emitVersion(chunk);
+
+            setCurrentChunk(std::move(chunk), chunk_ctx);
+        }
+    }
+    else
+    {
+        /// Single level
+        if (params->emit_changelog)
+        {
+            auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertSingleLevelToChangelog(
+                many_data->variants, many_data->getField<ManyRetractedDataVariants>(), *params);
+            setCurrentChunk(std::move(chunk), chunk_ctx, std::move(retracted_chunk));
+        }
+        else
+        {
+            auto chunk = AggregatingHelper::mergeAndConvertSingleLevel(many_data->variants, *params);
+            if (params->emit_version && params->final)
+                emitVersion(chunk);
+
+            setCurrentChunk(std::move(chunk), chunk_ctx);
+        }
+    }
 }
 
 }

@@ -203,9 +203,9 @@ std::pair<bool, bool> AggregatingTransform::executeOrMergeColumns(Chunk & chunk,
     }
 }
 
-void AggregatingTransform::emitVersion(Block & block)
+void AggregatingTransform::emitVersion(Chunk & chunk)
 {
-    size_t rows = block.rows();
+    size_t rows = chunk.rows();
     if (params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
     {
         /// For UDA with own emit strategy, possibly a block can trigger multiple emits, each emit cause version+1
@@ -214,22 +214,22 @@ void AggregatingTransform::emitVersion(Block & block)
         col->reserve(rows);
         for (size_t i = 0; i < rows; i++)
             col->insert(many_data->version++);
-        block.insert({std::move(col), params->version_type, ProtonConsts::RESERVED_EMIT_VERSION});
+        chunk.addColumn(std::move(col));
     }
     else
     {
         Int64 version = many_data->version++;
-        block.insert(
-            {params->version_type->createColumnConst(rows, version)->convertToFullColumnIfConst(),
-             params->version_type,
-             ProtonConsts::RESERVED_EMIT_VERSION});
+        chunk.addColumn(params->version_type->createColumnConst(rows, version)->convertToFullColumnIfConst());
     }
 }
 
-void AggregatingTransform::setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx)
+void AggregatingTransform::setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx, Chunk retracted_chunk)
 {
     if (has_input)
         throw Exception("Current chunk was already set.", ErrorCodes::LOGICAL_ERROR);
+
+    if (!chunk)
+        return;
 
     has_input = true;
     current_chunk_aggregated = std::move(chunk);
@@ -244,11 +244,25 @@ void AggregatingTransform::setCurrentChunk(Chunk chunk, const ChunkContextPtr & 
 
         current_chunk_aggregated.setChunkContext(std::move(chunk_ctx));
     }
+
+    if (retracted_chunk.rows())
+    {
+        current_chunk_retracted = std::move(retracted_chunk);
+        current_chunk_retracted.getOrCreateChunkContext()->setRetractedDataFlag();
+    }
 }
 
 IProcessor::Status AggregatingTransform::preparePushToOutput()
 {
     auto & output = outputs.front();
+
+    /// At first, push retracted data, then push aggregated data
+    if (current_chunk_retracted)
+    {
+        output.push(std::move(current_chunk_retracted));
+        return Status::PortFull;
+    }
+
     output.push(std::move(current_chunk_aggregated));
     has_input = false;
 

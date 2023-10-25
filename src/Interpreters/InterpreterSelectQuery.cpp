@@ -173,6 +173,20 @@ std::vector<size_t> keyPositionsForSubstreams(const Block & header, const Select
         substream_key_positions.emplace_back(header.getPositionByName(key));
     return substream_key_positions;
 }
+
+/// Requires: 1) no window function 2) has aggregation
+bool hasGlobalAggregationInQuery(const ASTPtr & query, const ASTSelectQuery & select_query, StoragePtr storage)
+{
+    if (storage)
+    {
+        if (auto * proxy = storage->as<Streaming::ProxyStream>(); proxy && proxy->getStreamingWindowFunctionDescription())
+            return false;
+    }
+
+    GetAggregatesVisitor::Data data;
+    GetAggregatesVisitor(data).visit(query);
+    return !data.aggregates.empty() || select_query.groupBy() != nullptr;
+}
 }
 /// proton: ends.
 
@@ -559,6 +573,30 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
         if (isStreaming() && (query_info.trackingChanges() || data_stream_semantic_pair.isChangelogOutput()))
         {
+            /// A speical case: global aggr over global aggr, for example:
+            /// `select count() from (select count() from stream) emit changelog`
+            /// The outer global aggr needs emit changelog, we shall force the nested global aggr emit changelog.
+            /// Since the outer global aggr does not retain state (unless nested one emits aggregated changes)
+            /// the retraction of outer global aggr will not work correctly
+            if (tables.size() == 1 && data_stream_semantic_pair.isChangelogOutput()
+                && hasGlobalAggregationInQuery(query_ptr, getSelectQuery(), storage))
+            {
+                bool force_single_subquery_input_to_emit_changelog = false;
+                if (interpreter_subquery && interpreter_subquery->hasGlobalAggregation())
+                    force_single_subquery_input_to_emit_changelog = true;
+                else if (storage)
+                {
+                    auto * proxy = storage->as<Streaming::ProxyStream>();
+                    force_single_subquery_input_to_emit_changelog = proxy && proxy->hasGlobalAggregation();
+                }
+
+                if (force_single_subquery_input_to_emit_changelog)
+                {
+                    query_info.left_input_tracking_changes = true;
+                    data_stream_semantic_pair.effective_input_data_stream_semantic = Streaming::DataStreamSemantic::Changelog;
+                }
+            }
+
             /// Rewrite select query to add back _tp_delta if it is not present
             Streaming::ChangelogQueryVisitorMatcher data(
                 data_stream_semantic_pair,
@@ -625,6 +663,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
         TreeRewriterResult tree_rewriter_result(source_header.getNamesAndTypesList(), storage, storage_snapshot);
         tree_rewriter_result.streaming = isStreaming();
+        tree_rewriter_result.emit_changelog = data_stream_semantic_pair.isChangelogOutput();
 
         syntax_analyzer_result = TreeRewriter(context).analyzeSelect(
             query_ptr,
@@ -3140,6 +3179,13 @@ void InterpreterSelectQuery::executeStreamingAggregation(
 
     const Settings & settings = context->getSettingsRef();
 
+    /// TODO: support more overflow mode
+    if (unlikely(settings.group_by_overflow_mode != OverflowMode::THROW))
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "Streaming aggregatation group by overflow mode '{}' is not implemented",
+            magic_enum::enum_name(settings.group_by_overflow_mode.value));
+
     Streaming::Aggregator::Params params(
         header_before_aggregation,
         keys,
@@ -3172,11 +3218,11 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         : static_cast<size_t>(settings.max_threads);
 
     if (query_info.hasPartitionByKeys())
-        query_plan.addStep(
-            std::make_unique<Streaming::AggregatingStepWithSubstream>(query_plan.getCurrentDataStream(), params, final, emit_version));
+        query_plan.addStep(std::make_unique<Streaming::AggregatingStepWithSubstream>(
+            query_plan.getCurrentDataStream(), std::move(params), final, emit_version, data_stream_semantic_pair.isChangelogOutput()));
     else
         query_plan.addStep(std::make_unique<Streaming::AggregatingStep>(
-            query_plan.getCurrentDataStream(), params, final, merge_threads, temporary_data_merge_threads, emit_version));
+            query_plan.getCurrentDataStream(), std::move(params), final, merge_threads, temporary_data_merge_threads, emit_version, data_stream_semantic_pair.isChangelogOutput()));
 }
 
 /// Resolve input / output data stream semantic.
@@ -3283,6 +3329,9 @@ bool InterpreterSelectQuery::shouldKeepState() const
 
     if (hasGlobalAggregation())
     {
+        if (data_stream_semantic_pair.isChangelogInput())
+            return true;
+
         if (interpreter_subquery && interpreter_subquery->hasGlobalAggregation())
             return false;
 
@@ -3312,6 +3361,11 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
                 if (proxy->hasGlobalAggregation())
                     throw Exception("Streaming query doesn't support window func over a global aggregation", ErrorCodes::NOT_IMPLEMENTED);
         }
+    }
+    else
+    {
+        if (query_info.force_emit_changelog)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Emit changelog is only supported in streaming processing query");
     }
 
     if (hasStreamingWindowFunc())
