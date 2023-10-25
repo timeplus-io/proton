@@ -100,6 +100,7 @@ def main():
     else:
         print("::notice ::Can run")
         post_commit_status(gh, pr_info.sha, "Labels check", description, labels_state, pr_info.pr_html_url)
+        sys.exit(0)  # make sure to exit with code 0 to indicate success
 
 if __name__ == '__main__':
     main()
