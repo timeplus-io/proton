@@ -10,8 +10,7 @@ struct ExternalStreamSettings;
 class StorageExternalStreamImpl;
 
 /// StorageExternalStream acts like a routing storage engine which proxy the requests to the underlying specific
-/// external streaming storage like Kafka, Redpanda etc. This type of stream doesn't have any backing storage in Proton.
-/// So they can service query only (ingest to this type of storage engine ends up with error)
+/// external streaming storage like Kafka, Redpanda etc.
 class StorageExternalStream final : public shared_ptr_helper<StorageExternalStream>, public IStorage, public WithContext
 {
     friend struct shared_ptr_helper<StorageExternalStream>;
@@ -22,6 +21,7 @@ public:
     void startup() override;
     void shutdown() override;
     bool supportsSubcolumns() const override;
+    bool squashInsert() const noexcept override { return false; }
     NamesAndTypesList getVirtuals() const override;
 
     Pipe read(

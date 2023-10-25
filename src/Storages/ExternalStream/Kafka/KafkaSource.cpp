@@ -22,6 +22,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
+extern const int INVALID_SETTING_VALUE;
 extern const int LOGICAL_ERROR;
 extern const int OK;
 extern const int RECOVER_CHECKPOINT_FAILED;
@@ -48,8 +49,6 @@ KafkaSource::KafkaSource(
     , virtual_col_types(header.columns(), nullptr)
     , ckpt_data(consume_ctx)
 {
-    is_streaming = true;
-
     calculateColumnPositions();
     initConsumer(kafka);
     initFormatExecutor(kafka);
@@ -99,7 +98,7 @@ void KafkaSource::readAndProcess()
     current_batch.clear();
     current_batch.reserve(header.columns());
 
-    auto res = consumer->consume(&KafkaSource::parseMessage, this, record_consume_batch_count, record_consume_timeout, consume_ctx);
+    auto res = consumer->consume(&KafkaSource::parseMessage, this, record_consume_batch_count, record_consume_timeout_ms, consume_ctx);
     if (res != ErrorCodes::OK)
         LOG_ERROR(log, "Failed to consume streaming, topic={} shard={} err={}", consume_ctx.topic, consume_ctx.partition, res);
 
@@ -245,11 +244,13 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
 
 void KafkaSource::initConsumer(const Kafka * kafka)
 {
-    if (query_context->getSettingsRef().record_consume_batch_count != 0)
-        record_consume_batch_count = static_cast<uint32_t>(query_context->getSettingsRef().record_consume_batch_count.value);
+    const auto & settings_ref = query_context->getSettingsRef();
 
-    if (query_context->getSettingsRef().record_consume_timeout != 0)
-        record_consume_timeout = static_cast<int32_t>(query_context->getSettingsRef().record_consume_timeout.value);
+    if (settings_ref.record_consume_batch_count != 0)
+        record_consume_batch_count = static_cast<uint32_t>(settings_ref.record_consume_batch_count.value);
+
+    if (settings_ref.record_consume_timeout_ms != 0)
+        record_consume_timeout_ms = static_cast<int32_t>(settings_ref.record_consume_timeout_ms.value);
 
     if (consume_ctx.offset == -1)
         consume_ctx.auto_offset_reset = "latest";
@@ -259,7 +260,7 @@ void KafkaSource::initConsumer(const Kafka * kafka)
     consume_ctx.enforce_offset = true;
     klog::KafkaWALAuth auth
         = {.security_protocol = kafka->securityProtocol(), .username = kafka->username(), .password = kafka->password()};
-    consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(kafka->brokers(), auth, record_consume_timeout);
+    consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(kafka->brokers(), auth, record_consume_timeout_ms);
     consumer->initTopicHandle(consume_ctx);
 }
 

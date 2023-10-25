@@ -150,6 +150,10 @@ void TranslateQualifiedNamesMatcher::visit(ASTIdentifier & identifier, ASTPtr &,
             const auto & table = data.tables[table_pos].table;
             if (table_pos && (data.hasColumn(short_name) || !isValidIdentifierBegin(short_name.at(0))))
                 IdentifierSemantic::setColumnLongName(identifier, table);
+            /// proton: starts. Supports nested column name such as `t2.raw.id` when the joined table `t2` have columns `raw`, `raw.id`                
+            else if (table_pos && data.hasColumn(IdentifierSemantic::extractNestedName(identifier, table)))
+                IdentifierSemantic::setColumnLongNestedName(identifier, table);
+            /// proton: ends.   
             else
                 IdentifierSemantic::setColumnShortName(identifier, table);
         }

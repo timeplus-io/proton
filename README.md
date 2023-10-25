@@ -3,28 +3,22 @@
   />
 </p>
 <p align="center">
-  <a href="https://timeplus.com/slack">
-    <img src="https://img.shields.io/badge/Join%20Our%20Community-Slack-blue" alt="Slack" />
-  </a>
-  <a href="https://twitter.com/timeplusdata">
-    <img src="https://img.shields.io/twitter/follow/timeplusdata?style=flat&label=%40timeplusdata&logo=twitter&color=0bf&logoColor=fff" alt="Twitter" />
-  </a>
-  <a href="https://github.com/timeplus-io/proton/blob/develop/LICENSE">
-    <img src="https://img.shields.io/github/license/timeplus-io/proton?label=license&logo=github&color=f80&logoColor=fff" alt="License" />
-  </a>
-  <a href="https://github.com/timeplus-io/proton/actions/workflows/nightly_test.yml">
-    <img src="https://github.com/timeplus-io/proton/actions/workflows/nightly_test.yml/badge.svg?branch=develop" />
-  </a>
+  <a href="https://github.com/timeplus-io/proton/blob/develop/LICENSE"><img src="https://img.shields.io/github/license/timeplus-io/proton?label=license&logo=github&color=blue" alt="License" /></a>
+  <a href="https://github.com/timeplus-io/proton/"><img src="https://img.shields.io/github/stars/timeplus-io/proton?logo=github" /></a>
+  <a href="https://timeplus.com/slack"><img src="https://img.shields.io/badge/Join%20Slack-blue?logo=slack" alt="Slack" /></a>
+  <a href="https://linkedin.com/company/timeplusinc"><img src="https://img.shields.io/badge/timeplusinc-0077B5?style=social&logo=linkedin" alt="follow on LinkedIn"></a>
+  <a href="https://twitter.com/intent/follow?screen_name=timeplusdata"><img src="https://img.shields.io/twitter/follow/timeplusdata?style=social&label=%40timeplusdata&logo=twitter" alt="Twitter" /></a>
 </p>
+
 
 <p align="center">
   <a href="#introduction"><strong>Introduction</strong></a> ·
-  <a href="#get-started"><strong>Get started</strong></a> ·
-  <a href="#get-more-with-timeplus"><strong>Timeplus</strong></a> ·
+  <a href="#architecture"><strong>Architecture</strong></a> ·
+  <a href="#get-started"><strong>Get Started</strong></a> ·
+  <a href="#more-examples"><strong>More Examples</strong></a> ·
   <a href="#documentation"><strong>Documentation</strong></a> ·
   <a href="#contributing"><strong>Contributing</strong></a> ·
-  <a href="#need-help"><strong>Need help?</strong></a> ·
-  <a href="#licensing"><strong>Licensing</strong></a>
+  <a href="#need-help"><strong>Need help?</strong></a>
 </p>
 
 ## Introduction
@@ -52,6 +46,10 @@ Plus built-in support for powerful streaming and analytical functionality:
 | <b>[Data revision processing (changelog)](https://docs.timeplus.com/changelog-stream)</b> | Create and manage non-append streams with primary keys and change data capture (CDC) semantics. |
 | <b>[Federated streaming queries](https://docs.timeplus.com/external-stream)</b> | Query streaming data in external systems (e.g. Kafka) without duplicating them. |
 | <b>[Materialized views](https://docs.timeplus.com/view#m_view)</b> | Create long-running and internally-stored queries.           |
+
+## Architecture
+
+![Architecture](design/proton-high-level-arch.svg)
 
 See our [architecture](https://docs.timeplus.com/proton-architecture) doc for technical details and the [FAQ](https://docs.timeplus.com/proton-faq) for more information on the various editions of Proton, how it's related to ClickHouse, and why we chose Apache License 2.0.
 
@@ -94,7 +92,7 @@ You should see data like the following:
 └─────────┴─────────┴──────────────────┴──────────────────┘
 ```
 
-### What's next?
+### More Examples
 
 Now that you're running Proton and have created your first stream, query, and view, you can explore [reading and writing data from Apache Kafka](https://docs.timeplus.com/proton-kafka#tutorial) with External Streams, or view the [Proton documentation](https://docs.timeplus.com/proton) to explore additional capabilities.
 

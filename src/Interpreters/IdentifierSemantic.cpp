@@ -255,6 +255,36 @@ void IdentifierSemantic::setColumnLongName(ASTIdentifier & identifier, const Dat
     }
 }
 
+/// proton: starts.
+void IdentifierSemantic::setColumnLongNestedName(ASTIdentifier & identifier, const DatabaseAndTableWithAlias & db_and_table)
+{
+    String prefix = db_and_table.getQualifiedNamePrefix(false);
+    if (!prefix.empty())
+    {
+        auto match = IdentifierSemantic::canReferColumnToTable(identifier, db_and_table);
+        size_t to_strip = 0;
+        switch (match)
+        {
+            case IdentifierSemantic::ColumnMatch::TableName:
+            case IdentifierSemantic::ColumnMatch::AliasedTableName:
+            case IdentifierSemantic::ColumnMatch::TableAlias:
+                to_strip = 1;
+                break;
+            case IdentifierSemantic::ColumnMatch::DBAndTable:
+                to_strip = 2;
+                break;
+            default:
+                break;
+        }
+
+        identifier.name_parts.erase(identifier.name_parts.begin(), identifier.name_parts.begin() + to_strip);
+        identifier.name_parts.insert(identifier.name_parts.begin(), prefix);
+        identifier.resetFullName();
+        identifier.semantic->table = std::move(prefix);
+    }
+}
+/// proton: ends.
+
 std::optional<size_t> IdentifierSemantic::getIdentMembership(const ASTIdentifier & ident, const std::vector<TableWithColumnNamesAndTypes> & tables)
 {
     std::optional<size_t> table_pos = IdentifierSemantic::getMembership(ident);

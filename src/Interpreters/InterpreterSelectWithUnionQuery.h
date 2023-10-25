@@ -55,7 +55,6 @@ public:
     bool hasStreamingWindowFunc() const override;
     Streaming::DataStreamSemanticEx getDataStreamSemantic() const override;
 
-    ColumnsDescriptionPtr getExtendedObjects() const override;
     std::set<String> getGroupByColumns() const override;
     /// proton: ends
 
