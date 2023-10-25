@@ -4,6 +4,11 @@
 
 #include <ctime>
 
+#ifdef __MACH__
+#include <mach/clock.h>
+#include <mach/mach.h>
+#endif
+
 namespace DB
 {
 namespace ErrorCodes
@@ -16,8 +21,20 @@ inline Field nowSubsecond(UInt32 scale)
     static constexpr Int32 fractional_scale = 9;
 
     timespec spec{};
+
+#if defined(__MACH__)
+	clock_serv_t cs;
+	mach_timespec_t mts;
+
+	host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cs);
+	clock_get_time(cs, &mts);
+	mach_port_deallocate(mach_task_self(), cs);
+    spec.tv_sec = mts.tv_sec;
+    spec.tv_nsec = mts.tv_nsec;
+#else
     if (clock_gettime(CLOCK_REALTIME, &spec))
         throwFromErrno("Cannot clock_gettime.", ErrorCodes::CANNOT_CLOCK_GETTIME);
+#endif
 
     DecimalUtils::DecimalComponents<DateTime64> components{spec.tv_sec, spec.tv_nsec};
 

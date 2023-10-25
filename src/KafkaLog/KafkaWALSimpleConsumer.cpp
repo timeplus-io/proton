@@ -11,10 +11,10 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int OK;
-    extern const int RESOURCE_NOT_INITED;
-    extern const int RESOURCE_NOT_FOUND;
-    extern const int DWAL_FATAL_ERROR;
+extern const int OK;
+extern const int RESOURCE_NOT_INITED;
+extern const int RESOURCE_NOT_FOUND;
+extern const int DWAL_FATAL_ERROR;
 }
 }
 
@@ -72,22 +72,22 @@ void KafkaWALSimpleConsumer::initHandle()
     ///     3.2) In corruption cases (application offsets corruption), use offsets in borkers
     /// https://github.com/edenhill/librdkafka/wiki/Consumer-offset-management
     std::vector<std::pair<String, String>> consumer_params = {
-        std::make_pair("bootstrap.servers", settings->brokers.c_str()),
-        std::make_pair("group.id", settings->group_id),
+        {"bootstrap.servers", settings->brokers.c_str()},
+        {"group.id", settings->group_id},
         /// Enable auto offset commit
-        std::make_pair("enable.auto.commit", "true"),
-        std::make_pair("auto.commit.interval.ms", std::to_string(settings->auto_commit_interval_ms)),
-        std::make_pair("fetch.message.max.bytes", std::to_string(settings->fetch_message_max_bytes)),
-        std::make_pair("fetch.wait.max.ms", std::to_string(settings->fetch_wait_max_ms)),
+        {"enable.auto.commit", "true"},
+        {"auto.commit.interval.ms", std::to_string(settings->auto_commit_interval_ms)},
+        {"fetch.message.max.bytes", std::to_string(settings->fetch_message_max_bytes)},
+        {"fetch.wait.max.ms", std::to_string(settings->fetch_wait_max_ms)},
         /// Disable librdkafka committing offset prior handling messages to applications
-        std::make_pair("enable.auto.offset.store", "false"),
+        {"enable.auto.offset.store", "false"},
         /// By default offset.store.method is broker. Enabling it gives a warning message
         /// https://github.com/edenhill/librdkafka/pull/3035
-        /// std::make_pair("offset.store.method", "broker"),
-        std::make_pair("enable.partition.eof", "false"),
-        std::make_pair("queued.min.messages", std::to_string(settings->queued_min_messages)),
-        std::make_pair("queued.max.messages.kbytes", std::to_string(settings->queued_max_messages_kbytes)),
-        std::make_pair("security.protocol", settings->auth.security_protocol.c_str()),
+        /// {"offset.store.method", "broker"},
+        {"enable.partition.eof", "false"},
+        {"queued.min.messages", std::to_string(settings->queued_min_messages)},
+        {"queued.max.messages.kbytes", std::to_string(settings->queued_max_messages_kbytes)},
+        {"security.protocol", settings->auth.security_protocol.c_str()},
     };
 
     if (!settings->debug.empty())
@@ -142,10 +142,10 @@ void KafkaWALSimpleConsumer::initTopicHandle(KafkaWALContext & ctx) const
 
     KConfParams topic_params = {
         /// enable auto offset commit
-        std::make_pair("enable.auto.commit", "true"), /// LEGACY topic settings
-        std::make_pair("auto.commit.interval.ms", std::to_string(settings->auto_commit_interval_ms)), /// LEGACY topic settings
-        std::make_pair("auto.offset.reset", ctx.auto_offset_reset),
-        std::make_pair("consume.callback.max.messages", std::to_string(ctx.consume_callback_max_messages)),
+        {"enable.auto.commit", "true"}, /// LEGACY topic settings
+        {"auto.commit.interval.ms", std::to_string(settings->auto_commit_interval_ms)}, /// LEGACY topic settings
+        {"auto.offset.reset", ctx.auto_offset_reset},
+        {"consume.callback.max.messages", std::to_string(ctx.consume_callback_max_messages)},
     };
 
     ctx.topic_handle = initRdKafkaTopicHandle(ctx.topic, topic_params, consumer_handle.get(), stats.get());
@@ -530,8 +530,9 @@ DescribeResult KafkaWALSimpleConsumer::describe(const String & name) const
     return describeTopic(name, consumer_handle.get(), log);
 }
 
-std::vector<int64_t> KafkaWALSimpleConsumer::offsetsForTimestamps(const std::string & topic, const std::vector<int64_t> & timestamps, int32_t timeout_ms) const
+std::vector<int64_t> KafkaWALSimpleConsumer::offsetsForTimestamps(
+    const std::string & topic, const std::vector<PartitionTimestamp> & partition_timestamps, int32_t timeout_ms) const
 {
-    return getOffsetsForTimestamps(consumer_handle.get(), topic, timestamps, timeout_ms);
+    return getOffsetsForTimestamps(consumer_handle.get(), topic, partition_timestamps, timeout_ms);
 }
 }

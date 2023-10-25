@@ -2,10 +2,9 @@
 #include "KafkaWALStats.h"
 
 #include <base/ClockUtils.h>
-#include <Common/logger_useful.h>
 #include <Common/Exception.h>
 #include <Common/hex.h>
-#include <Common/parseIntStrict.h>
+#include <Common/logger_useful.h>
 
 #include <cstring>
 
@@ -14,18 +13,18 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int OK;
-    extern const int RESOURCE_NOT_FOUND;
-    extern const int RESOURCE_ALREADY_EXISTS;
-    extern const int UNKNOWN_EXCEPTION;
-    extern const int BAD_ARGUMENTS;
-    extern const int DWAL_FATAL_ERROR;
-    extern const int DWAL_RETRIABLE_ERROR;
-    extern const int INVALID_CONFIG_PARAMETER;
-    extern const int MSG_SIZE_TOO_LARGE;
-    extern const int INTERNAL_INGEST_BUFFER_FULL;
-    extern const int INVALID_LOGSTORE_REPLICATION_FACTOR;
-    extern const int TIMEOUT_EXCEEDED;
+extern const int OK;
+extern const int RESOURCE_NOT_FOUND;
+extern const int RESOURCE_ALREADY_EXISTS;
+extern const int UNKNOWN_EXCEPTION;
+extern const int BAD_ARGUMENTS;
+extern const int DWAL_FATAL_ERROR;
+extern const int DWAL_RETRIABLE_ERROR;
+extern const int INVALID_CONFIG_PARAMETER;
+extern const int MSG_SIZE_TOO_LARGE;
+extern const int INTERNAL_INGEST_BUFFER_FULL;
+extern const int INVALID_LOGSTORE_REPLICATION_FACTOR;
+extern const int TIMEOUT_EXCEEDED;
 }
 
 /// Allowed chars are ASCII alphanumerics, '.', '_' and '-'. '_' is used as escaped char in the form '_xx' where xx
@@ -232,42 +231,46 @@ DescribeResult describeTopic(const String & name, struct rd_kafka_s * rk, Poco::
     return {.err = DB::ErrorCodes::RESOURCE_NOT_FOUND};
 }
 
-std::vector<int64_t>
-getOffsetsForTimestamps(struct rd_kafka_s * rd_handle, const std::string & topic, const std::vector<int64_t> & timestamps, int32_t timeout_ms)
+std::vector<int64_t> getOffsetsForTimestamps(
+    struct rd_kafka_s * rd_handle,
+    const std::string & topic,
+    const std::vector<PartitionTimestamp> & partition_timestamps,
+    int32_t timeout_ms)
 {
-    int32_t partitions = static_cast<int32_t>(timestamps.size());
-
     assert(rd_handle);
 
     using RdKafkaTopicPartitionListPtr
         = std::unique_ptr<rd_kafka_topic_partition_list_t, decltype(rd_kafka_topic_partition_list_destroy) *>;
-    RdKafkaTopicPartitionListPtr offsets{rd_kafka_topic_partition_list_new(static_cast<int>(timestamps.size())), rd_kafka_topic_partition_list_destroy};
 
-    for (int32_t partition = 0; auto timestamp : timestamps)
+    RdKafkaTopicPartitionListPtr offsets{
+        rd_kafka_topic_partition_list_new(static_cast<int>(partition_timestamps.size())), rd_kafka_topic_partition_list_destroy};
+
+    for (size_t i = 0; const auto & partition_timestamp : partition_timestamps)
     {
-        memset(&offsets->elems[partition], 0, sizeof(offsets->elems[partition]));
+        memset(&offsets->elems[i], 0, sizeof(offsets->elems[i]));
 
         /// We will need duplicate the topic string since destroy function will free it
-        offsets->elems[partition].topic = strdup(topic.c_str());
-        offsets->elems[partition].partition = partition;
-        offsets->elems[partition].offset = timestamp;
-        ++partition;
+        offsets->elems[i].topic = strdup(topic.c_str());
+        offsets->elems[i].partition = partition_timestamp.partition;
+        offsets->elems[i].offset = partition_timestamp.timestamp;
+        ++i;
     }
 
-    offsets->cnt = partitions;
+    offsets->cnt = partition_timestamps.size();
 
     auto err = rd_kafka_offsets_for_times(rd_handle, offsets.get(), timeout_ms);
     if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
         throw DB::Exception("Failed to fetch offsets for timestamps", mapErrorCode(err));
 
-    std::vector<int64_t> results(partitions, 0);
+    std::vector<int64_t> results;
+    results.reserve(partition_timestamps.size());
 
-    for (int32_t i = 0; i < partitions; ++i)
+    for (size_t i = 0; i < partition_timestamps.size(); ++i)
     {
         if (offsets->elems[i].err != RD_KAFKA_RESP_ERR_NO_ERROR)
-            throw DB::Exception("Failed to fetch offsets for timestamps", mapErrorCode(err));
+            throw DB::Exception(mapErrorCode(err), "Failed to fetch offsets for timestamps on partition {}", offsets->elems[i].partition);
 
-        results[offsets->elems[i].partition] = offsets->elems[i].offset;
+        results.push_back(offsets->elems[i].offset);
     }
 
     return results;

@@ -235,19 +235,6 @@ ASTPtr StorageView::restoreViewName(ASTSelectQuery & select_query, const ASTPtr 
 }
 
 /// proton: starts.
-StorageSnapshotPtr StorageView::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const
-{
-    if (hasDynamicSubcolumns(metadata_snapshot->getColumns()))
-    {
-        auto object_columns
-            = InterpreterSelectWithUnionQuery(getInMemoryMetadataPtr()->getSelectQuery().inner_query, query_context, SelectQueryOptions().analyze())
-                .getExtendedObjects();
-        return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, *object_columns);
-    }
-    else
-        return std::make_shared<StorageSnapshot>(*this, metadata_snapshot);
-}
-
 void StorageView::startup()
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();

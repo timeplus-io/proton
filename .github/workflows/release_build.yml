@@ -11,6 +11,7 @@ jobs:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-042a37e33a285c22b
       submodules: 'recursive'
+      run_mode: 'start' # start ec2 on demand instance
       command: |
         cd $GITHUB_WORKSPACE
 
@@ -61,6 +62,7 @@ jobs:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ami-0f3dbc4cc9994fdee
       submodules: 'recursive'
+      run_mode: 'start' # start ec2 on demand instance
       command: |
         cd $GITHUB_WORKSPACE
 
