@@ -103,6 +103,7 @@
 #include <Processors/QueryPlan/Streaming/JoinStep.h>
 #include <Processors/QueryPlan/Streaming/LimitStep.h>
 #include <Processors/QueryPlan/Streaming/OffsetStep.h>
+#include <Processors/QueryPlan/Streaming/ReplayStreamStep.h>
 #include <Processors/QueryPlan/Streaming/ShufflingStep.h>
 #include <Processors/QueryPlan/Streaming/SortingStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
@@ -110,6 +111,7 @@
 #include <Processors/QueryPlan/Streaming/WindowStep.h>
 #include <Processors/Transforms/Streaming/WatermarkStamper.h>
 #include <Storages/Streaming/ProxyStream.h>
+#include <Storages/Streaming/StorageStream.h>
 #include <Storages/Streaming/storageUtil.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
@@ -2293,7 +2295,30 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         query_info.storage_limits = std::make_shared<StorageLimitsList>(storage_limits);
 
         query_info.settings_limit_offset_done = options.settings_limit_offset_done;
-        storage->read(query_plan, required_columns, storage_snapshot, query_info, context, processing_stage, max_block_size, max_streams);
+
+        /// need replay operation
+        if (settings.replay_speed > 0)
+        {
+            /// check storage, only support s
+            if ((storage->as<StorageStream>() || storage->as<Streaming::ProxyStream>())
+                && Streaming::isAppendStorage(storage->dataStreamSemantic()))
+            {
+                if (std::ranges::none_of(required_columns, [](const auto & name) { return name == ProtonConsts::RESERVED_APPEND_TIME; }))
+                    required_columns.emplace_back(ProtonConsts::RESERVED_APPEND_TIME);
+
+                storage->read(
+                    query_plan, required_columns, storage_snapshot, query_info, context, processing_stage, max_block_size, max_streams);
+                auto replay_step = std::make_unique<Streaming::ReplayStreamStep>(query_plan.getCurrentDataStream(), settings.replay_speed);
+                replay_step->setStepDescription("Replay Stream");
+                query_plan.addStep(std::move(replay_step));
+            }
+            else
+                throw Exception("Replay Stream is only support append-only stream", ErrorCodes::NOT_IMPLEMENTED);
+
+        }
+        else
+            storage->read(
+                query_plan, required_columns, storage_snapshot, query_info, context, processing_stage, max_block_size, max_streams);
 
         if (context->hasQueryContext() && !options.is_internal)
         {
