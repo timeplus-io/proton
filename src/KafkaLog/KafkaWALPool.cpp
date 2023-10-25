@@ -447,7 +447,7 @@ KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const Strin
         /// No auto commit
         ksettings->enable_auto_commit = false;
 
-        LOG_INFO(log, "Create new external Kafka consume with settings={}", ksettings->string());
+        LOG_INFO(log, "Create new external Kafka consume with settings={{{}}}", ksettings->string());
 
         auto consumer = std::make_shared<KafkaWALSimpleConsumer>(std::move(ksettings));
         consumer->startup();

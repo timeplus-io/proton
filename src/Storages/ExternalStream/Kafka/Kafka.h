@@ -44,8 +44,10 @@ public:
 private:
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
-    std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info) const;
-    void validate();
+    std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const;
+    void validate(const std::vector<int32_t> & shards_to_query = {});
+
+    static std::vector<int32_t> parseShards(const std::string & shards_setting);
 
 private:
     StorageID storage_id;
@@ -57,6 +59,7 @@ private:
     NamesAndTypesList virtual_column_names_and_types;
     klog::KConfParams kafka_properties;
 
-    Int32 shards = -1;
+    std::mutex shards_mutex;
+    int32_t shards = 0;
 };
 }

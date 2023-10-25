@@ -188,7 +188,8 @@ void SeekToInfo::replicateForShards(Int32 shards)
             "sequence number based seek_to='earliest', seek_to='1023,23045,689'. Users either specify a common timestamp or sequence "
             "number to "
             "seek to for all shards of a stream or specify a separate timestamp or sequence number separated by ',' to seek to for each "
-            "shard of a stream. It expected {} timestamps or sequence numbers, but only found {} was specified",
+            "shard of a stream (if the `shards` setting is used, it needs to match that value). It expected {} timestamps or sequence "
+            "numbers, but only found {} was specified",
             shards,
             seek_points.size());
 

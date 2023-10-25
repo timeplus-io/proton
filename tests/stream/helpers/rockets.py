@@ -2574,7 +2574,7 @@ class QueryClientExec(QueryClient):
         table_ddl_url = rest_setting.get("table_ddl_url")
         commands = []
         for proton_server_container_name in proton_server_container_name_list:
-            command = f'docker exec {proton_server_container_name} proton-client -u {user} --password {password} --query="{query}"'
+            command = f'docker exec {proton_server_container_name} proton-client --host 127.0.0.1 -u {user} --password {password} --query="{query}"'
             commands.append(command)
         logger.debug(f"commands = {commands}")
         try:

@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for proton
+about: Suggest an idea for Proton
 title: ''
 labels: feature
 assignees: ''
