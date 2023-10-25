@@ -104,6 +104,7 @@ void Suggest::load(ContextPtr context, const ConnectionParameters & connection_p
     {
         for (size_t retry = 0; retry < 10; ++retry)
         {
+            ThreadStatus thread_status;
             try
             {
                 auto connection = ConnectionType::createConnection(connection_parameters, context);
