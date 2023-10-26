@@ -77,7 +77,6 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
     is_cross_arm = compiler.endswith(ARM_SUFFIX)
     is_cross_ppc = compiler.endswith(PPC_SUFFIX)
     is_cross_freebsd = compiler.endswith(FREEBSD_SUFFIX)
-    is_cross_compile = is_cross_darwin or is_cross_darwin_arm or is_cross_arm or is_cross_freebsd or is_cross_ppc
 
     if is_cross_darwin:
         cc = compiler[:-len(DARWIN_SUFFIX)]
