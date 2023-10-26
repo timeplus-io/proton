@@ -233,7 +233,8 @@
 	url = https://github.com/ClickHouse/libhdfs3.git
 [submodule "contrib/muduo"]
 	path = contrib/muduo
-	url = https://github.com/timeplus-io/muduo.git
+	url = https://github.com/yokofly/muduo.git
+	branch = bugfix/fix-cross-compile-to-macOS
 [submodule "contrib/llvm-project"]
 	path = contrib/llvm-project
 	url = https://github.com/ClickHouse/llvm-project.git
