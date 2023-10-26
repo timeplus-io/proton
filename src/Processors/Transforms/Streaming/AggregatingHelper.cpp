@@ -63,12 +63,19 @@ ChunkPair AggregatingHelper::convertWithoutKeyToChangelog(
 
     auto retracted_chunk = convertToChunk(
         params.aggregator.prepareBlockAndFillWithoutKey(retracted_data, params.final, false, ConvertAction::RETRACTED_EMIT));
-    auto retracted_delta_col = ColumnInt8::create(retracted_chunk.rows(), Int8(-1));
-    retracted_chunk.addColumn(std::move(retracted_delta_col));
+    if (retracted_chunk)
+    {
+        auto retracted_delta_col = ColumnInt8::create(retracted_chunk.rows(), Int8(-1));
+        retracted_chunk.addColumn(std::move(retracted_delta_col));
+        retracted_chunk.getOrCreateChunkContext()->setRetractedDataFlag();
+    }
 
     auto chunk = convertToChunk(params.aggregator.prepareBlockAndFillWithoutKey(data, params.final, false, ConvertAction::STREAMING_EMIT));
-    auto delta_col = ColumnInt8::create(chunk.rows(), Int8(1));
-    chunk.addColumn(std::move(delta_col));
+    if (chunk)
+    {
+        auto delta_col = ColumnInt8::create(chunk.rows(), Int8(1));
+        chunk.addColumn(std::move(delta_col));
+    }
 
     return {std::move(retracted_chunk), std::move(chunk)};
 }
@@ -99,12 +106,19 @@ ChunkPair AggregatingHelper::convertSingleLevelToChangelog(
 
     auto retracted_chunk
         = convertToChunk(params.aggregator.prepareBlockAndFillSingleLevel(retracted_data, params.final, ConvertAction::RETRACTED_EMIT));
-    auto retracted_delta_col = ColumnInt8::create(retracted_chunk.rows(), Int8(-1));
-    retracted_chunk.addColumn(std::move(retracted_delta_col));
+    if (retracted_chunk)
+    {
+        auto retracted_delta_col = ColumnInt8::create(retracted_chunk.rows(), Int8(-1));
+        retracted_chunk.addColumn(std::move(retracted_delta_col));
+        retracted_chunk.getOrCreateChunkContext()->setRetractedDataFlag();
+    }
 
     auto chunk = convertToChunk(params.aggregator.prepareBlockAndFillSingleLevel(data, params.final, ConvertAction::STREAMING_EMIT));
-    auto delta_col = ColumnInt8::create(chunk.rows(), Int8(1));
-    chunk.addColumn(std::move(delta_col));
+    if (chunk)
+    {
+        auto delta_col = ColumnInt8::create(chunk.rows(), Int8(1));
+        chunk.addColumn(std::move(delta_col));
+    }
 
     return {std::move(retracted_chunk), std::move(chunk)};
 }

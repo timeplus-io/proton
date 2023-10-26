@@ -10,6 +10,52 @@ namespace DB
 class WriteBuffer;
 class ReadBuffer;
 
+
+template <typename Map, typename MappedSerializer>
+void serializeHashMap(const Map & map, MappedSerializer && mapped_serializer, WriteBuffer & wb)
+{
+    /// Serialization layout
+    /// [uint32(size)] [<key><mapped>] ...
+    DB::writeIntBinary<UInt32>(static_cast<UInt32>(map.size()), wb);
+    const_cast<Map &>(map).forEachValue([&](const auto & key, const auto & mapped) {
+        DB::writeBinary(key, wb);
+        mapped_serializer(mapped, wb);
+    });
+}
+
+/// For StringHashMap or TwoLevelStringHashMap, it requires StringRef key padded 8 keys or zero terminated.
+/// If the key is ColumnString, the `@template_param: requires_zero_terminated_string` is true
+template <bool requires_zero_terminated_string, typename Map, typename MappedDeserializer>
+void deserializeHashMap(Map & map, MappedDeserializer && mapped_deserializer, Arena & pool, ReadBuffer & rb)
+{
+    typename Map::key_type key;
+    typename Map::LookupResult lookup_result;
+    bool inserted;
+    UInt32 size;
+    DB::readIntBinary<UInt32>(size, rb);
+    for (size_t i = 0; i < size; ++i)
+    {
+        /* Key */
+        if constexpr (std::is_same_v<typename Map::key_type, StringRef>)
+        {
+            if constexpr (requires_zero_terminated_string)
+                key = DB::readStringBinaryWithZerotTerminatedInto(pool, rb);
+            else
+                key = DB::readStringBinaryInto(pool, rb);
+
+            map.emplace(SerializedKeyHolder{key, pool}, lookup_result, inserted);
+        }
+        else
+        {
+            DB::readBinary(key, rb);
+            map.emplace(key, lookup_result, inserted);
+        }
+        assert(inserted);
+        /* Mapped */
+        mapped_deserializer(lookup_result->getMapped(), pool, rb);
+    }
+}
+
 /// HashMapsTemplate is a taken from HashJoin class and make it standalone
 /// and could be shared among different components
 
@@ -111,13 +157,7 @@ struct HashMapsTemplate
 #define M(NAME) \
     case HashType::NAME: { \
         assert(NAME); \
-        using Map = std::decay_t<decltype(*NAME)>; \
-        Map & map = *NAME; \
-        DB::writeIntBinary(map.size(), wb); \
-        map.forEachValue([&](const auto & key, auto & mapped) { \
-            /* Key */ DB::writeBinary(key, wb); \
-            /* Mapped */ mapped_serializer(mapped, wb); \
-        }); \
+        serializeHashMap(*NAME, mapped_serializer, wb); \
         return; \
     }
             APPLY_FOR_HASH_KEY_VARIANTS(M)
@@ -135,31 +175,7 @@ struct HashMapsTemplate
 #define M(NAME) \
     case HashType::NAME: { \
         assert(NAME); \
-        using Map = std::decay_t<decltype(*NAME)>; \
-        Map & map = *NAME; \
-        typename Map::key_type key; \
-        typename Map::LookupResult lookup_result; \
-        bool inserted; \
-        size_t map_size; \
-        DB::readIntBinary(map_size, rb); \
-        for (size_t i = 0; i < map_size; ++i) \
-        { \
-            /* Key */ \
-            if constexpr (std::is_same_v<typename Map::key_type, StringRef>) \
-            { \
-                key = DB::readStringBinaryInto(pool, rb); \
-                map.emplace(SerializedKeyHolder{key, pool}, lookup_result, inserted); \
-            } \
-            else \
-            { \
-                DB::readBinary(key, rb); \
-                map.emplace(key, lookup_result, inserted); \
-            } \
-            assert(inserted); \
-            /* Mapped */ \
-            Mapped & mapped = lookup_result->getMapped(); \
-            mapped_deserializer(mapped, pool, rb); \
-        } \
+        deserializeHashMap<false>(*NAME, mapped_deserializer, pool, rb); \
         return; \
     }
             APPLY_FOR_HASH_KEY_VARIANTS(M)

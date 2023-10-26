@@ -1248,12 +1248,6 @@ public:
     void recoverStatesTwoLevel(AggregatedDataVariants & data_variants, BlocksList & blocks);
     template <typename Method>
     void doRecoverStates(Method & method, Arena * aggregates_pool, Block & block);
-
-private:
-    template <typename Table>
-    void serializeHashTable(const Table & table, WriteBuffer & wb) const;
-    template <typename Table>
-    void deserializeHashTable(Table & table, ReadBuffer & rb, Arena * arena) const;
     /// proton: ends
 };
 

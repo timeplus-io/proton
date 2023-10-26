@@ -153,6 +153,21 @@ inline StringRef readStringBinaryInto(Arena & arena, ReadBuffer & buf)
 }
 
 /// proton: starts.
+inline StringRef readStringBinaryWithZerotTerminatedInto(Arena & arena, ReadBuffer & buf)
+{
+    size_t size = 0;
+    readVarUInt(size, buf);
+
+    char * data = arena.alloc(size + 1);
+    buf.readStrict(data, size);
+
+    /// zero terminated
+    ++size;
+    data[size - 1] = 0;
+
+    return StringRef(data, size);
+}
+
 inline StringRef readStringBinaryInto(ArenaWithFreeLists & arena, ReadBuffer & buf)
 {
     size_t size = 0;

@@ -32,6 +32,7 @@
 #include <Formats/SimpleNativeReader.h>
 #include <Formats/SimpleNativeWriter.h>
 #include <Interpreters/CompiledAggregateFunctionsHolder.h>
+#include <Common/HashMapsTemplate.h>
 #include <Common/ProtonCommon.h>
 #include <Common/VersionRevision.h>
 #include <Common/logger_useful.h>
@@ -2444,7 +2445,10 @@ void NO_INLINE Aggregator::mergeSingleLevelDataImpl(
 
         /// `current` will not destroy the states of aggregate functions in the destructor
         if (clear_states)
+        {
             current.aggregator = nullptr;
+            current.invalidate();
+        }
     }
 }
 
@@ -3568,7 +3572,9 @@ void Aggregator::doCheckpoint(const AggregatedDataVariants & data_variants, Writ
     if (false)
     {
     } // NOLINT
-#define M(NAME, IS_TWO_LEVEL) else if (data_variants.type == AggregatedDataVariants::Type::NAME) serializeHashTable(data_variants.NAME->data, wb);
+#define M(NAME, IS_TWO_LEVEL) \
+    else if (data_variants.type == AggregatedDataVariants::Type::NAME) DB::serializeHashMap( \
+        data_variants.NAME->data, [this](const auto & mapped, WriteBuffer & wb_) { serializeAggregateStates(mapped, wb_); }, wb);
     APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
 #undef M
     else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -3610,52 +3616,21 @@ void Aggregator::doRecover(AggregatedDataVariants & data_variants, ReadBuffer & 
         data_variants.convertToTwoLevel();
 
     /// [aggr-func-state-in-hash-map]
-    if (data_variants.type == AggregatedDataVariants::Type::without_key)
+    if (false)
     {
     } // NOLINT
-#define M(NAME, IS_TWO_LEVEL) else if (data_variants.type == AggregatedDataVariants::Type::NAME) deserializeHashTable(data_variants.NAME->data, rb, data_variants.aggregates_pool);
+#define M(NAME, IS_TWO_LEVEL) \
+    else if (data_variants.type == AggregatedDataVariants::Type::NAME) { \
+        /* key_string use a StringHashMap (key_string_two_level use a TwoLevelStringHashMap), which requires zero terminated string key */ \
+        if (data_variants.type == AggregatedDataVariants::Type::key_string || data_variants.type == AggregatedDataVariants::Type::key_string_two_level) \
+            DB::deserializeHashMap<true>(data_variants.NAME->data, [this](auto & mapped, Arena & pool, ReadBuffer & rb_) { deserializeAggregateStates(mapped, rb_, &pool); }, *data_variants.aggregates_pool, rb); \
+        else \
+            DB::deserializeHashMap<false>(data_variants.NAME->data, [this](auto & mapped, Arena & pool, ReadBuffer & rb_) { deserializeAggregateStates(mapped, rb_, &pool); }, *data_variants.aggregates_pool, rb); \
+    }
+
     APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
 #undef M
     else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
-}
-
-template <typename Table>
-void Aggregator::serializeHashTable(const Table & table, WriteBuffer & wb) const
-{
-    /// Serialization layout
-    /// [uint32(size)] [key1-aggr_states1] ...
-    DB::writeIntBinary<UInt32>(static_cast<UInt32>(table.size()), wb);
-    const_cast<Table &>(table).forEachValue([&](const auto & key, const auto & mapped) {
-        DB::writeBinary(key, wb);
-        serializeAggregateStates(mapped, wb);
-    });
-}
-
-template <typename Table>
-void Aggregator::deserializeHashTable(Table & table, ReadBuffer & rb, Arena * arena) const
-{
-    typename Table::key_type key;
-    typename Table::LookupResult lookup_result;
-    bool inserted;
-    UInt32 size;
-    DB::readIntBinary<UInt32>(size, rb);
-    for (size_t i = 0; i < size; ++i)
-    {
-        /* Key */
-        if constexpr (std::is_same_v<typename Table::key_type, StringRef>)
-        {
-            key = DB::readStringBinaryInto(*arena, rb);
-            table.emplace(SerializedKeyHolder{key, *arena}, lookup_result, inserted);
-        }
-        else
-        {
-            DB::readBinary(key, rb);
-            table.emplace(key, lookup_result, inserted);
-        }
-        assert(inserted);
-        /* Mapped */
-        deserializeAggregateStates(lookup_result->getMapped(), rb, arena);
-    }
 }
 
 bool Aggregator::shouldClearStates(ConvertAction action, bool final_) const
@@ -4060,7 +4035,8 @@ void Aggregator::mergeRetractedGroupsImpl(
 
         assert(!no_more_keys);
 
-        Table & src_retracted_table = getDataVariant<Method>(*retracted_data[result_num]).data;
+        auto & current_retracted = *retracted_data[result_num];
+        Table & src_retracted_table = getDataVariant<Method>(current_retracted).data;
         Table & src_aggregated_table = getDataVariant<Method>(*aggregated_data[result_num]).data;
         dst_retracted_table.forEachValue([&](const auto & key, auto & mapped) {
             /// Merge retracted groups non-changed thread parts
@@ -4093,9 +4069,10 @@ void Aggregator::mergeRetractedGroupsImpl(
             }
         });
 
-        /// Clear and reset retracted data after finalization
+        /// Clear retracted data after finalization
         src_retracted_table.clearAndShrink();
-        retracted_data[result_num]->init(method_chosen);
+        destroyAllAggregateStates(current_retracted);
+        current_retracted.invalidate();
     }
 }
 
@@ -4106,14 +4083,6 @@ void Aggregator::mergeAggregateStates(AggregateDataPtr & dst, AggregateDataPtr &
 
     if (!dst)
     {
-        /// Optmized path
-        if (clear_states)
-        {
-            dst = src;
-            src = nullptr;
-            return;
-        }
-
         dst = arena->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
         createAggregateStates(dst);
     }
