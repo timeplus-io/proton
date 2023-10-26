@@ -512,6 +512,35 @@
           [1, "111", "222", 1]
         ]}
       ]
+    },
+    {
+      "id": 18,
+      "tags": ["changelog"],
+      "name": "#221",
+      "description": "Covering query changelog function over a view with changelog join",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query": "drop stream if exists test_left_stream_18"},
+            {"client":"python", "query_type": "table", "query": "drop stream if exists test_right_stream_18"},
+            {"client":"python", "query_type": "table", "exist": "test_left_stream_18", "exist_wait":2, "wait":1, "query": "CREATE stream test_left_stream_18(`storage_income` int64, `month` string)"},
+            {"client":"python", "query_type": "table", "exist": "test_right_stream_18", "exist_wait":2, "wait":1, "query": "CREATE stream test_right_stream_18(`compute_income` float64, `month` string)"},
+            {"client":"python", "query_type": "table", "depends_on_stream":"test_right_stream_18", "wait":1, "query": "CREATE VIEW test_v_stream_18 AS (WITH left AS (SELECT * FROM changelog(test_left_stream_18, month)), right AS (SELECT * FROM changelog(test_right_stream_18, month)) SELECT right.compute_income AS compute_income, left.storage_income AS storage_income, month FROM left INNER JOIN right ON left.month = right.month)"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_v_stream_18", "query_id":"9900", "wait":1, "query":"select * from changelog(test_v_stream_18, month)"},
+            {"client":"python", "query_type": "table", "depends_on":"9900", "wait":1, "query": "insert into test_left_stream_18(storage_income, month) values(100, 'Aug')(200, 'Oct')"},
+            {"client":"python", "query_type": "table", "query": "insert into test_right_stream_18(compute_income, month) values(1, 'Aug')(2, 'Oct')"},
+            {"client":"python", "query_type": "table", "kill":9900, "kill_wait":3, "query": "insert into test_right_stream_18(compute_income, month) values(100, 'Aug')"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":[
+          [1, 100, "Aug", 1],
+          [2, 200, "Oct", 1],
+          [1, 100, "Aug", -1],
+          [100, 100, "Aug", 1]
+        ]}
+      ]
     }
   ]
 }
