@@ -266,6 +266,10 @@ NamesAndTypesList ProxyStream::getVirtuals() const
 
 Names ProxyStream::getRequiredInputs(Names required_outputs) const
 {
+    /// Do nothing since the input shall track changes
+    if (internal_name == "changelog" && canTrackChangesFromInput(proxy_data_stream_semantic))
+        return required_outputs;
+
     auto required_inputs = std::move(required_outputs);
     if (table_func_desc)
     {

@@ -23,7 +23,7 @@ apt install git cmake ccache python3 ninja-build wget apt-transport-https apt-ut
 install llvm-16 compiler
 
 ```sh
-bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
+wget https://apt.llvm.org/llvm.sh
 chmod +x llvm.sh
 sudo ./llvm.sh 16
 ```
