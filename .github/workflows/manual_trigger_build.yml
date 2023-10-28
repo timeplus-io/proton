@@ -49,33 +49,24 @@ jobs:
         # compiling
         ./docker/packager/packager --package-type binary --docker-image-version clang-16 --sanitizer $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
-        echo "after compiling"
-        ls -lah $GITHUB_WORKSPACE/output
-        sleep 5m
-
         # clear compiling footprint
         rm -rf $GITHUB_WORKSPACE/ccache
         rm -rf build_docker
 
         # build unit test docker image
-        # cp $GITHUB_WORKSPACE/output/unit_tests_dbms $GITHUB_WORKSPACE/docker/test/proton_unit_test/
-        # cd $GITHUB_WORKSPACE/docker/test/proton_unit_test/
-        # docker build . -t ghcr.io/timeplus-io/proton-unit-test:$TAG
-        # docker push ghcr.io/timeplus-io/proton-unit-test:$TAG
-        
-        echo "going to print the output"
-        ls -lah $GITHUB_WORKSPACE/output
-        sleep 5m
+        cp $GITHUB_WORKSPACE/output/unit_tests_dbms $GITHUB_WORKSPACE/docker/test/proton_unit_test/
+        cd $GITHUB_WORKSPACE/docker/test/proton_unit_test/
+        docker build . -t ghcr.io/timeplus-io/proton-unit-test:$TAG
+        docker push ghcr.io/timeplus-io/proton-unit-test:$TAG
 
         docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
         cd $GITHUB_WORKSPACE/docker/server
 
         # build docker image
         docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t ghcr.io/timeplus-io/proton:$TAG
-        sleep 5m
 
         # push docker image
-        # docker push ghcr.io/timeplus-io/proton:$TAG
+        docker push ghcr.io/timeplus-io/proton:$TAG
         echo "docker push ghcr.io/timeplus-io/proton:$TAG"
     steps:
       - name: display command
