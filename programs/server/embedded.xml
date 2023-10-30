@@ -2,12 +2,12 @@
 <!-- Config that is used when server is run without config file. -->
 <proton>
     <logger>
-        <level>trace</level>
+        <level>information</level>
         <console>true</console>
     </logger>
 
-    <http_port>8123</http_port>
-    <tcp_port>9000</tcp_port>
+    <http_port>3218</http_port>
+    <tcp_port>8463</tcp_port>
     <mysql_port>9004</mysql_port>
 
     <path>./</path>
@@ -36,4 +36,65 @@
     <quotas>
         <default />
     </quotas>
+
+    <metastore_server>
+      <http_port>9444</http_port>
+      <server_id>1</server_id>
+      <namespace_whitelist>
+        <namespace>proton</namespace>
+        <namespace>neutron</namespace>
+        <namespace>udf</namespace>
+      </namespace_whitelist>
+      <coordination_settings>
+        <session_timeout_ms>30000</session_timeout_ms>
+        <operation_timeout_ms>10000</operation_timeout_ms>
+        <raft_logs_level>information</raft_logs_level>
+        <force_sync>false</force_sync>
+        <startup_timeout>60000</startup_timeout>
+        <shutdown_timeout>5000</shutdown_timeout>
+        <stale_log_gap>10000</stale_log_gap>
+        <fresh_log_gap>200</fresh_log_gap>
+        <reserved_log_items>100000</reserved_log_items>
+        <snapshot_distance>100000</snapshot_distance>
+        <max_requests_batch_size>100</max_requests_batch_size>
+        <auto_forwarding>true</auto_forwarding>
+        <quorum_reads>false</quorum_reads>
+      </coordination_settings>
+      <raft_configuration>
+        <server>
+          <id>1</id>
+          <hostname>localhost</hostname>
+          <port>9445</port>
+          <http_port>3218</http_port>
+        </server>
+      </raft_configuration>
+    </metastore_server>
+
+    <cluster_settings>
+        <logstore>
+            <nativelog>
+              <enabled>true</enabled>
+              <default>false</default>
+              <check_crcs>false</check_crcs>
+              <metastore_data_dir>./nativelog/meta/</metastore_data_dir>
+              <log_data_dirs>
+                <dir1>./nativelog/log/</dir1>
+              </log_data_dirs>
+              <fetch_max_wait_ms>500</fetch_max_wait_ms>
+              <fetch_max_bytes>65536</fetch_max_bytes>
+              <log_max_record_size>10485760</log_max_record_size>
+              <cache_max_cached_entries>10000</cache_max_cached_entries>
+              <cache_max_cached_bytes>419430400</cache_max_cached_bytes>
+              <cache_max_cached_entries_per_shard>100</cache_max_cached_entries_per_shard>
+              <cache_max_cached_bytes_per_shard>4194304</cache_max_cached_bytes_per_shard>
+            </nativelog>
+        </logstore>
+    </cluster_settings>
+
+
+    <checkpoint>
+      <storage_type>local_file_system</storage_type>
+      <path>./checkpoint/</path>
+    </checkpoint>
+
 </proton>
