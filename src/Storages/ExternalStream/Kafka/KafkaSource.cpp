@@ -49,6 +49,8 @@ KafkaSource::KafkaSource(
     , virtual_col_types(header.columns(), nullptr)
     , ckpt_data(consume_ctx)
 {
+    is_streaming = true;
+
     calculateColumnPositions();
     initConsumer(kafka);
     initFormatExecutor(kafka);
