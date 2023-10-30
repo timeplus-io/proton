@@ -32,6 +32,7 @@ TRUSTED_CONTRIBUTORS = {
         "yokofly",
         "zliang-min",
         "qijun-niu-timeplus",
+        "lizhou1111",
         "leo-cai-timeplus",
     ]
 }
@@ -72,7 +73,7 @@ def should_run_ci_for_pr(pr_info: PRInfo) -> Tuple[bool, str, str]:
         print(
             f"PRs by untrusted users need the '{PR_TEST_LABEL}' label - please contact a member of the core team"
         )
-        return False, "Needs 'can be tested' label", "failure"
+        return False, "Needs 'pr-test' label", "failure"
 
     return True, "No special conditions apply", "success"
 
@@ -99,6 +100,7 @@ def main():
     else:
         print("::notice ::Can run")
         post_commit_status(gh, pr_info.sha, "Labels check", description, labels_state, pr_info.pr_html_url)
+        sys.exit(0)  # make sure to exit with code 0 to indicate success
 
 if __name__ == '__main__':
     main()

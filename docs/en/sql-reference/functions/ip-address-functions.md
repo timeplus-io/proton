@@ -446,3 +446,42 @@ Result:
 │                                            0 │
 └──────────────────────────────────────────────┘
 ```
+
+
+## reverse_dns_query
+
+Performs a reverse DNS query to get the PTR records associated with the IP address.
+
+**Syntax**
+
+``` sql
+reverse_dns_query(address)
+```
+
+This function performs reverse DNS resolutions on both IPv4 and IPv6.
+
+**Arguments**
+
+-   `address` — An IPv4 or IPv6 address. [String](../../sql-reference/data-types/string.md).
+
+**Returned value**
+
+-   Associated domains (PTR records).
+
+Type: Type: [Array(String)](../../sql-reference/data-types/array.md).
+
+**Example**
+
+Query:
+
+``` sql
+SELECT reverse_dns_query('192.168.0.2');
+```
+
+Result:
+
+``` text
+┌─reverse_dns_query('192.168.0.2')────────────┐
+│ ['test2.example.com','test3.example.com'] │
+└───────────────────────────────────────────┘
+```

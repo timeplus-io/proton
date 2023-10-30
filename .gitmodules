@@ -222,9 +222,6 @@
 [submodule "contrib/liburing"]
 	path = contrib/liburing
 	url = https://github.com/axboe/liburing.git
-[submodule "contrib/c-ares"]
-	path = contrib/c-ares
-	url = https://github.com/ClickHouse/c-ares.git
 [submodule "contrib/morton-nd"]
 	path = contrib/morton-nd
 	url = https://github.com/morton-nd/morton-nd
@@ -236,7 +233,8 @@
 	url = https://github.com/ClickHouse/libhdfs3.git
 [submodule "contrib/muduo"]
 	path = contrib/muduo
-	url = https://github.com/timeplus-io/muduo.git
+	url = https://github.com/yokofly/muduo.git
+	branch = bugfix/fix-cross-compile-to-macOS
 [submodule "contrib/llvm-project"]
 	path = contrib/llvm-project
 	url = https://github.com/ClickHouse/llvm-project.git
@@ -282,3 +280,6 @@
 [submodule "contrib/google-benchmark"]
 	path = contrib/google-benchmark
 	url = https://github.com/google/benchmark.git
+[submodule "contrib/c-ares"]
+	path = contrib/c-ares
+	url = https://github.com/c-ares/c-ares.git

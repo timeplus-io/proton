@@ -7,6 +7,7 @@ on: # yamllint disable-line rule:truthy
       - reopened
       - opened
       - ready_for_review
+      - labeled
     branches:
       - develop
     paths-ignore:
@@ -20,7 +21,8 @@ jobs:
   verify:
     name: Labels check
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
+    # Either the PR is not a draft OR it has the label 'pr-test'
+    if: github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'pr-test')
     env:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
     steps:
@@ -191,7 +193,7 @@ jobs:
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
-      timeout: 30
+      timeout: 45
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
         # make virtualenv
