@@ -39,7 +39,7 @@ private:
 
     Poco::Logger * log;
 
-#if USE_UNWIND
+#ifndef OS_DARWIN
     /// Timer id from timer_create(2)
     std::optional<timer_t> timer_id;
 #endif

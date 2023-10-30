@@ -104,7 +104,6 @@ if (ENABLE_FUZZING)
     set (ENABLE_CLICKHOUSE_ODBC_BRIDGE OFF)
     set (ENABLE_LIBRARIES 0)
     set (ENABLE_SSL 1)
-    set (USE_UNWIND ON)
     set (ENABLE_EMBEDDED_COMPILER 0)
     set (ENABLE_EXAMPLES 0)
     set (ENABLE_UTILS 0)
@@ -187,7 +186,7 @@ if (OS_DARWIN)
     # from a _specific_ library, which is what we need.
     set(WHOLE_ARCHIVE -force_load)
     # The `-noall_load` flag is the default and now obsolete.
-    set(NO_WHOLE_ARCHIVE "-undefined,error") # Effectively, a no-op. Here to avoid empty "-Wl, " sequence to be generated in the command line.
+    set(NO_WHOLE_ARCHIVE "-undefined,dynamic_lookup") # Effectively, a no-op. Here to avoid empty "-Wl, " sequence to be generated in the command line.
 else ()
     set(WHOLE_ARCHIVE --whole-archive)
     set(NO_WHOLE_ARCHIVE --no-whole-archive)
@@ -405,7 +404,7 @@ endif ()
 
 # Make this extra-checks for correct library dependencies.
 if (OS_LINUX AND NOT SANITIZE)
-    target_link_options(global-group INTERFACE "-Wl,--no-undefined")
+    target_link_options(global-group INTERFACE "LINKER:--no-undefined")
 endif ()
 
 ######################################
