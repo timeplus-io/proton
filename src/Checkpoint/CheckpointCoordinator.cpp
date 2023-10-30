@@ -237,14 +237,13 @@ void CheckpointCoordinator::removeCheckpoint(const String & qid)
     /// Mark the checkpoint to be removed and and schedule the checkpoint
     /// deletion later
     auto ckpt_ctx = std::make_shared<CheckpointContext>(0, qid, this);
-    ckpt->markRemove(ckpt_ctx);
-
-    timer_service.runAfter(grace_interval, [ckpt_ctx, this]() {
-        pool->scheduleOrThrow([ckpt_ctx, this]() {
-            ckpt->remove(ckpt_ctx);
-            LOG_INFO(logger, "Cleaned checkpoints for query={}", ckpt_ctx->qid);
+    if (ckpt->markRemove(ckpt_ctx))
+        timer_service.runAfter(grace_interval, [ckpt_ctx, this]() {
+            pool->scheduleOrThrow([ckpt_ctx, this]() {
+                ckpt->remove(ckpt_ctx);
+                LOG_INFO(logger, "Cleaned checkpoints for query={}", ckpt_ctx->qid);
+            });
         });
-    });
 }
 
 void CheckpointCoordinator::triggerCheckpoint(const String & qid, UInt64 checkpoint_interval)
