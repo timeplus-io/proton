@@ -93,6 +93,7 @@ protected:
         std::optional<ProgramOptionsDescription> external_description;
     };
 
+    virtual void updateLoggerLevel(const String &) {}
     virtual void printHelpMessage(const OptionsDescription & options_description) = 0;
     virtual void addOptions(OptionsDescription & options_description) = 0;
     virtual void processOptions(const OptionsDescription & options_description,
@@ -140,6 +141,11 @@ private:
     void updateSuggest(const ASTCreateQuery & ast_create);
 
 protected:
+    SharedContextHolder shared_context;
+    ContextMutablePtr global_context;
+
+    bool processMultiQueryFromFile(const String & file_name);
+
     bool is_interactive = false; /// Use either interactive line editing interface or batch mode.
     bool is_multiquery = false;
     bool delayed_interactive = false;
@@ -175,9 +181,6 @@ protected:
     /// Settings specified via command line args
     Settings cmd_settings;
 
-    SharedContextHolder shared_context;
-    ContextMutablePtr global_context;
-
     /// thread status should be destructed before shared context because it relies on process list.
     std::optional<ThreadStatus> thread_status;
 
@@ -211,6 +214,7 @@ protected:
 
     ProgressIndication progress_indication;
     bool need_render_progress = true;
+    bool need_render_profile_events = true;
     bool written_first_block = false;
     size_t processed_rows = 0; /// How many rows have been read or written.
 
@@ -245,6 +249,8 @@ protected:
     QueryProcessingStage::Enum query_processing_stage;
 
     bool cancelled = false;
+
+    bool logging_initialized = false;
 };
 
 }
