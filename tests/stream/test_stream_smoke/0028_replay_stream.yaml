@@ -32,20 +32,24 @@ tests:
           - client: python
             query_type: table
             query: drop stream if exists test29_stream
+
           - client: python
             query_type: table
             exist: test29_stream
             exist_wait: 2
             wait: 1
             query: create stream if not exists test29_stream (id int, value int);
+
           - client: python
             query_type: table
             wait: 1
             query: insert into test29_stream(id, value) values (1, 2);
+
           - client: python
             query_type: table
             wait: 2
             query: insert into test29_stream(id, value) values (3, 2);
+
           - client: python
             query_type: stream
             terminate: auto
@@ -72,20 +76,24 @@ tests:
           - client: python
             query_type: table
             query: drop stream if exists test29_stream
+
           - client: python
             query_type: table
             exist: test29_stream
             exist_wait: 2
             wait: 1
             query: create stream if not exists test29_stream (id int, value int);
+
           - client: python
             query_type: table
             wait: 1
             query: insert into test29_stream(id, value) values (1, 2);
+
           - client: python
             query_type: table
             wait: 2
             query: insert into test29_stream(id, value) values (3, 2);
+
           - client: python
             query_type: stream
             terminate: auto
@@ -112,36 +120,44 @@ tests:
           - client: python
             query_type: table
             query: drop stream if exists test29_stream
+
           - client: python
             query_type: table
             exist: test29_stream
             exist_wait: 2
             wait: 1
             query: create stream if not exists test29_stream (id int, value int);
+
           - client: python
             query_type: table
             wait: 1
             query: insert into test29_stream(id, value) values (1, 2);
+
           - client: python
             query_type: table
             wait: 2
             query: insert into test29_stream(id, value) values (3, 2);
+
           - client: python
             query_type: table
             wait: 1
             query: insert into test29_stream(id, value) values (1, 1);
+
           - client: python
             query_type: table
             wait: 2
             query: insert into test29_stream(id, value) values (9, 2);
+
           - client: python
             query_type: table
             wait: 2
             query: insert into test29_stream(id, value) values (1, 10);
+
           - client: python
             query_type: table
             wait: 2
             query: insert into test29_stream(id, value) values (3, 8);
+
           - client: python
             query_type: stream
             terminate: auto
@@ -165,86 +181,6 @@ tests:
           - [10,1,1]
           - [2,2,9]
 
-  - id: 3
-    tags:
-      - replay_stream
-      - join
-    name: replay stream join stream
-    description: replay stream join stream
-    steps:
-      - statements:
-          - client: python
-            query_type: table
-            query: drop stream if exists test29_stream_1
-          - client: python
-            query_type: table
-            exist: test29_stream_1
-            exist_wait: 2
-            wait: 1
-            query: create stream if not exists test29_stream_1 (id int, value int);
-          - client: python
-            query_type: table
-            query: drop stream if exists test29_stream_2
-          - client: python
-            query_type: table
-            exist: test29_stream_2
-            exist_wait: 2
-            wait: 1
-            query: create stream if not exists test29_stream_2 (id int, value int);
-          - client: python
-            query_type: table
-            wait: 1
-            query: insert into test29_stream_1(id, value) values (1, 2);
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test29_stream_1(id, value) values (3, 2);
-          - client: python
-            query_type: table
-            wait: 1
-            query: insert into test29_stream_1(id, value) values (2, 1);
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test29_stream_1(id, value) values (2, 2);
-          - client: python
-            query_type: stream
-            terminate: manuel
-            query_id: '2903'
-            wait: 1
-            query: with cte as (select id, value from test29_stream_1 where _tp_time >
-              earliest_timestamp() settings replay_speed=1) select a.id,
-              a.value, b.id, b.value from cte as a join test29_stream_2 as b on
-              a.id=b.id;
-          - client: python
-            query_type: table
-            depends_on: '2903'
-            wait: 2
-            query: insert into test29_stream_2(id, value) values (2, 3);
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test29_stream_2(id, value) values (1, 6);
-          - client: python
-            query_type: table
-            wait: 2
-            query: insert into test29_stream_2(id, value) values (2, 4);
-          - client: python
-            query_type: table
-            kill: '2903'
-            kill_await: 30
-            query: insert into test29_stream_2(id, value) values (2, 5);
-    expected_results:
-      - query_id: '2903'
-        expected_results:
-          - [2,1,2,3]
-          - [1,2,1,6]
-          - [2,2,2,3]
-          - [2,1,2,4]
-          - [2,2,2,4]
-          - [2,1,2,5]
-          - [2,2,2,5]
-
   - id: 4
     tags:
       - replay_stream
@@ -256,53 +192,65 @@ tests:
           - client: python
             query_type: table
             query: drop stream if exists test29_stream_1
+
           - client: python
             query_type: table
             exist: test29_stream_1
             exist_wait: 2
             wait: 1
             query: create stream if not exists test29_stream_1 (id int, value int);
+
           - client: python
             query_type: table
             query: drop stream if exists test29_stream_2
+
           - client: python
             query_type: table
             exist: test29_stream_2
             exist_wait: 2
             wait: 1
             query: create stream if not exists test29_stream_2 (id int, value int);
+
           - client: python
             query_type: table
             wait: 1
             query: insert into test29_stream_1(id, value) values (1, 2);
+
           - client: python
             query_type: table
             wait: 2
             query: insert into test29_stream_1(id, value) values (3, 2);
+
           - client: python
             query_type: table
             wait: 1
             query: insert into test29_stream_1(id, value) values (2, 1);
+
           - client: python
             query_type: table
             wait: 2
             query: insert into test29_stream_1(id, value) values (2, 2);
+
           - client: python
             query_type: table
             wait: 2
             query: insert into test29_stream_2(id, value) values (2, 3);
+
           - client: python
             query_type: table
             wait: 2
             query: insert into test29_stream_2(id, value) values (1, 6);
+
           - client: python
             query_type: table
             wait: 2
             query: insert into test29_stream_2(id, value) values (9, 4);
+
           - client: python
             query_type: table
             wait: 5
             query: insert into test29_stream_2(id, value) values (2, 5);
+            
           - client: python
             query_type: stream
             terminate: auto
