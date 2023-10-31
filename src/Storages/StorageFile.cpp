@@ -720,7 +720,7 @@ Pipe StorageFile::read(
                           &ProtonConsts::STREAMING_WINDOW_END,
                           &ProtonConsts::STREAMING_TIMESTAMP_ALIAS})
                         if (columns.has(*reserved_col))
-                            columns.remove(ProtonConsts::STREAMING_WINDOW_START);
+                            columns.remove(*reserved_col);
                     return columns;
                 }
                 else

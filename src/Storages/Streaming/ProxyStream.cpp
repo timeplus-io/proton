@@ -127,7 +127,7 @@ void ProxyStream::read(
     size_t max_block_size,
     size_t num_streams)
 {
-    if (!(query_info.syntax_analyzer_result->streaming))
+    if (!query_info.syntax_analyzer_result->streaming)
     {
         if (windowType() == WindowType::SESSION || windowType() == WindowType::HOP)
             throw Exception(
