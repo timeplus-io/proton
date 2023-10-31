@@ -466,7 +466,7 @@ public:
 
     using FilesInfoPtr = std::shared_ptr<FilesInfo>;
 
-    static Block getHeader(const StorageMetadataPtr & metadata_snapshot, bool need_path_column, bool need_file_column)
+    static Block getHeader(const StorageMetadataPtr & metadata_snapshot, bool need_path_column, bool need_file_column, bool is_streaming_)
     {
         auto header = metadata_snapshot->getSampleBlock();
 
@@ -483,6 +483,17 @@ public:
                  std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>()),
                  "_file"});
 
+        /// proton : starts
+        if (is_streaming_)
+        {
+            for (const auto * reserved_col :
+                 {&ProtonConsts::STREAMING_WINDOW_START,
+                  &ProtonConsts::STREAMING_WINDOW_END,
+                  &ProtonConsts::STREAMING_TIMESTAMP_ALIAS})
+                if (header.has(*reserved_col))
+                    header.erase(*reserved_col);
+        }
+        /// proton : ends
         return header;
     }
 
@@ -490,12 +501,13 @@ public:
         const StorageFilePtr & storage,
         const StorageSnapshotPtr & storage_snapshot,
         const ColumnsDescription & columns_description,
-        const FilesInfoPtr & files_info)
+        const FilesInfoPtr & files_info,
+        bool is_streaming_)
     {
         if (storage->isColumnOriented())
             return storage_snapshot->getSampleBlockForColumns(columns_description.getNamesOfPhysical());
         else
-            return getHeader(storage_snapshot->metadata, files_info->need_path_column, files_info->need_file_column);
+            return getHeader(storage_snapshot->metadata, files_info->need_path_column, files_info->need_file_column, is_streaming_);
     }
 
     StorageFileSource(
@@ -507,7 +519,7 @@ public:
         ColumnsDescription columns_description_,
         std::unique_ptr<ReadBuffer> read_buf_,
         bool is_streaming_)
-        : ISource(getBlockForSource(storage_, storage_snapshot_, columns_description_, files_info_), true, ProcessorID::StorageFileSourceID)
+        : ISource(getBlockForSource(storage_, storage_snapshot_, columns_description_, files_info_, is_streaming_), true, ProcessorID::StorageFileSourceID)
         , storage(std::move(storage_))
         , storage_snapshot(storage_snapshot_)
         , files_info(std::move(files_info_))
@@ -516,7 +528,22 @@ public:
         , context(context_)
         , max_block_size(max_block_size_)
     {
+        /// proton : starts
         is_streaming = is_streaming_;
+        if (storage->isColumnOriented())
+            block_for_format = storage_snapshot->getSampleBlockForColumns(columns_description.getNamesOfPhysical());
+        else
+            block_for_format = storage_snapshot->metadata->getSampleBlock();
+
+        if (is_streaming)
+        {
+            for (const auto * reserved_col :
+                 {&ProtonConsts::STREAMING_WINDOW_START, &ProtonConsts::STREAMING_WINDOW_END, &ProtonConsts::STREAMING_TIMESTAMP_ALIAS})
+                if (block_for_format.has(*reserved_col))
+                    block_for_format.erase(*reserved_col);
+        }
+        /// proton : ends
+
         if (!storage->use_table_fd)
         {
             shared_lock = std::shared_lock(storage->rwlock, getLockTimeout(context));
@@ -557,15 +584,8 @@ public:
                 if (!read_buf)
                     read_buf = createReadBuffer(current_path, storage->use_table_fd, storage->getName(), storage->table_fd, storage->compression_method, context);
 
-                auto get_block_for_format = [&]() -> Block
-                {
-                    if (storage->isColumnOriented())
-                        return storage_snapshot->getSampleBlockForColumns(columns_description.getNamesOfPhysical());
-                    return storage_snapshot->metadata->getSampleBlock();
-                };
-
                 auto format = context->getInputFormat(
-                    storage->format_name, *read_buf, get_block_for_format(), max_block_size, storage->format_settings);
+                    storage->format_name, *read_buf, block_for_format, max_block_size, storage->format_settings);
 
                 QueryPipelineBuilder builder;
                 builder.init(Pipe(format));
@@ -631,7 +651,7 @@ private:
     StorageSnapshotPtr storage_snapshot;
     FilesInfoPtr files_info;
     String current_path;
-    Block sample_block;
+    Block block_for_format;
     std::unique_ptr<ReadBuffer> read_buf;
     std::unique_ptr<QueryPipeline> pipeline;
     std::unique_ptr<PullingPipelineExecutor> reader;
@@ -699,36 +719,24 @@ Pipe StorageFile::read(
     if (progress_callback)
         progress_callback(FileProgress(0, total_bytes_to_read));
 
+    /// proton : starts
+    /// columns for format
+    auto columns_for_format = isColumnOriented()
+        ? ColumnsDescription{storage_snapshot->getSampleBlockForColumns(column_names).getNamesAndTypesList()}
+        : storage_snapshot->metadata->getColumns();
+
+    if (query_info.streaming_window_params && query_info.syntax_analyzer_result->streaming)
+    {
+        /// Filter out reserved columns
+        for (const auto * reserved_col :
+             {&ProtonConsts::STREAMING_WINDOW_START, &ProtonConsts::STREAMING_WINDOW_END, &ProtonConsts::STREAMING_TIMESTAMP_ALIAS})
+            if (columns_for_format.has(*reserved_col))
+                columns_for_format.remove(*reserved_col);
+    }
+    /// proton : ends
+
     for (size_t i = 0; i < num_streams; ++i)
     {
-        const auto get_columns_for_format = [&]() -> ColumnsDescription
-        {
-            /// proton : starts
-            if (isColumnOriented())
-            {
-                return ColumnsDescription{
-                    storage_snapshot->getSampleBlockForColumns(column_names).getNamesAndTypesList()};
-            }
-            else
-            {
-                if (query_info.streaming_window_params && query_info.syntax_analyzer_result->streaming)
-                {
-                    /// Filter out reserved columns
-                    auto columns = storage_snapshot->metadata->getColumns();
-                    for (const auto * reserved_col :
-                         {&ProtonConsts::STREAMING_WINDOW_START,
-                          &ProtonConsts::STREAMING_WINDOW_END,
-                          &ProtonConsts::STREAMING_TIMESTAMP_ALIAS})
-                        if (columns.has(*reserved_col))
-                            columns.remove(*reserved_col);
-                    return columns;
-                }
-                else
-                    return storage_snapshot->metadata->getColumns();
-            }
-            /// proton : ends
-        };
-
         /// In case of reading from fd we have to check whether we have already created
         /// the read buffer from it in Storage constructor (for schema inference) or not.
         /// If yes, then we should use it in StorageFileSource. Atomic bool flag is needed
@@ -738,7 +746,7 @@ Pipe StorageFile::read(
             read_buffer = std::move(peekable_read_buffer_from_fd);
 
         pipes.emplace_back(std::make_shared<StorageFileSource>(
-            this_ptr, storage_snapshot, context, max_block_size, files_info, get_columns_for_format(), std::move(read_buffer), query_info.syntax_analyzer_result->streaming));
+            this_ptr, storage_snapshot, context, max_block_size, files_info, columns_for_format, std::move(read_buffer), query_info.syntax_analyzer_result->streaming));
     }
 
     return Pipe::unitePipes(std::move(pipes));
