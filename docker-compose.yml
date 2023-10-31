@@ -5,6 +5,7 @@ volumes:
 services:
   proton:
      image: ghcr.io/timeplus-io/proton:latest
+     pull_policy: always
 
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v23.2.8

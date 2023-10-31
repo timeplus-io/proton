@@ -172,10 +172,14 @@ void LocalFileSystemCheckpoint::recover(
         rb.count());
 }
 
-void LocalFileSystemCheckpoint::markRemove(CheckpointContextPtr ckpt_ctx)
+bool LocalFileSystemCheckpoint::markRemove(CheckpointContextPtr ckpt_ctx)
 {
+    if (unlikely(!std::filesystem::exists(ckpt_ctx->queryCheckpointDir(baseDirectory()))))
+        return false;
+
     auto delete_file_mark = ckpt_ctx->checkpointDir(baseDirectory()) / DELETE_FILE;
     WriteBufferFromFile file_buf(delete_file_mark.string());
+    return true;
 }
 
 void LocalFileSystemCheckpoint::remove(CheckpointContextPtr ckpt_ctx)
@@ -276,6 +280,12 @@ bool LocalFileSystemCheckpoint::exists(const std::string & key, CheckpointContex
 
 void LocalFileSystemCheckpoint::preCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
+    if (unlikely(ckpt_ctx->epoch > 0 && !std::filesystem::exists(ckpt_ctx->queryCheckpointDir(baseDirectory()))))
+        throw Exception(
+            ErrorCodes::DIRECTORY_DOESNT_EXIST,
+            "The query checkpoint dir '{}' doesn't exist",
+            ckpt_ctx->queryCheckpointDir(baseDirectory()).string());
+
     auto dir = ckpt_ctx->checkpointDir(baseDirectory());
     std::error_code ec;
     if (!std::filesystem::exists(dir, ec))

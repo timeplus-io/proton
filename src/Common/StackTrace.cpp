@@ -14,9 +14,7 @@
 
 #include "config.h"
 
-#if USE_UNWIND
-#    include <libunwind.h>
-#endif
+#include <libunwind.h>
 
 std::string signalToErrorMessage(int sig, const siginfo_t & info, [[maybe_unused]] const ucontext_t & context)
 {
@@ -300,10 +298,8 @@ StackTrace::StackTrace(NoCapture)
 void StackTrace::tryCapture()
 {
     size = 0;
-#if USE_UNWIND
     size = unw_backtrace(frame_pointers.data(), capacity);
     __msan_unpoison(frame_pointers.data(), size * sizeof(frame_pointers[0]));
-#endif
 }
 
 size_t StackTrace::getSize() const

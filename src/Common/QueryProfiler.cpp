@@ -97,13 +97,13 @@ QueryProfilerBase<ProfilerImpl>::QueryProfilerBase(const UInt64 thread_id, const
     UNUSED(pause_signal);
 
     throw Exception("QueryProfiler disabled because they cannot work under sanitizers", ErrorCodes::NOT_IMPLEMENTED);
-#elif !USE_UNWIND
+#elif defined(OS_DARWIN)
     UNUSED(thread_id);
     UNUSED(clock_type);
     UNUSED(period);
     UNUSED(pause_signal);
 
-    throw Exception("QueryProfiler cannot work with stock libunwind", ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "QueryProfiler cannot work on OSX");
 #else
     /// Sanity check.
     if (!hasPHDRCache())
@@ -184,7 +184,7 @@ QueryProfilerBase<ProfilerImpl>::~QueryProfilerBase()
 template <typename ProfilerImpl>
 void QueryProfilerBase<ProfilerImpl>::tryCleanup()
 {
-#if USE_UNWIND
+#ifndef OS_DARWIN
     if (timer_id.has_value())
     {
         if (timer_delete(*timer_id))

@@ -206,7 +206,7 @@
 	url = https://github.com/ClickHouse-Extras/nlp-data.git
 [submodule "contrib/azure"]
 	path = contrib/azure
-	url = https://github.com/ClickHouse-Extras/azure-sdk-for-cpp.git
+	url = https://github.com/timeplus-io/azure-sdk-for-cpp.git
 [submodule "contrib/wyhash"]
 	path = contrib/wyhash
 	url = https://github.com/wangyi-fudan/wyhash.git

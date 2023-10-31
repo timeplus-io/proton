@@ -15,12 +15,10 @@ add_subdirectory (report)
 # Not used in package
 if (ENABLE_UTILS)
     add_subdirectory (compressor)
-    add_subdirectory (iotest)
     add_subdirectory (corrector_utf8)
     add_subdirectory (wikistat-loader)
     add_subdirectory (check-marks)
     add_subdirectory (checksum-for-compressed-block)
-    add_subdirectory (db-generator)
     add_subdirectory (wal-dump)
 
     # memcpy_jart.S contains position dependent code

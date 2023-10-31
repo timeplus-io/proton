@@ -39,7 +39,7 @@ public:
     void recover(
         const std::string & key, CheckpointContextPtr ckpt_ctx, std::function<void(VersionType version, ReadBuffer &)> do_recover) override;
 
-    void markRemove(CheckpointContextPtr ckpt_ctx) override;
+    bool markRemove(CheckpointContextPtr ckpt_ctx) override;
 
     void remove(CheckpointContextPtr ckpt_ctx) override;
 
