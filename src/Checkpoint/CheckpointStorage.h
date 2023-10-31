@@ -38,7 +38,8 @@ public:
     /// Recover checkpoint
     virtual void recover(const std::string & key, CheckpointContextPtr ckpt_ctx, std::function<void(VersionType version, ReadBuffer &)> do_recover) = 0;
 
-    virtual void markRemove(CheckpointContextPtr ckpt_ctx) = 0;
+    /// @return marked
+    virtual bool markRemove(CheckpointContextPtr ckpt_ctx) = 0;
 
     /// Remove all ckpts before ckpt_ctx->epic
     /// If ckpt_ctx->epic is zero, remove the whole ckpt folder for the query
