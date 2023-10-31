@@ -1,8 +1,8 @@
 #pragma once
-#include <optional>
+#include <Core/Block.h>
 #include <Processors/ISimpleTransform.h>
-#include "Core/Block.h"
-#include "base/types.h"
+#include <base/types.h>
+#include <optional>
 
 
 namespace DB
@@ -21,7 +21,7 @@ private:
     size_t append_time_index = 0;
 
     std::optional<Int64> last_batch_time;
-    Int64 wait_interval = 0;
+    Int64 wait_interval_ms = 0;
     /// TODO：mark the historical end
     /// bool begin_stream = false;
 };

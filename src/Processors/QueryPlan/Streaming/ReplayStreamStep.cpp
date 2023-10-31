@@ -1,5 +1,3 @@
-#include <utility>
-#include <IO/Operators.h>
 #include <Processors/QueryPlan/Streaming/ReplayStreamStep.h>
 #include <Processors/Streaming/ReplayStreamTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
@@ -31,10 +29,7 @@ ReplayStreamStep::ReplayStreamStep(const DataStream & input_stream_, Float32 rep
 
 void ReplayStreamStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
 {
-    pipeline.addSimpleTransform([&](const Block & header)
-    {
-        return std::make_shared<ReplayStreamTransform>(header, replay_speed);
-    });
+    pipeline.addSimpleTransform([&](const Block & header) { return std::make_shared<ReplayStreamTransform>(header, replay_speed); });
 }
 
 }
