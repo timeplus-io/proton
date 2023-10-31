@@ -60,6 +60,7 @@ tests:
         expected_results:
           - ["1", "2", any_value, any_value]
           - ["3", "2", "True", "True"]
+
   - id: 1
     tags:
       - replay a stream
@@ -99,6 +100,7 @@ tests:
         expected_results:
           - ["1", "2", any_value, any_value]
           - ["3", "2", "True", "True"]
+
   - id: 2
     tags:
       - replay_stream
@@ -162,6 +164,7 @@ tests:
           - [8,2,3]
           - [10,1,1]
           - [2,2,9]
+
   - id: 3
     tags:
       - replay_stream
@@ -241,6 +244,7 @@ tests:
           - [2,2,2,4]
           - [2,1,2,5]
           - [2,2,2,5]
+
   - id: 4
     tags:
       - replay_stream
