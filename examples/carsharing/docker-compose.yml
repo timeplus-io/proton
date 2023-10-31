@@ -3,6 +3,7 @@ name: proton-demo-carsharing
 services:
   proton:
      image: ghcr.io/timeplus-io/proton:latest
+     pull_policy: always
 
   carsharing_datagen:
     image: timeplus/cardemo:latest

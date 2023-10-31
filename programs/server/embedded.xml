@@ -2,12 +2,12 @@
 <!-- Config that is used when server is run without config file. -->
 <proton>
     <logger>
-        <level>trace</level>
+        <level>information</level>
         <console>true</console>
     </logger>
 
-    <http_port>8123</http_port>
-    <tcp_port>9000</tcp_port>
+    <http_port>3218</http_port>
+    <tcp_port>8463</tcp_port>
     <mysql_port>9004</mysql_port>
 
     <path>./</path>
@@ -36,4 +36,131 @@
     <quotas>
         <default />
     </quotas>
+
+    <metastore_server>
+      <http_port>9444</http_port>
+      <server_id>1</server_id>
+      <namespace_whitelist>
+        <namespace>proton</namespace>
+        <namespace>neutron</namespace>
+        <namespace>udf</namespace>
+      </namespace_whitelist>
+      <coordination_settings>
+        <session_timeout_ms>30000</session_timeout_ms>
+        <operation_timeout_ms>10000</operation_timeout_ms>
+        <raft_logs_level>information</raft_logs_level>
+        <force_sync>false</force_sync>
+        <startup_timeout>60000</startup_timeout>
+        <shutdown_timeout>5000</shutdown_timeout>
+        <stale_log_gap>10000</stale_log_gap>
+        <fresh_log_gap>200</fresh_log_gap>
+        <reserved_log_items>100000</reserved_log_items>
+        <snapshot_distance>100000</snapshot_distance>
+        <max_requests_batch_size>100</max_requests_batch_size>
+        <auto_forwarding>true</auto_forwarding>
+        <quorum_reads>false</quorum_reads>
+      </coordination_settings>
+      <raft_configuration>
+        <server>
+          <id>1</id>
+          <hostname>localhost</hostname>
+          <port>9445</port>
+          <http_port>3218</http_port>
+        </server>
+      </raft_configuration>
+    </metastore_server>
+
+    <settings>
+      <global>
+        <query_mode>streaming</query_mode>
+        <query_resource_group>dedicated</query_resource_group>
+        <enable_light_ingest>true</enable_light_ingest>
+        <_tp_enable_log_stream_expr>true</_tp_enable_log_stream_expr>
+        <synchronous_ddl>true</synchronous_ddl>
+        <asterisk_include_reserved_columns>true</asterisk_include_reserved_columns>
+        <async_ingest_block_timeout_ms>12000</async_ingest_block_timeout_ms>
+        <aysnc_ingest_max_outstanding_blocks>10000</aysnc_ingest_max_outstanding_blocks>
+        <part_commit_pool_size>8</part_commit_pool_size>
+        <max_idempotent_ids>1000</max_idempotent_ids>
+        <_tp_internal_system_open_sesame>true</_tp_internal_system_open_sesame>
+        <javascript_max_memory_bytes>104857600</javascript_max_memory_bytes>
+      </global>
+      <stream>
+        <default_shards>1</default_shards>
+        <default_replicas>1</default_replicas>
+        <default_sharding_expr></default_sharding_expr>
+        <distributed_ingest_mode>async</distributed_ingest_mode>
+        <logstore></logstore>
+        <logstore_replication_factor>1</logstore_replication_factor>
+        <storage_type>hybrid</storage_type>
+        <logstore_codec>none</logstore_codec>
+      </stream>
+    </settings>
+
+    <cluster_settings>
+      <logstore>
+        <kafka>
+          <enabled>false</enabled>
+          <default>true</default>
+          <cluster_name>default-sys-kafka-cluster-name</cluster_name>
+          <cluster_id>default-sys-kafka-cluster-id</cluster_id>
+          <security_protocol>PLAINTEXT</security_protocol>
+          <brokers>localhost:9092</brokers>
+          <group_id>proton</group_id>
+          <replication_factor>1</replication_factor>
+          <debug/>
+          <enable_idempotence>false</enable_idempotence>
+          <topic_metadata_refresh_interval_ms>300000</topic_metadata_refresh_interval_ms>
+          <message_max_bytes>1000000</message_max_bytes>
+          <statistic_internal_ms>30000</statistic_internal_ms>
+          <queue_buffering_max_messages>100000</queue_buffering_max_messages>
+          <queue_buffering_max_kbytes>1048576</queue_buffering_max_kbytes>
+          <queue_buffering_max_ms>50</queue_buffering_max_ms>
+          <message_send_max_retries>2</message_send_max_retries>
+          <retry_backoff_ms>100</retry_backoff_ms>
+          <compression_codec>snappy</compression_codec>
+          <message_timeout_ms>40000</message_timeout_ms>
+          <message_delivery_async_poll_ms>100</message_delivery_async_poll_ms>
+          <message_delivery_sync_poll_ms>10</message_delivery_sync_poll_ms>
+          <check_crcs>false</check_crcs>
+          <auto_commit_interval_ms>5000</auto_commit_interval_ms>
+          <fetch_message_max_bytes>1048576</fetch_message_max_bytes>
+          <fetch_wait_max_ms>500</fetch_wait_max_ms>
+          <queued_min_messages>1000000</queued_min_messages>
+          <queued_max_messages_kbytes>65536</queued_max_messages_kbytes>
+          <session_timeout_ms>10000</session_timeout_ms>
+          <max_poll_interval_ms>30000</max_poll_interval_ms>
+          <dedicated_subscription_pool_size>2</dedicated_subscription_pool_size>
+          <shared_subscription_pool_max_size>10</shared_subscription_pool_max_size>
+          <shared_subscription_flush_threshold_count>10000</shared_subscription_flush_threshold_count>
+          <shared_subscription_flush_threshold_size>10485760</shared_subscription_flush_threshold_size>
+          <shared_subscription_flush_threshold_ms>1000</shared_subscription_flush_threshold_ms>
+          <streaming_processing_pool_size>100</streaming_processing_pool_size>
+        </kafka>
+        <nativelog>
+          <enabled>true</enabled>
+          <default>false</default>
+          <check_crcs>false</check_crcs>
+          <metastore_data_dir>./nativelog/meta/</metastore_data_dir>
+          <log_data_dirs>
+            <dir1>./nativelog/log/</dir1>
+          </log_data_dirs>
+          <fetch_max_wait_ms>500</fetch_max_wait_ms>
+          <fetch_max_bytes>65536</fetch_max_bytes>
+          <log_max_record_size>10485760</log_max_record_size>
+          <cache_max_cached_entries>10000</cache_max_cached_entries>
+          <cache_max_cached_bytes>419430400</cache_max_cached_bytes>
+          <cache_max_cached_entries_per_shard>100</cache_max_cached_entries_per_shard>
+          <cache_max_cached_bytes_per_shard>4194304</cache_max_cached_bytes_per_shard>
+        </nativelog>
+      </logstore>
+      <node_identity>localhost:8123</node_identity>
+    </cluster_settings>
+
+
+    <checkpoint>
+      <storage_type>local_file_system</storage_type>
+      <path>./checkpoint/</path>
+    </checkpoint>
+
 </proton>
