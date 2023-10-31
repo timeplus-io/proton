@@ -438,9 +438,11 @@ try
 |         |    ` \/ `   |  {(@)v(@)} |
 |         \    \____/   /   {|~~~|}  |
 |          `'-.......-'`    {/^^^\}  |
-.___ldb______________________`m-m`___.)";
+.___ldb______________________`m-m`___.
 
-    std::cerr << holloween << "\n";
+Credit : https://www.asciiart.eu/holiday-and-events/halloween)";
+
+    std::cerr << "\n" << holloween << "\n\n";
 
     UseSSL use_ssl;
     thread_status.emplace();
