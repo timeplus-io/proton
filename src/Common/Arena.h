@@ -60,7 +60,7 @@ private:
             ProfileEvents::increment(ProfileEvents::ArenaAllocBytes, size_);
 
             begin = reinterpret_cast<char *>(Allocator<false>::alloc(size_));
-            pos = begin + pad_left_; /// skip left padding.
+            pos = begin + pad_left_; /// proton: skip left padding.
             end = begin + size_ - pad_right;
             prev = prev_;
 
@@ -69,6 +69,10 @@ private:
             /// proton: ends
 
             ASAN_POISON_MEMORY_REGION(begin, size_);
+
+            /// proton: starts.
+            ASAN_UNPOISON_MEMORY_REGION(begin, pad_left_);
+            /// proton: ends.
         }
 
         ~MemoryChunk()
@@ -445,6 +449,8 @@ public:
         assert(padded_pos < head->end);
         if (padded_pos > head->pos)
             head->pos = padded_pos;
+
+        ASAN_UNPOISON_MEMORY_REGION(head->begin, pad_left);
     }
 
     void enableRecycle(bool enable_recycle)
