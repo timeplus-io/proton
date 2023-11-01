@@ -1,10 +1,9 @@
-drop stream if exists tsv;
+drop table if exists tsv;
 set output_format_parallel_formatting=1;
 set max_read_buffer_size=1048576;
 set max_block_size=65505;
-set query_mode=table;
 
-create stream tsv(a int, b int default 7) engine File(TSV);
+create table tsv(a int, b int default 7) engine File(TSV);
 
 insert into tsv(a) select number from numbers(10000000);
 select '10000000';
