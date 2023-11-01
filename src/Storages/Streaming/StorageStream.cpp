@@ -1937,4 +1937,13 @@ void StorageStream::checkReady() const
         throw Exception(
             ErrorCodes::RESOURCE_NOT_INITED, "Background resources of '{}' are initializing", getStorageID().getFullTableName());
 }
+std::vector<nlog::RecordSN> StorageStream::getLastSNs() const
+{
+    std::vector<nlog::RecordSN> lastsn;
+    for (const auto & stream_shard : stream_shards)
+        if (stream_shard->storage)
+            lastsn.emplace_back(stream_shard->lastSN());
+
+    return lastsn;
+}
 }

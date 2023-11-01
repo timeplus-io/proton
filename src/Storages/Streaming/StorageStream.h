@@ -262,6 +262,8 @@ public:
 
     bool isInmemory() const { return getSettings()->storage_type.value == "memory"; }
 
+    std::vector<nlog::RecordSN> getLastSNs() const;
+
     friend class StreamSink;
     friend class MergeTreeData;
 
