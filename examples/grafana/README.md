@@ -4,6 +4,8 @@
 
 This docker compose file demonstrates how to use Grafana to connect to Proton and visualize the data.
 
+A YouTube video tutorial is available for visual learners: https://www.youtube.com/watch?v=cBRl1k9qWZc
+
 ## Start the example
 
 Simply run `docker compose up` in this folder. Two docker containers in the stack:
@@ -13,7 +15,25 @@ Simply run `docker compose up` in this folder. Two docker containers in the stac
 
 TODO: we will update the compose file later to include a preconfigured Grafana.
 
-## Use the Grafana plugin for Proton
+## Install and configure Grafana
+
+Install Grafana if you haven't. Please note, this plugin is not available for Grafana Cloud users yet. It's being reviewed.
+
+For Mac users, simply run `brew install grafana`.
+
+Before the plugin is approved by Grafana, you need to set your Grafana running in development mode via changing /usr/local/etc/grafana/grafana.ini, setting `app_mode = development`.
+
+Also searching for key word "plugin", and change `enable_alpha` and `allow_loading_unsigned_plugins` to
+```
+enable_alpha = true
+allow_loading_unsigned_plugins = timeplus-proton-datasource
+```
+
+## Install the Proton plugin for Grafana
+
+Currently you have to download the plugin from https://github.com/timeplus-io/proton-grafana-source/releases.
+
+We have submited the plugin to Grafana. Once it's approved, you will be able to install it with Grafana UI and it will also work on Grafana Cloud.
 
 Install the timeplus-proton-datasource in your Grafana plugin folder, such as
 - /var/lib/grafana/plugins (for Linux)
@@ -21,7 +41,7 @@ Install the timeplus-proton-datasource in your Grafana plugin folder, such as
 
 Unzip the file and restart Grafana. 
 
-Before the plugin is approved by Grafana, you need to set your Grafana running in development mode via changing /usr/local/etc/grafana/grafana.ini, setting `app_mode = development`
+
 
 In the navigation menu, choose Connections -> Add new connection.
 Search for Proton and accept the default settings (localhost:8463 as proton connection)

@@ -113,6 +113,7 @@ enum class ProcessorID : UInt32
     StreamingOffsetTransformID = 92,
     ChangelogConvertTransformID = 93,
     ChangelogTransformID = 94,
+    ReplayStreamTransformID = 95,
 
     /// Aggregating transform
     AggregatingInOrderTransformID = 1'000,

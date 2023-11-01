@@ -148,8 +148,9 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, ssize_t priority, std::
 
         jobs.emplace(std::move(job), priority);
         ++scheduled_jobs;
-        new_job_or_shutdown.notify_one();
     }
+
+    new_job_or_shutdown.notify_one();
 
     return ReturnType(true);
 }

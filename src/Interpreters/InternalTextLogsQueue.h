@@ -21,7 +21,7 @@ public:
     void pushBlock(Block && log_block);
 
     /// Converts priority from Poco::Message::Priority to a string
-    static const char * getPriorityName(int priority);
+    static std::string_view getPriorityName(int priority);
 };
 
 using InternalTextLogsQueuePtr = std::shared_ptr<InternalTextLogsQueue>;
