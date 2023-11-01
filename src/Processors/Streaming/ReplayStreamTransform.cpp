@@ -1,6 +1,6 @@
 #include <Processors/Streaming/ReplayStreamTransform.h>
-#include <Processors/ISimpleTransform.h>
 
+#include <Processors/ISimpleTransform.h>
 #include <Processors/ProcessorID.h>
 #include <base/ClockUtils.h>
 #include <base/types.h>
