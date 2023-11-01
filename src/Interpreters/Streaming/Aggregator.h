@@ -1138,6 +1138,8 @@ private:
     void serializeAggregateStates(const AggregateDataPtr & place, WriteBuffer & wb) const;
     void deserializeAggregateStates(AggregateDataPtr & place, ReadBuffer & rb, Arena * arena) const;
 
+    void clearDataVariants(AggregatedDataVariants & data_variants) const;
+
     /// @return does need abort ?
     bool checkAndProcessResult(AggregatedDataVariants & result, bool & no_more_keys) const;
     /// proton: ends.

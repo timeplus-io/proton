@@ -23,11 +23,14 @@ void serializeHashMap(const Map & map, MappedSerializer && mapped_serializer, Wr
     });
 }
 
-/// For StringHashMap or TwoLevelStringHashMap, it requires StringRef key padded 8 keys or zero terminated.
-/// If the key is ColumnString, the `@template_param: requires_zero_terminated_string` is true
-template <bool requires_zero_terminated_string, typename Map, typename MappedDeserializer>
+template <bool is_string_hash_map, typename Map, typename MappedDeserializer>
 void deserializeHashMap(Map & map, MappedDeserializer && mapped_deserializer, Arena & pool, ReadBuffer & rb)
 {
+    /// For StringHashMap or TwoLevelStringHashMap, it requires StringRef key padded 8 keys(left and right).
+    /// So far, the Arena's MemoryChunk is always padding right 15, so we just pad left 8 here
+    if constexpr (is_string_hash_map)
+        pool.setPaddingLeft(8);
+
     typename Map::key_type key;
     typename Map::LookupResult lookup_result;
     bool inserted;
@@ -38,11 +41,7 @@ void deserializeHashMap(Map & map, MappedDeserializer && mapped_deserializer, Ar
         /* Key */
         if constexpr (std::is_same_v<typename Map::key_type, StringRef>)
         {
-            if constexpr (requires_zero_terminated_string)
-                key = DB::readStringBinaryWithZerotTerminatedInto(pool, rb);
-            else
-                key = DB::readStringBinaryInto(pool, rb);
-
+            key = DB::readStringBinaryInto(pool, rb);
             map.emplace(SerializedKeyHolder{key, pool}, lookup_result, inserted);
         }
         else
@@ -54,6 +53,10 @@ void deserializeHashMap(Map & map, MappedDeserializer && mapped_deserializer, Ar
         /* Mapped */
         mapped_deserializer(lookup_result->getMapped(), pool, rb);
     }
+
+    /// No need padding after deserialized
+    if constexpr (is_string_hash_map)
+        pool.setPaddingLeft(0);
 }
 
 /// HashMapsTemplate is a taken from HashJoin class and make it standalone

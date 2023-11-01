@@ -1873,10 +1873,7 @@ Block Aggregator::prepareBlockAndFill(
 
     /// proton: starts
     if (shouldClearStates(action, final))
-    {
-        destroyAllAggregateStates(data_variants);
-        data_variants.invalidate();
-    }
+        clearDataVariants(data_variants);
     /// proton: ends
 
     return res;
@@ -2443,11 +2440,12 @@ void NO_INLINE Aggregator::mergeSingleLevelDataImpl(
                 clear_states);
         }
 
-        /// `current` will not destroy the states of aggregate functions in the destructor
         if (clear_states)
         {
+            /// `current` will not destroy the states of aggregate functions in the destructor,
+            /// since already cleared up in `mergeData...Impl()`
             current.aggregator = nullptr;
-            current.invalidate();
+            clearDataVariants(current);
         }
     }
 }
@@ -3615,14 +3613,18 @@ void Aggregator::doRecover(AggregatedDataVariants & data_variants, ReadBuffer & 
     if (is_two_level && !data_variants.isTwoLevel())
         data_variants.convertToTwoLevel();
 
+    bool use_string_hash_map = data_variants.type == AggregatedDataVariants::Type::key_string
+        || data_variants.type == AggregatedDataVariants::Type::key_string_two_level
+        || data_variants.type == AggregatedDataVariants::Type::key_fixed_string
+        || data_variants.type == AggregatedDataVariants::Type::key_fixed_string_two_level;
+
     /// [aggr-func-state-in-hash-map]
     if (false)
     {
     } // NOLINT
 #define M(NAME, IS_TWO_LEVEL) \
     else if (data_variants.type == AggregatedDataVariants::Type::NAME) { \
-        /* key_string use a StringHashMap (key_string_two_level use a TwoLevelStringHashMap), which requires zero terminated string key */ \
-        if (data_variants.type == AggregatedDataVariants::Type::key_string || data_variants.type == AggregatedDataVariants::Type::key_string_two_level) \
+        if (use_string_hash_map) \
             DB::deserializeHashMap<true>(data_variants.NAME->data, [this](auto & mapped, Arena & pool, ReadBuffer & rb_) { deserializeAggregateStates(mapped, rb_, &pool); }, *data_variants.aggregates_pool, rb); \
         else \
             DB::deserializeHashMap<false>(data_variants.NAME->data, [this](auto & mapped, Arena & pool, ReadBuffer & rb_) { deserializeAggregateStates(mapped, rb_, &pool); }, *data_variants.aggregates_pool, rb); \
@@ -4069,10 +4071,8 @@ void Aggregator::mergeRetractedGroupsImpl(
             }
         });
 
-        /// Clear retracted data after finalization
-        src_retracted_table.clearAndShrink();
-        destroyAllAggregateStates(current_retracted);
-        current_retracted.invalidate();
+        /// Reset retracted data after finalization
+        clearDataVariants(current_retracted);
     }
 }
 
@@ -4133,6 +4133,29 @@ void Aggregator::deserializeAggregateStates(AggregateDataPtr & place, ReadBuffer
         for (size_t i = 0; i < params.aggregates_size; ++i)
             aggregate_functions[i]->deserialize(place + offsets_of_aggregate_states[i], rb, std::nullopt, arena);
     }
+}
+
+void Aggregator::clearDataVariants(AggregatedDataVariants & data_variants) const
+{
+    /// Clear states
+    destroyAllAggregateStates(data_variants);
+
+    /// Clear hash map
+    switch (data_variants.type)
+    {
+        case AggregatedDataVariants::Type::EMPTY:       break;
+        case AggregatedDataVariants::Type::without_key: break;
+
+    #define M(NAME, IS_TWO_LEVEL) \
+        case AggregatedDataVariants::Type::NAME: data_variants.NAME.reset(); break;
+        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
+    #undef M
+    }
+    data_variants.invalidate();
+
+    /// Reset pool
+    data_variants.aggregates_pools = Arenas(1, std::make_shared<Arena>());
+    data_variants.aggregates_pool = data_variants.aggregates_pools.back().get();
 }
 
 bool Aggregator::checkAndProcessResult(AggregatedDataVariants & result, bool & no_more_keys) const

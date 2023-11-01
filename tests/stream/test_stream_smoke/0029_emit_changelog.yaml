@@ -29,41 +29,41 @@ tests:
         - client: python
           query_type: table
           query: |
-            drop stream if exists test29_stream;
+            drop stream if exists test30_stream;
 
         - client: python
           query_type: table
-          exist: test29_stream
+          exist: test30_stream
           exist_wait: 2
           wait: 1
           query: |
-            create stream if not exists test29_stream (i int, k string);
+            create stream if not exists test30_stream (i int, k string);
 
         - client: python
           query_type: stream
-          query_id: 2900
-          depends_on_stream: test29_stream
+          query_id: 3000
+          depends_on_stream: test30_stream
           wait: 1
           query: |
-            select count() from test29_stream emit changelog periodic 1s;
+            select count() from test30_stream emit changelog periodic 1s;
 
         - client: python
           query_type: table
-          depends_on: 2900
+          depends_on: 3000
           wait: 1
           query: |
-            insert into test29_stream(i, k) values (1, 'k1');
+            insert into test30_stream(i, k) values (1, 'k1');
 
         - client: python
           query_type: table
-          kill: 2900
+          kill: 3000
           kill_wait: 3
           wait: 1
           query: |
-            insert into test29_stream(i, k) values (1, 'k2');
+            insert into test30_stream(i, k) values (1, 'k2');
 
     expected_results:
-      - query_id: '2900'
+      - query_id: '3000'
         expected_results:
           - [1, 1]
           - [1, -1]
@@ -80,41 +80,41 @@ tests:
         - client: python
           query_type: table
           query: |
-            drop stream if exists test29_vk_stream;
+            drop stream if exists test30_vk_stream;
 
         - client: python
           query_type: table
-          exist: test29_vk_stream
+          exist: test30_vk_stream
           exist_wait: 2
           wait: 1
           query: |
-            create stream if not exists test29_vk_stream (i int, k string) primary key i settings mode='versioned_kv';
+            create stream if not exists test30_vk_stream (i int, k string) primary key i settings mode='versioned_kv';
 
         - client: python
           query_type: stream
-          query_id: 2900
-          depends_on_stream: test29_vk_stream
+          query_id: 3000
+          depends_on_stream: test30_vk_stream
           wait: 1
           query: |
-            select k, count() from test29_vk_stream group by k emit changelog periodic 1s;
+            select k, count() from test30_vk_stream group by k emit changelog periodic 1s;
 
         - client: python
           query_type: table
-          depends_on: 2900
+          depends_on: 3000
           wait: 1
           query: |
-            insert into test29_vk_stream(i, k) values (1, 'k1')(2, 'k1');
+            insert into test30_vk_stream(i, k) values (1, 'k1')(2, 'k1');
 
         - client: python
           query_type: table
-          kill: 2900
+          kill: 3000
           kill_wait: 3
           wait: 1
           query: |
-            insert into test29_vk_stream(i, k) values (1, 'k2');
+            insert into test30_vk_stream(i, k) values (1, 'k2');
 
     expected_results:
-      - query_id: '2900'
+      - query_id: '3000'
         expected_results:
           - ["k1", 2, 1]
           - ["k1", 2, -1]
@@ -132,41 +132,41 @@ tests:
         - client: python
           query_type: table
           query: |
-            drop stream if exists test29_changelog_kv_stream;
+            drop stream if exists test30_changelog_kv_stream;
 
         - client: python
           query_type: table
-          exist: test29_changelog_kv_stream
+          exist: test30_changelog_kv_stream
           exist_wait: 2
           wait: 1
           query: |
-            create stream if not exists test29_changelog_kv_stream (i int, k string) primary key i settings mode='changelog_kv';
+            create stream if not exists test30_changelog_kv_stream (i int, k string) primary key i settings mode='changelog_kv';
 
         - client: python
           query_type: stream
-          query_id: 2900
-          depends_on_stream: test29_changelog_kv_stream
+          query_id: 3000
+          depends_on_stream: test30_changelog_kv_stream
           wait: 1
           query: |
-            select k, count() from test29_changelog_kv_stream group by k emit changelog periodic 1s;
+            select k, count() from test30_changelog_kv_stream group by k emit changelog periodic 1s;
 
         - client: python
           query_type: table
-          depends_on: 2900
+          depends_on: 3000
           wait: 1
           query: |
-            insert into test29_changelog_kv_stream(i, k) values (1, 'k1')(2, 'k1');
+            insert into test30_changelog_kv_stream(i, k) values (1, 'k1')(2, 'k1');
 
         - client: python
           query_type: table
-          kill: 2900
+          kill: 3000
           kill_wait: 3
           wait: 1
           query: |
-            insert into test29_changelog_kv_stream(i, k, _tp_delta) values (1, 'k1', -1)(1, 'k2', 1);
+            insert into test30_changelog_kv_stream(i, k, _tp_delta) values (1, 'k1', -1)(1, 'k2', 1);
 
     expected_results:
-      - query_id: '2900'
+      - query_id: '3000'
         expected_results:
           - ["k1", 2, 1]
           - ["k1", 2, -1]
@@ -184,41 +184,41 @@ tests:
         - client: python
           query_type: table
           query: |
-            drop stream if exists test29_stream;
+            drop stream if exists test30_stream;
 
         - client: python
           query_type: table
-          exist: test29_stream
+          exist: test30_stream
           exist_wait: 2
           wait: 1
           query: |
-            create stream if not exists test29_stream (i int, k string);
+            create stream if not exists test30_stream (i int, k string);
 
         - client: python
           query_type: stream
-          query_id: 2900
-          depends_on_stream: test29_stream
+          query_id: 3000
+          depends_on_stream: test30_stream
           wait: 1
           query: |
-            select k, count() from changelog(test29_stream, i) group by k emit changelog periodic 1s;
+            select k, count() from changelog(test30_stream, i) group by k emit changelog periodic 1s;
 
         - client: python
           query_type: table
-          depends_on: 2900
+          depends_on: 3000
           wait: 1
           query: |
-            insert into test29_stream(i, k) values (1, 'k1')(2, 'k1');
+            insert into test30_stream(i, k) values (1, 'k1')(2, 'k1');
 
         - client: python
           query_type: table
-          kill: 2900
+          kill: 3000
           kill_wait: 3
           wait: 1
           query: |
-            insert into test29_stream(i, k) values (1, 'k2');
+            insert into test30_stream(i, k) values (1, 'k2');
 
     expected_results:
-      - query_id: '2900'
+      - query_id: '3000'
         expected_results:
           - ["k1", 2, 1]
           - ["k1", 2, -1]
@@ -236,64 +236,64 @@ tests:
         - client: python
           query_type: table
           query: |
-            drop stream if exists test29_stream;
+            drop stream if exists test30_stream;
 
         - client: python
           query_type: table
-          exist: test29_stream
+          exist: test30_stream
           exist_wait: 2
           wait: 1
           query: |
-            create stream if not exists test29_stream (i int, k string);
+            create stream if not exists test30_stream (i int, k string);
 
         - client: python
           query_type: stream
-          query_id: 2900
-          depends_on_stream: test29_stream
+          query_id: 3000
+          depends_on_stream: test30_stream
           wait: 1
           query: |
-            select count() from (select k, count() from changelog(test29_stream, i) group by k emit changelog periodic 1s) emit periodic 1s;
+            select count() from (select k, count() from changelog(test30_stream, i) group by k emit changelog periodic 1s) emit periodic 1s;
 
         - client: python
           query_type: stream
-          query_id: 2901
-          depends_on_stream: test29_stream
+          query_id: 3001
+          depends_on_stream: test30_stream
           query: |
-            select count() from (select k, count() from changelog(test29_stream, i) group by k emit periodic 1s) emit changelog periodic 1s;
+            select count() from (select k, count() from changelog(test30_stream, i) group by k emit periodic 1s) emit changelog periodic 1s;
 
         - client: python
           query_type: stream
-          query_id: 2902
-          depends_on_stream: test29_stream
+          query_id: 3002
+          depends_on_stream: test30_stream
           query: |
-            select count() from (select k, count() from changelog(test29_stream, i) group by k emit changelog periodic 1s) emit changelog periodic 1s;
+            select count() from (select k, count() from changelog(test30_stream, i) group by k emit changelog periodic 1s) emit changelog periodic 1s;
 
         - client: python
           query_type: table
-          depends_on: 2902
+          depends_on: 3002
           wait: 1
           query: |
-            insert into test29_stream(i, k) values (1, 'k1')(2, 'k1');
+            insert into test30_stream(i, k) values (1, 'k1')(2, 'k1');
 
         - client: python
           query_type: table
-          kill: 2900,2901,2902
+          kill: 3000,3001,3002
           kill_wait: 3
           wait: 1
           query: |
-            insert into test29_stream(i, k) values (1, 'k2');
+            insert into test30_stream(i, k) values (1, 'k2');
 
     expected_results:
-      - query_id: '2900'
+      - query_id: '3000'
         expected_results:
           - [1]
           - [2]
-      - query_id: '2901'
+      - query_id: '3001'
         expected_results:
           - [1, 1]
           - [1, -1]
           - [2, 1]
-      - query_id: '2902'
+      - query_id: '3002'
         expected_results:
           - [1, 1]
           - [1, -1]
@@ -310,79 +310,79 @@ tests:
         - client: python
           query_type: table
           query: |
-            drop stream if exists test29_left_stream;
+            drop stream if exists test30_left_stream;
 
         - client: python
           query_type: table
           query: |
-            drop stream if exists test29_right_vk_stream;
+            drop stream if exists test30_right_vk_stream;
 
         - client: python
           query_type: table
-          exist: test29_left_stream
+          exist: test30_left_stream
           exist_wait: 2
           wait: 1
           query: |
-            create stream if not exists test29_left_stream (i int, k string);
+            create stream if not exists test30_left_stream (i int, k string);
 
         - client: python
           query_type: table
-          exist: test29_right_vk_stream
+          exist: test30_right_vk_stream
           exist_wait: 2
           wait: 1
           query: |
-            create stream if not exists test29_right_vk_stream (i int, k string) primary key i settings mode='versioned_kv';
+            create stream if not exists test30_right_vk_stream (i int, k string) primary key i settings mode='versioned_kv';
 
         - client: python
           query_type: stream
-          query_id: 2900
-          depends_on_stream: test29_right_vk_stream
+          query_id: 3000
+          depends_on_stream: test30_right_vk_stream
           wait: 1
           query: |
-            select i, count(), max(test29_right_vk_stream.k) from test29_left_stream join test29_right_vk_stream using(i) group by i emit changelog periodic 1s;
+            select i, count(), max(test30_right_vk_stream.k) from test30_left_stream join test30_right_vk_stream using(i) group by i emit changelog periodic 1s;
 
         - client: python
           query_type: stream
-          query_id: 2901
+          query_id: 3001
           query: |
-            select test29_right_vk_stream.k, count(), max(i) from test29_left_stream join test29_right_vk_stream using(i) group by test29_right_vk_stream.k emit changelog periodic 1s;
+            select test30_right_vk_stream.k, count(), max(i) from test30_left_stream join test30_right_vk_stream using(i) group by test30_right_vk_stream.k emit changelog periodic 1s;
 
         - client: python
           query_type: table
-          depends_on: 2901
+          depends_on: 3001
           wait: 1
           query: |
-            insert into test29_right_vk_stream(i, k) values (1, 'k1')(2, 'k2');
-
-        - client: python
-          query_type: table
-          wait: 1
-          query: |
-            insert into test29_left_stream(i, k) values (1, 'k1');
+            insert into test30_right_vk_stream(i, k) values (1, 'k1')(2, 'k2');
 
         - client: python
           query_type: table
           wait: 1
           query: |
-            insert into test29_right_vk_stream(i, k) values (1, 'kk1')(2, 'kk1');
+            insert into test30_left_stream(i, k) values (1, 'k1');
 
         - client: python
           query_type: table
-          kill: 2900,2901
+          wait: 1
+          query: |
+            insert into test30_right_vk_stream(i, k) values (1, 'kk1')(2, 'kk1');
+
+        - client: python
+          query_type: table
+          kill: 3000,3001
           kill_wait: 3
           wait: 1
           query: |
-            insert into test29_left_stream(i, k) values (1, 'k1')(2, 'k1');
+            insert into test30_left_stream(i, k) values (1, 'k1')(2, 'k1');
 
     expected_results:
-      - query_id: '2900'
+      - query_id: '3000'
         expected_results:
           - [1, 1, "k1", 1]
           - [1, 1, "k1", -1]
           - [1, 2, "kk1", 1]
           - [2, 1, "kk1", 1]
 
-      - query_id: '2901'
+      - query_id: '3001'
         expected_results:
           - ["k1", 1, 1, 1]
           - ["kk1", 2, 2, 1]
@@ -399,87 +399,87 @@ tests:
         - client: python
           query_type: table
           query: |
-            drop stream if exists test29_left_stream;
+            drop stream if exists test30_left_stream;
 
         - client: python
           query_type: table
           query: |
-            drop stream if exists test29_right_vk_stream;
+            drop stream if exists test30_right_vk_stream;
 
         - client: python
           query_type: table
-          exist: test29_left_stream
+          exist: test30_left_stream
           exist_wait: 2
           wait: 1
           query: |
-            create stream if not exists test29_left_stream (i int, k string);
+            create stream if not exists test30_left_stream (i int, k string);
 
         - client: python
           query_type: table
-          exist: test29_right_vk_stream
+          exist: test30_right_vk_stream
           exist_wait: 2
           wait: 1
           query: |
-            create stream if not exists test29_right_vk_stream (i int, k string) primary key i settings mode='versioned_kv';
+            create stream if not exists test30_right_vk_stream (i int, k string) primary key i settings mode='versioned_kv';
 
         - client: python
           query_type: stream
-          query_id: 2900
-          depends_on_stream: test29_right_vk_stream
+          query_id: 3000
+          depends_on_stream: test30_right_vk_stream
           wait: 1
           query: |
-            subscribe to select i, count(), max(test29_right_vk_stream.k) from test29_left_stream join test29_right_vk_stream using(i) group by i emit changelog periodic 1s settings checkpoint_interval=1;
+            subscribe to select i, count(), max(test30_right_vk_stream.k) from test30_left_stream join test30_right_vk_stream using(i) group by i emit changelog periodic 1s settings checkpoint_interval=1;
 
         - client: python
           query_type: table
-          depends_on: 2900
+          depends_on: 3000
           wait: 1
           query: |
-            insert into test29_right_vk_stream(i, k) values (1, 'k1')(2, 'k2');
+            insert into test30_right_vk_stream(i, k) values (1, 'k1')(2, 'k2');
 
         - client: python
           query_type: table
           wait: 1
           query: |
-            insert into test29_left_stream(i, k) values (1, 'k1');
+            insert into test30_left_stream(i, k) values (1, 'k1');
 
         - client: python
           query_type: table
           wait: 2
           query: |
-            kill query where query_id = '2900' sync;
+            kill query where query_id = '3000' sync;
 
         - client: python
           query_type: stream
-          query_id: 2900-1
+          query_id: 3000-1
           wait: 1
           query: |
-            recover from '2900';
+            recover from '3000';
 
         - client: python
           query_type: table
           wait: 1
           query: |
-            insert into test29_right_vk_stream(i, k) values (1, 'kk1')(2, 'kk1');
+            insert into test30_right_vk_stream(i, k) values (1, 'kk1')(2, 'kk1');
 
         - client: python
           query_type: table
           wait: 1
           query: |
-            insert into test29_left_stream(i, k) values (1, 'k1')(2, 'k1');
+            insert into test30_left_stream(i, k) values (1, 'k1')(2, 'k1');
 
         - client: python
           query_type: table
           wait: 3
           query: |
-            unsubscribe to '2900';
+            unsubscribe to '3000';
 
     expected_results:
-      - query_id: '2900'
+      - query_id: '3000'
         expected_results:
           - [1, 1, "k1", 1]
 
-      - query_id: '2900-1'
+      - query_id: '3000-1'
         expected_results:
           - [1, 1, "k1", -1]
           - [1, 2, "kk1", 1]

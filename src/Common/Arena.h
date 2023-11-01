@@ -54,13 +54,13 @@ private:
         Int64 timestamp = std::numeric_limits<Int64>::min();
         /// proton: ends
 
-        MemoryChunk(size_t size_, MemoryChunk * prev_, Int64 timestamp_)
+        MemoryChunk(size_t size_, MemoryChunk * prev_, Int64 timestamp_, size_t pad_left_)
         {
             ProfileEvents::increment(ProfileEvents::ArenaAllocChunks);
             ProfileEvents::increment(ProfileEvents::ArenaAllocBytes, size_);
 
             begin = reinterpret_cast<char *>(Allocator<false>::alloc(size_));
-            pos = begin;
+            pos = begin + pad_left_; /// skip left padding.
             end = begin + size_ - pad_right;
             prev = prev_;
 
@@ -108,6 +108,8 @@ private:
     ///    and recycle these which have upper bound timestamp less than `t`.
     /// 4) Depending on size etc, some of the recycled chunks will be added to `free_lists` for future memory allocation
     Int64 current_timestamp = std::numeric_limits<Int64>::min();
+
+    size_t pad_left = 0;
 
     size_t chunks = 0;
     size_t size_in_bytes_in_free_lists = 0;
@@ -169,7 +171,7 @@ private:
                 return;
         }
 
-        head = new MemoryChunk(nextSize(min_size + pad_right), head, current_timestamp);
+        head = new MemoryChunk(nextSize(min_size + pad_right), head, current_timestamp, pad_left);
         size_in_bytes += head->size();
 
         /// proton: starts
@@ -227,7 +229,7 @@ private:
 public:
     explicit Arena(size_t initial_size_ = 4096, size_t growth_factor_ = 2, size_t linear_growth_threshold_ = 128 * 1024 * 1024)
         : growth_factor(growth_factor_), linear_growth_threshold(linear_growth_threshold_),
-        head(new MemoryChunk(initial_size_, nullptr, std::numeric_limits<Int64>::min())), size_in_bytes(head->size()),
+        head(new MemoryChunk(initial_size_, nullptr, std::numeric_limits<Int64>::min(), 0)), size_in_bytes(head->size()),
         page_size(static_cast<size_t>(::getPageSize())), chunks(1)
     {
     }
@@ -432,6 +434,19 @@ public:
         return chunks;
     }
 
+    void setPaddingLeft(size_t pad_left_)
+    {
+        if (pad_left == pad_left_)
+            return;
+
+        pad_left = pad_left_;
+        char * padded_pos = head->begin + pad_left;
+        /// Assume `end - begin` always greater than `pad_left`
+        assert(padded_pos < head->end);
+        if (padded_pos > head->pos)
+            head->pos = padded_pos;
+    }
+
     void enableRecycle(bool enable_recycle)
     {
         recycle_enabled = enable_recycle;
@@ -496,7 +511,7 @@ public:
 
             if (p == head)
             {
-                head = new MemoryChunk(page_size, nullptr, current_timestamp);
+                head = new MemoryChunk(page_size, nullptr, current_timestamp, pad_left);
                 size_in_bytes += head->size();
                 ++chunks;
                 assert(chunks == 1);
