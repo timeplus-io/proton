@@ -725,7 +725,13 @@ Pipe StorageFile::read(
         ? ColumnsDescription{storage_snapshot->getSampleBlockForColumns(column_names).getNamesAndTypesList()}
         : storage_snapshot->metadata->getColumns();
 
-    if (query_info.streaming_window_params && query_info.syntax_analyzer_result->streaming)
+    bool is_streaming = false;
+
+    if (query_info.syntax_analyzer_result) {
+        is_streaming = query_info.syntax_analyzer_result->streaming;
+    }
+
+    if (query_info.streaming_window_params && is_streaming)
     {
         /// Filter out reserved columns
         for (const auto * reserved_col :
@@ -746,7 +752,7 @@ Pipe StorageFile::read(
             read_buffer = std::move(peekable_read_buffer_from_fd);
 
         pipes.emplace_back(std::make_shared<StorageFileSource>(
-            this_ptr, storage_snapshot, context, max_block_size, files_info, columns_for_format, std::move(read_buffer), query_info.syntax_analyzer_result->streaming));
+            this_ptr, storage_snapshot, context, max_block_size, files_info, columns_for_format, std::move(read_buffer), is_streaming));
     }
 
     return Pipe::unitePipes(std::move(pipes));
