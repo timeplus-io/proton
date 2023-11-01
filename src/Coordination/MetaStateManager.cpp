@@ -98,6 +98,15 @@ void MetaStateManager::loadLogStore(uint64_t last_commited_index, uint64_t logs_
     log_store->init(last_commited_index, logs_to_keep);
 }
 
+void MetaStateManager::system_exit(const int /* exit_code */)
+{
+    /// NuRaft itself calls exit() which will call atexit handlers
+    /// and this may lead to an issues in multi-threaded program.
+    ///
+    /// Override this with abort().
+    abort();
+}
+
 void MetaStateManager::flushLogStore()
 {
     log_store->flush();
