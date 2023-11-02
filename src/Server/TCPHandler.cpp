@@ -760,6 +760,7 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
             return;
 
         sendData({});
+        last_sent_snapshots.clear();
     }
 
     sendProgress();
