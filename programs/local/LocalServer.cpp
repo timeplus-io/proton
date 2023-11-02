@@ -448,23 +448,6 @@ void LocalServer::connect()
 int LocalServer::main(const std::vector<std::string> & /*args*/)
 try
 {
-    const char * holloween = R"(.___,_______,_____Happy_Halloween____.
-| ./(       )\.        |             |
-| )  \/\_/\/  (        |             |
-| `)  (^Y^)  (`      \(|)/           |
-|  `),-(~)-,(`      --(")--          |
-|      '"'      \\    /`\            |
-|          .-'```^```'-.    ,     ,  |
-|         /   (\ __ /)  \   )\___/(  |
-|         |    ` \/ `   |  {(@)v(@)} |
-|         \    \____/   /   {|~~~|}  |
-|          `'-.......-'`    {/^^^\}  |
-.___ldb______________________`m-m`___.
-
-Credit : https://www.asciiart.eu/holiday-and-events/halloween)";
-
-    std::cerr << "\n" << holloween << "\n\n";
-
     UseSSL use_ssl;
     thread_status.emplace();
     setupSignalHandler();

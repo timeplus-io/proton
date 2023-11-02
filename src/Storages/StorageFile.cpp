@@ -727,9 +727,8 @@ Pipe StorageFile::read(
 
     bool is_streaming = false;
 
-    if (query_info.syntax_analyzer_result) {
+    if (query_info.syntax_analyzer_result)
         is_streaming = query_info.syntax_analyzer_result->streaming;
-    }
 
     if (query_info.streaming_window_params && is_streaming)
     {
