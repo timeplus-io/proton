@@ -16,7 +16,7 @@
   <a href="#introduction"><strong>Introduction</strong></a> ·
   <a href="#architecture"><strong>Architecture</strong></a> ·
   <a href="#get-started"><strong>Get Started</strong></a> ·
-  <a href="#more-examples"><strong>More Examples</strong></a> ·
+  <a href="#whats-next"><strong>What's next</strong></a> ·
   <a href="#documentation"><strong>Documentation</strong></a> ·
   <a href="#contributing"><strong>Contributing</strong></a> ·
   <a href="#need-help"><strong>Need help?</strong></a>
@@ -95,11 +95,23 @@ You should see data like the following:
 └─────────┴─────────┴──────────────────┴──────────────────┘
 ```
 
-### More Examples
+### What's next?
 
 Now that you're running Proton and have created your first stream, query, and view, you can explore [reading and writing data from Apache Kafka](https://docs.timeplus.com/proton-kafka#tutorial) with External Streams, or view the [Proton documentation](https://docs.timeplus.com/proton) to explore additional capabilities.
 
 To see more examples of using Proton, check out the [examples](https://github.com/timeplus-io/proton/tree/develop/examples) folder.
+
+The following drivers are available:
+
+* https://github.com/timeplus-io/proton-java-driver JDBC and other Java clients
+* https://github.com/timeplus-io/proton-go-driver
+* https://github.com/timeplus-io/proton-python-driver
+
+Integrations with other systems:
+
+* https://github.com/timeplus-io/proton-grafana-source
+* https://github.com/timeplus-io/homebrew-timeplus
+* https://github.com/timeplus-io/dbt-proton
 
 ## Get more with Timeplus
 
