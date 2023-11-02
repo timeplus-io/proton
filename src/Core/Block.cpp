@@ -879,7 +879,9 @@ void Block::reorderColumnsInplace(const std::vector<UInt16> & positions)
         result.insert(std::move(target_col));
     }
 
-    swap(result);
+    /// Don't swap block.info
+    data.swap(result.data);
+    index_by_name.swap(result.index_by_name);
 }
 
 void Block::renameColumn(String new_name, size_t column_pos)
@@ -960,7 +962,9 @@ void Block::reorderColumnsInplace(const Block & header)
             result.insert(std::move(target_col));
         }
 
-        swap(result);
+        /// Don't swap block.info
+        data.swap(result.data);
+        index_by_name.swap(result.index_by_name);
     // }
 }
 
