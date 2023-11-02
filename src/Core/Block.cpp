@@ -880,6 +880,7 @@ void Block::reorderColumnsInplace(const std::vector<UInt16> & positions)
     }
 
     swap(result);
+    info = result.info;
 }
 
 void Block::renameColumn(String new_name, size_t column_pos)

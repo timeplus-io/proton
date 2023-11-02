@@ -53,10 +53,14 @@ public:
         setCodec(DB::CompressionMethodByte::NONE);
     }
 
-    RecordPtr clone(DB::Block data) const
+    Record(RecordSN sn_, DB::Block && block_) : flags(MAGIC << MAGIC_OFFSET), sn(sn_), block_format(BlockFormat::MAX_FORMAT), block(std::move(block_))
     {
-        auto r{std::make_shared<Record>(sn)};
-        r->setBlock(data);
+        setCodec(DB::CompressionMethodByte::NONE);
+    }
+
+    RecordPtr clone(DB::Block && block_) const
+    {
+        auto r{std::make_shared<Record>(sn, std::move(block_))};
         r->stream = stream;
         r->key = key;
         r->headers = headers;
@@ -126,12 +130,18 @@ public:
     auto & getHeaders() { return headers; }
     const auto & getHeaders() const { return headers; }
 
-    void setBlock(DB::Block block_)
+    void setBlock(DB::Block && block_, bool override_block_info)
     {
-        /// FIXME
-        auto append_time = block.info.appendTime();
-        block.swap(block_);
-        block.info.setAppendTime(append_time);
+        if (override_block_info)
+        {
+            block.swap(block_);
+        }
+        else
+        {
+            auto info = block.info;
+            block.swap(block_);
+            block.info = info;
+        }
     }
     DB::Block & getBlock() { return block; }
     const DB::Block & getBlock() const { return block; }
