@@ -1992,6 +1992,14 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                 /// During execution, we need patch the Aggregation Pipe as well to produce `emit_version()` column to match the ActionsDAG
                 query_analyzer.aggregated_columns.push_back({ProtonConsts::RESERVED_EMIT_VERSION, DataTypeFactory::instance().get("int64")});
             }
+
+            if (Streaming::isChangelogDataStream(analysis_ctx.data_stream_semantic))
+            {
+                /// Here we are manually fixing the ActionsDAG to produce `_tp_delta` column to downstream pipe.
+                /// ActionsDAG: source_header -> ... -> Aggregation -> Aggregation Output + manually inserted `_tp_delta` column
+                /// During execution, we need patch the Aggregation Pipe as well to produce `_tp_delta` column to match the ActionsDAG
+                query_analyzer.aggregated_columns.push_back({ProtonConsts::RESERVED_DELTA_FLAG, DataTypeFactory::instance().get("int8")});
+            }
             /// proton: ends
 
             if (query_analyzer.appendHaving(chain, only_types || !second_stage))

@@ -15,10 +15,12 @@ public:
 
     String getName() const override { return "GlobalAggregatingTransformWithSubstream"; }
 
+protected:
+    SubstreamContextPtr getOrCreateSubstreamContext(const SubstreamID & id) override;
+    std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, const SubstreamContextPtr & substream_ctx) override;
+
 private:
     void finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx) override;
-
-    inline void doFinalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx);
 };
 
 }

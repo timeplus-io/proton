@@ -358,7 +358,7 @@ public:
         UInt64 block_size_,
         UInt64 random_seed_,
         Block block_header_,
-        const ColumnsDescription our_columns_,
+        const ColumnsDescription & our_columns_,
         ContextPtr context_,
         UInt64 events_per_second_,
         UInt64 interval_time_)
@@ -631,22 +631,19 @@ Pipe StorageRandom::read(
     size_t max_block_size,
     size_t num_streams)
 {
-    storage_snapshot->check(column_names);
-
     Pipes pipes;
     pipes.reserve(num_streams);
 
     Block block_header;
     const ColumnsDescription & our_columns = storage_snapshot->metadata->getColumns();
-    for (const auto & name : column_names)
-    {
-        const auto & name_type = our_columns.get(name);
-        MutableColumnPtr column = name_type.type->createColumn();
-        block_header.insert({std::move(column), name_type.type, name_type.name});
-    }
+
+    if (!column_names.empty())
+        block_header = storage_snapshot->getSampleBlockForColumns(column_names);
+    else
+        block_header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
+
     /// Will create more seed values for each source from initial seed.
     pcg64 generate(random_seed);
-
 
     if (events_per_second < num_streams)
     {

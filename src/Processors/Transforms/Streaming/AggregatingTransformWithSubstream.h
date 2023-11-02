@@ -86,10 +86,10 @@ private:
     virtual void finalize(const SubstreamContextPtr &, const ChunkContextPtr &) { }
 
 protected:
-    void emitVersion(Block & block, const SubstreamContextPtr & substream_ctx);
+    void emitVersion(Chunk & chunk, const SubstreamContextPtr & substream_ctx);
     /// return {should_abort, need_finalization} pair
     virtual std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, const SubstreamContextPtr & substream_ctx);
-    void setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx);
+    void setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx, Chunk retracted_chunk = {});
 
     virtual SubstreamContextPtr getOrCreateSubstreamContext(const SubstreamID & id);
     bool removeSubstreamContext(const SubstreamID & id);
@@ -121,6 +121,7 @@ protected:
     bool read_current_chunk = false;
 
     /// Aggregated result which is pushed to downstream output
+    Chunk current_chunk_retracted;
     Chunk current_chunk_aggregated;
     bool has_input = false;
 

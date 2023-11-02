@@ -29,6 +29,13 @@ WindowAggregatingTransform::WindowAggregatingTransform(
     assert(
         params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
         || params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END);
+
+    const auto & output_header = getOutputs().front().getHeader();
+    if (output_header.has(ProtonConsts::STREAMING_WINDOW_START))
+        window_start_col_pos = output_header.getPositionByName(ProtonConsts::STREAMING_WINDOW_START);
+
+    if (output_header.has(ProtonConsts::STREAMING_WINDOW_END))
+        window_end_col_pos = output_header.getPositionByName(ProtonConsts::STREAMING_WINDOW_END);
 }
 
 bool WindowAggregatingTransform::needFinalization(Int64 min_watermark) const
@@ -146,47 +153,56 @@ void WindowAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr &
 
     std::atomic<bool> is_cancelled{false};
 
-    Block merged_block;
-    Block block;
+    Chunk merged_chunk;
+    Chunk chunk;
 
     assert(!prepared_windows_with_buckets.empty());
     for (const auto & window_with_buckets : prepared_windows_with_buckets)
     {
         if (window_with_buckets.buckets.size() == 1)
         {
-            block = params->aggregator.mergeAndConvertOneBucketToBlock(
-                *data, first->aggregates_pool, params->final, ConvertAction::STREAMING_EMIT, window_with_buckets.buckets[0], &is_cancelled);
+            chunk = convertToChunk(params->aggregator.mergeAndConvertOneBucketToBlock(
+                *data,
+                first->aggregates_pool,
+                params->final,
+                ConvertAction::STREAMING_EMIT,
+                window_with_buckets.buckets[0],
+                &is_cancelled));
         }
         else
         {
             params->aggregator.mergeBuckets(
                 *data, first->aggregates_pool, params->final, ConvertAction::INTERNAL_MERGE, window_with_buckets.buckets);
-            block = params->aggregator.spliceAndConvertBucketsToBlock(
-                *first, params->final, ConvertAction::INTERNAL_MERGE, window_with_buckets.buckets);
+            chunk = convertToChunk(params->aggregator.spliceAndConvertBucketsToBlock(
+                *first, params->final, ConvertAction::INTERNAL_MERGE, window_with_buckets.buckets));
         }
 
         if (is_cancelled)
             return;
 
         if (needReassignWindow())
-            reassignWindow(block, window_with_buckets.window);
+            reassignWindow(chunk, window_with_buckets.window, params->params.window_params->time_col_is_datetime64, window_start_col_pos, window_end_col_pos);
 
         if (params->emit_version && params->final)
-            emitVersion(block);
+            emitVersion(chunk);
 
-        if (merged_block)
+        if (merged_chunk)
         {
-            assertBlocksHaveEqualStructure(merged_block, block, "merging buckets for streaming two level hashtable");
-            for (size_t i = 0, size = merged_block.columns(); i < size; ++i)
+            assert(chunk.getNumColumns() == merged_chunk.getNumColumns());
+            auto source_columns = chunk.detachColumns();
+            auto merged_columns = merged_chunk.detachColumns();
+            for (size_t i = 0, size = merged_columns.size(); i < size; ++i)
             {
-                const auto source_column = block.getByPosition(i).column;
-                auto mutable_column = IColumn::mutate(std::move(merged_block.getByPosition(i).column));
+                auto mutable_column = IColumn::mutate(std::move(merged_columns[i]));
+                auto & source_column = source_columns[i];
                 mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
-                merged_block.getByPosition(i).column = std::move(mutable_column);
+                merged_columns[i] = std::move(mutable_column);
             }
+            auto num_rows = merged_columns[0]->size();
+            merged_chunk.setColumns(std::move(merged_columns), num_rows);
         }
         else
-            merged_block = std::move(block);
+            merged_chunk = std::move(chunk);
     }
 
     many_data->finalized_window_end.store(prepared_windows_with_buckets.back().window.end, std::memory_order_relaxed);
@@ -203,8 +219,8 @@ void WindowAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr &
 
     many_data->finalized_watermark.store(finalized_watermark, std::memory_order_relaxed);
 
-    if (merged_block)
-        setCurrentChunk(convertToChunk(merged_block), chunk_ctx);
+    if (merged_chunk)
+        setCurrentChunk(std::move(merged_chunk), chunk_ctx);
 }
 
 void WindowAggregatingTransform::removeBuckets(Int64 finalized_watermark)
