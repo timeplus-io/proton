@@ -132,16 +132,9 @@ public:
 
     void setBlock(DB::Block && block_, bool override_block_info)
     {
-        if (override_block_info)
-        {
-            block.swap(block_);
-        }
-        else
-        {
-            auto info = block.info;
-            block.swap(block_);
-            block.info = info;
-        }
+        block.swap(block_);
+        if (!override_block_info)
+            block.info = block_.info;
     }
     DB::Block & getBlock() { return block; }
     const DB::Block & getBlock() const { return block; }
