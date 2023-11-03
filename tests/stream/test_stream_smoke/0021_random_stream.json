@@ -352,6 +352,28 @@
                 ]
               }
             ]
+          },
+          {
+            "id": 16,
+            "tags": ["random stream table query"],
+            "name": "test random stream table query",
+            "description": "test random stream table query",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings eps=1000, interval_time=80"},
+                  {"client":"python", "query_type": "table", "query_id":"2225", "wait":2, "query":"select count(1) from table(test22_create_random) settings max_threads=10, max_block_size=10"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {
+                "query_id":"2225", "expected_results":[
+                    ["100"]
+                ]
+              }
+            ]
           }
     ]
   }
