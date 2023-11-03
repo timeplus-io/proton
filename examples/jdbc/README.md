@@ -1,0 +1,70 @@
+# How to connect to Proton via JDBC
+
+This docker compose file demonstrates how to connect to Proton via JDBC driver.
+
+## Start Proton with data generator
+
+Simply run `docker compose up` in this folder. Two docker containers in the stack:
+
+1. ghcr.io/timeplus-io/proton:latest, as the streaming database. Port 8463 is exposed so that Grafana can connect to it.
+2. timeplus/cardemo:latest, as the data generator
+
+Please note port 3218 from the Proton container is exposed to the host. You need this port to connect to Proton via JDBC driver.
+
+## Connect to Proton via JDBC driver
+
+Grab the latest JDBC driver from https://github.com/timeplus-io/proton-java-driver/releases
+
+Assuming you have experience with JDBC, the key information you need are:
+* JDBC URL is `jdbc:ch://localhost:3218` or `jdbc:ch://localhost:3218/default`
+* Username is `default` and password is an empty string
+* Driver class is `com.proton.jdbc.ProtonDriver`
+
+Please note, by default Proton's query behavior is streaming SQL, looking for new data in the future and never ends. This can be considered as hang for JDBC client. So please use `select .. from .. LIMIT 100` to stop the query at 100 events. Or use a historical query, such as `select .. from table(car_live_data)..`
+
+Here is an example Java code:
+
+```java
+package test_jdbc_driver;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+
+
+public class App {
+    static int query(String url, String user, String password, String table) throws SQLException {
+        String sql = "select * from " + table+" limit 10";
+        System.out.println(sql);
+        try (Connection conn = DriverManager.getConnection(url, user, password);
+                Statement stmt = conn.createStatement();
+                ResultSet rs = stmt.executeQuery(sql)) {
+                //ResultSet rs = stmt.executeQuery("select 1")) {
+            int count = 0;
+            while (rs.next()) {
+                count++;
+                System.out.println(rs.getString(1));
+                System.out.println(rs.getString(2));
+            }
+            return count;
+        }
+    }    
+    public static void main(String[] args) {
+        String url = "jdbc:ch://localhost:3218";
+        String user = System.getProperty("user", "default");
+        String password = System.getProperty("password", "");
+        String table = "car_live_data";
+
+        try {
+            query(url, user, password, table);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+You can also connect to Proton from GUI tools that supports JDBC, such as DBeaver.
