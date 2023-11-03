@@ -1,4 +1,3 @@
-#include <utility>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
@@ -418,10 +417,15 @@ protected:
     {
         if (!is_streaming)
         {
-            /// random stream table query will return a block_size of chunk and end query.
-            auto chunk = doGenerate(block_size);
-            block_size = 0;
-            return chunk;
+            if (block_size)
+            {
+                /// random stream table query will return a block_size of chunk and end query.
+                auto chunk = doGenerate(block_size);
+                block_size = 0;
+                return chunk;
+            }
+
+            return {};
         }
 
         if (events_per_second != 0)
@@ -456,7 +460,7 @@ protected:
     Chunk doGenerate(UInt64 block_size_)
     {
         if (block_size_ == 0)
-            return {};
+            return header_chunk.clone();
 
         Columns columns;
         columns.reserve(block_full.columns());
@@ -664,13 +668,13 @@ Pipe StorageRandom::read(
             for (size_t i = 0; i < num_streams; i++)
             {
                 pipes.emplace_back(
-                    std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, 0, 1000, (query_info.syntax_analyzer_result->streaming)));
+                    std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, 0, 1000, query_info.syntax_analyzer_result->streaming));
             }
         }
         /// number of datas generated per second is less than the number of thread;
         for (size_t i = 0; i < events_per_second; i++) {
             pipes.emplace_back(
-                std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, 1, 1000, (query_info.syntax_analyzer_result->streaming)));
+                std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, 1, 1000, query_info.syntax_analyzer_result->streaming));
         }
         
     }
@@ -682,11 +686,11 @@ Pipe StorageRandom::read(
         /// number of data generated per second is bigger than the number of thread;
         for (size_t i = 0; i < num_streams - 1; i++) {
             pipes.emplace_back(
-                std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread, interval_time, (query_info.syntax_analyzer_result->streaming)));
+                std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread, interval_time, query_info.syntax_analyzer_result->streaming));
         }
         /// The last thread will do the remaining work
         pipes.emplace_back(
-            std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread + remainder, interval_time, (query_info.syntax_analyzer_result->streaming)));
+            std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread + remainder, interval_time, query_info.syntax_analyzer_result->streaming));
 
     }
     return Pipe::unitePipes(std::move(pipes));
