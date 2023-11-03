@@ -1,3 +1,4 @@
+#include <utility>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
@@ -13,6 +14,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/NestedUtils.h>
 #include <Functions/FunctionFactory.h>
+#include <Interpreters/TreeRewriter.h>
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
@@ -361,7 +363,8 @@ public:
         const ColumnsDescription & our_columns_,
         ContextPtr context_,
         UInt64 events_per_second_,
-        UInt64 interval_time_)
+        UInt64 interval_time_,
+        bool is_streaming_)
         : ISource(Nested::flatten(prepareBlockToFill(block_header_)), true, ProcessorID::GenerateRandomSourceID)
         , block_size(block_size_)
         , block_full(std::move(block_header_))
@@ -372,7 +375,7 @@ public:
         , header_chunk(Nested::flatten(block_full.cloneEmpty()).getColumns(), 0)
         , generate_interval(interval_time_)
     {
-        is_streaming = true;
+        is_streaming = is_streaming_;
         block_idx_in_window = 0;
         max_full_block_count = events_per_second_ / block_size;
         partial_size = events_per_second_ % block_size;
@@ -413,6 +416,14 @@ public:
 protected:
     Chunk generate() override
     {
+        if (!is_streaming)
+        {
+            /// random stream table query will return a block_size of chunk and end query.
+            auto chunk = doGenerate(block_size);
+            block_size = 0;
+            return chunk;
+        }
+
         if (events_per_second != 0)
         {
             int is_special = index - index / interval_count * interval_count;
@@ -445,7 +456,7 @@ protected:
     Chunk doGenerate(UInt64 block_size_)
     {
         if (block_size_ == 0)
-            return header_chunk.clone();
+            return {};
 
         Columns columns;
         columns.reserve(block_full.columns());
@@ -625,7 +636,7 @@ void StorageRandom::read(
 Pipe StorageRandom::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & /*query_info*/,
+    SelectQueryInfo & query_info,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
     size_t max_block_size,
@@ -653,13 +664,13 @@ Pipe StorageRandom::read(
             for (size_t i = 0; i < num_streams; i++)
             {
                 pipes.emplace_back(
-                    std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, 0, 1000));
+                    std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, 0, 1000, (query_info.syntax_analyzer_result->streaming)));
             }
         }
         /// number of datas generated per second is less than the number of thread;
         for (size_t i = 0; i < events_per_second; i++) {
             pipes.emplace_back(
-                std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, 1, 1000));
+                std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, 1, 1000, (query_info.syntax_analyzer_result->streaming)));
         }
         
     }
@@ -671,11 +682,11 @@ Pipe StorageRandom::read(
         /// number of data generated per second is bigger than the number of thread;
         for (size_t i = 0; i < num_streams - 1; i++) {
             pipes.emplace_back(
-                std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread, interval_time));
+                std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread, interval_time, (query_info.syntax_analyzer_result->streaming)));
         }
         /// The last thread will do the remaining work
         pipes.emplace_back(
-            std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread + remainder, interval_time));
+            std::make_shared<GenerateRandomSource>(max_block_size, generate(), block_header, our_columns, context, count_per_thread + remainder, interval_time, (query_info.syntax_analyzer_result->streaming)));
 
     }
     return Pipe::unitePipes(std::move(pipes));
