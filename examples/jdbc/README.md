@@ -18,11 +18,11 @@ Grab the latest JDBC driver from https://github.com/timeplus-io/proton-java-driv
 Assuming you have experience with JDBC, the key information you need are:
 * JDBC URL is `jdbc:ch://localhost:3218` or `jdbc:ch://localhost:3218/default`
 * Username is `default` and password is an empty string
-* Driver class is `com.proton.jdbc.ProtonDriver`
+* Driver class is `com.timeplus.proton.jdbc.ProtonDriver`
 
 Please note, by default Proton's query behavior is streaming SQL, looking for new data in the future and never ends. This can be considered as hang for JDBC client. So please use `select .. from .. LIMIT 100` to stop the query at 100 events. Or use a historical query, such as `select .. from table(car_live_data)..`
 
-Here is an example Java code:
+### Example Java code
 
 ```java
 package test_jdbc_driver;
@@ -67,4 +67,21 @@ public class App {
 }
 ```
 
+### Connnect to Proton via DBeaver
+
 You can also connect to Proton from GUI tools that supports JDBC, such as DBeaver.
+
+First add the Proton JDBC driver to DBeaver. Taking DBeaver 23.2.3 as an example, choose "Driver Manager" from "Database" menu. Click the "New" button, and use the following settings:
+* Driver Name: Timeplus Proton
+* Driver Type: Generic
+* Class Name: com.timeplus.proton.jdbc.ProtonDriver
+* URL Tempalte: jdbc:ch://localhost:3218/default
+* Default Port: 3218
+* Default Database: default
+* Default User: default
+
+In the "Libaries" tab, click "Add File" and choose the proton-jdbc-[version].jar. Click the "Find Class" button to load the class. (If no JDBC class is found, save that dialog and edit the driver again.
+
+Create a new database connection, choose "Timeplus Proton" and accept the default settings. Click the "Test Connection.." to verify the connection is okay.
+
+Open a SQL script for this connection, type the sample SQL `select count() from table(car_live_data);` Ctrl+Enter to run the query and get the result.
