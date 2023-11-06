@@ -1939,10 +1939,10 @@ void StorageStream::checkReady() const
 }
 std::vector<nlog::RecordSN> StorageStream::getLastSNs() const
 {
-    std::vector<nlog::RecordSN> lastsns;
+    std::vector<nlog::RecordSN> last_sns;
     for (const auto & stream_shard : stream_shards)
-        lastsns.emplace_back(stream_shard->lastSN());
+        last_sns.emplace_back(stream_shard->lastSN());
 
-    return lastsns;
+    return last_sns;
 }
 }
