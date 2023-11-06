@@ -30,6 +30,7 @@ ReplayStreamStep::ReplayStreamStep(const DataStream & input_stream_, Float32 rep
 
 void ReplayStreamStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
 {
+    /// FIXME: `StorageStream::getLastSNs()` result is invalid for multiple shards in cluster
     if (unlikely(pipeline.getNumStreams() != shards_last_sns.size()))
         throw Exception("Input Stream is not equal to the shard's num", ErrorCodes::LOGICAL_ERROR);
 

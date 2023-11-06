@@ -2345,14 +2345,13 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             {
                 if (const auto * proxy = storage->as<Streaming::ProxyStream>())
                 {
-                    const auto & variant_storage_or_subquery = proxy->getProxyStorageOrSubquery();
-                    const auto * nested_storage = std::get_if<StoragePtr>(&variant_storage_or_subquery);
+                    const auto & proxyed = proxy->getProxyStorageOrSubquery();
+                    const auto * nested_storage = std::get_if<StoragePtr>(&proxyed);
                     if (nested_storage)
-                        storagestream = storage->as<StorageStream>();
+                        storagestream = (*nested_storage)->as<StorageStream>();
                 }
                 else
                     storagestream = storage->as<StorageStream>();
-                    // [[maybe_unused]] std::shared_ptr<StorageStream> tmp= storage->as<StorageStream>();
 
                 if (!storagestream)
                     throw Exception("Replay Stream is only support append-only stream", ErrorCodes::NOT_IMPLEMENTED);
