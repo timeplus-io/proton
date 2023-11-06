@@ -275,7 +275,7 @@ public:
     static bool cancelled() { return exit_on_signal.test(); }
 };
 
-/// This signal handler is set only for SIGINT.
+/// This signal handler is set for SIGINT and SIGQUIT.
 void interruptSignalHandler(int signum)
 {
     if (QueryInterruptHandler::stop())
@@ -308,11 +308,14 @@ void ClientBase::setupSignalHandler()
     sigemptyset(&new_act.sa_mask);
 #else
     if (sigemptyset(&new_act.sa_mask))
-        throw Exception(ErrorCodes::CANNOT_SET_SIGNAL_HANDLER, "Cannot set signal handler.");
+        throwFromErrno("Cannot set signal handler.", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
 #endif
 
     if (sigaction(SIGINT, &new_act, nullptr))
-        throw Exception(ErrorCodes::CANNOT_SET_SIGNAL_HANDLER, "Cannot set signal handler.");
+        throwFromErrno("Cannot set signal handler.", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
+
+    if (sigaction(SIGQUIT, &new_act, nullptr))
+        throwFromErrno("Cannot set signal handler.", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
 }
 
 
