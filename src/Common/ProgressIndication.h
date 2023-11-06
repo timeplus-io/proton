@@ -8,11 +8,10 @@
 #include <Common/Stopwatch.h>
 
 
-/// http://en.wikipedia.org/wiki/ANSI_escape_code
-#define CLEAR_TO_END_OF_LINE "\033[K"
-
 namespace DB
 {
+
+class WriteBufferFromFileDescriptor;
 
 struct ThreadEventData
 {
@@ -29,13 +28,12 @@ using HostToThreadTimesMap = std::unordered_map<String, ThreadIdToTimeMap>;
 class ProgressIndication
 {
 public:
-    /// Write progress to stderr.
-    void writeProgress();
+    /// Write progress bar.
+    void writeProgress(WriteBufferFromFileDescriptor & message);
+    void clearProgressOutput(WriteBufferFromFileDescriptor & message);
 
+    /// Write summary.
     void writeFinalProgress();
-
-    /// Clear stderr output.
-    void clearProgressOutput();
 
     /// Reset progress values.
     void resetProgress();
@@ -51,7 +49,7 @@ public:
     /// In some cases there is a need to update progress value, when there is no access to progress_inidcation object.
     /// In this case it is added via context.
     /// `write_progress_on_update` is needed to write progress for loading files data via pipe in non-interactive mode.
-    void setFileProgressCallback(ContextMutablePtr context, bool write_progress_on_update = false);
+    void setFileProgressCallback(ContextMutablePtr context, WriteBufferFromFileDescriptor & message);
 
     /// How much seconds passed since query execution start.
     double elapsedSeconds() const { return watch.elapsedSeconds(); }
