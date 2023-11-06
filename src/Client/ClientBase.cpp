@@ -274,6 +274,13 @@ void interruptSignalHandler(int signum)
 }
 
 
+/// To cancel the query on local format error.
+class LocalFormatError : public DB::Exception
+{
+public:
+    using Exception::Exception;
+};
+
 ClientBase::~ClientBase() = default;
 ClientBase::ClientBase() = default;
 
@@ -489,6 +496,7 @@ void ClientBase::onProfileInfo(const ProfileInfo & profile_info)
 
 
 void ClientBase::initBlockOutputStream(const Block & block, ASTPtr parsed_query)
+try
 {
     if (!output_format)
     {
@@ -576,6 +584,10 @@ void ClientBase::initBlockOutputStream(const Block & block, ASTPtr parsed_query)
 
         output_format->setAutoFlush();
     }
+}
+catch (...)
+{
+    throw LocalFormatError(getCurrentExceptionMessage(print_stack_trace), getCurrentExceptionCode());
 }
 
 
@@ -813,6 +825,9 @@ void ClientBase::receiveResult(ASTPtr parsed_query)
         = std::max(min_poll_interval, std::min<size_t>(receive_timeout.totalMicroseconds(), default_poll_interval));
 
     bool break_on_timeout = connection->getConnectionType() != IServerConnection::Type::LOCAL;
+
+    std::exception_ptr local_format_error;
+
     while (true)
     {
         Stopwatch receive_watch(CLOCK_MONOTONIC_COARSE);
@@ -850,9 +865,20 @@ void ClientBase::receiveResult(ASTPtr parsed_query)
                 break;
         }
 
-        if (!receiveAndProcessPacket(parsed_query, cancelled))
-            break;
+        try
+        {
+            if (!receiveAndProcessPacket(parsed_query, cancelled))
+                break;
+        }
+        catch (const LocalFormatError &)
+        {
+            local_format_error = std::current_exception();
+            connection->sendCancel();
+        }
     }
+
+    if (local_format_error)
+        std::rethrow_exception(local_format_error);
 
     if (cancelled && is_interactive)
         std::cout << "Query was cancelled." << std::endl;
