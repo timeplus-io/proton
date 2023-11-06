@@ -1180,13 +1180,9 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
     /// proton : starts. Add streaming source after historical source
     if (create_streaming_source)
     {
-        Pipes pipes;
-
-        cur_header = pipe.getHeader();
-        pipes.emplace_back(Pipe(std::make_shared<MarkSource>(cur_header, ChunkContext::HISTORICAL_DATA_START_FLAG)));
-
-        /// TODO: support optimized order for the stream with ordered by `_tp_time`
+        if (query_info.requires_backfill_input_in_order)
         {
+            /// TODO: support optimized order for the stream with ordered by `_tp_time`
             /// Copy basic code from `SortingStep::fullSort`
             /// Sorting backfilled historical data by ascending event time
             SortDescription sort_desc;
@@ -1218,6 +1214,11 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
                 pipe.addTransform(std::move(transform));
             }
         }
+
+        Pipes pipes;
+
+        cur_header = pipe.getHeader();
+        pipes.emplace_back(Pipe(std::make_shared<MarkSource>(cur_header, ChunkContext::HISTORICAL_DATA_START_FLAG)));
 
         pipes.emplace_back(std::move(pipe));
 

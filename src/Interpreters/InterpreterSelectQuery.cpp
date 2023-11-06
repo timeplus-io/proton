@@ -805,6 +805,10 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         /// and create `SeekToInfo` objects to represent these predicates for streaming store rewinding in a streaming query.
         analyzeEventPredicateAsSeekTo(joined_tables);
 
+        /// Optimization: no requires backfill data in order for global aggregation with settings `emit_aggregated_during_backfill = false`.
+        if (!context->getSettingsRef().emit_aggregated_during_backfill.value && hasGlobalAggregation())
+            query_info.requires_backfill_input_in_order = false;
+
         /// Calculate structure of the result.
         result_header = getSampleBlockImpl();
         /// proton, FIXME. For distributed streaming query in future, we may need conditionally remove __tp_ts from result header
@@ -3432,12 +3436,16 @@ void InterpreterSelectQuery::buildWatermarkQueryPlan(QueryPlan & query_plan) con
 {
     assert(isStreaming());
     auto params = std::make_shared<Streaming::WatermarkStamperParams>(
-                query_info.query, query_info.syntax_analyzer_result, query_info.streaming_window_params);
+        query_info.query, query_info.syntax_analyzer_result, query_info.streaming_window_params);
+
+    bool skip_stamping_for_backfill_data = !context->getSettingsRef().emit_aggregated_during_backfill.value;
+
     if (query_info.hasPartitionByKeys())
-        query_plan.addStep(
-            std::make_unique<Streaming::WatermarkStepWithSubstream>(query_plan.getCurrentDataStream(), std::move(params), log));
+        query_plan.addStep(std::make_unique<Streaming::WatermarkStepWithSubstream>(
+            query_plan.getCurrentDataStream(), std::move(params), skip_stamping_for_backfill_data, log));
     else
-        query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(query_plan.getCurrentDataStream(), std::move(params), log));
+        query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(
+            query_plan.getCurrentDataStream(), std::move(params), skip_stamping_for_backfill_data, log));
 }
 
 void InterpreterSelectQuery::buildStreamingProcessingQueryPlanBeforeJoin(QueryPlan & query_plan)

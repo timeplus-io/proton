@@ -43,8 +43,12 @@ WatermarkStamperPtr initWatermark(const WatermarkStamperParams & params, Poco::L
 }
 }
 
-WatermarkTransformWithSubstream::WatermarkTransformWithSubstream(const Block & header, WatermarkStamperParamsPtr params_, Poco::Logger * log_)
-    : IProcessor({header}, {header}, ProcessorID::WatermarkTransformWithSubstreamID), params(std::move(params_)), log(log_)
+WatermarkTransformWithSubstream::WatermarkTransformWithSubstream(
+    const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * log_)
+    : IProcessor({header}, {header}, ProcessorID::WatermarkTransformWithSubstreamID)
+    , params(std::move(params_))
+    , skip_stamping_for_backfill_data(skip_stamping_for_backfill_data_)
+    , log(log_)
 {
     watermark_template = initWatermark(*params, log);
     assert(watermark_template);
@@ -109,12 +113,21 @@ void WatermarkTransformWithSubstream::work()
     process_chunk.swap(input_chunk);
 
     process_chunk.clearWatermark();
+
+    if (process_chunk.isHistoricalDataStart())
+        is_backfill_data = true;
+    else if (process_chunk.isHistoricalDataEnd())
+        is_backfill_data = false;
+
+    bool avoid_watermark = process_chunk.avoidWatermark();
+    avoid_watermark |= is_backfill_data && skip_stamping_for_backfill_data;
+
     if (unlikely(process_chunk.requestCheckpoint()))
     {
         checkpoint(process_chunk.getCheckpointContext());
         output_chunks.emplace_back(std::move(process_chunk));
     }
-    else if (process_chunk.avoidWatermark())
+    else if (avoid_watermark)
     {
         output_chunks.emplace_back(std::move(process_chunk));
     }

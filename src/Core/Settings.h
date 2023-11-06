@@ -800,6 +800,7 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(UInt64, keep_windows, 0, "How many streaming windows to keep from recycling", 0) \
     M(String, seek_to, "", "Seeking to an offset of the streaming/historical store to seek", 0) \
     M(Bool, enable_backfill_from_historical_store, true, "Enable backfill data from historical data store", 0) \
+    M(Bool, emit_aggregated_during_backfill, true, "Enable emit intermediate aggr result during backfill historical data", 0) \
     M(Bool, include_internal_streams, false, "Show internal streams on SHOW streams query.", 0) \
 // End of GLOBAL_SETTINGS
 

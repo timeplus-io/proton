@@ -16,7 +16,7 @@ namespace Streaming
 class WatermarkTransform final : public ISimpleTransform
 {
 public:
-    WatermarkTransform(const Block & header, WatermarkStamperParamsPtr params_, Poco::Logger * log);
+    WatermarkTransform(const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * log);
 
     ~WatermarkTransform() override = default;
 
@@ -31,6 +31,9 @@ private:
 private:
     WatermarkStamperParamsPtr params;
     SERDE WatermarkStamperPtr watermark;
+
+    const bool skip_stamping_for_backfill_data;
+    bool is_backfill_data = false;
 };
 }
 }

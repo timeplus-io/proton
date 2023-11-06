@@ -16,7 +16,8 @@ namespace Streaming
 class WatermarkTransformWithSubstream final : public IProcessor
 {
 public:
-    WatermarkTransformWithSubstream(const Block & header, WatermarkStamperParamsPtr params_, Poco::Logger * log);
+    WatermarkTransformWithSubstream(
+        const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * log);
 
     ~WatermarkTransformWithSubstream() override = default;
 
@@ -38,6 +39,9 @@ private:
     WatermarkStamperParamsPtr params;
     WatermarkStamperPtr watermark_template;
     SERDE SubstreamHashMap<WatermarkStamperPtr> substream_watermarks;
+
+    const bool skip_stamping_for_backfill_data;
+    bool is_backfill_data = false;
 
     Poco::Logger * log;
 };

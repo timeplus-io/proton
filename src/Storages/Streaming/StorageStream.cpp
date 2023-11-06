@@ -462,6 +462,11 @@ void StorageStream::readConcat(
     auto description = makeFormattedNameOfConcatShards(shards_to_read);
     LOG_INFO(log, "Read local streaming concat {}", description);
 
+    /// If required backfill input in order, we will need read `_tp_time`.
+    if (query_info.requires_backfill_input_in_order
+        && std::ranges::none_of(column_names, [](const auto & name) { return name == ProtonConsts::RESERVED_EVENT_TIME; }))
+        column_names.emplace_back(ProtonConsts::RESERVED_EVENT_TIME);
+
     /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
     /// We will need add one
     Block header;

@@ -39,9 +39,11 @@ WatermarkStamperPtr initWatermark(const WatermarkStamperParams & params, Poco::L
 }
 }
 
-WatermarkTransform::WatermarkTransform(const Block & header, WatermarkStamperParamsPtr params_, Poco::Logger * log)
+WatermarkTransform::WatermarkTransform(
+    const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * log)
     : ISimpleTransform(header, header, false, ProcessorID::WatermarkTransformID)
     , params(std::move(params_))
+    , skip_stamping_for_backfill_data(skip_stamping_for_backfill_data_)
 {
     watermark = initWatermark(*params, log);
     assert(watermark);
@@ -51,7 +53,15 @@ WatermarkTransform::WatermarkTransform(const Block & header, WatermarkStamperPar
 void WatermarkTransform::transform(Chunk & chunk)
 {
     chunk.clearWatermark();
-    if (!chunk.avoidWatermark())
+
+    if (chunk.isHistoricalDataStart())
+        is_backfill_data = true;
+    else if (chunk.isHistoricalDataEnd())
+        is_backfill_data = false;
+
+    bool avoid_watermark = chunk.avoidWatermark();
+    avoid_watermark |= is_backfill_data && skip_stamping_for_backfill_data;
+    if (!avoid_watermark)
         watermark->process(chunk);
 }
 
