@@ -992,8 +992,8 @@ StorageStream::ShardsToRead StorageStream::getRequiredShardsToRead(ContextPtr co
         assert(query_info.seek_to_info);
         const auto & settings_ref = context_->getSettingsRef();
         bool require_back_fill_from_historical = !isInmemory()
-            && (Streaming::isChangelogKeyedStorage(dataStreamSemantic()) || Streaming::isVersionedKeyedStorage(dataStreamSemantic())
-                || (query_info.seek_to_info->getSeekTo() == "earliest" && settings_ref.enable_backfill_from_historical_store.value));
+            && (Streaming::isKeyedStorage(dataStreamSemantic())
+                || (!query_info.seek_to_info->getSeekTo().empty() && settings_ref.enable_backfill_from_historical_store.value));
         result.mode = require_back_fill_from_historical ? QueryMode::STREAMING_CONCAT : QueryMode::STREAMING;
     }
     else
