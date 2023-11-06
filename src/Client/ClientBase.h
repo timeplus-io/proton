@@ -164,6 +164,7 @@ protected:
 
     bool stdin_is_a_tty = false; /// stdin is a terminal.
     bool stdout_is_a_tty = false; /// stdout is a terminal.
+    bool stderr_is_a_tty = false; /// stderr is a terminal.
     uint64_t terminal_width = 0;
 
     String format; /// Query results output format.
