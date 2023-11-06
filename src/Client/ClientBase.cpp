@@ -668,7 +668,7 @@ void ClientBase::processOrdinaryQuery(const String & query_to_execute, ASTPtr pa
     }
 
     int retries_left = 10;
-while (retries_left)
+    while (retries_left)
     {
         try
         {
@@ -735,21 +735,10 @@ void ClientBase::receiveResult(ASTPtr parsed_query)
             /// to avoid losing sync.
             if (!cancelled)
             {
-                auto cancel_query = [&] {
-                    connection->sendCancel();
-                    if (is_interactive)
-                    {
-                        progress_indication.clearProgressOutput();
-                        std::cout << "Cancelling query." << std::endl;
-
-                    }
-                    cancelled = true;
-                };
-
                 /// handler received sigint
                 if (QueryInterruptHandler::cancelled())
                 {
-                    cancel_query();
+                    cancelQuery();
                 }
                 else
                 {
@@ -760,7 +749,7 @@ void ClientBase::receiveResult(ASTPtr parsed_query)
                                     << " Waited for " << static_cast<size_t>(elapsed) << " seconds,"
                                     << " timeout is " << receive_timeout.totalSeconds() << " seconds." << std::endl;
 
-                        cancel_query();
+                        cancelQuery();
                     }
                 }
             }
@@ -1016,6 +1005,9 @@ void ClientBase::processInsertQuery(const String & query_to_execute, ASTPtr pars
     if ((!parsed_insert_query.data && !parsed_insert_query.infile) && (is_interactive || (!stdin_is_a_tty && std_in.eof())))
         throw Exception("No data to insert", ErrorCodes::NO_DATA_TO_INSERT);
 
+    QueryInterruptHandler::start();
+    SCOPE_EXIT({ QueryInterruptHandler::stop(); });
+
     connection->sendQuery(
         connection_parameters.timeouts,
         query,
@@ -1202,6 +1194,13 @@ void ClientBase::sendDataFromPipe(Pipe&& pipe, ASTPtr parsed_query, bool have_mo
     Block block;
     while (executor.pull(block))
     {
+        if (!cancelled && QueryInterruptHandler::cancelled())
+        {
+            cancelQuery();
+            executor.cancel();
+            return;
+        }
+
         /// Check if server send Log packet
         receiveLogs(parsed_query);
 
@@ -1296,6 +1295,17 @@ bool ClientBase::receiveEndOfQuery()
     }
 }
 
+void ClientBase::cancelQuery()
+{
+    connection->sendCancel();
+    if (is_interactive)
+    {
+        progress_indication.clearProgressOutput();
+        std::cout << "Cancelling query." << std::endl;
+
+    }
+    cancelled = true;
+}
 
 void ClientBase::processParsedSingleQuery(const String & full_query, const String & query_to_execute,
         ASTPtr parsed_query, std::optional<bool> echo_query_, bool report_error)
