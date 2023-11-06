@@ -440,8 +440,16 @@ void ClientBase::onData(Block & block, ASTPtr parsed_query)
     if (need_render_progress && tty_buf && !select_into_file)
         progress_indication.clearProgressOutput(*tty_buf);
 
-    output_format->write(materializeBlock(block));
-    written_first_block = true;
+    try
+    {
+        output_format->write(materializeBlock(block));
+        written_first_block = true;
+    }
+    catch (const Exception &)
+    {
+        /// Catch client errors like NO_ROW_DELIMITER
+        throw LocalFormatError(getCurrentExceptionMessage(print_stack_trace), getCurrentExceptionCode());
+    }
 
     /// Received data block is immediately displayed to the user.
     output_format->flush();
