@@ -269,3 +269,66 @@ tests:
           - [2,1,2,5]
           - [2,2,2,3]
           - [2,2,2,5]
+
+  - id: 5
+    tags:
+      - replay_stream
+      - stream query
+    name: begin stream query after the replaying. 
+    description: begin stream query after the replaying.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test29_stream
+
+          - client: python
+            query_type: table
+            exist: test29_stream
+            exist_wait: 2
+            wait: 1
+            query: create stream if not exists test29_stream (id int, value int);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: insert into test29_stream(id, value) values (1, 2);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: insert into test29_stream(id, value) values (2, 2);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: insert into test29_stream(id, value) values (3, 1);
+
+          - client: python
+            query_type: stream
+            terminate: munual
+            query_id: '2905'
+            wait: 1
+            query: select id, value from test29_stream where _tp_time > earliest_timestamp() settings replay_speed=1;
+
+          - client: python
+            query_type: table
+            depends_on: '2905'
+            wait: 15
+            query: insert into test29_stream(id, value) values (4, 1);
+
+          - client: python
+            query_type: table
+            kill: '2905'
+            kill_wait: 1
+            wait: 1
+            query: insert into test29_stream(id, value) values (5, 1);
+
+    expected_results:
+      - query_id: '2905'
+        expected_results:
+          - [1, 2]
+          - [2, 2]
+          - [3, 1]
+          - [4, 1]
+          - [5, 1]

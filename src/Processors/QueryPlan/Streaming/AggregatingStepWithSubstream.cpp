@@ -14,6 +14,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
+extern const int NOT_IMPLEMENTED;
 }
 
 namespace Streaming
@@ -36,22 +37,27 @@ ITransformingStep::Traits getTraits()
 }
 
 AggregatingStepWithSubstream::AggregatingStepWithSubstream(
-    const DataStream & input_stream_, Aggregator::Params params_, bool final_, bool emit_version_)
-    : ITransformingStep(input_stream_, AggregatingTransformParams::getHeader(params_, final_, emit_version_), getTraits(), false)
+    const DataStream & input_stream_, Aggregator::Params params_, bool final_, bool emit_version_, bool emit_changelog_)
+    : ITransformingStep(
+        input_stream_, AggregatingTransformParams::getHeader(params_, final_, emit_version_, emit_changelog_), getTraits(), false)
     , params(std::move(params_))
     , final(std::move(final_))
     , emit_version(emit_version_)
+    , emit_changelog(emit_changelog_)
 {
 }
 
 void AggregatingStepWithSubstream::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
 {
+    if (emit_changelog && params.group_by != Aggregator::Params::GroupBy::OTHER)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only support streaming global aggregation emit changelog");
+
     QueryPipelineProcessorsCollector collector(pipeline, this);
 
     /// Forget about current totals and extremes. They will be calculated again after aggregation if needed.
     pipeline.dropTotalsAndExtremes();
 
-    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version);
+    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version, emit_changelog);
 
     /// If there are several sources, we perform aggregation separately (Assume it's shuffled data by substream keys)
     pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {

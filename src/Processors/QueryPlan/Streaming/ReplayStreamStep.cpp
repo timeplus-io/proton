@@ -1,6 +1,7 @@
 #include <Processors/QueryPlan/Streaming/ReplayStreamStep.h>
 #include <Processors/Streaming/ReplayStreamTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
+#include <Common/Exception.h>
 
 
 namespace DB
@@ -22,14 +23,19 @@ static ITransformingStep::Traits getTraits()
         }};
 }
 
-ReplayStreamStep::ReplayStreamStep(const DataStream & input_stream_, Float32 replay_speed_)
-    : ITransformingStep(input_stream_, input_stream_.header, getTraits()), replay_speed(replay_speed_)
+ReplayStreamStep::ReplayStreamStep(const DataStream & input_stream_, Float32 replay_speed_, std::vector<Int64> shards_last_sns_)
+    : ITransformingStep(input_stream_, input_stream_.header, getTraits()), replay_speed(replay_speed_), shards_last_sns(std::move(shards_last_sns_))
 {
 }
 
 void ReplayStreamStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
 {
-    pipeline.addSimpleTransform([&](const Block & header) { return std::make_shared<ReplayStreamTransform>(header, replay_speed); });
+    /// FIXME: `StorageStream::getLastSNs()` result is invalid for multiple shards in cluster
+    if (unlikely(pipeline.getNumStreams() != shards_last_sns.size()))
+        throw Exception("Input Stream is not equal to the shard's num", ErrorCodes::LOGICAL_ERROR);
+
+    size_t index = 0;
+    pipeline.addSimpleTransform([&](const Block & header) { return std::make_shared<ReplayStreamTransform>(header, replay_speed, shards_last_sns[index++]); });
 }
 
 }

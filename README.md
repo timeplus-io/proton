@@ -7,7 +7,8 @@
   <a href="https://github.com/timeplus-io/proton/"><img src="https://img.shields.io/github/stars/timeplus-io/proton?logo=github" /></a>
   <a href="https://timeplus.com/slack"><img src="https://img.shields.io/badge/Join%20Slack-blue?logo=slack" alt="Slack" /></a>
   <a href="https://linkedin.com/company/timeplusinc"><img src="https://img.shields.io/badge/timeplusinc-0077B5?style=social&logo=linkedin" alt="follow on LinkedIn"></a>
-  <a href="https://twitter.com/intent/follow?screen_name=timeplusdata"><img src="https://img.shields.io/twitter/follow/timeplusdata?style=social&label=%40timeplusdata&logo=twitter" alt="Twitter" /></a>
+  <a href="https://www.youtube.com/@timeplusdata"><img src="https://img.shields.io/youtube/channel/views/UCRQCOw9wOiqHZkm7ftAMdTQ" alt="YouTube" /></a>
+  <a href="https://twitter.com/intent/follow?screen_name=timeplusdata"><img src="https://img.shields.io/twitter/follow/timeplusdata" alt="Twitter(X)" /></a>
 </p>
 
 
@@ -15,7 +16,7 @@
   <a href="#introduction"><strong>Introduction</strong></a> ·
   <a href="#architecture"><strong>Architecture</strong></a> ·
   <a href="#get-started"><strong>Get Started</strong></a> ·
-  <a href="#more-examples"><strong>More Examples</strong></a> ·
+  <a href="#whats-next"><strong>What's next</strong></a> ·
   <a href="#documentation"><strong>Documentation</strong></a> ·
   <a href="#contributing"><strong>Contributing</strong></a> ·
   <a href="#need-help"><strong>Need help?</strong></a>
@@ -69,6 +70,8 @@ docker exec -it proton proton-client -n
 
 If you stop the container and want to start it again, run `docker start proton`.
 
+If you are using Mac and homebrew, you can also check [homebrew-timeplus](https://github.com/timeplus-io/homebrew-timeplus) to easily install/upgrade proton.
+
 ### Query a test stream
 
 From `proton-client`, run the following SQL to create a stream of random data:
@@ -92,11 +95,23 @@ You should see data like the following:
 └─────────┴─────────┴──────────────────┴──────────────────┘
 ```
 
-### More Examples
+### What's next?
 
 Now that you're running Proton and have created your first stream, query, and view, you can explore [reading and writing data from Apache Kafka](https://docs.timeplus.com/proton-kafka#tutorial) with External Streams, or view the [Proton documentation](https://docs.timeplus.com/proton) to explore additional capabilities.
 
 To see more examples of using Proton, check out the [examples](https://github.com/timeplus-io/proton/tree/develop/examples) folder.
+
+The following drivers are available:
+
+* https://github.com/timeplus-io/proton-java-driver JDBC and other Java clients
+* https://github.com/timeplus-io/proton-go-driver
+* https://github.com/timeplus-io/proton-python-driver
+
+Integrations with other systems:
+
+* https://github.com/timeplus-io/proton-grafana-source
+* https://github.com/timeplus-io/homebrew-timeplus
+* https://github.com/timeplus-io/dbt-proton
 
 ## Get more with Timeplus
 

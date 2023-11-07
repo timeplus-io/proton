@@ -17,6 +17,7 @@
 #include <Storages/ColumnsDescription.h>
 #include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Storages/StorageFile.h>
 #include <Storages/StorageView.h>
 #include <Storages/Streaming/StorageMaterializedView.h>
 #include <Storages/Streaming/StorageRandom.h>
@@ -126,7 +127,7 @@ void ProxyStream::read(
     size_t max_block_size,
     size_t num_streams)
 {
-    if (!(query_info.syntax_analyzer_result->streaming))
+    if (!query_info.syntax_analyzer_result->streaming)
     {
         if (windowType() == WindowType::SESSION || windowType() == WindowType::HOP)
             throw Exception(
@@ -142,7 +143,7 @@ void ProxyStream::read(
             query_info.changelog_query_drop_late_rows = std::any_cast<std::optional<bool>>(table_func_desc->func_ctx);
         }
         else
-            /// Add additional ChangelogConvertTransform, so the input doesn't need tracking changes, 
+            /// Add additional ChangelogConvertTransform, so the input doesn't need tracking changes,
             query_info.left_input_tracking_changes = false;
     }
 
@@ -220,6 +221,9 @@ void ProxyStream::doRead(
             query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     else if (auto * random_stream = storage->as<StorageRandom>())
         return random_stream->read(
+            query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+    else if (auto * file_stream = storage->as<StorageFile>())
+        return file_stream->read(
             query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     else if (nested_proxy_storage)
         return nested_proxy_storage->read(
@@ -432,9 +436,11 @@ void ProxyStream::processTimestampStep(QueryPlan & query_plan, const SelectQuery
 
     /// Add transformed timestamp column required by downstream pipe
     auto timestamp_col = timestamp_func_desc->expr->getSampleBlock().getByPosition(0);
-    assert(!output_header.findByName(timestamp_col.name));
-    timestamp_col.column = timestamp_col.type->createColumn();
-    output_header.insert(timestamp_col);
+    if (!output_header.has(timestamp_col.name))
+    {
+        timestamp_col.column = timestamp_col.type->createColumn();
+        output_header.insert(timestamp_col);
+    }
 
     assert(query_info.seek_to_info);
     const auto & seek_to = query_info.seek_to_info->getSeekTo();
@@ -448,7 +454,7 @@ void ProxyStream::processWindowAssignmentStep(
     QueryPlan & query_plan,
     const SelectQueryInfo & query_info,
     const Names & required_columns,
-    const StorageSnapshotPtr & storage_snapshot) const
+    const StorageSnapshotPtr & /*storage_snapshot*/) const
 {
     assert(table_func_desc && table_func_desc->type != WindowType::NONE);
     auto output_header = checkAndGetOutputHeader(required_columns, query_plan.getCurrentDataStream().header);

@@ -81,7 +81,8 @@ enum class ConvertAction : uint8_t
     WRITE_TO_TEMP_FS = 2,
     CHECKPOINT = 3,
     STREAMING_EMIT = 4,
-    INTERNAL_MERGE = 5
+    INTERNAL_MERGE = 5,
+    RETRACTED_EMIT = 6
 };
 
 /// using TimeBucketAggregatedDataWithUInt16Key = TimeBucketHashMap<FixedImplicitZeroHashMap<UInt16, AggregateDataPtr>>;
@@ -778,7 +779,8 @@ public:
     Block convertOneBucketToBlockFinal(AggregatedDataVariants & data_variants, ConvertAction action, size_t bucket) const;
     Block convertOneBucketToBlockIntermediate(AggregatedDataVariants & data_variants, ConvertAction action, size_t bucket) const;
 
-    ManyAggregatedDataVariantsPtr prepareVariantsToMerge(ManyAggregatedDataVariants & data_variants) const;
+    /// If @p always_merge_into_empty is true, always add an empty variants at front even if there is only one 
+    ManyAggregatedDataVariantsPtr prepareVariantsToMerge(ManyAggregatedDataVariants & data_variants, bool always_merge_into_empty = false) const;
 
     using BucketToBlocks = std::map<Int32, BlocksList>;
     /// Merge partially aggregated blocks separated to buckets into one data structure.
@@ -834,10 +836,12 @@ private:
     friend class AggregatingInOrderTransform;
 
     /// proton: starts
+    friend struct AggregatingHelper;
     friend class StreamingConvertingAggregatedToChunksTransform;
     friend class StreamingConvertingAggregatedToChunksSource;
     friend class AggregatingTransform;
     friend class GlobalAggregatingTransform;
+    friend class GlobalAggregatingTransformWithSubstream;
     friend class WindowAggregatingTransform;
     friend class WindowAggregatingTransformWithSubstream;
     friend class TumbleAggregatingTransform;
@@ -847,8 +851,6 @@ private:
     friend class SessionAggregatingTransform;
     friend class SessionAggregatingTransformWithSubstream;
     friend class UserDefinedEmitStrategyAggregatingTransform;
-
-    mutable std::optional<VersionType> version;
     /// proton: ends
 
     Params params;
@@ -1018,7 +1020,7 @@ private:
         bool clear_states) const;
 
     void mergeWithoutKeyDataImpl(
-        ManyAggregatedDataVariants & non_empty_data) const;
+        ManyAggregatedDataVariants & non_empty_data, ConvertAction action) const;
 
     template <typename Method>
     void mergeSingleLevelDataImpl(
@@ -1102,6 +1104,44 @@ private:
 
     void mergeBuckets(
         ManyAggregatedDataVariants & variants, Arena * arena, bool final, ConvertAction action, const std::vector<Int64> & buckets) const;
+    
+    /// Used for emit changelog
+    std::pair<bool, bool> executeAndRetractOnBlock(
+        Columns columns,
+        size_t row_begin,
+        size_t row_end,
+        AggregatedDataVariants & result,
+        AggregatedDataVariants & retracted_result,
+        ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
+        bool & no_more_keys) const;
+
+    template <typename Method>
+    bool executeAndRetractImpl(
+        Method & method,
+        Arena * aggregates_pool,
+        Method & retracted_method,
+        Arena * retracted_pool,
+        size_t row_begin,
+        size_t row_end,
+        ColumnRawPtrs & key_columns,
+        AggregateFunctionInstruction * aggregate_instructions) const;
+
+    void mergeRetractedGroups(ManyAggregatedDataVariants & aggregated_data, ManyAggregatedDataVariants & retracted_data) const;
+
+    template <typename Method>
+    void mergeRetractedGroupsImpl(ManyAggregatedDataVariants & aggregated_data, ManyAggregatedDataVariants & retracted_data) const;
+
+    void mergeAggregateStates(AggregateDataPtr & dst, AggregateDataPtr & src, Arena * arena, bool clear_states) const;
+
+    void destroyAggregateStates(AggregateDataPtr & place) const;
+
+    void serializeAggregateStates(const AggregateDataPtr & place, WriteBuffer & wb) const;
+    void deserializeAggregateStates(AggregateDataPtr & place, ReadBuffer & rb, Arena * arena) const;
+
+    void clearDataVariants(AggregatedDataVariants & data_variants) const;
+
+    /// @return does need abort ?
+    bool checkAndProcessResult(AggregatedDataVariants & result, bool & no_more_keys) const;
     /// proton: ends.
 
     Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows, ConvertAction action) const;
@@ -1197,11 +1237,17 @@ private:
 public:
     void checkpoint(const AggregatedDataVariants & data_variants, WriteBuffer & wb);
     void recover(AggregatedDataVariants & data_variants, ReadBuffer & rb);
+
+    void doCheckpoint(const AggregatedDataVariants & data_variants, WriteBuffer & wb);
+    void doRecover(AggregatedDataVariants & data_variants, ReadBuffer & rb);
+
+    /// [Legacy]
+    void doCheckpointLegacy(const AggregatedDataVariants & data_variants, WriteBuffer & wb);
+    void doRecoverLegacy(AggregatedDataVariants & data_variants, ReadBuffer & rb);
     void recoverStates(AggregatedDataVariants & data_variants, BlocksList & blocks);
     void recoverStatesWithoutKey(AggregatedDataVariants & data_variants, BlocksList & blocks);
     void recoverStatesSingleLevel(AggregatedDataVariants & data_variants, BlocksList & blocks);
     void recoverStatesTwoLevel(AggregatedDataVariants & data_variants, BlocksList & blocks);
-
     template <typename Method>
     void doRecoverStates(Method & method, Arena * aggregates_pool, Block & block);
     /// proton: ends

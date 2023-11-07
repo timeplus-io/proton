@@ -135,13 +135,13 @@ RecordPtr Record::deserialize(const char * data, size_t size, const SchemaContex
         if (likely(record->codec() == DB::CompressionMethodByte::NONE))
         {
             DB::NativeReader reader(rb, DBMS_TCP_PROTOCOL_VERSION);
-            record->setBlock(reader.read());
+            record->setBlock(reader.read(), /*override_block_info=*/false);
         }
         else
         {
             DB::CompressedReadBuffer compressed_in = DB::CompressedReadBuffer(rb);
             DB::NativeReader reader(compressed_in, DBMS_TCP_PROTOCOL_VERSION);
-            record->setBlock(reader.read());
+            record->setBlock(reader.read(), /*override_block_info=*/false);
         }
     }
 
@@ -171,6 +171,7 @@ RecordPtr Record::doDeserializeCommonMetadata(DB::ReadBuffer & rb)
     /// Read append time
     Int64 append_time;
     DB::readIntBinary(append_time, rb);
+    /// append time is stuffed to block.info
     record->setAppendTime(append_time);
 
     /// Read schema version

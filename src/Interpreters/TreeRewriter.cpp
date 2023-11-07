@@ -514,8 +514,11 @@ void removeUnneededColumnsFromSelectClause(const ASTSelectQuery * select_query, 
                 new_elements.push_back(elem);
 
             /// removing aggregation can change number of rows, so `count()` result in outer sub-query would be wrong
-            if (func && AggregateFunctionFactory::instance().isAggregateFunctionName(func->name) && !select_query->groupBy())
+            /// proton: starts. Cannot remove aggregation if need to emit changelog
+            if (func && AggregateFunctionFactory::instance().isAggregateFunctionName(func->name)
+                && (!select_query->groupBy() || required_columns_with_duplicate_count.contains(ProtonConsts::RESERVED_DELTA_FLAG)))
                 new_elements.push_back(elem);
+            /// proton: ends.
         }
     }
 
@@ -1147,6 +1150,15 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
             }
         }
     }
+
+    /// proton: starts.
+    if (unknown_required_source_columns.contains(ProtonConsts::RESERVED_DELTA_FLAG))
+    {
+        /// If emit changelog, the `_tp_delta` shall be generated after aggregation
+        if (emit_changelog && hasAggregation())
+            unknown_required_source_columns.erase(ProtonConsts::RESERVED_DELTA_FLAG);
+    }
+    /// proton: ends.
 
     if (!unknown_required_source_columns.empty())
     {

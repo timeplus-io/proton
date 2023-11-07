@@ -1,5 +1,6 @@
 #include "UserDefinedEmitStrategyAggregatingTransformWithSubstream.h"
 
+#include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/convertToChunk.h>
 
 #include <algorithm>
@@ -29,25 +30,16 @@ void UserDefinedEmitStrategyAggregatingTransformWithSubstream::finalize(const Su
     if (variants.empty())
         return;
 
-    Block block;
-    if (params->final)
-    {
-        auto results = params->aggregator.convertToBlocksFinal(variants, ConvertAction::STREAMING_EMIT, 1);
-        assert(results.size() == 1);
-        block = std::move(results.back());
-
-        if (params->emit_version)
-            emitVersion(block, substream_ctx);
-    }
+    Chunk chunk;
+    if (variants.type == AggregatedDataVariants::Type::without_key)
+        chunk = AggregatingHelper::convertWithoutKey(variants, *params);
     else
-    {
-        auto results = params->aggregator.convertToBlocksIntermediate(variants, ConvertAction::STREAMING_EMIT, 1);
-        assert(results.size() == 1);
-        block = std::move(results.back());
-    }
+        chunk = AggregatingHelper::convertSingleLevel(variants, *params);
 
-    if (block)
-        setCurrentChunk(convertToChunk(block), chunk_ctx);
+    if (params->emit_version && params->final)
+        emitVersion(chunk, substream_ctx);
+
+    setCurrentChunk(std::move(chunk), chunk_ctx);
 }
 }
 }

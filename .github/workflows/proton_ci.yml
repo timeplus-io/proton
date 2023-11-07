@@ -45,6 +45,7 @@ jobs:
       ec2-image-id: ${{ vars.X64_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
+      run_mode: 'start' # start ec2 on demand instance
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
       command: |

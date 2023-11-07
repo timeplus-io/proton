@@ -11,7 +11,7 @@ namespace DB
 bool supportStreamingQuery(const StoragePtr & storage)
 {
     const auto & name = storage->getName();
-    return (name == "ProxyStream" || name == "Stream" || name == "View" || name == "MaterializedView" || name == "ExternalStream" || name == "Random");
+    return (name == "ProxyStream" || name == "Stream" || name == "View" || name == "MaterializedView" || name == "ExternalStream" || name == "Random" || name == "File");
 }
 
 String getStorageName(const ASTCreateQuery & create)
