@@ -149,8 +149,8 @@
             {"client":"python", "query_type": "table", "depends_on_stream":"test_mv_1934", "wait":2, "query": "insert into test_stream_1934(value) values(1)"},
             {"client":"python", "query_type": "table", "wait":3, "query": "insert into test_stream_1934(value) values(2)"},
             {"client":"python", "query_type": "table", "wait":3, "query": "insert into test_stream_1934(value) values(3)"},
-            {"client":"python", "query_type": "stream", "query_id":"9900", "query_end_timer":3, "query":"select `count()`, _tp_shard, _tp_sn from test_mv_1934 where _tp_sn >= 0"},
-            {"client":"python", "query_type": "stream", "query_id":"9901", "query_end_timer":3,"drop_view":"test_mv_1934", "drop_view_wait":2, "query":"select `count()`, _tp_shard, _tp_sn from test_mv_1934 where _tp_time >= now() - 1m"}
+            {"client":"python", "query_type": "stream", "query_id":"9900", "query_end_timer":3, "query":"select `count()`, _tp_shard, _tp_sn from test_mv_1934 where _tp_sn >= 0 settings enable_backfill_from_historical_store=false"},
+            {"client":"python", "query_type": "stream", "query_id":"9901", "query_end_timer":3,"drop_view":"test_mv_1934", "drop_view_wait":2, "query":"select `count()`, _tp_shard, _tp_sn from test_mv_1934 where _tp_time >= now() - 1m settings enable_backfill_from_historical_store=false"}
           ]
         }
       ],
@@ -555,7 +555,7 @@
               {"client":"python", "query_type": "table", "query": "insert into test_append_time(id, value) values(1, 2);"},
               {"client":"python", "query_type": "table", "query": "insert into test_append_time(id, value) values(3, 2);"},
               {"client":"python", "query_type": "table", "query": "insert into test_append_time(id, value) values(5, 2);"},
-              {"client":"python", "query_type": "stream", "depends_on_stream":"test_append_time", "query_id":"9919", "wait":5, "query":"with cte as (select *, _tp_append_time from test_append_time)select date_diff('millisecond', to_datetime64(_tp_append_time/1000, 3, 'UTC'), _tp_time) < 10 from cte where _tp_time > earliest_timestamp();"},
+              {"client":"python", "query_type": "stream", "depends_on_stream":"test_append_time", "query_id":"9919", "wait":5, "query":"with cte as (select *, _tp_append_time from test_append_time)select date_diff('millisecond', to_datetime64(_tp_append_time/1000, 3, 'UTC'), _tp_time) < 10 from cte where _tp_time > earliest_timestamp() settings enable_backfill_from_historical_store=false;"},
               {"client":"python", "query_type": "table", "depends_on":"9919", "wait":1, "query": "insert into test_append_time(id, value) values(5, 2);"},
               {"client":"python", "query_type": "table", "query": "insert into test_append_time(id, value) values(6, 2);"},
               {"client":"python", "query_type": "table", "kill":9919, "kill_wait":3, "query": "insert into test_append_time(id, value) values(6, 2);"}

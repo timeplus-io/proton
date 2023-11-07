@@ -83,15 +83,15 @@ ChunkPair AggregatingHelper::convertWithoutKeyToChangelog(
 ChunkPair AggregatingHelper::mergeAndConvertWithoutKeyToChangelog(
     ManyAggregatedDataVariants & data, ManyRetractedDataVariants & retracted_data, const AggregatingTransformParams & params)
 {
-    assert(data.at(0)->type == AggregatedDataVariants::Type::without_key);
-    assert(retracted_data.at(0)->type == AggregatedDataVariants::Type::without_key);
-
     auto prepared_data = params.aggregator.prepareVariantsToMerge(data);
     if (prepared_data->empty())
         return {};
 
     auto prepared_retracted_data = params.aggregator.prepareVariantsToMerge(retracted_data);
     assert(!prepared_retracted_data->empty());
+
+    assert(prepared_data->at(0)->type == AggregatedDataVariants::Type::without_key);
+    assert(prepared_retracted_data->at(0)->type == AggregatedDataVariants::Type::without_key);
 
     params.aggregator.mergeWithoutKeyDataImpl(*prepared_retracted_data, ConvertAction::RETRACTED_EMIT);
     params.aggregator.mergeWithoutKeyDataImpl(*prepared_data, ConvertAction::STREAMING_EMIT);
@@ -126,15 +126,15 @@ ChunkPair AggregatingHelper::convertSingleLevelToChangelog(
 ChunkPair AggregatingHelper::mergeAndConvertSingleLevelToChangelog(
     ManyAggregatedDataVariants & data, ManyRetractedDataVariants & retracted_data, const AggregatingTransformParams & params)
 {
-    assert(data.at(0)->type != AggregatedDataVariants::Type::without_key && !data.at(0)->isTwoLevel());
-    assert(retracted_data.at(0)->type != AggregatedDataVariants::Type::without_key && !retracted_data.at(0)->isTwoLevel());
-
     auto prepared_data = params.aggregator.prepareVariantsToMerge(data, /*always_merge_into_empty*/ true);
     if (prepared_data->empty())
         return {};
 
     auto prepared_retracted_data = params.aggregator.prepareVariantsToMerge(retracted_data, /*always_merge_into_empty*/ true);
     assert(!prepared_retracted_data->empty());
+
+    assert(prepared_data->at(0)->type != AggregatedDataVariants::Type::without_key && !prepared_data->at(0)->isTwoLevel());
+    assert(prepared_retracted_data->at(0)->type != AggregatedDataVariants::Type::without_key && !prepared_retracted_data->at(0)->isTwoLevel());
 
     /// To only emit changelog:
     /// 1) Merge retracted groups data into first one

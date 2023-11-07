@@ -2343,6 +2343,11 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         /// need replay operation
         if (settings.replay_speed > 0)
         {
+            if (settings.enable_backfill_from_historical_store.value)
+                throw Exception(
+                    ErrorCodes::NOT_IMPLEMENTED,
+                    "Only support replay from streaming store, but setting 'enable_backfill_from_historical_store=true'");
+
             /// So far, only support append-only stream (or proxyed)
             StorageStream * storagestream = nullptr;
             if (Streaming::isAppendStorage(storage->dataStreamSemantic()))
