@@ -21,9 +21,7 @@ if (TARGET ch_contrib::azure_sdk)
     target_link_libraries(clickhouse-local-lib PRIVATE ch_contrib::azure_sdk)
 endif()
 
-if(NOT CLICKHOUSE_ONE_SHARED)
-    target_link_libraries(clickhouse-local-lib PRIVATE clickhouse-server-lib)
-endif()
+target_link_libraries(clickhouse-local-lib PRIVATE clickhouse-server-lib)
 
 if (ENABLE_FUZZING)
     add_compile_definitions(FUZZING_MODE=1)
