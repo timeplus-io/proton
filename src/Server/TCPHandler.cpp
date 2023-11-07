@@ -377,6 +377,7 @@ void TCPHandler::runImpl()
                             return true;
 
                         sendProgress();
+                        sendProfileEvents();
                         sendLogs();
 
                         return false;
