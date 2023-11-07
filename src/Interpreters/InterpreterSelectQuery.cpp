@@ -187,6 +187,23 @@ bool hasGlobalAggregationInQuery(const ASTPtr & query, const ASTSelectQuery & se
     GetAggregatesVisitor(data).visit(query);
     return !data.aggregates.empty() || select_query.groupBy() != nullptr;
 }
+
+[[maybe_unused]] Names getShuffleByColumns(const ASTSelectQuery & query)
+{
+    Names shuffle_by_columns;
+
+    if (!query.shuffleBy())
+        return shuffle_by_columns;
+
+    shuffle_by_columns.reserve(query.shuffleBy()->children.size());
+    for (const auto & elem : query.shuffleBy()->children)
+    {
+        if (elem->as<ASTIdentifier>())
+            shuffle_by_columns.push_back(elem->getColumnName());
+    }
+
+    return shuffle_by_columns;
+}
 }
 /// proton: ends.
 
@@ -571,7 +588,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
         if (isStreamingQuery() && (query_info.trackingChanges() || data_stream_semantic_pair.isChangelogOutput()))
         {
-            /// A speical case: global aggr over global aggr, for example:
+            /// A special case: global aggr over global aggr, for example:
             /// `select count() from (select count() from stream) emit changelog`
             /// The outer global aggr needs emit changelog, we shall force the nested global aggr emit changelog.
             /// Since the outer global aggr does not retain state (unless nested one emits aggregated changes)
@@ -1145,7 +1162,7 @@ static SortDescription getSortDescription(const ASTSelectQuery & query, const Co
 
     for (const auto & elem : query.orderBy()->children)
     {
-        const String & column_name = elem->children.front()->getColumnName();
+        auto column_name = elem->children.front()->getColumnName();
         const auto & order_by_elem = elem->as<ASTOrderByElement &>();
 
         std::shared_ptr<Collator> collator;
@@ -1155,10 +1172,10 @@ static SortDescription getSortDescription(const ASTSelectQuery & query, const Co
         if (order_by_elem.with_fill)
         {
             FillColumnDescription fill_desc = getWithFillDescription(order_by_elem, context_);
-            order_descr.emplace_back(column_name, order_by_elem.direction, order_by_elem.nulls_direction, collator, true, fill_desc);
+            order_descr.emplace_back(std::move(column_name), order_by_elem.direction, order_by_elem.nulls_direction, collator, true, fill_desc);
         }
         else
-            order_descr.emplace_back(column_name, order_by_elem.direction, order_by_elem.nulls_direction, collator);
+            order_descr.emplace_back(std::move(column_name), order_by_elem.direction, order_by_elem.nulls_direction, collator);
     }
 
     return order_descr;
@@ -1170,10 +1187,7 @@ static SortDescription getSortDescriptionFromGroupBy(const ASTSelectQuery & quer
     order_descr.reserve(query.groupBy()->children.size());
 
     for (const auto & elem : query.groupBy()->children)
-    {
-        String name = elem->getColumnName();
-        order_descr.emplace_back(name, 1, 1);
-    }
+        order_descr.emplace_back(elem->getColumnName(), 1, 1);
 
     return order_descr;
 }
@@ -3231,6 +3245,8 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     if (query_info.hasPartitionByKeys())
         query_plan.addStep(std::make_unique<Streaming::AggregatingStepWithSubstream>(
             query_plan.getCurrentDataStream(), std::move(params), final, emit_version, data_stream_semantic_pair.isChangelogOutput()));
+    else if (query_info.hasShuffleByKeys())
+        ;
     else
         query_plan.addStep(std::make_unique<Streaming::AggregatingStep>(
             query_plan.getCurrentDataStream(), std::move(params), final, merge_threads, temporary_data_merge_threads, emit_version, data_stream_semantic_pair.isChangelogOutput()));
@@ -3665,9 +3681,9 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
     if (!streaming)
         return;
 
-    /// Assign partition by for aggregate / statulful functions
+    /// Assign partition by for aggregate / stateful functions
     /// select sum(x), avg(x) from ... partition by id
-    /// e.g. sum(x) -> sum(x) over(paritiotn by id), avg(x) over(partition by id)
+    /// e.g. sum(x) -> sum(x) over(partition by id), avg(x) over(partition by id)
     PartitionByVisitor::Data partition_by_data;
     partition_by_data.context = context;
     PartitionByVisitor(partition_by_data).visit(query_ptr);

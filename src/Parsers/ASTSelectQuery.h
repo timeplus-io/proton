@@ -24,7 +24,8 @@ public:
         PREWHERE,
         WHERE,
         /// proton: starts
-        PARTITION_BY,
+        PARTITION_BY, /// Partition the data and track watermark for each partitioned data (substream) separately.
+        SHUFFLE_BY, /// shuffle by is light-weight patition by without calculating substream ID which is 128 bits long.
         /// proton: ends
         GROUP_BY,
         HAVING,
@@ -57,7 +58,9 @@ public:
                 return "WHERE";
             /// proton: starts
             case Expression::PARTITION_BY:
-                return "PARTITION_BY";
+                return "PARTITION BY";
+            case Expression::SHUFFLE_BY:
+                return "SHUFFLE BY";
             /// proton: ends
             case Expression::GROUP_BY:
                 return "GROUP BY";
@@ -113,6 +116,7 @@ public:
     const ASTPtr where()          const { return getExpression(Expression::WHERE); }
     /// proton: starts
     const ASTPtr partitionBy()    const { return getExpression(Expression::PARTITION_BY); }
+    const ASTPtr shuffleBy()    const { return getExpression(Expression::SHUFFLE_BY); }
     /// proton: ends
     const ASTPtr groupBy()        const { return getExpression(Expression::GROUP_BY); }
     const ASTPtr having()         const { return getExpression(Expression::HAVING); }

@@ -1,7 +1,7 @@
-#include "DDLHelper.h"
+#include <Interpreters/Streaming/ASTToJSONUtils.h>
+#include <Interpreters/Streaming/DDLHelper.h>
 
 #include <KafkaLog/KafkaWALPool.h>
-#include "ASTToJSONUtils.h"
 
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
