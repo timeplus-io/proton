@@ -116,7 +116,7 @@ public:
     const ASTPtr where()          const { return getExpression(Expression::WHERE); }
     /// proton: starts
     const ASTPtr partitionBy()    const { return getExpression(Expression::PARTITION_BY); }
-    const ASTPtr shuffleBy()    const { return getExpression(Expression::SHUFFLE_BY); }
+    const ASTPtr shuffleBy()      const { return getExpression(Expression::SHUFFLE_BY); }
     /// proton: ends
     const ASTPtr groupBy()        const { return getExpression(Expression::GROUP_BY); }
     const ASTPtr having()         const { return getExpression(Expression::HAVING); }

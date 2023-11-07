@@ -604,6 +604,12 @@ void QueryPipelineBuilder::addShufflingTransform(const Pipe::ProcessorGetter & g
     pipe.addShufflingTransform(getter);
 }
 
+void QueryPipelineBuilder::addLightShufflingTransform(const Pipe::ProcessorGetter & getter)
+{
+    checkInitializedAndNotCompleted();
+    pipe.addLightShufflingTransform(getter);
+}
+
 std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreaming(
     std::unique_ptr<QueryPipelineBuilder> left,
     std::unique_ptr<QueryPipelineBuilder> right,

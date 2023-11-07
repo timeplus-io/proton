@@ -197,10 +197,8 @@ struct SelectQueryInfo
     bool has_non_aggregate_over = false;
     bool has_javascript_uda = false; /// Used to guide query concurrency
     Names partition_by_keys;
-    Names shuffle_by_keys;
 
     bool hasPartitionByKeys() const noexcept { return !partition_by_keys.empty(); }
-    bool hasShuffleByKeys() const noexcept { return !shuffle_by_keys.empty(); }
     bool trackingChanges() const noexcept { return left_input_tracking_changes || right_input_tracking_changes; }
     /// proton: ends.
 

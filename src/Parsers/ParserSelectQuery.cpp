@@ -506,7 +506,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
     select_query->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where_expression));
     /// proton: starts.
     select_query->setExpression(ASTSelectQuery::Expression::PARTITION_BY, std::move(partition_by_expression_list));
-    select_query->setExpression(ASTSelectQuery::Expression::SHUFFLE_BY, std::move(partition_by_expression_list));
+    select_query->setExpression(ASTSelectQuery::Expression::SHUFFLE_BY, std::move(shuffle_by_expression_list));
     /// proton: ends.
     select_query->setExpression(ASTSelectQuery::Expression::GROUP_BY, std::move(group_expression_list));
     select_query->setExpression(ASTSelectQuery::Expression::HAVING, std::move(having_expression));

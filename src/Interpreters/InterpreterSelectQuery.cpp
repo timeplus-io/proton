@@ -98,6 +98,7 @@
 #include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Parsers/ASTWindowDefinition.h>
 #include <Parsers/Streaming/ASTEmitQuery.h>
+#include <Processors/QueryPlan/LightShufflingStep.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStepWithSubstream.h>
 #include <Processors/QueryPlan/Streaming/JoinStep.h>
@@ -165,13 +166,13 @@ void addEventTimePredicate(ASTSelectQuery & select, Int64 utc_ms)
         select.setExpression(ASTSelectQuery::Expression::WHERE, greater);
 }
 
-std::vector<size_t> keyPositionsForSubstreams(const Block & header, const SelectQueryInfo & query_info)
+std::vector<size_t> keyPositions(const Block & header, const Names & key_columns)
 {
-    std::vector<size_t> substream_key_positions;
-    substream_key_positions.reserve(query_info.partition_by_keys.size());
-    for (const auto & key : query_info.partition_by_keys)
-        substream_key_positions.emplace_back(header.getPositionByName(key));
-    return substream_key_positions;
+    std::vector<size_t> key_positions;
+    key_positions.reserve(key_columns.size());
+    for (const auto & key : key_columns)
+        key_positions.emplace_back(header.getPositionByName(key));
+    return key_positions;
 }
 
 /// Requires: 1) no window function 2) has aggregation
@@ -188,7 +189,7 @@ bool hasGlobalAggregationInQuery(const ASTPtr & query, const ASTSelectQuery & se
     return !data.aggregates.empty() || select_query.groupBy() != nullptr;
 }
 
-[[maybe_unused]] Names getShuffleByColumns(const ASTSelectQuery & query)
+Names getShuffleByColumns(const ASTSelectQuery & query)
 {
     Names shuffle_by_columns;
 
@@ -1610,6 +1611,13 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
             if (!query_info.projection && expressions.hasWhere())
                 executeWhere(query_plan, expressions.before_where, expressions.remove_where_filter);
 
+            /// proton : starts. TODO, when we support arbitrary shuffle expr, moved to ExpressionAnalyzer
+            /// TODO, if there is no aggregation / or parent select doesn't have aggregation (recursively)
+            /// avoid shuffle by step as an optimization
+            if (query.shuffleBy())
+                executeLightShuffling(query_plan);
+            /// proton : ends
+
             if (expressions.need_aggregate)
             {
                 executeAggregation(
@@ -2439,6 +2447,15 @@ void InterpreterSelectQuery::executeWhere(QueryPlan & query_plan, const ActionsD
     query_plan.addStep(std::move(where_step));
 }
 
+/// proton : starts
+void InterpreterSelectQuery::executeLightShuffling(QueryPlan & query_plan)
+{
+    auto key_positions = keyPositions(query_plan.getCurrentDataStream().header, getShuffleByColumns(getSelectQuery()));
+    query_plan.addStep(std::make_unique<LightShufflingStep>(
+        query_plan.getCurrentDataStream(), std::move(key_positions), context->getSettingsRef().max_threads.value));
+}
+/// proton : ends
+
 static Aggregator::Params getAggregatorParams(
     const ASTPtr & query_ptr,
     const SelectQueryExpressionAnalyzer & query_analyzer,
@@ -3245,8 +3262,6 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     if (query_info.hasPartitionByKeys())
         query_plan.addStep(std::make_unique<Streaming::AggregatingStepWithSubstream>(
             query_plan.getCurrentDataStream(), std::move(params), final, emit_version, data_stream_semantic_pair.isChangelogOutput()));
-    else if (query_info.hasShuffleByKeys())
-        ;
     else
         query_plan.addStep(std::make_unique<Streaming::AggregatingStep>(
             query_plan.getCurrentDataStream(), std::move(params), final, merge_threads, temporary_data_merge_threads, emit_version, data_stream_semantic_pair.isChangelogOutput()));
@@ -3465,7 +3480,7 @@ void InterpreterSelectQuery::buildShufflingQueryPlan(QueryPlan & query_plan)
     }
     shuffle_output_streams = shuffle_output_streams == 0 ? 1 : shuffle_output_streams;
 
-    auto substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
+    auto substream_key_positions = keyPositions(query_plan.getCurrentDataStream().header, query_info.partition_by_keys);
     query_plan.addStep(std::make_unique<Streaming::ShufflingStep>(
         query_plan.getCurrentDataStream(), std::move(substream_key_positions), shuffle_output_streams));
 }

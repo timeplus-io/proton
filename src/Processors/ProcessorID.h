@@ -114,6 +114,7 @@ enum class ProcessorID : UInt32
     ChangelogConvertTransformID = 93,
     ChangelogTransformID = 94,
     ReplayStreamTransformID = 95,
+    LightShufflingTransformID = 96,
 
     /// Aggregating transform
     AggregatingInOrderTransformID = 1'000,

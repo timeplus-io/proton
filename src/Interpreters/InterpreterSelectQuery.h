@@ -188,6 +188,7 @@ private:
     String generateFilterActions(ActionsDAGPtr & actions, const Names & prerequisite_columns = {}) const;
 
     /// proton: starts
+    void executeLightShuffling(QueryPlan & query_plan);
     void executeStreamingWindow(QueryPlan & query_plan);
     void executeStreamingOrder(QueryPlan & query_plan);
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
