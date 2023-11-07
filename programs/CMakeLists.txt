@@ -122,18 +122,10 @@ else()
     message(STATUS "proton klog-benchmark: OFF")
 endif()
 
-if(NOT (USE_STATIC_LIBRARIES OR SPLIT_SHARED_LIBRARIES))
-    set(CLICKHOUSE_ONE_SHARED ON)
-endif()
-
 configure_file (config_tools.h.in ${CONFIG_INCLUDE_PATH}/config_tools.h)
 
 macro(proton_target_link_split_lib target name)
-    if(NOT CLICKHOUSE_ONE_SHARED)
-        target_link_libraries(${target} PRIVATE clickhouse-${name}-lib)
-    else()
-        target_link_libraries(${target} PRIVATE clickhouse-lib)
-    endif()
+    target_link_libraries(${target} PRIVATE clickhouse-${name}-lib)
 endmacro()
 
 macro(proton_program_add_library name)
@@ -145,18 +137,16 @@ macro(proton_program_add_library name)
     set(CLICKHOUSE_${name_uc}_LINK ${CLICKHOUSE_${name_uc}_LINK} PARENT_SCOPE)
     set(CLICKHOUSE_${name_uc}_INCLUDE ${CLICKHOUSE_${name_uc}_INCLUDE} PARENT_SCOPE)
 
-    if(NOT CLICKHOUSE_ONE_SHARED)
-        add_library(clickhouse-${name}-lib ${CLICKHOUSE_${name_uc}_SOURCES})
+    add_library(clickhouse-${name}-lib ${CLICKHOUSE_${name_uc}_SOURCES})
 
-        set(_link ${CLICKHOUSE_${name_uc}_LINK}) # can't use ${} in if()
-        if(_link)
-            target_link_libraries(clickhouse-${name}-lib ${CLICKHOUSE_${name_uc}_LINK})
-        endif()
+    set(_link ${CLICKHOUSE_${name_uc}_LINK}) # can't use ${} in if()
+    if(_link)
+        target_link_libraries(clickhouse-${name}-lib ${CLICKHOUSE_${name_uc}_LINK})
+    endif()
 
-        set(_include ${CLICKHOUSE_${name_uc}_INCLUDE}) # can't use ${} in if()
-        if (_include)
-            target_include_directories(clickhouse-${name}-lib ${CLICKHOUSE_${name_uc}_INCLUDE})
-        endif()
+    set(_include ${CLICKHOUSE_${name_uc}_INCLUDE}) # can't use ${} in if()
+    if (_include)
+        target_include_directories(clickhouse-${name}-lib ${CLICKHOUSE_${name_uc}_INCLUDE})
     endif()
 endmacro()
 
@@ -185,46 +175,6 @@ if (ENABLE_PROTON_METASTORE)
 endif()
 # proton: ends.
 
-if (CLICKHOUSE_ONE_SHARED)
-  add_library(clickhouse-lib SHARED
-    ${CLICKHOUSE_SERVER_SOURCES}
-    ${CLICKHOUSE_CLIENT_SOURCES}
-    ${CLICKHOUSE_LOCAL_SOURCES}
-    ${CLICKHOUSE_BENCHMARK_SOURCES}
-    ${CLICKHOUSE_FORMAT_SOURCES}
-    ${CLICKHOUSE_GIT_IMPORT_SOURCES}
-    ${CLICKHOUSE_COMPRESSOR_SOURCES}
-    ${CLICKHOUSE_KEEPER_SOURCES}
-    ${CLICKHOUSE_KEEPER_CONVERTER_SOURCES}
-    ${CLICKHOUSE_STATIC_FILES_DISK_UPLOADER_SOURCES}
-    ${CLICKHOUSE_KLOG_BENCHMARK_SOURCES})
-
-    target_link_libraries(clickhouse-lib
-      ${CLICKHOUSE_SERVER_LINK}
-      ${CLICKHOUSE_CLIENT_LINK}
-      ${CLICKHOUSE_LOCAL_LINK}
-      ${CLICKHOUSE_BENCHMARK_LINK}
-      ${CLICKHOUSE_FORMAT_LINK}
-      ${CLICKHOUSE_GIT_IMPORT_LINK}
-      ${CLICKHOUSE_COMPRESSOR_LINK}
-      ${CLICKHOUSE_KEEPER_LINK}
-      ${CLICKHOUSE_KEEPER_CONVERTER_LINK}
-      ${CLICKHOUSE_STATIC_FILES_DISK_UPLOADER_LINK})
-
-    target_include_directories(clickhouse-lib
-      ${CLICKHOUSE_SERVER_INCLUDE}
-      ${CLICKHOUSE_CLIENT_INCLUDE}
-      ${CLICKHOUSE_LOCAL_INCLUDE}
-      ${CLICKHOUSE_BENCHMARK_INCLUDE}
-      ${CLICKHOUSE_FORMAT_INCLUDE}
-      ${CLICKHOUSE_GIT_IMPORT_INCLUDE}
-      ${CLICKHOUSE_COMPRESSOR_INCLUDE}
-      ${CLICKHOUSE_KEEPER_INCLUDE}
-      ${CLICKHOUSE_KEEPER_CONVERTER_INCLUDE})
-
-    set_target_properties(clickhouse-lib PROPERTIES SOVERSION ${VERSION_MAJOR}.${VERSION_MINOR} VERSION ${VERSION_SO} OUTPUT_NAME proton DEBUG_POSTFIX "")
-    install (TARGETS clickhouse-lib LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT proton)
-endif()
 
 proton_add_executable (proton main.cpp)
 

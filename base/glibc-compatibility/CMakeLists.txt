@@ -38,9 +38,7 @@ if (GLIBC_COMPATIBILITY)
 
     target_include_directories(glibc-compatibility PRIVATE libcxxabi ${musl_arch_include_dir})
 
-    if (NOT USE_STATIC_LIBRARIES AND NOT USE_STATIC_LIBRARIES)
-        target_compile_options(glibc-compatibility PRIVATE -fPIC)
-    endif ()
+    target_compile_options(glibc-compatibility PRIVATE -fPIC)
 
     target_link_libraries(global-libs INTERFACE glibc-compatibility ${MEMCPY_LIBRARY})
 

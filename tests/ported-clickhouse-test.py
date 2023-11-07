@@ -1207,8 +1207,7 @@ def main(args):
     global restarted_tests
 
     if not check_server_started(args):
-        msg = "Server is not responding. Cannot execute 'SELECT 1' query. \
-            If you are using split build, you have to specify -c option."
+        msg = "Server is not responding. Cannot execute 'SELECT 1' query."
         if args.hung_check:
             print(msg)
             pid = get_server_pid()
