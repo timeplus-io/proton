@@ -2334,29 +2334,42 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         query_info.storage_limits = std::make_shared<StorageLimitsList>(storage_limits);
 
         query_info.settings_limit_offset_done = options.settings_limit_offset_done;
+
         /// proton: starts.
         /// need replay operation
         if (settings.replay_speed > 0)
         {
             /// So far, only support append-only stream (or proxyed)
-            bool supported = false;
+            StorageStream * storagestream = nullptr;
             if (Streaming::isAppendStorage(storage->dataStreamSemantic()))
             {
-                if (storage->as<StorageStream>())
-                    supported = true;
-                else if (auto * proxy = storage->as<Streaming::ProxyStream>(); proxy && std::holds_alternative<StoragePtr>(proxy->getProxyStorageOrSubquery()))
-                    supported = true;
-            }
+                if (const auto * proxy = storage->as<Streaming::ProxyStream>())
+                {
+                    const auto & proxyed = proxy->getProxyStorageOrSubquery();
+                    const auto * nested_storage = std::get_if<StoragePtr>(&proxyed);
+                    if (nested_storage)
+                        storagestream = (*nested_storage)->as<StorageStream>();
+                }
+                else
+                    storagestream = storage->as<StorageStream>();
 
-            if (!supported)
-                throw Exception("Replay Stream is only support append-only stream", ErrorCodes::NOT_IMPLEMENTED);
+                if (!storagestream)
+                    throw Exception("Replay Stream is only support append-only stream", ErrorCodes::NOT_IMPLEMENTED);
+            }
+            assert(storagestream);
 
             if (std::ranges::none_of(required_columns, [](const auto & name) { return name == ProtonConsts::RESERVED_APPEND_TIME; }))
                 required_columns.emplace_back(ProtonConsts::RESERVED_APPEND_TIME);
 
+            if (std::ranges::none_of(
+                    required_columns, [](const auto & name) { return name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID; }))
+                required_columns.emplace_back(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
+
             storage->read(
                 query_plan, required_columns, storage_snapshot, query_info, context, processing_stage, max_block_size, max_streams);
-            auto replay_step = std::make_unique<Streaming::ReplayStreamStep>(query_plan.getCurrentDataStream(), settings.replay_speed);
+
+            auto replay_step = std::make_unique<Streaming::ReplayStreamStep>(
+                query_plan.getCurrentDataStream(), settings.replay_speed, (storagestream)->getLastSNs());
             replay_step->setStepDescription("Replay Stream");
             query_plan.addStep(std::move(replay_step));
         }
@@ -2364,6 +2377,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             storage->read(
                 query_plan, required_columns, storage_snapshot, query_info, context, processing_stage, max_block_size, max_streams);
         /// proton: ends.
+
         if (context->hasQueryContext() && !options.is_internal)
         {
             const String view_name{};
