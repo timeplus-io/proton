@@ -51,6 +51,7 @@ extern const int BAD_ARGUMENTS;
 extern const int RECEIVED_ERROR_TOO_MANY_REQUESTS;
 extern const int UNKNOWN_EXCEPTION;
 extern const int INTERNAL_ERROR;
+extern const int UNSUPPORTED;
 extern const int UNSUPPORTED_PARAMETER;
 extern const int RESOURCE_NOT_INITED;
 }
@@ -996,9 +997,23 @@ StorageStream::ShardsToRead StorageStream::getRequiredShardsToRead(ContextPtr co
     {
         assert(query_info.seek_to_info);
         const auto & settings_ref = context_->getSettingsRef();
-        bool require_back_fill_from_historical = !isInmemory()
-            && (Streaming::isKeyedStorage(dataStreamSemantic())
-                || (!query_info.seek_to_info->getSeekTo().empty() && settings_ref.enable_backfill_from_historical_store.value));
+
+        /// We allow backfill from historical store the following scenarios:
+        /// 1) For non-inmemory keyed storage stream, we always back fill from historical store (e.g. VersionedKV, ChangelogKV)
+        /// 2) Do time travel with settings `enable_backfill_from_historical_store = true`
+        bool require_back_fill_from_historical = false;
+        if (!isInmemory() && Streaming::isKeyedStorage(dataStreamSemantic()))
+            require_back_fill_from_historical = true;
+        else if (!query_info.seek_to_info->getSeekTo().empty() && settings_ref.enable_backfill_from_historical_store.value)
+        {
+            if (!query_info.seek_to_info->isTimeBased() && query_info.seek_to_info->getSeekTo() != "earliest")
+                throw Exception(
+                    ErrorCodes::UNSUPPORTED,
+                    "Seek to by absolute sequence number is not supported when set 'enable_backfill_from_historical_store=true'");
+
+            require_back_fill_from_historical = true;
+        }
+
         result.mode = require_back_fill_from_historical ? QueryMode::STREAMING_CONCAT : QueryMode::STREAMING;
     }
     else
