@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 #include <unordered_set>
+#include <mutex>
 #include <IO/Progress.h>
 #include <Interpreters/Context.h>
 #include <base/types.h>
@@ -91,6 +92,16 @@ private:
 
     EventRateMeter cpu_usage_meter{static_cast<double>(clock_gettime_ns()), 2'000'000'000 /*ns*/}; // average cpu utilization last 2 second
     HostToThreadTimesMap thread_data;
+    /// In case of all of the above:
+    /// - clickhouse-local
+    /// - input_format_parallel_parsing=true
+    /// - write_progress_on_update=true
+    ///
+    /// It is possible concurrent access to the following:
+    /// - writeProgress() (class properties) (guarded with progress_mutex)
+    /// - thread_data/host_cpu_usage (guarded with profile_events_mutex)
+    mutable std::mutex profile_events_mutex;
+    mutable std::mutex progress_mutex;
 };
 
 }

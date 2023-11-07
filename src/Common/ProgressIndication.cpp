@@ -48,8 +48,11 @@ void ProgressIndication::resetProgress()
     show_progress_bar = false;
     written_progress_chars = 0;
     write_progress_on_update = false;
-    cpu_usage_meter.reset(static_cast<double>(clock_gettime_ns()));
-    thread_data.clear();
+    {
+        std::lock_guard lock(profile_events_mutex);
+        cpu_usage_meter.reset(static_cast<double>(clock_gettime_ns()));
+        thread_data.clear();
+    }
 }
 
 void ProgressIndication::setFileProgressCallback(ContextMutablePtr context, WriteBufferFromFileDescriptor & message)
@@ -63,6 +66,8 @@ void ProgressIndication::setFileProgressCallback(ContextMutablePtr context, Writ
 
 void ProgressIndication::addThreadIdToList(String const & host, UInt64 thread_id)
 {
+    std::lock_guard lock(profile_events_mutex);
+
     auto & thread_to_times = thread_data[host];
     if (thread_to_times.contains(thread_id))
         return;
@@ -71,6 +76,8 @@ void ProgressIndication::addThreadIdToList(String const & host, UInt64 thread_id
 
 void ProgressIndication::updateThreadEventData(HostToThreadTimesMap & new_thread_data)
 {
+    std::lock_guard lock(profile_events_mutex);
+
     UInt64 total_cpu_ns = 0;
     for (auto & new_host_map : new_thread_data)
     {
@@ -82,6 +89,8 @@ void ProgressIndication::updateThreadEventData(HostToThreadTimesMap & new_thread
 
 size_t ProgressIndication::getUsedThreadsCount() const
 {
+    std::lock_guard lock(profile_events_mutex);
+
     return std::accumulate(thread_data.cbegin(), thread_data.cend(), 0,
         [] (size_t acc, auto const & threads)
         {
@@ -91,11 +100,15 @@ size_t ProgressIndication::getUsedThreadsCount() const
 
 double ProgressIndication::getCPUUsage()
 {
+    std::lock_guard lock(profile_events_mutex);
+
     return cpu_usage_meter.rate(clock_gettime_ns());
 }
 
 ProgressIndication::MemoryUsage ProgressIndication::getMemoryUsage() const
 {
+    std::lock_guard lock(profile_events_mutex);
+
     return std::accumulate(thread_data.cbegin(), thread_data.cend(), MemoryUsage{},
         [](MemoryUsage const & acc, auto const & host_data)
         {
@@ -128,6 +141,8 @@ void ProgressIndication::writeFinalProgress()
 
 void ProgressIndication::writeProgress(WriteBufferFromFileDescriptor & message)
 {
+    std::lock_guard lock(progress_mutex);
+
     static size_t increment = 0;
     static const char * indicators[8] = {
         "\033[1;30m→\033[0m",
