@@ -30,7 +30,7 @@ LightChunkSplitter::LightChunkSplitter(std::vector<size_t> key_column_positions_
 }
 
 
-ShardChunks LightChunkSplitter::split(DB::Chunk & chunk) const
+ShardChunks LightChunkSplitter::split(Chunk & chunk) const
 {
     size_t num_rows = chunk.getNumRows();
     assert(num_rows > 0);
@@ -46,11 +46,15 @@ ShardChunks LightChunkSplitter::split(DB::Chunk & chunk) const
         key_col_no_lc->updateWeakHash32(hash);
     }
 
+    ShardChunks shard_chunks;
+
     if (num_rows == 1)
     {
         /// Fast path
+        shard_chunks.reserve(1);
         UInt16 shard = intHash64(hash.getData()[0]) & (total_shards - 1);
-        return ShardChunks{{shard, std::move(chunk)}};
+        shard_chunks.emplace_back(shard, std::move(chunk));
+        return shard_chunks;
     }
 
     auto selector = hashToSelector(hash, total_shards);
@@ -61,7 +65,6 @@ ShardChunks LightChunkSplitter::split(DB::Chunk & chunk) const
     for (const auto & column : columns)
         sharded_columns.emplace_back(column->scatter(total_shards, selector));
 
-    ShardChunks shard_chunks;
     shard_chunks.reserve(total_shards);
 
     auto num_columns = columns.size();
@@ -77,7 +80,7 @@ ShardChunks LightChunkSplitter::split(DB::Chunk & chunk) const
                 chunk_columns[col_pos] = std::move(sharded_columns[col_pos][shard]);
 
             auto chunk_rows = chunk_columns[0]->size();
-            sharded_columns.emplace_back(shard, Chunk(std::move(chunk_columns), chunk_rows));
+            shard_chunks.emplace_back(shard, Chunk(std::move(chunk_columns), chunk_rows));
         }
     }
 

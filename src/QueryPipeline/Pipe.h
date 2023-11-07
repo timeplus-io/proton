@@ -86,8 +86,6 @@ public:
     /// Add shuffling transform. It should have single input with compatible header.
     /// Output ports should have same headers. (used for shuffling)
     void addShufflingTransform(const ProcessorGetter & getter);
-
-    void addLightShufflingTransform(const ProcessorGetter & getter);
     /// proton: ends.
 
     /// Add chain to every output port.

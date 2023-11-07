@@ -9,6 +9,7 @@ namespace DB
 struct ShardChunk
 {
     ShardChunk(UInt16 shard_, Chunk && chunk_) : shard(shard_), chunk(std::move(chunk_)) { }
+    ShardChunk(ShardChunk && other) noexcept : shard(other.shard), chunk(std::move(other.chunk)) { }
 
     UInt16 shard;
     Chunk chunk;

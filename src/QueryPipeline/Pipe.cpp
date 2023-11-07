@@ -6,9 +6,6 @@
 #include <Processors/Sinks/NullSink.h>
 #include <Processors/Sinks/EmptySink.h>
 #include <Processors/Transforms/ExtremesTransform.h>
-#include <Processors/Formats/IOutputFormat.h>
-#include <Processors/Sources/NullSource.h>
-#include <Processors/ISource.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <QueryPipeline/ReadProgressCallback.h>
 #include <Columns/ColumnConst.h>
@@ -914,6 +911,8 @@ void Pipe::addShufflingTransform(const ProcessorGetter & getter)
     size_t new_outputs_num = 0;
     std::vector<OutputPortRawPtrs> to_merge_outputs_list;
 
+    auto is_streaming = isStreaming();
+
     /// Add complex transform for each outport
     for (auto & output : output_ports)
     {
@@ -976,7 +975,11 @@ void Pipe::addShufflingTransform(const ProcessorGetter & getter)
     /// Merge the same index outputs of all transforms
     for (auto & to_merge_outputs : to_merge_outputs_list)
     {
-        auto resize = getStreamingResizeProcessor(new_header, to_merge_outputs.size(), 1);
+        ProcessorPtr resize;
+        if (is_streaming)
+            resize = getStreamingResizeProcessor(new_header, to_merge_outputs.size(), 1);
+        else
+            resize = std::make_shared<ResizeProcessor>(new_header, to_merge_outputs.size(), 1);
 
         /// -----------------------------------       -------------------------------
         /// | shuffling transform 1, output 1 | ->    | resize transform 1, input 1 |
@@ -992,99 +995,6 @@ void Pipe::addShufflingTransform(const ProcessorGetter & getter)
         processors.emplace_back(std::move(resize));
     }
     assert(isStreaming());
-
-    header = output_ports.front()->getHeader();
-
-    max_parallel_streams = std::max<size_t>(max_parallel_streams, output_ports.size());
-}
-
-/// FIXME, refactor with addShufflingTransform
-void Pipe::addLightShufflingTransform(const ProcessorGetter & getter)
-{
-    if (output_ports.empty())
-        throw Exception("Cannot add complex transform to empty Pipe.", ErrorCodes::LOGICAL_ERROR);
-
-    Block new_header;
-    size_t new_outputs_num = 0;
-    std::vector<OutputPortRawPtrs> to_merge_outputs_list;
-
-    /// Add complex transform for each outport
-    for (auto & output : output_ports)
-    {
-        assert(output);
-        auto transform = getter(output->getHeader());
-        assert(transform);
-
-        auto & new_inputs = transform->getInputs();
-        if (new_inputs.size() != 1)
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Processor for query pipeline transform should have single input, but {} has {} inputs",
-                transform->getName(),
-                new_inputs.size());
-
-        auto & new_outputs = transform->getOutputs();
-        if (new_outputs.empty())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot add complex transform without outports");
-
-        const auto & out_header = new_outputs.front().getHeader();
-
-        if (new_header)
-        {
-            assertBlocksHaveEqualStructure(new_header, out_header, "QueryPipeline");
-            if (new_outputs_num != new_outputs.size())
-                throw Exception(
-                    ErrorCodes::LOGICAL_ERROR,
-                    "Processors for query pipeline transform should have same outputs size {}, but {} has {} outputs",
-                    new_outputs_num,
-                    transform->getName(),
-                    new_outputs.size());
-        }
-        else
-        {
-            new_header = out_header;
-            new_outputs_num = new_outputs.size();
-            to_merge_outputs_list.resize(new_outputs_num);
-        }
-
-        /// ---------------------    ---------------------
-        /// | Upstream output 1 | -> | Shuffling Input 1 |
-        /// ---------------------     -------------------
-        /// | Upstream output 2 | -> | Shuffling Input 2 |
-        /// ---------------------    ---------------------
-        /// ...
-        connect(*output, new_inputs.front());
-
-        for (size_t i = 0; auto & new_output: new_outputs)
-            to_merge_outputs_list[i++].emplace_back(&new_output);
-
-        if (collected_processors)
-            collected_processors->emplace_back(transform);
-
-        processors.emplace_back(std::move(transform));
-    }
-
-    output_ports.clear();
-    output_ports.reserve(new_outputs_num);
-
-    /// Merge the same index outputs of all transforms
-    for (auto & to_merge_outputs : to_merge_outputs_list)
-    {
-        auto resize = std::make_shared<ResizeProcessor>(new_header, to_merge_outputs.size(), 1);
-
-        /// -----------------------------------       -------------------------------
-        /// | shuffling transform 1, output 1 | ->    | resize transform 1, input 1 |
-        /// -----------------------------------       -------------------------------
-        /// | shuffling transform 2, output 1 | ->    | resize transform 1, input 2 |
-        /// -----------------------------------       -------------------------------
-        /// ...
-        for (size_t i = 0; auto & input : resize->getInputs())
-            connect(*to_merge_outputs[i++], input);
-
-        output_ports.emplace_back(&resize->getOutputs().front());
-
-        processors.emplace_back(std::move(resize));
-    }
 
     header = output_ports.front()->getHeader();
 

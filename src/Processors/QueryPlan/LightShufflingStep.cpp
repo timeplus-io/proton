@@ -5,8 +5,6 @@
 
 namespace DB
 {
-namespace Streaming
-{
 static ITransformingStep::Traits getTraits()
 {
     return ITransformingStep::Traits{
@@ -43,11 +41,10 @@ void LightShufflingStep::transformPipeline(QueryPipelineBuilder & pipeline, cons
     else
     {
         /// M -> N
-        pipeline.addLightShufflingTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
+        pipeline.addShufflingTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
             return std::make_shared<LightShufflingTransform>(header, num_outputs, key_positions);
         });
     }
 }
 
-}
 }

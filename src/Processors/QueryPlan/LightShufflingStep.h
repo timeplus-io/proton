@@ -5,8 +5,6 @@
 
 namespace DB
 {
-namespace Streaming
-{
 /// M shards -> N virtual shards (threads) shuffling without calculating the substream ID when compared with Streaming::ShufflingStep
 class LightShufflingStep final : public ITransformingStep
 {
@@ -22,5 +20,4 @@ private:
     size_t max_num_outputs;
 };
 
-}
 }
