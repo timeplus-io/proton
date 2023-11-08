@@ -7,10 +7,16 @@
     </logger>
 
     <http_port>3218</http_port>
+    <snapshot_server_http_port>8123</snapshot_server_http_port>
     <tcp_port>8463</tcp_port>
+    <snapshot_server_tcp_port>7587</snapshot_server_tcp_port>
+    <postgresql_port>5432</postgresql_port>
     <mysql_port>9004</mysql_port>
+    <interserver_http_port>9009</interserver_http_port>
+    <listen_host>0.0.0.0</listen_host>
+    <telemetry_enabled>true</telemetry_enabled>
 
-    <path>./</path>
+    <path>./proton-data/</path>
 
     <mark_cache_size>5368709120</mark_cache_size>
     <mlock_executable>true</mlock_executable>
@@ -141,9 +147,9 @@
           <enabled>true</enabled>
           <default>false</default>
           <check_crcs>false</check_crcs>
-          <metastore_data_dir>./nativelog/meta/</metastore_data_dir>
+          <metastore_data_dir>./proton-data/nativelog/meta/</metastore_data_dir>
           <log_data_dirs>
-            <dir1>./nativelog/log/</dir1>
+            <dir1>./proton-data/nativelog/log/</dir1>
           </log_data_dirs>
           <fetch_max_wait_ms>500</fetch_max_wait_ms>
           <fetch_max_bytes>65536</fetch_max_bytes>
@@ -160,7 +166,7 @@
 
     <checkpoint>
       <storage_type>local_file_system</storage_type>
-      <path>./checkpoint/</path>
+      <path>./proton-data/checkpoint/</path>
     </checkpoint>
 
 </proton>

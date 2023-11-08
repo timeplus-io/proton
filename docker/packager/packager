@@ -62,7 +62,7 @@ def run_docker_image_with_env(image_name, output, env_variables, ch_root, ccache
 
     subprocess.check_call(cmd, shell=True)
 
-def parse_env_variables(build_type, compiler, sanitizer, package_type, image_type, cache, split_binary, clang_tidy, version, author, official, alien_pkgs, with_coverage, with_binaries, proton_build):
+def parse_env_variables(build_type, compiler, sanitizer, package_type, image_type, cache, clang_tidy, version, author, official, alien_pkgs, with_coverage, with_binaries, proton_build):
     DARWIN_SUFFIX = "-darwin"
     DARWIN_ARM_SUFFIX = "-darwin-aarch64"
     ARM_SUFFIX = "-aarch64"
@@ -126,12 +126,10 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DCMAKE_C_COMPILER=`which {}`'.format(cc))
         cmake_flags.append('-DCMAKE_CXX_COMPILER=`which {}`'.format(cxx))
 
-    # Create combined output archive for split build and for performance tests.
+    # Create combined output archive for performance tests.
     if package_type == "performance":
         result.append("COMBINED_OUTPUT=performance")
         cmake_flags.append("-DENABLE_TESTS=0")
-    elif split_binary:
-        result.append("COMBINED_OUTPUT=shared_build")
 
     if sanitizer:
         result.append("SANITIZER={}".format(sanitizer))
@@ -165,13 +163,6 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         result.append('BINARY_OUTPUT=tests')
         cmake_flags.append('-DENABLE_TESTS=1')
 
-    if split_binary:
-        cmake_flags.append('-DUSE_STATIC_LIBRARIES=0 -DSPLIT_SHARED_LIBRARIES=1')
-        # We can't always build utils because it requires too much space, but
-        # we have to build them at least in some way in CI. The split build is
-        # probably the least heavy disk-wise.
-        cmake_flags.append('-DENABLE_UTILS=1')
-
     if clang_tidy:
         cmake_flags.append('-DENABLE_CLANG_TIDY=1')
         cmake_flags.append('-DENABLE_UTILS=1')
@@ -201,7 +192,6 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_PROTON_DWAL_BENCHMARK=ON')
         cmake_flags.append('-DENABLE_PROTON_INSTALL=ON')
         cmake_flags.append('-DENABLE_PROTON_METASTORE=ON')
-        cmake_flags.append('-DUSE_STATIC_LIBRARIES=ON')
         cmake_flags.append('-DUSE_DEBUG_HELPERS=ON')
         cmake_flags.append('-DENABLE_LIBRARIES=OFF')
         cmake_flags.append('-DENABLE_KAFKA=ON')
@@ -272,7 +262,6 @@ if __name__ == "__main__":
                                     default="clang-16")
 
     parser.add_argument("--sanitizer", choices=("address", "thread", "memory", "undefined", ""), default="")
-    parser.add_argument("--split-binary", action="store_true")
     parser.add_argument("--clang-tidy", action="store_true")
     parser.add_argument("--cache", choices=("", "ccache", "distcc"), default="")
     parser.add_argument("--ccache_dir", default= os.getenv("HOME", "") + '/.ccache')
@@ -318,7 +307,7 @@ if __name__ == "__main__":
     # proton: starts.
     env_prepared = parse_env_variables(
         args.build_type, args.compiler, args.sanitizer, args.package_type, image_type,
-        args.cache, args.split_binary, args.clang_tidy,
+        args.cache, args.clang_tidy,
         args.version, args.author, args.official, args.alien_pkgs, args.with_coverage, args.with_binaries, args.proton_build)
     # proton: ends.
 
