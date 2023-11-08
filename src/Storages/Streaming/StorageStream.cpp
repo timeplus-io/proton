@@ -477,8 +477,9 @@ void StorageStream::readConcat(
     else
         header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
 
+    /// Specially, we always read by single thread for keyed storage
     auto shard_num_streams = num_streams / shards_to_read.size();
-    if (shard_num_streams == 0)
+    if (shard_num_streams == 0 || Streaming::isKeyedStorage(dataStreamSemantic()))
         shard_num_streams = 1;
 
     std::vector<QueryPlanPtr> plans;
