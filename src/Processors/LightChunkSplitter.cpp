@@ -86,5 +86,4 @@ ShardChunks LightChunkSplitter::split(Chunk & chunk) const
 
     return shard_chunks;
 }
-
 }
