@@ -1180,7 +1180,7 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
     /// proton : starts. Add streaming source after historical source
     if (create_streaming_source)
     {
-        if (query_info.requires_backfill_input_in_order)
+        if (query_info.require_in_order_backfill)
         {
             /// TODO: support optimized order for the stream with ordered by `_tp_time`
             /// Copy basic code from `SortingStep::fullSort`

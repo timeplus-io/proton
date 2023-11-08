@@ -458,13 +458,14 @@ void StorageStream::readConcat(
     const StorageSnapshotPtr & storage_snapshot,
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
-    size_t max_block_size)
+    size_t max_block_size,
+    size_t num_streams)
 {
     auto description = makeFormattedNameOfConcatShards(shards_to_read);
     LOG_INFO(log, "Read local streaming concat {}", description);
 
     /// If required backfill input in order, we will need read `_tp_time`.
-    if (query_info.requires_backfill_input_in_order
+    if (query_info.require_in_order_backfill
         && std::ranges::none_of(column_names, [](const auto & name) { return name == ProtonConsts::RESERVED_EVENT_TIME; }))
         column_names.emplace_back(ProtonConsts::RESERVED_EVENT_TIME);
 
@@ -475,6 +476,10 @@ void StorageStream::readConcat(
         header = storage_snapshot->getSampleBlockForColumns(column_names);
     else
         header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
+
+    auto shard_num_streams = num_streams / shards_to_read.size();
+    if (shard_num_streams == 0)
+        shard_num_streams = 1;
 
     std::vector<QueryPlanPtr> plans;
     for (auto & stream_shard : shards_to_read)
@@ -552,6 +557,7 @@ void StorageStream::readConcat(
             context_,
             processed_stage,
             max_block_size,
+            shard_num_streams,
             std::move(create_streaming_source));
 
         if (plan->isInitialized())
@@ -564,7 +570,6 @@ void StorageStream::readConcat(
     if (plans.size() == 1)
     {
         query_plan = std::move(*plans.front());
-        query_plan.setMaxThreads(1);
     }
     else
     {
@@ -576,7 +581,6 @@ void StorageStream::readConcat(
         auto union_step = std::make_unique<UnionStep>(std::move(input_streams));
         union_step->setStepDescription(description);
         query_plan.unitePlans(std::move(union_step), std::move(plans));
-        query_plan.setMaxThreads(plans.size());
     }
 }
 
@@ -707,7 +711,8 @@ void StorageStream::read(
                 storage_snapshot,
                 std::move(context_),
                 processed_stage,
-                max_block_size);
+                max_block_size,
+                num_streams);
         }
         case QueryMode::HISTORICAL: {
             return readHistory(
@@ -801,7 +806,8 @@ void StorageStream::readChangelog(
                 storage_snapshot,
                 std::move(context_),
                 processed_stage,
-                max_block_size);
+                max_block_size,
+                num_streams);
             break;
         }
         case QueryMode::HISTORICAL: {
@@ -1005,14 +1011,7 @@ StorageStream::ShardsToRead StorageStream::getRequiredShardsToRead(ContextPtr co
         if (!isInmemory() && Streaming::isKeyedStorage(dataStreamSemantic()))
             require_back_fill_from_historical = true;
         else if (!query_info.seek_to_info->getSeekTo().empty() && settings_ref.enable_backfill_from_historical_store.value)
-        {
-            if (!query_info.seek_to_info->isTimeBased() && query_info.seek_to_info->getSeekTo() != "earliest")
-                throw Exception(
-                    ErrorCodes::UNSUPPORTED,
-                    "Seek to by absolute sequence number is not supported when set 'enable_backfill_from_historical_store=true'");
-
             require_back_fill_from_historical = true;
-        }
 
         result.mode = require_back_fill_from_historical ? QueryMode::STREAMING_CONCAT : QueryMode::STREAMING;
     }

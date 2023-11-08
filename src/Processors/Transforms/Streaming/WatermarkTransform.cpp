@@ -55,12 +55,12 @@ void WatermarkTransform::transform(Chunk & chunk)
     chunk.clearWatermark();
 
     if (chunk.isHistoricalDataStart())
-        is_backfill_data = true;
+        is_backfilling_data = true;
     else if (chunk.isHistoricalDataEnd())
-        is_backfill_data = false;
+        is_backfilling_data = false;
 
     bool avoid_watermark = chunk.avoidWatermark();
-    avoid_watermark |= is_backfill_data && skip_stamping_for_backfill_data;
+    avoid_watermark |= is_backfilling_data && skip_stamping_for_backfill_data;
     if (!avoid_watermark)
         watermark->process(chunk);
 }

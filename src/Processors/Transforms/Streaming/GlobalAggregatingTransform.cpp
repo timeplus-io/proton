@@ -125,21 +125,13 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
         many_data->finalized_watermark.store(chunk_ctx->getWatermark(), std::memory_order_relaxed);
     });
 
-    AggregatedDataVariantsPtr non_empty_one;
-    for (const auto & data : many_data->variants)
-    {
-        if (!data->empty())
-        {
-            non_empty_one = data;
-            break;
-        }
-    }
-    assert(non_empty_one);
+    auto first_data_iter = std::ranges::find_if(many_data->variants, [](const auto & data) { return !data->empty(); });
+    assert(first_data_iter != many_data->variants.end());
 
-    if (unlikely(non_empty_one->isTwoLevel()))
+    if (unlikely((*first_data_iter)->isTwoLevel()))
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Two level merge is not implemented in global aggregation");
 
-    if (non_empty_one->type == AggregatedDataVariants::Type::without_key)
+    if ((*first_data_iter)->type == AggregatedDataVariants::Type::without_key)
     {
         /// Without key
         if (params->emit_changelog)

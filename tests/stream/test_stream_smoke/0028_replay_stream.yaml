@@ -57,7 +57,7 @@ tests:
             query_id: '2900'
             wait: 1
             query: with cte as (select id, value, date_diff('millisecond', to_datetime64(lag(_tp_append_time, 1)/1000, 3, 'UTC'), to_datetime64(_tp_append_time/1000, 3, 'UTC')) as insert_interval,
-                    date_diff('millisecond',lag(now64(), 1), now64()) as output_time_diff, _tp_time from test29_stream where _tp_time > earliest_timestamp() settings replay_speed=1, enable_backfill_from_historical_store=false)
+                    date_diff('millisecond',lag(now64(), 1), now64()) as output_time_diff, _tp_time from test29_stream where _tp_time > earliest_timestamp() settings replay_speed=1)
                     select id, value, abs(insert_interval-2000) < 200, abs(insert_interval-output_time_diff) < 200 from cte;
     expected_results:
       - query_id: '2900'
@@ -101,7 +101,7 @@ tests:
             query_id: '2901'
             wait: 1
             query: with cte as (select id, value, date_diff('millisecond', to_datetime64(lag(_tp_append_time, 1)/1000, 3, 'UTC'), to_datetime64(_tp_append_time/1000, 3, 'UTC')) as insert_interval,
-                    date_diff('millisecond',lag(now64(), 1), now64()) as output_time_diff, _tp_time from test29_stream where _tp_time > earliest_timestamp() settings replay_speed=0.5, enable_backfill_from_historical_store=false)
+                    date_diff('millisecond',lag(now64(), 1), now64()) as output_time_diff, _tp_time from test29_stream where _tp_time > earliest_timestamp() settings replay_speed=0.5)
                     select id, value, abs(insert_interval-2000) < 200, abs(2*insert_interval-output_time_diff) < 200 from cte;
     expected_results:
       - query_id: '2901'
@@ -165,7 +165,7 @@ tests:
             query_id: '2902'
             wait: 1
             query: select max(value), min(value), id from test29_stream where _tp_time >
-              earliest_timestamp() group by id settings replay_speed=1, enable_backfill_from_historical_store=false;
+              earliest_timestamp() group by id settings replay_speed=1;
     expected_results:
       - query_id: '2902'
         expected_results:
@@ -258,7 +258,7 @@ tests:
             query_id: '2904'
             wait: 1
             query: with cte as (select id, value from test29_stream_1 where _tp_time >
-              earliest_timestamp() settings replay_speed=1, enable_backfill_from_historical_store=false) select a.id,
+              earliest_timestamp() settings replay_speed=1) select a.id,
               a.value, b.id, b.value from cte as a join table(test29_stream_2)
               as b on a.id=b.id;
     expected_results:
@@ -309,7 +309,7 @@ tests:
             terminate: munual
             query_id: '2905'
             wait: 1
-            query: select id, value from test29_stream where _tp_time > earliest_timestamp() settings replay_speed=1, enable_backfill_from_historical_store=false;
+            query: select id, value from test29_stream where _tp_time > earliest_timestamp() settings replay_speed=1;
 
           - client: python
             query_type: table

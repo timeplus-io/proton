@@ -62,6 +62,7 @@ public:
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
+        size_t num_streams,
         std::function<std::shared_ptr<ISource>(Int64&)> create_streaming_source);
     /// proton: ends
 

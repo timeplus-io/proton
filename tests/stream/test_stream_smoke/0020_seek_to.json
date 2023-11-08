@@ -24,8 +24,8 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"2100", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream settings seek_to='0' settings enable_backfill_from_historical_store = false"},
-            {"client":"python","query_id":"2190", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn >= 0 settings enable_backfill_from_historical_store = false"}
+            {"client":"python","query_id":"2100", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream settings seek_to='0'"},
+            {"client":"python","query_id":"2190", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn >= 0"}
           ]
         }
       ],
@@ -52,8 +52,8 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"2101", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream settings seek_to='1' settings enable_backfill_from_historical_store = false"},
-            {"client":"python","query_id":"2191", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn >= 1 settings enable_backfill_from_historical_store = false"}
+            {"client":"python","query_id":"2101", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream settings seek_to='1'"},
+            {"client":"python","query_id":"2191", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn >= 1"}
           ]
         }
       ],
@@ -80,8 +80,8 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"2102", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream settings seek_to='5' settings enable_backfill_from_historical_store = false"},
-            {"client":"python","query_id":"2192", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn >= 5 settings enable_backfill_from_historical_store = false"}
+            {"client":"python","query_id":"2102", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream settings seek_to='5'"},
+            {"client":"python","query_id":"2192", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn >= 5"}
           ]
         }
       ],
@@ -104,13 +104,13 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"2100", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn = 1 settings enable_backfill_from_historical_store = false"},
-            {"client":"python","query_id":"2101", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn = 5 settings enable_backfill_from_historical_store = false"},
-            {"client":"python","query_id":"2102", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn < 2 settings enable_backfill_from_historical_store = false"},
-            {"client":"python","query_id":"2103", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn <= 2 settings enable_backfill_from_historical_store = false"},
-            {"client":"python","query_id":"2104", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn > 2 settings enable_backfill_from_historical_store = false"},
-            {"client":"python","query_id":"2105", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn >= 2 settings enable_backfill_from_historical_store = false"},
-            {"client":"python","query_id":"2106", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn != 2 settings enable_backfill_from_historical_store = false"}
+            {"client":"python","query_id":"2100", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn = 1"},
+            {"client":"python","query_id":"2101", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn = 5"},
+            {"client":"python","query_id":"2102", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn < 2"},
+            {"client":"python","query_id":"2103", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn <= 2"},
+            {"client":"python","query_id":"2104", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn > 2"},
+            {"client":"python","query_id":"2105", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn >= 2"},
+            {"client":"python","query_id":"2106", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select i, s from test21_limit_by_stream where _tp_sn != 2"}
           ]
         }
       ],
@@ -227,7 +227,7 @@
         {
           "statements": [
             {"client":"python","query_id":"2100", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select t, s from (select * from test21_limit_by_stream) where _tp_time = '2022-12-01 00:00:01.111'"},
-            {"client":"python","query_id":"2101", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select t, s from (select *, _tp_sn from test21_limit_by_stream) where _tp_sn = 0 settings enable_backfill_from_historical_store = false"}
+            {"client":"python","query_id":"2101", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"select t, s from (select *, _tp_sn from test21_limit_by_stream) where _tp_sn = 0"}
           ]
         }
       ],
@@ -255,9 +255,9 @@
         {
           "statements": [
             {"client":"python","query_id":"2100", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"with cte as (select i, s, _tp_time as event_time from test21_limit_by_stream) select i, s from cte where event_time >= '2022-12-01 00:00:01.111'"},
-            {"client":"python","query_id":"2101", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"with cte as (select i, s, _tp_sn as sn from test21_limit_by_stream) select i, s from cte where sn >= 0 settings enable_backfill_from_historical_store = false"},
+            {"client":"python","query_id":"2101", "depends_on_stream":"test21_limit_by_stream","query_end_timer":2, "query_type": "stream", "query":"with cte as (select i, s, _tp_sn as sn from test21_limit_by_stream) select i, s from cte where sn >= 0"},
             {"client":"python", "query_id":"2102", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":2, "query_type": "stream", "query":"with cte as (select i, s, _tp_time as event_time from test21_limit_by_stream) select window_start, count() from tumble(cte, event_time, 2s) where event_time >= '2022-12-01 00:00:01.111' group by window_start"},
-            {"client":"python", "query_id":"2103", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":2, "query_type": "stream", "query":"with cte as (select i, s, _tp_time, _tp_sn as sn from test21_limit_by_stream) select window_start, count() from tumble(cte, 2s) where sn >= 0 group by window_start settings enable_backfill_from_historical_store = false"}
+            {"client":"python", "query_id":"2103", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":2, "query_type": "stream", "query":"with cte as (select i, s, _tp_time, _tp_sn as sn from test21_limit_by_stream) select window_start, count() from tumble(cte, 2s) where sn >= 0 group by window_start"}
           ]
         }
       ],
@@ -303,9 +303,9 @@
             {"client":"python", "query_type": "table", "wait": 2, "query":"create view seek_to_view1 as select t, s, _tp_time as time from (select * from test21_limit_by_stream)"},
             {"client":"python", "query_type": "table", "query":"create view seek_to_view2 as select t, s, _tp_time, _tp_sn from (select *, _tp_sn from test21_limit_by_stream)"},
             {"client":"python", "query_id":"2100", "depends_on_stream":"seek_to_view1", "query_end_timer":2, "query_type": "stream", "query":"select t, s from seek_to_view1 where time = '2022-12-01 00:00:01.111'"},
-            {"client":"python", "query_id":"2101", "depends_on_stream":"seek_to_view2", "query_end_timer":2, "query_type": "stream", "query":"select t, s from seek_to_view2 where _tp_sn = 0 settings enable_backfill_from_historical_store = false"},
+            {"client":"python", "query_id":"2101", "depends_on_stream":"seek_to_view2", "query_end_timer":2, "query_type": "stream", "query":"select t, s from seek_to_view2 where _tp_sn = 0"},
             {"client":"python", "query_id":"2102", "depends_on_stream":"seek_to_view1", "query_end_timer":2, "query_type": "stream","drop_view":"seek_to_view1", "drop_view_wait":2, "query":"select window_start, count() from tumble(seek_to_view1, time, 2s) where time >= '2022-12-01 00:00:01.111' group by window_start"},
-            {"client":"python", "query_id":"2103", "depends_on_stream":"seek_to_view2", "query_end_timer":2, "query_type": "stream","drop_view":"seek_to_view2", "drop_view_wait":2, "query":"select window_start, count() from tumble(seek_to_view2, 2s) where _tp_sn >= 0 group by window_start settings enable_backfill_from_historical_store = false"}
+            {"client":"python", "query_id":"2103", "depends_on_stream":"seek_to_view2", "query_end_timer":2, "query_type": "stream","drop_view":"seek_to_view2", "drop_view_wait":2, "query":"select window_start, count() from tumble(seek_to_view2, 2s) where _tp_sn >= 0 group by window_start"}
           ]
         }
       ],
@@ -354,8 +354,8 @@
             {"client":"python", "depends_on_stream":"test21_limit_by_stream_2", "query_type": "table", "query":"insert into test21_limit_by_stream_2(i, s, t) values (2, 's2', '2022-12-01 00:00:04.111')"},
             {"client":"python", "wait":2, "query_id":"2100", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":3, "query_type": "stream", "query":"select a.i, b.s, c.t from test21_limit_by_stream as a join test21_limit_by_stream as b on a.i = b.i join test21_limit_by_stream as c on b.i = c.i where a._tp_time >= '2022-12-01 00:00:01.111' and b._tp_time >= '2022-12-01 00:00:02.111' and c._tp_time >= '2022-12-01 00:00:03.111'"},
             {"client":"python", "wait":2, "query_id":"2101", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":3, "query_type": "stream", "query":"select a.i, count() from test21_limit_by_stream as a join test21_limit_by_stream as b on a.i = b.i where a._tp_time >= '2022-12-01 00:00:01.111' and b._tp_time >= '2022-12-01 00:00:02.111' group by a.i emit periodic 1s"},
-            {"client":"python", "wait":2, "query_id":"2102", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":3, "query_type": "stream", "query":"select i, s from test21_limit_by_stream as a  join test21_limit_by_stream_2 as b on a.i = b.i where test21_limit_by_stream._tp_sn > 1 and default.test21_limit_by_stream_2._tp_sn > 2 settings enable_backfill_from_historical_store = false"},
-            {"client":"python", "wait":2, "query_id":"2103", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":3, "query_type": "stream", "query":"select count() from test21_limit_by_stream as a  join test21_limit_by_stream_2 as b on a.i = b.i where test21_limit_by_stream._tp_sn > 0 and default.test21_limit_by_stream_2._tp_sn < 4 emit periodic 1s settings enable_backfill_from_historical_store = false"}
+            {"client":"python", "wait":2, "query_id":"2102", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":3, "query_type": "stream", "query":"select i, s from test21_limit_by_stream as a  join test21_limit_by_stream_2 as b on a.i = b.i where test21_limit_by_stream._tp_sn > 1 and default.test21_limit_by_stream_2._tp_sn > 2"},
+            {"client":"python", "wait":2, "query_id":"2103", "depends_on_stream":"test21_limit_by_stream", "query_end_timer":3, "query_type": "stream", "query":"select count() from test21_limit_by_stream as a  join test21_limit_by_stream_2 as b on a.i = b.i where test21_limit_by_stream._tp_sn > 0 and default.test21_limit_by_stream_2._tp_sn < 4 emit periodic 1s"}
           ]
         }
       ],
@@ -396,7 +396,7 @@
           "statements": [
             {"client":"python", "wait":2, "query_type": "table", "query":"drop view if exists seek_to_mv"},
             {"client":"python", "wait":2, "query_type": "table", "query":"create materialized view seek_to_mv as (select window_start as win_start, window_end as win_end, sum(i) as cnt from tumble(test21_limit_by_stream, 2s) where _tp_time >= '2022-12-01 00:00:01.111' group by window_start, window_end)"},
-            {"client":"python", "wait":5, "depends_on_stream":"seek_to_mv", "query_end_timer":3, "query_type": "stream", "query_id":"2100", "query":"select win_start, win_end, cnt from seek_to_mv where _tp_sn >= 0 settings enable_backfill_from_historical_store = false"},
+            {"client":"python", "wait":5, "depends_on_stream":"seek_to_mv", "query_end_timer":3, "query_type": "stream", "query_id":"2100", "query":"select win_start, win_end, cnt from seek_to_mv where _tp_sn >= 0"},
             {"client":"python", "depends_on_stream":"seek_to_mv", "wait":5, "query_type": "table", "query_id":"2101", "query":"select win_start, win_end, cnt from table(seek_to_mv)"},
             {"client":"python", "query_end_timer":4, "query_type": "stream", "query_id":"2102","drop_view":"seek_to_mv", "drop_view_wait":2, "query":"select window_start, sum(cnt) from tumble(seek_to_mv, win_start, 2s) where _tp_time >= now() - 1m group by window_start emit timeout 1s"}
           ]
@@ -438,9 +438,9 @@
             {"client":"python","query_id":"2101", "depends_on_stream":"test21_limit_by_stream","query_end_timer":1, "query_type": "stream", "query":"select s from test21_limit_by_stream where _tp_time >= '2022-12-01 00:00:04.111' and _tp_time >= '2022-12-01 00:00:02.111'"},
             {"client":"python","query_id":"2102", "depends_on_stream":"test21_limit_by_stream","query_end_timer":1, "query_type": "stream", "query":"select s from test21_limit_by_stream where _tp_time < '2022-12-01 00:00:03.111' and _tp_time > '2022-12-01 00:00:01.111'"},
             {"client":"python","query_id":"2103", "depends_on_stream":"test21_limit_by_stream","query_end_timer":1, "query_type": "stream", "query":"select s from test21_limit_by_stream where _tp_time <= '2022-12-01 00:00:03.111' and _tp_time <= '2022-12-01 00:00:04.111'"},
-            {"client":"python","query_id":"2104", "depends_on_stream":"test21_limit_by_stream","query_end_timer":1, "query_type": "stream", "query":"select s from test21_limit_by_stream where _tp_time > '2022-12-01 00:00:03.111' and _tp_sn >= 0 settings enable_backfill_from_historical_store = false"},
-            {"client":"python","query_id":"2105", "depends_on_stream":"test21_limit_by_stream","query_end_timer":1, "query_type": "stream", "query":"select s from test21_limit_by_stream where _tp_sn > 0 and _tp_time < '2022-12-01 00:00:03.111' settings enable_backfill_from_historical_store = false"},
-            {"client":"python","query_id":"2106", "depends_on_stream":"test21_limit_by_stream","query_end_timer":1, "query_type": "stream", "query":"select s from test21_limit_by_stream where _tp_sn < 5 and _tp_sn < 8 and _tp_sn < 4 settings enable_backfill_from_historical_store = false"},
+            {"client":"python","query_id":"2104", "depends_on_stream":"test21_limit_by_stream","query_end_timer":1, "query_type": "stream", "query":"select s from test21_limit_by_stream where _tp_time > '2022-12-01 00:00:03.111' and _tp_sn >= 0"},
+            {"client":"python","query_id":"2105", "depends_on_stream":"test21_limit_by_stream","query_end_timer":1, "query_type": "stream", "query":"select s from test21_limit_by_stream where _tp_sn > 0 and _tp_time < '2022-12-01 00:00:03.111'"},
+            {"client":"python","query_id":"2106", "depends_on_stream":"test21_limit_by_stream","query_end_timer":1, "query_type": "stream", "query":"select s from test21_limit_by_stream where _tp_sn < 5 and _tp_sn < 8 and _tp_sn < 4"},
             {"client":"python","query_id":"2107", "depends_on_stream":"test21_limit_by_stream","query_end_timer":1, "query_type": "stream", "query":"select s from test21_limit_by_stream where _tp_time != '2022-12-01 00:00:03.111' and _tp_time <= '2022-12-01 00:00:04.111' and _tp_time >= '2022-12-01 00:00:02.111'"}
           ]
         }

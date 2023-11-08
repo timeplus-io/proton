@@ -271,6 +271,7 @@ void StorageMergeTree::readConcat(
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
+    size_t num_streams,
     std::function<std::shared_ptr<ISource>(Int64 &)> create_streaming_source)
 {
     /// If true, then we will ask initiator if we can read chosen ranges
@@ -280,7 +281,7 @@ void StorageMergeTree::readConcat(
         LOG_TRACE(log, "Parallel reading from replicas enabled {}", enable_parallel_reading);
 
     if (auto plan = reader.readConcat(
-            column_names, storage_snapshot, query_info, std::move(local_context), max_block_size,
+            column_names, storage_snapshot, query_info, std::move(local_context), max_block_size, num_streams,
             processed_stage, nullptr, enable_parallel_reading, std::move(create_streaming_source)))
     {
         query_plan = std::move(*plan);

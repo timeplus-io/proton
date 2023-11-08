@@ -32,8 +32,8 @@ private:
     WatermarkStamperParamsPtr params;
     SERDE WatermarkStamperPtr watermark;
 
-    const bool skip_stamping_for_backfill_data;
-    bool is_backfill_data = false;
+    bool skip_stamping_for_backfill_data;
+    bool is_backfilling_data = false;
 };
 }
 }

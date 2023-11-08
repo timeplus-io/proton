@@ -805,10 +805,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         /// and create `SeekToInfo` objects to represent these predicates for streaming store rewinding in a streaming query.
         analyzeEventPredicateAsSeekTo(joined_tables);
 
-        /// Optimization: no requires backfill data in order for global aggregation with settings `emit_aggregated_during_backfill = false`.
-        if (!context->getSettingsRef().emit_aggregated_during_backfill.value && hasGlobalAggregation())
-            query_info.requires_backfill_input_in_order = false;
-
         /// Calculate structure of the result.
         result_header = getSampleBlockImpl();
         /// proton, FIXME. For distributed streaming query in future, we may need conditionally remove __tp_ts from result header
@@ -894,8 +890,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     }
 
     /// proton: starts
-    checkForStreamingQuery();
-    checkUDA();
+    finalCheckAndOptimizeForStreamingQuery();
 
     if (query_info.projection)
         storage_snapshot->addProjection(query_info.projection->desc);
@@ -2343,11 +2338,6 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         /// need replay operation
         if (settings.replay_speed > 0)
         {
-            if (settings.enable_backfill_from_historical_store.value)
-                throw Exception(
-                    ErrorCodes::NOT_IMPLEMENTED,
-                    "Only support replay from streaming store, but setting 'enable_backfill_from_historical_store=true'");
-
             /// So far, only support append-only stream (or proxyed)
             StorageStream * storagestream = nullptr;
             if (Streaming::isAppendStorage(storage->dataStreamSemantic()))
@@ -3372,7 +3362,7 @@ bool InterpreterSelectQuery::shouldKeepState() const
     return false;
 }
 
-void InterpreterSelectQuery::checkForStreamingQuery() const
+void InterpreterSelectQuery::finalCheckAndOptimizeForStreamingQuery()
 {
     if (isStreaming())
     {
@@ -3384,6 +3374,27 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
                 if (proxy->hasGlobalAggregation())
                     throw Exception("Streaming query doesn't support window func over a global aggregation", ErrorCodes::NOT_IMPLEMENTED);
         }
+
+        /// We will only be able to read data from streaming store in the following scenarios:
+        /// 1) required virtual column streaming only, such as `_tp_sn`
+        /// 2) seek to by absolute `_tp_sn`
+        /// 3) replay stream
+        const auto & settings = context->getSettingsRef();
+        if (settings.enable_backfill_from_historical_store.value)
+        {
+            bool required_virtual_col_streaming_only = std::ranges::any_of(required_columns, [](const auto & name) {
+                return name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID || name == ProtonConsts::RESERVED_APPEND_TIME
+                    || name == ProtonConsts::RESERVED_INGEST_TIME || name == ProtonConsts::RESERVED_PROCESS_TIME;
+            });
+            bool seek_to_by_absolute_sn = !query_info.seek_to_info->getSeekTo().empty() && !query_info.seek_to_info->isTimeBased()
+                && query_info.seek_to_info->getSeekTo() != "earliest";
+            if (required_virtual_col_streaming_only || seek_to_by_absolute_sn || settings.replay_speed > 0)
+                context->setSetting("enable_backfill_from_historical_store", false);
+        }
+
+        /// Optimization: no requires backfill data in order for global aggregation with settings `emit_aggregated_during_backfill = false`.
+        if (!settings.emit_aggregated_during_backfill.value && hasGlobalAggregation())
+            query_info.require_in_order_backfill = false;
     }
     else
     {
@@ -3408,6 +3419,8 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
                 "Neither window_start nor window_end is referenced in the query, but streaming window function is used",
                 ErrorCodes::WINDOW_COLUMN_NOT_REFERENCED);
     }
+
+    checkUDA();
 }
 
 void InterpreterSelectQuery::buildShufflingQueryPlan(QueryPlan & query_plan)

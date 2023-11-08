@@ -71,8 +71,8 @@
         {
             "id": 53,
             "tags": ["changelog(table))", "subquery"],
-            "name": "subquery from materialized view, cover add，delete,update",
-            "description": "subquery from materialized view, cover add，delete,update",
+            "name": "subquery from materialized view, cover add/delete/update",
+            "description": "subquery from materialized view, cover add/delete/update",
             "steps": [
                 {
                     "statements": [

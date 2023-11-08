@@ -40,8 +40,8 @@ private:
     WatermarkStamperPtr watermark_template;
     SERDE SubstreamHashMap<WatermarkStamperPtr> substream_watermarks;
 
-    const bool skip_stamping_for_backfill_data;
-    bool is_backfill_data = false;
+    bool skip_stamping_for_backfill_data;
+    bool is_backfilling_data = false;
 
     Poco::Logger * log;
 };
