@@ -126,6 +126,13 @@ public:
         size_t size = istr.readBig(reinterpret_cast<char*>(&x[initial_size]), sizeof(IPv) * limit);
         x.resize(initial_size + size / sizeof(IPv));
     }
+
+    /// proton: starts
+    void deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const override
+    {
+        istr.ignore(sizeof(IPv) * limit);
+    }
+    /// proton: ends
 };
 
 using SerializationIPv4 = SerializationIP<IPv4>;
