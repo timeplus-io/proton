@@ -79,8 +79,7 @@ inline bool parseIPv4(T * &src, EOFfunction eof, unsigned char * dst, int32_t fi
             break;
     }
 
-
-
+    memcpy(dst, &result, sizeof(result));
     return true;
 }
 
