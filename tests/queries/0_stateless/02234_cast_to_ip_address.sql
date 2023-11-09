@@ -1,6 +1,7 @@
 SELECT 'IPv4 functions';
 
-SELECT IPv4StringToNum('test'); --{serverError CANNOT_PARSE_IPV4}
+
+SELECT IPv4StringToNum('test'); --{serverError 671}
 SELECT IPv4StringToNumOrDefault('test');
 SELECT IPv4StringToNumOrNull('test');
 
@@ -10,7 +11,8 @@ SELECT IPv4StringToNumOrNull('127.0.0.1');
 
 SELECT '--';
 
-SELECT toIPv4('test'); --{serverError CANNOT_PARSE_IPV4}
+
+SELECT toIPv4('test'); --{serverError 671}
 SELECT toIPv4OrDefault('test');
 SELECT toIPv4OrNull('test');
 
@@ -20,7 +22,8 @@ SELECT toIPv4OrNull('127.0.0.1');
 
 SELECT '--';
 
-SELECT cast('test' , 'IPv4'); --{serverError CANNOT_PARSE_IPV4}
+
+SELECT cast('test' , 'IPv4'); --{serverError 671}
 SELECT cast('127.0.0.1' , 'IPv4');
 
 SELECT '--';
@@ -38,7 +41,8 @@ SET cast_ipv4_ipv6_default_on_conversion_error = 0;
 
 SELECT 'IPv6 functions';
 
-SELECT IPv6StringToNum('test'); --{serverError CANNOT_PARSE_IPV6}
+
+SELECT IPv6StringToNum('test'); --{serverError 672}
 SELECT IPv6StringToNumOrDefault('test');
 SELECT IPv6StringToNumOrNull('test');
 
@@ -48,7 +52,8 @@ SELECT IPv6StringToNumOrNull('::ffff:127.0.0.1');
 
 SELECT '--';
 
-SELECT toIPv6('test'); --{serverError CANNOT_PARSE_IPV6}
+
+SELECT toIPv6('test'); --{serverError 672}
 SELECT toIPv6OrDefault('test');
 SELECT toIPv6OrNull('test');
 
@@ -62,7 +67,8 @@ SELECT toIPv6OrNull('::.1.2.3');
 
 SELECT '--';
 
-SELECT cast('test' , 'IPv6'); --{serverError CANNOT_PARSE_IPV6}
+
+SELECT cast('test' , 'IPv6'); --{serverError 672}
 SELECT cast('::ffff:127.0.0.1', 'IPv6');
 
 SELECT '--';
@@ -81,5 +87,5 @@ SELECT '--';
 SET cast_ipv4_ipv6_default_on_conversion_error = 0;
 
 SELECT toFixedString('::1', 5) as value, cast(value, 'IPv6'), toIPv6(value);
-SELECT toFixedString('', 16) as value, cast(value, 'IPv6');
-SELECT toFixedString('', 16) as value, toIPv6(value);
+SELECT toFixedString('', 16) as value, cast(value, 'IPv6'); --{serverError 672}
+SELECT toFixedString('', 16) as value, toIPv6(value); --{serverError 672}

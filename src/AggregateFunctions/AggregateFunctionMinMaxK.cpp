@@ -1,6 +1,7 @@
 #include "AggregateFunctionMinMaxK.h"
 
 #include "AggregateFunctionFactory.h"
+#include "DataTypes/DataTypeIPv4andIPv6.h"
 #include "FactoryHelpers.h"
 #include "Helpers.h"
 
@@ -8,6 +9,7 @@
 #include <DataTypes/DataTypeDate32.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypeIPv4andIPv6.h>
 #include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/typeIndexToTypeName.h>
 #include <Functions/FunctionHelpers.h>
@@ -150,6 +152,12 @@ createAggregateFunctionMinMaxK(const std::string & name, const DataTypes & argum
                 break; \
             case TypeIndex::Tuple: \
                 M(TupleValue, ##__VA_ARGS__); \
+                break; \
+            case TypeIndex::IPv4: \
+                M(DataTypeIPv4::FieldType, ##__VA_ARGS__); \
+                break; \
+            case TypeIndex::IPv6: \
+                M(DataTypeIPv6::FieldType, ##__VA_ARGS__); \
                 break; \
             default: { \
                 throw Exception( \
