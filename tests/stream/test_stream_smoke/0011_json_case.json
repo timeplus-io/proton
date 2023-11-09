@@ -31,8 +31,8 @@
             "description": "create a table test_topmax, 1 column for 1 type and ingest data top_k on int",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists json_hop_mv"},
-                    {"client":"python", "query_type": "table","wait":5, "query":"drop view if exists json_tumble_hop_mv"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists json_tumble_hop_mv"},
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop view if exists json_hop_mv"},
                     {"client":"python", "query_type": "table", "wait":1,"exist":"json_hop_mv", "exit_wait":2, "query":"create materialized view if not exists json_hop_mv as with transformed as (select a.json:data.id as id, to_int64(a.json:data.value) as value, to_datetime(a.json:data.create_time) as created_at, b.location:location from test_json_str as a join table(test_json_d) as b on a.json:data.id = b.location:id) select window_start as ws, window_end as we, count() from hop(transformed, created_at, 3s, 5s) group by window_start, window_end"},
                     {"client":"python","query_id":"1201", "wait":2,"exist":"json_tumble_hop_mv", "exit_wait":2, "query_type": "table", "query":"create materialized view if not exists json_tumble_hop_mv as select window_start as w_s, window_end as w_e, count() as cnt from tumble(json_hop_mv, we, 5s) group by window_start, window_end"},
                     {"client":"python","query_id":"1202","wait":2, "terinate":"manual", "query_type": "stream","drop_view":"json_tumble_hop_mv,json_hop_mv", "drop_view_wait":2, "query":"select cnt from json_tumble_hop_mv"},
@@ -55,8 +55,8 @@
             "description": "create a table test_topmax, 1 column for 1 type and ingest data top_k on int",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists json_hop_v"},
-                    {"client":"python", "query_type": "table","wait":5, "query":"drop view if exists json_tumble_hop_v"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists json_tumble_hop_v"},
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop view if exists json_hop_v"},
                     {"client":"python", "query_type": "table","wait":2,"exist":"json_hop_v", "exit_wait":2, "query":"create view if not exists json_hop_v as with transformed as (select a.json:data.id as id, to_int64(a.json:data.value) as value, a.json:data.create_time::datetime as created_at, b.location:location from test_json_str as a join table(test_json_d) as b on a.json:data.id = b.location:id where value >0) select window_start as ws, window_end as we, count() from hop(transformed, created_at, 3s, 5s) group by window_start, window_end"},
                     {"client":"python","query_id":"1201", "wait":2,"exist":"json_tumble_hop_v", "exit_wait":2, "query_type": "table", "query":"create view if not exists json_tumble_hop_v as select window_start as w_s, window_end as w_e, count() as cnt from tumble(json_hop_v, we, 5s) group by window_start, window_end"},
                     {"client":"python","query_id":"1202", "wait":2, "terinate":"manual", "query_type": "stream","drop_view":"json_tumble_hop_v,json_hop_v", "drop_view_wait":2, "query":"select cnt from json_tumble_hop_v"},

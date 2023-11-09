@@ -38,6 +38,9 @@
 
 /// proton : start
 #include <Processors/Sources/MarkSource.h>
+#include <Processors/Transforms/MergeSortingTransform.h>
+#include <Processors/Transforms/PartialSortingTransform.h>
+#include <Common/ProtonCommon.h>
 /// proton : ends
 
 namespace ProfileEvents
@@ -1177,6 +1180,41 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
     /// proton : starts. Add streaming source after historical source
     if (create_streaming_source)
     {
+        if (query_info.require_in_order_backfill)
+        {
+            /// TODO: support optimized order for the stream with ordered by `_tp_time`
+            /// Copy basic code from `SortingStep::fullSort`
+            /// Sorting backfilled historical data by ascending event time
+            SortDescription sort_desc;
+            sort_desc.emplace_back(ProtonConsts::RESERVED_EVENT_TIME, /*ascending*/ 1);
+
+            pipe.addSimpleTransform(
+                [&](const Block & header) -> ProcessorPtr { return std::make_shared<PartialSortingTransform>(header, sort_desc); });
+
+            pipe.addSimpleTransform([&](const Block & header) -> ProcessorPtr {
+                return std::make_shared<MergeSortingTransform>(
+                    header,
+                    sort_desc,
+                    max_block_size,
+                    /*limits*/ 0,
+                    /// increase_sort_description_compile_attempts_current,
+                    settings.max_bytes_before_remerge_sort / pipe.numOutputPorts(),
+                    settings.remerge_sort_lowered_memory_bytes_ratio,
+                    settings.max_bytes_before_external_sort,
+                    context->getTemporaryVolume(),
+                    settings.min_free_disk_space_for_temporary_data);
+            });
+
+            /// If there are several streams, then we merge them into one
+            if (pipe.numOutputPorts() > 1)
+            {
+                auto transform = std::make_shared<MergingSortedTransform>(
+                    pipe.getHeader(), pipe.numOutputPorts(), sort_desc, max_block_size, SortingQueueStrategy::Batch, /*limits*/ 0);
+
+                pipe.addTransform(std::move(transform));
+            }
+        }
+
         Pipes pipes;
 
         cur_header = pipe.getHeader();
