@@ -981,7 +981,7 @@ void Pipe::addShufflingTransform(const ProcessorGetter & getter)
         if (is_streaming)
             resize = getStreamingResizeProcessor(new_header, to_merge_outputs.size(), 1);
         else
-            resize = std::make_shared<StrictResizeProcessor>(new_header, to_merge_outputs.size(), 1);
+            resize = std::make_shared<ResizeProcessor>(new_header, to_merge_outputs.size(), 1);
 
         /// -----------------------------------       -------------------------------
         /// | shuffling transform 1, output 1 | --->    | resize transform 1, input 1 |

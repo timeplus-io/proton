@@ -1,7 +1,6 @@
 #include <Processors/Transforms/LightShufflingTransform.h>
 
 #include <base/ClockUtils.h>
-#include <Common/logger_useful.h>
 
 #include <bit>
 

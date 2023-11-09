@@ -34,6 +34,7 @@
 #include <Common/ProtonCommon.h>
 #include <Common/SipHash.h>
 #include <Common/randomSeed.h>
+#include <Common/logger_useful.h>
 
 
 namespace DB
@@ -376,6 +377,7 @@ public:
         , header_chunk(Nested::flatten(block_full.cloneEmpty()).getColumns(), 0)
         , generate_interval(interval_time_)
         , total_events(total_events_)
+        , log(&Poco::Logger::get("GenerateRandSource"))
     {
         is_streaming = is_streaming_;
 
@@ -422,7 +424,10 @@ protected:
     Chunk generate() override
     {
         if (total_events && generated_events >= total_events)
+        {
+            LOG_INFO(log, "Finish generating total_events={}  generated_events={}", total_events, generated_events);
             return {};
+        }
 
         if (!is_streaming)
         {
@@ -540,6 +545,7 @@ private:
     size_t interval_count = 0;
     UInt64 total_events;
     UInt64 generated_events = 0;
+    Poco::Logger * log;
 
     static Block & prepareBlockToFill(Block & block)
     {
