@@ -878,32 +878,7 @@ inline bool tryReadIPv4Text(IPv4 & ip, ReadBuffer & buf)
 template <typename ReturnType = void>
 inline ReturnType readIPv6TextImpl(IPv6 & ip, ReadBuffer & buf)
 {
-
-    unsigned char * p = reinterpret_cast<unsigned char *>(ip.toUnderType().items);
-
-    if (parseIPv4(buf.position(), [&buf](){ return buf.eof(); }, p))
-    {
-        if constexpr (std::endian::native == std::endian::little)
-        {
-            p[15] = p[0]; p[0] = 0;
-            p[14] = p[1]; p[1] = 0;
-            p[13] = p[2]; p[2] = 0;
-            p[12] = p[3]; p[3] = 0;
-        }
-        else
-        {
-            p[15] = p[3]; p[3] = 0;
-            p[14] = p[2]; p[2] = 0;
-            p[13] = p[1]; p[1] = 0;
-            p[12] = p[0]; p[0] = 0;
-        }
-
-        p[11] = 0xff;
-        p[10] = 0xff;
-        return ReturnType(true);
-    }
-
-    if (parseIPv6(buf.position(), [&buf](){ return buf.eof(); }, p))
+    if (parseIPv6orIPv4(buf.position(), [&buf](){ return buf.eof(); }, reinterpret_cast<unsigned char *>(ip.toUnderType().items)))
         return ReturnType(true);
 
     if constexpr (std::is_same_v<ReturnType, void>)
