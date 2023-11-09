@@ -49,8 +49,8 @@ namespace ErrorCodes
 
 /** Encoding functions for network addresses:
   *
-  * IPv4NumToString (num) - See below.
-  * IPv4StringToNum(string) - Convert, for example, '192.168.0.1' to 3232235521 and vice versa.
+  * IPv6NumToString (num) - See below.
+  * IPv6StringToNum(string) - Convert, for example, '::1' to 1 and vice versa.
   */
 class FunctionIPv6NumToString : public IFunction
 {
@@ -66,11 +66,14 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!checkAndGetDataType<DataTypeIPv6>(arguments[0].get()))
-            throw Exception("Illegal type " + arguments[0]->getName() +
-                            " of argument of function " + getName() +
-                            ", expected fixed_string(" + toString(IPV6_BINARY_LENGTH) + ")",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        const auto * arg_string = checkAndGetDataType<DataTypeFixedString>(arguments[0].get());
+        const auto * arg_ipv6 = checkAndGetDataType<DataTypeIPv6>(arguments[0].get());
+        if (!arg_ipv6 && !(arg_string && arg_string->getN() == IPV6_BINARY_LENGTH))
+            throw Exception(
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Illegal type {} of argument of function {}, expected ipv6 or fixed_string({})",
+                arguments[0]->getName(), getName(), IPV6_BINARY_LENGTH
+            );
 
         return std::make_shared<DataTypeString>();
     }
@@ -79,6 +82,7 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
+<<<<<<< HEAD
         const auto & col_type_name = arguments[0];
         const ColumnPtr & column = col_type_name.column;
 
@@ -96,31 +100,50 @@ public:
 >>>>>>> fc7f4baf230... fixed IPv6CIDRToRange, fixed comparison for ColumnIPv6
             const auto size = col_in->size();
             const auto & vec_in = col_in->getData();
+=======
+        const ColumnPtr & column = arguments[0].column;
+        const auto * col_ipv6 = checkAndGetColumn<ColumnIPv6>(column.get());
+        const auto * col_string = checkAndGetColumn<ColumnFixedString>(column.get());
+        if (!col_ipv6 && !(col_string && col_string->getN() == IPV6_BINARY_LENGTH))
+            throw Exception(
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Illegal column {} of argument of function {}, expected IPv6 or FixedString({})",
+                arguments[0].name, getName(), IPV6_BINARY_LENGTH
+            );
+>>>>>>> ee3ce9de706... bugs fixed, some optimization, cleanup, test fixed
 
-            auto col_res = ColumnString::create();
+        auto col_res = ColumnString::create();
+        ColumnString::Chars & vec_res = col_res->getChars();
+        ColumnString::Offsets & offsets_res = col_res->getOffsets();
+        vec_res.resize(input_rows_count * (IPV6_MAX_TEXT_LENGTH + 1));
+        offsets_res.resize(input_rows_count);
 
-            ColumnString::Chars & vec_res = col_res->getChars();
-            ColumnString::Offsets & offsets_res = col_res->getOffsets();
-            vec_res.resize(size * (IPV6_MAX_TEXT_LENGTH + 1));
-            offsets_res.resize(size);
+        auto * begin = reinterpret_cast<char *>(vec_res.data());
+        auto * pos = begin;
 
-            auto * begin = reinterpret_cast<char *>(vec_res.data());
-            auto * pos = begin;
+        if (col_ipv6)
+        {
+            const auto & vec_in = col_ipv6->getData();
 
             for (size_t i = 0; i < input_rows_count; ++i)
             {
                 formatIPv6(reinterpret_cast<const unsigned char *>(&vec_in[i]), pos);
                 offsets_res[i] = pos - begin;
             }
-
-            vec_res.resize(pos - begin);
-
-            return col_res;
         }
         else
-            throw Exception("Illegal column " + arguments[0].column->getName()
-                            + " of argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_COLUMN);
+        {
+            const auto & vec_in = col_string->getChars();
+
+            for (size_t i = 0; i < input_rows_count; ++i)
+            {
+                formatIPv6(reinterpret_cast<const unsigned char *>(&vec_in[i * IPV6_BINARY_LENGTH]), pos);
+                offsets_res[i] = pos - begin;
+            }
+        }
+
+        vec_res.resize(pos - begin);
+        return col_res;
     }
 };
 
@@ -282,7 +305,7 @@ public:
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of argument of function {}", arguments[0]->getName(), getName());
         }
 
-        auto result_type = std::make_shared<DataTypeIPv6>();
+        auto result_type = std::make_shared<DataTypeFixedString>(IPV6_BINARY_LENGTH);
 
         if constexpr (exception_mode == IPStringToNumExceptionMode::Null)
         {
@@ -309,14 +332,14 @@ public:
         {
             if (cast_ipv4_ipv6_default_on_conversion_error)
             {
-                auto result = convertToIPv6<IPStringToNumExceptionMode::Default>(column, null_map);
+                auto result = convertToIPv6<IPStringToNumExceptionMode::Default, ColumnFixedString>(column, null_map);
                 if (null_map && !result->isNullable())
                     return ColumnNullable::create(result, null_map_column);
                 return result;
             }
         }
 
-        auto result = convertToIPv6<exception_mode>(column, null_map);
+        auto result = convertToIPv6<exception_mode, ColumnFixedString>(column, null_map);
         if (null_map && !result->isNullable())
             return ColumnNullable::create(IColumn::mutate(result), IColumn::mutate(null_map_column));
         return result;
@@ -326,6 +349,7 @@ private:
     bool cast_ipv4_ipv6_default_on_conversion_error = false;
 };
 
+<<<<<<< HEAD
 class FunctionToIPv6 : public IFunction
 {
 public:
@@ -387,6 +411,8 @@ public:
 private:
     bool cast_ipv4_ipv6_default_on_conversion_error = false;
 };
+=======
+>>>>>>> ee3ce9de706... bugs fixed, some optimization, cleanup, test fixed
 
 /** If mask_tail_octets > 0, the last specified number of octets will be filled with "xxx".
   */
@@ -417,7 +443,7 @@ private:
 
             for (size_t i = 0; i < vec_in.size(); ++i)
             {
-                DB::formatIPv4(reinterpret_cast<const unsigned char*>(&vec_in[i]), pos, mask_tail_octets, "xxx");
+                DB::formatIPv4(reinterpret_cast<const unsigned char*>(&vec_in[i]), sizeof(ArgType), pos, mask_tail_octets, "xxx");
                 offsets_res[i] = pos - begin;
             }
 
@@ -555,6 +581,7 @@ private:
     bool cast_ipv4_ipv6_default_on_conversion_error = false;
 };
 
+<<<<<<< HEAD
 class FunctionToIPv4 : public IFunction
 {
 public:
@@ -617,6 +644,8 @@ private:
     bool cast_ipv4_ipv6_default_on_conversion_error = false;
 };
 
+=======
+>>>>>>> ee3ce9de706... bugs fixed, some optimization, cleanup, test fixed
 
 class FunctionIPv4ToIPv6 : public IFunction
 {
@@ -1258,9 +1287,6 @@ REGISTER_FUNCTION(Coding)
     factory.registerFunction<FunctionIPv4StringToNum<IPStringToNumExceptionMode::Throw>>();
     factory.registerFunction<FunctionIPv4StringToNum<IPStringToNumExceptionMode::Default>>();
     factory.registerFunction<FunctionIPv4StringToNum<IPStringToNumExceptionMode::Null>>();
-
-    factory.registerFunction<FunctionToIPv4>();
-    factory.registerFunction<FunctionToIPv6>();
 
     factory.registerFunction<FunctionIPv6NumToString>();
     factory.registerFunction<FunctionIPv6StringToNum<IPStringToNumExceptionMode::Throw>>();
