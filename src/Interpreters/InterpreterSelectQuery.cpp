@@ -3375,20 +3375,22 @@ void InterpreterSelectQuery::finalCheckAndOptimizeForStreamingQuery()
                     throw Exception("Streaming query doesn't support window func over a global aggregation", ErrorCodes::NOT_IMPLEMENTED);
         }
 
-        /// We will only be able to read data from streaming store in the following scenarios:
-        /// 1) required virtual column streaming only, such as `_tp_sn`
-        /// 2) seek to by absolute `_tp_sn`
-        /// 3) replay stream
+        /// For now, for the following scenarios, we disable backfill from historic data store
+        /// 1) User select some virtual columns which is only available in streaming store, like `_tp_sn`, `_tp_index_time`
+        /// 2) Seek by streaming store sequence number
+        /// 3) Replaying a stream. 
+        /// TODO, ideally we shall check if historical data store has `_tp_sn` etc columns, if they have, we can backfill from
+        /// the historical data store as well technically. This will be a future enhancement.
         const auto & settings = context->getSettingsRef();
         if (settings.enable_backfill_from_historical_store.value)
         {
-            bool required_virtual_col_streaming_only = std::ranges::any_of(required_columns, [](const auto & name) {
+            bool has_streaming_only_virtual_columns = std::ranges::any_of(required_columns, [](const auto & name) {
                 return name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID || name == ProtonConsts::RESERVED_APPEND_TIME
                     || name == ProtonConsts::RESERVED_INGEST_TIME || name == ProtonConsts::RESERVED_PROCESS_TIME;
             });
-            bool seek_to_by_absolute_sn = !query_info.seek_to_info->getSeekTo().empty() && !query_info.seek_to_info->isTimeBased()
+            bool seek_by_sn = !query_info.seek_to_info->getSeekTo().empty() && !query_info.seek_to_info->isTimeBased()
                 && query_info.seek_to_info->getSeekTo() != "earliest";
-            if (required_virtual_col_streaming_only || seek_to_by_absolute_sn || settings.replay_speed > 0)
+            if (has_streaming_only_virtual_columns || seek_by_sn || settings.replay_speed > 0)
                 context->setSetting("enable_backfill_from_historical_store", false);
         }
 
