@@ -17,7 +17,7 @@ echo $?
 echo 'regression test for overlap profile events snapshots between queries'
 $CLICKHOUSE_CLIENT --print-profile-events --profile-events-delay-ms=-1 -n -q 'select 1; select 1' |& grep -F -o '[ 0 ] SelectedRows: 1 (increment)'
 
-echo 'regression test for overlap profile events snapshots between queries (clickhouse-local)'
+echo 'regression test for overlap profile events snapshots between queries (proton-local)'
 $CLICKHOUSE_LOCAL --print-profile-events --profile-events-delay-ms=-1 -n -q 'select 1; select 1' |& grep -F -o '[ 0 ] SelectedRows: 1 (increment)'
 
 echo 'print everything'
