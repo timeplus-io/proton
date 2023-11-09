@@ -1017,7 +1017,7 @@ inline void parseImpl<DataTypeIPv6>(DataTypeIPv6::FieldType & x, ReadBuffer & rb
 {
     IPv6 tmp;
     readIPv6Text(tmp, rb);
-    x = tmp.toUnderType();
+    x = tmp;
 }
 
 template <typename DataType>
@@ -1088,7 +1088,7 @@ inline bool tryParseImpl<DataTypeIPv6>(DataTypeIPv6::FieldType & x, ReadBuffer &
     if (!tryReadIPv6Text(tmp, rb))
         return false;
 
-    x = tmp.toUnderType();
+    x = tmp;
     return true;
 }
 
