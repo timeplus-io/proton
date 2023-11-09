@@ -82,35 +82,15 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
-<<<<<<< HEAD
-        const auto & col_type_name = arguments[0];
-        const ColumnPtr & column = col_type_name.column;
-
-        if (const auto * col_in = checkAndGetColumn<ColumnIPv6>(column.get()))
-        {
-<<<<<<< HEAD
-            if (col_in->getN() != IPV6_BINARY_LENGTH)
-                throw Exception("Illegal type " + col_type_name.type->getName() +
-                                " of column " + col_in->getName() +
-                                " argument of function " + getName() +
-                                ", expected fixed_string(" + toString(IPV6_BINARY_LENGTH) + ")",
-                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-=======
->>>>>>> fc7f4baf230... fixed IPv6CIDRToRange, fixed comparison for ColumnIPv6
-            const auto size = col_in->size();
-            const auto & vec_in = col_in->getData();
-=======
         const ColumnPtr & column = arguments[0].column;
         const auto * col_ipv6 = checkAndGetColumn<ColumnIPv6>(column.get());
         const auto * col_string = checkAndGetColumn<ColumnFixedString>(column.get());
         if (!col_ipv6 && !(col_string && col_string->getN() == IPV6_BINARY_LENGTH))
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal column {} of argument of function {}, expected IPv6 or FixedString({})",
+                "Illegal column {} of argument of function {}, expected ipv6 or fixed_string({})",
                 arguments[0].name, getName(), IPV6_BINARY_LENGTH
             );
->>>>>>> ee3ce9de706... bugs fixed, some optimization, cleanup, test fixed
 
         auto col_res = ColumnString::create();
         ColumnString::Chars & vec_res = col_res->getChars();
@@ -349,70 +329,7 @@ private:
     bool cast_ipv4_ipv6_default_on_conversion_error = false;
 };
 
-<<<<<<< HEAD
-class FunctionToIPv6 : public IFunction
-{
-public:
-    static constexpr auto name = "to_ipv6";
 
-    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionToIPv6>(context); }
-
-    explicit FunctionToIPv6(ContextPtr context)
-        : cast_ipv4_ipv6_default_on_conversion_error(context->getSettingsRef().cast_ipv4_ipv6_default_on_conversion_error)
-    {
-    }
-
-    String getName() const override { return name; }
-
-    size_t getNumberOfArguments() const override { return 1; }
-
-    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
-
-    bool useDefaultImplementationForConstants() const override { return true; }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        if (!isStringOrFixedString(removeNullable(arguments[0])))
-        {
-            throw Exception(
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of argument of function {}", arguments[0]->getName(), getName());
-        }
-
-        return std::make_shared<DataTypeIPv6>();
-    }
-
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/) const override
-    {
-        ColumnPtr column = arguments[0].column;
-        ColumnPtr null_map_column;
-        const NullMap * null_map = nullptr;
-        if (column->isNullable())
-        {
-            const auto * column_nullable = assert_cast<const ColumnNullable *>(column.get());
-            column = column_nullable->getNestedColumnPtr();
-            null_map_column = column_nullable->getNullMapColumnPtr();
-            null_map = &column_nullable->getNullMapData();
-        }
-
-        if (cast_ipv4_ipv6_default_on_conversion_error)
-        {
-            auto result = convertToIPv6<IPStringToNumExceptionMode::Default>(column, null_map);
-            if (null_map && !result->isNullable())
-                return ColumnNullable::create(result, null_map_column);
-            return result;
-        }
-
-        auto result = convertToIPv6<IPStringToNumExceptionMode::Throw>(column, null_map);
-        if (null_map && !result->isNullable())
-            return ColumnNullable::create(IColumn::mutate(result), IColumn::mutate(null_map_column));
-        return result;
-    }
-
-private:
-    bool cast_ipv4_ipv6_default_on_conversion_error = false;
-};
-=======
->>>>>>> ee3ce9de706... bugs fixed, some optimization, cleanup, test fixed
 
 /** If mask_tail_octets > 0, the last specified number of octets will be filled with "xxx".
   */
@@ -580,72 +497,6 @@ public:
 private:
     bool cast_ipv4_ipv6_default_on_conversion_error = false;
 };
-
-<<<<<<< HEAD
-class FunctionToIPv4 : public IFunction
-{
-public:
-    static constexpr auto name = "to_ipv4";
-
-    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionToIPv4>(context); }
-
-    explicit FunctionToIPv4(ContextPtr context)
-        : cast_ipv4_ipv6_default_on_conversion_error(context->getSettingsRef().cast_ipv4_ipv6_default_on_conversion_error)
-    {
-    }
-
-    String getName() const override { return name; }
-
-    size_t getNumberOfArguments() const override { return 1; }
-
-    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
-
-    bool useDefaultImplementationForConstants() const override { return true; }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        if (!isString(removeNullable(arguments[0])))
-        {
-            throw Exception(
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of argument of function {}", arguments[0]->getName(), getName());
-        }
-
-        return std::make_shared<DataTypeIPv4>();
-    }
-
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/) const override
-    {
-        ColumnPtr column = arguments[0].column;
-        ColumnPtr null_map_column;
-        const NullMap * null_map = nullptr;
-        if (column->isNullable())
-        {
-            const auto * column_nullable = assert_cast<const ColumnNullable *>(column.get());
-            column = column_nullable->getNestedColumnPtr();
-            null_map_column = column_nullable->getNullMapColumnPtr();
-            null_map = &column_nullable->getNullMapData();
-        }
-
-        if (cast_ipv4_ipv6_default_on_conversion_error)
-        {
-            auto result = convertToIPv4<IPStringToNumExceptionMode::Default>(column, null_map);
-            if (null_map && !result->isNullable())
-                return ColumnNullable::create(result, null_map_column);
-            return result;
-        }
-
-        auto result = convertToIPv4<IPStringToNumExceptionMode::Throw>(column, null_map);
-        if (null_map && !result->isNullable())
-            return ColumnNullable::create(IColumn::mutate(result), IColumn::mutate(null_map_column));
-        return result;
-    }
-
-private:
-    bool cast_ipv4_ipv6_default_on_conversion_error = false;
-};
-
-=======
->>>>>>> ee3ce9de706... bugs fixed, some optimization, cleanup, test fixed
 
 class FunctionIPv4ToIPv6 : public IFunction
 {
