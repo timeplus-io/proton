@@ -1877,7 +1877,7 @@ static void executeMergeAggregatedImpl(
 
     Aggregator::Params params(header_before_merge, keys, aggregates, overflow_row, settings.max_threads);
 
-    auto transform_params = std::make_shared<AggregatingTransformParams>(params, final);
+    auto transform_params = std::make_shared<AggregatingTransformParams>(params, final, false);
 
     auto merging_aggregated = std::make_unique<MergingAggregatedStep>(
         query_plan.getCurrentDataStream(),
@@ -2453,6 +2453,8 @@ void InterpreterSelectQuery::executeLightShuffling(QueryPlan & query_plan)
     auto key_positions = keyPositions(query_plan.getCurrentDataStream().header, getShuffleByColumns(getSelectQuery()));
     query_plan.addStep(std::make_unique<LightShufflingStep>(
         query_plan.getCurrentDataStream(), std::move(key_positions), context->getSettingsRef().max_threads.value));
+
+    light_shuffled = true;
 }
 /// proton : ends
 
@@ -2600,6 +2602,7 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
         merge_threads,
         temporary_data_merge_threads,
         storage_has_evenly_distributed_read,
+        light_shuffled,
         std::move(group_by_info),
         std::move(group_by_sort_description));
 
@@ -2666,7 +2669,7 @@ void InterpreterSelectQuery::executeRollupOrCube(QueryPlan & query_plan, Modific
         keys.push_back(header_before_transform.getPositionByName(key.name));
 
     auto params = getAggregatorParams(query_ptr, *query_analyzer, *context, header_before_transform, keys, query_analyzer->aggregates(), false, settings, 0, 0);
-    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), true);
+    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), true, false);
 
     QueryPlanStepPtr step;
     if (modificator == Modificator::ROLLUP)

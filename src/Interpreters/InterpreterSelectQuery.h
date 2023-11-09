@@ -256,6 +256,7 @@ private:
     std::optional<std::pair<JoinKind, JoinStrictness>> current_select_join_kind_and_strictness; /// Which implies having join if have value
     mutable std::optional<bool> is_streaming_query;
     bool shuffled_before_join = false;
+    bool light_shuffled = false;
     /// Overall data stream semantic defines the output semantic of the current layer of SELECT
     Streaming::DataStreamSemanticPair data_stream_semantic_pair;
     /// proton: ends

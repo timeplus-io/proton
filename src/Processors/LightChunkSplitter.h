@@ -25,6 +25,8 @@ public:
 
     ShardChunks split(Chunk & chunk) const;
 
+    const auto & keyColumnPositions() const noexcept { return key_column_positions; }
+
 private:
     UInt16 total_shards;
     std::vector<size_t> key_column_positions;

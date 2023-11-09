@@ -48,6 +48,8 @@ public:
 
     NamesAndTypesList getVirtuals() const override;
 
+    bool hasEvenlyDistributedRead() const override { return storage->hasEvenlyDistributedRead(); }
+
     TableFunctionDescriptionPtr getStreamingTableFunctionDescription() const { return table_func_desc; }
 
     /// Whether it reads data from streaming store or historical store

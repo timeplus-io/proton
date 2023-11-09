@@ -1,6 +1,7 @@
 #include <Processors/Transforms/LightShufflingTransform.h>
 
 #include <base/ClockUtils.h>
+#include <Common/logger_useful.h>
 
 #include <bit>
 
@@ -74,7 +75,6 @@ IProcessor::Status LightShufflingTransform::prepare(const PortNumbers &, const P
     for (auto iter = waiting_outputs.begin(); iter != waiting_outputs.end();)
     {
         auto output_port_index = *iter;
-        auto & waiting_output = output_ports[output_port_index];
         auto & shuffled_chunks = shuffled_output_chunks[output_port_index];
 
         /// If no buffered chunk for this waiting output, check next waiting output
@@ -84,9 +84,11 @@ IProcessor::Status LightShufflingTransform::prepare(const PortNumbers &, const P
             continue;
         }
 
+        auto & waiting_output = output_ports[output_port_index];
         waiting_output.port->push(std::move(shuffled_chunks.front()));
-        waiting_output.status = OutputStatus::NotActive;
         shuffled_chunks.pop();
+
+        waiting_output.status = OutputStatus::NotActive;
         iter = waiting_outputs.erase(iter);
     }
 
@@ -146,7 +148,7 @@ void LightShufflingTransform::consume(Chunk chunk)
     }
     else
     {
-        /// Shuffling is very upstream, downstream watermark transform still
+        /// Shuffling is upstream, downstream watermark transform still
         /// depends on this empty timer chunk to calculate watermark for global aggregation
         /// When we fix the timer issue systematically, the pipeline system shall have minimum
         /// empty block flowing around and we don't need this anymore

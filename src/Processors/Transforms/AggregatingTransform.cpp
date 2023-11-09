@@ -385,7 +385,7 @@ AggregatingTransform::AggregatingTransform(
     Block header,
     AggregatingTransformParamsPtr params_,
     ManyAggregatedDataPtr many_data_,
-    size_t current_variant,
+    size_t current_variant_,
     size_t max_threads_,
     size_t temporary_data_merge_threads_)
     : IProcessor({std::move(header)}, {params_->getHeader()}, ProcessorID::AggregatingTransformID)
@@ -393,7 +393,8 @@ AggregatingTransform::AggregatingTransform(
     , key_columns(params->params.keys_size)
     , aggregate_columns(params->params.aggregates_size)
     , many_data(std::move(many_data_))
-    , variants(*many_data->variants[current_variant])
+    , current_variant(current_variant_)
+    , variants(*many_data->variants[current_variant_])
     , max_threads(std::min(many_data->variants.size(), max_threads_))
     , temporary_data_merge_threads(temporary_data_merge_threads_)
 {
@@ -525,6 +526,20 @@ void AggregatingTransform::consume(Chunk chunk)
         if (!params->aggregator.executeOnBlock(chunk.detachColumns(), 0, num_rows, variants, key_columns, aggregate_columns, no_more_keys))
             is_consume_finished = true;
     }
+
+    /// REMOVE ME, kchen
+    if (DB::MonotonicSeconds::now() - last_log_ts >= 5)
+    {
+        double elapsed_seconds = watch.elapsedSeconds();
+        size_t rows = variants.sizeWithoutOverflowRow();
+        last_log_ts = DB::MonotonicSeconds::now();
+
+        LOG_INFO(log, "Aggregated so far, current_variant={} {} to {} rows (from {}) in {} sec. ({:.3f} rows/sec., {}/sec.)",
+                 current_variant,
+                 src_rows, rows, ReadableSize(src_bytes),
+                 elapsed_seconds, src_rows / elapsed_seconds,
+                 ReadableSize(src_bytes / elapsed_seconds));
+    }
 }
 
 void AggregatingTransform::initGenerate()
@@ -547,7 +562,8 @@ void AggregatingTransform::initGenerate()
     double elapsed_seconds = watch.elapsedSeconds();
     size_t rows = variants.sizeWithoutOverflowRow();
 
-    LOG_DEBUG(log, "Aggregated. {} to {} rows (from {}) in {} sec. ({:.3f} rows/sec., {}/sec.)",
+    LOG_INFO(log, "Aggregated. current_variant={} {} to {} rows (from {}) in {} sec. ({:.3f} rows/sec., {}/sec.)",
+        current_variant,
         src_rows, rows, ReadableSize(src_bytes),
         elapsed_seconds, src_rows / elapsed_seconds,
         ReadableSize(src_bytes / elapsed_seconds));
@@ -605,7 +621,7 @@ void AggregatingTransform::initGenerate()
             pipe = Pipe::unitePipes(std::move(pipes));
         }
 
-        LOG_DEBUG(
+        LOG_INFO(
             log,
             "Will merge {} temporary files of size {} compressed, {} uncompressed.",
             files.files.size(),

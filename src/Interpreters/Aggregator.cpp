@@ -304,7 +304,7 @@ std::optional<HashTablesCacheStatistics> getHashTablesCacheStatistics()
 void AggregatedDataVariants::convertToTwoLevel()
 {
     if (aggregator)
-        LOG_TRACE(aggregator->log, "Converting aggregation data to two-level.");
+        LOG_INFO(aggregator->log, "Converting aggregation data to two-level.");
 
     switch (type)
     {
@@ -1423,7 +1423,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     CompressedWriteBuffer compressed_buf(file_buf);
     NativeWriter block_out(compressed_buf, getHeader(false), ProtonRevision::getVersionRevision());
 
-    LOG_DEBUG(log, "Writing part of aggregation data into temporary file {}.", path);
+    LOG_INFO(log, "Writing part of aggregation data into temporary file {}.", path);
     ProfileEvents::increment(ProfileEvents::ExternalAggregationWritePart);
 
     /// Flush only two-level data and possibly overflow data.
@@ -1467,7 +1467,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     ProfileEvents::increment(ProfileEvents::ExternalAggregationCompressedBytes, compressed_bytes);
     ProfileEvents::increment(ProfileEvents::ExternalAggregationUncompressedBytes, uncompressed_bytes);
 
-    LOG_DEBUG(log,
+    LOG_INFO(log,
         "Written part in {:.3f} sec., {} rows, {} uncompressed, {} compressed,"
         " {:.3f} uncompressed bytes per row, {:.3f} compressed bytes per row, compression rate: {:.3f}"
         " ({:.3f} rows/sec., {}/sec. uncompressed, {}/sec. compressed)",
