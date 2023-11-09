@@ -55,8 +55,10 @@
 #include <Interpreters/ReplaceQueryParameterVisitor.h>
 #include <Interpreters/ProfileEventsExt.h>
 #include <IO/WriteBufferFromOStream.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/CompressionMethod.h>
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/algorithm/string/case_conv.hpp>
 
 #include <Access/AccessControl.h>
 #include <Storages/ColumnsDescription.h>
@@ -114,6 +116,7 @@ namespace ErrorCodes
     extern const int CANNOT_SET_SIGNAL_HANDLER;
     extern const int UNRECOGNIZED_ARGUMENTS;
     extern const int LOGICAL_ERROR;
+    extern const int CANNOT_OPEN_FILE;
 }
 
 }
@@ -127,12 +130,35 @@ namespace ProfileEvents
 namespace DB
 {
 
+ProgressOption toProgressOption(std::string progress)
+{
+    boost::to_upper(progress);
+
+    if (progress == "OFF" || progress == "FALSE" || progress == "0" || progress == "NO")
+        return ProgressOption::OFF;
+    if (progress == "TTY" || progress == "ON" || progress == "TRUE" || progress == "1" || progress == "YES")
+        return ProgressOption::TTY;
+    if (progress == "ERR")
+        return ProgressOption::ERR;
+    if (progress == "DEFAULT")
+        return ProgressOption::DEFAULT;
+
+    throw boost::program_options::validation_error(boost::program_options::validation_error::invalid_option_value);
+}
+
+std::istream& operator>> (std::istream & in, ProgressOption & progress)
+{
+    std::string token;
+    in >> token;
+    progress = toProgressOption(token);
+    return in;
+}
+
 static void incrementProfileEventsBlock(Block & dst, const Block & src)
 {
     if (!dst)
     {
-        dst = src;
-        return;
+        dst = src.cloneEmpty();
     }
 
     assertBlocksHaveEqualStructure(src, dst, "ProfileEvents");
@@ -146,7 +172,7 @@ static void incrementProfileEventsBlock(Block & dst, const Block & src)
 
     auto & dst_column_host_name = typeid_cast<ColumnString &>(*mutable_columns[name_pos["host_name"]]);
     auto & dst_array_current_time = typeid_cast<ColumnUInt32 &>(*mutable_columns[name_pos["current_time"]]).getData();
-    auto & dst_array_thread_id = typeid_cast<ColumnUInt64 &>(*mutable_columns[name_pos["thread_id"]]).getData();
+    // auto & dst_array_thread_id = typeid_cast<ColumnUInt64 &>(*mutable_columns[name_pos["thread_id"]]).getData();
     auto & dst_array_type = typeid_cast<ColumnInt8 &>(*mutable_columns[name_pos["type"]]).getData();
     auto & dst_column_name = typeid_cast<ColumnString &>(*mutable_columns[name_pos["name"]]);
     auto & dst_array_value = typeid_cast<ColumnInt64 &>(*mutable_columns[name_pos["value"]]).getData();
@@ -161,12 +187,11 @@ static void incrementProfileEventsBlock(Block & dst, const Block & src)
     {
         StringRef name;
         StringRef host_name;
-        UInt64 thread_id;
 
         bool operator<(const Id & rhs) const
         {
-            return std::tie(name, host_name, thread_id)
-                 < std::tie(rhs.name, rhs.host_name, rhs.thread_id);
+            return std::tie(name, host_name)
+                 < std::tie(rhs.name, rhs.host_name);
         }
     };
     std::map<Id, UInt64> rows_by_name;
@@ -175,9 +200,18 @@ static void incrementProfileEventsBlock(Block & dst, const Block & src)
         Id id{
             src_column_name.getDataAt(src_row),
             src_column_host_name.getDataAt(src_row),
-            src_array_thread_id[src_row],
         };
         rows_by_name[id] = src_row;
+    }
+
+    /// Filter out snapshots
+    std::set<size_t> thread_id_filter_mask;
+    for (size_t i = 0; i < src_array_thread_id.size(); ++i)
+    {
+        if (src_array_thread_id[i] != 0)
+        {
+            thread_id_filter_mask.emplace(i);
+        }
     }
 
     /// Merge src into dst.
@@ -186,12 +220,16 @@ static void incrementProfileEventsBlock(Block & dst, const Block & src)
         Id id{
             dst_column_name.getDataAt(dst_row),
             dst_column_host_name.getDataAt(dst_row),
-            dst_array_thread_id[dst_row],
         };
 
         if (auto it = rows_by_name.find(id); it != rows_by_name.end())
         {
             size_t src_row = it->second;
+            if (thread_id_filter_mask.contains(src_row))
+            {
+                continue;
+            }
+
             dst_array_current_time[dst_row] = src_array_current_time[src_row];
 
             switch (dst_array_type[dst_row])
@@ -211,6 +249,11 @@ static void incrementProfileEventsBlock(Block & dst, const Block & src)
     /// Copy rows from src that dst does not contains.
     for (const auto & [id, pos] : rows_by_name)
     {
+        if (thread_id_filter_mask.contains(pos))
+        {
+            continue;
+        }
+
         for (size_t col = 0; col < src.columns(); ++col)
         {
             mutable_columns[col]->insert((*src.getByPosition(col).column)[pos]);
@@ -232,13 +275,20 @@ public:
     static bool cancelled() { return exit_on_signal.test(); }
 };
 
-/// This signal handler is set only for SIGINT.
+/// This signal handler is set for SIGINT and SIGQUIT.
 void interruptSignalHandler(int signum)
 {
     if (QueryInterruptHandler::stop())
         safeExit(128 + signum);
 }
 
+
+/// To cancel the query on local format error.
+class LocalFormatError : public DB::Exception
+{
+public:
+    using Exception::Exception;
+};
 
 ClientBase::~ClientBase() = default;
 ClientBase::ClientBase() = default;
@@ -258,11 +308,14 @@ void ClientBase::setupSignalHandler()
     sigemptyset(&new_act.sa_mask);
 #else
     if (sigemptyset(&new_act.sa_mask))
-        throw Exception(ErrorCodes::CANNOT_SET_SIGNAL_HANDLER, "Cannot set signal handler.");
+        throwFromErrno("Cannot set signal handler.", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
 #endif
 
     if (sigaction(SIGINT, &new_act, nullptr))
-        throw Exception(ErrorCodes::CANNOT_SET_SIGNAL_HANDLER, "Cannot set signal handler.");
+        throwFromErrno("Cannot set signal handler.", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
+
+    if (sigaction(SIGQUIT, &new_act, nullptr))
+        throwFromErrno("Cannot set signal handler.", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
 }
 
 
@@ -396,21 +449,29 @@ void ClientBase::onData(Block & block, ASTPtr parsed_query)
         return;
 
     /// If results are written INTO OUTFILE, we can avoid clearing progress to avoid flicker.
-    if (need_render_progress && (stdout_is_a_tty || is_interactive) && !select_into_file)
-        progress_indication.clearProgressOutput();
+    if (need_render_progress && tty_buf && !select_into_file)
+        progress_indication.clearProgressOutput(*tty_buf);
 
-    output_format->write(materializeBlock(block));
-    written_first_block = true;
+    try
+    {
+        output_format->write(materializeBlock(block));
+        written_first_block = true;
+    }
+    catch (const Exception &)
+    {
+        /// Catch client errors like NO_ROW_DELIMITER
+        throw LocalFormatError(getCurrentExceptionMessage(print_stack_trace), getCurrentExceptionCode());
+    }
 
     /// Received data block is immediately displayed to the user.
     output_format->flush();
 
     /// Restore progress bar after data block.
-    if (need_render_progress && (stdout_is_a_tty || is_interactive))
+    if (need_render_progress && tty_buf)
     {
         if (select_into_file)
             std::cerr << "\r";
-        progress_indication.writeProgress();
+        progress_indication.writeProgress(*tty_buf);
     }
 }
 
@@ -418,7 +479,8 @@ void ClientBase::onData(Block & block, ASTPtr parsed_query)
 void ClientBase::onLogData(Block & block)
 {
     initLogsOutputStream();
-    progress_indication.clearProgressOutput();
+    if (need_render_progress && tty_buf)
+        progress_indication.clearProgressOutput(*tty_buf);
     logs_out_stream->writeLogs(block);
     logs_out_stream->flush();
 }
@@ -454,6 +516,7 @@ void ClientBase::onProfileInfo(const ProfileInfo & profile_info)
 
 
 void ClientBase::initBlockOutputStream(const Block & block, ASTPtr parsed_query)
+try
 {
     if (!output_format)
     {
@@ -542,6 +605,10 @@ void ClientBase::initBlockOutputStream(const Block & block, ASTPtr parsed_query)
         output_format->setAutoFlush();
     }
 }
+catch (...)
+{
+    throw LocalFormatError(getCurrentExceptionMessage(print_stack_trace), getCurrentExceptionCode());
+}
 
 
 void ClientBase::initLogsOutputStream()
@@ -550,6 +617,7 @@ void ClientBase::initLogsOutputStream()
     {
         WriteBuffer * wb = out_logs_buf.get();
 
+        bool color_logs = false;
         if (!out_logs_buf)
         {
             if (server_logs_file.empty())
@@ -557,11 +625,13 @@ void ClientBase::initLogsOutputStream()
                 /// Use stderr by default
                 out_logs_buf = std::make_unique<WriteBufferFromFileDescriptor>(STDERR_FILENO);
                 wb = out_logs_buf.get();
+                color_logs = stderr_is_a_tty;
             }
             else if (server_logs_file == "-")
             {
                 /// Use stdout if --server_logs_file=- specified
                 wb = &std_out;
+                color_logs = stdout_is_a_tty;
             }
             else
             {
@@ -571,8 +641,66 @@ void ClientBase::initLogsOutputStream()
             }
         }
 
-        logs_out_stream = std::make_unique<InternalTextLogs>(*wb, stdout_is_a_tty);
+        logs_out_stream = std::make_unique<InternalTextLogs>(*wb, color_logs);
     }
+}
+
+void ClientBase::initTtyBuffer(ProgressOption progress)
+{
+    if (tty_buf)
+        return;
+
+    if (progress == ProgressOption::OFF || (!is_interactive && progress == ProgressOption::DEFAULT))
+    {
+         need_render_progress = false;
+         return;
+    }
+
+    static constexpr auto tty_file_name = "/dev/tty";
+
+    /// Output all progress bar commands to terminal at once to avoid flicker.
+    /// This size is usually greater than the window size.
+    static constexpr size_t buf_size = 1024;
+
+    if (is_interactive || progress == ProgressOption::TTY)
+    {
+        std::error_code ec;
+        std::filesystem::file_status tty = std::filesystem::status(tty_file_name, ec);
+
+        if (!ec && exists(tty) && is_character_file(tty)
+            && (tty.permissions() & std::filesystem::perms::others_write) != std::filesystem::perms::none)
+        {
+            try
+            {
+                tty_buf = std::make_unique<WriteBufferFromFile>(tty_file_name, buf_size);
+
+                /// It is possible that the terminal file has writeable permissions
+                /// but we cannot write anything there. Check it with invisible character.
+                tty_buf->write('\0');
+                tty_buf->next();
+
+                return;
+            }
+            catch (const Exception & e)
+            {
+                if (tty_buf)
+                    tty_buf.reset();
+
+                if (e.code() != ErrorCodes::CANNOT_OPEN_FILE)
+                    throw;
+
+                /// It is normal if file exists, indicated as writeable but still cannot be opened.
+                /// Fallback to other options.
+            }
+        }
+    }
+
+    if (stderr_is_a_tty || progress == ProgressOption::ERR)
+    {
+        tty_buf = std::make_unique<WriteBufferFromFileDescriptor>(STDERR_FILENO, buf_size);
+    }
+    else
+        need_render_progress = false;
 }
 
 void ClientBase::updateSuggest(const ASTCreateQuery & ast_create)
@@ -661,7 +789,7 @@ void ClientBase::processOrdinaryQuery(const String & query_to_execute, ASTPtr pa
     }
 
     int retries_left = 10;
-while (retries_left)
+    while (retries_left)
     {
         try
         {
@@ -717,6 +845,9 @@ void ClientBase::receiveResult(ASTPtr parsed_query)
         = std::max(min_poll_interval, std::min<size_t>(receive_timeout.totalMicroseconds(), default_poll_interval));
 
     bool break_on_timeout = connection->getConnectionType() != IServerConnection::Type::LOCAL;
+
+    std::exception_ptr local_format_error;
+
     while (true)
     {
         Stopwatch receive_watch(CLOCK_MONOTONIC_COARSE);
@@ -728,21 +859,10 @@ void ClientBase::receiveResult(ASTPtr parsed_query)
             /// to avoid losing sync.
             if (!cancelled)
             {
-                auto cancel_query = [&] {
-                    connection->sendCancel();
-                    if (is_interactive)
-                    {
-                        progress_indication.clearProgressOutput();
-                        std::cout << "Cancelling query." << std::endl;
-
-                    }
-                    cancelled = true;
-                };
-
                 /// handler received sigint
                 if (QueryInterruptHandler::cancelled())
                 {
-                    cancel_query();
+                    cancelQuery();
                 }
                 else
                 {
@@ -753,7 +873,7 @@ void ClientBase::receiveResult(ASTPtr parsed_query)
                                     << " Waited for " << static_cast<size_t>(elapsed) << " seconds,"
                                     << " timeout is " << receive_timeout.totalSeconds() << " seconds." << std::endl;
 
-                        cancel_query();
+                        cancelQuery();
                     }
                 }
             }
@@ -765,9 +885,20 @@ void ClientBase::receiveResult(ASTPtr parsed_query)
                 break;
         }
 
-        if (!receiveAndProcessPacket(parsed_query, cancelled))
-            break;
+        try
+        {
+            if (!receiveAndProcessPacket(parsed_query, cancelled))
+                break;
+        }
+        catch (const LocalFormatError &)
+        {
+            local_format_error = std::current_exception();
+            connection->sendCancel();
+        }
     }
+
+    if (local_format_error)
+        std::rethrow_exception(local_format_error);
 
     if (cancelled && is_interactive)
         std::cout << "Query was cancelled." << std::endl;
@@ -843,14 +974,15 @@ void ClientBase::onProgress(const Progress & value)
     if (output_format)
         output_format->onProgress(value);
 
-    if (need_render_progress)
-        progress_indication.writeProgress();
+    if (need_render_progress && tty_buf)
+        progress_indication.writeProgress(*tty_buf);
 }
 
 
 void ClientBase::onEndOfStream()
 {
-    progress_indication.clearProgressOutput();
+    if (need_render_progress && tty_buf)
+        progress_indication.clearProgressOutput(*tty_buf);
 
     if (output_format)
         output_format->finalize();
@@ -858,10 +990,7 @@ void ClientBase::onEndOfStream()
     resetOutput();
 
     if (is_interactive && !written_first_block)
-    {
-        progress_indication.clearProgressOutput();
         std::cout << "Ok." << std::endl;
-    }
 }
 
 
@@ -890,28 +1019,32 @@ void ClientBase::onProfileEvents(Block & block)
                 progress_indication.addThreadIdToList(host_name, thread_id);
             auto event_name = names.getDataAt(i);
             auto value = array_values[i];
+
+            /// Ignore negative time delta or memory usage just in case.
+            if (value < 0)
+                continue;
+
             if (event_name == user_time_name)
-            {
                 thread_times[host_name][thread_id].user_ms = value;
-            }
             else if (event_name == system_time_name)
-            {
                 thread_times[host_name][thread_id].system_ms = value;
-            }
             else if (event_name == MemoryTracker::USAGE_EVENT_NAME)
-            {
                 thread_times[host_name][thread_id].memory_usage = value;
-            }
         }
-        auto elapsed_time = profile_events.watch.elapsedMicroseconds();
-        progress_indication.updateThreadEventData(thread_times, elapsed_time);
+        progress_indication.updateThreadEventData(thread_times);
+
+        if (need_render_progress && tty_buf)
+            progress_indication.writeProgress(*tty_buf);
 
         if (profile_events.print)
         {
             if (profile_events.watch.elapsedMilliseconds() >= profile_events.delay_ms)
             {
+                /// We need to restart the watch each time we flushed these events
+                profile_events.watch.restart();
                 initLogsOutputStream();
-                progress_indication.clearProgressOutput();
+                if (need_render_progress && tty_buf)
+                    progress_indication.clearProgressOutput(*tty_buf);
                 logs_out_stream->writeProfileEvents(block);
                 logs_out_stream->flush();
 
@@ -922,7 +1055,6 @@ void ClientBase::onProfileEvents(Block & block)
                 incrementProfileEventsBlock(profile_events.last_block, block);
             }
         }
-        profile_events.watch.restart();
     }
 }
 
@@ -1010,6 +1142,9 @@ void ClientBase::processInsertQuery(const String & query_to_execute, ASTPtr pars
     if ((!parsed_insert_query.data && !parsed_insert_query.infile) && (is_interactive || (!stdin_is_a_tty && std_in.eof())))
         throw Exception("No data to insert", ErrorCodes::NO_DATA_TO_INSERT);
 
+    QueryInterruptHandler::start();
+    SCOPE_EXIT({ QueryInterruptHandler::stop(); });
+
     connection->sendQuery(
         connection_parameters.timeouts,
         query,
@@ -1058,7 +1193,8 @@ void ClientBase::sendData(Block & sample, const ColumnsDescription & columns_des
         FileProgress file_progress(0, std_in.getFileSize());
         progress_indication.updateProgress(Progress(file_progress));
         /// Set callback to be called on file progress.
-        progress_indication.setFileProgressCallback(global_context, true);
+        if (tty_buf)
+            progress_indication.setFileProgressCallback(global_context, *tty_buf);
     }
 
     /// If data fetched from file (maybe compressed file)
@@ -1196,6 +1332,13 @@ void ClientBase::sendDataFromPipe(Pipe&& pipe, ASTPtr parsed_query, bool have_mo
     Block block;
     while (executor.pull(block))
     {
+        if (!cancelled && QueryInterruptHandler::cancelled())
+        {
+            cancelQuery();
+            executor.cancel();
+            return;
+        }
+
         /// Check if server send Log packet
         receiveLogs(parsed_query);
 
@@ -1290,6 +1433,17 @@ bool ClientBase::receiveEndOfQuery()
     }
 }
 
+void ClientBase::cancelQuery()
+{
+    connection->sendCancel();
+    if (need_render_progress && tty_buf)
+        progress_indication.clearProgressOutput(*tty_buf);
+
+    if (is_interactive)
+        std::cout << "Cancelling query." << std::endl;
+
+    cancelled = true;
+}
 
 void ClientBase::processParsedSingleQuery(const String & full_query, const String & query_to_execute,
         ASTPtr parsed_query, std::optional<bool> echo_query_, bool report_error)
@@ -1405,14 +1559,19 @@ void ClientBase::processParsedSingleQuery(const String & full_query, const Strin
     if (profile_events.last_block)
     {
         initLogsOutputStream();
-        progress_indication.clearProgressOutput();
+        if (need_render_progress && tty_buf)
+            progress_indication.clearProgressOutput(*tty_buf);
         logs_out_stream->writeProfileEvents(profile_events.last_block);
         logs_out_stream->flush();
+
+        profile_events.last_block = {};
     }
 
     if (is_interactive)
     {
-        std::cout << std::endl << processed_rows << " rows in set. Elapsed: " << progress_indication.elapsedSeconds() << " sec. ";
+        std::cout << std::endl
+            << processed_rows << " row" << (processed_rows == 1 ? "" : "s")
+            << " in set. Elapsed: " << progress_indication.elapsedSeconds() << " sec. ";
         progress_indication.writeFinalProgress();
         std::cout << std::endl << std::endl;
     }
@@ -1884,6 +2043,7 @@ void ClientBase::init(int argc, char ** argv)
 
     stdin_is_a_tty = isatty(STDIN_FILENO);
     stdout_is_a_tty = isatty(STDOUT_FILENO);
+    stderr_is_a_tty = isatty(STDERR_FILENO);
     terminal_width = getTerminalWidth();
 
     Arguments common_arguments{""}; /// 0th argument is ignored.
@@ -1910,7 +2070,7 @@ void ClientBase::init(int argc, char ** argv)
         ("query,q", po::value<std::string>(), "query")
         ("stage", po::value<std::string>()->default_value("complete"), "Request query processing up to specified stage: complete,fetch_columns,with_mergeable_state,with_mergeable_state_after_aggregation,with_mergeable_state_after_aggregation_and_limit")
         ("query_id", po::value<std::string>(), "query_id")
-        ("progress", "print progress of queries execution")
+        ("progress", po::value<ProgressOption>()->implicit_value(ProgressOption::TTY, "tty")->default_value(ProgressOption::DEFAULT, "default"), "Print progress of queries execution - to TTY: tty|on|1|true|yes; to STDERR non-interactive mode: err; OFF: off|0|false|no; DEFAULT - interactive to TTY, non-interactive is off")
 
         ("disable_suggestion,A", "Disable loading suggestion data. Note that suggestion data is loaded asynchronously through a second connection to proton server. Also it is reasonable to disable suggestion if you want to paste a query with TAB characters. Shorthand option -A is for those who get used to mysql client.")
         ("time,t", "print query execution time to stderr in non-interactive mode (for benchmarks)")
@@ -2015,7 +2175,23 @@ void ClientBase::init(int argc, char ** argv)
     if (options.count("profile-events-delay-ms"))
         config().setUInt64("profile-events-delay-ms", options["profile-events-delay-ms"].as<UInt64>());
     if (options.count("progress"))
-        config().setBool("progress", true);
+    {
+        switch (options["progress"].as<ProgressOption>())
+        {
+            case DEFAULT:
+                config().setString("progress", "default");
+                break;
+            case OFF:
+                config().setString("progress", "off");
+                break;
+            case TTY:
+                config().setString("progress", "tty");
+                break;
+            case ERR:
+                config().setString("progress", "err");
+                break;
+        }
+    }
     if (options.count("echo"))
         config().setBool("echo", true);
     if (options.count("disable_suggestion"))

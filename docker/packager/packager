@@ -226,6 +226,7 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_THINLTO=ON')
     else:
         cmake_flags.append('-DENABLE_TESTS=ON')
+        cmake_flags.append('-DENABLE_PROTON_LOCAL=ON')
     # proton: ends.
 
     result.append('CMAKE_FLAGS="' + ' '.join(cmake_flags) + '"')

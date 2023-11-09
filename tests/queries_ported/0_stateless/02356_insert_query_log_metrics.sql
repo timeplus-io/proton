@@ -1,3 +1,4 @@
+SET log_insert_query=true;
 CREATE STREAM 02356_destination (a int64, b string) ENGINE = Memory;
 
 INSERT INTO 02356_destination (a, b) SELECT * FROM generateRandom('a int64, b string') LIMIT 100 SETTINGS max_threads=1, max_block_size=100;
