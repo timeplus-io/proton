@@ -10,7 +10,8 @@ namespace DB
 class WriteBufferFromKafka final : public BufferWithOwnMemory<WriteBuffer>
 {
 public:
-    explicit WriteBufferFromKafka(klog::KTopicPtr topic_, size_t buffer_size = DBMS_DEFAULT_BUFFER_SIZE);
+    // WriteBufferFromKafka does not take the ownership of `topic_`.
+    explicit WriteBufferFromKafka(size_t buffer_size = DBMS_DEFAULT_BUFFER_SIZE);
 
     ~WriteBufferFromKafka() override = default;
 
@@ -30,6 +31,14 @@ public:
     /// allows to reset the state after each checkpoint
     void resetState() { state.reset(); }
 
+    /// Configure the buffer to write data to the specific topic.
+    /// The buffer does not take the ownership of the topic pointer.
+    /// This allows us to create a buffer w/o creating the topic first.
+    void write_to_topic(rd_kafka_topic_t * topic_) { topic = topic_; }
+
+    /// Set the partition ID the buffer will write data to.
+    /// This makes it possible write data to different paritions.
+    void write_to_partition(Int32 id) { partition_id = id; }
 private:
     void nextImpl() override;
 
@@ -43,7 +52,9 @@ private:
         void reset();
     };
 
-    klog::KTopicPtr topic;
+    rd_kafka_topic_t * topic;
     State state;
+
+    Int32 partition_id;
 };
 }

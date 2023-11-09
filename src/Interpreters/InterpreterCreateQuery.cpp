@@ -64,6 +64,9 @@
 
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/logger_useful.h>
+#include "Parsers/ASTFunction.h"
+#include "Parsers/ExpressionElementParsers.h"
+#include "Server/RestRouterHandlers/ColumnDefinition.h"
 
 #include <base/ClockUtils.h>
 
@@ -884,8 +887,6 @@ void InterpreterCreateQuery::handleStreamCreation(const String & current_databas
 
     if (create.getDatabase().empty())
         create.setDatabase(current_database);
-
-    return;
 }
 
 /// external stream is always created locally in the DDL request accepting node
@@ -894,12 +895,31 @@ void InterpreterCreateQuery::handleExternalStreamCreation(ASTCreateQuery & creat
     if (!create.is_external)
         return;
 
+    auto sharding_expr_field = Field("");
+    String sharding_expr;
+
     /// ExternalStreamStorage
     if (!create.storage)
         create.set(create.storage, std::make_shared<ASTStorage>());
+    else
+        create.storage->settings->changes.tryGet("sharding_expr", sharding_expr_field);
 
-    if (!create.storage->engine)
-        create.storage->set(create.storage->engine, makeASTFunction("ExternalStream"));
+    sharding_expr_field.tryGet<String>(sharding_expr);
+
+    ASTPtr sharding_expr_ast;
+    if (sharding_expr.empty())
+    {
+        sharding_expr_ast = makeASTFunction("rand");
+    }
+    else
+    {
+        ParserFunction parser;
+        const char * begin{sharding_expr.data()};
+        const char * end{begin + sharding_expr.size()};
+        sharding_expr_ast = parseQuery(parser, begin, end, "", 0, 0);
+    }
+
+    create.storage->set(create.storage->engine, makeASTFunction("ExternalStream", sharding_expr_ast));
 
     if (create.storage->engine->name != "ExternalStream")
         throw Exception(ErrorCodes::INCORRECT_QUERY, "External stream requires ExternalStream engine");

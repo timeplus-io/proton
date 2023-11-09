@@ -3,6 +3,7 @@
 #include <Storages/IStorage.h>
 #include <base/shared_ptr_helper.h>
 #include <Common/SettingsChanges.h>
+#include "Server/RestRouterHandlers/ColumnDefinition.h"
 
 namespace DB
 {
@@ -51,6 +52,7 @@ public:
 
 protected:
     StorageExternalStream(
+        const ASTPtr & sharding_key_,
         const StorageID & table_id_,
         ContextPtr context_,
         const ColumnsDescription & columns_,
