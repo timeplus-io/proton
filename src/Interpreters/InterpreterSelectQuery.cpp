@@ -890,8 +890,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     }
 
     /// proton: starts
-    checkForStreamingQuery();
-    checkUDA();
+    finalCheckAndOptimizeForStreamingQuery();
 
     if (query_info.projection)
         storage_snapshot->addProjection(query_info.projection->desc);
@@ -3363,7 +3362,7 @@ bool InterpreterSelectQuery::shouldKeepState() const
     return false;
 }
 
-void InterpreterSelectQuery::checkForStreamingQuery() const
+void InterpreterSelectQuery::finalCheckAndOptimizeForStreamingQuery()
 {
     if (isStreaming())
     {
@@ -3375,6 +3374,29 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
                 if (proxy->hasGlobalAggregation())
                     throw Exception("Streaming query doesn't support window func over a global aggregation", ErrorCodes::NOT_IMPLEMENTED);
         }
+
+        /// For now, for the following scenarios, we disable backfill from historic data store
+        /// 1) User select some virtual columns which is only available in streaming store, like `_tp_sn`, `_tp_index_time`
+        /// 2) Seek by streaming store sequence number
+        /// 3) Replaying a stream. 
+        /// TODO, ideally we shall check if historical data store has `_tp_sn` etc columns, if they have, we can backfill from
+        /// the historical data store as well technically. This will be a future enhancement.
+        const auto & settings = context->getSettingsRef();
+        if (settings.enable_backfill_from_historical_store.value)
+        {
+            bool has_streaming_only_virtual_columns = std::ranges::any_of(required_columns, [](const auto & name) {
+                return name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID || name == ProtonConsts::RESERVED_APPEND_TIME
+                    || name == ProtonConsts::RESERVED_INGEST_TIME || name == ProtonConsts::RESERVED_PROCESS_TIME;
+            });
+            bool seek_by_sn = !query_info.seek_to_info->getSeekTo().empty() && !query_info.seek_to_info->isTimeBased()
+                && query_info.seek_to_info->getSeekTo() != "earliest";
+            if (has_streaming_only_virtual_columns || seek_by_sn || settings.replay_speed > 0)
+                context->setSetting("enable_backfill_from_historical_store", false);
+        }
+
+        /// Optimization: no requires backfill data in order for global aggregation with settings `emit_aggregated_during_backfill = false`.
+        if (!settings.emit_aggregated_during_backfill.value && hasGlobalAggregation())
+            query_info.require_in_order_backfill = false;
     }
     else
     {
@@ -3399,6 +3421,8 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
                 "Neither window_start nor window_end is referenced in the query, but streaming window function is used",
                 ErrorCodes::WINDOW_COLUMN_NOT_REFERENCED);
     }
+
+    checkUDA();
 }
 
 void InterpreterSelectQuery::buildShufflingQueryPlan(QueryPlan & query_plan)
@@ -3432,12 +3456,16 @@ void InterpreterSelectQuery::buildWatermarkQueryPlan(QueryPlan & query_plan) con
 {
     assert(isStreaming());
     auto params = std::make_shared<Streaming::WatermarkStamperParams>(
-                query_info.query, query_info.syntax_analyzer_result, query_info.streaming_window_params);
+        query_info.query, query_info.syntax_analyzer_result, query_info.streaming_window_params);
+
+    bool skip_stamping_for_backfill_data = !context->getSettingsRef().emit_aggregated_during_backfill.value;
+
     if (query_info.hasPartitionByKeys())
-        query_plan.addStep(
-            std::make_unique<Streaming::WatermarkStepWithSubstream>(query_plan.getCurrentDataStream(), std::move(params), log));
+        query_plan.addStep(std::make_unique<Streaming::WatermarkStepWithSubstream>(
+            query_plan.getCurrentDataStream(), std::move(params), skip_stamping_for_backfill_data, log));
     else
-        query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(query_plan.getCurrentDataStream(), std::move(params), log));
+        query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(
+            query_plan.getCurrentDataStream(), std::move(params), skip_stamping_for_backfill_data, log));
 }
 
 void InterpreterSelectQuery::buildStreamingProcessingQueryPlanBeforeJoin(QueryPlan & query_plan)

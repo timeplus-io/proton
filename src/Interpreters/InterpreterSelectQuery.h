@@ -194,7 +194,7 @@ private:
     void executeStreamingPreLimit(QueryPlan & query_plan, bool do_not_skip_offset);
     void executeStreamingLimit(QueryPlan & query_plan);
     void executeStreamingOffset(QueryPlan & query_plan);
-    void checkForStreamingQuery() const;
+    void finalCheckAndOptimizeForStreamingQuery();
     bool shouldKeepState() const;
     void buildShufflingQueryPlan(QueryPlan & query_plan);
     void buildWatermarkQueryPlan(QueryPlan & query_plan) const;

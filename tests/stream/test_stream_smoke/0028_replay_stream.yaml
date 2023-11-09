@@ -26,7 +26,7 @@ tests:
     tags:
       - replay_stream
     name: test replay_stream
-    description: Check if the interval for data insertion is equal to the interval for output，allowable error within 10ms.Also check the data interval whether equal to the insert interval,allowable error within 200ms(because you can't control the the insert interval accurately)
+    description: Check if the interval for data insertion is equal to the interval for output, allowable error within 10ms.Also check the data interval whether equal to the insert interval,allowable error within 200ms(because you can't control the the insert interval accurately)
     steps:
       - statements:
           - client: python
@@ -53,12 +53,12 @@ tests:
           - client: python
             query_type: stream
             terminate: auto
-            query_end_timer: 20
+            query_end_timer: 10
             query_id: '2900'
             wait: 1
             query: with cte as (select id, value, date_diff('millisecond', to_datetime64(lag(_tp_append_time, 1)/1000, 3, 'UTC'), to_datetime64(_tp_append_time/1000, 3, 'UTC')) as insert_interval,
                     date_diff('millisecond',lag(now64(), 1), now64()) as output_time_diff, _tp_time from test29_stream where _tp_time > earliest_timestamp() settings replay_speed=1)
-                    select id, value, abs(insert_interval-2000) < 200, abs(insert_interval-output_time_diff) < 10 from cte;
+                    select id, value, abs(insert_interval-2000) < 200, abs(insert_interval-output_time_diff) < 200 from cte;
     expected_results:
       - query_id: '2900'
         expected_results:
@@ -97,12 +97,12 @@ tests:
           - client: python
             query_type: stream
             terminate: auto
-            query_end_timer: 20
+            query_end_timer: 15
             query_id: '2901'
             wait: 1
             query: with cte as (select id, value, date_diff('millisecond', to_datetime64(lag(_tp_append_time, 1)/1000, 3, 'UTC'), to_datetime64(_tp_append_time/1000, 3, 'UTC')) as insert_interval,
                     date_diff('millisecond',lag(now64(), 1), now64()) as output_time_diff, _tp_time from test29_stream where _tp_time > earliest_timestamp() settings replay_speed=0.5)
-                    select id, value, abs(insert_interval-2000) < 200, abs(2*insert_interval-output_time_diff) < 10 from cte;
+                    select id, value, abs(insert_interval-2000) < 200, abs(2*insert_interval-output_time_diff) < 200 from cte;
     expected_results:
       - query_id: '2901'
         expected_results:

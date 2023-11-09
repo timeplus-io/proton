@@ -278,6 +278,9 @@ public:
             chunk_ctx->setCheckpointContext(nullptr);
     }
 
+    bool isHistoricalDataStart() const { return chunk_ctx && chunk_ctx->isHistoricalDataStart(); }
+    bool isHistoricalDataEnd() const { return chunk_ctx && chunk_ctx->isHistoricalDataEnd(); }
+
     /// Dummy interface to make RefCountBlockList happy
     Int64 minTimestamp() const { return 0; }
     Int64 maxTimestamp() const { return 0;}
