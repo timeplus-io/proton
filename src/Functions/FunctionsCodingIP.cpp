@@ -329,8 +329,6 @@ private:
     bool cast_ipv4_ipv6_default_on_conversion_error = false;
 };
 
-
-
 /** If mask_tail_octets > 0, the last specified number of octets will be filled with "xxx".
   */
 template <size_t mask_tail_octets, typename Name>
