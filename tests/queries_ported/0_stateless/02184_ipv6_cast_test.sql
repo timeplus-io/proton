@@ -5,7 +5,8 @@ CREATE STREAM ipv6_test26473 (
 `ip` string,
 `ipv6` ipv6 MATERIALIZED to_ipv6(ip),
 `is_ipv6` boolean   MATERIALIZED is_ipv6_string(ip),
-`cblock` ipv6   MATERIALIZED cut_ipv6(ipv6, 10, 1)
+`cblock` ipv6   MATERIALIZED cut_ipv6(ipv6, 10, 1),
+`cblock1` IPv6  MATERIALIZED to_ipv6(cut_ipv6(ipv6, 10, 1))
 )
 ENGINE = Memory;
 
