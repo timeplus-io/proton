@@ -80,8 +80,8 @@ public:
 
     /// proton: starts
     virtual bool hasAggregation() const = 0;
-    virtual bool isStreaming() const = 0;
-    virtual bool hasGlobalAggregation() const = 0;
+    virtual bool isStreamingQuery() const = 0;
+    virtual bool hasStreamingGlobalAggregation() const = 0;
     virtual bool hasStreamingWindowFunc() const = 0;
     virtual Streaming::DataStreamSemanticEx getDataStreamSemantic() const = 0;
 

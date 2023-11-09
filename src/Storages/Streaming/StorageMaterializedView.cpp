@@ -231,7 +231,7 @@ void StorageMaterializedView::validateInnerQuery(const StorageInMemoryMetadata &
 
     auto description = storage_metadata.getSelectQuery();
     InterpreterSelectWithUnionQuery select_interpreter(description.inner_query, select_context, SelectQueryOptions().analyze());
-    if (!select_interpreter.isStreaming())
+    if (!select_interpreter.isStreamingQuery())
         throw Exception(ErrorCodes::INCORRECT_QUERY, "Materialized view doesn't support historical select query");
 
     if (std::ranges::find(description.select_table_ids, getStorageID()) != description.select_table_ids.end())

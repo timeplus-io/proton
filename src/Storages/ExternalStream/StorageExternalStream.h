@@ -45,6 +45,8 @@ public:
 
     SinkToStoragePtr write(const ASTPtr & /*query*/, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr /*context*/) override;
 
+    bool supportsStreamingQuery() const override { return true; }
+
     friend class KafkaSource;
 
 protected:

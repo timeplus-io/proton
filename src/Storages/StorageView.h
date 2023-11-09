@@ -20,6 +20,7 @@ public:
     /// It is passed inside the query and solved at its level.
     bool supportsSampling() const override { return true; }
     bool supportsFinal() const override { return true; }
+    bool isStreamingQuery(ContextPtr query_context) const;
 
     void read(
         QueryPlan & query_plan,

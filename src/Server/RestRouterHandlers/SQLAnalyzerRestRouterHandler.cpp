@@ -1,5 +1,5 @@
-#include "SQLAnalyzerRestRouterHandler.h"
-#include "SchemaValidator.h"
+#include <Server/RestRouterHandlers/SQLAnalyzerRestRouterHandler.h>
+#include <Server/RestRouterHandlers/SchemaValidator.h>
 
 #include <Interpreters/ApplyWithGlobalVisitor.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
@@ -271,7 +271,7 @@ std::pair<String, Int32> SQLAnalyzerRestRouterHandler::executePost(const Poco::J
             InterpreterSelectWithUnionQuery interpreter(ast, query_context, SelectQueryOptions());
             has_aggr = interpreter.hasAggregation();
             block = interpreter.getSampleBlock();
-            is_streaming = interpreter.isStreaming();
+            is_streaming = interpreter.isStreamingQuery();
             group_by_columns = interpreter.getGroupByColumns();
         }
 

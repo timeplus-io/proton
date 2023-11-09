@@ -1,5 +1,5 @@
-#include "ParserEmitQuery.h"
-#include "ASTEmitQuery.h"
+#include <Parsers/Streaming/ParserEmitQuery.h>
+#include <Parsers/Streaming/ASTEmitQuery.h>
 
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionListParsers.h>

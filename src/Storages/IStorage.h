@@ -227,6 +227,8 @@ public:
     /// likely have their own ways to do buffering. This function allows an implementation
     /// to skip using squashing.
     virtual bool squashInsert() const noexcept { return true; }
+
+    virtual bool supportsStreamingQuery() const { return false; }
     /// proton: ends.
 
     /// Return list of virtual columns (like _part, _table, etc). In the vast

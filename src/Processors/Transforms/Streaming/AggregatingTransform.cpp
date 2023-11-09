@@ -294,9 +294,9 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
         {
             /// Firstly, acquired finalizing lock, blocking update `many_data->finalized_watermark` in other threads
             /// Secondly, acquired watermark lock, blocking watermark alignment in other threads
-            /// NOTICE: Keeping the order of locking, since the watermark lock shall be acquired in `GlobalAggregatingTransform::prepareFinalization()`
-            std::lock_guard lock1(many_data->finalizing_mutex);
-            std::lock_guard lock2(many_data->watermarks_mutex);
+            /// NOTICE: Keeping the order of locking, since the watermark lock shall be acquired in
+            /// `GlobalAggregatingTransform::prepareFinalization()`
+            std::scoped_lock lock(many_data->finalizing_mutex, many_data->watermarks_mutex);
             watermark = many_data->finalized_watermark.load(std::memory_order_relaxed);
         }
 
@@ -305,7 +305,7 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
             /// Found min watermark to finalize
             try_finalizing_watermark = updateAndAlignWatermark(new_watermark);
         else if (new_watermark < watermark)
-            LOG_ERROR(log, "Found outdate watermark. current watermark={}, but got watermark={}", watermark, new_watermark);
+            LOG_ERROR(log, "Found outdated watermark. current watermark={}, but got watermark={}", watermark, new_watermark);
     }
 
     if (!try_finalizing_watermark.has_value())

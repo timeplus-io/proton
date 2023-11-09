@@ -127,7 +127,7 @@ bool ShrinkResizeProcessor::updateAndAlignWatermark(InputPortWithStatus & input_
     else
     {
         if (unlikely(new_watermark < aligned_watermark))
-            LOG_INFO(log, "Found outdate watermark. aligned watermark={}, but got watermark = {}", aligned_watermark, new_watermark);
+            LOG_INFO(log, "Found outdated watermark. aligned watermark={}, but got watermark = {}", aligned_watermark, new_watermark);
     }
 
     input_with_data.status = InputStatus::NeedData;
@@ -272,7 +272,7 @@ IProcessor::Status ExpandResizeProcessor::prepare(const PortNumbers & /*updated_
                 std::ranges::for_each(
                     output_ports, [](auto & output) { output.propagate_flag |= OutputPortWithStatus::PROPAGATE_HEARTBEAT; });
             }
-            
+
             if (data.chunk.hasRows())
             {
                 assert(num_checkpoint_requests == 0);

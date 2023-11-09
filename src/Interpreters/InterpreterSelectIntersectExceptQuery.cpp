@@ -22,6 +22,7 @@ namespace ErrorCodes
 {
     extern const int INTERSECT_OR_EXCEPT_RESULT_STRUCTURES_MISMATCH;
     extern const int LOGICAL_ERROR;
+    extern const int NOT_IMPLEMENTED;
 }
 
 static Block getCommonHeader(const Blocks & headers)
@@ -176,21 +177,21 @@ bool InterpreterSelectIntersectExceptQuery::hasAggregation() const
     return false;
 }
 
-bool InterpreterSelectIntersectExceptQuery::isStreaming() const
+bool InterpreterSelectIntersectExceptQuery::isStreamingQuery() const
 {
     for (const auto & interpreter : nested_interpreters)
     {
-        if (interpreter->isStreaming())
-            return true;
+        if (interpreter->isStreamingQuery())
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Streaming query is not supported in intersect select");
     }
     return false;
 }
 
-bool InterpreterSelectIntersectExceptQuery::hasGlobalAggregation() const
+bool InterpreterSelectIntersectExceptQuery::hasStreamingGlobalAggregation() const
 {
     for (const auto & interpreter : nested_interpreters)
     {
-        if (interpreter->hasGlobalAggregation())
+        if (interpreter->hasStreamingGlobalAggregation())
             return true;
     }
     return false;
@@ -201,7 +202,7 @@ bool InterpreterSelectIntersectExceptQuery::hasStreamingWindowFunc() const
     for (const auto & interpreter : nested_interpreters)
     {
         if (interpreter->hasStreamingWindowFunc())
-            return true;
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Streaming query is not supported in intersect select");
     }
     return false;
 }

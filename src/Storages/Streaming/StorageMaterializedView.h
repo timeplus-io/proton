@@ -69,6 +69,8 @@ public:
 
     bool isReady() const override;
 
+    bool supportsStreamingQuery() const override { return true; }
+
 private:
     /// Return true on success, false on failure
     void createInnerTable();
