@@ -183,6 +183,9 @@ struct SelectQueryInfo
     SeekToInfoPtr seek_to_info; /// Rewind info for left streaming store in streaming query
     SeekToInfoPtr seek_to_info_of_right_stream; /// Rewind info for right streaming store in streaming query
 
+    /// if is true, means need sort backfill input by event time (ascending)
+    bool require_in_order_backfill = true;
+
     Streaming::WindowParamsPtr streaming_window_params;
 
     bool left_input_tracking_changes = false;

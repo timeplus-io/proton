@@ -212,7 +212,8 @@ private:
         const StorageSnapshotPtr & storage_snapshot,
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
-        size_t max_block_size);
+        size_t max_block_size,
+        size_t num_streams);
 
     void readHistory(
         const StreamShardPtrs & shards_to_read,
