@@ -1514,6 +1514,29 @@ Block Aggregator::convertOneBucketToBlock(
     return block;
 }
 
+/// proton : starts
+/// Convert one bucket of a two level hash table data variants to a block.
+/// Use by shuffled aggregation
+Block Aggregator::convertOneBucketToBlock(AggregatedDataVariants & data_variants, Arena * arena, bool final, Int32 bucket) const
+{
+    assert(data_variants.isTwoLevel());
+
+    auto method = data_variants.type;
+    Block block;
+
+    if (false) {} // NOLINT
+#define M(NAME) \
+    else if (method == AggregatedDataVariants::Type::NAME) \
+    { \
+        block = convertOneBucketToBlock(data_variants, *data_variants.NAME, arena, final, bucket); \
+    }
+
+    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+#undef M
+
+    return block;
+}
+
 Block Aggregator::mergeAndConvertOneBucketToBlock(
     ManyAggregatedDataVariants & variants,
     Arena * arena,
