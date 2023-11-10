@@ -125,48 +125,20 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
         many_data->finalized_watermark.store(chunk_ctx->getWatermark(), std::memory_order_relaxed);
     });
 
-    auto first_data_iter = std::ranges::find_if(many_data->variants, [](const auto & data) { return !data->empty(); });
-    assert(first_data_iter != many_data->variants.end());
-
-    if (unlikely((*first_data_iter)->isTwoLevel()))
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Two level merge is not implemented in global aggregation");
-
-    if ((*first_data_iter)->type == AggregatedDataVariants::Type::without_key)
+    if (params->emit_changelog)
     {
-        /// Without key
-        if (params->emit_changelog)
-        {
-            auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertWithoutKeyToChangelog(
-                many_data->variants, many_data->getField<ManyRetractedDataVariants>(), *params);
+        auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertToChangelogChunk(
+            many_data->variants, many_data->getField<ManyRetractedDataVariants>(), *params);
 
-                setCurrentChunk(std::move(chunk), chunk_ctx, std::move(retracted_chunk));
-        }
-        else
-        {
-            auto chunk = AggregatingHelper::AggregatingHelper::mergeAndConvertWithoutKey(many_data->variants, *params);
-            if (params->emit_version && params->final)
-                emitVersion(chunk);
-
-            setCurrentChunk(std::move(chunk), chunk_ctx);
-        }
+            setCurrentChunk(std::move(chunk), chunk_ctx, std::move(retracted_chunk));
     }
     else
     {
-        /// Single level
-        if (params->emit_changelog)
-        {
-            auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertSingleLevelToChangelog(
-                many_data->variants, many_data->getField<ManyRetractedDataVariants>(), *params);
-            setCurrentChunk(std::move(chunk), chunk_ctx, std::move(retracted_chunk));
-        }
-        else
-        {
-            auto chunk = AggregatingHelper::mergeAndConvertSingleLevel(many_data->variants, *params);
-            if (params->emit_version && params->final)
-                emitVersion(chunk);
+        auto chunk = AggregatingHelper::mergeAndConvertToChunk(many_data->variants, *params);
+        if (params->emit_version && params->final)
+            emitVersion(chunk);
 
-            setCurrentChunk(std::move(chunk), chunk_ctx);
-        }
+        setCurrentChunk(std::move(chunk), chunk_ctx);
     }
 }
 

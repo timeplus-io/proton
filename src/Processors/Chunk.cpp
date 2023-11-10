@@ -183,6 +183,14 @@ void Chunk::append(const Chunk & chunk)
     setColumns(std::move(mutation), rows);
 }
 
+void Chunk::append(Chunk && chunk)
+{
+    if (!hasColumns())
+        this->operator=(std::move(chunk));
+    else
+        append(chunk);
+}
+
 void ChunkMissingValues::setBit(size_t column_idx, size_t row_idx)
 {
     RowsBitMask & mask = rows_mask_by_column_id[column_idx];

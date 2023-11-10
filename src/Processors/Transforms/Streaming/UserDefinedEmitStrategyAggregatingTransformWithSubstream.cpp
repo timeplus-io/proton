@@ -30,11 +30,7 @@ void UserDefinedEmitStrategyAggregatingTransformWithSubstream::finalize(const Su
     if (variants.empty())
         return;
 
-    Chunk chunk;
-    if (variants.type == AggregatedDataVariants::Type::without_key)
-        chunk = AggregatingHelper::convertWithoutKey(variants, *params);
-    else
-        chunk = AggregatingHelper::convertSingleLevel(variants, *params);
+    Chunk chunk = AggregatingHelper::convertToChunk(variants, *params);
 
     if (params->emit_version && params->final)
         emitVersion(chunk, substream_ctx);

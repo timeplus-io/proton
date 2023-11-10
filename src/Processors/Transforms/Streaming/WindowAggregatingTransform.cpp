@@ -1,5 +1,6 @@
 #include <Processors/Transforms/Streaming/WindowAggregatingTransform.h>
 
+#include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/convertToChunk.h>
 
 namespace DB
@@ -120,65 +121,17 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 {
     assert(chunk_ctx && chunk_ctx->hasWatermark());
 
-    /// FIXME spill to disk, overflow_row etc cases
-    auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(many_data->variants);
-    if (prepared_data_ptr->empty())
-        return;
-
     SCOPE_EXIT({ many_data->resetRowCounts(); });
 
-    initialize(prepared_data_ptr);
-
-    assert(prepared_data_ptr->at(0)->isTwoLevel());
-    convertTwoLevel(prepared_data_ptr, chunk_ctx);
-}
-
-void WindowAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & data)
-{
-    AggregatedDataVariantsPtr & first = data->at(0);
-
-    assert(first->type != AggregatedDataVariants::Type::without_key && !params->params.overflow_row);
-
-    /// At least we need one arena in first data item per thread
-    Arenas & first_pool = first->aggregates_pools;
-    for (size_t j = first_pool.size(); j < max_threads; j++)
-        first_pool.emplace_back(std::make_shared<Arena>());
-}
-
-void WindowAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx)
-{
     /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
     /// one project window for streaming processing
-    auto & first = data->at(0);
-
-    std::atomic<bool> is_cancelled{false};
-
     Chunk merged_chunk;
     Chunk chunk;
 
     assert(!prepared_windows_with_buckets.empty());
     for (const auto & window_with_buckets : prepared_windows_with_buckets)
     {
-        if (window_with_buckets.buckets.size() == 1)
-        {
-            chunk = convertToChunk(params->aggregator.mergeAndConvertOneBucketToBlock(
-                *data,
-                first->aggregates_pool,
-                params->final,
-                ConvertAction::STREAMING_EMIT,
-                window_with_buckets.buckets[0],
-                &is_cancelled));
-        }
-        else
-        {
-            params->aggregator.mergeBuckets(
-                *data, first->aggregates_pool, params->final, ConvertAction::INTERNAL_MERGE, window_with_buckets.buckets);
-            chunk = convertToChunk(params->aggregator.spliceAndConvertBucketsToBlock(
-                *first, params->final, ConvertAction::INTERNAL_MERGE, window_with_buckets.buckets));
-        }
-
-        if (is_cancelled)
-            return;
+        chunk = AggregatingHelper::mergeAndSpliceAndConvertBucketsToChunk(many_data->variants, *params, window_with_buckets.buckets);
 
         if (needReassignWindow())
             reassignWindow(chunk, window_with_buckets.window, params->params.window_params->time_col_is_datetime64, window_start_col_pos, window_end_col_pos);
@@ -186,23 +139,7 @@ void WindowAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr &
         if (params->emit_version && params->final)
             emitVersion(chunk);
 
-        if (merged_chunk)
-        {
-            assert(chunk.getNumColumns() == merged_chunk.getNumColumns());
-            auto source_columns = chunk.detachColumns();
-            auto merged_columns = merged_chunk.detachColumns();
-            for (size_t i = 0, size = merged_columns.size(); i < size; ++i)
-            {
-                auto mutable_column = IColumn::mutate(std::move(merged_columns[i]));
-                auto & source_column = source_columns[i];
-                mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
-                merged_columns[i] = std::move(mutable_column);
-            }
-            auto num_rows = merged_columns[0]->size();
-            merged_chunk.setColumns(std::move(merged_columns), num_rows);
-        }
-        else
-            merged_chunk = std::move(chunk);
+        merged_chunk.append(std::move(chunk));
     }
 
     many_data->finalized_window_end.store(prepared_windows_with_buckets.back().window.end, std::memory_order_relaxed);

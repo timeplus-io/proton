@@ -739,6 +739,26 @@ public:
         ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
         bool & no_more_keys) const;
 
+    /// Execute and retracted state for changed groups:
+    /// 1) For new group:
+    ///     @p retracted_result: add an elem <group_key, null> if not exists
+    ///     @p result:           add an elem <group_key, curent_state>
+    /// 2) For updated group:
+    ///     @p retracted_result: add an elem <group_key, last_state> if not exists
+    ///     @p result:           update the elem <group_key, curent_state>
+    /// 3) For deleted group:
+    ///     @p retracted_result: add an elem <group_key, last_state> if not exists
+    ///     @p result:           delete the <group_key> group
+    std::pair<bool, bool> executeAndRetractOnBlock(
+        Columns columns,
+        size_t row_begin,
+        size_t row_end,
+        AggregatedDataVariants & result,
+        AggregatedDataVariants & retracted_result,
+        ColumnRawPtrs & key_columns,
+        AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
+        bool & no_more_keys) const;
+
     bool mergeOnBlock(Block block, AggregatedDataVariants & result, bool & no_more_keys) const;
 
     /** Convert the aggregation data structure into a block.
@@ -765,19 +785,27 @@ public:
       *          );
       */
     BlocksList convertToBlocks(AggregatedDataVariants & data_variants, bool final, ConvertAction action, size_t max_threads) const;
+    BlocksList mergeAndConvertToBlocks(ManyAggregatedDataVariants & data_variants, bool final, ConvertAction action, size_t max_threads) const;
 
-    BlocksList convertToBlocksFinal(AggregatedDataVariants & data_variants, ConvertAction action, size_t max_threads) const
-    {
-        return convertToBlocks(data_variants, true, action, max_threads);
-    }
+    Block convertOneBucketToBlock(AggregatedDataVariants & data_variants, bool final, ConvertAction action, size_t bucket) const;
+    Block mergeAndConvertOneBucketToBlock(ManyAggregatedDataVariants & variants, bool final, ConvertAction action, size_t bucket) const;
 
-    BlocksList convertToBlocksIntermediate(AggregatedDataVariants & data_variants, ConvertAction action, size_t max_threads) const
-    {
-        return convertToBlocks(data_variants, false, action, max_threads);
-    }
+    /// Used for hop window function, merge multiple gcd windows (buckets) to a hop window
+    /// For examples:
+    ///   gcd_bucket1 - [00:00, 00:02)
+    ///                            =>  result block - [00:00, 00:04)
+    ///   gcd_bucket2 - [00:02, 00:04)
+    Block spliceAndConvertBucketsToBlock(
+        AggregatedDataVariants & variants, bool final, ConvertAction action, const std::vector<Int64> & gcd_buckets) const;
+    Block mergeAndSpliceAndConvertBucketsToBlock(
+        ManyAggregatedDataVariants & variants, bool final, ConvertAction action, const std::vector<Int64> & gcd_buckets) const;
 
-    Block convertOneBucketToBlockFinal(AggregatedDataVariants & data_variants, ConvertAction action, size_t bucket) const;
-    Block convertOneBucketToBlockIntermediate(AggregatedDataVariants & data_variants, ConvertAction action, size_t bucket) const;
+    /// Used for merge changed groups into first one (retracted and aggregated)
+    std::pair<AggregatedDataVariantsPtr, AggregatedDataVariantsPtr>
+    mergeRetractedGroups(ManyAggregatedDataVariants & aggregated_data, ManyAggregatedDataVariants & retracted_data) const;
+
+    std::vector<Int64> bucketsBefore(const AggregatedDataVariants & result, Int64 max_bucket) const;
+    void removeBucketsBefore(AggregatedDataVariants & result, Int64 max_bucket) const;
 
     /// If @p always_merge_into_empty is true, always add an empty variants at front even if there is only one 
     ManyAggregatedDataVariantsPtr prepareVariantsToMerge(ManyAggregatedDataVariants & data_variants, bool always_merge_into_empty = false) const;
@@ -831,27 +859,6 @@ public:
 private:
 
     friend struct AggregatedDataVariants;
-    friend class ConvertingAggregatedToChunksTransform;
-    friend class ConvertingAggregatedToChunksSource;
-    friend class AggregatingInOrderTransform;
-
-    /// proton: starts
-    friend struct AggregatingHelper;
-    friend class StreamingConvertingAggregatedToChunksTransform;
-    friend class StreamingConvertingAggregatedToChunksSource;
-    friend class AggregatingTransform;
-    friend class GlobalAggregatingTransform;
-    friend class GlobalAggregatingTransformWithSubstream;
-    friend class WindowAggregatingTransform;
-    friend class WindowAggregatingTransformWithSubstream;
-    friend class TumbleAggregatingTransform;
-    friend class TumbleAggregatingTransformWithSubstream;
-    friend class HopAggregatingTransform;
-    friend class HopAggregatingTransformWithSubstream;
-    friend class SessionAggregatingTransform;
-    friend class SessionAggregatingTransformWithSubstream;
-    friend class UserDefinedEmitStrategyAggregatingTransform;
-    /// proton: ends
 
     Params params;
 
@@ -1019,12 +1026,10 @@ private:
         Arena * arena,
         bool clear_states) const;
 
-    void mergeWithoutKeyDataImpl(
-        ManyAggregatedDataVariants & non_empty_data, ConvertAction action) const;
+    void mergeWithoutKeyDataImpl(ManyAggregatedDataVariants & non_empty_data, bool clear_states) const;
 
     template <typename Method>
-    void mergeSingleLevelDataImpl(
-        ManyAggregatedDataVariants & non_empty_data, ConvertAction action) const;
+    void mergeSingleLevelDataImpl(ManyAggregatedDataVariants & non_empty_data, bool clear_states) const;
 
     template <typename Method, typename Table>
     void convertToBlockImpl(
@@ -1035,7 +1040,7 @@ private:
         MutableColumns & final_aggregate_columns,
         Arena * arena,
         bool final,
-        ConvertAction action) const;
+        bool clear_states) const;
 
     template <typename Mapped>
     void insertAggregatesIntoColumns(
@@ -1050,7 +1055,7 @@ private:
         std::vector<IColumn *> key_columns,
         MutableColumns & final_aggregate_columns,
         Arena * arena,
-        ConvertAction action) const;
+        bool clear_states) const;
 
     template <typename Method, typename Table>
     void convertToBlockImplNotFinal(
@@ -1063,26 +1068,18 @@ private:
     Block prepareBlockAndFill(
         AggregatedDataVariants & data_variants,
         bool final,
-        ConvertAction action,
+        bool clear_states,
         size_t rows,
         Filler && filler) const;
 
     template <typename Method>
-    Block convertOneBucketToBlock(
+    Block convertOneBucketToBlockImpl(
         AggregatedDataVariants & data_variants,
         Method & method,
         Arena * arena,
         bool final,
-        ConvertAction action,
+        bool clear_states,
         size_t bucket) const;
-
-    Block mergeAndConvertOneBucketToBlock(
-        ManyAggregatedDataVariants & variants,
-        Arena * arena,
-        bool final,
-        ConvertAction action,
-        size_t bucket,
-        std::atomic<bool> * is_cancelled = nullptr) const;
 
     /// proton: starts.
     template <typename Method>
@@ -1090,30 +1087,18 @@ private:
         AggregatedDataVariants & data_dest,
         AggregatedDataVariants & data_src,
         bool final,
-        ConvertAction action,
+        bool clear_states,
         const std::vector<Int64> & gcd_buckets,
         Arena * arena) const;
 
-    /// Used for hop window function, merge multiple gcd windows (buckets) to a hop window
-    /// For examples:
-    ///   gcd_bucket1 - [00:00, 00:02)
-    ///                            =>  result block - [00:00, 00:04)
-    ///   gcd_bucket2 - [00:02, 00:04)
-    Block spliceAndConvertBucketsToBlock(
-        AggregatedDataVariants & variants, bool final, ConvertAction action, const std::vector<Int64> & gcd_buckets) const;
+    template <typename Method>
+    BlocksList mergeAndConvertTwoLevelToBlocksImpl(
+        ManyAggregatedDataVariants & non_empty_data, bool final, size_t max_threads, bool clear_states) const;
 
-    void mergeBuckets(
-        ManyAggregatedDataVariants & variants, Arena * arena, bool final, ConvertAction action, const std::vector<Int64> & buckets) const;
-    
-    /// Used for emit changelog
-    std::pair<bool, bool> executeAndRetractOnBlock(
-        Columns columns,
-        size_t row_begin,
-        size_t row_end,
-        AggregatedDataVariants & result,
-        AggregatedDataVariants & retracted_result,
-        ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
-        bool & no_more_keys) const;
+    Block mergeAndConvertWithoutKeyToBlock(ManyAggregatedDataVariants & non_empty_data, bool final, bool clear_states) const;
+    Block mergeAndConvertSingleLevelToBlock(ManyAggregatedDataVariants & non_empty_data, bool final, bool clear_states) const;
+    BlocksList
+    mergeAndConvertTwoLevelToBlocks(ManyAggregatedDataVariants & non_empty_data, bool final, size_t max_threads, bool clear_states) const;
 
     template <typename Method>
     bool executeAndRetractImpl(
@@ -1125,8 +1110,6 @@ private:
         size_t row_end,
         ColumnRawPtrs & key_columns,
         AggregateFunctionInstruction * aggregate_instructions) const;
-
-    void mergeRetractedGroups(ManyAggregatedDataVariants & aggregated_data, ManyAggregatedDataVariants & retracted_data) const;
 
     template <typename Method>
     void mergeRetractedGroupsImpl(ManyAggregatedDataVariants & aggregated_data, ManyAggregatedDataVariants & retracted_data) const;
@@ -1144,16 +1127,16 @@ private:
     bool checkAndProcessResult(AggregatedDataVariants & result, bool & no_more_keys) const;
     /// proton: ends.
 
-    Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows, ConvertAction action) const;
-    Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final, ConvertAction action) const;
-    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, size_t max_threads, ConvertAction action) const;
+    Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows, bool clear_states) const;
+    Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final, bool clear_states) const;
+    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, size_t max_threads, bool clear_states) const;
 
     template <typename Method>
     BlocksList prepareBlocksAndFillTwoLevelImpl(
         AggregatedDataVariants & data_variants,
         Method & method,
         bool final,
-        ConvertAction action,
+        bool clear_states,
         ThreadPool * thread_pool) const;
 
     template <bool no_more_keys, typename Method, typename Table>
@@ -1179,7 +1162,7 @@ private:
 
     template <typename Method>
     void mergeBucketImpl(
-        ManyAggregatedDataVariants & data, bool final, ConvertAction action, size_t bucket, Arena * arena, std::atomic<bool> * is_cancelled = nullptr) const;
+        ManyAggregatedDataVariants & data, bool final, bool clear_states, Int64 bucket, Arena * arena, std::atomic<bool> * is_cancelled = nullptr) const;
 
     template <typename Method>
     void convertBlockToTwoLevelImpl(
@@ -1226,8 +1209,6 @@ private:
 
     /// proton: starts
     void setupAggregatesPoolTimestamps(size_t row_begin, size_t row_end, const ColumnRawPtrs & key_columns, Arena * aggregates_pool) const;
-    void removeBucketsBefore(AggregatedDataVariants & result, Int64 max_bucket) const;
-    std::vector<Int64> bucketsBefore(const AggregatedDataVariants & result, Int64 max_bucket) const;
 
     inline bool shouldClearStates(ConvertAction action, bool final_) const;
 

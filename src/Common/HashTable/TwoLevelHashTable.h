@@ -350,9 +350,9 @@ public:
     }
 
     /// proton : starts
-    std::vector<size_t> buckets() const
+    std::vector<Int64> buckets() const
     {
-        std::vector<size_t> bucket_ids(NUM_BUCKETS);
+        std::vector<Int64> bucket_ids(NUM_BUCKETS);
         std::iota(bucket_ids.begin(), bucket_ids.end(), 0);
         return bucket_ids;
     }

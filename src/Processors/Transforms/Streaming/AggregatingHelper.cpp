@@ -9,60 +9,70 @@ namespace DB
 {
 namespace Streaming
 {
-Chunk AggregatingHelper::convertWithoutKey(AggregatedDataVariants & data, const AggregatingTransformParams & params)
+namespace
 {
-    assert(data.type == AggregatedDataVariants::Type::without_key);
-    return convertToChunk(params.aggregator.prepareBlockAndFillWithoutKey(data, params.final, false, ConvertAction::STREAMING_EMIT));
+Chunk mergeBlocksToChunk(BlocksList && blocks)
+{
+    Chunk merged_chunk;
+    for (auto & block : blocks)
+        merged_chunk.append(DB::convertToChunk(std::move(block)));
+    return merged_chunk;
 }
 
-Chunk AggregatingHelper::mergeAndConvertWithoutKey(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params)
+Chunk convertToChunkImpl(AggregatedDataVariants & data, const AggregatingTransformParams & params, ConvertAction action)
 {
-    auto prepared_data = params.aggregator.prepareVariantsToMerge(data);
-    if (prepared_data->empty())
+    if (data.empty())
         return {};
 
-    assert(prepared_data->at(0)->type == AggregatedDataVariants::Type::without_key);
-    params.aggregator.mergeWithoutKeyDataImpl(*prepared_data, ConvertAction::STREAMING_EMIT);
-    return convertWithoutKey(*prepared_data->at(0), params);
+    auto blocks = params.aggregator.convertToBlocks(data, params.final, action, params.params.max_threads);
+    /// FIXME: When global aggr states was converted two level hash table, the merged chunk may be too large
+    return mergeBlocksToChunk(std::move(blocks));
+}
 }
 
-Chunk AggregatingHelper::convertSingleLevel(AggregatedDataVariants & data, const AggregatingTransformParams & params)
+namespace AggregatingHelper
 {
-    assert(data.type != AggregatedDataVariants::Type::without_key && !data.isTwoLevel());
-    return convertToChunk(params.aggregator.prepareBlockAndFillSingleLevel(data, params.final, ConvertAction::STREAMING_EMIT));
+Chunk convertToChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params)
+{
+    return convertToChunkImpl(data, params, ConvertAction::STREAMING_EMIT);
 }
 
-Chunk AggregatingHelper::mergeAndConvertSingleLevel(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params)
+Chunk mergeAndConvertToChunk(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params)
 {
-    auto prepared_data = params.aggregator.prepareVariantsToMerge(data);
-    if (prepared_data->empty())
+    auto blocks = params.aggregator.mergeAndConvertToBlocks(data, params.final, ConvertAction::STREAMING_EMIT, params.params.max_threads);
+    /// FIXME: When global aggr states was converted two level hash table, the merged chunk may be too large
+    return mergeBlocksToChunk(std::move(blocks));
+}
+
+Chunk spliceAndConvertBucketsToChunk(
+    AggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
+{
+    if (buckets.size() == 1)
+        return convertToChunk(params.aggregator.convertOneBucketToBlock(data, params.final, ConvertAction::STREAMING_EMIT, buckets[0]));
+    else
+        return convertToChunk(params.aggregator.spliceAndConvertBucketsToBlock(data, params.final, ConvertAction::INTERNAL_MERGE, buckets));
+}
+
+Chunk mergeAndSpliceAndConvertBucketsToChunk(
+    ManyAggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
+{
+    if (buckets.size() == 1)
+        return convertToChunk(
+            params.aggregator.mergeAndConvertOneBucketToBlock(data, params.final, ConvertAction::STREAMING_EMIT, buckets[0]));
+    else
+        return convertToChunk(
+            params.aggregator.mergeAndSpliceAndConvertBucketsToBlock(data, params.final, ConvertAction::INTERNAL_MERGE, buckets));
+}
+
+ChunkPair
+convertToChangelogChunk(AggregatedDataVariants & data, RetractedDataVariants & retracted_data, const AggregatingTransformParams & params)
+{
+    if (data.empty())
         return {};
 
-    AggregatedDataVariantsPtr & first = prepared_data->at(0);
-    assert(first->type != AggregatedDataVariants::Type::without_key && !first->isTwoLevel());
+    assert(!retracted_data.empty());
 
-#define M(NAME) \
-    else if (first->type == AggregatedDataVariants::Type::NAME) \
-        params.aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(*prepared_data, ConvertAction::STREAMING_EMIT);
-    if (false)
-    {
-    } // NOLINT
-    APPLY_FOR_VARIANTS_SINGLE_LEVEL_STREAMING(M)
-#undef M
-    else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
-
-    return convertSingleLevel(*first, params);
-}
-
-/// Used for emit changelog
-ChunkPair AggregatingHelper::convertWithoutKeyToChangelog(
-    AggregatedDataVariants & data, RetractedDataVariants & retracted_data, const AggregatingTransformParams & params)
-{
-    assert(data.type == AggregatedDataVariants::Type::without_key);
-    assert(retracted_data.type == AggregatedDataVariants::Type::without_key);
-
-    auto retracted_chunk = convertToChunk(
-        params.aggregator.prepareBlockAndFillWithoutKey(retracted_data, params.final, false, ConvertAction::RETRACTED_EMIT));
+    auto retracted_chunk = convertToChunkImpl(retracted_data, params, ConvertAction::RETRACTED_EMIT);
     if (retracted_chunk)
     {
         auto retracted_delta_col = ColumnInt8::create(retracted_chunk.rows(), Int8(-1));
@@ -70,7 +80,7 @@ ChunkPair AggregatingHelper::convertWithoutKeyToChangelog(
         retracted_chunk.getOrCreateChunkContext()->setRetractedDataFlag();
     }
 
-    auto chunk = convertToChunk(params.aggregator.prepareBlockAndFillWithoutKey(data, params.final, false, ConvertAction::STREAMING_EMIT));
+    auto chunk = convertToChunkImpl(data, params, ConvertAction::STREAMING_EMIT);
     if (chunk)
     {
         auto delta_col = ColumnInt8::create(chunk.rows(), Int8(1));
@@ -80,67 +90,16 @@ ChunkPair AggregatingHelper::convertWithoutKeyToChangelog(
     return {std::move(retracted_chunk), std::move(chunk)};
 }
 
-ChunkPair AggregatingHelper::mergeAndConvertWithoutKeyToChangelog(
+ChunkPair mergeAndConvertToChangelogChunk(
     ManyAggregatedDataVariants & data, ManyRetractedDataVariants & retracted_data, const AggregatingTransformParams & params)
 {
-    auto prepared_data = params.aggregator.prepareVariantsToMerge(data);
-    if (prepared_data->empty())
+    auto [merged_data, merged_retracted_data] = params.aggregator.mergeRetractedGroups(data, retracted_data);
+    if (!merged_data)
         return {};
 
-    auto prepared_retracted_data = params.aggregator.prepareVariantsToMerge(retracted_data);
-    assert(!prepared_retracted_data->empty());
-
-    assert(prepared_data->at(0)->type == AggregatedDataVariants::Type::without_key);
-    assert(prepared_retracted_data->at(0)->type == AggregatedDataVariants::Type::without_key);
-
-    params.aggregator.mergeWithoutKeyDataImpl(*prepared_retracted_data, ConvertAction::RETRACTED_EMIT);
-    params.aggregator.mergeWithoutKeyDataImpl(*prepared_data, ConvertAction::STREAMING_EMIT);
-    return convertWithoutKeyToChangelog(*prepared_data->at(0), *prepared_retracted_data->at(0), params);
+    assert(merged_retracted_data);
+    return convertToChangelogChunk(*merged_data, *merged_retracted_data, params);
 }
-
-ChunkPair AggregatingHelper::convertSingleLevelToChangelog(
-    AggregatedDataVariants & data, RetractedDataVariants & retracted_data, const AggregatingTransformParams & params)
-{
-    assert(data.type != AggregatedDataVariants::Type::without_key && !data.isTwoLevel());
-    assert(retracted_data.type != AggregatedDataVariants::Type::without_key && !retracted_data.isTwoLevel());
-
-    auto retracted_chunk
-        = convertToChunk(params.aggregator.prepareBlockAndFillSingleLevel(retracted_data, params.final, ConvertAction::RETRACTED_EMIT));
-    if (retracted_chunk)
-    {
-        auto retracted_delta_col = ColumnInt8::create(retracted_chunk.rows(), Int8(-1));
-        retracted_chunk.addColumn(std::move(retracted_delta_col));
-        retracted_chunk.getOrCreateChunkContext()->setRetractedDataFlag();
-    }
-
-    auto chunk = convertToChunk(params.aggregator.prepareBlockAndFillSingleLevel(data, params.final, ConvertAction::STREAMING_EMIT));
-    if (chunk)
-    {
-        auto delta_col = ColumnInt8::create(chunk.rows(), Int8(1));
-        chunk.addColumn(std::move(delta_col));
-    }
-
-    return {std::move(retracted_chunk), std::move(chunk)};
-}
-
-ChunkPair AggregatingHelper::mergeAndConvertSingleLevelToChangelog(
-    ManyAggregatedDataVariants & data, ManyRetractedDataVariants & retracted_data, const AggregatingTransformParams & params)
-{
-    auto prepared_data = params.aggregator.prepareVariantsToMerge(data, /*always_merge_into_empty*/ true);
-    if (prepared_data->empty())
-        return {};
-
-    auto prepared_retracted_data = params.aggregator.prepareVariantsToMerge(retracted_data, /*always_merge_into_empty*/ true);
-    assert(!prepared_retracted_data->empty());
-
-    assert(prepared_data->at(0)->type != AggregatedDataVariants::Type::without_key && !prepared_data->at(0)->isTwoLevel());
-    assert(prepared_retracted_data->at(0)->type != AggregatedDataVariants::Type::without_key && !prepared_retracted_data->at(0)->isTwoLevel());
-
-    /// To only emit changelog:
-    /// 1) Merge retracted groups data into first one
-    /// 2) Merge changed groups data into first one (based on retracted groups)
-    params.aggregator.mergeRetractedGroups(*prepared_data, *prepared_retracted_data);
-    return convertSingleLevelToChangelog(*prepared_data->at(0), *prepared_retracted_data->at(0), params);
 }
 }
 }
