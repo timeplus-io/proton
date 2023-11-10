@@ -382,7 +382,9 @@ public:
         is_streaming = is_streaming_;
 
         if (total_events == 0 && !is_streaming)
-            total_events = events_per_second;
+        {
+            total_events = events_per_second ? events_per_second : block_size;
+        }
 
         block_idx_in_window = 0;
         max_full_block_count = events_per_second_ / block_size;
