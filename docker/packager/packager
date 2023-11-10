@@ -62,7 +62,7 @@ def run_docker_image_with_env(image_name, output, env_variables, ch_root, ccache
 
     subprocess.check_call(cmd, shell=True)
 
-def parse_env_variables(build_type, compiler, sanitizer, package_type, image_type, cache, clang_tidy, version, author, official, alien_pkgs, with_coverage, with_binaries, proton_build):
+def parse_env_variables(build_type, compiler, sanitizer, package_type, image_type, cache, clang_tidy, version, author, official, alien_pkgs, with_coverage, with_binaries, proton_build, enable_proton_local):
     DARWIN_SUFFIX = "-darwin"
     DARWIN_ARM_SUFFIX = "-darwin-aarch64"
     ARM_SUFFIX = "-aarch64"
@@ -226,7 +226,14 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_THINLTO=ON')
     else:
         cmake_flags.append('-DENABLE_TESTS=ON')
+
+    # Use this option to control the proton_local whether need to build
+    if enable_proton_local:
+        logging.info("Enable proton-local")
         cmake_flags.append('-DENABLE_PROTON_LOCAL=ON')
+    else:   
+        logging.info("Disable proton-local")
+        
     # proton: ends.
 
     result.append('CMAKE_FLAGS="' + ' '.join(cmake_flags) + '"')
@@ -240,6 +247,7 @@ if __name__ == "__main__":
     parser.add_argument("--proton-repo-path", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir))
     parser.add_argument("--build-type", choices=("debug", "release", ""), default="")
     parser.add_argument("--proton-build", action="store_true")
+    parser.add_argument('--enable-proton-local', action='store_true', default=False)
     # proton: ends.
     # 'performance' creates a combined .tgz with server and configs to be used for performance test.
     parser.add_argument("--package-type", choices=['deb', 'binary', 'performance'], required=True)
@@ -309,7 +317,8 @@ if __name__ == "__main__":
     env_prepared = parse_env_variables(
         args.build_type, args.compiler, args.sanitizer, args.package_type, image_type,
         args.cache, args.clang_tidy,
-        args.version, args.author, args.official, args.alien_pkgs, args.with_coverage, args.with_binaries, args.proton_build)
+        args.version, args.author, args.official, args.alien_pkgs, args.with_coverage, args.with_binaries, args.proton_build,
+        args.enable_proton_local)
     # proton: ends.
 
     run_docker_image_with_env(image_name, args.output_dir, env_prepared, ch_root, args.ccache_dir, args.docker_image_version)
