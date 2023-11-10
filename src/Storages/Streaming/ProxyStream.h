@@ -48,7 +48,7 @@ public:
 
     NamesAndTypesList getVirtuals() const override;
 
-    bool hasEvenlyDistributedRead() const override { return storage->hasEvenlyDistributedRead(); }
+    bool hasEvenlyDistributedRead() const override { return storage ? storage->hasEvenlyDistributedRead() : false; }
 
     TableFunctionDescriptionPtr getStreamingTableFunctionDescription() const { return table_func_desc; }
 
