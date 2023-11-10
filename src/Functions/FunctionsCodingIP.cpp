@@ -1,6 +1,4 @@
-#include "Core/Types.h"
-#include "base/IPv4andIPv6.h"
-#include "base/types.h"
+#include <functional>
 #ifdef HAS_RESERVED_IDENTIFIER
 #pragma clang diagnostic ignored "-Wreserved-identifier"
 #endif
@@ -524,6 +522,8 @@ public:
     bool isInjective(const ColumnsWithTypeAndName &) const override { return true; }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
 
+    /// for backward compatibility IPv4ToIPv6 is overloaded, and result type depends on type of argument -
+    ///   if it is UInt32 (presenting IPv4) then result is FixedString(16), if IPv4 - result is IPv6
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         const auto * dt_uint32 = checkAndGetDataType<DataTypeUInt32>(arguments[0].get());
@@ -845,7 +845,7 @@ public:
                             + " of second argument of function " + getName()
                             + ", expected uint8", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
-        DataTypePtr element = DataTypeFactory::instance().get("ipv6");
+        DataTypePtr element = std::make_shared<DataTypeIPv6>();
         return std::make_shared<DataTypeTuple>(DataTypes{element, element});
     }
 
