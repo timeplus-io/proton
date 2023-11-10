@@ -60,6 +60,7 @@ namespace ErrorCodes
     extern const int PROTOBUF_BAD_CAST;
     extern const int LOGICAL_ERROR;
     extern const int BAD_ARGUMENTS;
+    extern const int ILLEGAL_COLUMN;
 }
 
 namespace
@@ -271,7 +272,10 @@ namespace
             try
             {
                 /// TODO: use accurate::convertNumeric() maybe?
-                result = boost::numeric_cast<DestType>(value);
+                if constexpr (std::is_same_v<SrcType, IPv4>)
+                    result = boost::numeric_cast<DestType>(value.toUnderType());
+                else
+                    result = boost::numeric_cast<DestType>(value);
             }
             catch (boost::numeric::bad_numeric_cast &)
             {
@@ -1457,6 +1461,81 @@ namespace
         }
     };
 
+    class ProtobufSerializerIPv4 : public ProtobufSerializerNumber<IPv4>
+    {
+    public:
+        ProtobufSerializerIPv4(
+            std::string_view column_name_,
+            const FieldDescriptor & field_descriptor_,
+            const ProtobufReaderOrWriter & reader_or_writer_)
+            : ProtobufSerializerNumber<IPv4>(column_name_, field_descriptor_, reader_or_writer_)
+        {
+            setFunctions();
+        }
+
+        void describeTree(WriteBuffer & out, size_t indent) const override
+        {
+            writeIndent(out, indent) << "ProtobufSerializerDate: column " << quoteString(column_name) << " -> field "
+                                     << quoteString(field_descriptor.full_name()) << " (" << field_descriptor.type_name() << ")\n";
+        }
+
+    private:
+        void setFunctions()
+        {
+            switch (field_typeid)
+            {
+                case FieldTypeId::TYPE_INT32:
+                case FieldTypeId::TYPE_SINT32:
+                case FieldTypeId::TYPE_UINT32:
+                case FieldTypeId::TYPE_INT64:
+                case FieldTypeId::TYPE_SINT64:
+                case FieldTypeId::TYPE_UINT64:
+                case FieldTypeId::TYPE_FIXED32:
+                case FieldTypeId::TYPE_SFIXED32:
+                case FieldTypeId::TYPE_FIXED64:
+                case FieldTypeId::TYPE_SFIXED64:
+                case FieldTypeId::TYPE_FLOAT:
+                case FieldTypeId::TYPE_DOUBLE:
+                    break; /// already set in ProtobufSerializerNumber<UInt16>::setFunctions().
+
+                case FieldTypeId::TYPE_STRING:
+                case FieldTypeId::TYPE_BYTES:
+                {
+                    write_function = [this](IPv4 value)
+                    {
+                        ipv4ToString(value, text_buffer);
+                        writeStr(text_buffer);
+                    };
+
+                    read_function = [this]() -> IPv4
+                    {
+                        readStr(text_buffer);
+                        return stringToIPv4(text_buffer);
+                    };
+
+                    default_function = [this]() -> IPv4 { return stringToIPv4(field_descriptor.default_value_string()); };
+                    break;
+                }
+
+                default:
+                    incompatibleColumnType("Date");
+            }
+        }
+
+        static void ipv4ToString(IPv4 value, String & str)
+        {
+            WriteBufferFromString buf{str};
+            writeIPv4Text(value, buf);
+        }
+
+        static IPv4 stringToIPv4(const String & str)
+        {
+            IPv4 value;
+            ReadBufferFromString buf{str};
+            readIPv4Text(value, buf);
+            return value;
+        }
+    };
 
     /// Serializes a ColumnVector<UInt32> containing datetimes to a field of any type except TYPE_MESSAGE, TYPE_GROUP, TYPE_BOOL, TYPE_ENUM.
     class ProtobufSerializerDateTime : public ProtobufSerializerNumber<UInt32>
@@ -1698,10 +1777,7 @@ namespace
         String text_buffer;
     };
 
-    using ProtobufSerializerIPv4 = ProtobufSerializerNumber<UInt32>;
-
     using ProtobufSerializerInterval = ProtobufSerializerNumber<Int64>;
-
 
     /// Serializes a ColumnAggregateFunction to a field of type TYPE_STRING or TYPE_BYTES.
     class ProtobufSerializerAggregateFunction : public ProtobufSerializerSingleValue
