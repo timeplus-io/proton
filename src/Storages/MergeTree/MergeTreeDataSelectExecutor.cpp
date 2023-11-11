@@ -355,7 +355,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::doRead(
                     header_before_aggregation); // The source header is also an intermediate header
 
                 transform_params = std::make_shared<AggregatingTransformParams>(
-                    std::move(params), aggregator_list_ptr, query_info.projection->aggregate_final);
+                    std::move(params), aggregator_list_ptr, query_info.projection->aggregate_final, /*shuffled_=*/false);
 
                 /// This part is hacky.
                 /// We want AggregatingTransform to work with aggregate states instead of normal columns.
@@ -386,7 +386,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::doRead(
                     settings.min_count_to_compile_aggregate_expression);
 
                 transform_params = std::make_shared<AggregatingTransformParams>(
-                    std::move(params), aggregator_list_ptr, query_info.projection->aggregate_final);
+                    std::move(params), aggregator_list_ptr, query_info.projection->aggregate_final, /*shuffled_=*/false);
             }
 
             pipe.resize(pipe.numOutputPorts(), true, true);

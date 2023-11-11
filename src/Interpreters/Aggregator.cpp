@@ -304,7 +304,7 @@ std::optional<HashTablesCacheStatistics> getHashTablesCacheStatistics()
 void AggregatedDataVariants::convertToTwoLevel()
 {
     if (aggregator)
-        LOG_TRACE(aggregator->log, "Converting aggregation data to two-level.");
+        LOG_INFO(aggregator->log, "Converting aggregation data to two-level.");
 
     switch (type)
     {
@@ -1423,7 +1423,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     CompressedWriteBuffer compressed_buf(file_buf);
     NativeWriter block_out(compressed_buf, getHeader(false), ProtonRevision::getVersionRevision());
 
-    LOG_DEBUG(log, "Writing part of aggregation data into temporary file {}.", path);
+    LOG_INFO(log, "Writing part of aggregation data into temporary file {}.", path);
     ProfileEvents::increment(ProfileEvents::ExternalAggregationWritePart);
 
     /// Flush only two-level data and possibly overflow data.
@@ -1467,7 +1467,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     ProfileEvents::increment(ProfileEvents::ExternalAggregationCompressedBytes, compressed_bytes);
     ProfileEvents::increment(ProfileEvents::ExternalAggregationUncompressedBytes, uncompressed_bytes);
 
-    LOG_DEBUG(log,
+    LOG_INFO(log,
         "Written part in {:.3f} sec., {} rows, {} uncompressed, {} compressed,"
         " {:.3f} uncompressed bytes per row, {:.3f} compressed bytes per row, compression rate: {:.3f}"
         " ({:.3f} rows/sec., {}/sec. uncompressed, {}/sec. compressed)",
@@ -1511,6 +1511,29 @@ Block Aggregator::convertOneBucketToBlock(
         });
 
     block.info.bucket_num = static_cast<int>(bucket);
+    return block;
+}
+
+/// proton : starts
+/// Convert one bucket of a two level hash table data variants to a block.
+/// Use by shuffled aggregation
+Block Aggregator::convertOneBucketToBlock(AggregatedDataVariants & data_variants, Arena * arena, bool final, Int32 bucket) const
+{
+    assert(data_variants.isTwoLevel());
+
+    auto method = data_variants.type;
+    Block block;
+
+    if (false) {} // NOLINT
+#define M(NAME) \
+    else if (method == AggregatedDataVariants::Type::NAME) \
+    { \
+        block = convertOneBucketToBlock(data_variants, *data_variants.NAME, arena, final, bucket); \
+    }
+
+    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+#undef M
+
     return block;
 }
 

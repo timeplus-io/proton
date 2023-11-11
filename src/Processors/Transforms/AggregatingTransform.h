@@ -27,21 +27,24 @@ struct AggregatingTransformParams
     AggregatorListPtr aggregator_list_ptr;
     Aggregator & aggregator;
     bool final;
+    bool shuffled; /// When data is shuffled, we don't need do aggregation merge
     bool only_merge = false;
 
-    AggregatingTransformParams(const Aggregator::Params & params_, bool final_)
+    AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool shuffled_)
         : params(params_)
         , aggregator_list_ptr(std::make_shared<AggregatorList>())
         , aggregator(*aggregator_list_ptr->emplace(aggregator_list_ptr->end(), params))
         , final(final_)
+        , shuffled(shuffled_)
     {
     }
 
-    AggregatingTransformParams(const Aggregator::Params & params_, const AggregatorListPtr & aggregator_list_ptr_, bool final_)
+    AggregatingTransformParams(const Aggregator::Params & params_, const AggregatorListPtr & aggregator_list_ptr_, bool final_, bool shuffled_)
         : params(params_)
         , aggregator_list_ptr(aggregator_list_ptr_)
         , aggregator(*aggregator_list_ptr->emplace(aggregator_list_ptr->end(), params))
         , final(final_)
+        , shuffled(shuffled_)
     {
     }
 
@@ -53,16 +56,12 @@ struct AggregatingTransformParams
 struct ManyAggregatedData
 {
     ManyAggregatedDataVariants variants;
-    std::vector<std::unique_ptr<std::mutex>> mutexes;
     std::atomic<UInt32> num_finished = 0;
 
-    explicit ManyAggregatedData(size_t num_threads = 0) : variants(num_threads), mutexes(num_threads)
+    explicit ManyAggregatedData(size_t num_threads = 0) : variants(num_threads)
     {
         for (auto & elem : variants)
             elem = std::make_shared<AggregatedDataVariants>();
-
-        for (auto & mut : mutexes)
-            mut = std::make_unique<std::mutex>();
     }
 
     ~ManyAggregatedData()
@@ -137,10 +136,10 @@ public:
     AggregatingTransform(
         Block header,
         AggregatingTransformParamsPtr params_,
-        ManyAggregatedDataPtr many_data,
-        size_t current_variant,
-        size_t max_threads,
-        size_t temporary_data_merge_threads);
+        ManyAggregatedDataPtr many_data_,
+        size_t current_variant_,
+        size_t max_threads_,
+        size_t temporary_data_merge_threads_);
     ~AggregatingTransform() override;
 
     String getName() const override { return "AggregatingTransform"; }
@@ -169,6 +168,7 @@ private:
     bool no_more_keys = false;
 
     ManyAggregatedDataPtr many_data;
+    size_t current_variant;
     AggregatedDataVariants & variants;
     size_t max_threads = 1;
     size_t temporary_data_merge_threads = 1;

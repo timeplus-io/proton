@@ -98,6 +98,7 @@
 #include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Parsers/ASTWindowDefinition.h>
 #include <Parsers/Streaming/ASTEmitQuery.h>
+#include <Processors/QueryPlan/LightShufflingStep.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStepWithSubstream.h>
 #include <Processors/QueryPlan/Streaming/JoinStep.h>
@@ -165,13 +166,13 @@ void addEventTimePredicate(ASTSelectQuery & select, Int64 utc_ms)
         select.setExpression(ASTSelectQuery::Expression::WHERE, greater);
 }
 
-std::vector<size_t> keyPositionsForSubstreams(const Block & header, const SelectQueryInfo & query_info)
+std::vector<size_t> keyPositions(const Block & header, const Names & key_columns)
 {
-    std::vector<size_t> substream_key_positions;
-    substream_key_positions.reserve(query_info.partition_by_keys.size());
-    for (const auto & key : query_info.partition_by_keys)
-        substream_key_positions.emplace_back(header.getPositionByName(key));
-    return substream_key_positions;
+    std::vector<size_t> key_positions;
+    key_positions.reserve(key_columns.size());
+    for (const auto & key : key_columns)
+        key_positions.emplace_back(header.getPositionByName(key));
+    return key_positions;
 }
 
 /// Requires: 1) no window function 2) has aggregation
@@ -186,6 +187,23 @@ bool hasGlobalAggregationInQuery(const ASTPtr & query, const ASTSelectQuery & se
     GetAggregatesVisitor::Data data;
     GetAggregatesVisitor(data).visit(query);
     return !data.aggregates.empty() || select_query.groupBy() != nullptr;
+}
+
+Names getShuffleByColumns(const ASTSelectQuery & query)
+{
+    Names shuffle_by_columns;
+
+    if (!query.shuffleBy())
+        return shuffle_by_columns;
+
+    shuffle_by_columns.reserve(query.shuffleBy()->children.size());
+    for (const auto & elem : query.shuffleBy()->children)
+    {
+        if (elem->as<ASTIdentifier>())
+            shuffle_by_columns.push_back(elem->getColumnName());
+    }
+
+    return shuffle_by_columns;
 }
 }
 /// proton: ends.
@@ -571,7 +589,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
         if (isStreamingQuery() && (query_info.trackingChanges() || data_stream_semantic_pair.isChangelogOutput()))
         {
-            /// A speical case: global aggr over global aggr, for example:
+            /// A special case: global aggr over global aggr, for example:
             /// `select count() from (select count() from stream) emit changelog`
             /// The outer global aggr needs emit changelog, we shall force the nested global aggr emit changelog.
             /// Since the outer global aggr does not retain state (unless nested one emits aggregated changes)
@@ -1145,7 +1163,7 @@ static SortDescription getSortDescription(const ASTSelectQuery & query, const Co
 
     for (const auto & elem : query.orderBy()->children)
     {
-        const String & column_name = elem->children.front()->getColumnName();
+        auto column_name = elem->children.front()->getColumnName();
         const auto & order_by_elem = elem->as<ASTOrderByElement &>();
 
         std::shared_ptr<Collator> collator;
@@ -1155,10 +1173,10 @@ static SortDescription getSortDescription(const ASTSelectQuery & query, const Co
         if (order_by_elem.with_fill)
         {
             FillColumnDescription fill_desc = getWithFillDescription(order_by_elem, context_);
-            order_descr.emplace_back(column_name, order_by_elem.direction, order_by_elem.nulls_direction, collator, true, fill_desc);
+            order_descr.emplace_back(std::move(column_name), order_by_elem.direction, order_by_elem.nulls_direction, collator, true, fill_desc);
         }
         else
-            order_descr.emplace_back(column_name, order_by_elem.direction, order_by_elem.nulls_direction, collator);
+            order_descr.emplace_back(std::move(column_name), order_by_elem.direction, order_by_elem.nulls_direction, collator);
     }
 
     return order_descr;
@@ -1170,10 +1188,7 @@ static SortDescription getSortDescriptionFromGroupBy(const ASTSelectQuery & quer
     order_descr.reserve(query.groupBy()->children.size());
 
     for (const auto & elem : query.groupBy()->children)
-    {
-        String name = elem->getColumnName();
-        order_descr.emplace_back(name, 1, 1);
-    }
+        order_descr.emplace_back(elem->getColumnName(), 1, 1);
 
     return order_descr;
 }
@@ -1596,6 +1611,13 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
             if (!query_info.projection && expressions.hasWhere())
                 executeWhere(query_plan, expressions.before_where, expressions.remove_where_filter);
 
+            /// proton : starts. TODO, when we support arbitrary shuffle expr, moved to ExpressionAnalyzer
+            /// TODO, if there is no aggregation / or parent select doesn't have aggregation (recursively)
+            /// avoid shuffle by step as an optimization
+            if (query.shuffleBy())
+                executeLightShuffling(query_plan);
+            /// proton : ends
+
             if (expressions.need_aggregate)
             {
                 executeAggregation(
@@ -1855,7 +1877,7 @@ static void executeMergeAggregatedImpl(
 
     Aggregator::Params params(header_before_merge, keys, aggregates, overflow_row, settings.max_threads);
 
-    auto transform_params = std::make_shared<AggregatingTransformParams>(params, final);
+    auto transform_params = std::make_shared<AggregatingTransformParams>(params, final, false);
 
     auto merging_aggregated = std::make_unique<MergingAggregatedStep>(
         query_plan.getCurrentDataStream(),
@@ -2425,6 +2447,17 @@ void InterpreterSelectQuery::executeWhere(QueryPlan & query_plan, const ActionsD
     query_plan.addStep(std::move(where_step));
 }
 
+/// proton : starts
+void InterpreterSelectQuery::executeLightShuffling(QueryPlan & query_plan)
+{
+    auto key_positions = keyPositions(query_plan.getCurrentDataStream().header, getShuffleByColumns(getSelectQuery()));
+    query_plan.addStep(std::make_unique<LightShufflingStep>(
+        query_plan.getCurrentDataStream(), std::move(key_positions), context->getSettingsRef().max_threads.value));
+
+    light_shuffled = true;
+}
+/// proton : ends
+
 static Aggregator::Params getAggregatorParams(
     const ASTPtr & query_ptr,
     const SelectQueryExpressionAnalyzer & query_analyzer,
@@ -2569,6 +2602,7 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
         merge_threads,
         temporary_data_merge_threads,
         storage_has_evenly_distributed_read,
+        light_shuffled,
         std::move(group_by_info),
         std::move(group_by_sort_description));
 
@@ -2635,7 +2669,7 @@ void InterpreterSelectQuery::executeRollupOrCube(QueryPlan & query_plan, Modific
         keys.push_back(header_before_transform.getPositionByName(key.name));
 
     auto params = getAggregatorParams(query_ptr, *query_analyzer, *context, header_before_transform, keys, query_analyzer->aggregates(), false, settings, 0, 0);
-    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), true);
+    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), true, false);
 
     QueryPlanStepPtr step;
     if (modificator == Modificator::ROLLUP)
@@ -3449,7 +3483,7 @@ void InterpreterSelectQuery::buildShufflingQueryPlan(QueryPlan & query_plan)
     }
     shuffle_output_streams = shuffle_output_streams == 0 ? 1 : shuffle_output_streams;
 
-    auto substream_key_positions = keyPositionsForSubstreams(query_plan.getCurrentDataStream().header, query_info);
+    auto substream_key_positions = keyPositions(query_plan.getCurrentDataStream().header, query_info.partition_by_keys);
     query_plan.addStep(std::make_unique<Streaming::ShufflingStep>(
         query_plan.getCurrentDataStream(), std::move(substream_key_positions), shuffle_output_streams));
 }
@@ -3665,9 +3699,9 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
     if (!streaming)
         return;
 
-    /// Assign partition by for aggregate / statulful functions
+    /// Assign partition by for aggregate / stateful functions
     /// select sum(x), avg(x) from ... partition by id
-    /// e.g. sum(x) -> sum(x) over(paritiotn by id), avg(x) over(partition by id)
+    /// e.g. sum(x) -> sum(x) over(partition by id), avg(x) over(partition by id)
     PartitionByVisitor::Data partition_by_data;
     partition_by_data.context = context;
     PartitionByVisitor(partition_by_data).visit(query_ptr);

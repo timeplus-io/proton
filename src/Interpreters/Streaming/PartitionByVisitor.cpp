@@ -1,4 +1,4 @@
-#include "PartitionByVisitor.h"
+#include <Interpreters/Streaming/PartitionByVisitor.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Functions/FunctionFactory.h>
@@ -52,7 +52,7 @@ void PartitionByMatcher::visit(ASTPtr & ast, Data & data)
             if (!data.win_define || node_func->is_window_function || !isStatefulFunction(node_func->name, data.context))
                 return;
 
-            /// Convert functoin to window function.
+            /// Convert function to window function.
             node_func->code_name = node_func->getColumnName();
             node_func->window_definition = data.win_define->clone();
             node_func->is_window_function = true;

@@ -5,13 +5,14 @@
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/IParserBase.h>
-#include <Parsers/ParserSampleRatio.h>
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/ParserSetQuery.h>
 #include <Parsers/ParserTablesInSelectQuery.h>
 #include <Parsers/ParserWithElement.h>
+
 /// proton: starts
 #include <Parsers/Streaming/ParserEmitQuery.h>
+#include <Parsers/ASTIdentifier.h>
 /// proton: ends
 
 namespace DB
@@ -44,6 +45,8 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
     /// proton: starts.
     ParserKeyword keyword_partition_by("PARTITION BY");
     ParserNotEmptyExpressionList columns_partition_by(false /* we don't allow declaring aliases here*/);
+    ParserKeyword keyword_shuffle_by("SHUFFLE BY");
+    ParserNotEmptyExpressionList columns_shuffle_by(false /* we don't allow declaring aliases here*/);
     /// proton: ends.
     ParserKeyword s_group_by("GROUP BY");
     ParserKeyword s_with("WITH");
@@ -87,6 +90,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
     ASTPtr where_expression;
     /// proton: starts.
     ASTPtr partition_by_expression_list;
+    ASTPtr shuffle_by_expression_list;
     /// proton: ends.
     ASTPtr group_expression_list;
     ASTPtr having_expression;
@@ -212,6 +216,24 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
     {
         if (!columns_partition_by.parse(pos, partition_by_expression_list, expected))
             return false;
+    }
+
+    if (keyword_shuffle_by.ignore(pos, expected))
+    {
+        if (!columns_shuffle_by.parse(pos, shuffle_by_expression_list, expected))
+            return false;
+    }
+
+    if (partition_by_expression_list && shuffle_by_expression_list)
+        throw Exception(ErrorCodes::SYNTAX_ERROR, "'PARTITION BY' and 'SHUFFLE BY' shall not be used together");
+
+    /// For now, only support `SHUFFLE BY col1, col2, ...`, so expecting column identifier
+    /// `SHUFFLE BY const_literal` seems doesn't make sense
+    if (shuffle_by_expression_list)
+    {
+        for (const auto & elem : shuffle_by_expression_list->children)
+            if (!elem->as<ASTIdentifier>())
+                throw Exception(ErrorCodes::SYNTAX_ERROR, "'SHUFFLE BY' only support columns instead of expressions / functions");
     }
     /// proton: ends.
 
@@ -484,6 +506,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
     select_query->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where_expression));
     /// proton: starts.
     select_query->setExpression(ASTSelectQuery::Expression::PARTITION_BY, std::move(partition_by_expression_list));
+    select_query->setExpression(ASTSelectQuery::Expression::SHUFFLE_BY, std::move(shuffle_by_expression_list));
     /// proton: ends.
     select_query->setExpression(ASTSelectQuery::Expression::GROUP_BY, std::move(group_expression_list));
     select_query->setExpression(ASTSelectQuery::Expression::HAVING, std::move(having_expression));

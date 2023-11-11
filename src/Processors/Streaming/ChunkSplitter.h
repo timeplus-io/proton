@@ -18,7 +18,8 @@ struct ChunkWithID
     Chunk chunk;
 };
 
-/// Split block via keys columns
+/// Split Chunk into max number of shards via keys columns
+/// For calculate a substream ID for each unique key
 class ChunkSplitter final
 {
 public:
