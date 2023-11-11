@@ -187,7 +187,6 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
     }
 
     wb = std::make_unique<WriteBufferFromKafka>();
-    rd_kafka_conf_set_opaque(conf, this);
 
     auto * topic_conf = rd_kafka_conf_get_default_topic_conf(conf);
     if (!topic_conf)
@@ -197,7 +196,10 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
         rd_kafka_conf_set_default_topic_conf(conf, topic_conf);
     }
 
-    /// Even though the partition
+    rd_kafka_conf_set_opaque(conf, this);
+    rd_kafka_topic_conf_set_opaque(topic_conf, this);
+
+    /// With partitioner callback, we can get the up-to-date partition count w/o additional effort.
     rd_kafka_topic_conf_set_partitioner_cb(topic_conf, [](const rd_kafka_topic_t * /*rkt*/,
 						const void * /*keydata*/,
 						size_t /*keylen*/,

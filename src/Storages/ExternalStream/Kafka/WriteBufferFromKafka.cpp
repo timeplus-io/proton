@@ -32,8 +32,8 @@ void WriteBufferFromKafka::nextImpl()
         RD_KAFKA_MSG_F_COPY | RD_KAFKA_MSG_F_BLOCK,
         working_buffer.begin(),
         offset(),
-        nullptr /* key */,
-        0 /* keylen */,
+        "unused" /* key, this key actually not used but for triggering the partitioner callback */,
+        6 /* keylen */,
         static_cast<void *>(part_id) /* opaque */);
 
     if (unlikely(err))
