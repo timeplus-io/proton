@@ -72,6 +72,10 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
     result = []
     cmake_flags = ['$CMAKE_FLAGS']
 
+    # proton: starts.
+    cmake_flags.append("-DLINKER_NAME=ld.lld")
+    # proton: ends.
+
     is_cross_darwin = compiler.endswith(DARWIN_SUFFIX)
     is_cross_darwin_arm = compiler.endswith(DARWIN_ARM_SUFFIX)
     is_cross_arm = compiler.endswith(ARM_SUFFIX)
@@ -110,10 +114,6 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
 
     cxx = cc.replace('gcc', 'g++').replace('clang', 'clang++')
 
-    # proton: starts.
-    cmake_flags.append("-DLINKER_NAME=ld.lld")
-    # proton: ends.
-
     if image_type == "deb":
         result.append("DEB_CC={}".format(cc))
         result.append("DEB_CXX={}".format(cxx))
@@ -135,7 +135,7 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         result.append("SANITIZER={}".format(sanitizer))
         # proton: starts.
         cmake_flags.append('-DENABLE_JEMALLOC=OFF')
-    else:
+    elif not is_cross_darwin and not is_cross_darwin_arm:
         cmake_flags.append('-DENABLE_JEMALLOC=ON')
         cmake_flags.append('-DENABLE_ARG_MIN_MAX_FUNCS=ON')
         # proton: ends.
@@ -151,6 +151,18 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         result.append("CCACHE_MAXSIZE=50G")
         # proton: ends.
         # result.append("CCACHE_UMASK=777")
+
+    # When compiling a release binary for cross compilation, 
+    # we do not build tests, utils, or examples.
+    # We also use the default full build style with `cmake ..`.
+    # THINLTO only works for Linux and Clang,
+    # so we skip it since we only want the binary.
+    if is_cross_darwin or is_cross_darwin_arm:
+        cmake_flags.append('-DENABLE_TESTS=OFF')
+        cmake_flags.append('-DENABLE_UTILS=OFF')
+        cmake_flags.append('-DENABLE_EXAMPLES=OFF')
+        result.append('CMAKE_FLAGS="' + ' '.join(cmake_flags) + '"')
+        return result
 
 
     if alien_pkgs:
