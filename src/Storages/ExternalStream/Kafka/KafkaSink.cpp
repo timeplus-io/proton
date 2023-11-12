@@ -17,6 +17,7 @@ namespace DB
 
 namespace ErrorCodes
 {
+extern const int CANNOT_WRITE_TO_KAFKA;
 extern const int MISSING_ACKNOWLEDGEMENT;
 extern const int INVALID_CONFIG_PARAMETER;
 extern const int TYPE_MISMATCH;
@@ -283,7 +284,9 @@ void KafkaSink::onFinish()
         return;
 
     /// Make sure all outstanding requests are transmitted and handled.
-    if (auto err = rd_kafka_flush(producer.get(), -1 /* blocks */); err)
+    /// It should not block for ever here, otherwise, it will block proton from stopping the job
+    /// or block proton from terminating.
+    if (auto err = rd_kafka_flush(producer.get(), 15000 /* time_ms */); err)
         LOG_ERROR(log, "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
 
     if (auto err = wb->lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
@@ -310,10 +313,30 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
         if (wb->hasNoOutstandings())
             break;
 
+        if (is_finished.test())
+        {
+            /// for a final check, it should not wait for too long
+            if (auto err = rd_kafka_flush(producer.get(), 15000 /* time_ms */); err)
+                throw Exception(
+                    klog::mapErrorCode(err), "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
+
+            if (auto err = wb->lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
+                throw Exception(
+                    klog::mapErrorCode(err), "Failed to send messages, error_cout={} last_error={}", wb->error_count(), rd_kafka_err2str(err));
+
+
+            if (!wb->hasNoOutstandings())
+                throw Exception(
+                    ErrorCodes::CANNOT_WRITE_TO_KAFKA, "Not all messsages are sent successfully, expected={} actual={}", wb->outstandings(), wb->acked());
+
+            break;
+        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    } while (!is_finished.test());
+    } while (true);
 
     wb->resetState();
     IProcessor::checkpoint(context);
 }
 }
+

@@ -32,7 +32,7 @@ void WriteBufferFromKafka::nextImpl()
         RD_KAFKA_MSG_F_COPY | RD_KAFKA_MSG_F_BLOCK,
         working_buffer.begin(),
         offset(),
-        "unused" /* key, this key actually not used but for triggering the partitioner callback */,
+        "unused" /* key, even though we don't use the key, but it's needed to trigger the partitioner_cb */,
         6 /* keylen */,
         static_cast<void *>(part_id) /* opaque */);
 
