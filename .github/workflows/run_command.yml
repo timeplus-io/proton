@@ -160,10 +160,10 @@ jobs:
         run: |
           ${{ inputs.command }}
       - name: Release binary
-        if: ${{ input.upload_files != '' }}
+        if: ${{ inputs.upload_files != '' }}
         uses: softprops/action-gh-release@v1
         with:
-          files: ${{ input.upload_files }}
+          files: ${{ inputs.upload_files }}
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           generate_release_notes: true
   stop-runner:
