@@ -10,10 +10,6 @@ jobs:
     steps:
       - name: create a new release
         run: |
-          # git login
-          gh auth login
-          gh auth status
-
           # get proton tag
           PROTON_TAG=$(git describe --abbrev=0)
 
@@ -61,11 +57,6 @@ jobs:
         echo "Proton Binary Name: $PROTON_BINARY"
 
         mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/output/$PROTON_BINARY
-
-        # git login
-        export GH_TOKEN=$GH_PERSONAL_ACCESS_TOKEN
-        gh auth login
-        gh auth status
 
         # upload binary of proton
         gh release upload $PROTON_TAG $GITHUB_WORKSPACE/output/$PROTON_BINARY --clobber
@@ -127,11 +118,6 @@ jobs:
         echo "Proton Binary Name: $PROTON_BINARY"
 
         mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/output/$PROTON_BINARY
-
-        # git login
-        export GH_TOKEN=$GH_PERSONAL_ACCESS_TOKEN
-        gh auth login
-        gh auth status
 
         # upload binary of proton
         gh release upload $PROTON_TAG $GITHUB_WORKSPACE/output/$PROTON_BINARY --clobber
@@ -256,11 +242,6 @@ jobs:
 
         mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/output/$PROTON_BINARY
 
-        # git login
-        export GH_TOKEN=$GH_PERSONAL_ACCESS_TOKEN
-        gh auth login
-        gh auth status
-
         # upload binary of proton
         gh release upload $PROTON_TAG $GITHUB_WORKSPACE/output/$PROTON_BINARY --clobber
     secrets:
@@ -314,11 +295,6 @@ jobs:
         echo "Proton Binary Name: $PROTON_BINARY"
 
         mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/output/$PROTON_BINARY
-
-        # git login
-        export GH_TOKEN=$GH_PERSONAL_ACCESS_TOKEN
-        gh auth login
-        gh auth status
 
         # upload binary of proton
         gh release upload $PROTON_TAG $GITHUB_WORKSPACE/output/$PROTON_BINARY --clobber
