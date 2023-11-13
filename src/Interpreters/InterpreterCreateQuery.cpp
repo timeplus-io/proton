@@ -64,9 +64,6 @@
 
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/logger_useful.h>
-#include "Parsers/ASTFunction.h"
-#include "Parsers/ExpressionElementParsers.h"
-#include "Server/RestRouterHandlers/ColumnDefinition.h"
 
 #include <base/ClockUtils.h>
 

@@ -1,15 +1,8 @@
 #include "StorageExternalStream.h"
-#include <algorithm>
-#include "Core/Types.h"
-#include "ExternalStreamSettings.h"
 #include "ExternalStreamTypes.h"
-#include "Interpreters/ExpressionAnalyzer.h"
-#include "Interpreters/TreeRewriter.h"
-#include "Parsers/ASTFunction.h"
-#include "Parsers/IAST_fwd.h"
-#include "Server/RestRouterHandlers/ColumnDefinition.h"
 #include "StorageExternalStreamImpl.h"
 
+#include <Interpreters/ExpressionAnalyzer.h>
 /// External stream storages
 #include <Storages/ExternalStream/Kafka/Kafka.h>
 #include <Storages/SelectQueryInfo.h>

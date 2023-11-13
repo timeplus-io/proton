@@ -3,7 +3,6 @@
 #include <Storages/IStorage.h>
 #include <base/shared_ptr_helper.h>
 #include <Common/SettingsChanges.h>
-#include "Server/RestRouterHandlers/ColumnDefinition.h"
 
 namespace DB
 {
