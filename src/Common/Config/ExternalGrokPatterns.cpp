@@ -87,15 +87,12 @@ void ExternalGrokPatterns::loadPatternsFromFile()
     if (!ifs)
     {
         LOG_WARNING(log, "External grok patterns file '{}' does not exist, trying embedded resource", file_name);
-        
-        // Try to load the patterns from embedded resource
+
+        /// Try to load the patterns from embedded resource
         auto resource_data = getResource(file_name);
         if (!resource_data.empty())
         {
-            // Convert std::string_view to std::string
             std::string resource_string(resource_data);
-
-            // Now create a std::istringstream from the std::string
             std::istringstream resource_stream(resource_string);
             loadPatternsFromStream(resource_stream);
         }
@@ -110,9 +107,8 @@ void ExternalGrokPatterns::loadPatternsFromFile()
     loadPatternsFromStream(ifs);
 }
 
-void ExternalGrokPatterns::loadPatternsFromStream(std::istream& stream)
+void ExternalGrokPatterns::loadPatternsFromStream(std::istream & stream)
 {
-
     int line_num = 0;
     String line;
 

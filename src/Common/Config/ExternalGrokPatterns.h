@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Core/BackgroundSchedulePool.h>
-#include <Common/logger_useful.h>
 #include <Common/getResource.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {
@@ -38,7 +38,7 @@ private:
     ExternalGrokPatterns(ContextPtr context_);
     void reloadPatternsFromFile();
     void loadPatternsFromFile();
-    void loadPatternsFromStream(std::istream& stream);
+    void loadPatternsFromStream(std::istream & stream);
 
 private:
     std::atomic_flag is_shutdown;
