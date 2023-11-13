@@ -53,6 +53,10 @@ on:
         required: false
         type: string
         default: 'start_spot' # start_spot, start
+      upload_files:
+        required: false
+        type: string
+        default: ''
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -155,6 +159,13 @@ jobs:
         timeout-minutes: ${{ inputs.timeout }}
         run: |
           ${{ inputs.command }}
+      - name: Release binary
+        if: ${{ input.upload_files != '' }}
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ input.upload_files }}
+          token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          generate_release_notes: true
   stop-runner:
     name: Stop self-hosted EC2 runner
     needs:
