@@ -5,7 +5,24 @@ on: # yamllint disable-line rule:truthy
   workflow_dispatch:
 
 jobs:
-  Build:
+  Create_Release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: create a new release
+        run: |
+          # git login
+          gh auth login
+          gh auth status
+
+          # get proton tag
+          PROTON_TAG=$(git describe --abbrev=0)
+
+          # create a new release
+          gh release create $PROTON_TAG --generate-notes --latest
+        env:
+          GH_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+  Build_Linux_X86_64:
+    needs: [ Create_Release ]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.4xlarge
@@ -20,7 +37,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
         
         # update version
-        ./release --version patch
+        # ./release --version patch
 
         # prepare build cache
         aws s3 cp --no-progress s3://tp-internal/proton/cache.tar.gz .
@@ -29,12 +46,31 @@ jobs:
         rm cache.tar.gz
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-16 --build-type release --proton-build --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-16 --build-type release --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
         
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"
           exit 127
         fi
+
+        # get proton tag
+        PROTON_TAG=$(git describe --abbrev=0)
+        echo "Proton tag: $PROTON_TAG"
+
+        PROTON_BINARY=proton-$PROTON_TAG-Linux-x86_64
+        echo "Proton Binary Name: $PROTON_BINARY"
+
+        mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/output/$PROTON_BINARY
+
+        # git login
+        export GH_TOKEN=$GH_PERSONAL_ACCESS_TOKEN
+        gh auth login
+        gh auth status
+
+        # upload binary of proton
+        gh release upload $PROTON_TAG $GITHUB_WORKSPACE/output/$PROTON_BINARY --clobber
+        
+        mv $GITHUB_WORKSPACE/output/$PROTON_BINARY $GITHUB_WORKSPACE/output/proton
 
         docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
         cd $GITHUB_WORKSPACE/docker/server
@@ -56,7 +92,8 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-  BuildArm:
+  Build_Linux_Arm64:
+    needs: [ Create_Release ]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
@@ -71,7 +108,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
 
         # update version
-        ./release --version patch
+        # ./release --version patch
 
         # prepare build cache
         aws s3 cp --no-progress s3://tp-internal/proton/cache-arm.tar.gz .
@@ -80,7 +117,27 @@ jobs:
         rm cache-arm.tar.gz
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-16 --build-type release --proton-build --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-16 --build-type release --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        
+        # get proton tag
+        PROTON_TAG=$(git describe --abbrev=0)
+        echo "Proton tag: $PROTON_TAG"
+
+        PROTON_BINARY=proton-$PROTON_TAG-Linux-aarch64
+        echo "Proton Binary Name: $PROTON_BINARY"
+
+        mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/output/$PROTON_BINARY
+
+        # git login
+        export GH_TOKEN=$GH_PERSONAL_ACCESS_TOKEN
+        gh auth login
+        gh auth status
+
+        # upload binary of proton
+        gh release upload $PROTON_TAG $GITHUB_WORKSPACE/output/$PROTON_BINARY --clobber
+        
+        mv $GITHUB_WORKSPACE/output/$PROTON_BINARY $GITHUB_WORKSPACE/output/proton
+        
         docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
         cd $GITHUB_WORKSPACE/docker/server
 
@@ -102,7 +159,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   CommitTag:
-    needs: [Build, BuildArm]
+    needs: [Build_Linux_X86_64, Build_Linux_Arm64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.4xlarge
@@ -146,6 +203,125 @@ jobs:
           -H "X-GitHub-Api-Version: 2022-11-28" \
           https://api.github.com/repos/timeplus-io/proton/actions/workflows/manual_trigger_test.yml/dispatches \
           -d "{\"ref\":\"develop\",\"inputs\":{\"arch\": \"arm\", \"tag\":\"$PROTON_TAG-rc\"}}\""
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  Build_Darwin_X86_64:
+    needs: [ Create_Release ]
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c5.4xlarge
+      ec2-image-id: ami-042a37e33a285c22b
+      submodules: 'recursive'
+      run_mode: 'start' # start ec2 on demand instance
+      command: |
+        cd $GITHUB_WORKSPACE
+
+        # git config
+        git config user.name "proton-robot"
+        git config user.email "proton_robot@timeplus.io"
+
+        # download the pre-built binary of v8 (this is only for cross-compile)
+        aws s3 cp --no-progress s3://tp-internal/proton/v8-cmake-x64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
+        tar -zxf $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-x64.tar.gz -C $GITHUB_WORKSPACE/contrib/v8-cmake/
+        rm $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-x64.tar.gz
+
+        # prepare build cache
+        mkdir $GITHUB_WORKSPACE/ccache
+        echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
+
+        # compiling
+        ./docker/packager/packager --package-type binary --docker-image-version clang-16 --build-type release --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output --compiler clang-16-darwin
+
+        if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
+          echo "Compiling proton Failed"
+          exit 127
+        fi
+
+        # clean ccache and build footprint
+        rm -rf $GITHUB_WORKSPACE/ccache
+        rm -rf $GITHUB_WORKSPACE/build_docker
+
+        # get proton tag
+        PROTON_TAG=$(git describe --abbrev=0)
+        echo "Proton tag: $PROTON_TAG"
+
+        PROTON_BINARY=proton-$PROTON_TAG-Darwin-x86_64
+        echo "Proton Binary Name: $PROTON_BINARY"
+
+        mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/output/$PROTON_BINARY
+
+        # git login
+        export GH_TOKEN=$GH_PERSONAL_ACCESS_TOKEN
+        gh auth login
+        gh auth status
+
+        # upload binary of proton
+        gh release upload $PROTON_TAG $GITHUB_WORKSPACE/output/$PROTON_BINARY --clobber
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  Build_Darwin_Arm64:
+    needs: [ Create_Release ]
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c6g.4xlarge
+      ec2-image-id: ami-0f3dbc4cc9994fdee
+      submodules: 'recursive'
+      run_mode: 'start' # start ec2 on demand instance
+      command: |
+        cd $GITHUB_WORKSPACE
+
+        # git config
+        git config user.name "proton-robot"
+        git config user.email "proton_robot@timeplus.io"
+
+        # download the pre-built binary of v8 (this is only for cross-compile)
+        aws s3 cp --no-progress s3://tp-internal/proton/v8-cmake-arm64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
+        tar -zxf $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-arm64.tar.gz -C $GITHUB_WORKSPACE/contrib/v8-cmake/
+        rm $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-arm64.tar.gz
+
+        # prepare build cache
+        mkdir $GITHUB_WORKSPACE/ccache
+        echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
+
+        # compiling
+        ./docker/packager/packager --package-type binary --docker-image-version clang-16 --build-type release --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output --compiler clang-16-darwin-aarch64
+        if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
+          echo "Compiling proton Failed"
+          exit 127
+        fi
+
+        # clean ccache and build footprint
+        rm -rf $GITHUB_WORKSPACE/ccache
+        rm -rf $GITHUB_WORKSPACE/build_docker
+
+        # get proton tag
+        PROTON_TAG=$(git describe --abbrev=0)
+        echo "Proton tag: $PROTON_TAG"
+
+        PROTON_BINARY=proton-$PROTON_TAG-Darwin-arm64
+        echo "Proton Binary Name: $PROTON_BINARY"
+
+        mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/output/$PROTON_BINARY
+
+        # git login
+        export GH_TOKEN=$GH_PERSONAL_ACCESS_TOKEN
+        gh auth login
+        gh auth status
+
+        # upload binary of proton
+        gh release upload $PROTON_TAG $GITHUB_WORKSPACE/output/$PROTON_BINARY --clobber
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
