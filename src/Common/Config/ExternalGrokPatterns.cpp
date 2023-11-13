@@ -89,7 +89,7 @@ void ExternalGrokPatterns::loadPatternsFromFile()
         LOG_WARNING(log, "External grok patterns file '{}' does not exist, trying embedded resource", file_name);
 
         /// Try to load the patterns from embedded resource
-        auto resource_data = getResource(file_name);
+        auto resource_data = getResource("grok-patterns");
         if (!resource_data.empty())
         {
             std::string resource_string(resource_data);
