@@ -17,6 +17,6 @@ ffff::	4	('f000::','ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff')
 ('ffff:ffff:ffff:ffff::','ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff')
 ('::','ff:ffff:ffff:ffff:ffff:ffff:ffff:ffff')
 ('f000::','ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff')
-1
+true
 ('2001:db8:0:85a3::ac1f:8001','2001:db8:0:85a3::ac1f:8001')
 ('2001:db8:0:85a3::ac1f:8000','2001:db8:0:85a3::ac1f:8001')
