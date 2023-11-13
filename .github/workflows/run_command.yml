@@ -156,6 +156,7 @@ jobs:
       - name: Prepare directory
         run: mkdir /test_output /artifacts
       - name: execute
+        id: execute
         timeout-minutes: ${{ inputs.timeout }}
         run: |
           ${{ inputs.command }}
@@ -166,6 +167,7 @@ jobs:
           files: ${{ inputs.upload_files }}
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           generate_release_notes: true
+          tag_name: ${{ steps.execute.outputs.tag_name }}
   stop-runner:
     name: Stop self-hosted EC2 runner
     needs:
