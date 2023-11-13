@@ -6,7 +6,7 @@ on: # yamllint disable-line rule:truthy
 
 jobs:
   Build_Linux_X86_64:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-231-binary-release-workflow
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-042a37e33a285c22b
@@ -21,7 +21,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
         
         # update version
-        # ./release --version patch
+        ./release --version patch
 
         # prepare build cache
         aws s3 cp --no-progress s3://tp-internal/proton/cache.tar.gz .
@@ -68,7 +68,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   Build_Linux_Arm64:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-231-binary-release-workflow
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ami-0f3dbc4cc9994fdee
@@ -83,7 +83,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
 
         # update version
-        # ./release --version patch
+        ./release --version patch
 
         # prepare build cache
         aws s3 cp --no-progress s3://tp-internal/proton/cache-arm.tar.gz .
@@ -126,7 +126,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   CommitTag:
     needs: [Build_Linux_X86_64, Build_Linux_Arm64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-231-binary-release-workflow
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-042a37e33a285c22b
@@ -178,7 +178,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   Build_Darwin_X86_64:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-231-binary-release-workflow
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-042a37e33a285c22b
@@ -193,7 +193,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
         
         # update version
-        # ./release --version patch
+        ./release --version patch
 
         # download the pre-built binary of v8 (this is only for cross-compile)
         aws s3 cp --no-progress s3://tp-internal/proton/cross-compile-prebuilt-binary/v8-cmake-x64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
@@ -237,7 +237,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   Build_Darwin_Arm64:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-231-binary-release-workflow
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ami-0f3dbc4cc9994fdee
@@ -252,7 +252,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
         
         # update version
-        # ./release --version patch
+        ./release --version patch
 
         # download the pre-built binary of v8 (this is only for cross-compile)
         aws s3 cp --no-progress s3://tp-internal/proton/cross-compile-prebuilt-binary/v8-cmake-arm64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
