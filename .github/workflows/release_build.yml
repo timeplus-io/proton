@@ -13,6 +13,8 @@ jobs:
       submodules: 'recursive'
       run_mode: 'start' # start ec2 on demand instance
       command: |
+        cd $GITHUB_WORKSPACE
+        
         # get proton tag
         PROTON_TAG=$(git describe --abbrev=0)
 
