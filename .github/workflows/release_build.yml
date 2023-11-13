@@ -6,17 +6,26 @@ on: # yamllint disable-line rule:truthy
 
 jobs:
   Create_Release:
-    runs-on: ubuntu-latest
-    steps:
-      - name: create a new release
-        run: |
-          # get proton tag
-          PROTON_TAG=$(git describe --abbrev=0)
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c5.4xlarge
+      ec2-image-id: ami-042a37e33a285c22b
+      submodules: 'recursive'
+      run_mode: 'start' # start ec2 on demand instance
+      command: |
+        # get proton tag
+        PROTON_TAG=$(git describe --abbrev=0)
 
-          # create a new release
-          gh release create $PROTON_TAG --generate-notes --latest
-        env:
-          GH_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+        # create a new release
+        gh release create $PROTON_TAG --generate-notes --latest
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   Build_Linux_X86_64:
     needs: [ Create_Release ]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
