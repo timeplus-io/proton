@@ -10,8 +10,9 @@ namespace ErrorCodes
 extern const int CANNOT_WRITE_TO_KAFKA;
 }
 
-WriteBufferFromKafka::WriteBufferFromKafka(size_t buffer_size)
+WriteBufferFromKafka::WriteBufferFromKafka(rd_kafka_topic_t * topic_, size_t buffer_size)
     : BufferWithOwnMemory<WriteBuffer>(buffer_size)
+    , topic(topic_)
 {
 }
 

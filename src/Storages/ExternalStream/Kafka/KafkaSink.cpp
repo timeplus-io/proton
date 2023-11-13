@@ -54,11 +54,10 @@ BlocksWithShard ChunkPartitioner::partition(Block block, Int32 partition_cnt) co
     if (partition_cnt == 1)
         return {BlockWithShard{Block(std::move(block)), 0}};
 
-    if (!random_partitioning)
-        return doParition(std::move(block), partition_cnt);
+    if (random_partitioning)
+        return {BlockWithShard{Block(std::move(block)), getNextShardIndex(partition_cnt)}};
 
-    /// Randomly pick one shard to ingest this block
-    return {BlockWithShard{Block(std::move(block)), getNextShardIndex(partition_cnt)}};
+    return doParition(std::move(block), partition_cnt);
 }
 
 BlocksWithShard ChunkPartitioner::doParition(Block block, Int32 partition_cnt) const
@@ -187,8 +186,6 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
         }
     }
 
-    wb = std::make_unique<WriteBufferFromKafka>();
-
     auto * topic_conf = rd_kafka_conf_get_default_topic_conf(conf);
     if (!topic_conf)
     {
@@ -236,7 +233,7 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
     }
 
     topic = klog::KTopicPtr(rd_kafka_topic_new(producer.get(), kafka->topic().c_str(), nullptr), rd_kafka_topic_destroy);
-    wb->write_to_topic(topic.get());
+    wb = std::make_unique<WriteBufferFromKafka>(topic.get());
 
     String data_format = kafka->dataFormat();
     if (data_format.empty())
@@ -264,7 +261,7 @@ void KafkaSink::consume(Chunk chunk)
 
     for (auto & blockWithShard : blocks)
     {
-        /// Since we set AutoFlush on writer, it makes sure that `writer-write` will call
+        /// Since we set AutoFlush on writer, it makes sure that `writer->write` will call
         /// `wb->nextImpl` and waits for it finishes, it's safe to call `wb->write_to_partition`
         /// before `writer->write`.
         wb->write_to_partition(blockWithShard.shard);
