@@ -194,7 +194,7 @@ jobs:
         # ./release --version patch
 
         # download the pre-built binary of v8 (this is only for cross-compile)
-        aws s3 cp --no-progress s3://tp-internal/proton/v8-cmake-x64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
+        aws s3 cp --no-progress s3://tp-internal/proton/cross-compile-prebuilt-binary/v8-cmake-x64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
         tar -zxf $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-x64.tar.gz -C $GITHUB_WORKSPACE/contrib/v8-cmake/
         rm $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-x64.tar.gz
 
@@ -249,7 +249,7 @@ jobs:
         # ./release --version patch
 
         # download the pre-built binary of v8 (this is only for cross-compile)
-        aws s3 cp --no-progress s3://tp-internal/proton/v8-cmake-arm64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
+        aws s3 cp --no-progress s3://tp-internal/proton/cross-compile-prebuilt-binary/v8-cmake-arm64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
         tar -zxf $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-arm64.tar.gz -C $GITHUB_WORKSPACE/contrib/v8-cmake/
         rm $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-arm64.tar.gz
 
