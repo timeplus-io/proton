@@ -320,17 +320,8 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
     CurrentMetrics::Increment metric_all_threads(
         std::is_same_v<Thread, std::thread> ? CurrentMetrics::GlobalThread : CurrentMetrics::LocalThread);
 
-    /// Remove this thread from `threads` and detach it, that must be done before exiting from this worker.
-    /// We can't wrap the following lambda function into `SCOPE_EXIT` because it requires `mutex` to be locked.
-    auto detach_thread = [this, thread_it]
-    {
-        /// `mutex` is supposed to be already locked.
-        if (threads_remove_themselves)
-        {
-            thread_it->detach();
-            threads.erase(thread_it);
-        }
-    };
+    bool job_is_done = false;
+    std::exception_ptr exception_from_job;
 
     /// We'll run jobs in this worker while there are scheduled jobs and until some special event occurs (e.g. shutdown, or decreasing the number of max_threads).
     /// And if `max_free_threads > 0` we keep this number of threads even when there are no jobs for them currently.
@@ -341,18 +332,42 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
 
         /// Get a job from the queue.
         Job job;
-        std::exception_ptr exception_from_job;
-        bool need_shutdown = false;
 
         {
             std::unique_lock lock(mutex);
-            new_job_or_shutdown.wait(lock, [&] { return !jobs.empty() || shutdown || (threads.size() > std::min(max_threads, scheduled_jobs + max_free_threads)); });
-            need_shutdown = shutdown;
 
-            if (jobs.empty())
+            // Finish with previous job if any
+            if (job_is_done)
             {
-                /// No jobs and either `shutdown` is set or this thread is excessive. The worker will stop.
-                detach_thread();
+                job_is_done = false;
+                if (exception_from_job)
+                {
+                    if (!first_exception)
+                        first_exception = exception_from_job;
+                    if (shutdown_on_exception)
+                        shutdown = true;
+                    exception_from_job = {};
+                }
+
+                --scheduled_jobs;
+
+                job_finished.notify_all();
+                if (shutdown)
+                    new_job_or_shutdown.notify_all(); /// `shutdown` was set, wake up other threads so they can finish themselves.
+            }
+
+            new_job_or_shutdown.wait(lock, [&] { return !jobs.empty() || shutdown || threads.size() > std::min(max_threads, scheduled_jobs + max_free_threads); });
+
+            if (jobs.empty() || threads.size() > std::min(max_threads, scheduled_jobs + max_free_threads))
+            {
+                // We enter here if:
+                //  - either this thread is not needed anymore due to max_free_threads excess;
+                //  - or shutdown happened AND all jobs are already handled.
+                if (threads_remove_themselves)
+                {
+                    thread_it->detach();
+                    threads.erase(thread_it);
+                }
                 return;
             }
 
@@ -360,59 +375,33 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
             /// to prevent us from modifying its priority. We have to use const_cast to force move semantics on JobWithPriority::job.
             job = std::move(const_cast<Job &>(jobs.top().job));
             jobs.pop();
-        }
-
-        /// Run the job. We don't run jobs after `shutdown` is set.
-        if (!need_shutdown)
-        {
-            try
-            {
-                ALLOW_ALLOCATIONS_IN_SCOPE;
-                CurrentMetrics::Increment metric_active_threads(
-                    std::is_same_v<Thread, std::thread> ? CurrentMetrics::GlobalThreadActive : CurrentMetrics::LocalThreadActive);
-
-                job();
-                /// job should be reset before decrementing scheduled_jobs to
-                /// ensure that the Job destroyed before wait() returns.
-                job = {};
-            }
-            catch (...)
-            {
-                exception_from_job = std::current_exception();
-
-                /// job should be reset before decrementing scheduled_jobs to
-                /// ensure that the Job destroyed before wait() returns.
-                job = {};
-            }
-        }
-
-        /// The job is done.
-        {
-            std::lock_guard lock(mutex);
-            if (exception_from_job)
-            {
-                if (!first_exception)
-                    first_exception = exception_from_job;
-                if (shutdown_on_exception)
-                    shutdown = true;
-            }
-
-            --scheduled_jobs;
-
-            if (threads.size() > std::min(max_threads, scheduled_jobs + max_free_threads))
-            {
-                /// This thread is excessive. The worker will stop.
-                detach_thread();
-                job_finished.notify_all();
-                if (shutdown)
-                    new_job_or_shutdown.notify_all(); /// `shutdown` was set, wake up other threads so they can finish themselves.
-                return;
-            }
-
-            job_finished.notify_all();
+            /// We don't run jobs after `shutdown` is set, but we have to properly dequeue all jobs and finish them.
             if (shutdown)
-                new_job_or_shutdown.notify_all(); /// `shutdown` was set, wake up other threads so they can finish themselves.
+                continue;
         }
+
+        /// Run the job.
+        try
+        {
+            ALLOW_ALLOCATIONS_IN_SCOPE;
+            CurrentMetrics::Increment metric_active_threads(
+                std::is_same_v<Thread, std::thread> ? CurrentMetrics::GlobalThreadActive : CurrentMetrics::LocalThreadActive);
+
+            job();
+            /// job should be reset before decrementing scheduled_jobs to
+            /// ensure that the Job destroyed before wait() returns.
+            job = {};
+        }
+        catch (...)
+        {
+            exception_from_job = std::current_exception();
+
+            /// job should be reset before decrementing scheduled_jobs to
+            /// ensure that the Job destroyed before wait() returns.
+            job = {};
+        }
+
+        job_is_done = true;
     }
 }
 
