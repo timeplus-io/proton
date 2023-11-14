@@ -186,7 +186,7 @@ void Chunk::append(const Chunk & chunk)
 void Chunk::append(Chunk && chunk)
 {
     if (!hasColumns())
-        this->operator=(std::move(chunk));
+        *this = std::move(chunk);
     else
         append(chunk);
 }

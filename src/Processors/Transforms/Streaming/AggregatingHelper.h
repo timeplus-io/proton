@@ -39,7 +39,11 @@ Chunk mergeAndSpliceAndConvertBucketsToChunk(
 
 /// Only used for emit changelog
 /// @brief Based on new/updated groups @p retracted_data , only convert the state of changed groups (retracted: last state, aggregated: current state)
+/// @p data: current aggregated state of all groups
+/// @p retracted_data: only have last state of changed groups (i.e. new/updated/deleted)
 /// @return <retracted_chunk, aggregated_chunk>
+/// retracted_chunk: just contains retracted data of changed groups
+/// aggregated_chunk: just contains aggregated data of changed groups
 ChunkPair
 convertToChangelogChunk(AggregatedDataVariants & data, RetractedDataVariants & retracted_data, const AggregatingTransformParams & params);
 ChunkPair mergeAndConvertToChangelogChunk(

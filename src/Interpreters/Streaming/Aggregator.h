@@ -76,13 +76,13 @@ namespace Streaming
 
 enum class ConvertAction : uint8_t
 {
-    UNKNOWN = 0,
-    DISTRIBUTED_MERGE = 1,
-    WRITE_TO_TEMP_FS = 2,
-    CHECKPOINT = 3,
-    STREAMING_EMIT = 4,
-    INTERNAL_MERGE = 5,
-    RETRACTED_EMIT = 6
+    Unkonwn = 0,
+    DistributedMerge,
+    WriteToTmpFS,
+    Checkpoint,
+    StreamingEmit,
+    InternalMerge,
+    RetractedEmit
 };
 
 /// using TimeBucketAggregatedDataWithUInt16Key = TimeBucketHashMap<FixedImplicitZeroHashMap<UInt16, AggregateDataPtr>>;
@@ -739,7 +739,7 @@ public:
         ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
         bool & no_more_keys) const;
 
-    /// Execute and retracted state for changed groups:
+    /// Execute and retract state for changed groups:
     /// 1) For new group:
     ///     @p retracted_result: add an elem <group_key, null> if not exists
     ///     @p result:           add an elem <group_key, curent_state>
@@ -749,6 +749,9 @@ public:
     /// 3) For deleted group:
     ///     @p retracted_result: add an elem <group_key, last_state> if not exists
     ///     @p result:           delete the <group_key> group
+    /// @return {should_abort, need_finalization} pair
+    /// should_abort: if the processing should be aborted (with group_by_overflow_mode = 'break') return true, otherwise false.
+    /// need_finalization : only for UDA aggregation. If there is no UDA, always false
     std::pair<bool, bool> executeAndRetractOnBlock(
         Columns columns,
         size_t row_begin,
@@ -790,7 +793,7 @@ public:
     Block convertOneBucketToBlock(AggregatedDataVariants & data_variants, bool final, ConvertAction action, size_t bucket) const;
     Block mergeAndConvertOneBucketToBlock(ManyAggregatedDataVariants & variants, bool final, ConvertAction action, size_t bucket) const;
 
-    /// Used for hop window function, merge multiple gcd windows (buckets) to a hop window
+    /// Used by hop window function, merge multiple gcd windows (buckets) to a hop window
     /// For examples:
     ///   gcd_bucket1 - [00:00, 00:02)
     ///                            =>  result block - [00:00, 00:04)
@@ -800,7 +803,7 @@ public:
     Block mergeAndSpliceAndConvertBucketsToBlock(
         ManyAggregatedDataVariants & variants, bool final, ConvertAction action, const std::vector<Int64> & gcd_buckets) const;
 
-    /// Used for merge changed groups into first one (retracted and aggregated)
+    /// Used for merge changed groups and return the <retracted_state, aggregated_state> of changed groups
     std::pair<AggregatedDataVariantsPtr, AggregatedDataVariantsPtr>
     mergeRetractedGroups(ManyAggregatedDataVariants & aggregated_data, ManyAggregatedDataVariants & retracted_data) const;
 

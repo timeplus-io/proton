@@ -64,7 +64,7 @@ namespace Streaming
 namespace
 {
 inline bool worthConvertToTwoLevel(
-    size_t group_by_two_level_threshold, size_t result_size, size_t group_by_two_level_threshold_bytes, auto result_size_bytes)
+    size_t group_by_two_level_threshold, size_t result_size, size_t group_by_two_level_threshold_bytes, Int64 result_size_bytes)
 {
     /// params.group_by_two_level_threshold will be equal to 0 if we have only one thread to execute aggregation (refer to AggregatingStep::transformPipeline).
     return (group_by_two_level_threshold && result_size >= group_by_two_level_threshold)
@@ -1407,6 +1407,7 @@ BlocksList Aggregator::mergeAndConvertTwoLevelToBlocksImpl(
     ManyAggregatedDataVariants & non_empty_data, bool final, size_t max_threads, bool clear_states) const
 {
     auto & first = *non_empty_data.at(0);
+
     std::vector<Int64> buckets;
     if (first.isStaticBucketTwoLevel())
         buckets = getDataVariant<Method>(first).data.buckets();
@@ -1422,18 +1423,7 @@ BlocksList Aggregator::mergeAndConvertTwoLevelToBlocksImpl(
         buckets.assign(buckets_set.begin(), buckets_set.end());
     }
 
-    std::unique_ptr<ThreadPool> thread_pool;
-    auto num_threads = std::min(max_threads, buckets.size());
-    if (num_threads > 1)
-        thread_pool = std::make_unique<ThreadPool>(num_threads);
-
-    /// proton FIXME : separate final vs non-final converting. For non-final converting, we don't need
-    /// each arena for each thread.
-    for (size_t i = first.aggregates_pools.size(); i < num_threads; ++i)
-        first.aggregates_pools.push_back(std::make_shared<Arena>());
-
     std::atomic<size_t> next_bucket_idx_to_merge = 0;
-
     auto converter = [&](size_t thread_id, ThreadGroupStatusPtr thread_group) {
         SCOPE_EXIT_SAFE(if (thread_group) CurrentThread::detachQueryIfNotDetached(););
         if (thread_group)
@@ -1468,41 +1458,36 @@ BlocksList Aggregator::mergeAndConvertTwoLevelToBlocksImpl(
         return blocks;
     };
 
-    /// packaged_task is used to ensure that exceptions are automatically thrown into the main stream.
-    std::vector<std::packaged_task<BlocksList()>> tasks(num_threads);
+    auto num_threads = std::min(max_threads, buckets.size());
+    if (num_threads <= 1)
+        converter(0, nullptr);
+
+    /// Process in parallel
+    /// proton FIXME : separate final vs non-final converting. For non-final converting, we don't need
+    /// each arena for each thread.
+    for (size_t i = first.aggregates_pools.size(); i < num_threads; ++i)
+        first.aggregates_pools.push_back(std::make_shared<Arena>());
+
+    auto results = std::make_shared<std::vector<BlocksList>>();
+    results->resize(num_threads);
+    ThreadPool thread_pool(num_threads);
     try
     {
         for (size_t thread_id = 0; thread_id < num_threads; ++thread_id)
-        {
-            tasks[thread_id] = std::packaged_task<BlocksList()>(
-                [group = CurrentThread::getGroup(), thread_id, &converter] { return converter(thread_id, group); });
-
-            if (thread_pool)
-                thread_pool->scheduleOrThrowOnError([thread_id, &tasks] { tasks[thread_id](); });
-            else
-                tasks[thread_id]();
-        }
+            thread_pool.scheduleOrThrowOnError([thread_id, group = CurrentThread::getGroup(), results, &converter] { (*results)[thread_id] = converter(thread_id, group); });
     }
     catch (...)
     {
         /// If this is not done, then in case of an exception, tasks will be destroyed before the threads are completed, and it will be bad.
-        if (thread_pool)
-            thread_pool->wait();
-
+        thread_pool.wait();
         throw;
     }
 
-    if (thread_pool)
-        thread_pool->wait();
+    thread_pool.wait();
 
     BlocksList blocks;
-    for (auto & task : tasks)
-    {
-        if (!task.valid())
-            continue;
-
-        blocks.splice(blocks.end(), task.get_future().get());
-    }
+    for (auto & result : *results)
+        blocks.splice(blocks.end(), std::move(result));
 
     return blocks;
 }
@@ -3378,8 +3363,8 @@ void Aggregator::doCheckpointLegacy(const AggregatedDataVariants & data_variants
     writeIntBinary(num_aggr_funcs, wb);
 
     /// FIXME, set a good max_threads
-    /// For ConvertAction::CHECKPOINT, don't clear state `data_variants`
-    auto blocks = convertToBlocks(const_cast<AggregatedDataVariants &>(data_variants), false, ConvertAction::CHECKPOINT, 8);
+    /// For ConvertAction::Checkpoint, don't clear state `data_variants`
+    auto blocks = convertToBlocks(const_cast<AggregatedDataVariants &>(data_variants), false, ConvertAction::Checkpoint, 8);
 
     /// assert(!blocks.empty());
 
@@ -3726,21 +3711,21 @@ bool Aggregator::shouldClearStates(ConvertAction action, bool final_) const
 
     switch (action)
     {
-        case ConvertAction::DISTRIBUTED_MERGE:
+        case ConvertAction::DistributedMerge:
             /// Distributed processing case. Only clear states on initiator
             return final_;
-        case ConvertAction::WRITE_TO_TEMP_FS:
+        case ConvertAction::WriteToTmpFS:
             /// We are dumping all states to file system in case of memory is not efficient
             /// In this case, we should not keep the states
             return true;
-        case ConvertAction::CHECKPOINT:
+        case ConvertAction::Checkpoint:
             /// Checkpoint is snapshot of in-memory states, we shall not clear the states
             return false;
-        case ConvertAction::INTERNAL_MERGE:
+        case ConvertAction::InternalMerge:
             return false;
-        case ConvertAction::RETRACTED_EMIT:
+        case ConvertAction::RetractedEmit:
             return true;
-        case ConvertAction::STREAMING_EMIT:
+        case ConvertAction::StreamingEmit:
             [[fallthrough]];
         default:
             /// By default, streaming processing needs hold on to the states
@@ -4286,7 +4271,7 @@ bool Aggregator::checkAndProcessResult(AggregatedDataVariants & result, bool & n
             current_memory_usage = memory_tracker->get();
 
     /// Here all the results in the sum are taken into account, from different threads.
-    auto result_size_bytes = current_memory_usage - memory_usage_before_aggregation;
+    Int64 result_size_bytes = current_memory_usage - memory_usage_before_aggregation;
 
     bool worth_convert_to_two_level = worthConvertToTwoLevel(
         params.group_by_two_level_threshold, result_size, params.group_by_two_level_threshold_bytes, result_size_bytes);
