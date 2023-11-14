@@ -33,7 +33,8 @@ public:
 
     /// Set the partition ID the buffer will write data to.
     /// This makes it possible write data to different paritions.
-    void write_to_partition(Int32 id) { partition_id = id; }
+    void setTargetPartition(Int32 id) { partition_id = id; }
+
 private:
     void nextImpl() override;
 

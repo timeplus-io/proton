@@ -1,7 +1,5 @@
 #include "KafkaSink.h"
-#include <rdkafka.h>
 
-#include <Common/logger_useful.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -9,6 +7,7 @@
 #include <Interpreters/createBlockSelector.h>
 #include <Parsers/ASTFunction.h>
 #include <Processors/Formats/IOutputFormat.h>
+#include <Common/logger_useful.h>
 
 #include <boost/algorithm/string/predicate.hpp>
 
@@ -25,7 +24,8 @@ extern const int TYPE_MISMATCH;
 
 namespace KafkaStream
 {
-ChunkPartitioner::ChunkPartitioner(ContextPtr context, const Block & header, const ASTPtr & partitioning_expr_ast) {
+ChunkPartitioner::ChunkPartitioner(ContextPtr context, const Block & header, const ASTPtr & partitioning_expr_ast)
+{
     /// `InterpreterCreateQuery::handleExternalStreamCreation` ensures this
     assert(partitioning_expr_ast);
 
@@ -36,20 +36,16 @@ ChunkPartitioner::ChunkPartitioner(ContextPtr context, const Block & header, con
     partitioning_key_column_name = partitioning_expr_ast->getColumnName();
 
     if (auto * shard_func = partitioning_expr_ast->as<ASTFunction>())
+    {
         if (shard_func->name == "rand" || shard_func->name == "RAND")
-        {
             random_partitioning = true;
-            std::random_device r;
-            rand = std::minstd_rand(r());
-        }
+    }
 }
 
 BlocksWithShard ChunkPartitioner::partition(Block block, Int32 partition_cnt) const
 {
     /// no topics have zero partitions
     assert(partition_cnt > 0);
-    /// check the ctor for how this is guaruanteed
-    assert(partitioning_expr);
 
     if (partition_cnt == 1)
         return {BlockWithShard{Block(std::move(block)), 0}};
@@ -88,15 +84,14 @@ BlocksWithShard ChunkPartitioner::doParition(Block block, Int32 partition_cnt) c
     return blocks_with_shard;
 }
 
-IColumn::Selector ChunkPartitioner::createSelector(const Block & block, Int32 partition_cnt) const
+IColumn::Selector ChunkPartitioner::createSelector(Block block, Int32 partition_cnt) const
 {
     std::vector<UInt64> slot_to_shard(partition_cnt);
     std::iota(slot_to_shard.begin(), slot_to_shard.end(), 0);
 
-    Block current_block = block;
-    partitioning_expr->execute(current_block);
+    partitioning_expr->execute(block);
 
-    const auto & key_column = current_block.getByName(partitioning_key_column_name);
+    const auto & key_column = block.getByName(partitioning_key_column_name);
 
 /// If key_column.type is DataTypeLowCardinality, do shard according to its dictionaryType
 #define CREATE_FOR_TYPE(TYPE) \
@@ -122,7 +117,12 @@ IColumn::Selector ChunkPartitioner::createSelector(const Block & block, Int32 pa
 }
 
 KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr context, Int32 initial_partition_cnt, Poco::Logger * log_)
-    : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID), producer(nullptr, nullptr), topic(nullptr, nullptr), polling_threads(1), partition_cnt(initial_partition_cnt), log(log_)
+    : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
+    , producer(nullptr, nullptr)
+    , topic(nullptr, nullptr)
+    , polling_threads(1)
+    , partition_cnt(initial_partition_cnt)
+    , log(log_)
 {
     /// default values
     std::vector<std::pair<String, String>> producer_params{
@@ -198,30 +198,9 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
     rd_kafka_topic_conf_set_opaque(topic_conf, this);
 
     /// With partitioner callback, we can get the up-to-date partition count w/o additional effort.
-    rd_kafka_topic_conf_set_partitioner_cb(topic_conf, [](const rd_kafka_topic_t * /*rkt*/,
-						const void * /*keydata*/,
-						size_t /*keylen*/,
-						int32_t partition_count,
-						void * rkt_opaque,
-						void * msg_opaque) -> int32_t
-    {
-        /// update partition count
-        auto * sink = static_cast<KafkaSink *>(rkt_opaque);
-        sink->partition_cnt = partition_count;
+    rd_kafka_topic_conf_set_partitioner_cb(topic_conf, &KafkaSink::onPartitioning);
 
-        auto * partition_id_ptr = static_cast<Int32 *>(msg_opaque);
-        auto parition_id =  *partition_id_ptr;
-        delete partition_id_ptr;
-        /// This should not really happen because Kafka does not support reducing partitions.
-        /// However, KIP-694 is currently under discussion, so this might heppen in the future.
-        if (parition_id >= partition_count)
-            parition_id = partition_count - 1;
-        return parition_id;
-    });
-
-    rd_kafka_conf_set_dr_msg_cb(conf, [](rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void * opaque) {
-        static_cast<KafkaSink *>(opaque)->wb->onMessageDelivery(msg);
-    });
+    rd_kafka_conf_set_dr_msg_cb(conf, &KafkaSink::onMessageDelivery);
 
     producer = klog::KafkaPtr(rd_kafka_new(RD_KAFKA_PRODUCER, conf, errstr, sizeof(errstr)), rd_kafka_destroy);
     if (!producer)
@@ -264,7 +243,7 @@ void KafkaSink::consume(Chunk chunk)
         /// Since we set AutoFlush on writer, it makes sure that `writer->write` will call
         /// `wb->nextImpl` and waits for it finishes, it's safe to call `wb->write_to_partition`
         /// before `writer->write`.
-        wb->write_to_partition(blockWithShard.shard);
+        wb->setTargetPartition(blockWithShard.shard);
         writer->write(blockWithShard.block);
     }
 }
@@ -314,17 +293,21 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
         {
             /// for a final check, it should not wait for too long
             if (auto err = rd_kafka_flush(producer.get(), 15000 /* time_ms */); err)
-                throw Exception(
-                    klog::mapErrorCode(err), "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
+                throw Exception(klog::mapErrorCode(err), "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
 
             if (auto err = wb->lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
                 throw Exception(
-                    klog::mapErrorCode(err), "Failed to send messages, error_cout={} last_error={}", wb->error_count(), rd_kafka_err2str(err));
-
+                    klog::mapErrorCode(err),
+                    "Failed to send messages, error_cout={} last_error={}",
+                    wb->error_count(),
+                    rd_kafka_err2str(err));
 
             if (!wb->hasNoOutstandings())
                 throw Exception(
-                    ErrorCodes::CANNOT_WRITE_TO_KAFKA, "Not all messsages are sent successfully, expected={} actual={}", wb->outstandings(), wb->acked());
+                    ErrorCodes::CANNOT_WRITE_TO_KAFKA,
+                    "Not all messsages are sent successfully, expected={} actual={}",
+                    wb->outstandings(),
+                    wb->acked());
 
             break;
         }
@@ -336,4 +319,3 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
     IProcessor::checkpoint(context);
 }
 }
-

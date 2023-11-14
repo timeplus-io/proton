@@ -32,16 +32,14 @@ extern const int TYPE_MISMATCH;
 namespace
 {
 ExpressionActionsPtr
-buildShardingKeyExpression(const ASTPtr & sharding_key, ContextPtr context, const NamesAndTypesList & columns)
+buildShardingKeyExpression(ASTPtr sharding_key, ContextPtr context, const NamesAndTypesList & columns)
 {
-    ASTPtr query = sharding_key;
-    auto syntax_result = TreeRewriter(context).analyze(query, columns);
-    return ExpressionAnalyzer(query, syntax_result, context).getActions(true);
+    auto syntax_result = TreeRewriter(context).analyze(sharding_key, columns);
+    return ExpressionAnalyzer(sharding_key, syntax_result, context).getActions(true);
 }
 
 void validateEngineArgs(ContextPtr context, ASTs & engine_args, const ColumnsDescription & columns) {
-    const auto & sharding_expr_arg = engine_args[0];
-    auto sharding_expr = buildShardingKeyExpression(sharding_expr_arg, context, columns.getAllPhysical());
+    auto sharding_expr = buildShardingKeyExpression(engine_args[0], context, columns.getAllPhysical());
     const auto & block = sharding_expr->getSampleBlock();
     if (block.columns() != 1)
         throw Exception("Sharding expression must return exactly one column", ErrorCodes::INCORRECT_NUMBER_OF_COLUMNS);

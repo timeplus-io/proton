@@ -11,8 +11,7 @@ extern const int CANNOT_WRITE_TO_KAFKA;
 }
 
 WriteBufferFromKafka::WriteBufferFromKafka(rd_kafka_topic_t * topic_, size_t buffer_size)
-    : BufferWithOwnMemory<WriteBuffer>(buffer_size)
-    , topic(topic_)
+    : BufferWithOwnMemory<WriteBuffer>(buffer_size), topic(topic_)
 {
 }
 
@@ -21,11 +20,6 @@ void WriteBufferFromKafka::nextImpl()
     if (!offset())
         return;
 
-    /// `write_to_topic` should have been called before the buffer starts to work.
-    assert(topic);
-
-    auto * part_id = new Int32(partition_id);
-
     auto err = rd_kafka_produce(
         topic,
         /// we want to trigger the partitioner function, check KafkaSink.cpp
@@ -33,9 +27,9 @@ void WriteBufferFromKafka::nextImpl()
         RD_KAFKA_MSG_F_COPY | RD_KAFKA_MSG_F_BLOCK,
         working_buffer.begin(),
         offset(),
-        "unused" /* key, even though we don't use the key, but it's needed to trigger the partitioner_cb */,
-        6 /* keylen */,
-        static_cast<void *>(part_id) /* opaque */);
+        "" /* key, even though we don't use the key, but it's needed to trigger the partitioner_cb */,
+        0 /* keylen */,
+        reinterpret_cast<void *>(partition_id) /* opaque */);
 
     if (unlikely(err))
         throw Exception(
