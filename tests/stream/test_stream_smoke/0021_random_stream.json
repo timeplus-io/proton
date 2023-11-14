@@ -418,6 +418,28 @@
                 ]
               }
             ]
+          },
+          {
+            "id": 19,
+            "tags": ["create random", "unstable"],
+            "name": "set generate_eps, test eps",
+            "description": "set generate_eps, test eps",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings eps=1000"},
+                  {"client":"python", "query_type": "table", "query_id":"2228", "wait":2, "query":"select count(1) from tumble(test22_create_random, 1s) group by window_start limit 5 settings generate_eps=10000"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {
+                "query_id":"2228", "expected_results":[
+                    ["10000"], ["10000"], ["10000"], ["10000"], ["10000"]
+                ]
+              }
+            ]
           }
     ]
   }
