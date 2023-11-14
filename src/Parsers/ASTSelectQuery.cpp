@@ -1,5 +1,4 @@
 #include <Common/typeid_cast.h>
-#include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -118,6 +117,14 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
         s.one_line
             ? partitionBy()->formatImpl(s, state, frame)
             : partitionBy()->as<ASTExpressionList &>().formatImplMultiline(s, state, frame);
+    }
+
+    if (shuffleBy())
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "SHUFFLE BY " << (s.one_line ? "" : "\n") << next_indent_str << (s.hilite ? hilite_none : "");
+        s.one_line
+            ? shuffleBy()->formatImpl(s, state, frame)
+            : shuffleBy()->as<ASTExpressionList &>().formatImplMultiline(s, state, frame);
     }
     /// proton: ends
 
@@ -478,14 +485,12 @@ void ASTSelectQuery::setFinal() // NOLINT method can be made const
     auto & tables_in_select_query = tables()->as<ASTTablesInSelectQuery &>();
 
     if (tables_in_select_query.children.empty())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Tables list is empty, it's a bug");
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Streams list is empty, it's a bug");
 
     auto & tables_element = tables_in_select_query.children[0]->as<ASTTablesInSelectQueryElement &>();
 
     if (!tables_element.table_expression)
-        /// proton: starts
         throw Exception(ErrorCodes::LOGICAL_ERROR, "There is no stream expression, it's a bug");
-        /// proton: ends
 
     tables_element.table_expression->as<ASTTableExpression &>().final = true;
 }

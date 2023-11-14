@@ -59,6 +59,7 @@ public:
         size_t num_streams) override;
 
     bool supportsStreamingQuery() const override { return true; }
+    bool hasEvenlyDistributedRead() const override { return true; }
 
 private:
     UInt64 random_seed = 0;

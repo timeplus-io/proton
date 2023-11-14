@@ -1,25 +1,21 @@
 #pragma once
 
 #include <Processors/IProcessor.h>
-#include <Processors/Streaming/ChunkSplitter.h>
+#include <Processors/LightChunkSplitter.h>
 
 #include <queue>
 
-
 namespace DB
 {
-namespace Streaming
-{
-
-/// ShufflingTransform shuffle data from one input to N outputs
+/// LightShufflingTransform shuffle data from one input to N outputs
 /// according to keys. Data with the same key is guaranteed to push to
 /// the same outputs
-class ShufflingTransform final : public IProcessor
+class LightShufflingTransform final : public IProcessor
 {
 public:
-    ShufflingTransform(Block header_, size_t num_outputs_, std::vector<size_t> key_positions_);
+    LightShufflingTransform(Block header_, size_t num_outputs_, std::vector<size_t> key_positions_);
 
-    String getName() const override { return "ShufflingTransform"; }
+    String getName() const override { return "LightShufflingTransform"; }
 
     Status prepare(const PortNumbers & updated_inputs, const PortNumbers & updated_outputs) override;
 
@@ -47,9 +43,10 @@ private:
     size_t num_finished_outputs = 0;
 
     std::vector<std::queue<Chunk>> shuffled_output_chunks;
-    ChunkSplitter chunk_splitter;
+    LightChunkSplitter chunk_splitter;
     Chunk current_chunk;
 };
 
-}
+UInt16 bestTotalOutputStreams(size_t num_output_streams);
+
 }

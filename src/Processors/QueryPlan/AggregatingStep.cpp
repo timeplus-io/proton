@@ -59,6 +59,7 @@ AggregatingStep::AggregatingStep(
     size_t merge_threads_,
     size_t temporary_data_merge_threads_,
     bool storage_has_evenly_distributed_read_,
+    bool shuffled_,
     InputOrderInfoPtr group_by_info_,
     SortDescription group_by_sort_description_)
     : ITransformingStep(input_stream_, appendGroupingColumn(params_.getHeader(final_), grouping_sets_params_), getTraits(), false)
@@ -70,6 +71,7 @@ AggregatingStep::AggregatingStep(
     , merge_threads(merge_threads_)
     , temporary_data_merge_threads(temporary_data_merge_threads_)
     , storage_has_evenly_distributed_read(storage_has_evenly_distributed_read_)
+    , shuffled(shuffled_)
     , group_by_info(std::move(group_by_info_))
     , group_by_sort_description(std::move(group_by_sort_description_))
 {
@@ -103,7 +105,7 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
       * 1. Parallel aggregation is done, and the results should be merged in parallel.
       * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
       */
-    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final);
+    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, shuffled);
 
     if (!grouping_sets_params.empty())
     {
@@ -153,7 +155,7 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
                     transform_params->params.intermediate_header,
                     transform_params->params.stats_collecting_params
                 };
-                auto transform_params_for_set = std::make_shared<AggregatingTransformParams>(std::move(params_for_set), final);
+                auto transform_params_for_set = std::make_shared<AggregatingTransformParams>(std::move(params_for_set), final, shuffled);
 
                 if (streams > 1)
                 {
@@ -331,7 +333,10 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
     if (pipeline.getNumStreams() > 1)
     {
         /// Add resize transform to uniformly distribute data between aggregating streams.
-        if (!storage_has_evenly_distributed_read)
+        /// proton : starts / ends. When data gets shuffled, avoid resize here since
+        /// the shuffle processor is meant to partition the data evenly and according to
+        /// the shuffle key
+        if (!storage_has_evenly_distributed_read && !shuffled)
             pipeline.resize(pipeline.getNumStreams(), true, true);
 
         auto many_data = std::make_shared<ManyAggregatedData>(pipeline.getNumStreams());

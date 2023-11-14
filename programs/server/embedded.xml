@@ -22,18 +22,61 @@
     <mlock_executable>true</mlock_executable>
 
     <users>
-        <default>
-            <password></password>
+      <default>
+        <password></password>
 
-            <networks>
-                <ip>::/0</ip>
-            </networks>
+        <networks>
+          <ip>::/0</ip>
+        </networks>
 
-            <profile>default</profile>
-            <quota>default</quota>
-            <access_management>1</access_management>
-        </default>
+        <profile>default</profile>
+        <quota>default</quota>
+        <allow_databases>
+          <database>default</database>
+        </allow_databases>
+        <default_database>default</default_database>
+      </default>
+      <system>
+        <password>sys@t+</password>
+        <allow_databases>
+          <database>system</database>
+        </allow_databases>
+        <default_database>system</default_database>
+      </system>
+      <pgadmin>
+        <allow_databases>
+          <database>default</database>
+        </allow_databases>
+        <default_database>default</default_database>
+        <password>pgadmin</password>
+        <networks>
+          <ip>::/0</ip>
+        </networks>
+      </pgadmin>
+      <neutron>
+        <allow_databases>
+          <database>neutron</database>
+        </allow_databases>
+        <default_database>neutron</default_database>
+        <password>neutron@t+</password>
+        <networks>
+          <ip>::/0</ip>
+        </networks>
+      </neutron>
+      <proton>
+        <default_database>default</default_database>
+        <password>proton@t+</password>
+        <networks>
+          <ip>::1</ip>
+        </networks>
+        <networks>
+          <ip>127.0.0.1</ip>
+        </networks>
+        <access_management>1</access_management>
+      </proton>
     </users>
+
+    <grok_patterns_file>grok-patterns</grok_patterns_file>
 
     <profiles>
         <default/>

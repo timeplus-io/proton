@@ -36,6 +36,7 @@ public:
         size_t merge_threads_,
         size_t temporary_data_merge_threads_,
         bool storage_has_evenly_distributed_read_,
+        bool shuffled_,
         InputOrderInfoPtr group_by_info_,
         SortDescription group_by_sort_description_);
 
@@ -60,6 +61,7 @@ private:
     size_t temporary_data_merge_threads;
 
     bool storage_has_evenly_distributed_read;
+    bool shuffled;
 
     InputOrderInfoPtr group_by_info;
     SortDescription group_by_sort_description;
