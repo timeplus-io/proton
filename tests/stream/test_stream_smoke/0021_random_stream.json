@@ -374,6 +374,50 @@
                 ]
               }
             ]
+          },
+          {
+            "id": 17,
+            "tags": ["random stream table query"],
+            "name": "test random stream table query, set max_events=1000",
+            "description": "test random stream table query",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings eps=100000"},
+                  {"client":"python", "query_type": "table", "query_id":"2226", "wait":2, "query":"select count(1) from table(test22_create_random) settings max_events=1000"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {
+                "query_id":"2226", "expected_results":[
+                    ["1000"]
+                ]
+              }
+            ]
+          },
+          {
+            "id": 18,
+            "tags": ["random stream table query"],
+            "name": "test random stream stream query, set max_events=1000",
+            "description": "test random stream stream query",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings eps=1000"},
+                  {"client":"python", "query_type": "stream", "terminate" : "auto", "query_end_timer" : 7, "query_id":"2227", "wait":2, "query":"select count(1) from table(test22_create_random) settings max_events=5000"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {
+                "query_id":"2227", "expected_results":[
+                    ["5000"]
+                ]
+              }
+            ]
           }
     ]
   }
