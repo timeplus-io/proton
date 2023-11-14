@@ -130,7 +130,7 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
         auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertToChangelogChunk(
             many_data->variants, many_data->getField<ManyRetractedDataVariants>(), *params);
 
-            setCurrentChunk(std::move(chunk), chunk_ctx, std::move(retracted_chunk));
+        setCurrentChunk(std::move(chunk), chunk_ctx, std::move(retracted_chunk));
     }
     else
     {

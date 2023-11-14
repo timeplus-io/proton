@@ -4129,14 +4129,9 @@ void Aggregator::mergeRetractedGroupsImpl(
 
     /// 2) Merge retracted groups non-changed thread parts (based on all changed groups)
     /// `dst_retracted` <= (thread-1: group-2) + (thread-2: group-1)
-    /// 3) Merge new/updated groups (based on all changed groups)
-    /// `dst` <= (thread-1: group-1 group-2) + (thread-2: group-1 group-2)
     for (size_t result_num = 1, size = retracted_data.size(); result_num < size; ++result_num)
     {
         if (!checkLimits(retracted_res->sizeWithoutOverflowRow(), no_more_keys))
-            break;
-
-        if (!checkLimits(res->sizeWithoutOverflowRow(), no_more_keys))
             break;
 
         assert(!no_more_keys);
@@ -4155,8 +4150,22 @@ void Aggregator::mergeRetractedGroupsImpl(
                         find_it->getMapped(),
                         retracted_res->aggregates_pool,
                         /*clear_states*/ false);
-            }
+            }});
 
+        /// Reset retracted data after finalization
+        clearDataVariants(current_retracted);
+    }
+
+    /// 3) Merge new/updated groups (based on all changed groups)
+    /// `dst` <= (thread-1: group-1 group-2) + (thread-2: group-1 group-2)
+    for (size_t result_num = 1, size = aggregated_data.size(); result_num < size; ++result_num)
+    {
+        if (!checkLimits(res->sizeWithoutOverflowRow(), no_more_keys))
+            break;
+
+        assert(!no_more_keys);
+        Table & src_aggregated_table = getDataVariant<Method>(*aggregated_data[result_num]).data;
+        dst_retracted_table.forEachValue([&](const auto & key, auto & mapped) {
             /// Merge new/updated groups
             {
                 typename Table::LookupResult dst_it;
@@ -4174,9 +4183,6 @@ void Aggregator::mergeRetractedGroupsImpl(
                         /*clear_states*/ false);
             }
         });
-
-        /// Reset retracted data after finalization
-        clearDataVariants(current_retracted);
     }
 }
 

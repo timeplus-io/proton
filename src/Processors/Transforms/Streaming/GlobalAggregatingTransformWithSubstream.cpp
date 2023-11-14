@@ -26,7 +26,7 @@ GlobalAggregatingTransformWithSubstream::GlobalAggregatingTransformWithSubstream
 SubstreamContextPtr GlobalAggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
 {
     auto substream_ctx = AggregatingTransformWithSubstream::getOrCreateSubstreamContext(id);
-    if (params->emit_changelog)
+    if (params->emit_changelog && !substream_ctx->hasField())
     {
         if (params->emit_version)
             throw Exception(ErrorCodes::UNSUPPORTED, "'emit_version()' is not supported in global aggregation emit changelog");
