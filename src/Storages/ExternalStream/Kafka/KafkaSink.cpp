@@ -73,6 +73,7 @@ BlocksWithShard ChunkPartitioner::doParition(Block block, Int32 partition_cnt) c
     }
 
     BlocksWithShard blocks_with_shard;
+    blocks_with_shard.reserve(partitioned_blocks.size());
 
     /// Filter out empty blocks
     for (size_t i = 0; i < partitioned_blocks.size(); ++i)
