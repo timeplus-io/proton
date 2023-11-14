@@ -49,6 +49,22 @@ curl -L -o "$BINARY_FILE" "$DOWNLOAD_URL"
 # Check if the download was successful
 if [ $? -eq 0 ]; then
   echo "Download completed: $BINARY_FILE"
+  echo "
+To interact with Proton:
+0. Give Proton executable permissions:
+   sudo chmod u+x $BINARY_FILE
+
+1. Start the Proton server:
+   ./$BINARY_FILE server start
+
+2. In a separate terminal, connect to the server:
+   ./$BINARY_FILE client
+   (Note: If you encounter a 'connection refused' error, use: ./$BINARY_FILE client --host 127.0.0.1)
+
+3. To terminate the server, press ctrl+c in the server terminal.
+
+For detailed usage and more information, check out the Timeplus documentation:
+https://docs.timeplus.com/"
 else
   echo "Download failed or the binary for $OS-$ARCH is not available." >&2
 fi

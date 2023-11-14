@@ -72,6 +72,12 @@ If you stop the container and want to start it again, run `docker start proton`.
 
 If you are using Mac and homebrew, you can also check [homebrew-timeplus](https://github.com/timeplus-io/homebrew-timeplus) to easily install/upgrade proton.
 
+If you are interested in installing via single binary method, run:
+
+```
+curl -sSf https://raw.githubusercontent.com/timeplus-io/proton/develop/install.sh | sh
+```
+
 ### Query a test stream
 
 From `proton-client`, run the following SQL to create a stream of random data:
