@@ -4,6 +4,7 @@
 #include <KafkaLog/KafkaWALSimpleConsumer.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Processors/ISource.h>
+#include <Storages/IStorage.h>
 #include <Storages/StorageSnapshot.h>
 #include <Checkpoint/CheckpointRequest.h>
 
@@ -30,7 +31,8 @@ public:
         Int32 shard,
         Int64 offset,
         size_t max_block_size,
-        Poco::Logger * log_);
+        Poco::Logger * log_,
+        std::shared_ptr<ExternalStreamCounter> thecounter);
 
     ~KafkaSource() override;
 
@@ -103,6 +105,7 @@ private:
 
         State(const klog::KafkaWALContext & consume_ctx_) : topic(consume_ctx_.topic), partition(consume_ctx_.partition) { }
     } ckpt_data;
+    std::shared_ptr<ExternalStreamCounter> external_stream_counter;
 };
 
 }

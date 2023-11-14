@@ -13,6 +13,10 @@ class StorageExternalStreamImpl;
 /// external streaming storage like Kafka, Redpanda etc.
 class StorageExternalStream final : public shared_ptr_helper<StorageExternalStream>, public IStorage, public WithContext
 {
+    // StorageExternalStream(const StorageExternalStream &) = delete;
+    // StorageExternalStream(StorageExternalStream &&) = delete;
+    // StorageExternalStream & operator=(const StorageExternalStream &) = delete;
+    // StorageExternalStream & operator=(StorageExternalStream &&) = delete;
     friend struct shared_ptr_helper<StorageExternalStream>;
 
 public:
@@ -49,6 +53,8 @@ public:
     bool supportsStreamingQuery() const override { return true; }
 
     friend class KafkaSource;
+    //friend std::string getExternalStreamCounter(ContextPtr context);
+    std::shared_ptr<ExternalStreamCounter> getExternalStreamCounter();
 
 protected:
     StorageExternalStream(
@@ -61,6 +67,7 @@ protected:
 
 private:
     std::unique_ptr<StorageExternalStreamImpl> external_stream;
+    std::shared_ptr<ExternalStreamCounter> external_stream_counter;
 };
-
 }
+

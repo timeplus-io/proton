@@ -13,7 +13,7 @@ class IStorage;
 class Kafka final : public StorageExternalStreamImpl
 {
 public:
-    Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach);
+    Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, std::shared_ptr<ExternalStreamCounter> thecounter);
     ~Kafka() override = default;
 
     void startup() override { }

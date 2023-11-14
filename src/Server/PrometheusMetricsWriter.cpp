@@ -1,9 +1,9 @@
 #include "PrometheusMetricsWriter.h"
-
 #include <algorithm>
 
 #include <IO/WriteHelpers.h>
 #include <Common/StatusInfo.h>
+#include <Storages/ExternalStream/StorageExternalStream.h>
 #include <regex>
 
 namespace
@@ -41,12 +41,14 @@ namespace DB
 
 PrometheusMetricsWriter::PrometheusMetricsWriter(
     const Poco::Util::AbstractConfiguration & config, const std::string & config_name,
-    const AsynchronousMetrics & async_metrics_)
+    const AsynchronousMetrics & async_metrics_, ContextPtr context)
     : async_metrics(async_metrics_)
+    , context(context)
     , send_events(config.getBool(config_name + ".events", true))
     , send_metrics(config.getBool(config_name + ".metrics", true))
     , send_asynchronous_metrics(config.getBool(config_name + ".asynchronous_metrics", true))
     , send_status_info(config.getBool(config_name + ".status_info", true))
+    , send_external_stream(config.getBool(config_name+".external_stream", true))
 {
 }
 
@@ -121,7 +123,6 @@ void PrometheusMetricsWriter::write(WriteBuffer & wb) const
 
             writeOutLine(wb, "# HELP", key, metric_doc);
             writeOutLine(wb, "# TYPE", key, "gauge");
-
             for (const auto & value: CurrentStatusInfo::values[i])
             {
                 for (const auto & enum_value: CurrentStatusInfo::getAllPossibleValues(static_cast<CurrentStatusInfo::Status>(i)))
@@ -136,6 +137,35 @@ void PrometheusMetricsWriter::write(WriteBuffer & wb) const
                     DB::writeText("} ", wb);
                     DB::writeText(value.second == enum_value.second, wb);
                     DB::writeChar('\n', wb);
+                }
+            }
+        }
+    }
+    if (send_external_stream) {
+        auto databases = DatabaseCatalog::instance().getDatabases();
+        for (const auto & database_name : databases | boost::adaptors::map_keys){
+            DatabasePtr database = DatabaseCatalog::instance().tryGetDatabase(database_name);
+            if (!database)
+                continue;
+            for (auto table_it = database->getTablesIterator(context); table_it->isValid(); table_it->next()) {
+                StoragePtr tableptr = table_it->table();
+                if(auto * external_stream = tableptr->as<StorageExternalStream>()){
+                    auto tablestorageid = external_stream->getStorageID();
+                    std::string tablename = tablestorageid.getFullTableName();
+                    auto excounter = external_stream->getExternalStreamCounter();
+                    std::vector<ExternalStreamCounter::CounterInfo> counters = excounter->getCounters();
+                    for (const auto& cntinfo : counters) {
+                        std::string key{external_stream_prefix + cntinfo.name};
+                        writeOutLine(wb, "# TYPE", key, "counter");
+                        DB::writeText(key, wb);
+                        DB::writeText("{name=", wb);
+                        DB::writeText(tablename, wb);
+                        DB::writeText("}=", wb);
+                        DB::writeText(key, wb);
+                        DB::writeChar(' ', wb);
+                        DB::writeIntText(cntinfo.value, wb);
+                        DB::writeChar('\n', wb);
+                    }
                 }
             }
         }

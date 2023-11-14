@@ -91,6 +91,37 @@ struct ColumnSize
 
 using IndexSize = ColumnSize;
 
+struct ExternalStreamCounter {
+private:
+
+    std::atomic<int> readBytes;
+    std::atomic<int> readCounts;
+    std::atomic<int> readFailed;
+
+public:
+    int getReadBytes() { return readBytes.load();}
+    int getReadCounts() { return readCounts.load();}
+    int getReadFailed() { return readFailed.load();}
+
+    void addToReadBytes(int bytes) { readBytes.fetch_add(bytes);}
+    void addToReadCounts(int counts) { readCounts.fetch_add(counts);}
+    void addToReadFailed(int amount) { readFailed.fetch_add(amount);}
+    
+    struct CounterInfo {
+        std::string name;
+        int value;
+    };
+
+    std::vector<CounterInfo> getCounters() const {
+        return {
+            {"ReadBytes", readBytes.load()},
+            {"ReadCounts", readCounts.load()},
+            {"ReadFailed", readFailed.load()},
+        };
+    }
+
+};
+
 /** Storage. Describes the table. Responsible for
   * - storage of the table data;
   * - the definition in which files (or not in files) the data is stored;
