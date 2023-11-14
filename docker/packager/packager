@@ -217,24 +217,26 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_THRIFT=ON')
         cmake_flags.append('-DENABLE_GEO_FUNCS=ON')
         cmake_flags.append('-DENABLE_HASH_FUNCS=ON')
+        cmake_flags.append('-DENABLE_KRB5=ON')
+        cmake_flags.append('-DENABLE_CYRUS_SASL=ON')
         cmake_flags.append('-DENABLE_INTROSPECTION_FUNCS=ON')
         cmake_flags.append('-DENABLE_BROTLI=ON')
         cmake_flags.append('-DENABLE_S3=ON')
         cmake_flags.append('-DENABLE_URL_FUNCS=ON')
 
-    # contrib/krb5-cmake/CMakeLists.txt:3 "krb5 disabled in non-Linux and non-native-Darwin environments"
-    # cyrus-sasl needs krb5:
-    # in contrib/cyrus-sasl-cmake/CMakeLists.txt:79 `target_link_libraries(_sasl2 PUBLIC ch_contrib::krb5)`
+    # 1. krb5: contrib/krb5-cmake/CMakeLists.txt:3 "krb5 disabled in non-Linux and non-native-Darwin environments"
+    # see https://github.com/timeplus-io/proton/blob/d643e51b14a20278bcaa74f6c6fcf58ea29ae5f1/contrib/krb5-cmake/CMakeLists.txt#L2-L3
+    # 2. cyrus-sasl needs krb5: `target_link_libraries(_sasl2 PUBLIC ch_contrib::krb5)`
+    # see https://github.com/timeplus-io/proton/blob/d643e51b14a20278bcaa74f6c6fcf58ea29ae5f1/contrib/cyrus-sasl-cmake/CMakeLists.txt#L78-L79
+    # 3. cross_compiling will not build grpc, see https://github.com/timeplus-io/proton/blob/d643e51b14a20278bcaa74f6c6fcf58ea29ae5f1/cmake/target.cmake#L25
     if is_cross_darwin or is_cross_darwin_arm:
         cmake_flags.append('-DENABLE_KRB5=OFF')
         cmake_flags.append('-DENABLE_CYRUS_SASL=OFF')
+        cmake_flags.append('-DENABLE_GRPC=OFF')
 
         cmake_flags.append('-DENABLE_TESTS=OFF')
         cmake_flags.append('-DENABLE_UTILS=OFF')
         cmake_flags.append('-DENABLE_EXAMPLES=OFF')
-    else:
-        cmake_flags.append('-DENABLE_KRB5=ON')
-        cmake_flags.append('-DENABLE_CYRUS_SASL=ON')
 
     if build_type == "release":
         cmake_flags.append('-DENABLE_TESTS=OFF')
