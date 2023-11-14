@@ -698,9 +698,12 @@ Pipe StorageRandom::read(
     auto max_events = context->getSettingsRef().max_events;
     auto events_share = max_events / num_streams;
     auto events_remainder = max_events % num_streams;
-    if (events_per_second < num_streams)
+
+    /// setting random stream eps in query time, if generate_eps is not defalut value, use generate_eps as eps first.
+    UInt64 eps = context->getSettingsRef().generate_eps < 0 ? events_per_second : static_cast<UInt64>(context->getSettingsRef().generate_eps);
+    if (eps < num_streams)
     {
-        if (events_per_second == 0)
+        if (eps == 0)
         {
             /// special case eps = 0: means no limit
             for (size_t i = 0; i < num_streams - 1; i++)
@@ -737,7 +740,7 @@ Pipe StorageRandom::read(
                 block_header,
                 our_columns,
                 context,
-                events_per_second,
+                eps,
                 1000,
                 query_info.syntax_analyzer_result->streaming,
                 max_events));
@@ -745,8 +748,8 @@ Pipe StorageRandom::read(
     }
     else
     {
-        size_t eps_thread = events_per_second / num_streams;
-        size_t remainder = events_per_second % num_streams;
+        size_t eps_thread = eps / num_streams;
+        size_t remainder = eps % num_streams;
         /// number of data generated per second is bigger than the number of thread;
         for (size_t i = 0; i < num_streams - 1; i++)
         {
