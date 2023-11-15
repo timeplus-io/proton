@@ -14,3 +14,4 @@ struct BlockWithShard
 
 using BlocksWithShard = std::vector<BlockWithShard>;
 }
+
