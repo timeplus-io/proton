@@ -741,15 +741,15 @@ public:
 
     /// Execute and retract state for changed groups:
     /// 1) For new group:
-    ///     @p retracted_result: add an elem <group_key, null> if not exists
-    ///     @p result:           add an elem <group_key, curent_state>
+    ///     \retracted_result: add an elem <group_key, null> if not exists
+    ///     \result:           add an elem <group_key, curent_state>
     /// 2) For updated group:
-    ///     @p retracted_result: add an elem <group_key, last_state> if not exists
-    ///     @p result:           update the elem <group_key, curent_state>
+    ///     \retracted_result: add an elem <group_key, last_state> if not exists
+    ///     \result:           update the elem <group_key, curent_state>
     /// 3) For deleted group:
-    ///     @p retracted_result: add an elem <group_key, last_state> if not exists
-    ///     @p result:           delete the <group_key> group
-    /// @return {should_abort, need_finalization} pair
+    ///     \retracted_result: add an elem <group_key, last_state> if not exists
+    ///     \result:           delete the <group_key> group
+    /// \returns {should_abort, need_finalization} bool pair
     /// should_abort: if the processing should be aborted (with group_by_overflow_mode = 'break') return true, otherwise false.
     /// need_finalization : only for UDA aggregation. If there is no UDA, always false
     std::pair<bool, bool> executeAndRetractOnBlock(

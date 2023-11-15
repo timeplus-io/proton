@@ -1424,7 +1424,7 @@ BlocksList Aggregator::mergeAndConvertTwoLevelToBlocksImpl(
     }
 
     std::atomic<size_t> next_bucket_idx_to_merge = 0;
-    auto converter = [&](size_t thread_id, ThreadGroupStatusPtr thread_group) {
+    auto converter = [&](size_t thread_id, ThreadGroupStatusPtr thread_group, const std::atomic_flag * cancelled) {
         SCOPE_EXIT_SAFE(if (thread_group) CurrentThread::detachQueryIfNotDetached(););
         if (thread_group)
             CurrentThread::attachToIfDetached(thread_group);
@@ -1432,6 +1432,9 @@ BlocksList Aggregator::mergeAndConvertTwoLevelToBlocksImpl(
         BlocksList blocks;
         while (true)
         {
+            if (cancelled && cancelled->test())
+                break;
+
             UInt32 bucket_idx = next_bucket_idx_to_merge.fetch_add(1);
             if (bucket_idx >= buckets.size())
                 break;
@@ -1460,7 +1463,7 @@ BlocksList Aggregator::mergeAndConvertTwoLevelToBlocksImpl(
 
     auto num_threads = std::min(max_threads, buckets.size());
     if (num_threads <= 1)
-        converter(0, nullptr);
+        return converter(0, nullptr, nullptr);
 
     /// Process in parallel
     /// proton FIXME : separate final vs non-final converting. For non-final converting, we don't need
@@ -1471,14 +1474,18 @@ BlocksList Aggregator::mergeAndConvertTwoLevelToBlocksImpl(
     auto results = std::make_shared<std::vector<BlocksList>>();
     results->resize(num_threads);
     ThreadPool thread_pool(num_threads);
+    std::atomic_flag cancelled;
     try
     {
         for (size_t thread_id = 0; thread_id < num_threads; ++thread_id)
-            thread_pool.scheduleOrThrowOnError([thread_id, group = CurrentThread::getGroup(), results, &converter] { (*results)[thread_id] = converter(thread_id, group); });
+            thread_pool.scheduleOrThrowOnError([thread_id, group = CurrentThread::getGroup(), results, &converter, &cancelled] {
+                (*results)[thread_id] = converter(thread_id, group, &cancelled);
+            });
     }
     catch (...)
     {
         /// If this is not done, then in case of an exception, tasks will be destroyed before the threads are completed, and it will be bad.
+        cancelled.test_and_set();
         thread_pool.wait();
         throw;
     }
