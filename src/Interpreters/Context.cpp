@@ -12,6 +12,7 @@
 #include <Common/thread_local_rng.h>
 #include <Common/FieldVisitorToString.h>
 #include <Common/getMultipleKeysFromConfig.h>
+#include <Common/callOnce.h>
 #include <Coordination/KeeperDispatcher.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Formats/FormatFactory.h>
@@ -153,8 +154,8 @@ struct ContextSharedPart : boost::noncopyable
 {
     Poco::Logger * log = &Poco::Logger::get("Context");
 
-    /// For access of most of shared objects. Recursive mutex.
-    mutable std::recursive_mutex mutex;
+    /// For access of most of shared objects.
+    mutable SharedMutex mutex;
     /// Separate mutex for access of dictionaries. Separate mutex to avoid locks when server doing request to itself.
     mutable std::mutex embedded_dictionaries_mutex;
     mutable std::mutex external_dictionaries_mutex;
@@ -219,10 +220,14 @@ struct ContextSharedPart : boost::noncopyable
     /// proton: ends
     scope_guard user_defined_executable_functions_xmls;
 
+    mutable OnceFlag user_defined_sql_objects_loader_initializer;
     mutable std::unique_ptr<IUserDefinedSQLObjectsLoader> user_defined_sql_objects_loader;
 
 #if USE_NLP
+    mutable OnceFlag synonyms_extensions_initializer;
     mutable std::optional<SynonymsExtensions> synonyms_extensions;
+
+    mutable OnceFlag lemmatizers_initializer;
     mutable std::optional<Lemmatizers> lemmatizers;
 #endif
 
@@ -232,6 +237,7 @@ struct ContextSharedPart : boost::noncopyable
     std::unique_ptr<AccessControl> access_control;
     mutable UncompressedCachePtr uncompressed_cache;        /// The cache of decompressed blocks.
     mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
+    mutable OnceFlag load_marks_threadpool_initializer;
     mutable std::unique_ptr<ThreadPool> load_marks_threadpool; /// Threadpool for loading marks cache.
     mutable UncompressedCachePtr index_uncompressed_cache;  /// The cache of decompressed blocks for MergeTree indices.
     mutable MarkCachePtr index_mark_cache;                  /// Cache of marks in compressed files of MergeTree indices.
@@ -248,10 +254,12 @@ struct ContextSharedPart : boost::noncopyable
     mutable std::unique_ptr<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
     mutable std::unique_ptr<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
 
+    mutable OnceFlag readers_initializer;
     mutable std::unique_ptr<IAsynchronousReader> asynchronous_remote_fs_reader;
     mutable std::unique_ptr<IAsynchronousReader> asynchronous_local_fs_reader;
     mutable std::unique_ptr<IAsynchronousReader> synchronous_local_fs_reader;
 
+    mutable OnceFlag threadpool_writer_initializer;
     mutable std::unique_ptr<ThreadPool> threadpool_writer;
 
     mutable ThrottlerPtr remote_read_throttler;             /// A server-wide throttler for remote IO reads
@@ -272,7 +280,9 @@ struct ContextSharedPart : boost::noncopyable
     std::atomic_size_t max_stream_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     std::atomic_size_t max_partition_size_to_drop = 50000000000lu; /// Protects MergeTree partitions from accidental DROP (50GB by default)
     String format_schema_path;                              /// Path to a directory that contains schema files used by input formats.
+    mutable OnceFlag action_locks_manager_initializer;
     ActionLocksManagerPtr action_locks_manager;             /// Set of storages' action lockers
+    OnceFlag system_logs_initializer;
     std::unique_ptr<SystemLogs> system_logs;                /// Used to log queries and operations on parts
     std::optional<StorageS3Settings> storage_s3_settings;   /// Settings of S3 storage
     std::vector<String> warnings;                           /// Store warning messages about server configuration.
@@ -569,10 +579,11 @@ struct ContextSharedPart : boost::noncopyable
     }
 };
 
+ContextData::ContextData() = default;
+ContextData::ContextData(const ContextData &) = default;
 
 Context::Context() = default;
-Context::Context(const Context &) = default;
-Context & Context::operator=(const Context &) = default;
+Context::Context(const Context & rhs) : ContextData(rhs), std::enable_shared_from_this<Context>(rhs) {}
 
 SharedContextHolder::SharedContextHolder(SharedContextHolder &&) noexcept = default;
 SharedContextHolder & SharedContextHolder::operator=(SharedContextHolder &&) noexcept = default;
@@ -583,10 +594,10 @@ SharedContextHolder::SharedContextHolder(std::unique_ptr<ContextSharedPart> shar
 
 void SharedContextHolder::reset() { shared.reset(); }
 
-ContextMutablePtr Context::createGlobal(ContextSharedPart * shared)
+ContextMutablePtr Context::createGlobal(ContextSharedPart * shared_part)
 {
     auto res = std::shared_ptr<Context>(new Context);
-    res->shared = shared;
+    res->shared = shared_part;
     return res;
 }
 
@@ -607,7 +618,7 @@ ContextMutablePtr Context::createCopy(const ContextPtr & other)
     /// Ported the PR 'fix race in context::createcopy' from https://github.com/ClickHouse/ClickHouse/pull/49663/files
     /// Tests associated with this PR were not ported. The related tests require additional functions which are not utilized in proton now.
 
-    auto lock = other->getLock();
+    auto lock = other->getLocalSharedLock();
     return std::shared_ptr<Context>(new Context(*other));
 }
 
@@ -628,12 +639,42 @@ Context::~Context() = default;
 
 InterserverIOHandler & Context::getInterserverIOHandler() { return shared->interserver_io_handler; }
 
-std::unique_lock<std::recursive_mutex> Context::getLock() const
+std::unique_lock<SharedMutex> Context::getGlobalLock() const
 {
     ProfileEvents::increment(ProfileEvents::ContextLock);
     CurrentMetrics::Increment increment{CurrentMetrics::ContextLockWait};
     Stopwatch watch;
     auto lock = std::unique_lock(shared->mutex);
+    ProfileEvents::increment(ProfileEvents::ContextLockWaitMicroseconds, watch.elapsedMicroseconds());
+    return lock;
+}
+
+std::shared_lock<SharedMutex> Context::getGlobalSharedLock() const
+{
+    ProfileEvents::increment(ProfileEvents::ContextLock);
+    CurrentMetrics::Increment increment{CurrentMetrics::ContextLockWait};
+    Stopwatch watch;
+    auto lock = std::shared_lock(shared->mutex);
+    ProfileEvents::increment(ProfileEvents::ContextLockWaitMicroseconds, watch.elapsedMicroseconds());
+    return lock;
+}
+
+std::unique_lock<SharedMutex> Context::getLocalLock() const
+{
+    ProfileEvents::increment(ProfileEvents::ContextLock);
+    CurrentMetrics::Increment increment{CurrentMetrics::ContextLockWait};
+    Stopwatch watch;
+    auto lock = std::unique_lock(mutex);
+    ProfileEvents::increment(ProfileEvents::ContextLockWaitMicroseconds, watch.elapsedMicroseconds());
+    return lock;
+}
+
+std::shared_lock<SharedMutex> Context::getLocalSharedLock() const
+{
+    ProfileEvents::increment(ProfileEvents::ContextLock);
+    CurrentMetrics::Increment increment{CurrentMetrics::ContextLockWait};
+    Stopwatch watch;
+    auto lock = std::shared_lock(mutex);
     ProfileEvents::increment(ProfileEvents::ContextLockWaitMicroseconds, watch.elapsedMicroseconds());
     return lock;
 }
@@ -654,31 +695,31 @@ String Context::resolveDatabase(const String & database_name) const
 
 String Context::getPath() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return shared->path;
 }
 
 String Context::getFlagsPath() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return shared->flags_path;
 }
 
 String Context::getUserFilesPath() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return shared->user_files_path;
 }
 
 String Context::getDictionariesLibPath() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return shared->dictionaries_lib_path;
 }
 
 String Context::getUserScriptsPath() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return shared->user_scripts_path;
 }
 
@@ -686,7 +727,7 @@ Strings Context::getWarnings() const
 {
     Strings common_warnings;
     {
-        auto lock = getLock();
+        auto lock = getGlobalSharedLock();
         common_warnings = shared->warnings;
     }
     for (const auto & setting : settings)
@@ -703,13 +744,13 @@ Strings Context::getWarnings() const
 
 VolumePtr Context::getTemporaryVolume() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return shared->tmp_volume;
 }
 
 void Context::setPath(const String & path)
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
 
     shared->path = path;
 
@@ -759,44 +800,52 @@ VolumePtr Context::setTemporaryStorage(const String & path, const String & polic
 
 void Context::setFlagsPath(const String & path)
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
     shared->flags_path = path;
 }
 
 void Context::setUserFilesPath(const String & path)
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
     shared->user_files_path = path;
 }
 
 void Context::setDictionariesLibPath(const String & path)
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
     shared->dictionaries_lib_path = path;
 }
 
 void Context::setUserScriptsPath(const String & path)
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
     shared->user_scripts_path = path;
 }
 
 void Context::addWarningMessage(const String & msg)
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
     shared->addWarningMessage(msg);
 }
 
 void Context::setConfig(const ConfigurationPtr & config)
 {
-    auto lock = getLock();
+    if (!config)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Set nullptr config is invalid");
+
+    auto lock = getGlobalLock();
     shared->config = config;
     shared->access_control->setExternalAuthenticatorsConfig(*shared->config);
 }
 
+const Poco::Util::AbstractConfiguration & Context::getConfigRefWithLock(const std::unique_lock<SharedMutex> &) const
+{
+    return shared->config ? *shared->config : Poco::Util::Application::instance().config();
+}
+
 const Poco::Util::AbstractConfiguration & Context::getConfigRef() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return shared->config ? *shared->config : Poco::Util::Application::instance().config();
 }
 
@@ -813,32 +862,32 @@ const AccessControl & Context::getAccessControl() const
 
 void Context::setExternalAuthenticatorsConfig(const Poco::Util::AbstractConfiguration & config)
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
     shared->access_control->setExternalAuthenticatorsConfig(config);
 }
 
 std::unique_ptr<GSSAcceptorContext> Context::makeGSSAcceptorContext() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return std::make_unique<GSSAcceptorContext>(shared->access_control->getExternalAuthenticators().getKerberosParams());
 }
 
 void Context::setUsersConfig(const ConfigurationPtr & config)
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
     shared->users_config = config;
     shared->access_control->setUsersConfig(*shared->users_config);
 }
 
 ConfigurationPtr Context::getUsersConfig()
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return shared->users_config;
 }
 
 void Context::setUser(const UUID & user_id_)
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
 
     user_id = user_id_;
 
@@ -850,10 +899,10 @@ void Context::setUser(const UUID & user_id_)
 
     auto default_profile_info = access->getDefaultProfileInfo();
     settings_constraints_and_current_profiles = default_profile_info->getConstraintsAndProfileIDs();
-    applySettingsChanges(default_profile_info->settings);
+    applySettingsChangesWithLock(default_profile_info->settings, lock);
 
     if (!user->default_database.empty())
-        setCurrentDatabase(user->default_database);
+        setCurrentDatabaseWithLock(user->default_database, lock);
 }
 
 std::shared_ptr<const User> Context::getUser() const
@@ -868,7 +917,7 @@ String Context::getUserName() const
 
 std::optional<UUID> Context::getUserID() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return user_id;
 }
 
@@ -913,18 +962,23 @@ void Context::setUserByName(const String & user_name)
 
 void Context::setQuotaKey(String quota_key_)
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
     client_info.quota_key = std::move(quota_key_);
 }
 
 
-void Context::setCurrentRoles(const std::vector<UUID> & current_roles_)
+void Context::setCurrentRolesWithLock(const std::vector<UUID> & current_roles_, const std::unique_lock<SharedMutex> & lock)
 {
-    auto lock = getLock();
     if (current_roles ? (*current_roles == current_roles_) : current_roles_.empty())
        return;
     current_roles = std::make_shared<std::vector<UUID>>(current_roles_);
-    calculateAccessRights();
+    calculateAccessRightsWithLock(lock);
+}
+
+void Context::setCurrentRoles(const std::vector<UUID> & current_roles_)
+{
+    auto lock = getLocalLock();
+    setCurrentRolesWithLock(current_roles_, lock);
 }
 
 void Context::setCurrentRolesDefault()
@@ -948,10 +1002,8 @@ std::shared_ptr<const EnabledRolesInfo> Context::getRolesInfo() const
     return getAccess()->getRolesInfo();
 }
 
-
-void Context::calculateAccessRights()
+void Context::calculateAccessRightsWithLock(const std::unique_lock<SharedMutex> & lock)
 {
-    auto lock = getLock();
     if (user_id)
         access = getAccessControl().getContextAccess(
             *user_id,
@@ -959,7 +1011,7 @@ void Context::calculateAccessRights()
             /* use_default_roles = */ false,
             settings,
             current_database,
-            client_info);
+            client_info);    
 }
 
 
@@ -985,20 +1037,20 @@ void Context::checkAccess(const AccessRightsElements & elements) const { return 
 
 std::shared_ptr<const ContextAccess> Context::getAccess() const
 {
-    auto lock = getLock();
+    auto lock = getLocalSharedLock();
     return access ? access : ContextAccess::getFullAccess();
 }
 
 ASTPtr Context::getRowPolicyFilter(const String & database, const String & table_name, RowPolicyFilterType filter_type) const
 {
-    auto lock = getLock();
+    auto lock = getLocalSharedLock();
     auto row_filter_of_initial_user = row_policies_of_initial_user ? row_policies_of_initial_user->getFilter(database, table_name, filter_type) : nullptr;
     return getAccess()->getRowPolicyFilter(database, table_name, filter_type, row_filter_of_initial_user);
 }
 
 void Context::enableRowPoliciesOfInitialUser()
 {
-    auto lock = getLock();
+    auto lock = getLocalSharedLock();
     row_policies_of_initial_user = nullptr;
     if (client_info.initial_user == client_info.current_user)
         return;
@@ -1021,13 +1073,12 @@ std::optional<QuotaUsage> Context::getQuotaUsage() const
 }
 
 
-void Context::setCurrentProfile(const String & profile_name)
+void Context::setCurrentProfileWithLock(const String & profile_name, const std::unique_lock<SharedMutex> & lock)
 {
-    auto lock = getLock();
     try
     {
         UUID profile_id = getAccessControl().getID<SettingsProfile>(profile_name);
-        setCurrentProfile(profile_id);
+        setCurrentProfileWithLock(profile_id, lock);
     }
     catch (Exception & e)
     {
@@ -1036,25 +1087,35 @@ void Context::setCurrentProfile(const String & profile_name)
     }
 }
 
-void Context::setCurrentProfile(const UUID & profile_id)
+void Context::setCurrentProfileWithLock(const UUID & profile_id, const std::unique_lock<SharedMutex> & lock)
 {
-    auto lock = getLock();
     auto profile_info = getAccessControl().getSettingsProfileInfo(profile_id);
-    checkSettingsConstraints(profile_info->settings);
-    applySettingsChanges(profile_info->settings);
+    checkSettingsConstraintsWithLock(profile_info->settings);
+    applySettingsChangesWithLock(profile_info->settings, lock);
     settings_constraints_and_current_profiles = profile_info->getConstraintsAndProfileIDs(settings_constraints_and_current_profiles);
 }
 
+void Context::setCurrentProfile(const String & profile_name)
+{
+    auto lock = getLocalLock();
+    setCurrentProfileWithLock(profile_name, lock);
+}
+
+void Context::setCurrentProfile(const UUID & profile_id)
+{
+    auto lock = getLocalLock();
+    setCurrentProfileWithLock(profile_id, lock);
+}
 
 std::vector<UUID> Context::getCurrentProfiles() const
 {
-    auto lock = getLock();
+    auto lock = getLocalSharedLock();
     return settings_constraints_and_current_profiles->current_profiles;
 }
 
 std::vector<UUID> Context::getEnabledProfiles() const
 {
-    auto lock = getLock();
+    auto lock = getLocalSharedLock();
     return settings_constraints_and_current_profiles->enabled_profiles;
 }
 
@@ -1090,7 +1151,7 @@ Tables Context::getExternalTables() const
     if (isGlobalContext())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Global context cannot have external tables");
 
-    auto lock = getLock();
+    auto lock = getLocalSharedLock();
 
     Tables res;
     for (const auto & table : external_tables_mapping)
@@ -1117,7 +1178,7 @@ void Context::addExternalTable(const String & table_name, TemporaryTableHolder &
     if (isGlobalContext())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Global context cannot have external tables");
 
-    auto lock = getLock();
+    auto lock = getLocalLock();
     if (external_tables_mapping.end() != external_tables_mapping.find(table_name))
         throw Exception("Temporary stream " + backQuoteIfNeed(table_name) + " already exists.", ErrorCodes::STREAM_ALREADY_EXISTS);
     external_tables_mapping.emplace(table_name, std::make_shared<TemporaryTableHolder>(std::move(temporary_table)));
@@ -1131,7 +1192,7 @@ std::shared_ptr<TemporaryTableHolder> Context::removeExternalTable(const String 
 
     std::shared_ptr<TemporaryTableHolder> holder;
     {
-        auto lock = getLock();
+        auto lock = getLocalLock();
         auto iter = external_tables_mapping.find(table_name);
         if (iter == external_tables_mapping.end())
             return {};
@@ -1275,14 +1336,14 @@ StoragePtr Context::getViewSource() const
 
 Settings Context::getSettings() const
 {
-    auto lock = getLock();
+    auto lock = getLocalSharedLock();
     return settings;
 }
 
 
 void Context::setSettings(const Settings & settings_)
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
     auto old_readonly = settings.readonly;
     auto old_allow_ddl = settings.allow_ddl;
     auto old_allow_introspection_functions = settings.allow_introspection_functions;
@@ -1290,39 +1351,70 @@ void Context::setSettings(const Settings & settings_)
     settings = settings_;
 
     if ((settings.readonly != old_readonly) || (settings.allow_ddl != old_allow_ddl) || (settings.allow_introspection_functions != old_allow_introspection_functions))
-        calculateAccessRights();
+        calculateAccessRightsWithLock(lock);
 }
 
+
+void Context::setSettingWithLock(std::string_view name, const String & value, const std::unique_lock<SharedMutex> & lock)
+{
+    if (name == "profile")
+    {
+        setCurrentProfileWithLock(value, lock);
+        return;
+    }
+    settings.set(name, value);
+
+    if (name == "readonly" || name == "allow_ddl" || name == "allow_introspection_functions")
+        calculateAccessRightsWithLock(lock);
+}
+
+
+void Context::setSettingWithLock(std::string_view name, const Field & value, const std::unique_lock<SharedMutex> & lock)
+{
+    if (name == "profile")
+    {
+        setCurrentProfileWithLock(value.safeGet<String>(), lock);
+        return;
+    }
+    settings.set(name, value);
+
+    if (name == "readonly" || name == "allow_ddl" || name == "allow_introspection_functions")
+        calculateAccessRightsWithLock(lock);
+}
+
+void Context::applySettingChangeWithLock(const SettingChange & change, const std::unique_lock<SharedMutex> & lock)
+{
+    try
+    {
+        setSettingWithLock(change.name, change.value, lock);
+    }
+    catch (Exception & e)
+    {
+        e.addMessage(fmt::format(
+                         "in attempt to set the value of setting '{}' to {}",
+                         change.name, applyVisitor(FieldVisitorToString(), change.value)));
+        throw;
+    }
+}
+
+void Context::applySettingsChangesWithLock(const SettingsChanges & changes, const std::unique_lock<SharedMutex> & lock)
+{
+    for (const SettingChange & change : changes)
+        applySettingChangeWithLock(change, lock);
+    applySettingsQuirks(settings);
+}
 
 void Context::setSetting(std::string_view name, const String & value)
 {
-    auto lock = getLock();
-    if (name == "profile")
-    {
-        setCurrentProfile(value);
-        return;
-    }
-    settings.set(name, value);
-
-    if (name == "readonly" || name == "allow_ddl" || name == "allow_introspection_functions")
-        calculateAccessRights();
+    auto lock = getLocalLock();
+    setSettingWithLock(name, value, lock);
 }
-
 
 void Context::setSetting(std::string_view name, const Field & value)
 {
-    auto lock = getLock();
-    if (name == "profile")
-    {
-        setCurrentProfile(value.safeGet<String>());
-        return;
-    }
-    settings.set(name, value);
-
-    if (name == "readonly" || name == "allow_ddl" || name == "allow_introspection_functions")
-        calculateAccessRights();
+    auto lock = getLocalLock();
+    setSettingWithLock(name, value, lock);
 }
-
 
 void Context::applySettingChange(const SettingChange & change)
 {
@@ -1341,55 +1433,79 @@ void Context::applySettingChange(const SettingChange & change)
 
 void Context::applySettingsChanges(const SettingsChanges & changes)
 {
-    auto lock = getLock();
-    for (const SettingChange & change : changes)
-        applySettingChange(change);
-    applySettingsQuirks(settings);
+    auto lock = getLocalLock();
+    applySettingsChangesWithLock(changes, lock);
+}
+
+void Context::checkSettingsConstraintsWithLock(const SettingChange & change) const
+{
+    getSettingsConstraintsAndCurrentProfilesWithLock()->constraints.check(settings, change);
+}
+
+void Context::checkSettingsConstraintsWithLock(const SettingsChanges & changes) const
+{
+    getSettingsConstraintsAndCurrentProfilesWithLock()->constraints.check(settings, changes);
+}
+
+void Context::checkSettingsConstraintsWithLock(SettingsChanges & changes) const
+{
+    getSettingsConstraintsAndCurrentProfilesWithLock()->constraints.check(settings, changes);
+}
+
+void Context::clampToSettingsConstraintsWithLock(SettingsChanges & changes) const
+{
+    getSettingsConstraintsAndCurrentProfilesWithLock()->constraints.clamp(settings, changes);
 }
 
 
 void Context::checkSettingsConstraints(const SettingChange & change) const
 {
-    getSettingsConstraintsAndCurrentProfiles()->constraints.check(settings, change);
+    auto shared_lock = getLocalSharedLock();
+    checkSettingsConstraintsWithLock(change);
 }
 
 void Context::checkSettingsConstraints(const SettingsChanges & changes) const
 {
+    auto shared_lock = getLocalSharedLock();
     getSettingsConstraintsAndCurrentProfiles()->constraints.check(settings, changes);
 }
 
 void Context::checkSettingsConstraints(SettingsChanges & changes) const
 {
-    getSettingsConstraintsAndCurrentProfiles()->constraints.check(settings, changes);
+    auto shared_lock = getLocalSharedLock();
+    checkSettingsConstraintsWithLock(changes);
 }
 
 void Context::clampToSettingsConstraints(SettingsChanges & changes) const
 {
-    getSettingsConstraintsAndCurrentProfiles()->constraints.clamp(settings, changes);
+    auto shared_lock = getLocalSharedLock();
+    clampToSettingsConstraintsWithLock(changes);
 }
 
 void Context::resetSettingsToDefaultValue(const std::vector<String> & names)
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
     for (const String & name: names)
-    {
         settings.setDefaultValue(name);
-    }
 }
 
-std::shared_ptr<const SettingsConstraintsAndProfileIDs> Context::getSettingsConstraintsAndCurrentProfiles() const
+std::shared_ptr<const SettingsConstraintsAndProfileIDs> Context::getSettingsConstraintsAndCurrentProfilesWithLock() const
 {
-    auto lock = getLock();
     if (settings_constraints_and_current_profiles)
         return settings_constraints_and_current_profiles;
     static auto no_constraints_or_profiles = std::make_shared<SettingsConstraintsAndProfileIDs>(getAccessControl());
     return no_constraints_or_profiles;
 }
 
+std::shared_ptr<const SettingsConstraintsAndProfileIDs> Context::getSettingsConstraintsAndCurrentProfiles() const
+{
+    auto lock = getLocalSharedLock();
+    return getSettingsConstraintsAndCurrentProfilesWithLock();
+}
 
 String Context::getCurrentDatabase() const
 {
-    auto lock = getLock();
+    auto lock = getLocalSharedLock();
     return current_database;
 }
 
@@ -1405,7 +1521,7 @@ void Context::setCurrentDatabaseNameInGlobalContext(const String & name)
     if (!isGlobalContext())
         throw Exception("Cannot set current database for non global context, this method should be used during server initialization",
                         ErrorCodes::LOGICAL_ERROR);
-    auto lock = getLock();
+    auto lock = getLocalLock();
 
     if (!current_database.empty())
         throw Exception("Default database name cannot be changed in global context without server restart",
@@ -1414,12 +1530,18 @@ void Context::setCurrentDatabaseNameInGlobalContext(const String & name)
     current_database = name;
 }
 
+void Context::setCurrentDatabaseWithLock(const String & name, const std::unique_lock<SharedMutex> &)
+{
+    DatabaseCatalog::instance().assertDatabaseExists(name);
+    current_database = name;
+}
+
 void Context::setCurrentDatabase(const String & name)
 {
     DatabaseCatalog::instance().assertDatabaseExists(name);
-    auto lock = getLock();
+    auto lock = getLocalLock();
     current_database = name;
-    calculateAccessRights();
+    calculateAccessRightsWithLock(lock);
 }
 
 void Context::setCurrentQueryId(const String & query_id)
@@ -1719,17 +1841,23 @@ Streaming::MetaStoreJSONConfigRepository * Context::getMetaStoreJSONConfigReposi
 
 const IUserDefinedSQLObjectsLoader & Context::getUserDefinedSQLObjectsLoader() const
 {
-    auto lock = getLock();
-    if (!shared->user_defined_sql_objects_loader)
-        shared->user_defined_sql_objects_loader = createUserDefinedSQLObjectsLoader(getGlobalContext());
+    callOnce(shared->user_defined_sql_objects_loader_initializer, [&] {
+        if (!shared->user_defined_sql_objects_loader)
+            shared->user_defined_sql_objects_loader = createUserDefinedSQLObjectsLoader(getGlobalContext());
+    });
+
+    auto lock = getGlobalSharedLock();
     return *shared->user_defined_sql_objects_loader;
 }
 
 IUserDefinedSQLObjectsLoader & Context::getUserDefinedSQLObjectsLoader()
 {
-    auto lock = getLock();
-    if (!shared->user_defined_sql_objects_loader)
-        shared->user_defined_sql_objects_loader = createUserDefinedSQLObjectsLoader(getGlobalContext());
+    callOnce(shared->user_defined_sql_objects_loader_initializer, [&] {
+        if (!shared->user_defined_sql_objects_loader)
+            shared->user_defined_sql_objects_loader = createUserDefinedSQLObjectsLoader(getGlobalContext());
+    });
+
+    auto lock = getGlobalSharedLock();
     return *shared->user_defined_sql_objects_loader;
 }
 
@@ -1737,20 +1865,18 @@ IUserDefinedSQLObjectsLoader & Context::getUserDefinedSQLObjectsLoader()
 
 SynonymsExtensions & Context::getSynonymsExtensions() const
 {
-    auto lock = getLock();
-
-    if (!shared->synonyms_extensions)
+    callOnce(shared->synonyms_extensions_initializer, [&] {
         shared->synonyms_extensions.emplace(getConfigRef());
+    });
 
     return *shared->synonyms_extensions;
 }
 
 Lemmatizers & Context::getLemmatizers() const
 {
-    auto lock = getLock();
-
-    if (!shared->lemmatizers)
+    callOnce(shared->lemmatizers_initializer, [&] {
         shared->lemmatizers.emplace(getConfigRef());
+    });
 
     return *shared->lemmatizers;
 }
@@ -1782,7 +1908,7 @@ ProcessList::Element * Context::getProcessListElement() const
 
 void Context::setUncompressedCache(size_t max_size_in_bytes)
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
 
     if (shared->uncompressed_cache)
         throw Exception("Uncompressed cache has been already created.", ErrorCodes::LOGICAL_ERROR);
@@ -1793,14 +1919,14 @@ void Context::setUncompressedCache(size_t max_size_in_bytes)
 
 UncompressedCachePtr Context::getUncompressedCache() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return shared->uncompressed_cache;
 }
 
 
 void Context::dropUncompressedCache() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
     if (shared->uncompressed_cache)
         shared->uncompressed_cache->reset();
 }
@@ -1808,7 +1934,7 @@ void Context::dropUncompressedCache() const
 
 void Context::setMarkCache(size_t cache_size_in_bytes)
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
 
     if (shared->mark_cache)
         throw Exception("Mark cache has been already created.", ErrorCodes::LOGICAL_ERROR);
@@ -1818,34 +1944,32 @@ void Context::setMarkCache(size_t cache_size_in_bytes)
 
 MarkCachePtr Context::getMarkCache() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return shared->mark_cache;
 }
 
 void Context::dropMarkCache() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
     if (shared->mark_cache)
         shared->mark_cache->reset();
 }
 
 ThreadPool & Context::getLoadMarksThreadpool() const
 {
-    const auto & config = getConfigRef();
-
-    auto lock = getLock();
-    if (!shared->load_marks_threadpool)
-    {
+    callOnce(shared->load_marks_threadpool_initializer, [&] {
+        const auto & config = getConfigRef();
         auto pool_size = config.getUInt(".load_marks_threadpool_pool_size", 50);
         auto queue_size = config.getUInt(".load_marks_threadpool_queue_size", 1000000);
         shared->load_marks_threadpool = std::make_unique<ThreadPool>(pool_size, pool_size, queue_size);
-    }
+    });
+
     return *shared->load_marks_threadpool;
 }
 
 void Context::setIndexUncompressedCache(size_t max_size_in_bytes)
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
 
     if (shared->index_uncompressed_cache)
         throw Exception("Index uncompressed cache has been already created.", ErrorCodes::LOGICAL_ERROR);
@@ -1856,14 +1980,14 @@ void Context::setIndexUncompressedCache(size_t max_size_in_bytes)
 
 UncompressedCachePtr Context::getIndexUncompressedCache() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return shared->index_uncompressed_cache;
 }
 
 
 void Context::dropIndexUncompressedCache() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
     if (shared->index_uncompressed_cache)
         shared->index_uncompressed_cache->reset();
 }
@@ -1871,7 +1995,7 @@ void Context::dropIndexUncompressedCache() const
 
 void Context::setIndexMarkCache(size_t cache_size_in_bytes)
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
 
     if (shared->index_mark_cache)
         throw Exception("Index mark cache has been already created.", ErrorCodes::LOGICAL_ERROR);
@@ -1881,13 +2005,13 @@ void Context::setIndexMarkCache(size_t cache_size_in_bytes)
 
 MarkCachePtr Context::getIndexMarkCache() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return shared->index_mark_cache;
 }
 
 void Context::dropIndexMarkCache() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
     if (shared->index_mark_cache)
         shared->index_mark_cache->reset();
 }
@@ -1895,7 +2019,7 @@ void Context::dropIndexMarkCache() const
 
 void Context::setMMappedFileCache(size_t cache_size_in_num_entries)
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
 
     if (shared->mmap_cache)
         throw Exception("Mapped file cache has been already created.", ErrorCodes::LOGICAL_ERROR);
@@ -1905,13 +2029,13 @@ void Context::setMMappedFileCache(size_t cache_size_in_num_entries)
 
 MMappedFileCachePtr Context::getMMappedFileCache() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return shared->mmap_cache;
 }
 
 void Context::dropMMappedFileCache() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
     if (shared->mmap_cache)
         shared->mmap_cache->reset();
 }
@@ -1919,7 +2043,7 @@ void Context::dropMMappedFileCache() const
 
 void Context::dropCaches() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
 
     if (shared->uncompressed_cache)
         shared->uncompressed_cache->reset();
@@ -1939,7 +2063,7 @@ void Context::dropCaches() const
 
 BackgroundSchedulePool & Context::getBufferFlushSchedulePool() const
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
     if (!shared->buffer_flush_schedule_pool)
         shared->buffer_flush_schedule_pool = std::make_unique<BackgroundSchedulePool>(
             settings.background_buffer_flush_schedule_pool_size,
@@ -1981,7 +2105,7 @@ BackgroundTaskSchedulingSettings Context::getBackgroundMoveTaskSchedulingSetting
 
 BackgroundSchedulePool & Context::getSchedulePool() const
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
     if (!shared->schedule_pool)
         shared->schedule_pool = std::make_unique<BackgroundSchedulePool>(
             settings.background_schedule_pool_size,
@@ -1992,7 +2116,7 @@ BackgroundSchedulePool & Context::getSchedulePool() const
 
 BackgroundSchedulePool & Context::getDistributedSchedulePool() const
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
     if (!shared->distributed_schedule_pool)
         shared->distributed_schedule_pool = std::make_unique<BackgroundSchedulePool>(
             settings.background_distributed_schedule_pool_size,
@@ -2003,7 +2127,7 @@ BackgroundSchedulePool & Context::getDistributedSchedulePool() const
 
 BackgroundSchedulePool & Context::getMessageBrokerSchedulePool() const
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
     if (!shared->message_broker_schedule_pool)
         shared->message_broker_schedule_pool = std::make_unique<BackgroundSchedulePool>(
             settings.background_message_broker_schedule_pool_size,
@@ -2014,7 +2138,7 @@ BackgroundSchedulePool & Context::getMessageBrokerSchedulePool() const
 
 ThrottlerPtr Context::getRemoteReadThrottler() const
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
     if (!shared->remote_read_throttler)
         shared->remote_read_throttler = std::make_shared<Throttler>(
             settings.max_remote_read_network_bandwidth_for_server);
@@ -2024,7 +2148,7 @@ ThrottlerPtr Context::getRemoteReadThrottler() const
 
 ThrottlerPtr Context::getRemoteWriteThrottler() const
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
     if (!shared->remote_write_throttler)
         shared->remote_write_throttler = std::make_shared<Throttler>(
             settings.max_remote_write_network_bandwidth_for_server);
@@ -2208,16 +2332,12 @@ const RemoteHostFilter & Context::getRemoteHostFilter() const
 
 UInt16 Context::getTCPPort() const
 {
-    auto lock = getLock();
-
     const auto & config = getConfigRef();
     return config.getInt("tcp_port", DBMS_DEFAULT_PORT);
 }
 
 std::optional<UInt16> Context::getTCPPortSecure() const
 {
-    auto lock = getLock();
-
     const auto & config = getConfigRef();
     if (config.has("tcp_port_secure"))
         return config.getInt("tcp_port_secure");
@@ -2323,8 +2443,9 @@ void Context::setCluster(const String & cluster_name, const std::shared_ptr<Clus
 
 void Context::initializeSystemLogs()
 {
-    auto lock = getLock();
-    shared->system_logs = std::make_unique<SystemLogs>(getGlobalContext(), getConfigRef());
+    callOnce(shared->system_logs_initializer, [&] {
+        shared->system_logs = std::make_unique<SystemLogs>(getGlobalContext(), getConfigRef());
+    });
 }
 
 void Context::initializeTraceCollector()
@@ -2347,7 +2468,7 @@ bool Context::hasTraceCollector() const
 
 std::shared_ptr<QueryLog> Context::getQueryLog() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
 
     if (!shared->system_logs)
         return {};
@@ -2357,7 +2478,7 @@ std::shared_ptr<QueryLog> Context::getQueryLog() const
 
 std::shared_ptr<QueryThreadLog> Context::getQueryThreadLog() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
 
     if (!shared->system_logs)
         return {};
@@ -2367,7 +2488,7 @@ std::shared_ptr<QueryThreadLog> Context::getQueryThreadLog() const
 
 std::shared_ptr<QueryViewsLog> Context::getQueryViewsLog() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
 
     if (!shared->system_logs)
         return {};
@@ -2377,7 +2498,7 @@ std::shared_ptr<QueryViewsLog> Context::getQueryViewsLog() const
 
 std::shared_ptr<PartLog> Context::getPartLog(const String & part_database) const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
 
     /// No part log or system logs are shutting down.
     if (!shared->system_logs)
@@ -2395,7 +2516,7 @@ std::shared_ptr<PartLog> Context::getPartLog(const String & part_database) const
 
 std::shared_ptr<TraceLog> Context::getTraceLog() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
 
     if (!shared->system_logs)
         return {};
@@ -2406,7 +2527,7 @@ std::shared_ptr<TraceLog> Context::getTraceLog() const
 
 std::shared_ptr<TextLog> Context::getTextLog() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
 
     if (!shared->system_logs)
         return {};
@@ -2417,7 +2538,7 @@ std::shared_ptr<TextLog> Context::getTextLog() const
 
 std::shared_ptr<MetricLog> Context::getMetricLog() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
 
     if (!shared->system_logs)
         return {};
@@ -2428,7 +2549,7 @@ std::shared_ptr<MetricLog> Context::getMetricLog() const
 
 std::shared_ptr<AsynchronousMetricLog> Context::getAsynchronousMetricLog() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
 
     if (!shared->system_logs)
         return {};
@@ -2439,7 +2560,7 @@ std::shared_ptr<AsynchronousMetricLog> Context::getAsynchronousMetricLog() const
 /// proton: starts.
 std::shared_ptr<PipelineMetricLog> Context::getPipelineMetricLog() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
 
     if (!shared->system_logs)
         return {};
@@ -2450,7 +2571,7 @@ std::shared_ptr<PipelineMetricLog> Context::getPipelineMetricLog() const
 
 std::shared_ptr<OpenTelemetrySpanLog> Context::getOpenTelemetrySpanLog() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
 
     if (!shared->system_logs)
         return {};
@@ -2460,7 +2581,7 @@ std::shared_ptr<OpenTelemetrySpanLog> Context::getOpenTelemetrySpanLog() const
 
 std::shared_ptr<SessionLog> Context::getSessionLog() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
 
     if (!shared->system_logs)
         return {};
@@ -2471,7 +2592,7 @@ std::shared_ptr<SessionLog> Context::getSessionLog() const
 
 std::shared_ptr<ZooKeeperLog> Context::getZooKeeperLog() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
 
     if (!shared->system_logs)
         return {};
@@ -2482,7 +2603,7 @@ std::shared_ptr<ZooKeeperLog> Context::getZooKeeperLog() const
 
 std::shared_ptr<ProcessorsProfileLog> Context::getProcessorsProfileLog() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
 
     if (!shared->system_logs)
         return {};
@@ -2492,7 +2613,7 @@ std::shared_ptr<ProcessorsProfileLog> Context::getProcessorsProfileLog() const
 
 std::shared_ptr<TransactionsInfoLog> Context::getTransactionsInfoLog() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
 
     if (!shared->system_logs)
         return {};
@@ -2502,7 +2623,7 @@ std::shared_ptr<TransactionsInfoLog> Context::getTransactionsInfoLog() const
 
 std::shared_ptr<FilesystemCacheLog> Context::getFilesystemCacheLog() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     if (!shared->system_logs)
         return {};
 
@@ -2511,12 +2632,12 @@ std::shared_ptr<FilesystemCacheLog> Context::getFilesystemCacheLog() const
 
 CompressionCodecPtr Context::chooseCompressionCodec(size_t part_size, double part_size_ratio) const
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
 
     if (!shared->compression_codec_selector)
     {
         constexpr auto config_name = "compression";
-        const auto & config = getConfigRef();
+        const auto & config = getConfigRefWithLock(lock);
 
         if (config.has(config_name))
             shared->compression_codec_selector = std::make_unique<CompressionCodecSelector>(config, "compression");
@@ -2623,13 +2744,13 @@ const MergeTreeSettings & Context::getMergeTreeSettings() const
 
 const StreamSettings & Context::getStreamSettings() const
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
 
     if (!shared->stream_settings)
     {
         StreamSettings settings;
         /// Apply configured stream settings.
-        settings.applyChanges(loadSettingChangesFromConfig<ConfigurableStreamSettingsTraits>("settings.stream", getConfigRef()));
+        settings.applyChanges(loadSettingChangesFromConfig<ConfigurableStreamSettingsTraits>("settings.stream", getConfigRefWithLock(lock)));
         shared->stream_settings.emplace(settings);
     }
 
@@ -2638,17 +2759,18 @@ const StreamSettings & Context::getStreamSettings() const
 
 void Context::applyGlobalSettingsFromConfig()
 {
-    settings.applyChanges(loadSettingChangesFromConfig<ConfigurableSettingsTraits>("settings.global", getConfigRef()));
+    auto lock = getGlobalLock();
+    settings.applyChanges(loadSettingChangesFromConfig<ConfigurableSettingsTraits>("settings.global", getConfigRefWithLock(lock)));
 }
 /// proton: ends.
 
 const StorageS3Settings & Context::getStorageS3Settings() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalLock();
 
     if (!shared->storage_s3_settings)
     {
-        const auto & config = getConfigRef();
+        const auto & config = getConfigRefWithLock(lock);
         shared->storage_s3_settings.emplace().loadFromConfig("s3", config, getSettingsRef());
     }
 
@@ -2743,7 +2865,7 @@ OutputFormatPtr Context::getOutputFormatParallelIfPossible(const String & name, 
 
 double Context::getUptimeSeconds() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     return shared->uptime_watch.elapsedSeconds();
 }
 
@@ -2885,10 +3007,10 @@ const IHostContextPtr & Context::getHostContext() const
 
 std::shared_ptr<ActionLocksManager> Context::getActionLocksManager()
 {
-    auto lock = getLock();
-
-    if (!shared->action_locks_manager)
-        shared->action_locks_manager = std::make_shared<ActionLocksManager>(shared_from_this());
+    callOnce(shared->action_locks_manager_initializer, [&] {
+        if (!shared->action_locks_manager)
+            shared->action_locks_manager = std::make_shared<ActionLocksManager>(shared_from_this());
+    });
 
     return shared->action_locks_manager;
 }
@@ -2966,7 +3088,7 @@ StorageID Context::resolveStorageID(StorageID storage_id, StorageNamespace where
     StorageID resolved = StorageID::createEmpty();
     std::optional<Exception> exc;
     {
-        auto lock = getLock();
+        auto lock = getLocalSharedLock();
         resolved = resolveStorageIDImpl(std::move(storage_id), where, &exc);
     }
     if (exc)
@@ -2983,7 +3105,7 @@ StorageID Context::tryResolveStorageID(StorageID storage_id, StorageNamespace wh
 
     StorageID resolved = StorageID::createEmpty();
     {
-        auto lock = getLock();
+        auto lock = getLocalSharedLock();
         resolved = resolveStorageIDImpl(std::move(storage_id), where, nullptr);
     }
     if (resolved && !resolved.hasUUID() && resolved.database_name != DatabaseCatalog::TEMPORARY_DATABASE)
@@ -3112,14 +3234,14 @@ MergeTreeTransactionPtr Context::getCurrentTransaction() const
 
 bool Context::isServerCompletelyStarted() const
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
     assert(getApplicationType() == ApplicationType::SERVER);
     return shared->is_server_completely_started;
 }
 
 void Context::setServerCompletelyStarted()
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
     assert(global_context.lock().get() == this);
     assert(!shared->is_server_completely_started);
     assert(getApplicationType() == ApplicationType::SERVER);
@@ -3128,7 +3250,7 @@ void Context::setServerCompletelyStarted()
 
 PartUUIDsPtr Context::getPartUUIDs() const
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
     if (!part_uuids)
         /// For context itself, only this initialization is not const.
         /// We could have done in constructor.
@@ -3168,7 +3290,7 @@ void Context::setMergeTreeReadTaskCallback(MergeTreeReadTaskCallback && callback
 
 PartUUIDsPtr Context::getIgnoredPartUUIDs() const
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
     if (!ignored_part_uuids)
         const_cast<PartUUIDsPtr &>(ignored_part_uuids) = std::make_shared<PartUUIDs>();
 
@@ -3192,7 +3314,7 @@ void Context::setAsynchronousInsertQueue(const std::shared_ptr<AsynchronousInser
 
 void Context::initializeBackgroundExecutorsIfNeeded()
 {
-    auto lock = getLock();
+    auto lock = getLocalLock();
     if (shared->is_background_executors_initialized)
         return;
 
@@ -3294,59 +3416,38 @@ size_t Context::getThreadPoolReaderSize(FilesystemReaderType type) const
 
 IAsynchronousReader & Context::getThreadPoolReader(FilesystemReaderType type) const
 {
-    const auto & config = getConfigRef();
+    callOnce(shared->readers_initializer, [&] {
+        const auto & config = getConfigRef();
+        auto pool_size = getThreadPoolReaderSizeFromConfig(type, config);
+        auto queue_size = config.getUInt(".threadpool_remote_fs_reader_queue_size", 1000000);
+        shared->asynchronous_remote_fs_reader = std::make_unique<ThreadPoolRemoteFSReader>(pool_size, queue_size);
+        
+        queue_size = config.getUInt(".threadpool_local_fs_reader_queue_size", 1000000);
+        shared->asynchronous_local_fs_reader = std::make_unique<ThreadPoolReader>(pool_size, queue_size);
 
-    auto lock = getLock();
+        shared->synchronous_local_fs_reader = std::make_unique<SynchronousReader>();
+    });
 
     switch (type)
     {
         case FilesystemReaderType::ASYNCHRONOUS_REMOTE_FS_READER:
-        {
-            if (!shared->asynchronous_remote_fs_reader)
-            {
-                auto pool_size = getThreadPoolReaderSizeFromConfig(type, config);
-                auto queue_size = config.getUInt(".threadpool_remote_fs_reader_queue_size", 1000000);
-                shared->asynchronous_remote_fs_reader = std::make_unique<ThreadPoolRemoteFSReader>(pool_size, queue_size);
-            }
-
             return *shared->asynchronous_remote_fs_reader;
-        }
         case FilesystemReaderType::ASYNCHRONOUS_LOCAL_FS_READER:
-        {
-            if (!shared->asynchronous_local_fs_reader)
-            {
-                auto pool_size = getThreadPoolReaderSizeFromConfig(type, config);
-                auto queue_size = config.getUInt(".threadpool_local_fs_reader_queue_size", 1000000);
-                shared->asynchronous_local_fs_reader = std::make_unique<ThreadPoolReader>(pool_size, queue_size);
-            }
-
             return *shared->asynchronous_local_fs_reader;
-        }
         case FilesystemReaderType::SYNCHRONOUS_LOCAL_FS_READER:
-        {
-            if (!shared->synchronous_local_fs_reader)
-            {
-                shared->synchronous_local_fs_reader = std::make_unique<SynchronousReader>();
-            }
-
             return *shared->synchronous_local_fs_reader;
-        }
     }
 }
 
 ThreadPool & Context::getThreadPoolWriter() const
 {
-    const auto & config = getConfigRef();
-
-    auto lock = getLock();
-
-    if (!shared->threadpool_writer)
-    {
+    callOnce(shared->threadpool_writer_initializer, [&] {
+        const auto & config = getConfigRef();
         auto pool_size = config.getUInt(".threadpool_writer_pool_size", 100);
         auto queue_size = config.getUInt(".threadpool_writer_queue_size", 1000000);
 
         shared->threadpool_writer = std::make_unique<ThreadPool>(pool_size, pool_size, queue_size);
-    }
+    });
 
     return *shared->threadpool_writer;
 }
@@ -3433,7 +3534,7 @@ bool Context::isDistributedEnv() const
 
 ThreadPool & Context::getPartCommitPool() const
 {
-    auto lock = getLock();
+    auto lock = getGlobalSharedLock();
     if (!shared->part_commit_pool)
         /// FIXME, queue size may matter
         shared->part_commit_pool = std::make_unique<ThreadPool>(settings.part_commit_pool_size);

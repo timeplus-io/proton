@@ -16,6 +16,7 @@
 #include <Common/RemoteHostFilter.h>
 #include <Common/isLocalAddress.h>
 #include <Common/ThreadPool.h>
+#include <Common/SharedMutex.h>
 #include <base/types.h>
 #include <Storages/MergeTree/ParallelReplicasReadingCoordinator.h>
 
@@ -212,15 +213,9 @@ private:
     std::unique_ptr<ContextSharedPart> shared;
 };
 
-/** A set of known objects that can be used in the query.
-  * Consists of a shared part (always common to all sessions and queries)
-  *  and copied part (which can be its own for each session or query).
-  *
-  * Everything is encapsulated for all sorts of checks and locks.
-  */
-class Context: public std::enable_shared_from_this<Context>
+class ContextData
 {
-private:
+protected:
     ContextSharedPart * shared;
 
     ClientInfo client_info;
@@ -405,7 +400,7 @@ public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
 
-private:
+protected:
     using SampleBlockCache = std::unordered_map<std::string, Block>;
     mutable SampleBlockCache sample_block_cache;
 
@@ -438,13 +433,29 @@ private:
     mutable DataStreamSemanticCache data_stream_semantic_cache;
     /// proton: end.
 
+    /// Use copy constructor or createGlobal() instead
+    ContextData();
+    ContextData(const ContextData &);
+};
+
+/** A set of known objects that can be used in the query.
+  * Consists of a shared part (always common to all sessions and queries)
+  *  and copied part (which can be its own for each session or query).
+  *
+  * Everything is encapsulated for all sorts of checks and locks.
+  */
+class Context: public ContextData, public std::enable_shared_from_this<Context>
+{
+private:
+    /// ContextData mutex
+    mutable SharedMutex mutex;
+
     Context();
     Context(const Context &);
-    Context & operator=(const Context &);
 
 public:
     /// Create initial Context with ContextShared and etc.
-    static ContextMutablePtr createGlobal(ContextSharedPart * shared);
+    static ContextMutablePtr createGlobal(ContextSharedPart * shared_part);
     static ContextMutablePtr createCopy(const ContextWeakPtr & other);
     static ContextMutablePtr createCopy(const ContextMutablePtr & other);
     static ContextMutablePtr createCopy(const ContextPtr & other);
@@ -1090,12 +1101,46 @@ public:
     WriteSettings getWriteSettings() const;
 
 private:
-    std::unique_lock<std::recursive_mutex> getLock() const;
+    std::unique_lock<SharedMutex> getGlobalLock() const;
+
+    std::shared_lock<SharedMutex> getGlobalSharedLock() const;
+
+    std::unique_lock<SharedMutex> getLocalLock() const;
+
+    std::shared_lock<SharedMutex> getLocalSharedLock() const;
+
+    const Poco::Util::AbstractConfiguration & getConfigRefWithLock(const std::unique_lock<SharedMutex> & lock) const;
+
+    std::shared_ptr<const SettingsConstraintsAndProfileIDs> getSettingsConstraintsAndCurrentProfilesWithLock() const;
+
+    void setCurrentProfileWithLock(const String & profile_name, const std::unique_lock<SharedMutex> & lock);
+
+    void setCurrentProfileWithLock(const UUID & profile_id, const std::unique_lock<SharedMutex> & lock);
+
+    void setCurrentRolesWithLock(const std::vector<UUID> & current_roles_, const std::unique_lock<SharedMutex> & lock);
+
+    void setSettingWithLock(std::string_view name, const String & value, const std::unique_lock<SharedMutex> & lock);
+
+    void setSettingWithLock(std::string_view name, const Field & value, const std::unique_lock<SharedMutex> & lock);
+
+    void applySettingChangeWithLock(const SettingChange & change, const std::unique_lock<SharedMutex> & lock);
+
+    void applySettingsChangesWithLock(const SettingsChanges & changes, const std::unique_lock<SharedMutex> & lock);
+
+    void setCurrentDatabaseWithLock(const String & name, const std::unique_lock<SharedMutex> & lock);
+
+    void checkSettingsConstraintsWithLock(const SettingChange & change) const;
+
+    void checkSettingsConstraintsWithLock(const SettingsChanges & changes) const;
+
+    void checkSettingsConstraintsWithLock(SettingsChanges & changes) const;
+
+    void clampToSettingsConstraintsWithLock(SettingsChanges & changes) const;
 
     void initGlobal();
 
     /// Compute and set actual user settings, client_info.current_user should be set
-    void calculateAccessRights();
+    void calculateAccessRightsWithLock(const std::unique_lock<SharedMutex> & lock);
 
     template <typename... Args>
     void checkAccessImpl(const Args &... args) const;
