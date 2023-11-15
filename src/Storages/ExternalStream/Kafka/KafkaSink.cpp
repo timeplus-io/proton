@@ -223,7 +223,7 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
     if (data_format.empty())
         data_format = "JSONEachRow";
 
-    /// The callback lets it produce one Kafka message per row.
+    /// The callback allows `IRowOutputFormat` based formats produce one Kafka message per row.
     writer = FormatFactory::instance().getOutputFormat(
         data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->next(); });
     writer->setAutoFlush();
