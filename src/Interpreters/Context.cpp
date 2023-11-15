@@ -579,13 +579,18 @@ SharedContextHolder Context::createShared()
 
 ContextMutablePtr Context::createCopy(const ContextPtr & other)
 {
+    /// Ported the PR 'fix race in context::createcopy' from https://github.com/ClickHouse/ClickHouse/pull/49663/files
+    /// Tests associated with this PR were not ported. The related tests require additional functions which are not utilized in proton now.
+
+    auto lock = other->getLock();
     return std::shared_ptr<Context>(new Context(*other));
 }
 
 ContextMutablePtr Context::createCopy(const ContextWeakPtr & other)
 {
     auto ptr = other.lock();
-    if (!ptr) throw Exception("Can't copy an expired context", ErrorCodes::LOGICAL_ERROR);
+    if (!ptr)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't copy an expired context");
     return createCopy(ptr);
 }
 
