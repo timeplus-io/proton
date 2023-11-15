@@ -33,11 +33,10 @@ private:
 
     IColumn::Selector createSelector(Block block, Int32 partition_cnt) const;
 
-    static inline std::minstd_rand rand{std::random_device()()};
-
     ExpressionActionsPtr partitioning_expr;
     String partitioning_key_column_name;
     bool random_partitioning = false;
+    mutable std::minstd_rand rand;
 };
 }
 
@@ -71,8 +70,7 @@ private:
         auto * sink = static_cast<KafkaSink *>(rkt_opaque);
         sink->partition_cnt = partition_count;
 
-        auto partition_id_ptr = reinterpret_cast<std::uintptr_t>(msg_opaque);
-        auto parition_id = static_cast<Int32>(partition_id_ptr);
+        auto parition_id = static_cast<Int32>(reinterpret_cast<std::uintptr_t>(msg_opaque));
         /// This should not really happen because Kafka does not support reducing partitions.
         /// However, KIP-694 is currently under discussion, so this might heppen in the future.
         if (parition_id >= partition_count)

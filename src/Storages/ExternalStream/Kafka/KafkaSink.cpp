@@ -38,7 +38,11 @@ ChunkPartitioner::ChunkPartitioner(ContextPtr context, const Block & header, con
     if (auto * shard_func = partitioning_expr_ast->as<ASTFunction>())
     {
         if (shard_func->name == "rand" || shard_func->name == "RAND")
+        {
             random_partitioning = true;
+            std::random_device r;
+            rand = std::minstd_rand(r());
+        }
     }
 }
 

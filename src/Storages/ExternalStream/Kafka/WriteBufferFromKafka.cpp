@@ -27,9 +27,9 @@ void WriteBufferFromKafka::nextImpl()
         RD_KAFKA_MSG_F_COPY | RD_KAFKA_MSG_F_BLOCK,
         working_buffer.begin(),
         offset(),
-        "" /* key, even though we don't use the key, but it's needed to trigger the partitioner_cb */,
-        0 /* keylen */,
-        reinterpret_cast<void *>(partition_id) /* opaque */);
+        /*key=*/ "", /// Even though we don't use the key, but it's needed to trigger the partitioner_cb
+        /*keylen=*/ 0,
+        /*msg_opaque=*/ reinterpret_cast<void *>(partition_id));
 
     if (unlikely(err))
         throw Exception(
