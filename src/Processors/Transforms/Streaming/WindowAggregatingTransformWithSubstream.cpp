@@ -1,5 +1,6 @@
 #include <Processors/Transforms/Streaming/WindowAggregatingTransformWithSubstream.h>
 
+#include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/convertToChunk.h>
 
 namespace DB
@@ -71,20 +72,7 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
             && window_with_buckets.window.end <= last_finalized_windows_with_buckets.back().window.end)
             continue;
 
-        if (window_with_buckets.buckets.size() == 1)
-        {
-            if (params->final)
-                chunk = convertToChunk(params->aggregator.convertOneBucketToBlockFinal(
-                    data_variant, ConvertAction::STREAMING_EMIT, window_with_buckets.buckets[0]));
-            else
-                chunk = convertToChunk(params->aggregator.convertOneBucketToBlockIntermediate(
-                    data_variant, ConvertAction::STREAMING_EMIT, window_with_buckets.buckets[0]));
-        }
-        else
-        {
-            chunk = convertToChunk(params->aggregator.spliceAndConvertBucketsToBlock(
-                data_variant, params->final, ConvertAction::INTERNAL_MERGE, window_with_buckets.buckets));
-        }
+        chunk = AggregatingHelper::spliceAndConvertBucketsToChunk(data_variant, *params, window_with_buckets.buckets);
 
         if (needReassignWindow())
             reassignWindow(chunk, window_with_buckets.window, params->params.window_params->time_col_is_datetime64, window_start_col_pos, window_end_col_pos);
@@ -92,23 +80,7 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
         if (params->emit_version && params->final)
             emitVersion(chunk, substream_ctx);
 
-        if (merged_chunk)
-        {
-            assert(chunk.getNumColumns() == merged_chunk.getNumColumns());
-            auto source_columns = chunk.detachColumns();
-            auto merged_columns = merged_chunk.detachColumns();
-            for (size_t i = 0, size = merged_columns.size(); i < size; ++i)
-            {
-                auto mutable_column = IColumn::mutate(std::move(merged_columns[i]));
-                auto & source_column = source_columns[i];
-                mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
-                merged_columns[i] = std::move(mutable_column);
-            }
-            auto num_rows = merged_columns[0]->size();
-            merged_chunk.setColumns(std::move(merged_columns), num_rows);
-        }
-        else
-            merged_chunk = std::move(chunk);
+        merged_chunk.append(std::move(chunk));
     }
 
     if (watermark != TIMEOUT_WATERMARK)
