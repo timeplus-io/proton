@@ -223,7 +223,9 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
     if (data_format.empty())
         data_format = "JSONEachRow";
 
-    writer = FormatFactory::instance().getOutputFormat(data_format, *wb, header, context);
+    /// The callback allows `IRowOutputFormat` based formats produce one Kafka message per row.
+    writer = FormatFactory::instance().getOutputFormat(
+        data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->next(); });
     writer->setAutoFlush();
 
     partitioner = std::make_unique<KafkaStream::ChunkPartitioner>(context, header, kafka->partitioning_expr_ast());
