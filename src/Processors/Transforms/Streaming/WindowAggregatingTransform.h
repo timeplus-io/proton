@@ -32,10 +32,6 @@ protected:
     std::vector<Int64> getBucketsBefore(Int64 max_buckets) const;
 
 private:
-    inline void initialize(ManyAggregatedDataVariantsPtr & data);
-
-    void convertTwoLevel(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx);
-
     virtual WindowsWithBuckets getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark) const = 0;
     virtual void removeBucketsImpl(Int64 watermark) = 0;
     virtual bool needReassignWindow() const = 0;
