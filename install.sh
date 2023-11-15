@@ -42,9 +42,8 @@ TARGET_FILE="proton"
 
 # Check if the proton file exists
 if [ -f "$TARGET_FILE" ]; then
-  read -p "'proton' file exists. Do you want to overwrite it? (y/n): " -n 1 -r
-  echo
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
+  read -p "'proton' file exists. Do you want to overwrite it? (y/n): " answer
+  if [ "$answer" = "y" -o "$answer" = "Y" ]; then
     TARGET_FILE="proton"
   else
     TARGET_FILE=$BINARY_FILE
