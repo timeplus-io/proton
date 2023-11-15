@@ -414,6 +414,7 @@ Functions:
 -   `dictGetDateTime`
 -   `dictGetUUID`
 -   `dictGetString`
+-   `dictGetIPv4`, `dictGetIPv6`
 
 All these functions have the `OrDefault` modification. For example, `dictGetDateOrDefault`.
 
