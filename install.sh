@@ -29,7 +29,7 @@ case $ARCH in
     fi
     ;;
   *)
-    echo "Currently, github.com/timeplus-io/proton does not support $OS-$ARCH releases. You can try our docker image\
+    echo "Currently, https://github.com/timeplus-io/proton does not support $OS-$ARCH releases. You can try our docker image\
             with  \
             \$ docker pull ghcr.io/timeplus-io/proton" >&2
     exit 1
@@ -38,28 +38,39 @@ esac
 
 # Binary file name
 BINARY_FILE="proton-${LATEST_TAG}-${OS}-${ARCH}"
+TARGET_FILE="proton"
+
+# Check if the proton file exists
+if [ -f "$TARGET_FILE" ]; then
+  read -p "'proton' file exists. Do you want to overwrite it? (y/n): " -n 1 -r
+  echo
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    TARGET_FILE="proton"
+  else
+    TARGET_FILE=$BINARY_FILE
+  fi
+fi
 
 # Download URL
 DOWNLOAD_URL="https://github.com/$USER_REPO/releases/download/${LATEST_TAG}/${BINARY_FILE}"
 
 # Download the binary
-echo "Downloading $BINARY_FILE..."
-curl -L -o "$BINARY_FILE" "$DOWNLOAD_URL"
+echo "Downloading $TARGET_FILE..."
+curl -L -o "$TARGET_FILE" "$DOWNLOAD_URL"
 
 # Check if the download was successful
 if [ $? -eq 0 ]; then
-  echo "Download completed: $BINARY_FILE"
+  # Make the file executable
+  chmod u+x "$TARGET_FILE"
+  echo "Download and permission setting completed: $TARGET_FILE"
   echo "
 To interact with Proton:
-0. Give Proton executable permissions:
-   sudo chmod u+x $BINARY_FILE
-
-1. Start the Proton server:
-   ./$BINARY_FILE server start
+1. Start the Proton server(data store in current folder ./proton-data/ ):
+   ./$TARGET_FILE server start
 
 2. In a separate terminal, connect to the server:
-   ./$BINARY_FILE client
-   (Note: If you encounter a 'connection refused' error, use: ./$BINARY_FILE client --host 127.0.0.1)
+   ./$TARGET_FILE client
+   (Note: If you encounter a 'connection refused' error, use: ./$TARGET_FILE client --host 127.0.0.1)
 
 3. To terminate the server, press ctrl+c in the server terminal.
 
@@ -67,4 +78,11 @@ For detailed usage and more information, check out the Timeplus documentation:
 https://docs.timeplus.com/"
 else
   echo "Download failed or the binary for $OS-$ARCH is not available." >&2
+fi
+
+if [ "${OS}" = "Linux" ]
+then
+    echo
+    echo "You can also install it(data store in /var/lib/proton/):
+    sudo ./${TARGET_FILE} install"
 fi
