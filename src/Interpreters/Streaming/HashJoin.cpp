@@ -911,6 +911,8 @@ void HashJoin::init()
                                  && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Changelog)
         || streaming_strictness == Strictness::Asof || streaming_strictness == Strictness::Latest;
 
+    /// FIXME, for now, only asof join need align watermark. For window join, we shall do same but probably in a different way
+    require_aligned_streams = (streaming_strictness == Strictness::Asof);
     bidirectional_hash_join = !data_enrichment_join;
 
     /// append-only inner join append-only on ... and date_diff_within(10s)
