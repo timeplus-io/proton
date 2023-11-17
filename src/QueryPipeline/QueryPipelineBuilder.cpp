@@ -19,9 +19,10 @@
 #include <Processors/QueryPlan/QueryPlan.h>
 
 /// proton : starts
-#include <Interpreters/Streaming/IHashJoin.h>
 #include <Interpreters/Streaming/ConcurrentHashJoin.h>
+#include <Interpreters/Streaming/IHashJoin.h>
 #include <Processors/Transforms/Streaming/JoinTransform.h>
+#include <Processors/Transforms/Streaming/JoinTransformWithAlignment.h>
 /// proton : ends
 
 namespace DB
@@ -610,8 +611,8 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     JoinPtr join,
     const Block & out_header,
     size_t max_block_size,
-    size_t join_max_cached_bytes,
     size_t max_streams,
+    size_t join_max_cached_bytes,
     Processors * collected_processors)
 {
     left->checkInitializedAndNotCompleted();
@@ -704,13 +705,24 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
 
     for (size_t i = 0; i < num_transforms; ++i)
     {
-        auto joining = std::make_shared<Streaming::JoinTransform>(
-            left->getHeader(),
-            right->getHeader(),
-            out_header,
-            std::dynamic_pointer_cast<Streaming::IHashJoin>(join),
-            max_block_size,
-            join_max_cached_bytes);
+        ProcessorPtr joining;
+        auto hash_join = std::dynamic_pointer_cast<Streaming::IHashJoin>(join);
+        hash_join->postInit(left->getHeader(), right->getHeader(), join_max_cached_bytes);
+
+        if (hash_join->requireWatermarkAlignedStreams())
+        {
+            joining = std::make_shared<Streaming::JoinTransformWithAlignment>(
+                left->getHeader(),
+                right->getHeader(),
+                out_header,
+                std::move(hash_join),
+                join_max_cached_bytes);
+        }
+        else
+        {
+            joining = std::make_shared<Streaming::JoinTransform>(
+                left->getHeader(), right->getHeader(), out_header, std::move(hash_join), max_block_size, join_max_cached_bytes);
+        }
 
         connect(**lit, joining->getInputs().front());
         connect(**rit, joining->getInputs().back());

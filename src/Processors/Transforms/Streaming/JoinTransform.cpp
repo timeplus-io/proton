@@ -28,8 +28,8 @@ JoinTransform::JoinTransform(
     , join(std::move(join_))
     , max_block_size(max_block_size_)
     , output_header_chunk(outputs.front().getHeader().getColumns(), 0)
-    , input_ports_with_data{InputPortWithData{&inputs.front()}, InputPortWithData{&inputs.back()}}
     , logger(&Poco::Logger::get("StreamingJoinTransform"))
+    , input_ports_with_data{InputPortWithData{&inputs.front()}, InputPortWithData{&inputs.back()}}
 {
     assert(join);
 
@@ -38,7 +38,6 @@ JoinTransform::JoinTransform(
 
     range_bidirectional_hash_join = join->rangeBidirectionalHashJoin();
     bidirectional_hash_join = join->bidirectionalHashJoin();
-    require_inputs_alignment = join->requireWatermarkAlignedStreams();
 }
 
 IProcessor::Status JoinTransform::prepare()
@@ -70,15 +69,12 @@ IProcessor::Status JoinTransform::prepare()
 
     Status status = Status::NeedData;
 
-    /// Invariant: at any specific time, we can't have both inputs muted
-    assert(!input_ports_with_data.front().muted || !input_ports_with_data.back().muted);
-
     for (size_t i = 0; auto & input_port_with_data : input_ports_with_data)
     {
-        if (!input_port_with_data.input_chunks.empty())
+        if (input_port_with_data.input_chunk)
         {
             /// In case, this input port request checkpoint, so we need wait for other inputs
-            if (input_port_with_data.required_checkpoint)
+            if (input_port_with_data.input_chunk.requestCheckpoint())
                 continue;
 
             /// In case, this input need wait for another input processing next consecutive chunk done.
@@ -102,22 +98,11 @@ IProcessor::Status JoinTransform::prepare()
         }
         else
         {
-            if (input_port_with_data.muted)
-                continue;
-
             input_port_with_data.input_port->setNeeded();
 
             if (input_port_with_data.input_port->hasData())
             {
-                input_port_with_data.input_chunks.push_back(input_port_with_data.input_port->pull(true));
-
-                /// FIXME, move to work() ?
-                if (require_inputs_alignment && input_port_with_data.input_chunks.back().hasRows())
-                {
-                    if (auto new_watermark = getWatermark(input_port_with_data.input_chunks.back());
-                        new_watermark > input_port_with_data.watermark)
-                        input_port_with_data.watermark = new_watermark;
-                }
+                input_port_with_data.input_chunk = input_port_with_data.input_port->pull(true);
                 status = Status::Ready;
             }
         }
@@ -129,9 +114,6 @@ IProcessor::Status JoinTransform::prepare()
 
 void JoinTransform::work()
 {
-    if (require_inputs_alignment)
-        return handleInputsAlignment();
-
     int64_t local_watermark = std::numeric_limits<int64_t>::max();
 
     bool has_watermark = false;
@@ -144,15 +126,13 @@ void JoinTransform::work()
         /// Move out the input chunks
         std::scoped_lock lock(mutex);
 
-        assert(!input_ports_with_data[0].input_chunks.empty() || input_ports_with_data[1].input_chunks.empty());
-        assert(input_ports_with_data[0].input_chunks.size() <= 1 && input_ports_with_data[1].input_chunks.size() <= 1);
+        assert(input_ports_with_data[0].input_chunk || input_ports_with_data[1].input_chunk);
 
         for (size_t i = 0; i < input_ports_with_data.size(); ++i)
         {
-            if (!input_ports_with_data[i].input_chunks.empty())
+            auto & input_chunk = input_ports_with_data[i].input_chunk;
+            if (input_chunk)
             {
-                auto & input_chunk = input_ports_with_data[i].input_chunks.front();
-
                 /// If any input needs to update data, currently the input is always two consecutive chunks with _tp_delta `-1 and +1`
                 /// So we have to process them together before processing another input
                 /// NOTE: Assume the first retracted chunk of updated data always set RetractedDataFlag.
@@ -183,7 +163,6 @@ void JoinTransform::work()
                     has_data = true;
 
                 chunks[i].swap(input_chunk);
-                input_ports_with_data[i].input_chunks.clear();
             }
         }
 
@@ -196,8 +175,8 @@ void JoinTransform::work()
         /// All inputs request checkpoint
         if (requested_checkpoint_num == input_ports_with_data.size())
         {
-            requested_ckpt = input_ports_with_data.front().input_chunks.back().getCheckpointContext();
-            std::ranges::for_each(input_ports_with_data, [](auto & data) { data.input_chunks.clear(); });
+            requested_ckpt = input_ports_with_data.front().input_chunk.getCheckpointContext();
+            std::ranges::for_each(input_ports_with_data, [](auto & data) { data.input_chunk.clear(); });
         }
     }
 
@@ -351,98 +330,5 @@ void JoinTransform::onCancel()
     join->cancel();
 }
 
-/// Watermark alignment algorithm in general:
-/// 1) Pull the right stream first and track its watermark / timestamp as right_stream_watermark.
-///    Feed the data pulled to the right hash table directly which means JoinTransform doesn't buffer
-///    right stream data.
-/// 2) If there are no buffered data for left stream. Pull the left stream next, and track its watermark / timestamp
-///    as left_stream_watermark.
-///    a. If events' left_stream_watermark + latency_threshold <= right_stream_watermark,
-///       i) we can send the data to join the right hash table.
-///       ii) Mute right stream to avoid pulling more data since we may more left data which can be joined with right hash table.
-///       iii) Continue pulling more left stream data until the `left_stream_watermark + latency_threshold > right_stream_watermark`.
-///            and buffer these events which hold `left_stream_watermark + latency_threshold > right_stream_watermark` events in JoinTransform for next join.
-///    b. If events' left_stream_watermark + latency_threshold > right_stream_watermark, buffer these events in JoinTransform.
-///       Mute left stream and unmute right stream if necessary
-/// 3) If there are already buffered data for left stream (it shall be muted). Check if we can send the buffered to join the right hashtable and send as
-///    much as possible. If the left buffered data is empty, unmute it.
-///
-/// When right stream can garbage collect its data ?
-/// For asof join, for now, we manually use keep_versions to do garbage collection. Ideally we can do better job (automatically), but seems hard since version
-/// and watermark / timestamp are different.
-void JoinTransform::handleInputsAlignment()
-{
-    std::scoped_lock lock(mutex);
-
-    auto & left_input = input_ports_with_data[0];
-    auto & right_input = input_ports_with_data[1];
-
-    assert(right_input.input_chunks.size() <= 1);
-
-    if (right_input.watermark > 0)
-    {
-        /// 1) We pulled right input and it has data
-        if (!right_input.input_chunks.empty())
-        {
-            auto & right_chunk = right_input.input_chunks.front();
-            if (right_chunk.hasRows())
-            {
-                join->insertRightBlock(right_input.input_port->getHeader().cloneWithColumns(right_chunk.detachColumns()));
-            }
-            else
-            {
-                /// FIXME, watermark / heartbeat chunk.
-            }
-        }
-
-        /// Left input has buffered data or newly pulled data
-        if (!left_input.input_chunks.empty())
-        {
-            assert(
-                left_input.watermark != std::numeric_limits<int64_t>::min()
-                && right_input.watermark != std::numeric_limits<int64_t>::min());
-
-            if (left_input.watermark + latency_threshold <= right_input.watermark)
-            {
-                for (auto & left_chunk : left_input.input_chunks)
-                {
-                    auto joined_block = left_input.input_port->getHeader().cloneWithColumns(left_chunk.detachColumns());
-                    join->joinLeftBlock(joined_block);
-
-                    if (auto rows = joined_block.rows(); rows > 0)
-                        output_chunks.emplace_back(joined_block.getColumns(), rows);
-                }
-
-                left_input.input_chunks.clear();
-            }
-            else
-            {
-                /// Mute left input to wait right input progress
-                left_input.muted = true;
-                right_input.muted = false;
-            }
-        }
-        else
-        {
-            /// Left input doesn't have any data yet, we like to pull more. Mute the right input to give left more chance
-            /// to catch up.
-            left_input.muted = false;
-            right_input.muted = true;
-        }
-    }
-    else
-    {
-        /// Right input doesn't have any data yet. Mute left input
-        left_input.muted = true;
-        right_input.muted = false;
-    }
-}
-
-int64_t JoinTransform::getWatermark(const Chunk & chunk) const
-{
-    /// FIXME
-    (void)chunk;
-    return DB::UTCMilliseconds::now();
-}
 }
 }

@@ -2272,19 +2272,22 @@ std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreami
     Streaming::DataStreamSemanticEx right_input_data_stream_semantic = tables[1].output_data_stream_semantic;
 
     auto keep_versions = getContext()->getSettingsRef().keep_versions;
+    auto latency_threshold = getContext()->getSettingsRef().join_latency_threshold;
     auto max_threads = getContext()->getSettingsRef().max_threads;
 
     auto left_join_stream_desc = std::make_shared<Streaming::JoinStreamDescription>(
         tables[0],
         Block{},
         left_input_data_stream_semantic,
-        keep_versions); /// We don't know the header of the left stream yet since it is not finalized
+        keep_versions,
+        latency_threshold); /// We don't know the header of the left stream yet since it is not finalized
 
     auto right_join_stream_desc = std::make_shared<Streaming::JoinStreamDescription>(
         tables[1],
         joined_plan->getCurrentDataStream().header,
         right_input_data_stream_semantic,
-        keep_versions);
+        keep_versions,
+        latency_threshold);
 
     /// Right join stream desc has stream semantic and header set, can evaluate the primary key etc column positions
     right_join_stream_desc->calculateColumnPositions(analyzed_join->strictness());

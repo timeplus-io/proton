@@ -748,8 +748,8 @@ bool TableJoin::allowParallelHashJoin() const
         return false;
     if (table_join.kind != JoinKind::Left && table_join.kind != JoinKind::Inner)
         return false;
-    if (table_join.strictness == JoinStrictness::Asof)
-        return false;
+    /// if (table_join.strictness == JoinStrictness::Asof)
+    ///    return false;
     if (isSpecialStorage() || !oneDisjunct())
         return false;
     return true;

@@ -16,23 +16,25 @@ DataStreamSemanticEx getDataStreamSemantic(StoragePtr storage);
 
 struct JoinStreamDescription
 {
-    JoinStreamDescription(const TableWithColumnNamesAndTypes & table_with_columns_, Block input_header_, DataStreamSemanticEx data_stream_semantic_, UInt64 keep_versions_)
+    JoinStreamDescription(const TableWithColumnNamesAndTypes & table_with_columns_, Block input_header_, DataStreamSemanticEx data_stream_semantic_, UInt64 keep_versions_, Int64 latency_threshold_)
         : table_with_columns(table_with_columns_)
         , input_header(std::move(input_header_))
         , data_stream_semantic(data_stream_semantic_)
         , keep_versions(keep_versions_)
+        , latency_threshold(latency_threshold_)
     {
     }
 
-    JoinStreamDescription(JoinStreamDescription && other) noexcept
-        : table_with_columns(other.table_with_columns)
-        , input_header(std::move(other.input_header))
-        , data_stream_semantic(other.data_stream_semantic)
-        , keep_versions(other.keep_versions)
-        , primary_key_column_positions(std::move(other.primary_key_column_positions))
-        , version_column_position(other.version_column_position)
-    {
-    }
+    JoinStreamDescription(JoinStreamDescription && other) noexcept = default;
+//        : table_with_columns(other.table_with_columns)
+//        , input_header(std::move(other.input_header))
+//        , data_stream_semantic(other.data_stream_semantic)
+//        , keep_versions(other.keep_versions)
+//        , latency_threshold(other.latency_threshold)
+//        , primary_key_column_positions(std::move(other.primary_key_column_positions))
+//        , version_column_position(other.version_column_position)
+//    {
+//    }
 
     bool hasPrimaryKey() const noexcept { return primary_key_column_positions.has_value() && !primary_key_column_positions->empty(); }
     bool hasVersionColumn() const noexcept { return version_column_position.has_value(); }
@@ -48,7 +50,18 @@ struct JoinStreamDescription
     /// The input stream data semantic
     DataStreamSemanticEx data_stream_semantic;
 
+    /// SELECT * FROM left ASOF JOIN right
+    ///     ON left.k = right.k AND left.version < right.version
+    /// SETTINGS join_latency_threshold=500, keep_versions=16;
+    ///
+    /// OR
+    ///
+    /// SELECT * FROM left ASOF JOIN right
+    ///    ON left.k = right.k AND left.version < right.version AND
+    ///       date_diff_within(left.ts, right.ts, 20)
+    /// SETTINGS keep_versions=16;
     UInt64 keep_versions;
+    Int64 latency_threshold;
 
     /// Header's properties. Pre-calculated and cached. Used during join
     /// Primary key columns and version columns could be a performance enhancement
