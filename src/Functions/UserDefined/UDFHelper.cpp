@@ -146,9 +146,9 @@ createUserDefinedExecutableFunction(ContextPtr context, const std::string & name
                     arguments.emplace_back(std::move(argument));
                 }
             }
-            catch (const std::exception &)
+            catch (const std::exception & e)
             {
-                throw Exception(ErrorCodes::INCORRECT_DATA, "Invalid UDF config");
+                throw Exception(ErrorCodes::INCORRECT_DATA, "Invalid UDF config: {}", e.what());
             }
         }
 

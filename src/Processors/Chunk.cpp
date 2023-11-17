@@ -50,14 +50,9 @@ Chunk Chunk::clone() const
     return Chunk(getColumns(), getNumRows(), chunk_info, chunk_ctx);
 }
 
-ChunkContextPtr Chunk::cloneChunkContext() const
-{
-    return chunk_ctx ? std::make_shared<ChunkContext>(*chunk_ctx) : nullptr;
-}
-
 Chunk Chunk::cloneWithChunkContext(const ChunkContextPtr & chunk_ctx_) const
 {
-    return Chunk(getColumns(), getNumRows(), chunk_info, chunk_ctx_ ? std::make_shared<ChunkContext>(*chunk_ctx_) : nullptr);
+    return Chunk(getColumns(), getNumRows(), chunk_info, chunk_ctx_ ? chunk_ctx_->clone() : nullptr);
 }
 
 void Chunk::setColumns(Columns columns_, UInt64 num_rows_)

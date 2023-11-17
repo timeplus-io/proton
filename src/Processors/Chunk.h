@@ -94,6 +94,8 @@ struct ChunkContext
     CheckpointContextPtr getCheckpointContext() const { return ckpt_ctx; }
 
     const Streaming::SubstreamID & getSubstreamID() const { return id; }
+
+    std::shared_ptr<ChunkContext> clone() const { return std::make_shared<ChunkContext>(*this); }
 };
 using ChunkContextPtr = std::shared_ptr<ChunkContext>;
 /// proton : ends
@@ -202,7 +204,6 @@ public:
     void append(Chunk && chunk);
 
     /// proton : starts
-    ChunkContextPtr cloneChunkContext() const;
     /// Clone chunk with copyed chunk context, used for shuffling to prevent access to the same chunk context
     Chunk cloneWithChunkContext(const ChunkContextPtr & chunk_ctx_) const;
 
