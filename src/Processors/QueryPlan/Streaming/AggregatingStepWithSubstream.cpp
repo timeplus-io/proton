@@ -57,9 +57,13 @@ void AggregatingStepWithSubstream::transformPipeline(QueryPipelineBuilder & pipe
     /// Forget about current totals and extremes. They will be calculated again after aggregation if needed.
     pipeline.dropTotalsAndExtremes();
 
-    /// Disable convert to two level group by, since the input stream already is shuffled substream data.
-    params.group_by_two_level_threshold = 0;
-    params.group_by_two_level_threshold_bytes = 0;
+    /// By default, disable convert to two level group by, since the input stream already is shuffled substream data.
+    bool allow_to_use_two_level_group_by = params.max_bytes_before_external_group_by != 0;
+    if (!allow_to_use_two_level_group_by)
+    {
+        params.group_by_two_level_threshold = 0;
+        params.group_by_two_level_threshold_bytes = 0;
+    }
 
     auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version, emit_changelog);
 

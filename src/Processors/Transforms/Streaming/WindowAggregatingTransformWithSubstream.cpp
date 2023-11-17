@@ -96,5 +96,10 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
     }
 }
 
+void WindowAggregatingTransformWithSubstream::clearFinalized(Int64 finalized_watermark, const SubstreamContextPtr & substream_ctx)
+{
+    removeBucketsImpl(finalized_watermark, substream_ctx);
+}
+
 }
 }

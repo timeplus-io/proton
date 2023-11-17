@@ -85,6 +85,9 @@ private:
 
     virtual void finalize(const SubstreamContextPtr &, const ChunkContextPtr &) { }
 
+    /// Try propagate and garbage collect time bucketed memory by finalized watermark
+    void propagateWatermarkAndClear(const SubstreamContextPtr & substream_ctx);
+
 protected:
     void emitVersion(Chunk & chunk, const SubstreamContextPtr & substream_ctx);
     /// return {should_abort, need_finalization} pair
@@ -93,6 +96,8 @@ protected:
 
     virtual SubstreamContextPtr getOrCreateSubstreamContext(const SubstreamID & id);
     bool removeSubstreamContext(const SubstreamID & id);
+
+    virtual void clearFinalized(Int64 /*finalized_watermark*/, const SubstreamContextPtr &) { }
 
     inline IProcessor::Status preparePushToOutput();
 

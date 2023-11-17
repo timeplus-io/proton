@@ -380,7 +380,7 @@ bool AggregatingTransform::propagateWatermarkAndClear()
         else
             assert(finalized_watermark == current_chunk_aggregated.getWatermark());
 
-        removeBuckets(finalized_watermark);
+        clearFinalized(finalized_watermark);
         propagated_watermark = finalized_watermark;
         return true;
     }

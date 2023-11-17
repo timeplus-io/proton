@@ -198,7 +198,7 @@ protected:
     /// Prepare and check whether can finalization many_data (called after acquired finalizing lock)
     virtual bool prepareFinalization(Int64 /*min_watermark*/) { return true; }
 
-    virtual void removeBuckets(Int64 /*finalized_watermark*/) { }
+    virtual void clearFinalized(Int64 /*finalized_watermark*/) { }
 
 protected:
     /// To read the data that was flushed into the temporary data file.

@@ -202,6 +202,10 @@ public:
     void append(Chunk && chunk);
 
     /// proton : starts
+    ChunkContextPtr cloneChunkContext() const;
+    /// Clone chunk with copyed chunk context, used for shuffling to prevent access to the same chunk context
+    Chunk cloneWithChunkContext(const ChunkContextPtr & chunk_ctx_) const;
+
     bool hasWatermark() const { return chunk_ctx && chunk_ctx->hasWatermark(); }
 
     bool hasTimeoutWatermark() const { return chunk_ctx && chunk_ctx->hasTimeoutWatermark(); }
@@ -243,7 +247,7 @@ public:
     void trySetSubstreamID(Streaming::SubstreamID id)
     {
         if (chunk_ctx)
-            chunk_ctx->setSubstreamID(id);
+            chunk_ctx->setSubstreamID(std::move(id));
     }
 
     Int64 getWatermark() const

@@ -160,7 +160,7 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
         setCurrentChunk(std::move(merged_chunk), chunk_ctx);
 }
 
-void WindowAggregatingTransform::removeBuckets(Int64 finalized_watermark)
+void WindowAggregatingTransform::clearFinalized(Int64 finalized_watermark)
 {
     /// Blocking finalization during remove buckets from current variant
     std::lock_guard lock(variants_mutex);
