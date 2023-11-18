@@ -147,7 +147,7 @@ Chunk FileLogSource::process()
             col->insertData(line.data(), line.size());
 
         /// Move the remaining bytes to the start of buffer
-        memcpy(buffer.data(), buffer.data() + (buffer_offset - left), left);
+        std::memmove(buffer.data(), buffer.data() + (buffer_offset - left), left);
         remaining = left;
         buffer_offset = left;
 
