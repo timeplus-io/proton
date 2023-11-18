@@ -2272,8 +2272,12 @@ std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreami
     Streaming::DataStreamSemanticEx right_input_data_stream_semantic = tables[1].output_data_stream_semantic;
 
     auto keep_versions = getContext()->getSettingsRef().keep_versions;
-    auto latency_threshold = getContext()->getSettingsRef().join_latency_threshold;
     auto max_threads = getContext()->getSettingsRef().max_threads;
+
+    auto latency_threshold = getContext()->getSettingsRef().join_latency_threshold; /// Query global settings
+    /// If user explicitly specifies `JOIN ... ON ... AND lag_behind(10ms, ...), override the query global settings
+    if (auto lag_interval = analyzed_join->lagBehindInterval(); lag_interval != 0)
+        latency_threshold = lag_interval;
 
     auto left_join_stream_desc = std::make_shared<Streaming::JoinStreamDescription>(
         tables[0],
@@ -2288,6 +2292,14 @@ std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreami
         right_input_data_stream_semantic,
         keep_versions,
         latency_threshold);
+
+    if (auto lag_interval = analyzed_join->lagBehindInterval(); lag_interval != 0)
+    {
+        left_join_stream_desc->lag_column = analyzed_join->leftLagBehindColumn();
+        assert(!left_join_stream_desc->lag_column.empty());
+        right_join_stream_desc->lag_column = analyzed_join->rightLagBehindColumn();
+        assert(!right_join_stream_desc->lag_column.empty());
+    }
 
     /// Right join stream desc has stream semantic and header set, can evaluate the primary key etc column positions
     right_join_stream_desc->calculateColumnPositions(analyzed_join->strictness());

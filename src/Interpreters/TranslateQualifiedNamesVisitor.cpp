@@ -180,13 +180,14 @@ void TranslateQualifiedNamesMatcher::visit(ASTFunction & node, const ASTPtr &, D
         func_arguments->children[0]->as<ASTAsterisk>())
         func_arguments->children.erase(func_arguments->children.begin());
 
-    if (func_arguments->children.size() == 1 && func_name_lowercase == "date_diff_within")
+    if (func_arguments->children.size() == 1 && (func_name_lowercase == "date_diff_within" || func_name_lowercase == "lag_behind"))
     {
         if (data.tables.size() != 2)
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Multiple stream to stream join is not supported");
 
         /// Add left._tp_time and right._tp_time as its parameters
         /// date_diff_within(10s) => date_diff_within(10s, left_table._tp_time, right_table._tp_time)
+        /// lag_behind(10s) => lag_behind(10s, left_table._tp_time, right_table._tp_time)
         if (!data.tables[0].hasColumn(ProtonConsts::RESERVED_EVENT_TIME) || !data.tables[1].hasColumn(ProtonConsts::RESERVED_EVENT_TIME))
             throw Exception(
                 ErrorCodes::SYNTAX_ERROR,

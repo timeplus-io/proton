@@ -1,13 +1,8 @@
 #include <Processors/Transforms/Streaming/JoinTransformWithAlignment.h>
 
-#include <Interpreters/Streaming/ConcurrentHashJoin.h>
-#include <Interpreters/Streaming/HashJoin.h>
-#include <base/ClockUtils.h>
 #include <Common/logger_useful.h>
 
-namespace DB
-{
-namespace Streaming
+namespace DB::Streaming
 {
 Block JoinTransformWithAlignment::transformHeader(Block header, const HashJoinPtr & join)
 {
@@ -20,8 +15,6 @@ JoinTransformWithAlignment::JoinTransformWithAlignment(
     : IProcessor({left_input_header, right_input_header}, {output_header}, ProcessorID::StreamingJoinTransformWithAlignmentID)
     , join(std::move(join_))
     , output_header_chunk(outputs.front().getHeader().getColumns(), 0)
-    , left_watermark_column_position(0) /// FIXME
-    , right_watermark_column_position(0)
     , left_input{&inputs.front()}
     , right_input{&inputs.back()}
     , last_stats_log_ts(DB::MonotonicSeconds::now())
@@ -33,12 +26,24 @@ JoinTransformWithAlignment::JoinTransformWithAlignment(
     join->postInit(left_input_header, output_header, join_max_cached_bytes);
     assert(join->requireWatermarkAlignedStreams());
 
-    latency_threshold = join->leftJoinStreamDescription()->latency_threshold;
+    auto left_join_stream_desc = join->leftJoinStreamDescription();
+    latency_threshold = left_join_stream_desc->latency_threshold;
     if (latency_threshold <= 0)
         latency_threshold = 200;
 
-    (void)left_watermark_column_position;
-    (void)right_watermark_column_position;
+    auto right_join_stream_desc = join->rightJoinStreamDescription();
+
+    left_watermark_column_position = left_join_stream_desc->lagBehindColumnPosition();
+    left_watermark_column_type = left_join_stream_desc->lagBehindColumnType();
+
+    right_watermark_column_position = right_join_stream_desc->lagBehindColumnPosition();
+    right_watermark_column_type = right_join_stream_desc->lagBehindColumnType();
+
+    assert(
+        (left_watermark_column_position && right_watermark_column_position)
+        || (!left_watermark_column_position && !right_watermark_column_position));
+
+    assert((left_watermark_column_type && right_watermark_column_type) || (!left_watermark_column_type && !right_watermark_column_type));
 }
 
 IProcessor::Status JoinTransformWithAlignment::prepareRightInput()
@@ -67,7 +72,7 @@ IProcessor::Status JoinTransformWithAlignment::prepareRightInput()
             right_input.input_chunk = right_input.input_port->pull(true);
             if (right_input.input_chunk.hasRows())
             {
-                if (auto new_watermark = getWatermark(right_input.input_chunk); new_watermark > right_input.watermark)
+                if (auto new_watermark = getRightWatermark(right_input.input_chunk); new_watermark > right_input.watermark)
                     right_input.watermark = new_watermark;
             }
             right_input.required_checkpoint = right_input.input_chunk.requestCheckpoint();
@@ -105,7 +110,7 @@ IProcessor::Status JoinTransformWithAlignment::prepareLeftInput()
 
             if (left_input.input_chunks.back().hasRows())
             {
-                if (auto new_watermark = getWatermark(left_input.input_chunks.back()); new_watermark > left_input.watermark)
+                if (auto new_watermark = getLeftWatermark(left_input.input_chunks.back()); new_watermark > left_input.watermark)
                     left_input.watermark = new_watermark;
             }
             left_input.required_checkpoint = left_input.input_chunks.back().requestCheckpoint();
@@ -264,16 +269,8 @@ void JoinTransformWithAlignment::work()
     }
 }
 
-Int64 JoinTransformWithAlignment::getWatermark(const Chunk & chunk) const
-{
-    /// FIXME
-    (void)chunk;
-    return DB::UTCMilliseconds::now();
-}
-
 void JoinTransformWithAlignment::onCancel()
 {
     join->cancel();
-}
 }
 }
