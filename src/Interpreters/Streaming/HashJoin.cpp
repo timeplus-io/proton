@@ -3,10 +3,7 @@
 #include <Interpreters/Streaming/joinSerder.h>
 
 #include <Columns/ColumnConst.h>
-#include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnSparse.h>
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>

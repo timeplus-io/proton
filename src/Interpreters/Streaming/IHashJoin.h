@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Interpreters/IJoin.h>
+#include <Interpreters/Streaming/JoinStreamDescription.h>
 
 namespace DB
 {
@@ -31,7 +32,14 @@ public:
     virtual bool rangeBidirectionalHashJoin() const = 0;
     /// If requires left / right do timestamp / watermark alignment
     virtual bool requireWatermarkAlignedStreams() const = 0;
-    virtual void getKeyColumnPositions(std::vector<size_t> & left_key_column_positions, std::vector<size_t> & right_key_column_positions, bool include_asof_key_column = false) const = 0;
+    virtual void getKeyColumnPositions(
+        std::vector<size_t> & left_key_column_positions,
+        std::vector<size_t> & right_key_column_positions,
+        bool include_asof_key_column = false) const
+        = 0;
+
+    virtual JoinStreamDescriptionPtr leftJoinStreamDescription() const noexcept = 0;
+    virtual JoinStreamDescriptionPtr rightJoinStreamDescription() const noexcept = 0;
 
     virtual void serialize(WriteBuffer & wb) const = 0;
     virtual void deserialize(ReadBuffer & rb) = 0;

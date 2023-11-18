@@ -1,5 +1,6 @@
 #include <Processors/Transforms/Streaming/JoinTransformWithAlignment.h>
 
+#include <Interpreters/Streaming/ConcurrentHashJoin.h>
 #include <Interpreters/Streaming/HashJoin.h>
 #include <base/ClockUtils.h>
 #include <Common/logger_useful.h>
@@ -32,17 +33,17 @@ JoinTransformWithAlignment::JoinTransformWithAlignment(
     join->postInit(left_input_header, output_header, join_max_cached_bytes);
     assert(join->requireWatermarkAlignedStreams());
 
-    latency_threshold = std::dynamic_pointer_cast<HashJoin>(join)->leftJoinStreamDescription()->latency_threshold;
+    latency_threshold = join->leftJoinStreamDescription()->latency_threshold;
     if (latency_threshold <= 0)
         latency_threshold = 200;
 
-    (void) left_watermark_column_position;
-    (void) right_watermark_column_position;
+    (void)left_watermark_column_position;
+    (void)right_watermark_column_position;
 }
 
 IProcessor::Status JoinTransformWithAlignment::prepareRightInput()
 {
-    if (!right_input.input_chunk)
+    if (right_input.input_chunk)
     {
         /// When we already pulled data from right input and didn't consume it yet,
         /// consume it.
@@ -63,8 +64,7 @@ IProcessor::Status JoinTransformWithAlignment::prepareRightInput()
 
         if (right_input.input_port->hasData())
         {
-            right_input.input_chunk = left_input.input_port->pull(true);
-
+            right_input.input_chunk = right_input.input_port->pull(true);
             if (right_input.input_chunk.hasRows())
             {
                 if (auto new_watermark = getWatermark(right_input.input_chunk); new_watermark > right_input.watermark)
@@ -185,7 +185,7 @@ void JoinTransformWithAlignment::work()
         if (likely(right_input.watermark != INVALID_WATERMARK))
         {
             /// 1) We pulled right input and it has data
-            if (!right_input.input_chunk)
+            if (right_input.input_chunk)
             {
                 if (right_input.input_chunk.hasRows())
                 {
@@ -252,7 +252,14 @@ void JoinTransformWithAlignment::work()
 
     if (DB::MonotonicSeconds::now() - last_stats_log_ts >= 5)
     {
-        LOG_INFO(log, "left_input_muted={} right_input_muted={}", stats.left_input_muted, stats.right_input_muted);
+        LOG_INFO(
+            log,
+            "left_watermark={} right_watermark={} left_input_muted={} right_input_muted={}",
+            left_input.watermark,
+            right_input.watermark,
+            stats.left_input_muted,
+            stats.right_input_muted);
+
         last_stats_log_ts = DB::MonotonicSeconds::now();
     }
 }

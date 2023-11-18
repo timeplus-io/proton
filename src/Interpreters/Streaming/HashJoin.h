@@ -246,9 +246,8 @@ public:
         SERDE std::unique_ptr<HashJoinMapsVariants> maps;
     };
 
-    JoinStreamDescriptionPtr leftJoinStreamDescription() const noexcept { return left_data.join_stream_desc; }
-
-    JoinStreamDescriptionPtr rightJoinStreamDescription() const noexcept { return right_data.join_stream_desc; }
+    JoinStreamDescriptionPtr leftJoinStreamDescription() const noexcept override { return left_data.join_stream_desc; }
+    JoinStreamDescriptionPtr rightJoinStreamDescription() const noexcept override { return right_data.join_stream_desc; }
 
 private:
     void checkJoinSemantic() const;
