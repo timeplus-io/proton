@@ -23,8 +23,8 @@ extern const int CANNOT_FSTAT;
 }
 
 FileLog::FileLog(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_)
-    : storage_id(storage->getStorageID())
-    , settings(std::move(settings_))
+    : StorageExternalStreamImpl(std::move(settings_))
+    , storage_id(storage->getStorageID())
     , timestamp_regex(std::make_unique<re2::RE2>(settings->timestamp_regex.value))
     , linebreaker_regex(std::make_unique<re2::RE2>(settings->row_delimiter.value))
     , log(&Poco::Logger::get("External-FileLog"))

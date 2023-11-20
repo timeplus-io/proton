@@ -27,6 +27,8 @@
 #include "Common/Exception.h"
 
 /// proton : starts
+#include <Parsers/ParserShowCreateFormatSchemaQuery.h>
+#include <Parsers/ParserShowFormatSchemasQuery.h>
 #include <Parsers/Streaming/ParserSubscribeQuery.h>
 /// proton : ends
 
@@ -59,6 +61,10 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserShowGrantsQuery show_grants_p;
     ParserShowPrivilegesQuery show_privileges_p;
     ParserExplainQuery explain_p(end, allow_settings_after_format_in_insert);
+    /// proton: starts
+    ParserShowFormatSchemasQuery show_format_schemas_p;
+    ParserShowCreateFormatSchemaQuery format_schema_p;
+    /// proton: ends
 
     ASTPtr query;
 
@@ -69,6 +75,9 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || unsubscribe_p.parse(pos, query, expected)
         || recover_p.parse(pos, query, expected)
         || show_create_access_entity_p.parse(pos, query, expected) /// should be before `show_tables_p`
+        /// proton: starts
+        || format_schema_p.parse(pos, query, expected) /// should be before 'show_tables_p'
+        /// proton: ends
         || show_tables_p.parse(pos, query, expected)
         || table_p.parse(pos, query, expected)
         || describe_cache_p.parse(pos, query, expected)
@@ -82,6 +91,9 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || kill_query_p.parse(pos, query, expected)
         || optimize_p.parse(pos, query, expected)
         || watch_p.parse(pos, query, expected)
+        /// proton: starts
+        || show_format_schemas_p.parse(pos, query, expected)
+        /// proton: ends
         || show_access_p.parse(pos, query, expected)
         || show_access_entities_p.parse(pos, query, expected)
         || show_grants_p.parse(pos, query, expected)

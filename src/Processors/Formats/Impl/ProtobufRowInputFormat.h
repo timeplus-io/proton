@@ -34,6 +34,10 @@ public:
 
     String getName() const override { return "ProtobufRowInputFormat"; }
 
+    /// proton: starts
+    void setReadBuffer(ReadBuffer & buf) override;
+    /// proton: ends
+
 private:
     bool readRow(MutableColumns & columns, RowReadExtension &) override;
     bool allowSyncAfterError() const override;

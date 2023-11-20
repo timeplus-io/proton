@@ -24,6 +24,11 @@
 #include <Parsers/Access/ParserGrantQuery.h>
 #include <Parsers/Access/ParserSetRoleQuery.h>
 
+/// proton: starts
+#include <Parsers/ParserCreateFormatSchemaQuery.h>
+#include <Parsers/ParserDropFormatSchemaQuery.h>
+/// proton: ends
+
 
 namespace DB
 {
@@ -49,6 +54,10 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ ma
     ParserExternalDDLQuery external_ddl_p;
     ParserTransactionControl transaction_control_p;
     ParserBackupQuery backup_p;
+    /// proton: starts
+    ParserCreateFormatSchemaQuery create_format_schema_p;
+    ParserDropFormatSchemaQuery drop_format_schema_p;
+    /// proton: ends
 
     bool res = query_with_output_p.parse(pos, node, expected)
         || insert_p.parse(pos, node, expected)
@@ -62,6 +71,10 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ ma
         || create_row_policy_p.parse(pos, node, expected)
         || create_settings_profile_p.parse(pos, node, expected)
         || create_function_p.parse(pos, node, expected)
+        /// proton: starts
+        || create_format_schema_p.parse(pos, node, expected)
+        || drop_format_schema_p.parse(pos, node, expected)
+        /// proton: ends
         || drop_function_p.parse(pos, node, expected)
         || drop_access_entity_p.parse(pos, node, expected)
         || grant_p.parse(pos, node, expected)

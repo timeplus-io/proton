@@ -28,6 +28,14 @@ ProtobufRowInputFormat::ProtobufRowInputFormat(ReadBuffer & in_, const Block & h
 
 ProtobufRowInputFormat::~ProtobufRowInputFormat() = default;
 
+/// proton: starts
+void ProtobufRowInputFormat::setReadBuffer(ReadBuffer & buf)
+{
+    IInputFormat::setReadBuffer(buf);
+    reader->setReadBuffer(buf);
+}
+/// proton: ends
+
 bool ProtobufRowInputFormat::readRow(MutableColumns & columns, RowReadExtension & row_read_extension)
 {
     if (reader->eof())
