@@ -9,9 +9,20 @@
 #include <base/getMemoryAmount.h>
 #include <Common/DateLUT.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Core/ServerUUID.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
+namespace ProfileEvents
+{
+    extern const Event SelectQuery;
+    extern const Event StreamingSelectQuery;
+    extern const Event HistoricalSelectQuery;
+}
 
 namespace DB
 {
@@ -77,6 +88,21 @@ void TelemetryCollector::collect()
 
         Int64 duration_in_minute = UTCMinutes::now() - started_on_in_minutes;
 
+        DB::UUID server_uuid = DB::ServerUUID::get();
+        std::string server_uuid_str = server_uuid != DB::UUIDHelpers::Nil ? DB::toString(server_uuid) : "Unknown";
+
+        /// https://stackoverflow.com/questions/20010199/how-to-determine-if-a-process-runs-inside-lxc-docker
+        bool in_docker = fs::exists("/.dockerenv");
+
+        auto load_counter = [](const auto & event){
+            assert (event < ProfileEvents::end());
+            return ProfileEvents::global_counters[event].load(std::memory_order_relaxed);
+        };
+
+        const auto total_select_query = load_counter(ProfileEvents::SelectQuery);
+        const auto streaming_select_query = load_counter(ProfileEvents::StreamingSelectQuery);
+        const auto historical_select_query = load_counter(ProfileEvents::HistoricalSelectQuery);
+
         std::string data = fmt::format("{{"
             "\"type\": \"track\","
             "\"event\": \"proton_ping\","
@@ -87,9 +113,16 @@ void TelemetryCollector::collect()
             "    \"version\": \"{}\","
             "    \"new_session\": \"{}\","
             "    \"started_on\": \"{}\","
-            "    \"duration_in_minute\": \"{}\""
+            "    \"duration_in_minute\": \"{}\","
+            "    \"session_id\": \"{}\","
+            "    \"docker\": \"{}\","
+            "    \"total_select_query\": \"{}\","
+            "    \"historical_select_query\": \"{}\","
+            "    \"streaming_select_query\": \"{}\""
             "}}"
-        "}}", cpu, memory_in_gb, EDITION, VERSION_STRING, new_session, started_on, duration_in_minute);
+        "}}", cpu, memory_in_gb, EDITION, VERSION_STRING, new_session, started_on, duration_in_minute, server_uuid_str, in_docker, total_select_query, historical_select_query, streaming_select_query);
+
+        LOG_TRACE(log, "Sending telemetry: {}.", data);
 
         new_session = false;
 

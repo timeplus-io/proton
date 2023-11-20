@@ -97,6 +97,8 @@ namespace ProfileEvents
 {
     extern const Event Query;
     extern const Event SelectQuery;
+    extern const Event StreamingSelectQuery;
+    extern const Event HistoricalSelectQuery;
     extern const Event InsertQuery;
 }
 
@@ -123,8 +125,13 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     }
     else if (query->as<ASTSelectWithUnionQuery>())
     {
+        auto interpreter = std::make_unique<InterpreterSelectWithUnionQuery>(query, context, options);
         ProfileEvents::increment(ProfileEvents::SelectQuery);
-        return std::make_unique<InterpreterSelectWithUnionQuery>(query, context, options);
+        if (interpreter->isStreamingQuery())
+            ProfileEvents::increment(ProfileEvents::StreamingSelectQuery);
+        else
+            ProfileEvents::increment(ProfileEvents::HistoricalSelectQuery);
+        return std::move(interpreter);
     }
     else if (query->as<ASTSelectIntersectExceptQuery>())
     {
