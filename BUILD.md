@@ -5,7 +5,7 @@
 ### Build with docker container
 
 ```sh
-./docker/packager/packager --package-type binary --docker-image-version clang-16 --proton-build --enable_proton_local --output-dir `pwd`/build_output
+./docker/packager/packager --package-type binary --docker-image-version clang-16 --proton-build --enable-proton-local --output-dir `pwd`/build_output
 ```
 
 ### Bare metal build

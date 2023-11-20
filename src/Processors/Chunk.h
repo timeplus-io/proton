@@ -199,6 +199,7 @@ public:
     std::string dumpStructure() const;
 
     void append(const Chunk & chunk);
+    void append(Chunk && chunk);
 
     /// proton : starts
     bool hasWatermark() const { return chunk_ctx && chunk_ctx->hasWatermark(); }

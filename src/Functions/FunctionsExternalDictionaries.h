@@ -8,6 +8,7 @@
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypeIPv4andIPv6.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 
@@ -720,6 +721,9 @@ struct NameDictGetDecimal32 { static constexpr auto name = "dict_get_decimal32";
 struct NameDictGetDecimal64 { static constexpr auto name = "dict_get_decimal64"; };
 struct NameDictGetDecimal128 { static constexpr auto name = "dict_get_decimal128"; };
 struct NameDictGetString { static constexpr auto name = "dict_get_string"; };
+struct NameDictGetIPv4 { static constexpr auto name = "dict_get_ipv4"; };
+struct NameDictGetIPv6 { static constexpr auto name = "dict_get_ipv6"; };
+
 
 using FunctionDictGetUInt8 = FunctionDictGet<DataTypeUInt8, NameDictGetUInt8>;
 using FunctionDictGetUInt16 = FunctionDictGet<DataTypeUInt16, NameDictGetUInt16>;
@@ -734,6 +738,8 @@ using FunctionDictGetFloat64 = FunctionDictGet<DataTypeFloat64, NameDictGetFloat
 using FunctionDictGetDate = FunctionDictGet<DataTypeDate, NameDictGetDate>;
 using FunctionDictGetDateTime = FunctionDictGet<DataTypeDateTime, NameDictGetDateTime>;
 using FunctionDictGetUUID = FunctionDictGet<DataTypeUUID, NameDictGetUUID>;
+using FunctionDictGetIPv4 = FunctionDictGet<DataTypeIPv4, NameDictGetIPv4>;
+using FunctionDictGetIPv6 = FunctionDictGet<DataTypeIPv6, NameDictGetIPv6>;
 using FunctionDictGetDecimal32 = FunctionDictGet<DataTypeDecimal<Decimal32>, NameDictGetDecimal32>;
 using FunctionDictGetDecimal64 = FunctionDictGet<DataTypeDecimal<Decimal64>, NameDictGetDecimal64>;
 using FunctionDictGetDecimal128 = FunctionDictGet<DataTypeDecimal<Decimal128>, NameDictGetDecimal128>;
@@ -759,6 +765,8 @@ struct NameDictGetDecimal32OrDefault { static constexpr auto name = "dict_get_de
 struct NameDictGetDecimal64OrDefault { static constexpr auto name = "dict_get_decimal64_or_default"; };
 struct NameDictGetDecimal128OrDefault { static constexpr auto name = "dict_get_decimal128_or_default"; };
 struct NameDictGetStringOrDefault { static constexpr auto name = "dict_get_string_or_default"; };
+struct NameDictGetIPv4OrDefault { static constexpr auto name = "dict_get_ipv4_or_default"; };
+struct NameDictGetIPv6OrDefault { static constexpr auto name = "dict_get_ipv6_or_default"; };
 
 using FunctionDictGetUInt8OrDefault = FunctionDictGetOrDefault<DataTypeUInt8, NameDictGetUInt8OrDefault>;
 using FunctionDictGetUInt16OrDefault = FunctionDictGetOrDefault<DataTypeUInt16, NameDictGetUInt16OrDefault>;
@@ -773,6 +781,8 @@ using FunctionDictGetFloat64OrDefault = FunctionDictGetOrDefault<DataTypeFloat64
 using FunctionDictGetDateOrDefault = FunctionDictGetOrDefault<DataTypeDate, NameDictGetDateOrDefault>;
 using FunctionDictGetDateTimeOrDefault = FunctionDictGetOrDefault<DataTypeDateTime, NameDictGetDateTimeOrDefault>;
 using FunctionDictGetUUIDOrDefault = FunctionDictGetOrDefault<DataTypeUUID, NameDictGetUUIDOrDefault>;
+using FunctionDictGetIPv4OrDefault = FunctionDictGetOrDefault<DataTypeIPv4, NameDictGetIPv4OrDefault>;
+using FunctionDictGetIPv6OrDefault = FunctionDictGetOrDefault<DataTypeIPv6, NameDictGetIPv6OrDefault>;
 using FunctionDictGetDecimal32OrDefault = FunctionDictGetOrDefault<DataTypeDecimal<Decimal32>, NameDictGetDecimal32OrDefault>;
 using FunctionDictGetDecimal64OrDefault = FunctionDictGetOrDefault<DataTypeDecimal<Decimal64>, NameDictGetDecimal64OrDefault>;
 using FunctionDictGetDecimal128OrDefault = FunctionDictGetOrDefault<DataTypeDecimal<Decimal128>, NameDictGetDecimal128OrDefault>;

@@ -2,6 +2,7 @@
 
 #include "Decimal.h"
 #include "UUID.h"
+#include "IPv4andIPv6.h"
 
 namespace DB
 {
@@ -45,6 +46,8 @@ TN_MAP(Array, array)
 TN_MAP(Tuple, tuple)
 TN_MAP(Map, map)
 TN_MAP(Object, json)
+TN_MAP(IPv4, ipv4)
+TN_MAP(IPv6, ipv6)
 
 /// Special case
 template <> constexpr inline std::string_view TypeName<AggregateFunctionStateData> = "aggregate_function_state";

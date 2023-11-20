@@ -26,7 +26,7 @@ GlobalAggregatingTransformWithSubstream::GlobalAggregatingTransformWithSubstream
 SubstreamContextPtr GlobalAggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
 {
     auto substream_ctx = AggregatingTransformWithSubstream::getOrCreateSubstreamContext(id);
-    if (params->emit_changelog)
+    if (params->emit_changelog && !substream_ctx->hasField())
     {
         if (params->emit_version)
             throw Exception(ErrorCodes::UNSUPPORTED, "'emit_version()' is not supported in global aggregation emit changelog");
@@ -84,21 +84,16 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     if (variants.empty())
         return;
 
-    assert(variants.type != AggregatedDataVariants::Type::without_key);
-
-    if (unlikely(variants.isTwoLevel()))
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Two level merge is not implemented in global aggregation");
-
     auto start = MonotonicMilliseconds::now();
     if (params->emit_changelog)
     {
         auto [retracted_chunk, chunk]
-            = AggregatingHelper::convertSingleLevelToChangelog(variants, *substream_ctx->getField<RetractedDataVariantsPtr>(), *params);
+            = AggregatingHelper::convertToChangelogChunk(variants, *substream_ctx->getField<RetractedDataVariantsPtr>(), *params);
         setCurrentChunk(std::move(chunk), chunk_ctx, std::move(retracted_chunk));
     }
     else
     {
-        auto chunk = AggregatingHelper::convertSingleLevel(variants, *params);
+        auto chunk = AggregatingHelper::convertToChunk(variants, *params);
         if (params->final && params->emit_version)
             emitVersion(chunk, substream_ctx);
 

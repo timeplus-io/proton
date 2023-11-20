@@ -86,16 +86,34 @@ void ExternalGrokPatterns::loadPatternsFromFile()
     std::ifstream ifs(file_name);
     if (!ifs)
     {
-        LOG_WARNING(log, "External grok patterns file '{}' is not exist", file_name);
-        patterns = std::make_unique<std::unordered_map<String, String>>();
+        LOG_WARNING(log, "External grok patterns file '{}' does not exist, trying embedded resource", file_name);
+
+        /// Try to load the patterns from embedded resource
+        auto resource_data = getResource("grok-patterns");
+        if (!resource_data.empty())
+        {
+            std::string resource_string(resource_data);
+            std::istringstream resource_stream(resource_string);
+            loadPatternsFromStream(resource_stream);
+        }
+        else
+        {
+            LOG_ERROR(log, "Failed to load grok patterns from both file and embedded resource");
+            patterns = std::make_unique<std::unordered_map<String, String>>();
+        }
         return;
     }
 
+    loadPatternsFromStream(ifs);
+}
+
+void ExternalGrokPatterns::loadPatternsFromStream(std::istream & stream)
+{
     int line_num = 0;
     String line;
 
     auto new_patterns = std::make_unique<std::unordered_map<String, String>>();
-    while (std::getline(ifs, line))
+    while (std::getline(stream, line))
     {
         Poco::trimInPlace(line);
         ++line_num;

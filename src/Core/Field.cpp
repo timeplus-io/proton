@@ -51,6 +51,18 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
             readBinary(value, buf);
             return value;
         }
+        case Field::Types::IPv4:
+        {
+            IPv4 value;
+            readBinary(value, buf);
+            return value;
+        }
+        case Field::Types::IPv6:
+        {
+            IPv6 value;
+            readBinary(value.toUnderType(), buf);
+            return value;
+        }
         case Field::Types::Int64:
         {
             Int64 value;
@@ -583,6 +595,8 @@ String fieldTypeToString(Field::Types::Which type)
         case Field::Types::Which::UInt128: return "uint128";
         case Field::Types::Which::UInt256: return "uint256";
         case Field::Types::Which::UUID: return "uuid";
+        case Field::Types::Which::IPv4: return "ipv4";
+        case Field::Types::Which::IPv6: return "ipv6";
     }
 }
 

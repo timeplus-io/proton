@@ -51,6 +51,7 @@ public:
 
 protected:
     StorageExternalStream(
+        const ASTPtr & sharding_key_,
         const StorageID & table_id_,
         ContextPtr context_,
         const ColumnsDescription & columns_,

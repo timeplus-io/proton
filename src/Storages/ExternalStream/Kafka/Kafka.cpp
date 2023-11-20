@@ -25,11 +25,12 @@ extern const int INVALID_SETTING_VALUE;
 extern const int RESOURCE_NOT_FOUND;
 }
 
-Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, bool attach)
+Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, ASTPtr partitioning_expr_, bool attach)
     : storage_id(storage->getStorageID())
     , settings(std::move(settings_))
     , data_format(settings->data_format.value)
     , log(&Poco::Logger::get("External-" + settings->topic.value))
+    , partitioning_expr(std::move(partitioning_expr_))
 {
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
 
@@ -268,6 +269,8 @@ void Kafka::validate(const std::vector<int32_t> & shards_to_query)
 
 SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
 {
-    return std::make_shared<KafkaSink>(this, metadata_snapshot->getSampleBlock(), context, log);
+    /// always validate before actual use
+    validate();
+    return std::make_shared<KafkaSink>(this, metadata_snapshot->getSampleBlock(), context, shards, log);
 }
 }
