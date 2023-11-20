@@ -2444,7 +2444,9 @@ void Context::setCluster(const String & cluster_name, const std::shared_ptr<Clus
 void Context::initializeSystemLogs()
 {
     callOnce(shared->system_logs_initializer, [&] {
-        shared->system_logs = std::make_unique<SystemLogs>(getGlobalContext(), getConfigRef());
+        auto system_logs = std::make_unique<SystemLogs>(getGlobalContext(), getConfigRef());
+        auto lock = getGlobalLock();
+        shared->system_logs = std::move(system_logs);
     });
 }
 
