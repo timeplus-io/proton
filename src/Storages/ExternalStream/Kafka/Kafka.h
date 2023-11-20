@@ -34,8 +34,7 @@ public:
 
     bool produceOneMessagePerRow() const { return settings->one_message_per_row; }
     const String & brokers() const { return settings->brokers.value; }
-    const String & dataFormat() const { return data_format; }
-    const String & dataSchema() const { return settings->data_schema.value; }
+    const String & dataFormat() const override { return data_format; }
     const String & topic() const { return settings->topic.value; }
     const String & securityProtocol() const { return settings->security_protocol.value; }
     const String & username() const { return settings->username.value; }
@@ -55,7 +54,6 @@ private:
 
 private:
     StorageID storage_id;
-    std::unique_ptr<ExternalStreamSettings> settings;
     String data_format;
 
     Poco::Logger * log;

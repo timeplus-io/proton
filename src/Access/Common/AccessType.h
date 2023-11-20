@@ -24,6 +24,9 @@ enum class AccessType
                                          implicitly enabled with any grant on the column */\
     M(SHOW_DICTIONARIES, "", DICTIONARY, SHOW) /* allows to execute SHOW DICTIONARIES, SHOW CREATE DICTIONARY, EXISTS <dictionary>;
                                                   implicitly enabled by any grant on the dictionary */\
+    /* proton:starts */ \
+    M(SHOW_FORMAT_SCHEMAS, "SHOW FORMAT SCHEMAS", GLOBAL, SHOW) \
+    /* proton:ends */ \
     M(SHOW, "", GROUP, ALL) /* allows to execute SHOW, USE, EXISTS, CHECK, DESCRIBE */\
     M(SHOW_FILESYSTEM_CACHES, "", GROUP, ALL) \
     \
@@ -89,6 +92,9 @@ enum class AccessType
     M(CREATE_TEMPORARY_TABLE, "", GLOBAL, CREATE) /* allows to create and manipulate temporary tables;
                                                      implicitly enabled by the grant CREATE_TABLE on any table */ \
     M(CREATE_FUNCTION, "", GLOBAL, CREATE) /* allows to execute CREATE FUNCTION */ \
+    /* proton:starts */ \
+    M(CREATE_FORMAT_SCHEMA, "", GLOBAL, CREATE) /* allows to execute CREATE FORMAT SCHEMA */ \
+    /* proton:ends */ \
     M(CREATE_NAMED_COLLECTION, "", GLOBAL, CREATE) /* allows to execute CREATE NAMED COLLECTION */ \
     M(CREATE, "", GROUP, ALL) /* allows to execute {CREATE|ATTACH} */ \
     \
@@ -98,6 +104,9 @@ enum class AccessType
                                     implicitly enabled by the grant DROP_TABLE */\
     M(DROP_DICTIONARY, "", DICTIONARY, DROP) /* allows to execute {DROP|DETACH} DICTIONARY */\
     M(DROP_FUNCTION, "", GLOBAL, DROP) /* allows to execute DROP FUNCTION */\
+    /* proton:starts */ \
+    M(DROP_FORMAT_SCHEMA, "", GLOBAL, DROP) /* allows to execute DROP FORMAT SCHEMA */ \
+    /* proton:ends */ \
     M(DROP_NAMED_COLLECTION, "", GLOBAL, DROP) /* allows to execute DROP NAMED COLLECTION */\
     M(DROP, "", GROUP, ALL) /* allows to execute {DROP|DETACH} */\
     \

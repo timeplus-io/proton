@@ -280,7 +280,7 @@ void KafkaSource::initFormatExecutor(const Kafka * kafka)
     if (!data_format.empty())
     {
         auto input_format
-            = FormatFactory::instance().getInputFormat(data_format, read_buffer, non_virtual_header, query_context, max_block_size);
+            = FormatFactory::instance().getInputFormat(data_format, read_buffer, non_virtual_header, query_context, max_block_size, kafka->getFormatSettings(query_context));
 
         format_executor = std::make_unique<StreamingFormatExecutor>(
             non_virtual_header, std::move(input_format), [](const MutableColumns &, Exception &) -> size_t { return 0; });

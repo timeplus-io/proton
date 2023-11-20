@@ -27,8 +27,7 @@ class ASTStorage;
     /* those are mapped to format factory settings */ \
     M(String, data_format, "", "The message format, for example JSONEachRow", 0) \
     M(String, row_delimiter, "\n", "The string to be considered as a delimiter in raw message.", 0) \
-    M(UInt64, max_row_length, 4096, "Max row length", 0) \
-    M(String, data_schema, "", "Schema identifier (used by schema-based formats)", 0)
+    M(UInt64, max_row_length, 4096, "Max row length", 0)
 
 #define LIST_OF_EXTERNAL_STREAM_SETTINGS(M) \
     EXTERNAL_STREAM_RELATED_SETTINGS(M) \

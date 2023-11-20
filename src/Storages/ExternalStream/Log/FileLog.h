@@ -50,7 +50,6 @@ public:
 
 private:
     StorageID storage_id;
-    std::unique_ptr<ExternalStreamSettings> settings;
     std::vector<std::unique_ptr<re2::RE2>> file_regexes;
     std::unique_ptr<re2::RE2> timestamp_regex;
     std::unique_ptr<re2::RE2> linebreaker_regex;
