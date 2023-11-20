@@ -201,12 +201,12 @@ struct ContextSharedPart : boost::noncopyable
 
     mutable VolumePtr backups_volume;                       /// Volume for all the backups.
 
-    mutable std::optional<EmbeddedDictionaries> embedded_dictionaries;    /// Metrica's dictionaries. Have lazy initialization.
-    mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
+    mutable std::unique_ptr<EmbeddedDictionaries> embedded_dictionaries;    /// Metrica's dictionaries. Have lazy initialization.
+    mutable std::unique_ptr<ExternalDictionariesLoader> external_dictionaries_loader;
     /// proton: starts
-    /// mutable std::optional<ExternalUserDefinedFunctionsLoader> external_user_defined_executable_functions_loader;
+    /// mutable std::unique_ptr<ExternalUserDefinedFunctionsLoader> external_user_defined_executable_functions_loader;
     /// proton: ends
-    mutable std::optional<ExternalModelsLoader> external_models_loader;
+    mutable std::unique_ptr<ExternalModelsLoader> external_models_loader;
 
     ExternalLoaderXMLConfigRepository * external_models_config_repository = nullptr;
     scope_guard models_repository_guard;
@@ -242,11 +242,11 @@ struct ContextSharedPart : boost::noncopyable
     ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
     InterserverIOHandler interserver_io_handler;            /// Handler for interserver communication.
 
-    mutable std::optional<ThreadPool> part_commit_pool; /// proton: A thread pool that can build part and commit in background (used for Stream table engine)
-    mutable std::optional<BackgroundSchedulePool> buffer_flush_schedule_pool; /// A thread pool that can do background flush for Buffer tables.
-    mutable std::optional<BackgroundSchedulePool> schedule_pool;    /// A thread pool that can run different jobs in background (used in replicated tables)
-    mutable std::optional<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
-    mutable std::optional<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
+    mutable std::unique_ptr<ThreadPool> part_commit_pool; /// proton: A thread pool that can build part and commit in background (used for Stream table engine)
+    mutable std::unique_ptr<BackgroundSchedulePool> buffer_flush_schedule_pool; /// A thread pool that can do background flush for Buffer tables.
+    mutable std::unique_ptr<BackgroundSchedulePool> schedule_pool;    /// A thread pool that can run different jobs in background (used in replicated tables)
+    mutable std::unique_ptr<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
+    mutable std::unique_ptr<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
 
     mutable std::unique_ptr<IAsynchronousReader> asynchronous_remote_fs_reader;
     mutable std::unique_ptr<IAsynchronousReader> asynchronous_local_fs_reader;
@@ -457,12 +457,25 @@ struct ContextSharedPart : boost::noncopyable
 
         std::unique_ptr<SystemLogs> delete_system_logs;
         std::unique_ptr<IUserDefinedSQLObjectsLoader> delete_user_defined_sql_objects_loader;
+        std::unique_ptr<EmbeddedDictionaries> delete_embedded_dictionaries;
+        std::unique_ptr<ExternalDictionariesLoader> delete_external_dictionaries_loader;
+        /// proton: starts
+        /// std::unique_ptr<ExternalUserDefinedExecutableFunctionsLoader> delete_external_user_defined_executable_functions_loader;
+        /// proton: ends
+        std::unique_ptr<ExternalModelsLoader> delete_external_models_loader;
+        std::unique_ptr<ThreadPool> delete_part_commit_pool;
+        std::unique_ptr<BackgroundSchedulePool> delete_buffer_flush_schedule_pool;
+        std::unique_ptr<BackgroundSchedulePool> delete_schedule_pool;
+        std::unique_ptr<BackgroundSchedulePool> delete_distributed_schedule_pool;
+        std::unique_ptr<BackgroundSchedulePool> delete_message_broker_schedule_pool;
+        std::unique_ptr<AccessControl> delete_access_control;
+
         {
             auto lock = std::lock_guard(mutex);
 
-        /** Compiled expressions stored in cache need to be destroyed before destruction of static objects.
-          * Because CHJIT instance can be static object.
-          */
+            /** Compiled expressions stored in cache need to be destroyed before destruction of static objects.
+              * Because CHJIT instance can be static object.
+              */
 #if USE_EMBEDDED_COMPILER
             if (auto * cache = CompiledExpressionCacheFactory::instance().tryGetCache())
                 cache->reset();
@@ -482,22 +495,22 @@ struct ContextSharedPart : boost::noncopyable
             /// but at least they can be preserved for storage termination.
             dictionaries_xmls.reset();
             user_defined_executable_functions_xmls.reset();
+            models_repository_guard.reset();
 
             delete_system_logs = std::move(system_logs);
             delete_user_defined_sql_objects_loader = std::move(user_defined_sql_objects_loader);
-            embedded_dictionaries.reset();
-            external_dictionaries_loader.reset();
+            delete_embedded_dictionaries = std::move(embedded_dictionaries);
+            delete_external_dictionaries_loader = std::move(external_dictionaries_loader);
             /// proton: starts
-            /// external_user_defined_executable_functions_loader.reset();
+            /// delete_external_user_defined_executable_functions_loader = std::move(external_user_defined_executable_functions_loader);
             /// proton: ends
-            models_repository_guard.reset();
-            external_models_loader.reset();
-            buffer_flush_schedule_pool.reset();
-            schedule_pool.reset();
-            distributed_schedule_pool.reset();
-            message_broker_schedule_pool.reset();
-            part_commit_pool.reset(); /// proton:
-            access_control.reset();
+            delete_external_models_loader = std::move(external_models_loader);
+            delete_buffer_flush_schedule_pool = std::move(buffer_flush_schedule_pool);
+            delete_schedule_pool = std::move(schedule_pool);
+            delete_distributed_schedule_pool = std::move(distributed_schedule_pool);
+            delete_message_broker_schedule_pool = std::move(message_broker_schedule_pool);
+            delete_part_commit_pool = std::move(part_commit_pool);
+            delete_access_control = std::move(access_control);
 
             /// Stop trace collector if any
             trace_collector.reset();
@@ -517,6 +530,18 @@ struct ContextSharedPart : boost::noncopyable
         /// Can be removed without context lock
         delete_system_logs.reset();
         delete_user_defined_sql_objects_loader.reset();
+        delete_embedded_dictionaries.reset();
+        delete_external_dictionaries_loader.reset();
+        /// proton: starts
+        /// delete_external_user_defined_executable_functions_loader.reset();
+        /// proton: ends
+        delete_external_models_loader.reset();
+        delete_buffer_flush_schedule_pool.reset();
+        delete_schedule_pool.reset();
+        delete_distributed_schedule_pool.reset();
+        delete_message_broker_schedule_pool.reset();
+        delete_part_commit_pool.reset();
+        delete_access_control.reset();
 
         total_memory_tracker.resetOvercommitTracker();
     }
@@ -1548,7 +1573,8 @@ ExternalDictionariesLoader & Context::getExternalDictionariesLoader()
 ExternalDictionariesLoader & Context::getExternalDictionariesLoaderUnlocked()
 {
     if (!shared->external_dictionaries_loader)
-        shared->external_dictionaries_loader.emplace(getGlobalContext());
+        shared->external_dictionaries_loader =
+            std::make_unique<ExternalDictionariesLoader>(getGlobalContext());
     return *shared->external_dictionaries_loader;
 }
 
@@ -1567,9 +1593,10 @@ ExternalUserDefinedFunctionsLoader & Context::getExternalUserDefinedExecutableFu
 {
     return ExternalUserDefinedFunctionsLoader::instance(getGlobalContextInstance());
 
-//    if (!shared->external_user_defined_executable_functions_loader)
-//        shared->external_user_defined_executable_functions_loader.emplace(getGlobalContext());
-//    return *shared->external_user_defined_executable_functions_loader;
+///    if (!shared->external_user_defined_executable_functions_loader)
+///        shared->external_user_defined_executable_functions_loader =
+///            std::make_unique<ExternalUserDefinedExecutableFunctionsLoader>(getGlobalContext());
+///    return *shared->external_user_defined_executable_functions_loader;
 }
 
 const ExternalModelsLoader & Context::getExternalModelsLoader() const
@@ -1586,7 +1613,8 @@ ExternalModelsLoader & Context::getExternalModelsLoader()
 ExternalModelsLoader & Context::getExternalModelsLoaderUnlocked()
 {
     if (!shared->external_models_loader)
-        shared->external_models_loader.emplace(getGlobalContext());
+        shared->external_models_loader =
+            std::make_unique<ExternalModelsLoader>(getGlobalContext());
     return *shared->external_models_loader;
 }
 
@@ -1621,7 +1649,7 @@ EmbeddedDictionaries & Context::getEmbeddedDictionariesImpl(const bool throw_on_
     {
         auto geo_dictionaries_loader = std::make_unique<GeoDictionariesLoader>();
 
-        shared->embedded_dictionaries.emplace(
+        shared->embedded_dictionaries = std::make_unique<EmbeddedDictionaries>(
             std::move(geo_dictionaries_loader),
             getGlobalContext(),
             throw_on_error);
@@ -1666,17 +1694,17 @@ void Context::loadOrReloadDictionaries(const Poco::Util::AbstractConfiguration &
 void Context::loadOrReloadUserDefinedExecutableFunctions()
 {
     std::lock_guard lock(shared->external_user_defined_executable_functions_mutex);
-    auto & external_user_defined_executable_functions_loader = getExternalUserDefinedExecutableFunctionsLoaderUnlocked();
+    auto & external_user_defined_executable_functions_loader_ = getExternalUserDefinedExecutableFunctionsLoaderUnlocked();
     if (shared->user_defined_executable_functions_config_repository)
     {
-        external_user_defined_executable_functions_loader.reloadConfig(
+        external_user_defined_executable_functions_loader_.reloadConfig(
             shared->user_defined_executable_functions_config_repository->getName());
         return;
     }
     auto repository = std::make_unique<Streaming::MetaStoreJSONConfigRepository>(getMetaStoreDispatcher(), ProtonConsts::UDF_METASTORE_NAMESPACE);
     shared->user_defined_executable_functions_config_repository = repository.get();
     shared->user_defined_executable_functions_xmls
-        = external_user_defined_executable_functions_loader.addConfigRepository(std::move(repository));
+        = external_user_defined_executable_functions_loader_.addConfigRepository(std::move(repository));
 }
 
 Streaming::MetaStoreJSONConfigRepository * Context::getMetaStoreJSONConfigRepository() const
@@ -1913,7 +1941,7 @@ BackgroundSchedulePool & Context::getBufferFlushSchedulePool() const
 {
     auto lock = getLock();
     if (!shared->buffer_flush_schedule_pool)
-        shared->buffer_flush_schedule_pool.emplace(
+        shared->buffer_flush_schedule_pool = std::make_unique<BackgroundSchedulePool>(
             settings.background_buffer_flush_schedule_pool_size,
             CurrentMetrics::BackgroundBufferFlushSchedulePoolTask,
             "BgBufSchPool");
@@ -1955,7 +1983,7 @@ BackgroundSchedulePool & Context::getSchedulePool() const
 {
     auto lock = getLock();
     if (!shared->schedule_pool)
-        shared->schedule_pool.emplace(
+        shared->schedule_pool = std::make_unique<BackgroundSchedulePool>(
             settings.background_schedule_pool_size,
             CurrentMetrics::BackgroundSchedulePoolTask,
             "BgSchPool");
@@ -1966,7 +1994,7 @@ BackgroundSchedulePool & Context::getDistributedSchedulePool() const
 {
     auto lock = getLock();
     if (!shared->distributed_schedule_pool)
-        shared->distributed_schedule_pool.emplace(
+        shared->distributed_schedule_pool = std::make_unique<BackgroundSchedulePool>(
             settings.background_distributed_schedule_pool_size,
             CurrentMetrics::BackgroundDistributedSchedulePoolTask,
             "BgDistSchPool");
@@ -1977,7 +2005,7 @@ BackgroundSchedulePool & Context::getMessageBrokerSchedulePool() const
 {
     auto lock = getLock();
     if (!shared->message_broker_schedule_pool)
-        shared->message_broker_schedule_pool.emplace(
+        shared->message_broker_schedule_pool = std::make_unique<BackgroundSchedulePool>(
             settings.background_message_broker_schedule_pool_size,
             CurrentMetrics::BackgroundMessageBrokerSchedulePoolTask,
             "BgMBSchPool");
@@ -3408,7 +3436,7 @@ ThreadPool & Context::getPartCommitPool() const
     auto lock = getLock();
     if (!shared->part_commit_pool)
         /// FIXME, queue size may matter
-        shared->part_commit_pool.emplace(settings.part_commit_pool_size);
+        shared->part_commit_pool = std::make_unique<ThreadPool>(settings.part_commit_pool_size);
     return *shared->part_commit_pool;
 }
 
