@@ -44,6 +44,13 @@ JoinTransformWithAlignment::JoinTransformWithAlignment(
         || (!left_watermark_column_position && !right_watermark_column_position));
 
     assert((left_watermark_column_type && right_watermark_column_type) || (!left_watermark_column_type && !right_watermark_column_type));
+
+    LOG_INFO(
+        log,
+        "lag_latency_threshold={} left_lag_column={}, right_lag_column={}",
+        latency_threshold,
+        left_join_stream_desc->lag_column,
+        right_join_stream_desc->lag_column);
 }
 
 IProcessor::Status JoinTransformWithAlignment::prepareRightInput()

@@ -707,8 +707,6 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     {
         ProcessorPtr joining;
         auto hash_join = std::dynamic_pointer_cast<Streaming::IHashJoin>(join);
-        hash_join->postInit(left->getHeader(), right->getHeader(), join_max_cached_bytes);
-
         if (hash_join->requireWatermarkAlignedStreams())
         {
             joining = std::make_shared<Streaming::JoinTransformWithAlignment>(
