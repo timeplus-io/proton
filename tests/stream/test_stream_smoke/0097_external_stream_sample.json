@@ -2,7 +2,7 @@
     "test_suite_name": "external_stream_sample",
     "tag": "smoke",
     "test_suite_config":{
-        "settings_to_run":["redp"],
+        "settings_to_run":["redp","redpanda_single"],
         "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"]}}
     },
     "comments":
@@ -18,11 +18,11 @@
                 {"statements": [
                     {"client":"exec", "query_type":"docker", "query":"docker exec redpanda-1 rpk topic delete external_stream_test"},
                     {"client":"exec", "query_type":"docker","wait":2, "query":"docker exec redpanda-1 rpk topic create external_stream_test"},
-                    {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists external1"},
-                    {"client":"python", "query_type": "table","query_id":"9700", "wait":2, "query":"create external stream if not exists external1 (raw string) settings type='kafka', brokers='redpanda-1:9092', topic = 'external_stream_test'"},
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists external1"},
+                    {"client":"python", "query_type": "table","query_id":"9700", "wait":3, "query":"create external stream if not exists external1 (raw string) settings type='kafka', brokers='redpanda-1:9092', topic = 'external_stream_test'"},
                     {"client":"python","query_id":"9701", "depends_on_stream":"external1", "wait":1, "terminate":"manual","query_type": "stream", "query":"select raw:process from external1"},
-                    {"client":"exec", "query_type": "docker", "depends_on": "9701", "wait":3, "query":"docker exec -i redpanda-1 rpk topic produce external_stream_test", "echo":{"process": "powershell.exe","entity_id": "{42FC7E13-CB3E-5C05-0000-0010A0125101}"}},
-                    {"client":"python","query_type":"table", "query_id":"9702", "wati":3, "query":"kill query where query_id='9701'"}
+                    {"client":"exec", "query_type": "docker", "depends_on": "9701", "wait":1, "query":"docker exec -i redpanda-1 rpk topic produce external_stream_test", "echo":{"process": "powershell.exe","entity_id": "{42FC7E13-CB3E-5C05-0000-0010A0125101}"}},
+                    {"client":"python","query_type":"table","depends_on": "9701", "query_id":"9702", "wati":5, "query":"kill query where query_id='9701'"}
                     ]}
             ],
 
@@ -30,7 +30,29 @@
                 {"query_id":"9701", "expected_results":[
                 ["powershell.exe"]]}
             ]
-        }
+        },
+        {
+            "id": 1,
+            "tags": ["external_stream"],
+            "name": "json string parse from external stream -1",
+            "description": "create external stream external1, and run stream query to parse json field from field raw of external1 and insert data into redpanda topic test and verify result",
+            "steps":[
+                {"statements": [
+                    {"client":"exec", "query_type":"docker", "query":"docker exec redpanda-1 rpk topic delete external_stream_test"},
+                    {"client":"exec", "query_type":"docker","wait":2, "query":"docker exec redpanda-1 rpk topic create external_stream_test"},
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists external1"},
+                    {"client":"python", "query_type": "table","query_id":"9703", "wait":3, "query":"create external stream if not exists external1 (raw string) settings type='kafka', brokers='redpanda-1:9092', topic = 'external_stream_test'"},
+                    {"client":"python","query_id":"9704", "depends_on_stream":"external1", "wait":1, "terminate":"manual","query_type": "stream", "query":"select raw:int8 from external1"},
+                    {"client":"exec", "query_type": "docker", "depends_on": "9704", "wait":1, "query":"docker exec -i redpanda-1 rpk topic produce external_stream_test", "echo":{"int8":1,"int16":2,"int32":3,"int64":"4","uint8":5,"uint16":6,"uint32":7,"uint64":"8","uuid":"928c88b9-f37a-41d5-bef5-9cb3663c2445","string":"{@string}","float":12345.123,"decimal":123456.123,"date":"2022-03-24","datetime":"2022-03-24 17:17:17","enum":"a","tuple":{"s":"a","i":0},"ipv4":"192.168.168.168","ipv6":"2a02:aa08:e000:3100::20","map":{"key1":111},"datetime64":"1970-01-01 08:00:00.000","timestamp":"2023-11-16 14:20:29.477","array":[1,2,3]}},
+                    {"client":"python","query_type":"table","depends_on": "9704", "query_id":"9705", "wati":5, "query":"kill query where query_id='9704'"}
+                    ]}
+            ],
+
+            "expected_results": [
+                {"query_id":"9704", "expected_results":[
+                ["1"]]}
+            ]
+        }        
 
     ]
 }

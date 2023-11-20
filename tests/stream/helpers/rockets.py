@@ -143,8 +143,8 @@ def scan_tests_file_path(tests_file_path, proton_setting):
     )
     files = os.listdir(tests_file_path)
     logger.debug(f"files = {files}")
+    test_suite_settings_2_run = None
     for file_name in files:
-        test_suite_settings_2_run = None
         if (
             file_name.endswith(".json")
             or file_name.endswith(".yaml")
