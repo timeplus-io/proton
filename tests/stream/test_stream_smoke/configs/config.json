@@ -45,6 +45,30 @@
         },
         "proton_server_container_name": "proton-server"
     },
+    "redpanda_single": {
+        "rest_setting": {
+            "host_url": "http://localhost:13218",
+            "http_snapshot_url": "http://localhost:18123",
+            "table_ddl_url": "http://localhost:13218/proton/v1/ddl/streams",
+            "ingest_url": "http://localhost:13218/proton/v1/ingest/streams",
+            "query_url": "http://localhost:13218/proton/v1/search",
+            "health_check_url": "http://localhost:13218/proton/ping",
+            "info_url": "http://localhost:13218/proton/info",
+            "params": {
+                "headers": {
+                    "Content-Type": "application/json"
+                }
+            }
+        },
+        "proton_server": "localhost",
+        "proton_server_native_port": "18463",
+        "proton_admin": {
+            "name": "proton",
+            "password": "proton@t+"
+        },
+        "proton_server_container_name": "proton-redp",
+        "redp_server_container_name": "redpanda-1"  
+    },
     "new_setting_sample": {
         "description": "sample of a new setting",
         "comment": "setting is for ci_runner to learn how to connect to proton, while how to start the env mapping to settings need to be configured in test_stream_smoke/configs/docker-compose.yaml, so far all setting env is all to be set in this unified docker compose file, #todo: split docker-compose for different settings",
@@ -232,6 +256,7 @@
                     "password": "proton@t+"
                 },
                 "proton_server_container_name": "proton-redp",
+                "redp_server_container_name": "redpanda-1",
                 "ci_runner_params": [
                     {
                         "PROTON_TEST_SUITES": "Not_spport_in_this_level_yet"
@@ -260,6 +285,7 @@
                     "password": "proton@t+"
                 },
                 "proton_server_container_name": "proton-redp1",
+                "redp_server_container_name": "redpanda-2",
                 "ci_runner_params": [
                     {
                         "PROTON_TEST_SUITES": "Not_spport_in_this_level_yet"
@@ -288,6 +314,7 @@
                     "password": "proton@t+"
                 },
                 "proton_server_container_name": "proton-redp2",
+                "redp_server_container_name": "redpanda-3",
                 "ci_runner_params": [
                     {
                         "PROTON_TEST_SUITES": "Not_spport_in_this_level_yet"
@@ -316,6 +343,7 @@
                     "password": "proton@t+"
                 },
                 "proton_server_container_name": "proton-redp3",
+                "redp_server_container_name": "redpanda-4",
                 "ci_runner_params": [
                     {
                         "PROTON_TEST_SUITES": "Not_spport_in_this_level_yet"
@@ -344,6 +372,7 @@
                     "password": "proton@t+"
                 },
                 "proton_server_container_name": "proton-redp4",
+                "redp_server_container_name": "redpanda-5",
                 "ci_runner_params": [
                     {
                         "PROTON_TEST_SUITES": "Not_spport_in_this_level_yet"

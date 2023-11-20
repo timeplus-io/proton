@@ -128,7 +128,7 @@ def timeout_flag(
             f"{str(datetime.datetime.now())}, {hit_context_info}, timeout_flag exception, error = {error}"
         )
 
-def scan_tests_file_path(tests_file_path):
+def scan_tests_file_path(tests_file_path, proton_setting):
     test_suites_selected = []
     test_suite_names_selected = []
     all_test_suites_json = []
@@ -156,6 +156,7 @@ def scan_tests_file_path(tests_file_path):
                 )
                 test_suite_name = test_suite.get("test_suite_name")
                 test_suite_tag = test_suite.get("tag")
+                test_suite_settings_2_run = test_suite.get("settings_to_run")
                 if test_suite_name == None or test_suite_tag == "skip":
                     logger.debug(
                         f"test_suite_name is vacant or test_suite_tag == skip and ignore this json file"
@@ -165,17 +166,18 @@ def scan_tests_file_path(tests_file_path):
                     logger.debug(
                         f"check if test_sute_name = {test_suite_name} in test_suites_set_list = {test_suites_set_list}"
                     )
-                    if test_suites_set_list == None:
-                        test_suites_selected.append(test_suite)
-                        test_suite_names_selected.append(test_suite_name)
-                    elif len(test_suites_set_list) == 0:
-                        test_suites_selected.append(test_suite)
-                        test_suite_names_selected.append(test_suite_name)
-                    elif test_suite_name in test_suites_set_list:
-                        test_suites_selected.append(test_suite)
-                        test_suite_names_selected.append(test_suite_name)
-                    else:
-                        pass
+                    if test_suite_settings_2_run is None or (test_suite_settings_2_run is not None and proton_setting in test_suite_settings_2_run):
+                        if test_suites_set_list == None:
+                            test_suites_selected.append(test_suite)
+                            test_suite_names_selected.append(test_suite_name)
+                        elif len(test_suites_set_list) == 0:
+                            test_suites_selected.append(test_suite)
+                            test_suite_names_selected.append(test_suite_name)
+                        elif test_suite_name in test_suites_set_list:
+                            test_suites_selected.append(test_suite)
+                            test_suite_names_selected.append(test_suite_name)
+                        else:
+                            pass
     logger.info(f"test_suite_names_selected = {test_suite_names_selected}")
     return {
         "test_suite_names_selected": test_suite_names_selected,
@@ -265,7 +267,7 @@ def rockets_context(config_file, tests_file_path, docker_compose_file):
         ] = proton_cluster_query_node  # put proton_cluster_query_node into config
         config["proton_cluster_query_route_mode"] = proton_cluster_query_route_mode
 
-    res_scan_tests_file_path = scan_tests_file_path(tests_file_path)
+    res_scan_tests_file_path = scan_tests_file_path(tests_file_path, proton_setting)
     test_suite_names_selected = res_scan_tests_file_path.get(
         "test_suite_names_selected"
     )
@@ -2553,12 +2555,19 @@ class QueryClientExec(QueryClient):
         logger.debug(
             f"local running: handler of logger = {logger.handlers}, logger.level = {logger.level}"
         )
+        proton_setting = config.get("proton_setting")
+        rest_setting = config.get("rest_setting")
+        query_url = rest_setting.get("query_url")         
         query_results = {}
         query_id = str(statement_2_run.get("query_id"))
         query_id_type = statement_2_run.get("query_id_type")
         query_type = statement_2_run.get("query_type")
+        echo = statement_2_run.get("echo")
         query = statement_2_run.get("query")
+        test_suite_name = statement_2_run.get("test_suite_name")
+        test_id = statement_2_run.get("test_id")
         query_client = statement_2_run.get("client")
+        depends_on = statement_2_run.get("depends_on")
         depends_on_stream = statement_2_run.get("depends_on_stream")
         query_start_time_str = str(datetime.datetime.now())
         query_end_time_str = str(datetime.datetime.now())
@@ -2574,7 +2583,14 @@ class QueryClientExec(QueryClient):
         table_ddl_url = rest_setting.get("table_ddl_url")
         commands = []
         for proton_server_container_name in proton_server_container_name_list:
-            command = f'docker exec {proton_server_container_name} proton-client --host 127.0.0.1 -u {user} --password {password} --query="{query}"'
+            if query_type is not None and query_type == 'docker':
+                if echo is not None:
+                    echo_str = json.dumps(echo)
+                    command = f"echo '{echo_str}' | {query}"
+                else:
+                    command = f'{query}'
+            else:
+                command = f'docker exec {proton_server_container_name} proton-client --host 127.0.0.1 -u {user} --password {password} --query="{query}"'
             commands.append(command)
         logger.debug(f"commands = {commands}")
         try:
@@ -2584,8 +2600,28 @@ class QueryClientExec(QueryClient):
                 depends_on_stream_info_list = QueryClientRest.depends_on_stream_exist(
                     table_ddl_url, depends_on_stream_list, query_id
                 )
+            if depends_on != None:  # todo: support depends_on multiple query_id
+                depends_on_exists = False
+                depends_on_exists = QueryClientRest.query_exists(
+                    depends_on, query_url
+                )
+                if not depends_on_exists:  # todo: error handling logic and error code
+                    error_msg = f"QUERY_DEPENDS_ON_FAILED_TO_START FATAL exception: proton_setting = {proton_setting}, proton_server_container_name = {proton_server_container_name},test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} does not be found during 30s after {query_id} was started, query_states_dict = {query_states_dict}, raise Fatal Error, the depends_on query may failed to start in 30s or exits/ends unexpectedly."
+                    logger.error(error_msg)
+                    query_depends_on_exception = TestException(
+                        error_msg, ErrorCodes.QUERY_DEPENDS_ON_FAILED_TO_START
+                    )
+                    raise query_depends_on_exception
+                else:
+                    logger.info(
+                        f"proton_setting = {proton_setting},test_suite_name = {test_suite_name}, test_id = {test_id}, proton_server_container_name = {proton_server_container_name},  query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} exists"
+                    )
+                time.sleep(1)  # for waiting the depends_on query ready.                
             query_result_str = ""
             for command in commands:
+                # if query_type is not None and query_type == 'rpk' and msg is not None:
+                #     msg_str = json.dumps(msg)
+                #     command = f'echo {msg_str} | {command}'
                 query_result_str += str(self.exec_command(command))
             query_end_time_str = str(datetime.datetime.now())
             query_results = {
