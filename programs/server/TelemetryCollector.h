@@ -19,7 +19,7 @@ private:
     bool new_session = true;
     Int64 started_on_in_minutes;
 
-    static constexpr auto INTERVAL_MS = 60 * 60 * 1000; /// 1 hour
+    static constexpr auto INTERVAL_MS = 2 * 60 * 1000; /// sending anonymous telemetry data every 2 minutes
 
 public:
     static TelemetryCollector & instance(ContextPtr context_)
