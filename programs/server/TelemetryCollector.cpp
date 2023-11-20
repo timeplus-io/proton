@@ -114,7 +114,7 @@ void TelemetryCollector::collect()
             "    \"new_session\": \"{}\","
             "    \"started_on\": \"{}\","
             "    \"duration_in_minute\": \"{}\","
-            "    \"session_id\": \"{}\","
+            "    \"server_id\": \"{}\","
             "    \"docker\": \"{}\","
             "    \"total_select_query\": \"{}\","
             "    \"historical_select_query\": \"{}\","

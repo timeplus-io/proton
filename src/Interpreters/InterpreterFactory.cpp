@@ -127,10 +127,7 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     {
         auto interpreter = std::make_unique<InterpreterSelectWithUnionQuery>(query, context, options);
         ProfileEvents::increment(ProfileEvents::SelectQuery);
-        if (interpreter->isStreamingQuery())
-            ProfileEvents::increment(ProfileEvents::StreamingSelectQuery);
-        else
-            ProfileEvents::increment(ProfileEvents::HistoricalSelectQuery);
+        ProfileEvents::increment(interpreter->isStreamingQuery() ? ProfileEvents::StreamingSelectQuery : ProfileEvents::HistoricalSelectQuery);
         return std::move(interpreter);
     }
     else if (query->as<ASTSelectIntersectExceptQuery>())
