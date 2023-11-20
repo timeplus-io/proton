@@ -770,19 +770,6 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(EnumComparingMode, format_capn_proto_enum_comparising_mode, FormatSettings::EnumComparingMode::BY_VALUES, "How to map proton Enum and CapnProto Enum", 0)\
     M(String, rawstore_time_extraction_type, "", "_tp_time extraction type (string, json, regex)", 0) \
     M(String, rawstore_time_extraction_rule, "", "_tp_time extraction rule (string, json, regex)", 0) \
-    M(UInt64, join_max_cached_bytes, 524288000, "Max cached bytes for stream to stream join", 0) \
-    M(Int64, max_join_range, 300, "Max join range", 0) \
-    M(Bool, compact_kv_stream, true, "Control if compact a changelog kv or versioned kv stream during query", 0) \
-    M(UInt64, keep_versions, 3, "Control how many versions for each key kept in memory when joining. Used in versioned_kv join", 0) \
-    M(Bool, enforce_append_only, false, "For changelog storage, enforce query it as append only storage", 0) \
-    M(UInt64, retract_max, 10000, "Control how many more values to keep around for changelog processing to workaround retract scenarios in min/max etc aggr", 0) \
-    M(UInt64, retract_k_multiplier, 2, "Control how many more values to keep around for changelog processing to workaround retract scenarios in min_k/max_k etc aggr", 0) \
-    M(ExecuteMode, exec_mode, ExecuteMode::NORMAL, "Control query execute mode", 0) \
-    M(UInt64, checkpoint_interval, 0, "Checkpoint interval in seconds", 0) \
-    M(UInt64, javascript_uda_max_concurrency, 1, "Control the concurrency of JavaScript UDA in a query", 0) \
-    M(Float, replay_speed, 0., "Control the replay speed..0 < replay_speed < 1, means replay slower.replay_speed == 1, means replay by actual ingest interval.1 < replay_speed < <max_limit>, means replay faster", 0) \
-    M(UInt64, max_events, 0, "Total events to generate for random stream", 0) \
-    M(Int64, generate_eps, -1, "control the random stream eps in query time, defalut value is -1, if it is 0 means no limit.", 0) \
     /** proton: ends. */
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.
@@ -805,6 +792,19 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(Bool, enable_backfill_from_historical_store, true, "Enable backfill data from historical data store", 0) \
     M(Bool, emit_aggregated_during_backfill, true, "Enable emit intermediate aggr result during backfill historical data", 0) \
     M(Bool, include_internal_streams, false, "Show internal streams on SHOW streams query.", 0) \
+    M(UInt64, join_max_cached_bytes, 524288000, "Max cached bytes for stream to stream join", 0) \
+    M(Int64, max_join_range, 300, "Max join range", 0) \
+    M(Bool, compact_kv_stream, true, "Control if compact a changelog kv or versioned kv stream during query", 0) \
+    M(UInt64, keep_versions, 3, "Control how many versions for each key kept in memory when joining. Used in versioned_kv join", 0) \
+    M(Bool, enforce_append_only, false, "For changelog storage, enforce query it as append only storage", 0) \
+    M(UInt64, retract_max, 10000, "Control how many more values to keep around for changelog processing to workaround retract scenarios in min/max etc aggr", 0) \
+    M(UInt64, retract_k_multiplier, 2, "Control how many more values to keep around for changelog processing to workaround retract scenarios in min_k/max_k etc aggr", 0) \
+    M(ExecuteMode, exec_mode, ExecuteMode::NORMAL, "Control query execute mode", 0) \
+    M(UInt64, checkpoint_interval, 0, "Checkpoint interval in seconds", 0) \
+    M(UInt64, javascript_uda_max_concurrency, 1, "Control the concurrency of JavaScript UDA in a query", 0) \
+    M(Float, replay_speed, 0., "Control the replay speed..0 < replay_speed < 1, means replay slower.replay_speed == 1, means replay by actual ingest interval.1 < replay_speed < <max_limit>, means replay faster", 0) \
+    M(UInt64, max_events, 0, "Total events to generate for random stream", 0) \
+    M(Int64, eps, -1, "control the random stream eps in query time, defalut value is -1, if it is 0 means no limit.", 0) \
 // End of GLOBAL_SETTINGS
 
 #define CONFIGURABLE_GLOBAL_SETTINGS(M) \

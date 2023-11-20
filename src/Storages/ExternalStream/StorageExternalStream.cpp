@@ -39,6 +39,9 @@ buildShardingKeyExpression(ASTPtr sharding_key, ContextPtr context, const NamesA
 }
 
 void validateEngineArgs(ContextPtr context, ASTs & engine_args, const ColumnsDescription & columns) {
+    if (engine_args.size() == 0)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "ExternalStream requires sharding key expression");
+
     auto sharding_expr = buildShardingKeyExpression(engine_args[0], context, columns.getAllPhysical());
     const auto & block = sharding_expr->getSampleBlock();
     if (block.columns() != 1)
