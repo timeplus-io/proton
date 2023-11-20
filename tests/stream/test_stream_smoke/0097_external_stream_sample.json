@@ -2,7 +2,8 @@
     "test_suite_name": "external_stream_sample",
     "tag": "smoke",
     "test_suite_config":{
-        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "settings_to_run": ["redp"],"tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"]}}
+        "settings_to_run":["redp"],
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"]}}
     },
     "comments":
         "Test example for external stream case.",
@@ -15,8 +16,8 @@
             "description": "create external stream external1, and run stream query to parse json field from field raw of external1 and insert data into redpanda topic test and verify result",
             "steps":[
                 {"statements": [
-                    {"client":"exec", "query_type":"docker", "query":"docker exec -i redpanda-1 rpk delete topic external_stream_test"},
-                    {"client":"exec", "query_type":"docker","wait":2, "query":"docker exec -i redpanda-1 rpk create topic external_stream_test"},
+                    {"client":"exec", "query_type":"docker", "query":"docker exec redpanda-1 rpk topic delete external_stream_test"},
+                    {"client":"exec", "query_type":"docker","wait":2, "query":"docker exec redpanda-1 rpk topic create external_stream_test"},
                     {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists external1"},
                     {"client":"python", "query_type": "table","query_id":"9700", "wait":2, "query":"create external stream if not exists external1 (raw string) settings type='kafka', brokers='redpanda-1:9092', topic = 'external_stream_test'"},
                     {"client":"python","query_id":"9701", "depends_on_stream":"external1", "wait":1, "terminate":"manual","query_type": "stream", "query":"select raw:process from external1"},

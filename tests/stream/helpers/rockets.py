@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # _*_ coding: utf-8 _*_
-import datetime, yaml, json, getopt, logging, logging.config, math, os, platform, random, requests,signal,subprocess, sys, threading, time, traceback, uuid
+import datetime, yaml, json, getopt, logging, logging.config, math, os, platform, random, requests, signal, subprocess, sys, threading, time, traceback, uuid
 import multiprocessing as mp
 from proton_driver import Client, errors
 from timeplus import Stream, Environment
@@ -128,6 +128,7 @@ def timeout_flag(
             f"{str(datetime.datetime.now())}, {hit_context_info}, timeout_flag exception, error = {error}"
         )
 
+
 def scan_tests_file_path(tests_file_path, proton_setting):
     test_suites_selected = []
     test_suite_names_selected = []
@@ -143,7 +144,12 @@ def scan_tests_file_path(tests_file_path, proton_setting):
     files = os.listdir(tests_file_path)
     logger.debug(f"files = {files}")
     for file_name in files:
-        if file_name.endswith(".json") or file_name.endswith(".yaml") or file_name.endswith(".yml"):
+        test_suite_settings_2_run = None
+        if (
+            file_name.endswith(".json")
+            or file_name.endswith(".yaml")
+            or file_name.endswith(".yml")
+        ):
             file_abs_path = f"{tests_file_path}/{file_name}"
             logger.debug(f"file_abs_path = {file_abs_path}")
             with open(file_abs_path) as test_suite_file:
@@ -156,7 +162,11 @@ def scan_tests_file_path(tests_file_path, proton_setting):
                 )
                 test_suite_name = test_suite.get("test_suite_name")
                 test_suite_tag = test_suite.get("tag")
-                test_suite_settings_2_run = test_suite.get("settings_to_run")
+                test_suite_config = test_suite.get("test_suite_config")
+                if test_suite_config is not None:
+                    test_suite_settings_2_run = test_suite_config.get("settings_to_run")
+                else:
+                    test_suite_settings_2_run = None
                 if test_suite_name == None or test_suite_tag == "skip":
                     logger.debug(
                         f"test_suite_name is vacant or test_suite_tag == skip and ignore this json file"
@@ -164,9 +174,12 @@ def scan_tests_file_path(tests_file_path, proton_setting):
                     pass
                 else:
                     logger.debug(
-                        f"check if test_sute_name = {test_suite_name} in test_suites_set_list = {test_suites_set_list}"
+                        f"check if test_sute_name = {test_suite_name}, test_suite_settings_2_run = {test_suite_settings_2_run}, in test_suites_set_list = {test_suites_set_list}"
                     )
-                    if test_suite_settings_2_run is None or (test_suite_settings_2_run is not None and proton_setting in test_suite_settings_2_run):
+                    if test_suite_settings_2_run is None or (
+                        test_suite_settings_2_run is not None
+                        and proton_setting in test_suite_settings_2_run
+                    ):
                         if test_suites_set_list == None:
                             test_suites_selected.append(test_suite)
                             test_suite_names_selected.append(test_suite_name)
@@ -178,7 +191,9 @@ def scan_tests_file_path(tests_file_path, proton_setting):
                             test_suite_names_selected.append(test_suite_name)
                         else:
                             pass
-    logger.info(f"test_suite_names_selected = {test_suite_names_selected}")
+    logger.info(
+        f"proton_setting = {proton_setting}, test_suite_settings_2_run = {test_suite_settings_2_run}, test_suite_names_selected = {test_suite_names_selected}"
+    )
     return {
         "test_suite_names_selected": test_suite_names_selected,
         "test_suites_selected": test_suites_selected,
@@ -231,7 +246,9 @@ def rockets_context(config_file, tests_file_path, docker_compose_file):
             configs = json.load(f)
         elif config_file.endswith(".yaml") or config_file.endswith(".yml"):
             configs = yaml.safe_load(f)
-    timeplus_event_stream = configs.get("timeplus_event_stream") #todo: distribute global configs into configs
+    timeplus_event_stream = configs.get(
+        "timeplus_event_stream"
+    )  # todo: distribute global configs into configs
     timeplus_event_version = configs.get("timeplus_event_version")
     config = configs.get(proton_setting)
     logger.debug(f"setting = {proton_setting},config = {config}")
@@ -573,11 +590,11 @@ def run_test_suites(
     logger.debug(
         f"proton_setting = {proton_setting}, total {len(test_suites_selected_sets)} test suties are launched: {test_suite_names}"
     )
-    test_run_list_len_total = 0  
-    test_suite_result_summary_list = []    
+    test_run_list_len_total = 0
+    test_suite_result_summary_list = []
     try:
         test_suite_run_ctl_queue.join()
-        test_suite_result_collect_done = 0      
+        test_suite_result_collect_done = 0
         logger.debug(
             f"test_suite_result_collect_done = {test_suite_result_collect_done},len(test_suites_selected_sets) = {len(test_suites_selected_sets)} "
         )
@@ -2177,10 +2194,10 @@ class QueryClientRest(QueryClient):
         exception_retry = retry  # set the retry times of exception catching
         table_name = table_schema.get("name")
         type = table_schema.get("type")
-        create_start_time = datetime.datetime.now()  
-        res = None      
+        create_start_time = datetime.datetime.now()
+        res = None
         while retry > 0 and exception_retry > 0:
-            query_parameters = table_schema.get("query_parameters")            
+            query_parameters = table_schema.get("query_parameters")
             try:
                 logger.debug(f"create_table_rest starts...")
                 if query_parameters != None:
@@ -2239,7 +2256,7 @@ class QueryClientRest(QueryClient):
                 time.sleep(1)
         exception_retry = retry  # reset exception_retry for table_exit check
         create_table_time_out = 200  # set how many times wait and list table to check if table creation completed.
-        while create_table_time_out > 0 and exception_retry > 0:       
+        while create_table_time_out > 0 and exception_retry > 0:
             try:
                 if QueryClientRest.table_exist(table_ddl_url, table_name):
                     logger.info(f"table {table_name} is created successfully.")
@@ -2557,7 +2574,7 @@ class QueryClientExec(QueryClient):
         )
         proton_setting = config.get("proton_setting")
         rest_setting = config.get("rest_setting")
-        query_url = rest_setting.get("query_url")         
+        query_url = rest_setting.get("query_url")
         query_results = {}
         query_id = str(statement_2_run.get("query_id"))
         query_id_type = statement_2_run.get("query_id_type")
@@ -2583,12 +2600,12 @@ class QueryClientExec(QueryClient):
         table_ddl_url = rest_setting.get("table_ddl_url")
         commands = []
         for proton_server_container_name in proton_server_container_name_list:
-            if query_type is not None and query_type == 'docker':
+            if query_type is not None and query_type == "docker":
                 if echo is not None:
                     echo_str = json.dumps(echo)
                     command = f"echo '{echo_str}' | {query}"
                 else:
-                    command = f'{query}'
+                    command = f"{query}"
             else:
                 command = f'docker exec {proton_server_container_name} proton-client --host 127.0.0.1 -u {user} --password {password} --query="{query}"'
             commands.append(command)
@@ -2602,9 +2619,7 @@ class QueryClientExec(QueryClient):
                 )
             if depends_on != None:  # todo: support depends_on multiple query_id
                 depends_on_exists = False
-                depends_on_exists = QueryClientRest.query_exists(
-                    depends_on, query_url
-                )
+                depends_on_exists = QueryClientRest.query_exists(depends_on, query_url)
                 if not depends_on_exists:  # todo: error handling logic and error code
                     error_msg = f"QUERY_DEPENDS_ON_FAILED_TO_START FATAL exception: proton_setting = {proton_setting}, proton_server_container_name = {proton_server_container_name},test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} does not be found during 30s after {query_id} was started, query_states_dict = {query_states_dict}, raise Fatal Error, the depends_on query may failed to start in 30s or exits/ends unexpectedly."
                     logger.error(error_msg)
@@ -2616,7 +2631,7 @@ class QueryClientExec(QueryClient):
                     logger.info(
                         f"proton_setting = {proton_setting},test_suite_name = {test_suite_name}, test_id = {test_id}, proton_server_container_name = {proton_server_container_name},  query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} exists"
                     )
-                time.sleep(1)  # for waiting the depends_on query ready.                
+                time.sleep(1)  # for waiting the depends_on query ready.
             query_result_str = ""
             for command in commands:
                 # if query_type is not None and query_type == 'rpk' and msg is not None:
@@ -2726,7 +2741,7 @@ class QueryExecuter(object):
         proton_setting = config.get("proton_setting")
         proton_cluster_query_node = config.get("proton_cluster_query_node")
         proton_server = None
-        proton_server_native_port = ''
+        proton_server_native_port = ""
         if proton_setting is None or "cluster" not in proton_setting:
             proton_server = config.get("proton_server")
             proton_server_native_ports = config.get("proton_server_native_port")
@@ -2868,7 +2883,15 @@ class QueryExecuter(object):
             )  # create python client
             i = 0  # query
             auto_terminate_queries = []
-            test_id, query_id, query_type, query, query_start_time_str, query_end_time_str, message_recv  = None, None, None, None, None, None, None
+            (
+                test_id,
+                query_id,
+                query_type,
+                query,
+                query_start_time_str,
+                query_end_time_str,
+                message_recv,
+            ) = (None, None, None, None, None, None, None)
             while (not tear_down) and query_run_count > 0 and self.alive.value:
                 try:
                     query_proc = None
@@ -3384,11 +3407,18 @@ class TestSuite(object):
                                                 "float"
                                                 in query_result_column_types[i][1]
                                             ):
-                                                if (math.isclose(
-                                                    float(expected_result_field),
-                                                    float(query_result_field),
-                                                    rel_tol=1e-2,)
-                                                    or math.isnan(float(expected_result_field)) and math.isnan(float(query_result_field))
+                                                if (
+                                                    math.isclose(
+                                                        float(expected_result_field),
+                                                        float(query_result_field),
+                                                        rel_tol=1e-2,
+                                                    )
+                                                    or math.isnan(
+                                                        float(expected_result_field)
+                                                    )
+                                                    and math.isnan(
+                                                        float(query_result_field)
+                                                    )
                                                 ):
                                                     expected_result_row_field_check_arry[
                                                         i
