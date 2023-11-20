@@ -133,7 +133,7 @@ bool ShrinkResizeProcessor::updateAndAlignWatermark(InputPortWithStatus & input_
     input_with_data.status = InputStatus::NeedData;
 
     if (updated)
-        chunk.getChunkContext()->setWatermark(aligned_watermark);
+        chunk.setWatermark(aligned_watermark);
     else
         chunk.clearWatermark();
 
@@ -296,12 +296,12 @@ IProcessor::Status ExpandResizeProcessor::prepare(const PortNumbers & /*updated_
             /// Checkpoint barrier is always standalone, it can't coexist with watermark, we must propagate watermark first
             if (waiting_output.propagate_flag & OutputPortWithStatus::PROPAGATE_WATERMARK)
             {
-                chunk.getOrCreateChunkContext()->setWatermark(watermark);
+                chunk.setWatermark(watermark);
                 waiting_output.propagate_flag &= ~(OutputPortWithStatus::PROPAGATE_WATERMARK | OutputPortWithStatus::PROPAGATE_HEARTBEAT);
             }
             else if (waiting_output.propagate_flag & OutputPortWithStatus::PROPAGATE_CHECKPOINT_REQUEST)
             {
-                chunk.getOrCreateChunkContext()->setCheckpointContext(ckpt_ctx);
+                chunk.setCheckpointContext(ckpt_ctx);
                 waiting_output.propagate_flag
                     &= ~(OutputPortWithStatus::PROPAGATE_CHECKPOINT_REQUEST | OutputPortWithStatus::PROPAGATE_HEARTBEAT);
                 assert(num_checkpoint_requests > 0);

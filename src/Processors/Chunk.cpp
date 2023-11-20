@@ -50,11 +50,6 @@ Chunk Chunk::clone() const
     return Chunk(getColumns(), getNumRows(), chunk_info, chunk_ctx);
 }
 
-Chunk Chunk::cloneWithChunkContext(const ChunkContextPtr & chunk_ctx_) const
-{
-    return Chunk(getColumns(), getNumRows(), chunk_info, chunk_ctx_ ? chunk_ctx_->clone() : nullptr);
-}
-
 void Chunk::setColumns(Columns columns_, UInt64 num_rows_)
 {
     columns = std::move(columns_);

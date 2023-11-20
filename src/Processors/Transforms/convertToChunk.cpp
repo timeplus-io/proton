@@ -19,11 +19,7 @@ Chunk convertToChunk(const Block & block)
 
     /// proton: starts
     if (block.hasWatermark())
-    {
-        auto chunk_ctx = std::make_shared<ChunkContext>();
-        chunk_ctx->setWatermark(block.watermark());
-        chunk.setChunkContext(std::move(chunk_ctx));
-    }
+        chunk.setWatermark(block.watermark());
     /// proton: ends
 
     return chunk;

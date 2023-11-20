@@ -16,7 +16,7 @@ public:
 protected:
     void finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx) override;
 
-    void clearFinalized(Int64 finalized_watermark, const SubstreamContextPtr & substream_ctx) override;
+    void clearExpiredState(Int64 finalized_watermark, const SubstreamContextPtr & substream_ctx) override;
 
 private:
     inline void doFinalize(Int64 watermark, const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx);

@@ -144,9 +144,9 @@ void WatermarkTransformWithSubstream::work()
         /// FIXME, we shall establish timer only when necessary instead of blindly generating empty heartbeat chunk
         bool propagated_heartbeat = false;
 
-        /// It's possible to generate periodic or timeout watermark for each substream by empty chunk
+        /// It's possible to generate periodic or timeout watermark for each substream via an empty chunk
         /// FIXME: This is a very ugly and inefficient implementation and needs to revisit.
-        if (!avoid_watermark && watermark_template->requiresPeriodicOrTimeout())
+        if (!avoid_watermark && watermark_template->requiresPeriodicOrTimeoutEmit())
         {
             output_chunks.reserve(substream_watermarks.size());
             for (auto & [id, watermark] : substream_watermarks)
@@ -156,7 +156,7 @@ void WatermarkTransformWithSubstream::work()
 
                 if (process_chunk.hasChunkContext())
                 {
-                    process_chunk.getChunkContext()->setSubstreamID(id);
+                    process_chunk.trySetSubstreamID(id);
                     output_chunks.emplace_back(process_chunk.clone());
                     propagated_heartbeat = true;
                 }

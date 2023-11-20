@@ -89,7 +89,8 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     {
         auto [retracted_chunk, chunk]
             = AggregatingHelper::convertToChangelogChunk(variants, *substream_ctx->getField<RetractedDataVariantsPtr>(), *params);
-        setCurrentChunk(std::move(chunk), chunk_ctx, std::move(retracted_chunk));
+        chunk.setChunkContext(chunk_ctx);
+        setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
     }
     else
     {
@@ -97,7 +98,8 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
         if (params->final && params->emit_version)
             emitVersion(chunk, substream_ctx);
 
-        setCurrentChunk(std::move(chunk), chunk_ctx);
+        chunk.setChunkContext(chunk_ctx);
+        setCurrentChunk(std::move(chunk));
     }
     auto end = MonotonicMilliseconds::now();
 

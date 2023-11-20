@@ -14,8 +14,17 @@ namespace DB
 {
 
 /// proton : starts
-struct ChunkContext
+struct ChunkContext : public COW<ChunkContext>
 {
+private:
+    friend class COW<ChunkContext>;
+
+    /// This is internal method to use from COW.
+    /// It performs shallow copy with copy-ctor and not useful from outside.
+    /// If you want to copy column for modification, look at 'mutate' method.
+    [[nodiscard]] MutablePtr clone() const { return ChunkContext::create(*this); }
+
+public:
     static constexpr UInt64 WATERMARK_FLAG = 0x1;
     static constexpr UInt64 APPEND_TIME_FLAG = 0x2;
     static constexpr UInt64 HISTORICAL_DATA_START_FLAG = 0x4;
@@ -94,10 +103,9 @@ struct ChunkContext
     CheckpointContextPtr getCheckpointContext() const { return ckpt_ctx; }
 
     const Streaming::SubstreamID & getSubstreamID() const { return id; }
-
-    std::shared_ptr<ChunkContext> clone() const { return std::make_shared<ChunkContext>(*this); }
 };
-using ChunkContextPtr = std::shared_ptr<ChunkContext>;
+using ChunkContextPtr = ChunkContext::Ptr;
+using MutableChunkContextPtr = ChunkContext::MutablePtr;
 /// proton : ends
 
 class ChunkInfo
@@ -204,9 +212,6 @@ public:
     void append(Chunk && chunk);
 
     /// proton : starts
-    /// Clone chunk with copyed chunk context, used for shuffling to prevent access to the same chunk context
-    Chunk cloneWithChunkContext(const ChunkContextPtr & chunk_ctx_) const;
-
     bool hasWatermark() const { return chunk_ctx && chunk_ctx->hasWatermark(); }
 
     bool hasTimeoutWatermark() const { return chunk_ctx && chunk_ctx->hasTimeoutWatermark(); }
@@ -224,7 +229,7 @@ public:
         if (chunk_ctx)
             return chunk_ctx;
 
-        setChunkContext(std::make_shared<ChunkContext>());
+        setChunkContext(ChunkContext::create());
 
         return chunk_ctx;
     }
@@ -248,13 +253,24 @@ public:
     void trySetSubstreamID(Streaming::SubstreamID id)
     {
         if (chunk_ctx)
-            chunk_ctx->setSubstreamID(std::move(id));
+        {
+            auto mutate_chunk_ctx = ChunkContext::mutate(chunk_ctx);
+            mutate_chunk_ctx->setSubstreamID(std::move(id));
+            chunk_ctx = std::move(mutate_chunk_ctx);
+        }
     }
 
     Int64 getWatermark() const
     {
         assert(chunk_ctx);
         return chunk_ctx->getWatermark();
+    }
+
+    void setWatermark(Int64 watermark)
+    {
+        auto mutate_chunk_ctx = chunk_ctx ? ChunkContext::mutate(chunk_ctx) : ChunkContext::create();
+        mutate_chunk_ctx->setWatermark(watermark);
+        chunk_ctx = std::move(mutate_chunk_ctx);
     }
 
     void reserve(size_t num_columns)
@@ -272,16 +288,38 @@ public:
         return chunk_ctx && chunk_ctx->avoidWatermark();
     }
 
-    void clearWatermark() const
+    void clearWatermark()
     {
-        if (chunk_ctx)
-            chunk_ctx->clearWatermark();
+        if (chunk_ctx && chunk_ctx->hasWatermark())
+        {
+            auto mutate_chunk_ctx = ChunkContext::mutate(chunk_ctx);
+            mutate_chunk_ctx->clearWatermark();
+            chunk_ctx = std::move(mutate_chunk_ctx);
+        }
     }
 
-    void clearRequestCheckpoint() const
+    void clearRequestCheckpoint()
     {
-        if (chunk_ctx)
-            chunk_ctx->setCheckpointContext(nullptr);
+        if (chunk_ctx && chunk_ctx->getCheckpointContext())
+        {
+            auto mutate_chunk_ctx = ChunkContext::mutate(chunk_ctx);
+            mutate_chunk_ctx->setCheckpointContext(nullptr);
+            chunk_ctx = std::move(mutate_chunk_ctx);
+        }
+    }
+
+    void setCheckpointContext(CheckpointContextPtr ckpt_ctx)
+    {
+        auto mutate_chunk_ctx = chunk_ctx ? ChunkContext::mutate(chunk_ctx) : ChunkContext::create();
+        mutate_chunk_ctx->setCheckpointContext(ckpt_ctx);
+        chunk_ctx = std::move(mutate_chunk_ctx);
+    }
+
+    void setRetractedDataFlag()
+    {
+        auto mutate_chunk_ctx = chunk_ctx ? ChunkContext::mutate(chunk_ctx) : ChunkContext::create();
+        mutate_chunk_ctx->setRetractedDataFlag();
+        chunk_ctx = std::move(mutate_chunk_ctx);
     }
 
     bool isHistoricalDataStart() const { return chunk_ctx && chunk_ctx->isHistoricalDataStart(); }
@@ -296,6 +334,7 @@ private:
     Columns columns;
     UInt64 num_rows = 0;
     ChunkInfoPtr chunk_info;
+    /// COW<ChunkContext>::Ptr, it can be shared by multiple processors (only copy on write)
     ChunkContextPtr chunk_ctx;
 
     void checkNumRowsIsConsistent();

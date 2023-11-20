@@ -143,7 +143,7 @@ void LightShufflingTransform::consume(Chunk chunk)
         for (auto & chunk_with_shard : split_chunks)
         {
             assert(chunk_with_shard.chunk);
-            chunk_with_shard.chunk.setChunkContext(chunk_ctx ? chunk_ctx->clone() : nullptr);
+            chunk_with_shard.chunk.setChunkContext(chunk_ctx);
             shuffled_output_chunks[chunk_with_shard.shard].push(std::move(chunk_with_shard.chunk));
         }
     }
@@ -153,9 +153,8 @@ void LightShufflingTransform::consume(Chunk chunk)
         /// depends on this empty timer chunk to calculate watermark for global aggregation
         /// When we fix the timer issue systematically, the pipeline system shall have minimum
         /// empty block flowing around and we don't need this anymore
-        auto chunk_ctx = chunk.getChunkContext();
         for (size_t output_idx = 0; output_idx < outputs.size(); ++output_idx)
-            shuffled_output_chunks[output_idx].push(chunk.cloneWithChunkContext(chunk_ctx));
+            shuffled_output_chunks[output_idx].push(chunk.clone());
     }
 }
 

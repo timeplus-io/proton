@@ -86,18 +86,18 @@ private:
     virtual void finalize(const SubstreamContextPtr &, const ChunkContextPtr &) { }
 
     /// Try propagate and garbage collect time bucketed memory by finalized watermark
-    void propagateWatermarkAndClear(const SubstreamContextPtr & substream_ctx);
+    void propagateWatermarkAndClearExpiredStates(const SubstreamContextPtr & substream_ctx);
 
 protected:
     void emitVersion(Chunk & chunk, const SubstreamContextPtr & substream_ctx);
     /// return {should_abort, need_finalization} pair
     virtual std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, const SubstreamContextPtr & substream_ctx);
-    void setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx, Chunk retracted_chunk = {});
+    void setCurrentChunk(Chunk chunk, Chunk retracted_chunk = {});
 
     virtual SubstreamContextPtr getOrCreateSubstreamContext(const SubstreamID & id);
     bool removeSubstreamContext(const SubstreamID & id);
 
-    virtual void clearFinalized(Int64 /*finalized_watermark*/, const SubstreamContextPtr &) { }
+    virtual void clearExpiredState(Int64 /*finalized_watermark*/, const SubstreamContextPtr &) { }
 
     inline IProcessor::Status preparePushToOutput();
 

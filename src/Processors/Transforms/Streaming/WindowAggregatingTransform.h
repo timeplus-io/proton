@@ -27,7 +27,7 @@ protected:
 
     void finalize(const ChunkContextPtr & chunk_ctx) override;
 
-    void clearFinalized(Int64 finalized_watermark) override;
+    void clearExpiredState(Int64 finalized_watermark) override;
 
     std::vector<Int64> getBucketsBefore(Int64 max_buckets) const;
 

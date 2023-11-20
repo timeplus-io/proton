@@ -140,7 +140,7 @@ void ChangelogTransform::work()
     }
     else if (std::all_of(delta_flags.begin(), delta_flags.end(), [](auto delta) { return delta < 0; }))
     {
-        input_data.chunk.getOrCreateChunkContext()->setRetractedDataFlag();
+        input_data.chunk.setRetractedDataFlag();
         transformChunk(input_data.chunk);
         return;
     }
@@ -163,7 +163,7 @@ void ChangelogTransform::work()
 
     if (chunks[0].getNumRows())
     {
-        chunks[0].getOrCreateChunkContext()->setRetractedDataFlag();
+        chunks[0].setRetractedDataFlag();
         transformChunk(chunks[0]);
     }
 

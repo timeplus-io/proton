@@ -124,15 +124,16 @@ void ShufflingTransform::consume(Chunk chunk)
 {
     if (chunk.hasRows())
     {
-        auto chunk_ctx = chunk.getChunkContext(); /// save chunk context before split
+        auto chunk_ctx = chunk.getOrCreateChunkContext(); /// save chunk context before split
         auto split_chunks{chunk_splitter.split(chunk)};
         for (auto & chunk_with_id : split_chunks)
         {
             assert(chunk_with_id.chunk);
             auto output_idx = chunk_with_id.id.items[0] % outputs.size();
             /// Keep substream id for each sub-chunk, used for downstream processors
-            chunk_with_id.chunk.setChunkContext(chunk_ctx ? chunk_ctx->clone() : nullptr);
-            chunk_with_id.chunk.getOrCreateChunkContext()->setSubstreamID(std::move(chunk_with_id.id));  
+            auto new_chunk_ctx = ChunkContext::create(*chunk_ctx);
+            new_chunk_ctx->setSubstreamID(std::move(chunk_with_id.id));
+            chunk_with_id.chunk.setChunkContext(std::move(new_chunk_ctx));
             shuffled_output_chunks[output_idx].push(std::move(chunk_with_id.chunk));
         }
     }
@@ -144,9 +145,8 @@ void ShufflingTransform::consume(Chunk chunk)
         /// depends on this empty timer chunk to calculate watermark for global aggregation
         /// When we fix the timer issue systematically, the pipeline system shall have minimum
         /// empty block flowing around and we don't need this anymore
-        auto chunk_ctx = chunk.getChunkContext();
         for (size_t output_idx = 0; output_idx < outputs.size(); ++output_idx)
-            shuffled_output_chunks[output_idx].push(chunk.cloneWithChunkContext(chunk_ctx));
+            shuffled_output_chunks[output_idx].push(chunk.clone());
     }
 }
 

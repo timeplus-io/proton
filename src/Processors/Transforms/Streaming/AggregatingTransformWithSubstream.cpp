@@ -77,7 +77,7 @@ void AggregatingTransformWithSubstream::work()
     auto num_rows = current_chunk.getNumRows();
     if (num_rows == 0 && !current_chunk.hasChunkContext())
     {
-        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0}, nullptr);
+        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0});
         /// Remember to reset `read_current_chunk`
         read_current_chunk = false;
         return;
@@ -128,7 +128,7 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
         /// For example:
         ///     `WITH cte AS (SELECT i, count() FROM test_31_multishards_stream WHERE _tp_time > earliest_ts() PARTITION BY i) SELECT count() FROM cte`
         /// As you can see, the outer global aggregation depends on the periodic watermark of the inner global aggregation 
-        propagateWatermarkAndClear(substream_ctx);
+        propagateWatermarkAndClearExpiredStates(substream_ctx);
     }
     else if (need_finalization)
     {
@@ -138,24 +138,24 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
     {
         checkpoint(chunk.getCheckpointContext());
         /// Propagate the checkpoint barrier to all down stream output ports
-        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0}, chunk.getChunkContext());
+        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, chunk.getChunkContext()});
     }
 }
 
-void AggregatingTransformWithSubstream::propagateWatermarkAndClear(const SubstreamContextPtr & substream_ctx)
+void AggregatingTransformWithSubstream::propagateWatermarkAndClearExpiredStates(const SubstreamContextPtr & substream_ctx)
 {
     assert(substream_ctx);
     if (!has_input)
     {
-        auto chunk_ctx = std::make_shared<ChunkContext>();
+        auto chunk_ctx = ChunkContext::create();
         chunk_ctx->setSubstreamID(substream_ctx->id);
         chunk_ctx->setWatermark(substream_ctx->finalized_watermark);
-        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0}, chunk_ctx);
+        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, std::move(chunk_ctx)});
     }
     else
         assert(substream_ctx->finalized_watermark == current_chunk_aggregated.getWatermark());
 
-    clearFinalized(substream_ctx->finalized_watermark, substream_ctx);
+    clearExpiredState(substream_ctx->finalized_watermark, substream_ctx);
 }
 
 void AggregatingTransformWithSubstream::emitVersion(Chunk & chunk, const SubstreamContextPtr & substream_ctx)
@@ -180,7 +180,7 @@ void AggregatingTransformWithSubstream::emitVersion(Chunk & chunk, const Substre
     }
 }
 
-void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx, Chunk retracted_chunk)
+void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, Chunk retracted_chunk)
 {
     if (has_input)
         throw Exception("Current chunk was already set.", ErrorCodes::LOGICAL_ERROR);
@@ -191,21 +191,10 @@ void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, const Chunk
     has_input = true;
     current_chunk_aggregated = std::move(chunk);
 
-    if (chunk_ctx)
-    {
-        /// NOTE: For StremaingShrinkResize of downstream, it's need all inputs propagate watermark then do watermark alignment,
-        /// So the watermark cannot be cleared. On the other hand, if the downstream needs to establish its own watermark,
-        /// the watermark will be cleared and reassigned in another `WatermarkStamper` of downstream.
-        // if (params->final && params->params.group_by != Aggregator::Params::GroupBy::OTHER)
-        //     chunk_ctx->clearWatermark();
-
-        current_chunk_aggregated.setChunkContext(std::move(chunk_ctx));
-    }
-
     if (retracted_chunk.rows())
     {
         current_chunk_retracted = std::move(retracted_chunk);
-        current_chunk_retracted.getOrCreateChunkContext()->setRetractedDataFlag();
+        current_chunk_retracted.setRetractedDataFlag();
     }
 }
 

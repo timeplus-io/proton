@@ -146,21 +146,22 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
     prepared_windows_with_buckets.clear();
     prepared_windows_with_buckets.shrink_to_fit();
 
+    merged_chunk.setChunkContext(chunk_ctx);
     auto finalized_watermark = chunk_ctx->getWatermark();
     /// If is timeout, we set watermark after actual finalized last window end
     if (unlikely(finalized_watermark == TIMEOUT_WATERMARK))
     {
         finalized_watermark = many_data->finalized_window_end.load(std::memory_order_relaxed);
-        chunk_ctx->setWatermark(finalized_watermark);
+        merged_chunk.setWatermark(finalized_watermark);
     }
 
     many_data->finalized_watermark.store(finalized_watermark, std::memory_order_relaxed);
 
-    if (merged_chunk)
-        setCurrentChunk(std::move(merged_chunk), chunk_ctx);
+    assert(merged_chunk.getWatermark() == finalized_watermark);
+    setCurrentChunk(std::move(merged_chunk));
 }
 
-void WindowAggregatingTransform::clearFinalized(Int64 finalized_watermark)
+void WindowAggregatingTransform::clearExpiredState(Int64 finalized_watermark)
 {
     /// Blocking finalization during remove buckets from current variant
     std::lock_guard lock(variants_mutex);

@@ -113,7 +113,7 @@ void StreamingStoreSource::readAndProcess()
         result_chunks.emplace_back(std::move(columns), rows);
         if (likely(block.info.appendTime() > 0))
         {
-            auto chunk_ctx = std::make_shared<ChunkContext>();
+            auto chunk_ctx = ChunkContext::create();
             chunk_ctx->setAppendTime(block.info.appendTime());
             result_chunks.back().setChunkContext(std::move(chunk_ctx));
         }

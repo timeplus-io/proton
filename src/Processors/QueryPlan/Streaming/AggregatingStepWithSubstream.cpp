@@ -57,7 +57,6 @@ void AggregatingStepWithSubstream::transformPipeline(QueryPipelineBuilder & pipe
     /// Forget about current totals and extremes. They will be calculated again after aggregation if needed.
     pipeline.dropTotalsAndExtremes();
 
-    /// By default, disable convert to two level group by, since the input stream already is shuffled substream data.
     bool allow_to_use_two_level_group_by = params.max_bytes_before_external_group_by != 0;
     if (!allow_to_use_two_level_group_by)
     {

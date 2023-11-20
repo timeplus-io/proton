@@ -178,7 +178,7 @@ private:
     Int64 updateAndAlignWatermark(Int64 new_watermark);
 
     /// Try propagate and garbage collect time bucketed memory by finalized watermark
-    bool propagateWatermarkAndClear();
+    bool propagateWatermarkAndClearExpiredStates();
 
     /// Try propagate checkpoint to downstream
     bool propagateCheckpointAndReset();
@@ -190,7 +190,7 @@ protected:
     void emitVersion(Chunk & chunk);
     /// return {should_abort, need_finalization} pair
     virtual std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, size_t num_rows);
-    void setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx, Chunk retracted_chunk = {});
+    void setCurrentChunk(Chunk chunk, Chunk retracted_chunk = {});
 
     /// Quickly check if need finalization
     virtual bool needFinalization(Int64 /*min_watermark*/) const { return true; }
@@ -198,7 +198,7 @@ protected:
     /// Prepare and check whether can finalization many_data (called after acquired finalizing lock)
     virtual bool prepareFinalization(Int64 /*min_watermark*/) { return true; }
 
-    virtual void clearFinalized(Int64 /*finalized_watermark*/) { }
+    virtual void clearExpiredState(Int64 /*finalized_watermark*/) { }
 
 protected:
     /// To read the data that was flushed into the temporary data file.

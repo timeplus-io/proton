@@ -60,7 +60,7 @@ public:
     void preProcess(const Block & header);
     void process(Chunk & chunk);
 
-    bool requiresPeriodicOrTimeout() const { return periodic_interval || timeout_interval; }
+    bool requiresPeriodicOrTimeoutEmit() const { return periodic_interval || timeout_interval; }
 
     VersionType getVersion() const;
 

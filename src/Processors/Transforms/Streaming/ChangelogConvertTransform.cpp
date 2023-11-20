@@ -310,7 +310,7 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
         /// We also can't concat -1 / +1 chunks since downstream join depends on this separation
         /// behavior meaning depends on a chunk is either all retraction or all append which
         /// largely simplify its logic and usually more performant
-        output_chunks.back().getOrCreateChunkContext()->setRetractedDataFlag();
+        output_chunks.back().setRetractedDataFlag();
     }
 
     /// Composing resulting chunk

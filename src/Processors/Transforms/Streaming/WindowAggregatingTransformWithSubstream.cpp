@@ -30,12 +30,16 @@ void WindowAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
 {
     assert(substream_ctx);
 
+    auto finalized_watermark = chunk_ctx->getWatermark();
+    SCOPE_EXIT({
+        substream_ctx->resetRowCounts();
+        substream_ctx->finalized_watermark = finalized_watermark;
+    });
     SCOPE_EXIT({ substream_ctx->resetRowCounts(); });
 
     /// Finalize current watermark
-    auto watermark = chunk_ctx->getWatermark();
     auto start = MonotonicMilliseconds::now();
-    doFinalize(watermark, substream_ctx, chunk_ctx);
+    doFinalize(finalized_watermark, substream_ctx, chunk_ctx);
     auto end = MonotonicMilliseconds::now();
 
     LOG_INFO(
@@ -44,9 +48,6 @@ void WindowAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
         end - start,
         substream_ctx->id,
         substream_ctx->finalized_watermark);
-
-    /// Do memory arena recycling by last finalized watermark
-    removeBucketsImpl(substream_ctx->finalized_watermark, substream_ctx);
 }
 
 void WindowAggregatingTransformWithSubstream::doFinalize(
@@ -83,20 +84,20 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
         merged_chunk.append(std::move(chunk));
     }
 
-    if (watermark != TIMEOUT_WATERMARK)
-        substream_ctx->finalized_watermark = watermark;
+    merged_chunk.setChunkContext(chunk_ctx);
+    substream_ctx->finalized_watermark = watermark;
     /// If is timeout, we set watermark after actual finalized last window
-    else if (!windows_with_buckets.empty())
-        substream_ctx->finalized_watermark = windows_with_buckets.back().window.end;
-
-    if (merged_chunk)
+    if (unlikely(watermark == TIMEOUT_WATERMARK && !windows_with_buckets.empty()))
     {
-        chunk_ctx->setWatermark(substream_ctx->finalized_watermark);
-        setCurrentChunk(std::move(merged_chunk), chunk_ctx);
+        substream_ctx->finalized_watermark = windows_with_buckets.back().window.end;
+        merged_chunk.setWatermark(substream_ctx->finalized_watermark);
     }
+
+    assert(merged_chunk.getWatermark() == substream_ctx->finalized_watermark);
+    setCurrentChunk(std::move(merged_chunk));
 }
 
-void WindowAggregatingTransformWithSubstream::clearFinalized(Int64 finalized_watermark, const SubstreamContextPtr & substream_ctx)
+void WindowAggregatingTransformWithSubstream::clearExpiredState(Int64 finalized_watermark, const SubstreamContextPtr & substream_ctx)
 {
     removeBucketsImpl(finalized_watermark, substream_ctx);
 }
