@@ -898,7 +898,7 @@ void InterpreterCreateQuery::handleExternalStreamCreation(ASTCreateQuery & creat
     /// ExternalStreamStorage
     if (!create.storage)
         create.set(create.storage, std::make_shared<ASTStorage>());
-    else
+    else if(create.storage->settings)
         create.storage->settings->changes.tryGet("sharding_expr", sharding_expr_field);
 
     sharding_expr_field.tryGet<String>(sharding_expr);
