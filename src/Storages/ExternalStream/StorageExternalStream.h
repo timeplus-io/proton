@@ -45,10 +45,13 @@ public:
 
     SinkToStoragePtr write(const ASTPtr & /*query*/, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr /*context*/) override;
 
+    bool supportsStreamingQuery() const override { return true; }
+
     friend class KafkaSource;
 
 protected:
     StorageExternalStream(
+        const ASTPtr & sharding_key_,
         const StorageID & table_id_,
         ContextPtr context_,
         const ColumnsDescription & columns_,

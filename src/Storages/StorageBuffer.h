@@ -106,7 +106,6 @@ public:
     std::optional<UInt64> lifetimeRows() const override { return lifetime_writes.rows; }
     std::optional<UInt64> lifetimeBytes() const override { return lifetime_writes.bytes; }
 
-
 private:
     struct Buffer
     {

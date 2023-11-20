@@ -6,9 +6,6 @@
 #include <Processors/Sinks/NullSink.h>
 #include <Processors/Sinks/EmptySink.h>
 #include <Processors/Transforms/ExtremesTransform.h>
-#include <Processors/Formats/IOutputFormat.h>
-#include <Processors/Sources/NullSource.h>
-#include <Processors/ISource.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <QueryPipeline/ReadProgressCallback.h>
 #include <Columns/ColumnConst.h>
@@ -893,15 +890,15 @@ void Pipe::transform(const Transformer & transformer)
 *
 *                             port-1 ——+=============> resizeStreaming(1) -->
 *                           /          |
-* --> shuffling transform-1 - prot-2 ——|————+========> resizeStreaming(1) -->
+* --> shuffling transform-1 - port-2 ——|————+========> resizeStreaming(1) -->
 *                           \          |    |
 *                             port-3 ——|————|————+===> resizeStreaming(1) -->
 *                                      |    |    |
-*                             prot-1 ——+    |    |
+*                             port-1 ——+    |    |
 *                           /               |    |
-* --> shuffling transform-2 - prot-2 ———————+    |
+* --> shuffling transform-2 - port-2 ———————+    |
 *                           \                    |
-*                             prot-3 ————————————+
+*                             port-3 ————————————+
 *
 * ...
 */
@@ -914,7 +911,9 @@ void Pipe::addShufflingTransform(const ProcessorGetter & getter)
     size_t new_outputs_num = 0;
     std::vector<OutputPortRawPtrs> to_merge_outputs_list;
 
-    /// Add complex transform for each outport
+    auto is_streaming = isStreaming();
+
+    /// Add complex transform for each output port
     for (auto & output : output_ports)
     {
         assert(output);
@@ -931,7 +930,7 @@ void Pipe::addShufflingTransform(const ProcessorGetter & getter)
 
         auto & new_outputs = transform->getOutputs();
         if (new_outputs.empty())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot add complex transform without outports");
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot add complex transform without output ports");
 
         const auto & out_header = new_outputs.front().getHeader();
 
@@ -951,13 +950,15 @@ void Pipe::addShufflingTransform(const ProcessorGetter & getter)
             new_header = out_header;
             new_outputs_num = new_outputs.size();
             to_merge_outputs_list.resize(new_outputs_num);
+            for (auto & merge_list : to_merge_outputs_list)
+                merge_list.reserve(output_ports.size());
         }
 
-        /// ---------------------    ---------------------
-        /// | Upstream output 1 | -> | Shuffling Input 1 |
-        /// ---------------------     -------------------
-        /// | Upstream output 2 | -> | Shuffling Input 2 |
-        /// ---------------------    ---------------------
+        /// ---------------------    ----------------------------
+        /// | Upstream output 1 | -> | ShufflingTransform1 Input|
+        /// ---------------------     ---------------------------
+        /// | Upstream output 2 | -> | ShufflingTransform2 Input|
+        /// ---------------------    ----------------------------
         /// ...
         connect(*output, new_inputs.front());
 
@@ -976,13 +977,17 @@ void Pipe::addShufflingTransform(const ProcessorGetter & getter)
     /// Merge the same index outputs of all transforms
     for (auto & to_merge_outputs : to_merge_outputs_list)
     {
-        auto resize = getStreamingResizeProcessor(new_header, to_merge_outputs.size(), 1);
+        ProcessorPtr resize;
+        if (is_streaming)
+            resize = getStreamingResizeProcessor(new_header, to_merge_outputs.size(), 1);
+        else
+            resize = std::make_shared<ResizeProcessor>(new_header, to_merge_outputs.size(), 1);
 
         /// -----------------------------------       -------------------------------
-        /// | shuffling transform 1, output 1 | ->    | resize transform 1, input 1 |
-        /// -----------------------------------       -------------------------------
-        /// | shuffling transform 2, output 1 | ->    | resize transform 1, input 2 |
-        /// -----------------------------------       -------------------------------
+        /// | shuffling transform 1, output 1 | --->    | resize transform 1, input 1 |
+        /// -----------------------------------  |     -------------------------------
+        /// | shuffling transform 2, output 1 | --
+        /// -----------------------------------
         /// ...
         for (size_t i = 0; auto & input : resize->getInputs())
             connect(*to_merge_outputs[i++], input);
@@ -991,7 +996,6 @@ void Pipe::addShufflingTransform(const ProcessorGetter & getter)
 
         processors.emplace_back(std::move(resize));
     }
-    assert(isStreaming());
 
     header = output_ports.front()->getHeader();
 

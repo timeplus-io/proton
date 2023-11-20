@@ -11,7 +11,8 @@ namespace Streaming
 class WatermarkStep final : public ITransformingStep
 {
 public:
-    WatermarkStep(const DataStream & input_stream_, WatermarkStamperParamsPtr params_, Poco::Logger * log);
+    WatermarkStep(
+        const DataStream & input_stream_, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * log);
 
     ~WatermarkStep() override = default;
 
@@ -20,6 +21,7 @@ public:
 
 private:
     WatermarkStamperParamsPtr params;
+    bool skip_stamping_for_backfill_data;
     Poco::Logger * log;
 };
 }

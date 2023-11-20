@@ -7,27 +7,76 @@
     </logger>
 
     <http_port>3218</http_port>
+    <snapshot_server_http_port>8123</snapshot_server_http_port>
     <tcp_port>8463</tcp_port>
+    <snapshot_server_tcp_port>7587</snapshot_server_tcp_port>
+    <postgresql_port>5432</postgresql_port>
     <mysql_port>9004</mysql_port>
+    <interserver_http_port>9009</interserver_http_port>
+    <listen_host>0.0.0.0</listen_host>
+    <telemetry_enabled>true</telemetry_enabled>
 
-    <path>./</path>
+    <path>./proton-data/</path>
 
     <mark_cache_size>5368709120</mark_cache_size>
     <mlock_executable>true</mlock_executable>
 
     <users>
-        <default>
-            <password></password>
+      <default>
+        <password></password>
 
-            <networks>
-                <ip>::/0</ip>
-            </networks>
+        <networks>
+          <ip>::/0</ip>
+        </networks>
 
-            <profile>default</profile>
-            <quota>default</quota>
-            <access_management>1</access_management>
-        </default>
+        <profile>default</profile>
+        <quota>default</quota>
+        <allow_databases>
+          <database>default</database>
+        </allow_databases>
+        <default_database>default</default_database>
+      </default>
+      <system>
+        <password>sys@t+</password>
+        <allow_databases>
+          <database>system</database>
+        </allow_databases>
+        <default_database>system</default_database>
+      </system>
+      <pgadmin>
+        <allow_databases>
+          <database>default</database>
+        </allow_databases>
+        <default_database>default</default_database>
+        <password>pgadmin</password>
+        <networks>
+          <ip>::/0</ip>
+        </networks>
+      </pgadmin>
+      <neutron>
+        <allow_databases>
+          <database>neutron</database>
+        </allow_databases>
+        <default_database>neutron</default_database>
+        <password>neutron@t+</password>
+        <networks>
+          <ip>::/0</ip>
+        </networks>
+      </neutron>
+      <proton>
+        <default_database>default</default_database>
+        <password>proton@t+</password>
+        <networks>
+          <ip>::1</ip>
+        </networks>
+        <networks>
+          <ip>127.0.0.1</ip>
+        </networks>
+        <access_management>1</access_management>
+      </proton>
     </users>
+
+    <grok_patterns_file>grok-patterns</grok_patterns_file>
 
     <profiles>
         <default/>
@@ -141,9 +190,9 @@
           <enabled>true</enabled>
           <default>false</default>
           <check_crcs>false</check_crcs>
-          <metastore_data_dir>./nativelog/meta/</metastore_data_dir>
+          <metastore_data_dir>./proton-data/nativelog/meta/</metastore_data_dir>
           <log_data_dirs>
-            <dir1>./nativelog/log/</dir1>
+            <dir1>./proton-data/nativelog/log/</dir1>
           </log_data_dirs>
           <fetch_max_wait_ms>500</fetch_max_wait_ms>
           <fetch_max_bytes>65536</fetch_max_bytes>
@@ -160,7 +209,7 @@
 
     <checkpoint>
       <storage_type>local_file_system</storage_type>
-      <path>./checkpoint/</path>
+      <path>./proton-data/checkpoint/</path>
     </checkpoint>
 
 </proton>

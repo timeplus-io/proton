@@ -71,7 +71,7 @@ StoragePtr TableFunctionHist::calculateColumnDescriptions(ContextPtr context)
                     "table function only can be applied to view on non-aggreagtion query '{}'",
                     storage_id.getNameForLogs());
         }
-        else if (!supportStreamingQuery(storage))
+        else if (!storage->supportsStreamingQuery())
             throw Exception(
                 ErrorCodes::BAD_ARGUMENTS, "table function can't be applied to {} '{}'", storage->getName(), storage_id.getNameForLogs());
 

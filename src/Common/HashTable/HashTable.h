@@ -73,7 +73,7 @@ template <typename T>
 bool check(const T x) { return x == T{}; }
 
 template <typename T>
-void set(T & x) { x = {}; }
+void set(T & x) { x = T{}; }
 
 }
 
@@ -1238,6 +1238,10 @@ public:
         return !buf[place_value].isZero(*this);
     }
 
+    bool ALWAYS_INLINE contains(const Key & x) const
+    {
+        return has(x);
+    }
 
     void write(DB::WriteBuffer & wb) const
     {

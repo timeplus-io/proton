@@ -115,6 +115,7 @@ public:
     virtual void describePipeline(FormatSettings & /*settings*/) const {}
 
     /// proton: starts.
+    /// Streaming is infectious. One input is streaming, the whole query will be streaming
     bool isStreaming() const
     {
         return output_stream

@@ -339,7 +339,7 @@ std::string LocalServer::getInitialCreateTableQuery()
     if (!config().has("table-structure") && !config().has("table-file"))
         return {};
 
-    auto table_name = backQuoteIfNeed(config().getString("table-name", "table"));
+    auto table_name = backQuoteIfNeed(config().getString("table-name", "stream"));
     auto table_structure = config().getString("table-structure", "auto");
 
     String table_file;
@@ -491,6 +491,8 @@ try
     registerFormats();
 
     processConfig();
+    initTtyBuffer(toProgressOption(config().getString("progress", "default")));
+
     applyCmdSettings(global_context);
 
     if (is_interactive)
@@ -566,7 +568,6 @@ void LocalServer::processConfig()
     }
     else
     {
-        need_render_progress = config().getBool("progress", false);
         echo_queries = config().hasOption("echo") || config().hasOption("verbose");
         ignore_error = config().getBool("ignore-error", false);
         is_multiquery = true;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "TableFunctionProxyBase.h"
+#include <TableFunctions/TableFunctionProxyBase.h>
 
 namespace DB
 {

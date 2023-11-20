@@ -264,6 +264,14 @@ bool StorageView::isReady() const
     return true;
 }
 
+bool StorageView::isStreamingQuery(ContextPtr query_context) const
+{
+    auto select = getInMemoryMetadataPtr()->getSelectQuery().inner_query;
+    auto local_ctx = Context::createCopy(query_context);
+    local_ctx->setCollectRequiredColumns(false);
+    return InterpreterSelectWithUnionQuery(select, local_ctx, SelectQueryOptions().analyze()).isStreamingQuery();
+}
+
 Streaming::DataStreamSemanticEx StorageView::dataStreamSemantic() const
 {
     if (data_stream_semantic_resolved)

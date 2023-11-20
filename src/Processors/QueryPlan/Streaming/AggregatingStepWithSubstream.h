@@ -18,7 +18,8 @@ public:
         const DataStream & input_stream_,
         Aggregator::Params params_,
         bool final_,
-        bool emit_version_);
+        bool emit_version_,
+        bool emit_changelog_);
 
     String getName() const override { return "StreamingAggregatingWithSubstream"; }
 
@@ -35,6 +36,7 @@ private:
     Aggregator::Params params;
     bool final;
     bool emit_version;
+    bool emit_changelog;
 
     Processors aggregating;
 };

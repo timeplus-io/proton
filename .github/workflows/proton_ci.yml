@@ -45,6 +45,7 @@ jobs:
       ec2-image-id: ${{ vars.X64_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
       submodules: 'recursive'
+      run_mode: 'start' # start ec2 on demand instance
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
       command: |
@@ -61,7 +62,7 @@ jobs:
         rm cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-16 --sanitizer $SANITIZER --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-16 --sanitizer $SANITIZER --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
         # clear compiling footprint
         rm -rf $GITHUB_WORKSPACE/ccache

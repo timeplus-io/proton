@@ -138,11 +138,11 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
     }
 }
 
-void AggregatingTransformWithSubstream::emitVersion(Block & block, const SubstreamContextPtr & substream_ctx)
+void AggregatingTransformWithSubstream::emitVersion(Chunk & chunk, const SubstreamContextPtr & substream_ctx)
 {
     assert(substream_ctx);
 
-    size_t rows = block.rows();
+    size_t rows = chunk.rows();
     if (params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
     {
         /// For UDA with own emit strategy, possibly a block can trigger multiple emits for a substream, each emit cause version+1
@@ -151,22 +151,22 @@ void AggregatingTransformWithSubstream::emitVersion(Block & block, const Substre
         col->reserve(rows);
         for (size_t i = 0; i < rows; i++)
             col->insert(substream_ctx->version++);
-        block.insert({std::move(col), params->version_type, ProtonConsts::RESERVED_EMIT_VERSION});
+        chunk.addColumn(std::move(col));
     }
     else
     {
         Int64 version = substream_ctx->version++;
-        block.insert(
-            {params->version_type->createColumnConst(rows, version)->convertToFullColumnIfConst(),
-             params->version_type,
-             ProtonConsts::RESERVED_EMIT_VERSION});
+        chunk.addColumn(params->version_type->createColumnConst(rows, version)->convertToFullColumnIfConst());
     }
 }
 
-void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx)
+void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx, Chunk retracted_chunk)
 {
     if (has_input)
         throw Exception("Current chunk was already set.", ErrorCodes::LOGICAL_ERROR);
+
+    if (!chunk)
+        return;
 
     has_input = true;
     current_chunk_aggregated = std::move(chunk);
@@ -180,6 +180,12 @@ void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, const Chunk
         //     chunk_ctx->clearWatermark();
 
         current_chunk_aggregated.setChunkContext(std::move(chunk_ctx));
+    }
+
+    if (retracted_chunk.rows())
+    {
+        current_chunk_retracted = std::move(retracted_chunk);
+        current_chunk_retracted.getOrCreateChunkContext()->setRetractedDataFlag();
     }
 }
 
@@ -216,6 +222,14 @@ bool AggregatingTransformWithSubstream::removeSubstreamContext(const SubstreamID
 IProcessor::Status AggregatingTransformWithSubstream::preparePushToOutput()
 {
     auto & output = outputs.front();
+
+    /// At first, push retracted data, then push aggregated data
+    if (current_chunk_retracted)
+    {
+        output.push(std::move(current_chunk_retracted));
+        return Status::PortFull;
+    }
+
     output.push(std::move(current_chunk_aggregated));
     has_input = false;
 

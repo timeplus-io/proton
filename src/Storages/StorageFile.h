@@ -34,6 +34,16 @@ public:
         size_t max_block_size,
         size_t num_streams) override;
 
+    void read(
+        QueryPlan & query_plan,
+        const Names & column_names,
+        const StorageSnapshotPtr & storage_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr context_,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        size_t num_streams) override;
+
     SinkToStoragePtr write(
         const ASTPtr & query,
         const StorageMetadataPtr & /*metadata_snapshot*/,
@@ -83,6 +93,8 @@ public:
         ContextPtr context);
 
     static SchemaCache & getSchemaCache(const ContextPtr & context);
+
+    bool supportsStreamingQuery() const override { return true; }
 
 protected:
     friend class StorageFileSource;

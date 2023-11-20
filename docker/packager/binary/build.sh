@@ -36,8 +36,6 @@ mv ./programs/proton* /output
 cp -r ../spec  /output/proton-spec
 # proton: ends
 mv ./src/unit_tests_dbms /output ||: # may not exist for some binary builds
-find . -name '*.so' -print -exec mv '{}' /output \;
-find . -name '*.so.*' -print -exec mv '{}' /output \;
 
 # Different files for performance test.
 if [ "performance" == "$COMBINED_OUTPUT" ]
@@ -70,7 +68,7 @@ then
     git -C /output/ch log -5
 fi
 
-# May be set for split build or for performance test.
+# May be set for performance test.
 if [ "" != "$COMBINED_OUTPUT" ]
 then
     mkdir -p /output/config

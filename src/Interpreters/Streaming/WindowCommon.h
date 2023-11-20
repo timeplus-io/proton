@@ -14,6 +14,7 @@ namespace DB
 {
 
 class ASTFunction;
+class Chunk;
 
 namespace Streaming
 {
@@ -295,7 +296,7 @@ using WindowsWithBuckets = std::vector<WindowWithBuckets>;
 
 void assignWindow(
     Columns & columns, const WindowInterval & interval, size_t time_col_pos, bool time_col_is_datetime64, const DateLUTImpl & time_zone);
-void reassignWindow(Block & block, const Window & window);
-
+void reassignWindow(
+    Chunk & chunk, const Window & window, bool time_col_is_datetime64, std::optional<size_t> start_pos, std::optional<size_t> end_pos);
 }
 }

@@ -1095,6 +1095,7 @@ private:
     friend struct AggregatedDataVariants;
     friend class ConvertingAggregatedToChunksTransform;
     friend class ConvertingAggregatedToChunksSource;
+    friend class ConvertingAggregatedToChunksSourceShuffled;
     friend class AggregatingInOrderTransform;
 
     Params params;
@@ -1308,6 +1309,12 @@ private:
     Block convertOneBucketToBlock(
         AggregatedDataVariants & data_variants,
         Method & method,
+        Arena * arena,
+        bool final,
+        Int32 bucket) const;
+
+    Block convertOneBucketToBlock(
+        AggregatedDataVariants & data_variants,
         Arena * arena,
         bool final,
         Int32 bucket) const;

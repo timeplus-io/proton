@@ -1,5 +1,6 @@
 #include <Processors/Transforms/Streaming/WindowAggregatingTransformWithSubstream.h>
 
+#include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/convertToChunk.h>
 
 namespace DB
@@ -14,6 +15,13 @@ WindowAggregatingTransformWithSubstream::WindowAggregatingTransformWithSubstream
     assert(
         params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
         || params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END);
+
+    const auto & output_header = getOutputs().front().getHeader();
+    if (output_header.has(ProtonConsts::STREAMING_WINDOW_START))
+        window_start_col_pos = output_header.getPositionByName(ProtonConsts::STREAMING_WINDOW_START);
+
+    if (output_header.has(ProtonConsts::STREAMING_WINDOW_END))
+        window_end_col_pos = output_header.getPositionByName(ProtonConsts::STREAMING_WINDOW_END);
 }
 
 /// Finalize what we have in memory and produce a finalized Block
@@ -52,9 +60,8 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
 
     assert(data_variant.isTwoLevel());
 
-    Block merged_block;
-
-    Block block;
+    Chunk merged_chunk;
+    Chunk chunk;
 
     const auto & last_finalized_windows_with_buckets = getFinalizedWindowsWithBuckets(substream_ctx->finalized_watermark, substream_ctx);
     const auto & windows_with_buckets = getFinalizedWindowsWithBuckets(watermark, substream_ctx);
@@ -65,40 +72,15 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
             && window_with_buckets.window.end <= last_finalized_windows_with_buckets.back().window.end)
             continue;
 
-        if (window_with_buckets.buckets.size() == 1)
-        {
-            if (params->final)
-                block = params->aggregator.convertOneBucketToBlockFinal(
-                    data_variant, ConvertAction::STREAMING_EMIT, window_with_buckets.buckets[0]);
-            else
-                block = params->aggregator.convertOneBucketToBlockIntermediate(
-                    data_variant, ConvertAction::STREAMING_EMIT, window_with_buckets.buckets[0]);
-        }
-        else
-        {
-            block = params->aggregator.spliceAndConvertBucketsToBlock(
-                data_variant, params->final, ConvertAction::INTERNAL_MERGE, window_with_buckets.buckets);
-        }
+        chunk = AggregatingHelper::spliceAndConvertBucketsToChunk(data_variant, *params, window_with_buckets.buckets);
 
         if (needReassignWindow())
-            reassignWindow(block, window_with_buckets.window);
+            reassignWindow(chunk, window_with_buckets.window, params->params.window_params->time_col_is_datetime64, window_start_col_pos, window_end_col_pos);
 
         if (params->emit_version && params->final)
-            emitVersion(block, substream_ctx);
+            emitVersion(chunk, substream_ctx);
 
-        if (merged_block)
-        {
-            assertBlocksHaveEqualStructure(merged_block, block, "merging buckets for streaming two level hashtable");
-            for (size_t i = 0, size = merged_block.columns(); i < size; ++i)
-            {
-                const auto source_column = block.getByPosition(i).column;
-                auto mutable_column = IColumn::mutate(std::move(merged_block.getByPosition(i).column));
-                mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
-                merged_block.getByPosition(i).column = std::move(mutable_column);
-            }
-        }
-        else
-            merged_block = std::move(block);
+        merged_chunk.append(std::move(chunk));
     }
 
     if (watermark != TIMEOUT_WATERMARK)
@@ -107,10 +89,10 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
     else if (!windows_with_buckets.empty())
         substream_ctx->finalized_watermark = windows_with_buckets.back().window.end;
 
-    if (merged_block)
+    if (merged_chunk)
     {
         chunk_ctx->setWatermark(substream_ctx->finalized_watermark);
-        setCurrentChunk(convertToChunk(merged_block), chunk_ctx);
+        setCurrentChunk(std::move(merged_chunk), chunk_ctx);
     }
 }
 

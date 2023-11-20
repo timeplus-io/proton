@@ -8,6 +8,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/Streaming/ASTSessionRangeComparision.h>
+#include <Processors/Chunk.h>
 #include <Common/ProtonCommon.h>
 #include <Common/intExp.h>
 
@@ -850,22 +851,26 @@ void assignWindow(
     columns.emplace_back(std::move(window_cols[1]));
 }
 
-void reassignWindow(Block & block, const Window & window)
+void reassignWindow(Chunk & chunk, const Window & window, bool time_col_is_datetime64, std::optional<size_t> start_pos, std::optional<size_t> end_pos)
 {
-    auto fill_time = [](ColumnWithTypeAndName & column_with_type, Int64 ts) {
-        auto column = IColumn::mutate(std::move(column_with_type.column));
-        if (isDateTime64(column_with_type.type))
-            std::ranges::fill(assert_cast<ColumnDateTime64 &>(*column).getData(), ts);
+    auto fill_time = [&](ColumnPtr & column, Int64 ts) {
+        auto col = IColumn::mutate(std::move(column));
+        if (time_col_is_datetime64)
+            std::ranges::fill(assert_cast<ColumnDateTime64 &>(*col).getData(), ts);
         else
-            std::ranges::fill(assert_cast<ColumnDateTime &>(*column).getData(), static_cast<UInt32>(ts));
-        column_with_type.column = std::move(column);
+            std::ranges::fill(assert_cast<ColumnDateTime &>(*col).getData(), static_cast<UInt32>(ts));
+        column = std::move(col);
     };
 
-    if (auto * column_with_type = block.findByName(ProtonConsts::STREAMING_WINDOW_START))
-        fill_time(*column_with_type, window.start);
+    auto rows = chunk.rows();
+    auto columns = chunk.detachColumns();
+    if (start_pos.has_value())
+        fill_time(columns.at(*start_pos), window.start);
 
-    if (auto * column_with_type = block.findByName(ProtonConsts::STREAMING_WINDOW_END))
-        fill_time(*column_with_type, window.end);
+    if (end_pos.has_value())
+        fill_time(columns.at(*end_pos), window.end);
+
+    chunk.setColumns(std::move(columns), rows);
 }
 
 }

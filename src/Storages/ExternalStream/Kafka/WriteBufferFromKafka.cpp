@@ -10,8 +10,8 @@ namespace ErrorCodes
 extern const int CANNOT_WRITE_TO_KAFKA;
 }
 
-WriteBufferFromKafka::WriteBufferFromKafka(klog::KTopicPtr topic_, size_t buffer_size)
-    : BufferWithOwnMemory<WriteBuffer>(buffer_size), topic(std::move(topic_))
+WriteBufferFromKafka::WriteBufferFromKafka(rd_kafka_topic_t * topic_, size_t buffer_size)
+    : BufferWithOwnMemory<WriteBuffer>(buffer_size), topic(topic_)
 {
 }
 
@@ -20,15 +20,17 @@ void WriteBufferFromKafka::nextImpl()
     if (!offset())
         return;
 
+    /// rd_kafka_produce only enqueue messages, it does not send messages out right away.
     auto err = rd_kafka_produce(
-        topic.get(),
+        topic,
+        /// we want to trigger the partitioner function, check KafkaSink.cpp
         RD_KAFKA_PARTITION_UA,
         RD_KAFKA_MSG_F_COPY | RD_KAFKA_MSG_F_BLOCK,
         working_buffer.begin(),
         offset(),
-        nullptr /* key */,
-        0 /* keylen */,
-        static_cast<void *>(this) /* opaque */);
+        /*key=*/ "", /// Even though we don't use the key, but it's needed to trigger the partitioner_cb
+        /*keylen=*/ 0,
+        /*msg_opaque=*/ reinterpret_cast<void *>(partition_id));
 
     if (unlikely(err))
         throw Exception(

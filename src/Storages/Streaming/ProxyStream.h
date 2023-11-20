@@ -48,20 +48,23 @@ public:
 
     NamesAndTypesList getVirtuals() const override;
 
+    bool hasEvenlyDistributedRead() const override { return storage ? storage->hasEvenlyDistributedRead() : false; }
+
     TableFunctionDescriptionPtr getStreamingTableFunctionDescription() const { return table_func_desc; }
 
     /// Whether it reads data from streaming store or historical store
-    bool isStreaming() const { return streaming; }
+    bool isStreamingQuery() const { return streaming; }
 
     /// Return WindowType::NONE, if it has no window func
     WindowType windowType() const;
     TableFunctionDescriptionPtr getStreamingWindowFunctionDescription() const;
 
     /// Whether has GlobalAggregation in subquery
-    bool hasGlobalAggregation() const { return has_global_aggr; }
+    bool hasStreamingGlobalAggregation() const { return has_global_aggr; }
 
     bool isProxyingSubqueryOrView() const;
 
+    bool supportsStreamingQuery() const override;
     bool isRemote() const override;
     bool supportsParallelInsert() const override;
     bool supportsIndexForIn() const override;

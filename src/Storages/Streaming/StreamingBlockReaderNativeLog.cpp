@@ -138,6 +138,7 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::processCached(nlog::RecordPtrs r
 
         const auto & rb = record->getBlock();
         auto rows = rb.rows();
+        block.info.setAppendTime(rb.info.appendTime());
 
         for (size_t i = 0; i < columns; ++i)
         {

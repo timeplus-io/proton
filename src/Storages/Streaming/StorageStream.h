@@ -212,7 +212,8 @@ private:
         const StorageSnapshotPtr & storage_snapshot,
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
-        size_t max_block_size);
+        size_t max_block_size,
+        size_t num_streams);
 
     void readHistory(
         const StreamShardPtrs & shards_to_read,
@@ -261,6 +262,10 @@ public:
     bool isReady() const override { return log_initialized.test(); }
 
     bool isInmemory() const { return getSettings()->storage_type.value == "memory"; }
+
+    std::vector<nlog::RecordSN> getLastSNs() const;
+
+    bool supportsStreamingQuery() const override { return true; }
 
     friend class StreamSink;
     friend class MergeTreeData;

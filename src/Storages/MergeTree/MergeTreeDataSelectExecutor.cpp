@@ -355,7 +355,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::doRead(
                     header_before_aggregation); // The source header is also an intermediate header
 
                 transform_params = std::make_shared<AggregatingTransformParams>(
-                    std::move(params), aggregator_list_ptr, query_info.projection->aggregate_final);
+                    std::move(params), aggregator_list_ptr, query_info.projection->aggregate_final, /*shuffled_=*/false);
 
                 /// This part is hacky.
                 /// We want AggregatingTransform to work with aggregate states instead of normal columns.
@@ -386,7 +386,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::doRead(
                     settings.min_count_to_compile_aggregate_expression);
 
                 transform_params = std::make_shared<AggregatingTransformParams>(
-                    std::move(params), aggregator_list_ptr, query_info.projection->aggregate_final);
+                    std::move(params), aggregator_list_ptr, query_info.projection->aggregate_final, /*shuffled_=*/false);
             }
 
             pipe.resize(pipe.numOutputPorts(), true, true);
@@ -1917,6 +1917,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readConcat(
     const SelectQueryInfo & query_info,
     ContextPtr context,
     UInt64 max_block_size,
+    size_t num_streams,
     QueryProcessingStage::Enum processed_stage,
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read,
     bool enable_parallel_reading,
@@ -1924,7 +1925,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readConcat(
 {
     /// For concat read, we don't want more than 1 thread concurrency for historical data read and we want read the data in order
     return doRead(column_names, storage_snapshot, query_info, std::move(context), max_block_size,
-                  1, processed_stage, max_block_numbers_to_read, enable_parallel_reading, std::move(create_streaming_source));
+                  num_streams, processed_stage, max_block_numbers_to_read, enable_parallel_reading, std::move(create_streaming_source));
 }
 /// proton: ends
 }

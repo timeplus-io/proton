@@ -21,6 +21,22 @@ public:
             this->impls[i].forEachMapped(func);
     }
 
+    /// proton: starts.
+    template <typename Func>
+    void ALWAYS_INLINE forEachValue(Func && func)
+    {
+        for (auto i = 0u; i < this->NUM_BUCKETS; ++i)
+            this->impls[i].forEachValue(func);
+    }
+
+    template <typename Func>
+    void ALWAYS_INLINE mergeToViaEmplace(Self & that, Func && func)
+    {
+        for (auto i = 0u; i < this->NUM_BUCKETS; ++i)
+            this->impls[i].mergeToViaEmplace(that.impls[i], func);
+    }
+    /// proton: ends.
+
     TMapped & ALWAYS_INLINE operator[](const Key & x)
     {
         bool inserted;

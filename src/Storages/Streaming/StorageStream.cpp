@@ -51,6 +51,7 @@ extern const int BAD_ARGUMENTS;
 extern const int RECEIVED_ERROR_TOO_MANY_REQUESTS;
 extern const int UNKNOWN_EXCEPTION;
 extern const int INTERNAL_ERROR;
+extern const int UNSUPPORTED;
 extern const int UNSUPPORTED_PARAMETER;
 extern const int RESOURCE_NOT_INITED;
 }
@@ -457,10 +458,16 @@ void StorageStream::readConcat(
     const StorageSnapshotPtr & storage_snapshot,
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
-    size_t max_block_size)
+    size_t max_block_size,
+    size_t num_streams)
 {
     auto description = makeFormattedNameOfConcatShards(shards_to_read);
     LOG_INFO(log, "Read local streaming concat {}", description);
+
+    /// If required backfill input in order, we will need read `_tp_time`.
+    if (query_info.require_in_order_backfill
+        && std::ranges::none_of(column_names, [](const auto & name) { return name == ProtonConsts::RESERVED_EVENT_TIME; }))
+        column_names.emplace_back(ProtonConsts::RESERVED_EVENT_TIME);
 
     /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
     /// We will need add one
@@ -469,6 +476,11 @@ void StorageStream::readConcat(
         header = storage_snapshot->getSampleBlockForColumns(column_names);
     else
         header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
+
+    /// Specially, we always read by single thread for keyed storage
+    auto shard_num_streams = num_streams / shards_to_read.size();
+    if (shard_num_streams == 0 || Streaming::isKeyedStorage(dataStreamSemantic()))
+        shard_num_streams = 1;
 
     std::vector<QueryPlanPtr> plans;
     for (auto & stream_shard : shards_to_read)
@@ -546,6 +558,7 @@ void StorageStream::readConcat(
             context_,
             processed_stage,
             max_block_size,
+            shard_num_streams,
             std::move(create_streaming_source));
 
         if (plan->isInitialized())
@@ -558,7 +571,6 @@ void StorageStream::readConcat(
     if (plans.size() == 1)
     {
         query_plan = std::move(*plans.front());
-        query_plan.setMaxThreads(1);
     }
     else
     {
@@ -570,7 +582,6 @@ void StorageStream::readConcat(
         auto union_step = std::make_unique<UnionStep>(std::move(input_streams));
         union_step->setStepDescription(description);
         query_plan.unitePlans(std::move(union_step), std::move(plans));
-        query_plan.setMaxThreads(plans.size());
     }
 }
 
@@ -701,7 +712,8 @@ void StorageStream::read(
                 storage_snapshot,
                 std::move(context_),
                 processed_stage,
-                max_block_size);
+                max_block_size,
+                num_streams);
         }
         case QueryMode::HISTORICAL: {
             return readHistory(
@@ -795,7 +807,8 @@ void StorageStream::readChangelog(
                 storage_snapshot,
                 std::move(context_),
                 processed_stage,
-                max_block_size);
+                max_block_size,
+                num_streams);
             break;
         }
         case QueryMode::HISTORICAL: {
@@ -991,9 +1004,16 @@ StorageStream::ShardsToRead StorageStream::getRequiredShardsToRead(ContextPtr co
     {
         assert(query_info.seek_to_info);
         const auto & settings_ref = context_->getSettingsRef();
-        bool require_back_fill_from_historical = !isInmemory()
-            && (Streaming::isChangelogKeyedStorage(dataStreamSemantic()) || Streaming::isVersionedKeyedStorage(dataStreamSemantic())
-                || (query_info.seek_to_info->getSeekTo() == "earliest" && settings_ref.enable_backfill_from_historical_store.value));
+
+        /// We allow backfill from historical store the following scenarios:
+        /// 1) For non-inmemory keyed storage stream, we always back fill from historical store (e.g. VersionedKV, ChangelogKV)
+        /// 2) Do time travel with settings `enable_backfill_from_historical_store = true`
+        bool require_back_fill_from_historical = false;
+        if (!isInmemory() && Streaming::isKeyedStorage(dataStreamSemantic()))
+            require_back_fill_from_historical = true;
+        else if (!query_info.seek_to_info->getSeekTo().empty() && settings_ref.enable_backfill_from_historical_store.value)
+            require_back_fill_from_historical = true;
+
         result.mode = require_back_fill_from_historical ? QueryMode::STREAMING_CONCAT : QueryMode::STREAMING;
     }
     else
@@ -1936,5 +1956,13 @@ void StorageStream::checkReady() const
     if (!isReady())
         throw Exception(
             ErrorCodes::RESOURCE_NOT_INITED, "Background resources of '{}' are initializing", getStorageID().getFullTableName());
+}
+std::vector<nlog::RecordSN> StorageStream::getLastSNs() const
+{
+    std::vector<nlog::RecordSN> last_sns;
+    for (const auto & stream_shard : stream_shards)
+        last_sns.emplace_back(stream_shard->lastSN());
+
+    return last_sns;
 }
 }

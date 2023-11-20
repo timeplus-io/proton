@@ -7,6 +7,7 @@
 #include <base/Decimal.h>
 #include <base/defines.h>
 #include <base/UUID.h>
+#include <base/IPv4andIPv6.h>
 
 
 namespace DB
@@ -89,6 +90,8 @@ enum class TypeIndex
     Map,
     Object,
     Bool,
+    IPv4,
+    IPv6,
 };
 #if !defined(__clang__)
 #pragma GCC diagnostic pop

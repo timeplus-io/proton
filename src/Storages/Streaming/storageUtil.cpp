@@ -1,19 +1,12 @@
-#include "storageUtil.h"
+#include <Storages/Streaming/storageUtil.h>
 
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Storages/IStorage.h>
 #include <Storages/StorageView.h>
 #include <Storages/Streaming/ProxyStream.h>
 
 namespace DB
 {
-bool supportStreamingQuery(const StoragePtr & storage)
-{
-    const auto & name = storage->getName();
-    return (name == "ProxyStream" || name == "Stream" || name == "View" || name == "MaterializedView" || name == "ExternalStream" || name == "Random");
-}
-
 String getStorageName(const ASTCreateQuery & create)
 {
     if (create.is_dictionary)
@@ -32,20 +25,12 @@ String getStorageName(const ASTCreateQuery & create)
 
 bool isStreamingStorage(const StoragePtr & storage, ContextPtr context)
 {
-    if (!supportStreamingQuery(storage))
-        return false;
+    if (const auto * proxy = storage->as<Streaming::ProxyStream>(); proxy)
+        return proxy->isStreamingQuery();
 
-    if (const auto * proxy = storage->as<Streaming::ProxyStream>())
-        return proxy->isStreaming();
+    if (const auto * view = storage->as<StorageView>(); view)
+        return view->isStreamingQuery(context);
 
-    if (storage->as<StorageView>())
-    {
-        auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
-        auto ctx = Context::createCopy(context);
-        ctx->setCollectRequiredColumns(false);
-        return InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().noModify().subquery().analyze()).isStreaming();
-    }
-
-    return true;
+    return storage->supportsStreamingQuery();
 }
 }

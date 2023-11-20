@@ -14,7 +14,7 @@ do
     do
         ${CLICKHOUSE_CLIENT} --query "TRUNCATE STREAM file"
         ${CLICKHOUSE_CLIENT} --query "INSERT INTO file SELECT * FROM numbers($size)"
-        ${CLICKHOUSE_CLIENT} --query "SELECT max(x) FROM file"
+        ${CLICKHOUSE_CLIENT} --query "SELECT max(x) FROM file SETTINGS query_mode='table'"
     done
 done
 

@@ -281,6 +281,7 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     /** Settings for testing hedged requests */ \
     M(Milliseconds, sleep_in_send_tables_status_ms, 0, "Time to sleep in sending tables status response in TCPHandler", 0) \
     M(Milliseconds, sleep_in_send_data_ms, 0, "Time to sleep in sending data in TCPHandler", 0) \
+    M(Milliseconds, sleep_after_receiving_query_ms, 0, "Time to sleep after receiving query in TCPHandler", 0) \
     M(UInt64, unknown_packet_in_send_data, 0, "Send unknown packet instead of data Nth data packet", 0) \
     /** Settings for testing connection collector */ \
     M(Milliseconds, sleep_in_receive_cancel_ms, 0, "Time to sleep in receiving cancel in TCPHandler", 0) \
@@ -779,6 +780,9 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(ExecuteMode, exec_mode, ExecuteMode::NORMAL, "Control query execute mode", 0) \
     M(UInt64, checkpoint_interval, 0, "Checkpoint interval in seconds", 0) \
     M(UInt64, javascript_uda_max_concurrency, 1, "Control the concurrency of JavaScript UDA in a query", 0) \
+    M(Float, replay_speed, 0., "Control the replay speed..0 < replay_speed < 1, means replay slower.replay_speed == 1, means replay by actual ingest interval.1 < replay_speed < <max_limit>, means replay faster", 0) \
+    M(UInt64, max_events, 0, "Total events to generate for random stream", 0) \
+    M(Int64, generate_eps, -1, "control the random stream eps in query time, defalut value is -1, if it is 0 means no limit.", 0) \
     /** proton: ends. */
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.
@@ -798,7 +802,8 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(UInt64, max_streaming_view_cached_block_bytes, 100 * 1024 * 1024, "Maximum bytes of block cached in streaming view", 0) \
     M(UInt64, keep_windows, 0, "How many streaming windows to keep from recycling", 0) \
     M(String, seek_to, "", "Seeking to an offset of the streaming/historical store to seek", 0) \
-    M(Bool, enable_backfill_from_historical_store, false, "Enable backfill data from historical data store", 0) \
+    M(Bool, enable_backfill_from_historical_store, true, "Enable backfill data from historical data store", 0) \
+    M(Bool, emit_aggregated_during_backfill, true, "Enable emit intermediate aggr result during backfill historical data", 0) \
     M(Bool, include_internal_streams, false, "Show internal streams on SHOW streams query.", 0) \
 // End of GLOBAL_SETTINGS
 

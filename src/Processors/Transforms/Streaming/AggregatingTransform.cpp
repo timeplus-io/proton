@@ -203,9 +203,9 @@ std::pair<bool, bool> AggregatingTransform::executeOrMergeColumns(Chunk & chunk,
     }
 }
 
-void AggregatingTransform::emitVersion(Block & block)
+void AggregatingTransform::emitVersion(Chunk & chunk)
 {
-    size_t rows = block.rows();
+    size_t rows = chunk.rows();
     if (params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
     {
         /// For UDA with own emit strategy, possibly a block can trigger multiple emits, each emit cause version+1
@@ -214,22 +214,22 @@ void AggregatingTransform::emitVersion(Block & block)
         col->reserve(rows);
         for (size_t i = 0; i < rows; i++)
             col->insert(many_data->version++);
-        block.insert({std::move(col), params->version_type, ProtonConsts::RESERVED_EMIT_VERSION});
+        chunk.addColumn(std::move(col));
     }
     else
     {
         Int64 version = many_data->version++;
-        block.insert(
-            {params->version_type->createColumnConst(rows, version)->convertToFullColumnIfConst(),
-             params->version_type,
-             ProtonConsts::RESERVED_EMIT_VERSION});
+        chunk.addColumn(params->version_type->createColumnConst(rows, version)->convertToFullColumnIfConst());
     }
 }
 
-void AggregatingTransform::setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx)
+void AggregatingTransform::setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx, Chunk retracted_chunk)
 {
     if (has_input)
         throw Exception("Current chunk was already set.", ErrorCodes::LOGICAL_ERROR);
+
+    if (!chunk)
+        return;
 
     has_input = true;
     current_chunk_aggregated = std::move(chunk);
@@ -244,11 +244,25 @@ void AggregatingTransform::setCurrentChunk(Chunk chunk, const ChunkContextPtr & 
 
         current_chunk_aggregated.setChunkContext(std::move(chunk_ctx));
     }
+
+    if (retracted_chunk.rows())
+    {
+        current_chunk_retracted = std::move(retracted_chunk);
+        current_chunk_retracted.getOrCreateChunkContext()->setRetractedDataFlag();
+    }
 }
 
 IProcessor::Status AggregatingTransform::preparePushToOutput()
 {
     auto & output = outputs.front();
+
+    /// At first, push retracted data, then push aggregated data
+    if (current_chunk_retracted)
+    {
+        output.push(std::move(current_chunk_retracted));
+        return Status::PortFull;
+    }
+
     output.push(std::move(current_chunk_aggregated));
     has_input = false;
 
@@ -280,9 +294,9 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
         {
             /// Firstly, acquired finalizing lock, blocking update `many_data->finalized_watermark` in other threads
             /// Secondly, acquired watermark lock, blocking watermark alignment in other threads
-            /// NOTICE: Keeping the order of locking, since the watermark lock shall be acquired in `GlobalAggregatingTransform::prepareFinalization()`
-            std::lock_guard lock1(many_data->finalizing_mutex);
-            std::lock_guard lock2(many_data->watermarks_mutex);
+            /// NOTICE: Keeping the order of locking, since the watermark lock shall be acquired in
+            /// `GlobalAggregatingTransform::prepareFinalization()`
+            std::scoped_lock lock(many_data->finalizing_mutex, many_data->watermarks_mutex);
             watermark = many_data->finalized_watermark.load(std::memory_order_relaxed);
         }
 
@@ -291,7 +305,7 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
             /// Found min watermark to finalize
             try_finalizing_watermark = updateAndAlignWatermark(new_watermark);
         else if (new_watermark < watermark)
-            LOG_ERROR(log, "Found outdate watermark. current watermark={}, but got watermark={}", watermark, new_watermark);
+            LOG_ERROR(log, "Found outdated watermark. current watermark={}, but got watermark={}", watermark, new_watermark);
     }
 
     if (!try_finalizing_watermark.has_value())

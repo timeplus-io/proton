@@ -199,6 +199,7 @@ public:
     std::string dumpStructure() const;
 
     void append(const Chunk & chunk);
+    void append(Chunk && chunk);
 
     /// proton : starts
     bool hasWatermark() const { return chunk_ctx && chunk_ctx->hasWatermark(); }
@@ -277,6 +278,9 @@ public:
         if (chunk_ctx)
             chunk_ctx->setCheckpointContext(nullptr);
     }
+
+    bool isHistoricalDataStart() const { return chunk_ctx && chunk_ctx->isHistoricalDataStart(); }
+    bool isHistoricalDataEnd() const { return chunk_ctx && chunk_ctx->isHistoricalDataEnd(); }
 
     /// Dummy interface to make RefCountBlockList happy
     Int64 minTimestamp() const { return 0; }

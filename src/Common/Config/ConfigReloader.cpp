@@ -143,10 +143,10 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error, bool /*fallb
 struct ConfigReloader::FileWithTimestamp
 {
     std::string path;
-    time_t modification_time;
+    fs::file_time_type modification_time;
 
-    FileWithTimestamp(const std::string & path_, time_t modification_time_)
-        : path(path_), modification_time(modification_time_) {}
+    explicit FileWithTimestamp(const std::string & path_)
+        : path(path_), modification_time(fs::last_write_time(path_)) {}
 
     bool operator < (const FileWithTimestamp & rhs) const
     {
@@ -163,7 +163,7 @@ struct ConfigReloader::FileWithTimestamp
 void ConfigReloader::FilesChangesTracker::addIfExists(const std::string & path_to_add)
 {
     if (!path_to_add.empty() && fs::exists(path_to_add))
-        files.emplace(path_to_add, FS::getModificationTime(path_to_add));
+        files.emplace(path_to_add);
 }
 
 bool ConfigReloader::FilesChangesTracker::isDifferOrNewerThan(const FilesChangesTracker & rhs)

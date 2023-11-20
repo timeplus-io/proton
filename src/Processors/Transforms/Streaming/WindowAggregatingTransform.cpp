@@ -1,5 +1,6 @@
 #include <Processors/Transforms/Streaming/WindowAggregatingTransform.h>
 
+#include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/convertToChunk.h>
 
 namespace DB
@@ -29,6 +30,13 @@ WindowAggregatingTransform::WindowAggregatingTransform(
     assert(
         params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
         || params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END);
+
+    const auto & output_header = getOutputs().front().getHeader();
+    if (output_header.has(ProtonConsts::STREAMING_WINDOW_START))
+        window_start_col_pos = output_header.getPositionByName(ProtonConsts::STREAMING_WINDOW_START);
+
+    if (output_header.has(ProtonConsts::STREAMING_WINDOW_END))
+        window_end_col_pos = output_header.getPositionByName(ProtonConsts::STREAMING_WINDOW_END);
 }
 
 bool WindowAggregatingTransform::needFinalization(Int64 min_watermark) const
@@ -113,80 +121,25 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 {
     assert(chunk_ctx && chunk_ctx->hasWatermark());
 
-    /// FIXME spill to disk, overflow_row etc cases
-    auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(many_data->variants);
-    if (prepared_data_ptr->empty())
-        return;
-
     SCOPE_EXIT({ many_data->resetRowCounts(); });
 
-    initialize(prepared_data_ptr);
-
-    assert(prepared_data_ptr->at(0)->isTwoLevel());
-    convertTwoLevel(prepared_data_ptr, chunk_ctx);
-}
-
-void WindowAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & data)
-{
-    AggregatedDataVariantsPtr & first = data->at(0);
-
-    assert(first->type != AggregatedDataVariants::Type::without_key && !params->params.overflow_row);
-
-    /// At least we need one arena in first data item per thread
-    Arenas & first_pool = first->aggregates_pools;
-    for (size_t j = first_pool.size(); j < max_threads; j++)
-        first_pool.emplace_back(std::make_shared<Arena>());
-}
-
-void WindowAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr & data, const ChunkContextPtr & chunk_ctx)
-{
     /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
     /// one project window for streaming processing
-    auto & first = data->at(0);
-
-    std::atomic<bool> is_cancelled{false};
-
-    Block merged_block;
-    Block block;
+    Chunk merged_chunk;
+    Chunk chunk;
 
     assert(!prepared_windows_with_buckets.empty());
     for (const auto & window_with_buckets : prepared_windows_with_buckets)
     {
-        if (window_with_buckets.buckets.size() == 1)
-        {
-            block = params->aggregator.mergeAndConvertOneBucketToBlock(
-                *data, first->aggregates_pool, params->final, ConvertAction::STREAMING_EMIT, window_with_buckets.buckets[0], &is_cancelled);
-        }
-        else
-        {
-            params->aggregator.mergeBuckets(
-                *data, first->aggregates_pool, params->final, ConvertAction::INTERNAL_MERGE, window_with_buckets.buckets);
-            block = params->aggregator.spliceAndConvertBucketsToBlock(
-                *first, params->final, ConvertAction::INTERNAL_MERGE, window_with_buckets.buckets);
-        }
-
-        if (is_cancelled)
-            return;
+        chunk = AggregatingHelper::mergeAndSpliceAndConvertBucketsToChunk(many_data->variants, *params, window_with_buckets.buckets);
 
         if (needReassignWindow())
-            reassignWindow(block, window_with_buckets.window);
+            reassignWindow(chunk, window_with_buckets.window, params->params.window_params->time_col_is_datetime64, window_start_col_pos, window_end_col_pos);
 
         if (params->emit_version && params->final)
-            emitVersion(block);
+            emitVersion(chunk);
 
-        if (merged_block)
-        {
-            assertBlocksHaveEqualStructure(merged_block, block, "merging buckets for streaming two level hashtable");
-            for (size_t i = 0, size = merged_block.columns(); i < size; ++i)
-            {
-                const auto source_column = block.getByPosition(i).column;
-                auto mutable_column = IColumn::mutate(std::move(merged_block.getByPosition(i).column));
-                mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
-                merged_block.getByPosition(i).column = std::move(mutable_column);
-            }
-        }
-        else
-            merged_block = std::move(block);
+        merged_chunk.append(std::move(chunk));
     }
 
     many_data->finalized_window_end.store(prepared_windows_with_buckets.back().window.end, std::memory_order_relaxed);
@@ -203,8 +156,8 @@ void WindowAggregatingTransform::convertTwoLevel(ManyAggregatedDataVariantsPtr &
 
     many_data->finalized_watermark.store(finalized_watermark, std::memory_order_relaxed);
 
-    if (merged_block)
-        setCurrentChunk(convertToChunk(merged_block), chunk_ctx);
+    if (merged_chunk)
+        setCurrentChunk(std::move(merged_chunk), chunk_ctx);
 }
 
 void WindowAggregatingTransform::removeBuckets(Int64 finalized_watermark)

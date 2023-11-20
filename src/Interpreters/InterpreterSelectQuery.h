@@ -116,12 +116,12 @@ public:
 
     /// proton: starts
     bool hasAggregation() const override { return query_analyzer->hasAggregation(); }
-    bool isStreaming() const override;
+    bool isStreamingQuery() const override;
     Streaming::DataStreamSemanticEx getDataStreamSemantic() const override { return data_stream_semantic_pair.output_data_stream_semantic; }
     std::set<String> getGroupByColumns() const override;
     bool hasStreamingWindowFunc() const override;
     Streaming::WindowType windowType() const;
-    bool hasGlobalAggregation() const override;
+    bool hasStreamingGlobalAggregation() const override;
     /// proton: ends
 
     static void addEmptySourceToQueryPlan(
@@ -188,14 +188,15 @@ private:
     String generateFilterActions(ActionsDAGPtr & actions, const Names & prerequisite_columns = {}) const;
 
     /// proton: starts
+    void executeLightShuffling(QueryPlan & query_plan);
     void executeStreamingWindow(QueryPlan & query_plan);
     void executeStreamingOrder(QueryPlan & query_plan);
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
     void executeStreamingPreLimit(QueryPlan & query_plan, bool do_not_skip_offset);
     void executeStreamingLimit(QueryPlan & query_plan);
     void executeStreamingOffset(QueryPlan & query_plan);
-    void checkForStreamingQuery() const;
-    bool shouldKeepState() const;
+    void finalCheckAndOptimizeForStreamingQuery();
+    bool shouldKeepAggregateState() const;
     void buildShufflingQueryPlan(QueryPlan & query_plan);
     void buildWatermarkQueryPlan(QueryPlan & query_plan) const;
     void buildStreamingProcessingQueryPlanBeforeJoin(QueryPlan & query_plan);
@@ -253,8 +254,9 @@ private:
     /// Bools to tell the query properties of the `current layer` of SELECT.
     bool current_select_has_aggregates = false;
     std::optional<std::pair<JoinKind, JoinStrictness>> current_select_join_kind_and_strictness; /// Which implies having join if have value
-    mutable std::optional<bool> is_streaming;
+    mutable std::optional<bool> is_streaming_query;
     bool shuffled_before_join = false;
+    bool light_shuffled = false;
     /// Overall data stream semantic defines the output semantic of the current layer of SELECT
     Streaming::DataStreamSemanticPair data_stream_semantic_pair;
     /// proton: ends

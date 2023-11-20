@@ -134,7 +134,6 @@ void RequiredSourceColumnsMatcher::visit(const ASTSelectQuery & select, const AS
         }
     }
 
-    std::vector<ASTPtr *> out;
     for (const auto & node : select.children)
     {
         // We should not go into WITH statement because all needed aliases are already expanded to

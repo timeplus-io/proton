@@ -1,5 +1,6 @@
 #include "UserDefinedEmitStrategyAggregatingTransform.h"
 
+#include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/convertToChunk.h>
 
 #include <algorithm>
@@ -41,25 +42,11 @@ void UserDefinedEmitStrategyAggregatingTransform::finalize(const ChunkContextPtr
     if (variants.empty())
         return;
 
-    Block block;
-    if (params->final)
-    {
-        auto results = params->aggregator.convertToBlocksFinal(variants, ConvertAction::STREAMING_EMIT, 1);
-        assert(results.size() == 1);
-        block = std::move(results.back());
+    Chunk chunk = AggregatingHelper::convertToChunk(variants, *params);
+    if (params->emit_version && params->final)
+        emitVersion(chunk);
 
-        if (params->emit_version)
-            emitVersion(block);
-    }
-    else
-    {
-        auto results = params->aggregator.convertToBlocksIntermediate(variants, ConvertAction::STREAMING_EMIT, 1);
-        assert(results.size() == 1);
-        block = std::move(results.back());
-    }
-
-    if (block)
-        setCurrentChunk(convertToChunk(block), chunk_ctx);
+    setCurrentChunk(std::move(chunk), chunk_ctx);
 }
 }
 }

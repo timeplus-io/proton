@@ -549,7 +549,7 @@ class TestCase:
         result_is_different = subprocess.call(['diff', '-q', self.reference_file, self.stdout_file], stdout=PIPE)
 
         if result_is_different:
-            diff = Popen(['diff', '-U', str(self.testcase_args.unified), self.reference_file, self.stdout_file], stdout=PIPE,
+            diff = Popen(['diff', '-U', str(self.testcase_args.unified), self.reference_file, self.stdout_file], encoding="latin-1", stdout=PIPE, 
                          universal_newlines=True).communicate()[0]
             description += "\n{}\n".format(diff)
             return TestResult(self.name, TestStatus.FAIL, FailureReason.RESULT_DIFF, total_time, description)
@@ -1207,8 +1207,7 @@ def main(args):
     global restarted_tests
 
     if not check_server_started(args):
-        msg = "Server is not responding. Cannot execute 'SELECT 1' query. \
-            If you are using split build, you have to specify -c option."
+        msg = "Server is not responding. Cannot execute 'SELECT 1' query."
         if args.hung_check:
             print(msg)
             pid = get_server_pid()
