@@ -220,14 +220,14 @@ struct ContextSharedPart : boost::noncopyable
     /// proton: ends
     scope_guard user_defined_executable_functions_xmls;
 
-    mutable OnceFlag user_defined_sql_objects_loader_initializer;
+    mutable OnceFlag user_defined_sql_objects_loader_initialized;
     mutable std::unique_ptr<IUserDefinedSQLObjectsLoader> user_defined_sql_objects_loader;
 
 #if USE_NLP
-    mutable OnceFlag synonyms_extensions_initializer;
+    mutable OnceFlag synonyms_extensions_initialized;
     mutable std::optional<SynonymsExtensions> synonyms_extensions;
 
-    mutable OnceFlag lemmatizers_initializer;
+    mutable OnceFlag lemmatizers_initialized;
     mutable std::optional<Lemmatizers> lemmatizers;
 #endif
 
@@ -237,7 +237,7 @@ struct ContextSharedPart : boost::noncopyable
     std::unique_ptr<AccessControl> access_control;
     mutable UncompressedCachePtr uncompressed_cache;        /// The cache of decompressed blocks.
     mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
-    mutable OnceFlag load_marks_threadpool_initializer;
+    mutable OnceFlag load_marks_threadpool_initialized;
     mutable std::unique_ptr<ThreadPool> load_marks_threadpool; /// Threadpool for loading marks cache.
     mutable UncompressedCachePtr index_uncompressed_cache;  /// The cache of decompressed blocks for MergeTree indices.
     mutable MarkCachePtr index_mark_cache;                  /// Cache of marks in compressed files of MergeTree indices.
@@ -248,18 +248,23 @@ struct ContextSharedPart : boost::noncopyable
     ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
     InterserverIOHandler interserver_io_handler;            /// Handler for interserver communication.
 
+    OnceFlag part_commit_pool_initialized;
     mutable std::unique_ptr<ThreadPool> part_commit_pool; /// proton: A thread pool that can build part and commit in background (used for Stream table engine)
+    OnceFlag buffer_flush_schedule_pool_initialized;
     mutable std::unique_ptr<BackgroundSchedulePool> buffer_flush_schedule_pool; /// A thread pool that can do background flush for Buffer tables.
+    OnceFlag schedule_pool_initialized;
     mutable std::unique_ptr<BackgroundSchedulePool> schedule_pool;    /// A thread pool that can run different jobs in background (used in replicated tables)
+    OnceFlag distributed_schedule_pool_initialized;
     mutable std::unique_ptr<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
+    OnceFlag message_broker_schedule_pool_initialized;
     mutable std::unique_ptr<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
 
-    mutable OnceFlag readers_initializer;
+    mutable OnceFlag readers_initialized;
     mutable std::unique_ptr<IAsynchronousReader> asynchronous_remote_fs_reader;
     mutable std::unique_ptr<IAsynchronousReader> asynchronous_local_fs_reader;
     mutable std::unique_ptr<IAsynchronousReader> synchronous_local_fs_reader;
 
-    mutable OnceFlag threadpool_writer_initializer;
+    mutable OnceFlag threadpool_writer_initialized;
     mutable std::unique_ptr<ThreadPool> threadpool_writer;
 
     mutable ThrottlerPtr remote_read_throttler;             /// A server-wide throttler for remote IO reads
@@ -280,9 +285,9 @@ struct ContextSharedPart : boost::noncopyable
     std::atomic_size_t max_stream_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     std::atomic_size_t max_partition_size_to_drop = 50000000000lu; /// Protects MergeTree partitions from accidental DROP (50GB by default)
     String format_schema_path;                              /// Path to a directory that contains schema files used by input formats.
-    mutable OnceFlag action_locks_manager_initializer;
+    mutable OnceFlag action_locks_manager_initialized;
     ActionLocksManagerPtr action_locks_manager;             /// Set of storages' action lockers
-    OnceFlag system_logs_initializer;
+    OnceFlag system_logs_initialized;
     std::unique_ptr<SystemLogs> system_logs;                /// Used to log queries and operations on parts
     std::optional<StorageS3Settings> storage_s3_settings;   /// Settings of S3 storage
     std::vector<String> warnings;                           /// Store warning messages about server configuration.
@@ -1530,18 +1535,17 @@ void Context::setCurrentDatabaseNameInGlobalContext(const String & name)
     current_database = name;
 }
 
-void Context::setCurrentDatabaseWithLock(const String & name, const std::unique_lock<SharedMutex> &)
+void Context::setCurrentDatabaseWithLock(const String & name, const std::unique_lock<SharedMutex> & lock)
 {
     DatabaseCatalog::instance().assertDatabaseExists(name);
     current_database = name;
+    calculateAccessRightsWithLock(lock);
 }
 
 void Context::setCurrentDatabase(const String & name)
 {
-    DatabaseCatalog::instance().assertDatabaseExists(name);
     auto lock = getLocalLock();
-    current_database = name;
-    calculateAccessRightsWithLock(lock);
+    setCurrentDatabaseWithLock(name, lock);
 }
 
 void Context::setCurrentQueryId(const String & query_id)
@@ -1841,9 +1845,8 @@ Streaming::MetaStoreJSONConfigRepository * Context::getMetaStoreJSONConfigReposi
 
 const IUserDefinedSQLObjectsLoader & Context::getUserDefinedSQLObjectsLoader() const
 {
-    callOnce(shared->user_defined_sql_objects_loader_initializer, [&] {
-        if (!shared->user_defined_sql_objects_loader)
-            shared->user_defined_sql_objects_loader = createUserDefinedSQLObjectsLoader(getGlobalContext());
+    callOnce(shared->user_defined_sql_objects_loader_initialized, [&] {
+        shared->user_defined_sql_objects_loader = createUserDefinedSQLObjectsLoader(getGlobalContext());
     });
 
     auto lock = getGlobalSharedLock();
@@ -1852,9 +1855,8 @@ const IUserDefinedSQLObjectsLoader & Context::getUserDefinedSQLObjectsLoader() c
 
 IUserDefinedSQLObjectsLoader & Context::getUserDefinedSQLObjectsLoader()
 {
-    callOnce(shared->user_defined_sql_objects_loader_initializer, [&] {
-        if (!shared->user_defined_sql_objects_loader)
-            shared->user_defined_sql_objects_loader = createUserDefinedSQLObjectsLoader(getGlobalContext());
+    callOnce(shared->user_defined_sql_objects_loader_initialized, [&] {
+        shared->user_defined_sql_objects_loader = createUserDefinedSQLObjectsLoader(getGlobalContext());
     });
 
     auto lock = getGlobalSharedLock();
@@ -1865,7 +1867,7 @@ IUserDefinedSQLObjectsLoader & Context::getUserDefinedSQLObjectsLoader()
 
 SynonymsExtensions & Context::getSynonymsExtensions() const
 {
-    callOnce(shared->synonyms_extensions_initializer, [&] {
+    callOnce(shared->synonyms_extensions_initialized, [&] {
         shared->synonyms_extensions.emplace(getConfigRef());
     });
 
@@ -1874,7 +1876,7 @@ SynonymsExtensions & Context::getSynonymsExtensions() const
 
 Lemmatizers & Context::getLemmatizers() const
 {
-    callOnce(shared->lemmatizers_initializer, [&] {
+    callOnce(shared->lemmatizers_initialized, [&] {
         shared->lemmatizers.emplace(getConfigRef());
     });
 
@@ -1957,7 +1959,7 @@ void Context::dropMarkCache() const
 
 ThreadPool & Context::getLoadMarksThreadpool() const
 {
-    callOnce(shared->load_marks_threadpool_initializer, [&] {
+    callOnce(shared->load_marks_threadpool_initialized, [&] {
         const auto & config = getConfigRef();
         auto pool_size = config.getUInt(".load_marks_threadpool_pool_size", 50);
         auto queue_size = config.getUInt(".load_marks_threadpool_queue_size", 1000000);
@@ -2063,12 +2065,12 @@ void Context::dropCaches() const
 
 BackgroundSchedulePool & Context::getBufferFlushSchedulePool() const
 {
-    auto lock = getLocalLock();
-    if (!shared->buffer_flush_schedule_pool)
+    callOnce(shared->buffer_flush_schedule_pool_initialized, [&] {
         shared->buffer_flush_schedule_pool = std::make_unique<BackgroundSchedulePool>(
             settings.background_buffer_flush_schedule_pool_size,
             CurrentMetrics::BackgroundBufferFlushSchedulePoolTask,
             "BgBufSchPool");
+    });
     return *shared->buffer_flush_schedule_pool;
 }
 
@@ -2105,34 +2107,34 @@ BackgroundTaskSchedulingSettings Context::getBackgroundMoveTaskSchedulingSetting
 
 BackgroundSchedulePool & Context::getSchedulePool() const
 {
-    auto lock = getLocalLock();
-    if (!shared->schedule_pool)
+    callOnce(shared->schedule_pool_initialized, [&] {
         shared->schedule_pool = std::make_unique<BackgroundSchedulePool>(
             settings.background_schedule_pool_size,
             CurrentMetrics::BackgroundSchedulePoolTask,
             "BgSchPool");
+    });
     return *shared->schedule_pool;
 }
 
 BackgroundSchedulePool & Context::getDistributedSchedulePool() const
 {
-    auto lock = getLocalLock();
-    if (!shared->distributed_schedule_pool)
+    callOnce(shared->distributed_schedule_pool_initialized, [&] {
         shared->distributed_schedule_pool = std::make_unique<BackgroundSchedulePool>(
             settings.background_distributed_schedule_pool_size,
             CurrentMetrics::BackgroundDistributedSchedulePoolTask,
             "BgDistSchPool");
+    });
     return *shared->distributed_schedule_pool;
 }
 
 BackgroundSchedulePool & Context::getMessageBrokerSchedulePool() const
 {
-    auto lock = getLocalLock();
-    if (!shared->message_broker_schedule_pool)
+    callOnce(shared->message_broker_schedule_pool_initialized, [&] {
         shared->message_broker_schedule_pool = std::make_unique<BackgroundSchedulePool>(
             settings.background_message_broker_schedule_pool_size,
             CurrentMetrics::BackgroundMessageBrokerSchedulePoolTask,
             "BgMBSchPool");
+    });
     return *shared->message_broker_schedule_pool;
 }
 
@@ -2443,7 +2445,7 @@ void Context::setCluster(const String & cluster_name, const std::shared_ptr<Clus
 
 void Context::initializeSystemLogs()
 {
-    callOnce(shared->system_logs_initializer, [&] {
+    callOnce(shared->system_logs_initialized, [&] {
         auto system_logs = std::make_unique<SystemLogs>(getGlobalContext(), getConfigRef());
         auto lock = getGlobalLock();
         shared->system_logs = std::move(system_logs);
@@ -3009,9 +3011,8 @@ const IHostContextPtr & Context::getHostContext() const
 
 std::shared_ptr<ActionLocksManager> Context::getActionLocksManager()
 {
-    callOnce(shared->action_locks_manager_initializer, [&] {
-        if (!shared->action_locks_manager)
-            shared->action_locks_manager = std::make_shared<ActionLocksManager>(shared_from_this());
+    callOnce(shared->action_locks_manager_initialized, [&] {
+        shared->action_locks_manager = std::make_shared<ActionLocksManager>(shared_from_this());
     });
 
     return shared->action_locks_manager;
@@ -3418,7 +3419,7 @@ size_t Context::getThreadPoolReaderSize(FilesystemReaderType type) const
 
 IAsynchronousReader & Context::getThreadPoolReader(FilesystemReaderType type) const
 {
-    callOnce(shared->readers_initializer, [&] {
+    callOnce(shared->readers_initialized, [&] {
         const auto & config = getConfigRef();
         auto pool_size = getThreadPoolReaderSizeFromConfig(type, config);
         auto queue_size = config.getUInt(".threadpool_remote_fs_reader_queue_size", 1000000);
@@ -3443,7 +3444,7 @@ IAsynchronousReader & Context::getThreadPoolReader(FilesystemReaderType type) co
 
 ThreadPool & Context::getThreadPoolWriter() const
 {
-    callOnce(shared->threadpool_writer_initializer, [&] {
+    callOnce(shared->threadpool_writer_initialized, [&] {
         const auto & config = getConfigRef();
         auto pool_size = config.getUInt(".threadpool_writer_pool_size", 100);
         auto queue_size = config.getUInt(".threadpool_writer_queue_size", 1000000);
@@ -3536,10 +3537,10 @@ bool Context::isDistributedEnv() const
 
 ThreadPool & Context::getPartCommitPool() const
 {
-    auto lock = getGlobalSharedLock();
-    if (!shared->part_commit_pool)
+    callOnce(shared->part_commit_pool_initialized, [&] {
         /// FIXME, queue size may matter
         shared->part_commit_pool = std::make_unique<ThreadPool>(settings.part_commit_pool_size);
+    });
     return *shared->part_commit_pool;
 }
 
