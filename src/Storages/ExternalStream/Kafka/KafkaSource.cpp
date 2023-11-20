@@ -190,8 +190,8 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
         {
             /// Merge all data in the current batch into the same chunk to avoid too many small chunks
             auto new_data(format_executor->getResultColumns());
-            for (size_t pos = 0; auto & column : current_batch)
-                column->insertRangeFrom(*new_data[pos], 0, new_rows);
+            for (size_t pos = 0; pos < current_batch.size(); ++pos)
+                current_batch[pos]->insertRangeFrom(*new_data[pos], 0, new_rows);
         }
         else
         {
