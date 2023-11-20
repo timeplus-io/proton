@@ -47,6 +47,7 @@ def get_run_command(check_name, output_path):
     env.append("-e MAX_CONCURRENT_QUERIES=200")
     env.append("-e MAX_CONCURRENT_INSERT_QUERIES=200")
     env.append("-e MAX_CONCURRENT_SELECT_QUERIES=200")
+    env.append("-e TELEMETRY_ENABLED=false")
 
     env_str = " ".join(env)
 
