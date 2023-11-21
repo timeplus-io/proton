@@ -3608,7 +3608,7 @@ void InterpreterSelectQuery::handleSeekToSetting()
         /// we rewrite WHERE predicates of SELECT query.
         /// Example : SELECT * FROM stream SETTINGS seek_to='2022-01-01 00:01:01' =>
         /// SELECT * FROM stream WHERE _tp_time >= '2022-01-01 00:01:01'
-        if (storage && !storage->builtinSeekToSupport())
+        if (storage && !storage->supportsNativeSeekTo())
             addEventTimePredicate(getSelectQuery(), seek_points[0]);
     }
     else

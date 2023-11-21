@@ -232,7 +232,7 @@ public:
     /// adding a prediction for filtering recrods by time (see InterpreterSelectQuery.cpp).
     /// However, some storages, like Kafka and alike, have built-in support for seek_to,
     /// for such storages, queries should not be rewritten.
-    virtual bool builtinSeekToSupport() const noexcept { return false; }
+    virtual bool supportsNativeSeekTo() const noexcept { return false; }
 
     virtual bool supportsStreamingQuery() const { return false; }
     /// proton: ends.
