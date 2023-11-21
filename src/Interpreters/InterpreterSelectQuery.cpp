@@ -3604,11 +3604,11 @@ void InterpreterSelectQuery::handleSeekToSetting()
         if (seek_points.size() != 1)
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It doesn't support time based `seek_to` settings for multiple shards");
 
-        /// If the storage does not have built-in seek_to support (for example, external streams like Kafka support seek_to, via offset, natively)
-        /// we rewrite WHERE predicates of SELECT query.
-        /// Example : SELECT * FROM stream SETTINGS seek_to='2022-01-01 00:01:01' =>
-        /// SELECT * FROM stream WHERE _tp_time >= '2022-01-01 00:01:01'
-        if (storage && !storage->supportsNativeSeekTo())
+        /// If the storage can do accurate seek_to (for example, Kafka external streams) no extra work is needed.
+        /// Otherwise, the WHERE predicates of SELECT query will be rewritten by adding a filter for filtering
+        /// records by `_tp_time`. For example: `SELECT * FROM stream SETTINGS seek_to='2022-01-01 00:01:01'` will
+        /// be rewritten to `SELECT * FROM stream WHERE _tp_time >= '2022-01-01 00:01:01'`.
+        if (storage && !storage->supportsAccurateSeekTo())
             addEventTimePredicate(getSelectQuery(), seek_points[0]);
     }
     else

@@ -228,11 +228,10 @@ public:
     /// to skip using squashing.
     virtual bool squashInsert() const noexcept { return true; }
 
-    /// In order to support time-based seek_to, such queries will be rewritten by
-    /// adding a prediction for filtering recrods by time (see InterpreterSelectQuery.cpp).
-    /// However, some storages, like Kafka and alike, have built-in support for seek_to,
-    /// for such storages, queries should not be rewritten.
-    virtual bool supportsNativeSeekTo() const noexcept { return false; }
+    /// If a query uses time-based seek_to and the storage does not support accurate seek_to,
+    /// the query will be rewritten by adding a prediction for filtering records by time
+    /// (see InterpreterSelectQuery.cpp).
+    virtual bool supportsAccurateSeekTo() const noexcept { return false; }
 
     virtual bool supportsStreamingQuery() const { return false; }
     /// proton: ends.

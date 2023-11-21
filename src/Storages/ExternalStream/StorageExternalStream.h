@@ -22,7 +22,7 @@ public:
     void shutdown() override;
     bool supportsSubcolumns() const override;
     bool squashInsert() const noexcept override { return false; }
-    bool supportsNativeSeekTo() const noexcept override { return true; }
+    bool supportsAccurateSeekTo() const noexcept override { return true; }
     NamesAndTypesList getVirtuals() const override;
 
     Pipe read(
