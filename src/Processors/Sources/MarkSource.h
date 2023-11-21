@@ -10,7 +10,7 @@ class MarkSource final : public ISource
 public:
     explicit MarkSource(Block header, UInt64 mark) : ISource(std::move(header), true, ProcessorID::MarkSourceID), chunk(output.getHeader().getColumns(), 0)
     {
-        auto chunk_ctx = std::make_shared<ChunkContext>();
+        auto chunk_ctx = ChunkContext::create();
         chunk_ctx->setMark(mark);
 
         chunk.setChunkContext(std::move(chunk_ctx));

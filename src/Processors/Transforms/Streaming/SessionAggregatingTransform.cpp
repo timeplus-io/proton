@@ -58,7 +58,7 @@ std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk &
         {
             if (!(*riter)->active)
             {
-                chunk.getOrCreateChunkContext()->setWatermark((*riter)->id);
+                chunk.setWatermark((*riter)->id);
                 return result;
             }
         }

@@ -381,9 +381,7 @@ Chunk KafkaSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
 {
     /// Prepare checkpoint barrier chunk
     auto result = header_chunk.clone();
-    auto chunk_ctx = std::make_shared<ChunkContext>();
-    chunk_ctx->setCheckpointContext(ckpt_ctx_);
-    result.setChunkContext(std::move(chunk_ctx));
+    result.setCheckpointContext(ckpt_ctx_);
 
     ckpt_ctx_->coordinator->checkpoint(State::VERSION, getLogicID(), ckpt_ctx_, [&](WriteBuffer & wb) { ckpt_data.serialize(wb); });
 

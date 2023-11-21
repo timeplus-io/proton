@@ -243,3 +243,55 @@ tests:
       - query_id: '3101-1'
         expected_results:
           - [101]
+
+  - id: 4
+    tags:
+      - "global aggr"
+      - "shuffle by"
+    name: global-aggr-with-shuffle-by
+    description: global aggregation query with shuffle by, convering stremaing and historical query, by default disable convert to two level
+    steps:
+      - statements:
+        - client: python
+          query_type: table
+          query: |
+            drop stream if exists test_31_multishards_stream;
+
+        - client: python
+          query_type: table
+          exist: test_31_multishards_stream
+          exist_wait: 2
+          wait: 1
+          query: |
+            create stream if not exists test_31_multishards_stream(i int, v string) settings shards=3;
+
+        - client: python
+          query_type: table
+          depends_on_stream: test_31_multishards_stream
+          wait: 1
+          query: |
+            insert into test_31_multishards_stream(i, v) select i % 100 + 1, v from test_31_rstream settings max_block_size=100, max_events=10000;
+
+        - client: python
+          query_type: stream
+          query_id: 3100
+          depends_on_stream: test_31_multishards_stream
+          wait: 1
+          query_end_timer: 5
+          query: |
+            with cte as (select i, count() from test_31_multishards_stream where _tp_time > earliest_ts() shuffle by i group by i settings group_by_two_level_threshold=10) select count() from cte settings emit_aggregated_during_backfill=false;
+
+        - client: python
+          query_type: table
+          query_id: 3101
+          depends_on_stream: test_31_multishards_stream
+          query: |
+            with cte as (select i, count() from table(test_31_multishards_stream) shuffle by i group by i settings group_by_two_level_threshold=10, max_block_size=100, max_events=10000) select count() from cte;
+
+    expected_results:
+      - query_id: '3100'
+        expected_results:
+          - [100]
+      - query_id: '3101'
+        expected_results:
+          - [100]

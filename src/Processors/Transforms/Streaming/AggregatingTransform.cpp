@@ -169,10 +169,10 @@ void AggregatingTransform::consume(Chunk chunk)
     /// If the last attempt to finalize failed (because other threads were finalizing), then we will continue to try in this processing.
     /// But there is already output, we will try in the next `work()`
     if (try_finalizing_watermark.has_value() && !has_input)
-        finalizeAlignment(std::make_shared<ChunkContext>());
+        finalizeAlignment(ChunkContext::create());
 
     /// Try propagate and garbage collect time bucketed memory by finalized watermark
-    propagateWatermarkAndClear();
+    propagateWatermarkAndClearExpiredStates();
 
     /// Try propagate checkpoint to downstream
     propagateCheckpointAndReset();
@@ -223,7 +223,7 @@ void AggregatingTransform::emitVersion(Chunk & chunk)
     }
 }
 
-void AggregatingTransform::setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx, Chunk retracted_chunk)
+void AggregatingTransform::setCurrentChunk(Chunk chunk, Chunk retracted_chunk)
 {
     if (has_input)
         throw Exception("Current chunk was already set.", ErrorCodes::LOGICAL_ERROR);
@@ -234,21 +234,10 @@ void AggregatingTransform::setCurrentChunk(Chunk chunk, const ChunkContextPtr & 
     has_input = true;
     current_chunk_aggregated = std::move(chunk);
 
-    if (chunk_ctx)
-    {
-        /// NOTE: For StremaingShrinkResize of downstream, it's need all inputs propagate watermark then do watermark alignment,
-        /// So the watermark cannot be cleared. On the other hand, if the downstream needs to establish its own watermark,
-        /// the watermark will be cleared and reassigned in another `WatermarkStamper` of downstream.
-        // if (params->final && params->params.group_by != Aggregator::Params::GroupBy::OTHER)
-        //     chunk_ctx->clearWatermark();
-
-        current_chunk_aggregated.setChunkContext(std::move(chunk_ctx));
-    }
-
     if (retracted_chunk.rows())
     {
         current_chunk_retracted = std::move(retracted_chunk);
-        current_chunk_retracted.getOrCreateChunkContext()->setRetractedDataFlag();
+        current_chunk_retracted.setRetractedDataFlag();
     }
 }
 
@@ -274,7 +263,7 @@ bool AggregatingTransform::propagateHeartbeatChunk()
     if (has_input)
         return false;
 
-    setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0}, nullptr);
+    setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0});
     return true;
 }
 
@@ -353,8 +342,9 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
         }
     } while (!all_locks_acquired);
 
-    chunk_ctx->setWatermark(*try_finalizing_watermark);
-    finalize(chunk_ctx);
+    auto mutate_chunk_ctx = ChunkContext::mutate(chunk_ctx);
+    mutate_chunk_ctx->setWatermark(*try_finalizing_watermark);
+    finalize(std::move(mutate_chunk_ctx));
     try_finalizing_watermark.reset();
 
     auto end = MonotonicMilliseconds::now();
@@ -366,21 +356,21 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
         many_data->finalized_watermark.load(std::memory_order_relaxed));
 }
 
-bool AggregatingTransform::propagateWatermarkAndClear()
+bool AggregatingTransform::propagateWatermarkAndClearExpiredStates()
 {
     auto finalized_watermark = many_data->finalized_watermark.load(std::memory_order_relaxed);
     if (finalized_watermark > propagated_watermark)
     {
         if (!has_input)
         {
-            auto chunk_ctx = std::make_shared<ChunkContext>();
+            auto chunk_ctx = ChunkContext::create();
             chunk_ctx->setWatermark(finalized_watermark);
-            setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0}, chunk_ctx);
+            setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, std::move(chunk_ctx)});
         }
         else
             assert(finalized_watermark == current_chunk_aggregated.getWatermark());
 
-        removeBuckets(finalized_watermark);
+        clearExpiredState(finalized_watermark);
         propagated_watermark = finalized_watermark;
         return true;
     }
@@ -419,9 +409,9 @@ bool AggregatingTransform::propagateCheckpointAndReset()
     /// Only all checkpoints request done, then can reset and propagate current ckpt request
     if (many_data->ckpt_requested.load() == 0)
     {
-        auto chunk_ctx = std::make_shared<ChunkContext>();
+        auto chunk_ctx = ChunkContext::create();
         chunk_ctx->setCheckpointContext(std::move(ckpt_request));
-        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0}, std::move(chunk_ctx));
+        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, std::move(chunk_ctx)});
         assert(!ckpt_request);
         return true;
     }

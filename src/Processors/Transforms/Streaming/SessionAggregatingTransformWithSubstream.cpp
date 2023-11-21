@@ -61,7 +61,7 @@ SessionAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, c
         {
             if (!(*riter)->active)
             {
-                chunk.getOrCreateChunkContext()->setWatermark((*riter)->id);
+                chunk.setWatermark((*riter)->id);
                 return result;
             }
         }

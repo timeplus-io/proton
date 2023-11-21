@@ -3262,7 +3262,10 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
         : static_cast<size_t>(settings.max_threads);
 
-    if (query_info.hasPartitionByKeys())
+    /// There are two substream categories:
+    /// 1) `parition by`: calculating substream with substream ID (The data have been shuffled by `ShufflingTransform`)
+    /// 2) `shuffle by`: calculating light substream without substream ID (The data have been shuffled by `LightShufflingTransform`)
+    if (query_info.hasPartitionByKeys() || light_shuffled)
         query_plan.addStep(std::make_unique<Streaming::AggregatingStepWithSubstream>(
             query_plan.getCurrentDataStream(), std::move(params), final, emit_version, data_stream_semantic_pair.isChangelogOutput()));
     else

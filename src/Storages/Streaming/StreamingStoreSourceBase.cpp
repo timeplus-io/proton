@@ -178,9 +178,7 @@ Chunk StreamingStoreSourceBase::doCheckpoint(CheckpointContextPtr current_ckpt_c
 
     /// Prepare checkpoint barrier chunk
     auto result = header_chunk.clone();
-    auto chunk_ctx = std::make_shared<ChunkContext>();
-    chunk_ctx->setCheckpointContext(current_ckpt_ctx);
-    result.setChunkContext(std::move(chunk_ctx));
+    result.setCheckpointContext(current_ckpt_ctx);
 
     /// Commit the checkpoint : shard
     auto stream_shard = getStreamShard();
