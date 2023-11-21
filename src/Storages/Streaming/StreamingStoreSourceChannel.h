@@ -1,8 +1,7 @@
 #pragma once
 
-#include "StreamingStoreSourceBase.h"
-
 #include <NativeLog/Record/Record.h>
+#include <Storages/Streaming/StreamingStoreSourceBase.h>
 #include <Common/ConcurrentBoundedQueue.h>
 
 namespace DB
@@ -21,6 +20,10 @@ public:
 
     ~StreamingStoreSourceChannel() override;
 
+    void attachTo(std::shared_ptr<StreamingStoreSourceMultiplexer> new_multiplexer);
+
+    void recover(CheckpointContextPtr ckpt_ctx_) override;
+
     String getName() const override { return "StreamingStoreSourceChannel"; }
 
     UInt32 getID() const { return id; }
@@ -35,7 +38,11 @@ private:
     static std::atomic<uint32_t> sequence_id;
 
     UInt32 id;
+
+    mutable std::mutex multiplexer_mutex;
     std::shared_ptr<StreamingStoreSourceMultiplexer> multiplexer;
+
+    Int32 record_consume_timeout_ms = 100;
 
     /// FIXME, use another lock-free one?
     ConcurrentBoundedQueue<nlog::RecordPtrs> records_queue;

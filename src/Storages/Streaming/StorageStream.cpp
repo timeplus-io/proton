@@ -601,22 +601,18 @@ void StorageStream::readStreaming(
 
     assert(query_info.seek_to_info);
     const auto & settings_ref = context_->getSettingsRef();
-    /// 1) Checkpointed queries shall not be multiplexed
-    /// 2) Queries which seek to a specific timestamp shall not be multiplexed
-    auto share_resource_group = (settings_ref.query_resource_group.value == "shared")
-        && (query_info.seek_to_info->getSeekTo().empty() || query_info.seek_to_info->getSeekTo() == "latest")
-        && (settings_ref.exec_mode == ExecuteMode::NORMAL);
-
-    if (share_resource_group)
+    if (settings_ref.query_resource_group.value == "shared")
     {
+        auto offsets = stream_shards.back()->getOffsets(query_info.seek_to_info);
         for (auto stream_shard : shards_to_read)
         {
+            const auto & offset = offsets[stream_shard->shard];
             if (!column_names.empty())
                 pipes.emplace_back(
-                    stream_shard->source_multiplexers->createChannel(stream_shard->shard, column_names, storage_snapshot, context_));
+                    source_multiplexers->createChannel(std::move(stream_shard), column_names, storage_snapshot, context_, offset));
             else
-                pipes.emplace_back(stream_shard->source_multiplexers->createChannel(
-                    stream_shard->shard, {ProtonConsts::RESERVED_EVENT_TIME}, storage_snapshot, context_));
+                pipes.emplace_back(source_multiplexers->createChannel(
+                    std::move(stream_shard), {ProtonConsts::RESERVED_EVENT_TIME}, storage_snapshot, context_, offset));
         }
 
         LOG_INFO(log, "Starting reading {} streams in shared resource group", pipes.size());
@@ -944,6 +940,8 @@ void StorageStream::startup()
         native_log = &nlog::NativeLog::instance(getContext());
         assert(native_log->enabled());
     }
+
+    source_multiplexers.reset(new StreamingStoreSourceMultiplexers(getContext(), log));
 
     log_initialized.test_and_set();
 

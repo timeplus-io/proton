@@ -28,17 +28,14 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view2_8;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view1_8;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_8;
 
           - client: python
@@ -321,12 +318,10 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_8;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_target_changelog_kv_8;
 
     expected_results:
@@ -360,8 +355,8 @@ tests:
               type: javascript
               name: test_14_8_add_five
               arguments:
-                - name: value
-                - type: float32
+              - name: value
+                type: float32
               return_type: float32
               source: |
                 function test_14_8_add_five(value) {
@@ -524,7 +519,6 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 2
             query: drop stream if exists test14_substream_8;
 
           - client: python
@@ -535,6 +529,7 @@ tests:
           - client: python
             query_id: '1453'
             depends_on_stream: test14_substream_8
+            wait: 1
             query_type: stream
             query: select max(val), min(val), avg(val), id, name from test14_substream_8 partition by id group by name emit periodic 1s;
 
@@ -618,8 +613,8 @@ tests:
               type: javascript
               name: test_14_8_add_five
               arguments:
-                - name: value
-                - type: float32
+              - name: value
+                type: float32
               return_type: float32
               source: |
                 function test_14_8_add_five(value) {

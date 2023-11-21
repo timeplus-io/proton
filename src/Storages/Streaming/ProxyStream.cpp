@@ -107,11 +107,12 @@ ProxyStream::ProxyStream(
 QueryProcessingStage::Enum ProxyStream::getQueryProcessingStage(
     ContextPtr context_,
     QueryProcessingStage::Enum to_stage,
-    const StorageSnapshotPtr & storage_snapshot,
+    const StorageSnapshotPtr & /*storage_snapshot*/,
     SelectQueryInfo & query_info) const
 {
     if (storage)
-        return storage->getQueryProcessingStage(context_, to_stage, storage_snapshot, query_info);
+        return storage->getQueryProcessingStage(
+            context_, to_stage, storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context_), query_info);
     else
         /// When it is created by subquery not a table
         return QueryProcessingStage::FetchColumns;
@@ -174,7 +175,7 @@ void ProxyStream::read(
 void ProxyStream::doRead(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageSnapshotPtr & storage_snapshot,
+    const StorageSnapshotPtr & /*storage_snapshot*/,
     SelectQueryInfo & query_info,
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
@@ -206,32 +207,35 @@ void ProxyStream::doRead(
         return;
     }
 
+    assert(storage);
+    auto proxy_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context_);
     if (auto * view = storage->as<StorageView>())
     {
         auto view_context = createProxySubqueryContext(context_, query_info, isStreamingQuery());
-        view->read(query_plan, column_names, storage_snapshot, query_info, view_context, processed_stage, max_block_size, num_streams);
+        view->read(
+            query_plan, column_names, proxy_storage_snapshot, query_info, view_context, processed_stage, max_block_size, num_streams);
         query_plan.addInterpreterContext(view_context);
         return;
     }
     else if (auto * materialized_view = storage->as<StorageMaterializedView>())
         return materialized_view->read(
-            query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+            query_plan, column_names, proxy_storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     else if (auto * external_stream = storage->as<StorageExternalStream>())
         return external_stream->read(
-            query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+            query_plan, column_names, proxy_storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     else if (auto * random_stream = storage->as<StorageRandom>())
         return random_stream->read(
-            query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+            query_plan, column_names, proxy_storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     else if (auto * file_stream = storage->as<StorageFile>())
         return file_stream->read(
-            query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+            query_plan, column_names, proxy_storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     else if (nested_proxy_storage)
         return nested_proxy_storage->read(
-            query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+            query_plan, column_names, proxy_storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 
     auto * distributed = storage->as<StorageStream>();
     assert(distributed);
-    distributed->read(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+    distributed->read(query_plan, column_names, proxy_storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 }
 
 Names ProxyStream::getRequiredColumnsForProxyStorage(const Names & column_names) const

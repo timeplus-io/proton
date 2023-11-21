@@ -148,9 +148,8 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::processCached(nlog::RecordPtrs r
             {
                 /// In general, an object has a large number of subcolumns,
                 /// so when a few subcolumns required for the object, we only copy partials to improve performance
-                if (isObject(col_with_type->type) && !schema_ctx.column_positions.positions.empty())
+                if (isObject(col_with_type->type) && !schema_ctx.column_positions.subcolumns.empty())
                 {
-                    assert(column_names.size() == schema_ctx.column_positions.positions.size());
                     auto iter = schema_ctx.column_positions.subcolumns.find(i);
                     if (iter != schema_ctx.column_positions.subcolumns.end())
                     {

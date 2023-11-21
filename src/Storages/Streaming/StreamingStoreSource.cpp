@@ -1,7 +1,7 @@
-#include "StreamingStoreSource.h"
-#include "StreamShard.h"
-#include "StreamingBlockReaderKafka.h"
-#include "StreamingBlockReaderNativeLog.h"
+#include <Storages/Streaming/StreamShard.h>
+#include <Storages/Streaming/StreamingBlockReaderKafka.h>
+#include <Storages/Streaming/StreamingBlockReaderNativeLog.h>
+#include <Storages/Streaming/StreamingStoreSource.h>
 
 #include <Interpreters/inplaceBlockConversions.h>
 #include <KafkaLog/KafkaWALPool.h>
@@ -16,7 +16,8 @@ StreamingStoreSource::StreamingStoreSource(
     ContextPtr context_,
     Int64 sn,
     Poco::Logger * log_)
-    : StreamingStoreSourceBase(header, storage_snapshot_, std::move(context_), log_, ProcessorID::StreamingStoreSourceID)
+    : StreamingStoreSourceBase(
+        header, storage_snapshot_, /*enable_partial_read*/ true, std::move(context_), log_, ProcessorID::StreamingStoreSourceID)
 {
     const auto & settings = query_context->getSettingsRef();
     if (settings.record_consume_batch_count.value != 0)
@@ -98,7 +99,8 @@ void StreamingStoreSource::readAndProcess()
                     /// NOTE: The `FilterTransform` will try optimizing filter ConstColumn to always_false or always_true,
                     /// for exmaple: `_tp_sn < 1`, if filter first data _tp_sn is 0, it will be optimized always_true.
                     /// So we can not create a constant column, since the virtual column data isn't constants value in fact.
-                    auto virtual_column = columns_desc.virtual_col_types[pos.virtualPosition()]->createColumnConst(rows, ts)->convertToFullColumnIfConst();
+                    auto virtual_column
+                        = columns_desc.virtual_col_types[pos.virtualPosition()]->createColumnConst(rows, ts)->convertToFullColumnIfConst();
                     columns.push_back(std::move(virtual_column));
                     break;
                 }

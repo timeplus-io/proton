@@ -1,8 +1,9 @@
-#include "StreamingStoreSourceChannel.h"
-#include "StreamingStoreSourceMultiplexer.h"
+#include <Storages/Streaming/StreamingStoreSourceChannel.h>
 
 #include <DataTypes/ObjectUtils.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/inplaceBlockConversions.h>
+#include <Storages/Streaming/StreamingStoreSourceMultiplexer.h>
 
 namespace DB
 {
@@ -12,24 +13,34 @@ StreamingStoreSourceChannel::StreamingStoreSourceChannel(
     StorageSnapshotPtr storage_snapshot_,
     ContextPtr query_context_,
     Poco::Logger * log_)
-    : StreamingStoreSourceBase(header, storage_snapshot_, std::move(query_context_), log_, ProcessorID::StreamingStoreSourceChannelID) /// NOLINT(performance-move-const-arg)
+    : StreamingStoreSourceBase(
+        header,
+        storage_snapshot_,
+        /*enable_partial_read*/ false,
+        std::move(query_context_),
+        log_,
+        ProcessorID::StreamingStoreSourceChannelID) /// NOLINT(performance-move-const-arg)
     , id(sequence_id++)
     , multiplexer(std::move(multiplexer_))
     , records_queue(1000)
 {
+    const auto & settings = query_context->getSettingsRef();
+    if (settings.record_consume_timeout_ms.value != 0)
+        record_consume_timeout_ms = static_cast<Int32>(settings.record_consume_timeout_ms.value);
 }
 
 std::atomic<uint32_t> StreamingStoreSourceChannel::sequence_id = 0;
 
 StreamingStoreSourceChannel::~StreamingStoreSourceChannel()
 {
+    std::lock_guard lock(multiplexer_mutex);
     multiplexer->removeChannel(id);
 }
 
 void StreamingStoreSourceChannel::readAndProcess()
 {
     nlog::RecordPtrs records;
-    auto got_records = records_queue.tryPop(records, 100);
+    auto got_records = records_queue.tryPop(records, record_consume_timeout_ms);
     if (!got_records)
         return;
 
@@ -48,13 +59,19 @@ void StreamingStoreSourceChannel::readAndProcess()
         if (record->empty())
             continue;
 
+        /// Ingore duplicate records, It's possible for re-attach to shared group from independent multiplexer
+        if (record->getSN() <= last_sn)
+            continue;
+
+        last_sn = record->getSN();
+
         Columns columns;
         columns.reserve(header_chunk.getNumColumns());
         Block & block = record->getBlock();
         auto rows = block.rows();
 
         /// Block in channel shall always contain full columns
-        assert(block.columns() == columns_desc.positions.size());
+        assert(block.columns() == columns_desc.physical_column_positions_to_read.positions.size());
 
         fillAndUpdateObjectsIfNecessary(block);
 
@@ -76,8 +93,12 @@ void StreamingStoreSourceChannel::readAndProcess()
                     /// The current column to return is a virtual column which needs be calculated lively
                     assert(columns_desc.virtual_col_calcs[pos.virtualPosition()]);
                     auto ts = columns_desc.virtual_col_calcs[pos.virtualPosition()](record);
-                    auto time_column = columns_desc.virtual_col_types[pos.virtualPosition()]->createColumnConst(rows, ts);
-                    columns.push_back(std::move(time_column));
+                    /// NOTE: The `FilterTransform` will try optimizing filter ConstColumn to always_false or always_true,
+                    /// for exmaple: `_tp_sn < 1`, if filter first data _tp_sn is 0, it will be optimized always_true.
+                    /// So we can not create a constant column, since the virtual column data isn't constants value in fact.
+                    auto virtual_column
+                        = columns_desc.virtual_col_types[pos.virtualPosition()]->createColumnConst(rows, ts)->convertToFullColumnIfConst();
+                    columns.push_back(std::move(virtual_column));
                     break;
                 }
                 case SourceColumnsDescription::ReadColumnType::SUB:
@@ -109,6 +130,27 @@ void StreamingStoreSourceChannel::add(nlog::RecordPtrs records)
 
 std::pair<String, Int32> StreamingStoreSourceChannel::getStreamShard() const
 {
+    std::lock_guard lock(multiplexer_mutex);
     return multiplexer->getStreamShard();
 }
+
+void StreamingStoreSourceChannel::attachTo(std::shared_ptr<StreamingStoreSourceMultiplexer> new_multiplexer)
+{
+    std::lock_guard lock(multiplexer_mutex);
+    multiplexer = std::move(new_multiplexer);
+}
+
+void StreamingStoreSourceChannel::recover(CheckpointContextPtr ckpt_ctx_)
+{
+    StreamingStoreSourceBase::recover(std::move(ckpt_ctx_));
+
+    if (last_sn >= 0)
+    {
+        std::lock_guard lock(multiplexer_mutex);
+        assert(multiplexer->totalChannels() == 1);
+        multiplexer->resetSequenceNumber(last_sn + 1);
+        multiplexer->startup();
+    }
+}
+
 }

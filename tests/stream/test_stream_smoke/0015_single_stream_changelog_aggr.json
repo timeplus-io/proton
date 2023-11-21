@@ -47,10 +47,10 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1601", "depends_on_stream":"changelog_kv_stream_aggr","query_end_timer":6, "query_type": "stream", "query":"select count(), avg(i), sum(i), min(i), max(i), min(s), max(s) from changelog_kv_stream_aggr emit periodic 1s"},
+            {"client":"python","query_id":"1601", "depends_on_stream":"changelog_kv_stream_aggr", "query_type": "stream", "query":"select count(), avg(i), sum(i), min(i), max(i), min(s), max(s) from changelog_kv_stream_aggr emit periodic 1s"},
             {"client":"python", "query_type": "table","depends_on":1601,"depends_on_stream":"changelog_kv_stream_aggr", "query": "insert into changelog_kv_stream_aggr(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
             {"client":"python", "query_type": "table","depends_on":1601,"depends_on_stream":"changelog_kv_stream_aggr", "wait":1, "query": "insert into changelog_kv_stream_aggr(i, s, _tp_delta) values (1, 's1', -1)"},
-            {"client":"python", "query_type": "table","depends_on":1601,"depends_on_stream":"changelog_kv_stream_aggr", "wait":1, "query": "insert into changelog_kv_stream_aggr(i, s, _tp_delta) values (3, 's3', -1)"}
+            {"client":"python", "query_type": "table","depends_on":1601,"depends_on_stream":"changelog_kv_stream_aggr", "wait":1, "kill":1601, "kill_wait":3, "query": "insert into changelog_kv_stream_aggr(i, s, _tp_delta) values (3, 's3', -1)"}
           ]
         }
       ],

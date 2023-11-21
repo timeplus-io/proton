@@ -124,8 +124,6 @@ StreamShard::~StreamShard()
 
 void StreamShard::startup()
 {
-    source_multiplexers.reset(new StreamingStoreSourceMultiplexers(shared_from_this(), storage_stream->getContext(), log));
-
     initLog();
 
     /// for virtual tables or in-memory storage type, there is no storage object
