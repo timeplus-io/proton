@@ -54,6 +54,8 @@ private:
             return DB::UTCMilliseconds::now();
     }
 
+    bool isRightInputInQuiesce() const noexcept { return DB::MonotonicMilliseconds::now() - right_input.last_data_ts >= quiesce_threshold; }
+
     void onCancel() override;
 
 private:
@@ -66,6 +68,7 @@ private:
 
         /// For join transform, we keep track watermark by itself
         Int64 watermark = INVALID_WATERMARK;
+        Int64 last_data_ts = 0;
         bool muted = false;
         bool required_checkpoint = false;
     };
@@ -79,6 +82,7 @@ private:
 
         /// For join transform, we keep track watermark by itself
         Int64 watermark = INVALID_WATERMARK;
+        Int64 last_data_ts = 0;
         bool muted = false;
         bool required_checkpoint = false;
     };
@@ -91,6 +95,7 @@ private:
     DataTypePtr left_watermark_column_type;
     DataTypePtr right_watermark_column_type;
     Int64 latency_threshold;
+    Int64 quiesce_threshold;
 
     mutable std::mutex mutex;
 

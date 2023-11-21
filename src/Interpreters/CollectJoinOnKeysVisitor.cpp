@@ -121,7 +121,7 @@ void CollectJoinOnKeysMatcher::Data::lagBehindASTToKeys()
     if (!lag_behind_left_key || !lag_behind_right_key)
         throw Exception("No lag_behind(...) ON section.", ErrorCodes::INVALID_JOIN_ON_EXPRESSION);
 
-    analyzed_join.addLagBehindKeys(asof_left_key, asof_right_key);
+    analyzed_join.addLagBehindKeys(lag_behind_left_key, lag_behind_right_key);
 }
 
 /// proton : ends

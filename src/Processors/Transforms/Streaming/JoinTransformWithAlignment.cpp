@@ -45,9 +45,13 @@ JoinTransformWithAlignment::JoinTransformWithAlignment(
 
     assert((left_watermark_column_type && right_watermark_column_type) || (!left_watermark_column_type && !right_watermark_column_type));
 
+    /// When left stream or right stream is in quiesce, we still need to push execute the join probably
+    quiesce_threshold = std::max<Int64>(latency_threshold / 2, 500);
+
     LOG_INFO(
         log,
-        "lag_latency_threshold={} left_lag_column={}, right_lag_column={}",
+        "quiesce_threshold={} lag_latency_threshold={} left_lag_column={}, right_lag_column={}",
+        quiesce_threshold,
         latency_threshold,
         left_join_stream_desc->lag_column,
         right_join_stream_desc->lag_column);
@@ -81,6 +85,8 @@ IProcessor::Status JoinTransformWithAlignment::prepareRightInput()
             {
                 if (auto new_watermark = getRightWatermark(right_input.input_chunk); new_watermark > right_input.watermark)
                     right_input.watermark = new_watermark;
+
+                right_input.last_data_ts = DB::MonotonicMilliseconds::now();
             }
             right_input.required_checkpoint = right_input.input_chunk.requestCheckpoint();
             return Status::Ready;
@@ -119,6 +125,8 @@ IProcessor::Status JoinTransformWithAlignment::prepareLeftInput()
             {
                 if (auto new_watermark = getLeftWatermark(left_input.input_chunks.back()); new_watermark > left_input.watermark)
                     left_input.watermark = new_watermark;
+
+                left_input.last_data_ts = DB::MonotonicMilliseconds::now();
             }
             left_input.required_checkpoint = left_input.input_chunks.back().requestCheckpoint();
             return Status::Ready;
@@ -186,6 +194,11 @@ IProcessor::Status JoinTransformWithAlignment::prepare()
 /// 3) If there are already buffered data for left stream (it shall be muted). Check if we can send the buffered to join the right hashtable and send as
 ///    much as possible. If the left buffered data is empty, unmute it.
 ///
+/// If left input got stuck, basically we will need mute right input to avoid having too much memory pressure.
+/// If right input got stuck, we wait for quiesce_threshold period, after that, we continue the join which may join stale right data
+/// but this is the best we can do since if we don't join, we stuck forever (this is a trade off, we can choose to stuck until right input
+/// has more data, but in some scenario, they just didn't have more data).
+///
 /// When right stream can garbage collect its data ?
 /// For asof join, for now, we manually use keep_versions to do garbage collection. Ideally we can do better job (automatically), but seems hard since version
 /// and watermark / timestamp are different.
@@ -194,71 +207,71 @@ void JoinTransformWithAlignment::work()
     {
         std::scoped_lock lock(mutex);
 
-        if (likely(right_input.watermark != INVALID_WATERMARK))
+        /// 1) We pulled right input and it has data
+        if (right_input.input_chunk)
         {
-            /// 1) We pulled right input and it has data
-            if (right_input.input_chunk)
+            if (right_input.input_chunk.hasRows())
             {
-                if (right_input.input_chunk.hasRows())
-                {
-                    join->insertRightBlock(right_input.input_port->getHeader().cloneWithColumns(right_input.input_chunk.detachColumns()));
-                }
-                else
-                {
-                    /// FIXME, watermark / heartbeat / checkpoint chunk.
-                    right_input.input_chunk.clear();
-                }
-            }
-
-            /// Left input has buffered data or newly pulled data
-            if (!left_input.input_chunks.empty())
-            {
-                assert(left_input.watermark != INVALID_WATERMARK);
-
-                if (left_input.watermark + latency_threshold <= right_input.watermark)
-                {
-                    /// right input already progressed ahead enough, it's time to join
-                    for (auto & left_chunk : left_input.input_chunks)
-                    {
-                        if (likely(left_chunk.hasRows()))
-                        {
-                            auto joined_block = left_input.input_port->getHeader().cloneWithColumns(left_chunk.detachColumns());
-                            join->joinLeftBlock(joined_block);
-
-                            if (auto rows = joined_block.rows(); rows > 0)
-                                output_chunks.emplace_back(joined_block.getColumns(), rows);
-                        }
-                        else
-                        {
-                            /// FIXME, watermark / heartbeat / checkpoint chunk.
-                        }
-                    }
-
-                    left_input.input_chunks.clear();
-                }
-                else
-                {
-                    /// Mute left input to wait right input progress
-                    left_input.muted = true;
-                    right_input.muted = false;
-                    stats.left_input_muted += 1;
-                }
+                join->insertRightBlock(right_input.input_port->getHeader().cloneWithColumns(right_input.input_chunk.detachColumns()));
             }
             else
             {
-                /// Left input doesn't have any data yet, we like to pull more. Mute the right input to
-                /// give left input more chance to catch up.
+                /// FIXME, watermark / heartbeat / checkpoint chunk.
+                right_input.input_chunk.clear();
+            }
+        }
+
+        /// Left input has buffered data or newly pulled data
+        if (!left_input.input_chunks.empty())
+        {
+            auto right_input_in_quiesce = isRightInputInQuiesce();
+            if ((left_input.watermark + latency_threshold <= right_input.watermark) || right_input_in_quiesce)
+            {
+                /// right input already progressed ahead enough or it is in quiesce, it's time to join
+                for (auto & left_chunk : left_input.input_chunks)
+                {
+                    if (likely(left_chunk.hasRows()))
+                    {
+                        auto joined_block = left_input.input_port->getHeader().cloneWithColumns(left_chunk.detachColumns());
+                        join->joinLeftBlock(joined_block);
+
+                        if (auto rows = joined_block.rows(); rows > 0)
+                            output_chunks.emplace_back(joined_block.getColumns(), rows);
+                    }
+                    else
+                    {
+                        /// FIXME, watermark / heartbeat / checkpoint chunk.
+                    }
+                }
+
+                left_input.input_chunks.clear();
+
+                /// Continue reading more data from left input
                 left_input.muted = false;
-                right_input.muted = true;
-                stats.right_input_muted += 1;
+
+                if (right_input_in_quiesce)
+                    right_input.muted = false;
+            }
+            else
+            {
+                /// Left stream is leading ahead, mute left input to wait right input to progress
+                left_input.muted = true;
+                right_input.muted = false;
+                stats.left_input_muted += 1;
             }
         }
         else
         {
-            /// Right input doesn't have any data yet. Mute left input
-            left_input.muted = true;
-            right_input.muted = false;
-            stats.left_input_muted += 1;
+            /// Left input doesn't have any data yet, we like to pull some. Mute the right input to
+            /// give left input more chance to catch up.
+            left_input.muted = false;
+
+            /// If the right input doesn't have watermark yet, don't mute it
+            if (likely(right_input.watermark != INVALID_WATERMARK))
+            {
+                right_input.muted = true;
+                stats.right_input_muted += 1;
+            }
         }
     }
 
