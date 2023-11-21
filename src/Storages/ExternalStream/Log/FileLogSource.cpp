@@ -1,6 +1,6 @@
-#include "FileLogSource.h"
-#include "FileLog.h"
-#include "fileLastModifiedTime.h"
+#include <Storages/ExternalStream/Log/FileLog.h>
+#include <Storages/ExternalStream/Log/FileLogSource.h>
+#include <Storages/ExternalStream/Log/fileLastModifiedTime.h>
 
 #include <Storages/ExternalStream/BreakLines.h>
 #include <base/ClockUtils.h>
@@ -15,10 +15,10 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int FILE_DOESNT_EXIST;
-    extern const int CANNOT_OPEN_FILE;
-    extern const int CANNOT_FSTAT;
-    extern const int CANNOT_READ_FROM_FILE_DESCRIPTOR;
+extern const int FILE_DOESNT_EXIST;
+extern const int CANNOT_OPEN_FILE;
+extern const int CANNOT_FSTAT;
+extern const int CANNOT_READ_FROM_FILE_DESCRIPTOR;
 }
 
 FileLogSource::FileLogSource(
@@ -74,7 +74,6 @@ Chunk FileLogSource::generate()
 
             if (buffer.empty())
                 buffer.resize(4 * 1024 * 1024);
-
 
             if (!handleCurrentFile())
                 return head_chunk.clone();
@@ -183,6 +182,8 @@ void FileLogSource::checkNewFiles()
     }
 
     auto new_files{file_log->searchForCandidates()};
+    last_check = MonotonicMilliseconds::now();
+
     if (new_files.empty())
     {
         /// FIXME, notification

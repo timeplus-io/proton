@@ -9,10 +9,10 @@
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/Streaming/storageUtil.h>
+#include <Common/logger_useful.h>
 
 #include <boost/algorithm/string.hpp>
 #include <re2/re2.h>
-#include <Poco/Logger.h>
 
 namespace DB
 {
@@ -147,6 +147,15 @@ FileLogSource::FileContainer FileLog::searchForCandidates()
         for (; !candidates.empty() && candidates.size() != 1;)
             candidates.erase(candidates.begin());
     }
+
+    LOG_INFO(
+        log,
+        "Using {} regexes: {} to search log_dir={} with start_timestamp={}, found {} candidates",
+        file_regexes.size(),
+        settings->log_files.value,
+        settings->log_dir.value,
+        start_timestamp,
+        candidates.size());
 
     if (!candidates.empty())
         /// Update start timestamp for next scan
