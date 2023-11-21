@@ -62,8 +62,11 @@ private:
     Poco::Logger * log;
 
     Block header;
+    const Block non_virtual_header;
     Block physical_header;
     Chunk header_chunk;
+
+    std::shared_ptr<ExpressionActions> convert_non_virtual_to_physical_action = nullptr;
 
     klog::KafkaWALSimpleConsumerPtr consumer;
     klog::KafkaWALContext consume_ctx;
