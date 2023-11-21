@@ -56,7 +56,7 @@ void RefCountBlockList<DataBlock>::deserialize(
     for (UInt32 i = 0; i < block_size; ++i)
     {
         auto data_block = reader.read();
-        RefCountBlock<DataBlock> elem{std::move(data_block)};
+        RefCountDataBlock<DataBlock> elem{std::move(data_block)};
         DB::readIntBinary(elem.refcnt, rb);
         assert(elem.refcnt > 0);
 
