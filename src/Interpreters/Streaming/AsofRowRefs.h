@@ -141,7 +141,7 @@ private:
 };
 
 template <typename DataBlock>
-class AsofRowRefs
+class PagedAsofRowRefs
 {
 public:
     using RowRefDataBlock = PageBasedRowRefWithRefCount<DataBlock>;
@@ -174,9 +174,9 @@ public:
         typename Entry<Decimal128>::LookupPtr,
         typename Entry<DateTime64>::LookupPtr>;
 
-    AsofRowRefs() { }
+    PagedAsofRowRefs() { }
 
-    AsofRowRefs(TypeIndex t);
+    PagedAsofRowRefs(TypeIndex t);
 
     /// This will be synchronized by the rwlock mutex in StreamingHashJoin.h
     void insert(

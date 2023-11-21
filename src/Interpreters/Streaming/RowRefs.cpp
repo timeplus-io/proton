@@ -1,7 +1,5 @@
 #include <Interpreters/Streaming/RowRefs.h>
 
-#include <Columns/IColumn.h>
-#include <Core/Block.h>
 #include <Interpreters/Streaming/joinSerder.h>
 #include <base/types.h>
 #include <Common/ColumnsHashing.h>
