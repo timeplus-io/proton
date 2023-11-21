@@ -664,7 +664,7 @@ template class RangeAsofRowRefs<LightChunkWithTimestamp>;
 /// For ChangelogCovertTransform
 template struct RowRefWithRefCount<LightChunk>;
 
-/// For gests
+/// For gtests
 template class AsofRowRefs<Block>;
 }
 }
