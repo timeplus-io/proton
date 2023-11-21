@@ -1,6 +1,6 @@
 #pragma once
 
-#include "FileLogSource.h"
+#include <Storages/ExternalStream/Log/FileLogSource.h>
 
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
@@ -55,7 +55,7 @@ private:
     std::unique_ptr<re2::RE2> timestamp_regex;
     std::unique_ptr<re2::RE2> linebreaker_regex;
 
-    Int64 start_timestamp;
+    Int64 start_timestamp = 0;
 
     Poco::Logger * log;
 };
