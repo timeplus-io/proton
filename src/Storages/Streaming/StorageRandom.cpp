@@ -700,7 +700,7 @@ Pipe StorageRandom::read(
     auto events_remainder = max_events % num_streams;
 
     /// setting random stream eps in query time, if generate_eps is not defalut value, use generate_eps as eps first.
-    UInt64 eps = context->getSettingsRef().generate_eps < 0 ? events_per_second : static_cast<UInt64>(context->getSettingsRef().generate_eps);
+    UInt64 eps = context->getSettingsRef().eps < 0 ? events_per_second : static_cast<UInt64>(context->getSettingsRef().eps);
     if (eps < num_streams)
     {
         if (eps == 0)

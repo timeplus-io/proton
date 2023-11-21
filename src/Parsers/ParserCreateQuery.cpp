@@ -628,6 +628,10 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     }
     auto comment = parseComment(pos, expected);
 
+    auto * storage_ast = storage->as<ASTStorage>();
+    if (storage_ast && storage_ast->engine && storage_ast->engine->name == "ExternalStream")
+        is_external = true;
+
     auto query = std::make_shared<ASTCreateQuery>();
     node = query;
 

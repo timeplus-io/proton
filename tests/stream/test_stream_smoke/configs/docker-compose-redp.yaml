@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   proton-redp:
-    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-latest}
     pull_policy: always
     container_name: proton-redp
     volumes:
@@ -28,6 +28,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
+      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -35,7 +36,7 @@ services:
       - stream-store
 
   proton-redp1:
-    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-latest}
     pull_policy: always
     container_name: proton-redp1
     volumes:
@@ -62,6 +63,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
+      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -70,7 +72,7 @@ services:
 
 
   proton-redp2:
-    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-latest}
     pull_policy: always
     container_name: proton-redp2
     volumes:
@@ -97,6 +99,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
+      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -104,7 +107,7 @@ services:
       - stream-store2
 
   proton-redp3:
-    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-latest}
     pull_policy: always
     container_name: proton-redp3
     volumes:
@@ -131,6 +134,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
+      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -138,7 +142,7 @@ services:
       - stream-store3
 
   proton-redp4:
-    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
+    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-latest}
     pull_policy: always
     container_name: proton-redp4
     volumes:
@@ -165,6 +169,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
+      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
