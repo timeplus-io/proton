@@ -132,7 +132,10 @@ void vectorPerfSortInsertDeleteOpt(benchmark::State & state, Args &&... args)
             {
                 sorted_row_refs.emplace_back(std::move(entry));
                 if (sorted_row_refs.size() > max_size)
+                {
                     sorted_row_refs.erase(sorted_row_refs.begin());
+                    /// sorted_row_refs.shrink_to_fit();
+                }
 
                 benchmark::ClobberMemory();
                 continue;
@@ -144,7 +147,10 @@ void vectorPerfSortInsertDeleteOpt(benchmark::State & state, Args &&... args)
             {
                 sorted_row_refs.insert(sorted_row_refs.begin(), std::move(entry));
                 if (sorted_row_refs.size() > max_size)
+                {
                     sorted_row_refs.pop_back();
+                    /// sorted_row_refs.shrink_to_fit();
+                }
 
                 benchmark::ClobberMemory();
                 continue;
@@ -160,6 +166,8 @@ void vectorPerfSortInsertDeleteOpt(benchmark::State & state, Args &&... args)
                 sorted_row_refs.erase(sorted_row_refs.begin());
             else
                 sorted_row_refs.pop_back();
+
+            /// sorted_row_refs.shrink_to_fit();
         }
 
         benchmark::ClobberMemory();
