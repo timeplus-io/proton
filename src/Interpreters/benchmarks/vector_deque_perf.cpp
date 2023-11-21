@@ -223,6 +223,57 @@ void dequePerfSortInsertDeleteOpt(benchmark::State & state, Args &&... args)
     }
 }
 
+template <typename... Args>
+void vectorLookup(benchmark::State & state, Args &&... args)
+{
+    auto args_tuple = std::make_tuple(std::move(args)...);
+    auto max_size = std::get<0>(args_tuple);
+    auto ascending = std::get<1>(args_tuple);
+
+    std::vector<Entry> sorted_row_refs;
+    sorted_row_refs.reserve(max_size);
+
+    if (ascending)
+    {
+        for (size_t i = 0; i < max_size; ++i)
+            sorted_row_refs.emplace_back(i);
+    }
+    else
+    {
+        for (size_t i = max_size; i > 0; --i)
+            sorted_row_refs.emplace_back(i - 1);
+    }
+
+    for (size_t i = 0; auto _ : state)
+        benchmark::DoNotOptimize(std::lower_bound(
+            sorted_row_refs.begin(), sorted_row_refs.end(), Entry(i % (max_size << 1)), (ascending ? lessEntry : greaterEntry)));
+}
+
+template <typename... Args>
+void dequeLookup(benchmark::State & state, Args &&... args)
+{
+    auto args_tuple = std::make_tuple(std::move(args)...);
+    auto max_size = std::get<0>(args_tuple);
+    auto ascending = std::get<1>(args_tuple);
+
+    std::deque<Entry> sorted_row_refs;
+
+    if (ascending)
+    {
+        for (size_t i = 0; i < max_size; ++i)
+            sorted_row_refs.emplace_back(i);
+    }
+    else
+    {
+        for (size_t i = max_size; i > 0; --i)
+            sorted_row_refs.emplace_back(i - 1);
+    }
+
+    for (size_t i = 0; auto _ : state)
+        benchmark::DoNotOptimize(std::lower_bound(
+            sorted_row_refs.begin(), sorted_row_refs.end(), Entry(i % (max_size << 1)), (ascending ? lessEntry : greaterEntry)));
+}
+
 BENCHMARK_CAPTURE(vectorPerfVanilla, vectorPerfVanilla10, /*keep_versions=*/10ull);
 BENCHMARK_CAPTURE(vectorPerfVanilla, vectorPerfVanilla100, /*keep_versions=*/100ull);
 BENCHMARK_CAPTURE(vectorPerfVanilla, vectorPerfVanilla1000, /*keep_versions=*/1000ull);
@@ -262,5 +313,14 @@ BENCHMARK_CAPTURE(dequePerfSortInsertDeleteOpt, dequePerfSortInsertDeleteOpt1000
 BENCHMARK_CAPTURE(dequePerfSortInsertDeleteOpt, dequePerfSortInsertDeleteOpt10desc, /*keep_versions=*/10ull, /*ascending=*/false);
 BENCHMARK_CAPTURE(dequePerfSortInsertDeleteOpt, dequePerfSortInsertDeleteOpt100desc, /*keep_versions=*/100ull, /*ascending=*/false);
 BENCHMARK_CAPTURE(dequePerfSortInsertDeleteOpt, dequePerfSortInsertDeleteOpt1000desc, /*keep_versions=*/1000ull, /*ascending=*/false);
+
+BENCHMARK_CAPTURE(vectorLookup, vectorLookup10desc, /*keep_versions=*/10ull, /*ascending=*/true);
+BENCHMARK_CAPTURE(vectorLookup, vectorLookup100desc, /*keep_versions=*/100ull, /*ascending=*/true);
+BENCHMARK_CAPTURE(vectorLookup, vectorLookup1000desc, /*keep_versions=*/1000ull, /*ascending=*/true);
+BENCHMARK_CAPTURE(vectorLookup, vectorLookup10000desc, /*keep_versions=*/10000ull, /*ascending=*/true);
+
+BENCHMARK_CAPTURE(dequeLookup, dequeLookup10desc, /*keep_versions=*/10ull, /*ascending=*/false);
+BENCHMARK_CAPTURE(dequeLookup, dequeLookup100desc, /*keep_versions=*/100ull, /*ascending=*/false);
+BENCHMARK_CAPTURE(dequeLookup, dequeLookup10000desc, /*keep_versions=*/10000ull, /*ascending=*/false);
 
 BENCHMARK_MAIN();
