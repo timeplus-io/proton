@@ -3,6 +3,8 @@
 #include <Interpreters/Streaming/CachedBlockMetrics.h>
 #include <Interpreters/Streaming/RefCountDataBlockPage.h>
 
+#include <base/defines.h>
+
 #include <deque>
 
 namespace DB::Streaming
@@ -11,15 +13,22 @@ namespace DB::Streaming
 template <typename DataBlock>
 struct RefCountDataBlockPages
 {
-    RefCountDataBlockPages(size_t page_size_, CachedBlockMetrics & metrics_) : page_size(page_size_), metrics(metrics_) { }
+    RefCountDataBlockPages(size_t page_size_, CachedBlockMetrics & metrics_) : metrics(metrics_), page_size(page_size_)
+    {
+        addPage();
+    }
 
     ~RefCountDataBlockPages()
     {
-        metrics.current_total_blocks -= block_pages.size();
+        for (const auto & page : block_pages)
+        {
+            metrics.current_total_blocks -= page->activeDataBlocks();
+            metrics.total_blocks -= page->activeDataBlocks();
+            metrics.gced_blocks += page->activeDataBlocks();
+        }
+
         metrics.current_total_bytes -= total_bytes;
-        metrics.total_blocks -= block_pages.size();
         metrics.total_bytes -= total_bytes;
-        metrics.gced_blocks += block_pages.size();
     }
 
     void add(DataBlock && block)
@@ -29,14 +38,14 @@ struct RefCountDataBlockPages
         auto & current_page = block_pages.back();
         if (likely(current_page->size() < page_size))
         {
-            current_page->page.emplace_back(std::move(block));
+            current_page->pushBack(std::move(block));
         }
         else
         {
             addPage();
 
             auto & page = block_pages.back();
-            page->emplace_back(std::move(block));
+            page->pushBack(std::move(block));
         }
     }
 
@@ -63,8 +72,9 @@ struct RefCountDataBlockPages
     int64_t maxTimestamp() const noexcept { return max_ts; }
 
     size_t pageSize() const noexcept { return page_size; }
+    size_t size() const noexcept { return block_pages.size(); }
 
-    void addPage() { block_pages.emplace_back(std::make_unique<RefCountDataBlockPage<DataBlock>>(page_size)); }
+    void addPage() { block_pages.emplace_back(std::make_unique<RefCountDataBlockPage<DataBlock>>(this)); }
 
     void erasePage(RefCountDataBlockPage<DataBlock> * page)
     {

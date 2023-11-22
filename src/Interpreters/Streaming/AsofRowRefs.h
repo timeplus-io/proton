@@ -13,17 +13,19 @@ class PagedAsofRowRefs
 {
 public:
     using RowRefDataBlock = PageBasedRowRefWithRefCount<DataBlock>;
+
     template <typename T>
     struct Entry
     {
         using LookupType = SortedLookupContainer<RowRefDataBlock, Entry<T>>;
         using LookupPtr = std::unique_ptr<LookupType>;
+
         T asof_value;
         RowRefDataBlock row_ref;
 
         Entry() = default;
         Entry(T v) : asof_value(v) { }
-        Entry(T v, RowRefDataBlock rr) : asof_value(v), row_ref(rr) { }
+        Entry(T v, RowRefDataBlock && row_ref_) : asof_value(v), row_ref(std::move(row_ref_)) { }
     };
 
     using Lookups = std::variant<
@@ -50,7 +52,7 @@ public:
     void insert(
         TypeIndex type,
         const IColumn & asof_column,
-        PageBasedRowRefWithRefCount<DataBlock> * blocks,
+        RefCountDataBlockPages<DataBlock> * blocks,
         size_t row_num,
         ASOFJoinInequality inequality,
         size_t keep_versions);

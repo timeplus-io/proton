@@ -1,8 +1,17 @@
 #include <Interpreters/Streaming/RefCountDataBlockPage.h>
 #include <Interpreters/Streaming/RefCountDataBlockPages.h>
 
+#include <Core/LightChunk.h>
+
 namespace DB::Streaming
 {
+template <typename DataBlock>
+RefCountDataBlockPage<DataBlock>::RefCountDataBlockPage(RefCountDataBlockPages<DataBlock> * pages_) : pages(pages_)
+{
+    assert(pages);
+    page.reserve(pages->pageSize());
+}
+
 template <typename DataBlock>
 void RefCountDataBlockPage<DataBlock>::pushBack(DataBlock && data_block)
 {
@@ -31,4 +40,6 @@ void RefCountDataBlockPage<DataBlock>::deref(uint32_t page_offset) noexcept
     }
 }
 
+template struct RefCountDataBlockPage<LightChunk>;
+template struct RefCountDataBlockPage<LightChunkWithTimestamp>;
 }

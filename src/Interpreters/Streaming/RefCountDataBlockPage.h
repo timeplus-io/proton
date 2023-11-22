@@ -13,9 +13,6 @@ struct RefCountDataBlockPage
 {
     explicit RefCountDataBlockPage(RefCountDataBlockPages<DataBlock> *);
 
-    auto size() const noexcept { return page.size(); }
-    auto empty() const noexcept { return page.empty(); }
-
     void ref(uint32_t page_offset) noexcept
     {
         assert(page.size() > page_offset);
@@ -33,7 +30,7 @@ struct RefCountDataBlockPage
     const DataBlock & getDataBlock(uint32_t page_offset) noexcept
     {
         assert(page.size() > page_offset);
-        page[page_offset].block;
+        return page[page_offset].block;
     }
 
     void pushBack(DataBlock && data_block);
@@ -41,6 +38,10 @@ struct RefCountDataBlockPage
     void clear() { page.clear(); }
 
     void reserve(size_t page_size) { page.reserve(page_size); }
+
+    auto size() const noexcept { return page.size(); }
+    auto empty() const noexcept { return page.empty(); }
+    auto activeDataBlocks() const noexcept { return active_data_blocks; }
 
 private:
     RefCountDataBlockPages<DataBlock> * pages;

@@ -286,10 +286,31 @@ class SortedLookupVector
 public:
     using Base = std::vector<TEntry>;
 
-    void insert(TEntry entry, bool ascending)
+    void insert(TEntry entry, bool ascending, size_t max_size)
     {
+        /// Happy and perf path
+        if (ascending)
+        {
+            if (array.empty() || less(array.back(), entry)) /// Very likely
+            {
+                array.push_back(std::move(entry));
+                eraseIfExceedingMaxSize(max_size, ascending);
+                return;
+            }
+        }
+        else
+        {
+            if (array.empty() || less(array.front(), entry)) /// Very likely
+            {
+                array.insert(array.begin(), std::move(entry));
+                eraseIfExceedingMaxSize(max_size, ascending);
+                return;
+            }
+        }
+
         auto it = std::lower_bound(array.begin(), array.end(), entry, (ascending ? less : greater));
         array.insert(it, entry);
+        eraseIfExceedingMaxSize(max_size, ascending);
     }
 
     const RowRefDataBlock * upperBound(const TEntry & k, bool ascending)
@@ -308,19 +329,6 @@ public:
         return nullptr;
     }
 
-    void truncateTo(size_t max_size, bool ascending)
-    {
-        if (array.size() > max_size)
-        {
-            if (ascending)
-                array.erase(array.begin(), array.begin() + array.size() - max_size);
-            else
-                array.erase(array.end() - (array.size() - max_size), array.end());
-
-            array.shrink_to_fit();
-        }
-    }
-
     using iterator = typename Base::iterator;
     using const_iterator = typename Base::const_iterator;
 
@@ -332,6 +340,18 @@ public:
 
     const_iterator begin() const { return array.begin(); }
     const_iterator end() const { return array.end(); }
+
+private:
+    inline void eraseIfExceedingMaxSize(size_t max_size, bool ascending)
+    {
+        if (array.size() > max_size)
+        {
+            if (ascending)
+                array.erase(array.begin());
+            else
+                array.pop_back();
+        }
+    }
 
 private:
     Base array;
@@ -351,6 +371,7 @@ public:
     {
         using LookupType = SortedLookupVector<RowRefDataBlock, Entry<T>>;
         using LookupPtr = std::unique_ptr<LookupType>;
+
         T asof_value;
         RowRefDataBlock row_ref;
 

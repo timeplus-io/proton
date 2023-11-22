@@ -167,8 +167,7 @@ void AsofRowRefs<DataBlock>::insert(
 
         T key = column.getElement(row_num);
         bool ascending = (inequality == ASOFJoinInequality::Less) || (inequality == ASOFJoinInequality::LessOrEquals);
-        container->insert(Entry<T>(key, RowRefDataBlock(blocks, row_num)), ascending);
-        container->truncateTo(keep_versions, ascending);
+        container->insert(Entry<T>(key, RowRefDataBlock(blocks, row_num)), ascending, keep_versions);
     };
 
     callWithType(type, call);

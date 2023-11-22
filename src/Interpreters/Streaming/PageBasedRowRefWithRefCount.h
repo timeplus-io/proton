@@ -2,6 +2,8 @@
 
 #include <Interpreters/Streaming/RefCountDataBlockPages.h>
 
+#include <base/defines.h>
+
 namespace DB::Streaming
 {
 /// Reference to the row in block with reference count
@@ -29,6 +31,15 @@ struct PageBasedRowRefWithRefCount
     {
         if (likely(page))
             page->ref(page_offset);
+    }
+
+    PageBasedRowRefWithRefCount(PageBasedRowRefWithRefCount && other)
+        : page(other.page), page_offset(other.page_offset), row_num(other.row_num)
+    {
+        /// Clean up other, refcount is moved over, so no `ref` again
+        other.page = nullptr;
+        other.page_offset = 0;
+        other.row_num = 0;
     }
 
     PageBasedRowRefWithRefCount & operator=(const PageBasedRowRefWithRefCount & other)
