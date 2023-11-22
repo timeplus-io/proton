@@ -264,8 +264,12 @@ void KafkaSource::initConsumer(const Kafka * kafka)
         consume_ctx.auto_offset_reset = "earliest";
 
     consume_ctx.enforce_offset = true;
-    klog::KafkaWALAuth auth
-        = {.security_protocol = kafka->securityProtocol(), .username = kafka->username(), .password = kafka->password()};
+    klog::KafkaWALAuth auth = {
+        .security_protocol = kafka->securityProtocol(),
+        .username = kafka->username(),
+        .password = kafka->password(),
+        .ssl_ca_cert_file = kafka->sslCaCertFile()
+    };
     consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(kafka->brokers(), auth, record_consume_timeout_ms);
     consumer->initTopicHandle(consume_ctx);
 }

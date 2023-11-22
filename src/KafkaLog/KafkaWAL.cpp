@@ -373,12 +373,16 @@ void KafkaWAL::initProducerHandle()
     if (!settings->debug.empty())
         producer_params.emplace_back("debug", settings->debug);
 
-    if (boost::iequals(settings->auth.security_protocol, "SASL_SSL"))
+    if (boost::iequals(settings->auth.security_protocol, "SASL_PLAINTEXT")
+        || boost::iequals(settings->auth.security_protocol, "SASL_SSL"))
     {
         producer_params.emplace_back("sasl.mechanisms", "PLAIN");
         producer_params.emplace_back("sasl.username", settings->auth.username.c_str());
         producer_params.emplace_back("sasl.password", settings->auth.password.c_str());
     }
+
+    if (boost::iequals(settings->auth.security_protocol, "SASL_SSL"))
+        producer_params.emplace_back("ssl.ca.location", settings->auth.ssl_ca_cert_file.c_str());
 
     auto cb_setup = [](rd_kafka_conf_t * kconf) {
         rd_kafka_conf_set_stats_cb(kconf, &KafkaWALStats::logStats);

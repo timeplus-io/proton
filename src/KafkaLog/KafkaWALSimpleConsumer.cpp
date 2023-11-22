@@ -95,12 +95,16 @@ void KafkaWALSimpleConsumer::initHandle()
         consumer_params.emplace_back("debug", settings->debug);
     }
 
-    if (boost::iequals(settings->auth.security_protocol, "SASL_SSL"))
+    if (boost::iequals(settings->auth.security_protocol, "SASL_PLAINTEXT")
+        || boost::iequals(settings->auth.security_protocol, "SASL_SSL"))
     {
         consumer_params.emplace_back("sasl.mechanisms", "PLAIN");
         consumer_params.emplace_back("sasl.username", settings->auth.username.c_str());
         consumer_params.emplace_back("sasl.password", settings->auth.password.c_str());
     }
+
+    if (boost::iequals(settings->auth.security_protocol, "SASL_SSL"))
+        consumer_params.emplace_back("ssl.ca.location", settings->auth.ssl_ca_cert_file.c_str());
 
     auto cb_setup = [](rd_kafka_conf_t * kconf) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         rd_kafka_conf_set_stats_cb(kconf, &KafkaWALStats::logStats);

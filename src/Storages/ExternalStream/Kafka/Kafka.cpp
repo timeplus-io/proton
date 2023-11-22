@@ -156,6 +156,7 @@ std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const s
             .security_protocol = securityProtocol(),
             .username = username(),
             .password = password(),
+            .ssl_ca_cert_file = sslCaCertFile(),
         };
 
         auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
@@ -238,7 +239,11 @@ void Kafka::validate(const std::vector<int32_t> & shards_to_query)
         {
             /// We haven't describe the topic yet
             klog::KafkaWALAuth auth = {
-                .security_protocol = settings->security_protocol.value, .username = settings->username.value, .password = settings->password.value};
+                .security_protocol = settings->security_protocol.value,
+                .username = settings->username.value,
+                .password = settings->password.value,
+                .ssl_ca_cert_file = settings->ssl_ca_cert_file.value,
+            };
 
             auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
 

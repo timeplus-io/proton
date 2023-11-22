@@ -167,12 +167,16 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
     /// properies from settings have higher priority
     producer_params.emplace_back("bootstrap.servers", kafka->brokers());
     producer_params.emplace_back("security.protocol", kafka->securityProtocol());
-    if (boost::iequals(kafka->securityProtocol(), "SASL_SSL"))
+    if (boost::iequals(kafka->securityProtocol(), "SASL_PLAINTEXT")
+        || boost::iequals(kafka->securityProtocol(), "SASL_SSL"))
     {
         producer_params.emplace_back("sasl.mechanisms", "PLAIN");
         producer_params.emplace_back("sasl.username", kafka->username());
         producer_params.emplace_back("sasl.password", kafka->password());
     }
+
+    if (boost::iequals(kafka->securityProtocol(), "SASL_SSL"))
+        producer_params.emplace_back("ssl.ca.location", kafka->sslCaCertFile());
 
     auto * conf = rd_kafka_conf_new();
     char errstr[512]{'\0'};

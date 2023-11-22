@@ -14,6 +14,7 @@ struct KafkaWALAuth
     std::string security_protocol;
     std::string username;
     std::string password;
+    std::string ssl_ca_cert_file;
 };
 
 struct KafkaWALSettings
@@ -28,7 +29,8 @@ struct KafkaWALSettings
     KafkaWALAuth auth = {
         .security_protocol = "plaintext",
         .username = "",
-        .password = ""
+        .password = "",
+        .ssl_ca_cert_file = ""
     };
     /// FIXME, SASL, SSL etc support
 
@@ -117,6 +119,10 @@ struct KafkaWALSettings
         settings.push_back(fmt::format("shared_subscription_flush_threshold_count={}", shared_subscription_flush_threshold_count));
         settings.push_back(fmt::format("shared_subscription_flush_threshold_bytes={}", shared_subscription_flush_threshold_bytes));
         settings.push_back(fmt::format("shared_subscription_flush_threshold_ms={}", shared_subscription_flush_threshold_ms));
+        settings.push_back(fmt::format("auth.security.protocol={}", auth.security_protocol));
+        settings.push_back(fmt::format("auth.username={}", auth.username));
+        settings.push_back(fmt::format("auth.password={}", auth.password));
+        settings.push_back(fmt::format("auth.ssl.ca.location={}", auth.ssl_ca_cert_file));
 
         return boost::algorithm::join(settings, " ");
     }
