@@ -39,7 +39,188 @@ DB::LightChunk prepareChunk(size_t rows, size_t start_value)
     return DB::LightChunk(std::move(columns));
 }
 
-void commonTest(size_t keys, size_t page_size, size_t total_pages, size_t keep_versions)
+
+void checkLess(
+    const DB::ColumnPtr & asof_column,
+    const DB::Streaming::PagedAsofRowRefs<DB::LightChunk>::RowRefDataBlock * result,
+    size_t keep_versions,
+    size_t keys,
+    size_t row)
+{
+    /// Less => source column < target column
+    if (keep_versions <= keys)
+    {
+        /// [keys - keep_versions + 1, keys] are kept around
+        /// For less, source keys in range [0, keys) can find a match
+        if (row < keys)
+        {
+            ASSERT_NE(result, nullptr);
+            const auto & found_columns = result->block().getColumns();
+            if (row < keys - keep_versions)
+                EXPECT_EQ(found_columns[0]->getUInt(result->row_num), keys - keep_versions + 1);
+            else
+                EXPECT_EQ(asof_column->getUInt(row) + 1, found_columns[0]->getUInt(result->row_num));
+        }
+        else
+        {
+            EXPECT_EQ(result, nullptr);
+        }
+    }
+    else
+    {
+        /// All keys [1, keys] are kept around, so except the last 2 key (key = keys, keys + 1) can't be found (Less),
+        /// other keys shall find a perfect match
+        if (row < keys)
+        {
+            ASSERT_NE(result, nullptr);
+            const auto & found_columns = result->block().getColumns();
+            EXPECT_EQ(asof_column->getUInt(row) + 1, found_columns[0]->getUInt(result->row_num));
+        }
+        else
+        {
+            EXPECT_EQ(result, nullptr);
+        }
+    }
+}
+
+void checkLessOrEquals(
+    const DB::ColumnPtr & asof_column,
+    const DB::Streaming::PagedAsofRowRefs<DB::LightChunk>::RowRefDataBlock * result,
+    size_t keep_versions,
+    size_t keys,
+    size_t row)
+{
+    /// Less => source column <= target column
+    if (keep_versions <= keys)
+    {
+        /// [keys - keep_versions + 1, keys] are kept around
+        /// For lessOrEqual, source keys in range [0, keys] can find a match
+        if (row < keys + 1)
+        {
+            ASSERT_NE(result, nullptr);
+            const auto & found_columns = result->block().getColumns();
+            if (row < keys - keep_versions + 1)
+                EXPECT_EQ(found_columns[0]->getUInt(result->row_num), keys - keep_versions + 1);
+            else
+                EXPECT_EQ(asof_column->getUInt(row), found_columns[0]->getUInt(result->row_num));
+        }
+        else
+        {
+            if (result)
+            {
+                const auto & found_columns = result->block().getColumns();
+                std::cout << found_columns[0]->getUInt(result->row_num) << " " << row << "\n";
+            }
+            EXPECT_EQ(result, nullptr);
+        }
+    }
+    else
+    {
+        /// All keys [1, keys] are kept around, so except the last 1 key keys + 1 can't be found (Less),
+        /// other keys shall find a perfect match
+        if (row < keys + 1)
+        {
+            ASSERT_NE(result, nullptr);
+            const auto & found_columns = result->block().getColumns();
+            if (row != 0)
+                EXPECT_EQ(asof_column->getUInt(row), found_columns[0]->getUInt(result->row_num));
+            else
+                EXPECT_EQ(asof_column->getUInt(row) + 1, found_columns[0]->getUInt(result->row_num));
+        }
+        else
+        {
+            EXPECT_EQ(result, nullptr);
+        }
+    }
+}
+
+void checkGreater(
+    const DB::ColumnPtr & asof_column,
+    const DB::Streaming::PagedAsofRowRefs<DB::LightChunk>::RowRefDataBlock * result,
+    size_t keep_versions,
+    size_t keys,
+    size_t row)
+{
+    /// Greater => source column > target column
+    if (keep_versions <= keys)
+    {
+        /// [keys - keep_version + 1, keys] are kept around
+        /// For greater, source keys in range [keys - keep_version + 2, keys] can find a perfect match
+        if (row < keys - keep_versions + 2)
+        {
+            EXPECT_EQ(result, nullptr);
+        }
+        else
+        {
+            ASSERT_NE(result, nullptr);
+            const auto & found_columns = result->block().getColumns();
+            EXPECT_EQ(asof_column->getUInt(row), found_columns[0]->getUInt(result->row_num) + 1);
+        }
+    }
+    else
+    {
+        /// All keys [1, keys] are kept around, so except the first 2 key (key = 0, 1) can't be found (Greater),
+        /// other keys shall find a perfect match
+        if (row > 1)
+        {
+            ASSERT_NE(result, nullptr);
+            const auto & found_columns = result->block().getColumns();
+            EXPECT_EQ(asof_column->getUInt(row), found_columns[0]->getUInt(result->row_num) + 1);
+        }
+        else
+        {
+            EXPECT_EQ(result, nullptr);
+        }
+    }
+}
+
+void checkGreaterOrEquals(
+    const DB::ColumnPtr & asof_column,
+    const DB::Streaming::PagedAsofRowRefs<DB::LightChunk>::RowRefDataBlock * result,
+    size_t keep_versions,
+    size_t keys,
+    size_t row)
+{
+    /// Greater => source column >= target column
+    if (keep_versions <= keys)
+    {
+        /// [keys - keep_version + 1, keys] are kept around
+        /// For greater, source keys in range [keys - keep_version + 1, keys] can find a perfect match
+        if (row < keys - keep_versions + 1)
+        {
+            EXPECT_EQ(result, nullptr);
+        }
+        else
+        {
+            ASSERT_NE(result, nullptr);
+            const auto & found_columns = result->block().getColumns();
+            if (row != keys + 1)
+                EXPECT_EQ(asof_column->getUInt(row), found_columns[0]->getUInt(result->row_num));
+            else
+                EXPECT_EQ(asof_column->getUInt(row), found_columns[0]->getUInt(result->row_num) + 1);
+        }
+    }
+    else
+    {
+        /// All keys [1, keys] are kept around, so except the first key (key = 0) can't be found (GreaterOrEquals),
+        /// other keys shall find a perfect match
+        if (row != 0)
+        {
+            ASSERT_NE(result, nullptr);
+            const auto & found_columns = result->block().getColumns();
+            if (row != keys + 1)
+                EXPECT_EQ(asof_column->getUInt(row), found_columns[0]->getUInt(result->row_num));
+            else
+                EXPECT_EQ(asof_column->getUInt(row), found_columns[0]->getUInt(result->row_num) + 1);
+        }
+        else
+        {
+            EXPECT_EQ(result, nullptr);
+        }
+    }
+}
+
+void commonTest(size_t keys, size_t page_size, size_t total_pages, size_t keep_versions, DB::ASOFJoinInequality inequality)
 {
     using BlockPages = DB::Streaming::RefCountDataBlockPages<DB::LightChunk>;
     DB::Streaming::CachedBlockMetrics metrics;
@@ -63,7 +244,7 @@ void commonTest(size_t keys, size_t page_size, size_t total_pages, size_t keep_v
 
         /// Index it in row refs
         for (size_t r = 0; r < chunk_rows; ++r)
-            paged_rows_refs.insert(DB::TypeIndex::UInt64, *asof_column, &block_pages, r, DB::ASOFJoinInequality::Less, keep_versions);
+            paged_rows_refs.insert(DB::TypeIndex::UInt64, *asof_column, &block_pages, r, inequality, keep_versions);
     }
 
     auto pages_kept_around = keep_versions / page_size / chunk_rows;
@@ -87,92 +268,44 @@ void commonTest(size_t keys, size_t page_size, size_t total_pages, size_t keep_v
     const auto & asof_column = probe_chunk.getColumns()[0];
     for (size_t row = 0; row < keys + 2; ++row)
     {
-        /// Less => source column < target column
-        const auto * result = paged_rows_refs.findAsof(DB::TypeIndex::UInt64, DB::ASOFJoinInequality::Less, *asof_column, row);
+        const auto * result = paged_rows_refs.findAsof(DB::TypeIndex::UInt64, inequality, *asof_column, row);
 
-        if (keep_versions <= keys)
+        switch (inequality)
         {
-            /// [keys - keep_versions + 1, keys] are kept around
-            /// For less, source keys in range [0, keys) can find a match
-            if (row < keys)
-            {
-                ASSERT_NE(result, nullptr);
-                const auto & found_columns = result->block().getColumns();
-                if (row < keys - keep_versions)
-                    ASSERT_EQ(found_columns[0]->getUInt(result->row_num), keys - keep_versions + 1);
-                else
-                    ASSERT_EQ(asof_column->getUInt(row) + 1, found_columns[0]->getUInt(result->row_num));
-            }
-            else
-            {
-                if (result)
-                {
-                    const auto & found_columns = result->block().getColumns();
-                    std::cout << found_columns[0]->getUInt(result->row_num) << " " << row << "\n";
-                }
-                ASSERT_EQ(result, nullptr);
-            }
-        }
-        else
-        {
-            /// All keys [1, keys] are kept around, so except the last 2 key (key = keys, keys + 1) can't be found (Less),
-            /// other keys shall find a perfect match
-            if (row < keys)
-            {
-                ASSERT_NE(result, nullptr);
-                const auto & found_columns = result->block().getColumns();
-                ASSERT_EQ(asof_column->getUInt(row) + 1, found_columns[0]->getUInt(result->row_num));
-            }
-            else
-            {
-                ASSERT_EQ(result, nullptr);
-            }
+            case DB::ASOFJoinInequality::Less:
+                checkLess(asof_column, result, keep_versions, keys, row);
+                break;
+            case DB::ASOFJoinInequality::LessOrEquals:
+                checkLessOrEquals(asof_column, result, keep_versions, keys, row);
+                break;
+            case DB::ASOFJoinInequality::Greater:
+                checkGreater(asof_column, result, keep_versions, keys, row);
+                break;
+            case DB::ASOFJoinInequality::GreaterOrEquals:
+                checkGreaterOrEquals(asof_column, result, keep_versions, keys, row);
+                break;
+            default:
+                break;
         }
     }
-#if 0
-        if (keep_versions <= keys)
-        {
-            /// [keys - keep_version + 1, keys] are kept around
-            /// For less, source keys in range [keys - keep_version + 2, keys] can find a perfect match
-            if (row < keys - keep_versions + 2)
-            {
-               ASSERT_EQ(result, nullptr);
-            }
-            else
-            {
-                ASSERT_NE(result, nullptr);
-                const auto & found_columns = result->block().getColumns();
-                ASSERT_EQ(asof_column->getUInt(row), found_columns[0]->getUInt(result->row_num) + 1);
-            }
-        }
-        else
-        {
-            /// All keys [1, keys] are kept around, so except the first 2 key (key = 0, 1) can't be found (Less),
-            /// other keys shall find a perfect match
-            if (row <= 1)
-            {
-                ASSERT_NE(result, nullptr);
-                const auto & found_columns = result->block().getColumns();
-                ASSERT_EQ(asof_column->getUInt(row), found_columns[0]->getUInt(result->row_num) + 1);
-            }
-            else
-            {
-                ASSERT_EQ(result, nullptr);
-            }
-        }
-    }
-#endif
 }
 }
 
 TEST(PagedAsofRowRefs, InsertAndFind)
 {
-    commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/3);
-    //    commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/8);
-    //    commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/9);
-    //    commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/16);
-    //    commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/17);
-    //    commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/1000);
-    //    commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/1024);
-    //    commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/1025);
+    for (auto inequality :
+         {DB::ASOFJoinInequality::Less,
+          DB::ASOFJoinInequality::LessOrEquals,
+          DB::ASOFJoinInequality::Greater,
+          DB::ASOFJoinInequality::GreaterOrEquals})
+    {
+        commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/3, inequality);
+        commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/8, inequality);
+        commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/9, inequality);
+        commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/16, inequality);
+        commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/17, inequality);
+        commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/1000, inequality);
+        commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/1024, inequality);
+        commonTest(/*keys=*/1024, /*page_size=*/16, /*total_pages=*/8, /*keep_versions=*/1025, inequality);
+    }
 }
