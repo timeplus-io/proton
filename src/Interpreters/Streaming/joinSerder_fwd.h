@@ -11,10 +11,10 @@ struct LightChunk;
 namespace Streaming
 {
 template <typename DataBlock>
-struct RefCountBlock;
+struct RefCountDataBlock;
 
 template <typename DataBlock>
-using RefCountBlockListIter = typename std::list<RefCountBlock<DataBlock>>::iterator;
+using RefCountBlockListIter = typename std::list<RefCountDataBlock<DataBlock>>::iterator;
 
 /// <Block *, serialized_index>
 using SerializedBlocksToIndices = std::unordered_map<std::uintptr_t, UInt32>;

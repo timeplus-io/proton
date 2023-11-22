@@ -748,14 +748,20 @@ bool TableJoin::allowParallelHashJoin() const
         return false;
     if (table_join.kind != JoinKind::Left && table_join.kind != JoinKind::Inner)
         return false;
-    if (table_join.strictness == JoinStrictness::Asof)
-        return false;
+    /// if (table_join.strictness == JoinStrictness::Asof)
+    ///    return false;
     if (isSpecialStorage() || !oneDisjunct())
         return false;
     return true;
 }
 
 /// proton : starts
+void TableJoin::addLagBehindKeys(const ASTPtr & left_table_ast, const ASTPtr & right_table_ast)
+{
+    left_table_lag_column = left_table_ast->getColumnName();
+    right_table_lag_column = right_table_ast->getAliasOrColumnName();
+}
+
 void TableJoin::validateRangeAsof(Int64 max_range) const
 {
     if (asof_inequality != ASOFJoinInequality::RangeBetween)
