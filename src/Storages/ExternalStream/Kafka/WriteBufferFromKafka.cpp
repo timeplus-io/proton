@@ -20,7 +20,6 @@ void WriteBufferFromKafka::nextImpl()
     if (!offset())
         return;
 
-    /// rd_kafka_produce only enqueue messages, it does not send messages out right away.
     auto err = rd_kafka_produce(
         topic,
         /// we want to trigger the partitioner function, check KafkaSink.cpp
