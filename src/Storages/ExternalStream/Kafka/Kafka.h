@@ -32,6 +32,7 @@ public:
 
     SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
 
+    bool produceOneMessagePerRow() const { return settings->one_message_per_row; }
     const String & brokers() const { return settings->brokers.value; }
     const String & dataFormat() const { return data_format; }
     const String & dataSchema() const { return settings->data_schema.value; }

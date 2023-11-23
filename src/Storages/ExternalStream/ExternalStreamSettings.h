@@ -17,6 +17,7 @@ class ASTStorage;
     M(String, password, "", "The password of external logstore", 0) \
     M(String, properties, "", "A semi-colon-separated key-value pairs for configuring the kafka client used by the external stream. A key-value pair is separated by a equal sign. Example: 'client.id=my-client-id;group.id=my-group-id'. Note, not all properties are supported, please check the document for supported properties.", 0) \
     M(String, sharding_expr, "", "An expression which will be evaluated on each row of data returned by the query to calculate the an integer which will be used to determine the ID of the partition to which the row of data will be sent. If not set, data are sent to any partition randomly.", 0) \
+    M(Bool, one_message_per_row, false, "If set to true, when send data to the Kafka external stream with row-based data format like `JSONEachRow`, it will produce one message per row.", 0) \
     /* those are log related settings */ \
     M(String, log_files, "", "A comma-separated list of log files", 0) \
     M(String, log_dir, "", "log root directory", 0) \
