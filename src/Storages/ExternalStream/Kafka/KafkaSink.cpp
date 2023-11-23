@@ -175,7 +175,7 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
         producer_params.emplace_back("sasl.password", kafka->password());
     }
 
-    if (boost::iequals(kafka->securityProtocol(), "SASL_SSL"))
+    if (boost::iequals(kafka->securityProtocol(), "SASL_SSL") && !kafka->sslCaCertFile().empty())
         producer_params.emplace_back("ssl.ca.location", kafka->sslCaCertFile());
 
     auto * conf = rd_kafka_conf_new();
