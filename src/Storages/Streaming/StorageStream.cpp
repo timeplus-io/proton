@@ -486,15 +486,19 @@ void StorageStream::readConcat(
     for (auto & stream_shard : shards_to_read)
     {
         auto create_streaming_source = [this, header, storage_snapshot, stream_shard, seek_to_info = query_info.seek_to_info, context_](
-                                           Int64 & max_sn_in_parts) {
+                                           Int64 & max_sn_in_parts) -> SourcePtr {
             if (max_sn_in_parts < 0)
             {
                 /// Fallback to seek streaming store
                 auto offsets = stream_shard->getOffsets(seek_to_info);
                 LOG_INFO(log, "Fused read fallbacks to seek stream for shard={} since there are no historical data", stream_shard->shard);
 
-                return std::make_shared<StreamingStoreSource>(
-                    stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log);
+                if (context_->getSettingsRef().query_resource_group.value == "shared")
+                    return source_multiplexers->createChannel(
+                        stream_shard, header.getNames(), storage_snapshot, context_, offsets[stream_shard->shard]);
+                else
+                    return std::make_shared<StreamingStoreSource>(
+                        stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log);
             }
 
             auto committed = stream_shard->storage->inMemoryCommittedSN();
@@ -526,7 +530,12 @@ void StorageStream::readConcat(
                     max_sn_in_parts,
                     committed);
 
-                return std::make_shared<StreamingStoreSource>(stream_shard, header, storage_snapshot, context_, max_sn_in_parts + 1, log);
+                if (context_->getSettingsRef().query_resource_group.value == "shared")
+                    return source_multiplexers->createChannel(
+                        stream_shard, header.getNames(), storage_snapshot, context_, max_sn_in_parts + 1);
+                else
+                    return std::make_shared<StreamingStoreSource>(
+                        stream_shard, header, storage_snapshot, context_, max_sn_in_parts + 1, log);
             }
             else
             {
@@ -542,8 +551,12 @@ void StorageStream::readConcat(
 
                 /// We need reset max_sn_in_parts to tell caller that we are seeking streaming store directly
                 max_sn_in_parts = -1;
-                return std::make_shared<StreamingStoreSource>(
-                    stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log);
+                if (context_->getSettingsRef().query_resource_group.value == "shared")
+                    return source_multiplexers->createChannel(
+                        stream_shard, header.getNames(), storage_snapshot, context_, offsets[stream_shard->shard]);
+                else
+                    return std::make_shared<StreamingStoreSource>(
+                        stream_shard, header, storage_snapshot, context_, offsets[stream_shard->shard], log);
             }
         };
 

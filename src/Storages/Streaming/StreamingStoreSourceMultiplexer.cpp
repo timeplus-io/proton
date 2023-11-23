@@ -280,6 +280,8 @@ std::pair<String, Int32> StreamingStoreSourceMultiplexer::getStreamShard() const
     return stream_shard->getStreamShard();
 }
 
+std::atomic<uint32_t> StreamingStoreSourceMultiplexers::multiplexer_id = 0;
+
 StreamingStoreSourceMultiplexers::StreamingStoreSourceMultiplexers(ContextPtr global_context_, Poco::Logger * log_)
     : global_context(std::move(global_context_)), log(log_)
 {
@@ -310,7 +312,8 @@ StreamingStoreSourceChannelPtr StreamingStoreSourceMultiplexers::createChannel(
     {
         multiplexers.emplace(
             shard,
-            StreamingStoreSourceMultiplexerPtrs{std::make_shared<StreamingStoreSourceMultiplexer>(0, stream_shard, global_context, log)});
+            StreamingStoreSourceMultiplexerPtrs{
+                std::make_shared<StreamingStoreSourceMultiplexer>(getMultiplexerID(), stream_shard, global_context, log)});
         iter = multiplexers.find(shard);
     }
 
@@ -342,7 +345,7 @@ StreamingStoreSourceChannelPtr StreamingStoreSourceMultiplexers::createChannel(
         /// If min channels is greater than > 20(default value), create another multiplexer for this shard
         if (min_channels > global_context->getSettingsRef().max_channels_per_resource_group.value)
         {
-            best_multiplexer = std::make_shared<StreamingStoreSourceMultiplexer>(iter->second.size(), stream_shard, global_context, log);
+            best_multiplexer = std::make_shared<StreamingStoreSourceMultiplexer>(getMultiplexerID(), stream_shard, global_context, log);
             iter->second.push_back(best_multiplexer);
         }
 
@@ -351,7 +354,7 @@ StreamingStoreSourceChannelPtr StreamingStoreSourceMultiplexers::createChannel(
     else
     {
         /// All multiplexers are shutdown
-        auto multiplexer{std::make_shared<StreamingStoreSourceMultiplexer>(iter->second.size(), stream_shard, global_context, log)};
+        auto multiplexer{std::make_shared<StreamingStoreSourceMultiplexer>(getMultiplexerID(), stream_shard, global_context, log)};
         iter->second.push_back(multiplexer);
         return multiplexer->createChannel(column_names, storage_snapshot, query_context);
     }
@@ -366,7 +369,7 @@ StreamingStoreSourceChannelPtr StreamingStoreSourceMultiplexers::createIndepende
     /// will startup after `StreamingStoreSourceChannel::recover()` and reset recovered sn
     /// The `multiplexer` is cached in created StreamingStoreSourceChannel, we can release this one
     auto multiplexer = std::make_shared<StreamingStoreSourceMultiplexer>(
-        0, std::move(stream_shard), global_context, log, [this](auto multiplexer_) { attachToSharedGroup(multiplexer_); });
+        getMultiplexerID(), std::move(stream_shard), global_context, log, [this](auto multiplexer_) { attachToSharedGroup(multiplexer_); });
     return multiplexer->createChannel(column_names, storage_snapshot, query_context);
 }
 
@@ -379,7 +382,7 @@ StreamingStoreSourceChannelPtr StreamingStoreSourceMultiplexers::createIndepende
 {
     /// The `multiplexer` is cached in created StreamingStoreSourceChannel, we can release this one
     auto multiplexer = std::make_shared<StreamingStoreSourceMultiplexer>(
-        0, std::move(stream_shard), global_context, log, [this](auto multiplexer_) { attachToSharedGroup(multiplexer_); });
+        getMultiplexerID(), std::move(stream_shard), global_context, log, [this](auto multiplexer_) { attachToSharedGroup(multiplexer_); });
     auto channel = multiplexer->createChannel(column_names, storage_snapshot, query_context);
     multiplexer->resetSequenceNumber(start_sn);
     multiplexer->startup();
@@ -394,8 +397,17 @@ void StreamingStoreSourceMultiplexers::attachToSharedGroup(StreamingStoreSourceM
     detached_multiplexers.clear();
 
     auto & multiplexer_list = multiplexers[multiplexer->stream_shard->getShard()];
-    for (auto & shared_multiplexer : multiplexer_list)
+    for (auto it = multiplexer_list.begin(); it != multiplexer_list.end();)
     {
+        if ((*it)->isShutdown())
+        {
+            it = multiplexer_list.erase(it);
+            continue;
+        }
+
+        auto & shared_multiplexer = *it;
+        ++it;
+
         /// Skip multiplexer that already have too many channels
         if (shared_multiplexer->totalChannels() > global_context->getSettingsRef().max_channels_per_resource_group.value)
             continue;
@@ -410,7 +422,6 @@ void StreamingStoreSourceMultiplexers::attachToSharedGroup(StreamingStoreSourceM
     }
 
     /// Not detach channels into any existed shared multiplexer, so we reuse it and join in shared groups
-    multiplexer->id = multiplexer_list.size(); /// it's thread safe
     multiplexer_list.emplace_back(std::move(multiplexer));
 }
 }

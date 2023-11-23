@@ -122,9 +122,13 @@ private:
 
     void attachToSharedGroup(StreamingStoreSourceMultiplexerPtr multiplexer);
 
+    uint32_t getMultiplexerID() { return multiplexer_id.fetch_add(1); }
+
 private:
     ContextPtr global_context;
     Poco::Logger * log;
+
+    static std::atomic<uint32_t> multiplexer_id;
 
     std::mutex multiplexers_mutex;
     std::unordered_map<Int32, StreamingStoreSourceMultiplexerPtrs> multiplexers;
