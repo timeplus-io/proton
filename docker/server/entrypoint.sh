@@ -291,6 +291,14 @@ if [ "$STREAM_STORAGE_TYPE" = "kafka" ]; then
                 exit 1
             fi
         fi
+
+        if [ -n "$STREAM_STORAGE_CA_CERT_FILE" ]; then
+            sed -i"" "s/# ssl_ca_cert_file:/ssl_ca_cert_file: $STREAM_STORAGE_CA_CERT_FILE/g" "$PROTON_CONFIG"
+            if [[ $? -ne 0 ]]; then
+                echo >&2 'Failed to set ca cert file.'
+                exit 1
+            fi
+        fi
     fi
 
     if [ -n "$STREAM_STORAGE_CLUSTER_ID" ]; then

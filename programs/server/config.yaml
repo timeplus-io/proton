@@ -990,10 +990,12 @@ cluster_settings:
             default: true # true means, the streaming storage will be used to provision system internal topics
             cluster_name: default-sys-kafka-cluster-name
             cluster_id: default-sys-kafka-cluster-id
-            security_protocol: PLAINTEXT # support PLAINTEXT, SASL_SSL
-            # if security_protocol is SASL_SSL, username and password should be specified.
+            security_protocol: PLAINTEXT # support PLAINTEXT, SASL_PLAINTEXT, SASL_SSL
+            # if security_protocol is SASL_PLAINTEXT, username and password should be specified.
             # username:
             # password:
+            # if security_protocol is SASL_SSL, ssl_ca_cert_file should be specified.
+            # ssl_ca_cert_file:
             # Setup the Kafka brokers here
             brokers: localhost:9092
             # Group ID used internally. Once it is setup, can't be changed.
