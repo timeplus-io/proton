@@ -1,9 +1,10 @@
+#include <Interpreters/Streaming/PagedAsofRowRefs.h>
+
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
 #include <Core/LightChunk.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Interpreters/Streaming/PagedAsofRowRefs.h>
 
 #include <gtest/gtest.h>
 
@@ -38,7 +39,6 @@ DB::LightChunk prepareChunk(size_t rows, size_t start_value)
 
     return DB::LightChunk(std::move(columns));
 }
-
 
 void checkLess(
     const DB::ColumnPtr & asof_column,

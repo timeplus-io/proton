@@ -4,6 +4,8 @@
 
 #include <benchmark/benchmark.h>
 
+namespace
+{
 struct RowRefWithRefCount
 {
     std::list<int32_t> * blocks;
@@ -272,6 +274,8 @@ void dequeLookup(benchmark::State & state, Args &&... args)
     for (size_t i = 0; auto _ : state)
         benchmark::DoNotOptimize(std::lower_bound(
             sorted_row_refs.begin(), sorted_row_refs.end(), Entry(i % (max_size << 1)), (ascending ? lessEntry : greaterEntry)));
+}
+
 }
 
 BENCHMARK_CAPTURE(vectorPerfVanilla, vectorPerfVanilla10, /*keep_versions=*/10ull);
