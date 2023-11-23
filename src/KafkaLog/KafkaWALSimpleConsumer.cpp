@@ -103,7 +103,7 @@ void KafkaWALSimpleConsumer::initHandle()
         consumer_params.emplace_back("sasl.password", settings->auth.password.c_str());
     }
 
-    if (boost::iequals(settings->auth.security_protocol, "SASL_SSL"))
+    if (boost::iequals(settings->auth.security_protocol, "SASL_SSL") && !settings->auth.ssl_ca_cert_file.empty())
         consumer_params.emplace_back("ssl.ca.location", settings->auth.ssl_ca_cert_file.c_str());
 
     auto cb_setup = [](rd_kafka_conf_t * kconf) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA

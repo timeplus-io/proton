@@ -109,7 +109,7 @@ void KafkaWALConsumer::initHandle()
         consumer_params.emplace_back("sasl.password", settings->auth.password.c_str());
     }
 
-    if (boost::iequals(settings->auth.security_protocol, "SASL_SSL"))
+    if (boost::iequals(settings->auth.security_protocol, "SASL_SSL") && !settings->auth.ssl_ca_cert_file.empty())
         consumer_params.emplace_back("ssl.ca.location", settings->auth.ssl_ca_cert_file.c_str());
 
     if (!settings->debug.empty())
