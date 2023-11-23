@@ -3,7 +3,7 @@
 #include <Core/LightChunk.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Interpreters/Streaming/AsofRowRefs.h>
+#include <Interpreters/Streaming/PagedAsofRowRefs.h>
 
 #include <gtest/gtest.h>
 
