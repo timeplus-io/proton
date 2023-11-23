@@ -138,8 +138,15 @@ Chunk StreamingStoreSourceBase::generate()
     if (isCancelled())
         return {};
 
-    if (auto * current = ckpt_ctx.exchange(nullptr, std::memory_order_relaxed); current)
-        return doCheckpoint(CheckpointContextPtr{current});
+    CheckpointContextPtr current;
+    {
+        std::scoped_lock lock(ckpt_mutex);
+        current = std::move(ckpt_ctx);
+        ckpt_ctx.reset();
+    }
+
+    if (current)
+        return doCheckpoint(current);
 
     if (result_chunks.empty() || iter == result_chunks.end())
     {
@@ -161,13 +168,14 @@ Chunk StreamingStoreSourceBase::generate()
 
 /// It basically initiate a checkpoint
 /// Since the checkpoint method is called in a different thread (CheckpointCoordinator)
-/// We nee make sure it is thread safe
+/// We need make sure it is thread safe
 void StreamingStoreSourceBase::checkpoint(CheckpointContextPtr ckpt_ctx_)
 {
     /// We assume the previous ckpt is already done
     /// Use std::atomic<std::shared_ptr<CheckpointContext>>
-    assert(!ckpt_ctx.load(std::memory_order_relaxed));
-    ckpt_ctx = new CheckpointContext(*ckpt_ctx_);
+    std::scoped_lock lock(ckpt_mutex);
+    assert(!ckpt_ctx);
+    ckpt_ctx = std::make_shared<CheckpointContext>(*ckpt_ctx_);
 }
 
 /// 1) Generate a checkpoint barrier

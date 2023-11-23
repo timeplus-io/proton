@@ -87,8 +87,9 @@ private:
     Int32 record_consume_timeout_ms = 100;
 
     /// For checkpoint
-    /// FIXME, switch to llvm-15
-    std::atomic<CheckpointContext *> ckpt_ctx;
+    /// FIXME, switch to llvm-15 atomic shared_ptr
+    CheckpointContextPtr ckpt_ctx TSA_PT_GUARDED_BY(ckpt_mutex);
+    std::mutex ckpt_mutex;
     struct State
     {
         void serialize(WriteBuffer & wb) const;

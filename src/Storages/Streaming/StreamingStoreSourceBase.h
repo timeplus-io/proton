@@ -1,6 +1,6 @@
 #pragma once
 
-#include "SourceColumnsDescription.h"
+#include <Storages/Streaming/SourceColumnsDescription.h>
 
 #include <Interpreters/Context_fwd.h>
 #include <NativeLog/Record/Record.h>
@@ -50,7 +50,8 @@ protected:
 
     Int64 last_sn = -1;
     Int64 last_epoch = -1;
-    /// FIXME, switch to llvm-15
-    std::atomic<CheckpointContext *> ckpt_ctx;
+    /// FIXME, switch to llvm-15 atomic shared_ptr
+    CheckpointContextPtr ckpt_ctx TSA_PT_GUARDED_BY(ckpt_mutex);
+    std::mutex ckpt_mutex;
 };
 }
