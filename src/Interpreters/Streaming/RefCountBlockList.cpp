@@ -1,4 +1,4 @@
-#include <Interpreters/Streaming/RefCountBlockList.h>
+#include <Interpreters/Streaming/RefCountDataBlockList.h>
 
 #include <Formats/SimpleNativeReader.h>
 #include <Formats/SimpleNativeWriter.h>
@@ -12,7 +12,7 @@ namespace DB
 namespace Streaming
 {
 template <typename DataBlock>
-void RefCountBlockList<DataBlock>::serialize(
+void RefCountDataBlockList<DataBlock>::serialize(
     const Block & header, WriteBuffer & wb, SerializedBlocksToIndices * serialized_blocks_to_indices) const
 {
     DB::writeIntBinary(min_ts, wb);
@@ -39,7 +39,7 @@ void RefCountBlockList<DataBlock>::serialize(
 }
 
 template <typename DataBlock>
-void RefCountBlockList<DataBlock>::deserialize(
+void RefCountDataBlockList<DataBlock>::deserialize(
     const Block & header, ReadBuffer & rb, DeserializedIndicesToBlocks<DataBlock> * deserialized_indices_with_block)
 {
     DB::readIntBinary(min_ts, rb);
@@ -67,7 +67,7 @@ void RefCountBlockList<DataBlock>::deserialize(
     }
 }
 
-template struct RefCountBlockList<LightChunk>;
-template struct RefCountBlockList<LightChunkWithTimestamp>;
+template struct RefCountDataBlockList<LightChunk>;
+template struct RefCountDataBlockList<LightChunkWithTimestamp>;
 }
 }

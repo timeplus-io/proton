@@ -84,7 +84,7 @@ private:
 
     SERDE size_t late_rows = 0;
     SERDE CachedBlockMetrics cached_block_metrics;
-    SERDE RefCountBlockList<LightChunk> source_chunks;
+    SERDE RefCountDataBlockList<LightChunk> source_chunks;
 
     Port::Data input_data;
     std::list<Chunk> output_chunks;

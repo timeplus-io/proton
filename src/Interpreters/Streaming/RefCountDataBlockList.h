@@ -13,11 +13,11 @@ namespace DB::Streaming
 {
 
 template <typename DataBlock>
-struct RefCountBlockList
+struct RefCountDataBlockList
 {
-    explicit RefCountBlockList(CachedBlockMetrics & metrics_) : metrics(metrics_) { }
+    explicit RefCountDataBlockList(CachedBlockMetrics & metrics_) : metrics(metrics_) { }
 
-    ~RefCountBlockList()
+    ~RefCountDataBlockList()
     {
         metrics.current_total_blocks -= blocks.size();
         metrics.current_total_bytes -= total_bytes;

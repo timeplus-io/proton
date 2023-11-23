@@ -2,7 +2,7 @@
 #include <Core/Block.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Interpreters/Streaming/CachedBlockMetrics.h>
-#include <Interpreters/Streaming/RefCountBlockList.h>
+#include <Interpreters/Streaming/RefCountDataBlockList.h>
 #include <Interpreters/Streaming/RowRefs.h>
 
 #include <gtest/gtest.h>
@@ -10,10 +10,10 @@
 namespace
 {
 /// TODO, other types
-std::shared_ptr<DB::Streaming::RefCountBlockList<DB::Block>>
-forEachRightBlock(DB::Streaming::CachedBlockMetrics & join_metrics, std::function<void(DB::Streaming::RefCountBlockList<DB::Block>*)> callback = {})
+std::shared_ptr<DB::Streaming::RefCountDataBlockList<DB::Block>>
+forEachRightBlock(DB::Streaming::CachedBlockMetrics & join_metrics, std::function<void(DB::Streaming::RefCountDataBlockList<DB::Block>*)> callback = {})
 {
-    auto blocks = std::make_shared<DB::Streaming::RefCountBlockList<DB::Block>>(join_metrics);
+    auto blocks = std::make_shared<DB::Streaming::RefCountDataBlockList<DB::Block>>(join_metrics);
     {
         auto type = std::make_shared<DB::DataTypeDateTime64>(3);
         auto mutable_col = type->createColumn();
@@ -104,7 +104,7 @@ void commonTest(const std::vector<Case> & cases)
 
     for (const auto & test_case : cases)
     {
-        std::shared_ptr<DB::Streaming::RefCountBlockList<DB::Block>> ret_right_blocks;
+        std::shared_ptr<DB::Streaming::RefCountDataBlockList<DB::Block>> ret_right_blocks;
         auto left_block{prepareLeftBlock(join_metrics)};
 
         auto & asof_col = left_block.getByPosition(0);
