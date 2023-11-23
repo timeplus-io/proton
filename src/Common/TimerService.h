@@ -1,6 +1,7 @@
 #pragma once
 
-#include "ThreadPool.h"
+#include <base/defines.h>
+#include <Common/ThreadPool.h>
 
 #include <muduo/net/EventLoop.h>
 
@@ -18,6 +19,7 @@ public:
     /// Safe to call from other threads.
     muduo::net::TimerId runAt(muduo::Timestamp time, muduo::net::TimerCallback cb)
     {
+        std::lock_guard lock(event_loop_mutex);
         assert(event_loop);
         return event_loop->runAt(time, std::move(cb));
     }
@@ -26,6 +28,7 @@ public:
     /// Safe to call from other threads.
     muduo::net::TimerId runAfter(double delay, muduo::net::TimerCallback cb)
     {
+        std::lock_guard lock(event_loop_mutex);
         assert(event_loop);
         return event_loop->runAfter(delay, std::move(cb));
     }
@@ -34,6 +37,7 @@ public:
     /// Safe to call from other threads.
     muduo::net::TimerId runEvery(double interval, muduo::net::TimerCallback cb)
     {
+        std::lock_guard lock(event_loop_mutex);
         assert(event_loop);
         return event_loop->runEvery(interval, std::move(cb));
     }
@@ -42,6 +46,7 @@ public:
     /// Safe to call from other threads.
     void cancel(muduo::net::TimerId timer_id)
     {
+        std::lock_guard lock(event_loop_mutex);
         assert(event_loop);
         return event_loop->cancel(timer_id);
     }
@@ -51,7 +56,8 @@ private:
 
 private:
     ThreadPool looper;
-    std::shared_ptr<muduo::net::EventLoop> event_loop;
+    std::shared_ptr<muduo::net::EventLoop> event_loop TSA_PT_GUARDED_BY(event_loop_mutex);
     std::atomic<muduo::net::EventLoop *> eloop_init_guard = nullptr;
+    std::mutex event_loop_mutex;
 };
 }
