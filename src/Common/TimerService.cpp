@@ -13,7 +13,7 @@ void TimerService::startup()
 void TimerService::shutdown()
 {
     {
-        std::lock_guard<std::mutex> lock(event_loop_mutex);
+        std::scoped_lock lock(event_loop_mutex);
         if (event_loop)
         {
             event_loop->quit();
@@ -35,7 +35,7 @@ void TimerService::startEventLoop()
     /// Event loop needs run and dtor in the its init thread
     auto eloop = std::make_shared<muduo::net::EventLoop>();
     {
-        std::lock_guard<std::mutex> lock(event_loop_mutex);
+        std::scoped_lock lock(event_loop_mutex);
         event_loop = eloop;
     }
     eloop_init_guard.store(eloop.get());

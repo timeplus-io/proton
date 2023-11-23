@@ -19,7 +19,7 @@ public:
     /// Safe to call from other threads.
     muduo::net::TimerId runAt(muduo::Timestamp time, muduo::net::TimerCallback cb)
     {
-        std::lock_guard lock(event_loop_mutex);
+        std::scoped_lock lock(event_loop_mutex);
         assert(event_loop);
         return event_loop->runAt(time, std::move(cb));
     }
@@ -28,7 +28,7 @@ public:
     /// Safe to call from other threads.
     muduo::net::TimerId runAfter(double delay, muduo::net::TimerCallback cb)
     {
-        std::lock_guard lock(event_loop_mutex);
+        std::scoped_lock lock(event_loop_mutex);
         assert(event_loop);
         return event_loop->runAfter(delay, std::move(cb));
     }
@@ -37,7 +37,7 @@ public:
     /// Safe to call from other threads.
     muduo::net::TimerId runEvery(double interval, muduo::net::TimerCallback cb)
     {
-        std::lock_guard lock(event_loop_mutex);
+        std::scoped_lock lock(event_loop_mutex);
         assert(event_loop);
         return event_loop->runEvery(interval, std::move(cb));
     }
@@ -46,7 +46,7 @@ public:
     /// Safe to call from other threads.
     void cancel(muduo::net::TimerId timer_id)
     {
-        std::lock_guard lock(event_loop_mutex);
+        std::scoped_lock lock(event_loop_mutex);
         assert(event_loop);
         return event_loop->cancel(timer_id);
     }
