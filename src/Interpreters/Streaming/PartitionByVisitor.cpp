@@ -8,6 +8,7 @@
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTWindowDefinition.h>
+#include <Parsers/formatAST.h>
 
 namespace DB
 {
@@ -53,7 +54,8 @@ void PartitionByMatcher::visit(ASTPtr & ast, Data & data)
                 return;
 
             /// Convert function to window function.
-            node_func->code_name = node_func->getColumnName();
+            /// Always show original function
+            node_func->code_name = DB::serializeAST(*node_func);
             node_func->window_definition = data.win_define->clone();
             node_func->is_window_function = true;
         }

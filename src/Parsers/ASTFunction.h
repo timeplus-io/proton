@@ -20,8 +20,12 @@ public:
     /// parameters - for parametric aggregate function. Example: quantile(0.9)(x) - what in first parens are 'parameters'.
     ASTPtr parameters;
 
-    /// proton: starts. If code_name exists, we shall show 'code_name' instead of 'name(...)'
+    /// proton: starts.
+    /// If code_name exists, we shall show 'code_name' instead of 'name(...)' (covered whole function show name)
     String code_name;
+
+    /// If covered_name exists, we shall show 'covered_name(...)' instead of 'name(...)' (Only covered function name)
+    String covered_name;
     /// proton: ends.
 
     bool is_window_function = false;
