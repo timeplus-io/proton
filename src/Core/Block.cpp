@@ -333,6 +333,16 @@ size_t Block::getPositionByName(const std::string & name) const
     return it->second;
 }
 
+/// proton : starts
+std::optional<size_t> Block::tryGetPositionByName(const std::string & name) const
+{
+    auto it = index_by_name.find(name);
+    if (index_by_name.end() == it)
+        return {};
+
+    return it->second;
+}
+/// proton : ends
 
 void Block::checkNumberOfRows(bool allow_null_columns) const
 {

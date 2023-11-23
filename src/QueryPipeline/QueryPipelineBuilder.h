@@ -201,8 +201,8 @@ public:
         JoinPtr join,
         const Block & out_header,
         size_t max_block_size,
-        size_t join_max_cached_bytes,
         size_t max_streams,
+        size_t join_max_cached_bytes,
         Processors * collected_processors = nullptr);
     /// proton: ends.
 

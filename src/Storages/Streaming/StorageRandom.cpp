@@ -33,8 +33,8 @@
 #include <base/unaligned.h>
 #include <Common/ProtonCommon.h>
 #include <Common/SipHash.h>
-#include <Common/randomSeed.h>
 #include <Common/logger_useful.h>
+#include <Common/randomSeed.h>
 
 
 namespace DB
@@ -594,9 +594,10 @@ StorageRandom::StorageRandom(
     const ColumnsDescription & columns_,
     const String & comment,
     std::optional<UInt64> random_seed_,
+    UInt64 shards_,
     UInt64 events_per_second_,
     UInt64 interval_time_)
-    : IStorage(table_id_), events_per_second(events_per_second_), interval_time(interval_time_)
+    : IStorage(table_id_), shards(shards_), events_per_second(events_per_second_), interval_time(interval_time_)
 {
     random_seed = random_seed_ ? sipHash64(*random_seed_) : randomSeed();
     StorageInMemoryMetadata storage_metadata;
@@ -627,22 +628,22 @@ void registerStorageRandom(StorageFactory & factory)
 
         auto storage_random_settings = std::make_unique<StorageRandomSettings>();
         if (args.storage_def->settings)
-        {
             storage_random_settings->loadFromQuery(*args.storage_def);
-        }
 
         if (storage_random_settings->interval_time.value == 0 || storage_random_settings->interval_time.value > 1000)
-        {
             throw Exception(
                 "Storage Random requires eps and interval_time to be set and interval_time should be less than 1000ms and bigger than 0ms",
                 ErrorCodes::INVALID_SETTING_VALUE);
-        }
+
+        if (storage_random_settings->shards.value == 0)
+            throw Exception("Invalid shards, shall not be 0", ErrorCodes::INVALID_SETTING_VALUE);
 
         return StorageRandom::create(
             args.table_id,
             args.columns,
             args.comment,
             random_seed,
+            storage_random_settings->shards.value,
             storage_random_settings->eps.value,
             storage_random_settings->interval_time.value);
     };
@@ -678,10 +679,10 @@ Pipe StorageRandom::read(
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
     size_t max_block_size,
-    size_t num_streams)
+    size_t /*num_streams*/)
 {
     Pipes pipes;
-    pipes.reserve(num_streams);
+    pipes.reserve(shards);
 
     Block block_header;
     const ColumnsDescription & our_columns = storage_snapshot->metadata->getColumns();
@@ -695,18 +696,19 @@ Pipe StorageRandom::read(
     pcg64 generate(random_seed);
 
     /// Approx max events
-    auto max_events = context->getSettingsRef().max_events;
-    auto events_share = max_events / num_streams;
-    auto events_remainder = max_events % num_streams;
+    const auto & settings = context->getSettingsRef();
+    auto max_events = settings.max_events;
+    auto events_share = max_events / shards;
+    auto events_remainder = max_events % shards;
 
     /// setting random stream eps in query time, if generate_eps is not defalut value, use generate_eps as eps first.
-    UInt64 eps = context->getSettingsRef().eps < 0 ? events_per_second : static_cast<UInt64>(context->getSettingsRef().eps);
-    if (eps < num_streams)
+    UInt64 eps = settings.eps < 0 ? events_per_second : static_cast<UInt64>(settings.eps);
+    if (eps < shards)
     {
         if (eps == 0)
         {
             /// special case eps = 0: means no limit
-            for (size_t i = 0; i < num_streams - 1; i++)
+            for (size_t i = 0; i < shards - 1; i++)
             {
                 pipes.emplace_back(std::make_shared<GenerateRandomSource>(
                     max_block_size,
@@ -748,10 +750,10 @@ Pipe StorageRandom::read(
     }
     else
     {
-        size_t eps_thread = eps / num_streams;
-        size_t remainder = eps % num_streams;
+        size_t eps_thread = eps / shards;
+        size_t remainder = eps % shards;
         /// number of data generated per second is bigger than the number of thread;
-        for (size_t i = 0; i < num_streams - 1; i++)
+        for (size_t i = 0; i < shards - 1; i++)
         {
             pipes.emplace_back(std::make_shared<GenerateRandomSource>(
                 max_block_size,

@@ -1,0 +1,2 @@
+proton_add_executable (vector_deque_perf vector_deque_perf.cpp)
+target_link_libraries (vector_deque_perf PRIVATE ch_contrib::gbenchmark_all)

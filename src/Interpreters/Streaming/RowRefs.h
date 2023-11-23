@@ -6,6 +6,7 @@
 #include <Interpreters/RowRefs.h>
 #include <Interpreters/Streaming/RangeAsofJoinContext.h>
 #include <Interpreters/Streaming/RefCountBlockList.h>
+#include <Interpreters/Streaming/SortedLookupContainer.h>
 #include <Interpreters/Streaming/joinSerder_fwd.h>
 #include <Interpreters/Streaming/joinTuple.h>
 #include <base/sort.h>
@@ -280,67 +281,6 @@ struct RowRefListMultipleRef
 template <typename DataBlock>
 using RowRefListMultipleRefPtr = std::unique_ptr<RowRefListMultipleRef<DataBlock>>;
 
-template <typename RowRefDataBlock, typename TEntry>
-class SortedLookupVector
-{
-public:
-    using Base = std::vector<TEntry>;
-
-    void insert(TEntry entry, bool ascending)
-    {
-        auto it = std::lower_bound(array.begin(), array.end(), entry, (ascending ? less : greater));
-        array.insert(it, entry);
-    }
-
-    const RowRefDataBlock * upperBound(const TEntry & k, bool ascending)
-    {
-        auto it = std::upper_bound(array.cbegin(), array.cend(), k, (ascending ? less : greater));
-        if (it != array.cend())
-            return &(it->row_ref);
-        return nullptr;
-    }
-
-    const RowRefDataBlock * lowerBound(const TEntry & k, bool ascending)
-    {
-        auto it = std::lower_bound(array.cbegin(), array.cend(), k, (ascending ? less : greater));
-        if (it != array.cend())
-            return &(it->row_ref);
-        return nullptr;
-    }
-
-    void truncateTo(size_t max_size, bool ascending)
-    {
-        if (array.size() > max_size)
-        {
-            if (ascending)
-                array.erase(array.begin(), array.begin() + array.size() - max_size);
-            else
-                array.erase(array.end() - (array.size() - max_size), array.end());
-
-            array.shrink_to_fit();
-        }
-    }
-
-    using iterator = typename Base::iterator;
-    using const_iterator = typename Base::const_iterator;
-
-    iterator begin() { return array.begin(); }
-    iterator end() { return array.end(); }
-
-    size_t size() const { return array.size(); }
-    void resize(size_t s) { array.resize(s); }
-
-    const_iterator begin() const { return array.begin(); }
-    const_iterator end() const { return array.end(); }
-
-private:
-    Base array;
-
-    static bool less(const TEntry & a, const TEntry & b) { return a.asof_value < b.asof_value; }
-
-    static bool greater(const TEntry & a, const TEntry & b) { return a.asof_value > b.asof_value; }
-};
-
 template <typename DataBlock>
 class AsofRowRefs
 {
@@ -349,8 +289,9 @@ public:
     template <typename T>
     struct Entry
     {
-        using LookupType = SortedLookupVector<RowRefDataBlock, Entry<T>>;
+        using LookupType = SortedLookupContainer<RowRefDataBlock, Entry<T>>;
         using LookupPtr = std::unique_ptr<LookupType>;
+
         T asof_value;
         RowRefDataBlock row_ref;
 

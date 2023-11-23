@@ -2,47 +2,15 @@
 
 #include <Core/LightChunk.h>
 #include <Interpreters/Streaming/CachedBlockMetrics.h>
+#include <Interpreters/Streaming/RefCountDataBlock.h>
 #include <Interpreters/Streaming/joinSerder_fwd.h>
 #include <base/SerdeTag.h>
 #include <base/defines.h>
 
 #include <list>
 
-namespace DB
+namespace DB::Streaming
 {
-namespace Streaming
-{
-template <typename DataBlock>
-struct RefCountBlock
-{
-    /// init ref count to row count for RowRefsWithCount case
-    /// When refcount drops to zero, which means nobody is referencing any row
-    /// in the block so the block will be GCed
-    explicit RefCountBlock(DataBlock && block_) : block(std::move(block_)), refcnt(static_cast<uint32_t>(block.rows())) { }
-    explicit RefCountBlock(const DataBlock & block_) : block(block_), refcnt(static_cast<uint32_t>(block.rows())) { }
-
-    RefCountBlock(RefCountBlock && other) noexcept : block(std::move(other.block)), refcnt(other.refcnt) { }
-
-    RefCountBlock & operator=(RefCountBlock && other) noexcept
-    {
-        block = std::move(other.block);
-        refcnt = other.refcnt;
-        return *this;
-    }
-
-    void ref() { ++refcnt; }
-
-    void deref()
-    {
-        assert(refcnt != 0);
-        --refcnt;
-    }
-
-    UInt32 refCount() const { return refcnt; }
-
-    DataBlock block;
-    UInt32 refcnt;
-};
 
 template <typename DataBlock>
 struct RefCountBlockList
@@ -84,7 +52,7 @@ struct RefCountBlockList
         ++metrics.gced_blocks;
     }
 
-    void erase(typename std::list<RefCountBlock<DataBlock>>::iterator iter)
+    void erase(typename std::list<RefCountDataBlock<DataBlock>>::iterator iter)
     {
         assert(iter->refCount() == 0);
         negateMetrics(iter->block);
@@ -106,8 +74,8 @@ struct RefCountBlockList
         return blocks.back().block;
     }
 
-    using iterator = typename std::list<RefCountBlock<DataBlock>>::iterator;
-    using const_iterator = typename std::list<RefCountBlock<DataBlock>>::const_iterator;
+    using iterator = typename std::list<RefCountDataBlock<DataBlock>>::iterator;
+    using const_iterator = typename std::list<RefCountDataBlock<DataBlock>>::const_iterator;
 
     auto begin() { return blocks.begin(); }
     auto end() { return blocks.end(); }
@@ -135,10 +103,9 @@ private:
     SERDE Int64 max_ts = std::numeric_limits<Int64>::min();
     SERDE size_t total_bytes = 0;
 
-    SERDE std::list<RefCountBlock<DataBlock>> blocks;
+    SERDE std::list<RefCountDataBlock<DataBlock>> blocks;
 
     CachedBlockMetrics & metrics;
 };
 
-}
 }
