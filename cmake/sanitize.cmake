@@ -54,7 +54,8 @@ if (SANITIZE)
         endif ()
 
     elseif (SANITIZE STREQUAL "thread")
-        set (TSAN_FLAGS "-fsanitize=thread")
+        # https://github.com/llvm/llvm-project/issues/59007
+        set (TSAN_FLAGS "-fsanitize=thread -lresolv")
         if (COMPILER_CLANG)
             set (TSAN_FLAGS "${TSAN_FLAGS} -fsanitize-blacklist=${PROJECT_SOURCE_DIR}/tests/tsan_suppressions.txt")
         endif()
