@@ -7,6 +7,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int INVALID_EVENT_LOOP_STATE;
+}
+
 /// TimerService runs callbacks at specific time at best effort in a separated thread.
 /// Callbacks are expected to run quick to avoid stall the whole timer pipeline
 class TimerService final
@@ -20,7 +25,10 @@ public:
     muduo::net::TimerId runAt(muduo::Timestamp time, muduo::net::TimerCallback cb)
     {
         std::scoped_lock lock(event_loop_mutex);
-        assert(event_loop);
+
+        if (!event_loop)
+            throw Exception(ErrorCodes::INVALID_EVENT_LOOP_STATE, "Event loop is not initialized or has been shut down");
+
         return event_loop->runAt(time, std::move(cb));
     }
 
@@ -29,7 +37,10 @@ public:
     muduo::net::TimerId runAfter(double delay, muduo::net::TimerCallback cb)
     {
         std::scoped_lock lock(event_loop_mutex);
-        assert(event_loop);
+
+        if (!event_loop)
+            throw Exception(ErrorCodes::INVALID_EVENT_LOOP_STATE, "Event loop is not initialized or has been shut down");
+
         return event_loop->runAfter(delay, std::move(cb));
     }
 
@@ -38,7 +49,10 @@ public:
     muduo::net::TimerId runEvery(double interval, muduo::net::TimerCallback cb)
     {
         std::scoped_lock lock(event_loop_mutex);
-        assert(event_loop);
+
+        if (!event_loop)
+            throw Exception(ErrorCodes::INVALID_EVENT_LOOP_STATE, "Event loop is not initialized or has been shut down");
+
         return event_loop->runEvery(interval, std::move(cb));
     }
 
@@ -47,7 +61,10 @@ public:
     void cancel(muduo::net::TimerId timer_id)
     {
         std::scoped_lock lock(event_loop_mutex);
-        assert(event_loop);
+
+        if (!event_loop)
+            throw Exception(ErrorCodes::INVALID_EVENT_LOOP_STATE, "Event loop is not initialized or has been shut down");
+
         return event_loop->cancel(timer_id);
     }
 
