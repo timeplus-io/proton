@@ -149,6 +149,42 @@ BENCHMARK_CAPTURE(
 
 BENCHMARK_CAPTURE(
     refCountDataBlockPages,
+    Column3ChunkRows1Chunks1000000PageSize512,
+    /*chunk_columns=*/3,
+    /*chunk_rows=*/1,
+    /*chunks*=*/1000'000,
+    /*page_size=*/512)
+    ->Iterations(10);
+
+BENCHMARK_CAPTURE(
+    refCountDataBlockPages,
+    Column3ChunkRows1Chunks10000000PageSize512,
+    /*chunk_columns=*/3,
+    /*chunk_rows=*/1,
+    /*chunks*=*/10'000'000,
+    /*page_size=*/512)
+    ->Iterations(1);
+
+BENCHMARK_CAPTURE(
+    refCountDataBlockPages,
+    Column3ChunkRows1Chunks1000000PageSize1024,
+    /*chunk_columns=*/3,
+    /*chunk_rows=*/1,
+    /*chunks*=*/1000'000,
+    /*page_size=*/1024)
+    ->Iterations(10);
+
+BENCHMARK_CAPTURE(
+    refCountDataBlockPages,
+    Column3ChunkRows1Chunks10000000PageSize1024,
+    /*chunk_columns=*/3,
+    /*chunk_rows=*/1,
+    /*chunks*=*/10'000'000,
+    /*page_size=*/1024)
+    ->Iterations(1);
+
+BENCHMARK_CAPTURE(
+    refCountDataBlockPages,
     Column3ChunkRows10Chunks1000PageSize512,
     /*chunk_columns=*/3,
     /*chunk_rows=*/10,
@@ -253,6 +289,22 @@ BENCHMARK_CAPTURE(
     /*chunk_rows=*/1,
     /*chunks*=*/100'000)
     ->Iterations(10);
+
+BENCHMARK_CAPTURE(
+    refCountDataBlockList,
+    Column3ChunkRows1Chunks1000000,
+    /*chunk_columns=*/3,
+    /*chunk_rows=*/1,
+    /*chunks*=*/1000'000)
+    ->Iterations(10);
+
+BENCHMARK_CAPTURE(
+    refCountDataBlockList,
+    Column3ChunkRows1Chunks10000000,
+    /*chunk_columns=*/3,
+    /*chunk_rows=*/1,
+    /*chunks*=*/10'000'000)
+    ->Iterations(1);
 
 BENCHMARK_CAPTURE(
     refCountDataBlockList,
