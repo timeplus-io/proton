@@ -418,7 +418,7 @@ KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const Strin
     for (const auto & consumer : consumers.second)
     {
         const auto & consumer_settings = consumer->getSettings();
-        if (consumer.use_count() == 1 && consumer_settings.fetch_wait_max_ms == fetch_wait_max_ms)
+        if (consumer.use_count() == 1 && consumer_settings.fetch_wait_max_ms == fetch_wait_max_ms && consumer_settings.auth == auth)
         {
             LOG_INFO(log, "Reusing external Kafka consume with settings={}", consumer_settings.string());
             return consumer;

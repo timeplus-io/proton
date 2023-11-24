@@ -15,6 +15,14 @@ struct KafkaWALAuth
     std::string username;
     std::string password;
     std::string ssl_ca_cert_file;
+
+    bool operator==(const KafkaWALAuth & o) const
+    {
+        return security_protocol == o.security_protocol
+            && username == o.username
+            && password == o.password
+            && ssl_ca_cert_file == o.ssl_ca_cert_file;
+    }
 };
 
 struct KafkaWALSettings
