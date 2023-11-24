@@ -35,7 +35,7 @@ struct HashBlocks
 
     ~HashBlocks();
 
-    void addBlock(JoinDataBlock && block) { blocks.push_back(std::move(block)); }
+    void addBlock(JoinDataBlock && block) { blocks.add(std::move(block)); }
 
     const JoinDataBlock & lastBlock() const { return blocks.lastBlock(); }
 

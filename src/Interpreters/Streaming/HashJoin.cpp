@@ -2288,7 +2288,7 @@ Block HashJoin::retract(const Block & result_block)
     std::scoped_lock lock(join_results->mutex);
 
     /// First, buffer the new join results
-    join_results->blocks.push_back(result_block);
+    join_results->blocks.add(Block(result_block));
 
     const auto & on_exprs = table_join->getClauses();
     auto disjuncts = on_exprs.size();

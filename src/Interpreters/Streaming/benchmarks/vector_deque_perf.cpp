@@ -286,7 +286,7 @@ BENCHMARK_CAPTURE(vectorPerfVanilla, vectorPerfVanilla10000, /*keep_versions=*/1
 BENCHMARK_CAPTURE(dequePerfVanilla, dequePerfVanilla10, /*keep_versions=*/10ull);
 BENCHMARK_CAPTURE(dequePerfVanilla, dequePerfVanilla100, /*keep_versions=*/100ull);
 BENCHMARK_CAPTURE(dequePerfVanilla, dequePerfVanilla1000, /*keep_versions=*/1000ull);
-BENCHMARK_CAPTURE(dequePerfVanilla, dequePerfVanilla1000, /*keep_versions=*/10000ull);
+BENCHMARK_CAPTURE(dequePerfVanilla, dequePerfVanilla10000, /*keep_versions=*/10000ull);
 
 BENCHMARK_CAPTURE(vectorPerfSortInsertDelete, vectorPerfSortInsertDelete10asc, /*keep_versions=*/10ull, /*ascending=*/true);
 BENCHMARK_CAPTURE(vectorPerfSortInsertDelete, vectorPerfSortInsertDelete100asc, /*keep_versions=*/100ull, /*ascending=*/true);
@@ -328,15 +328,15 @@ BENCHMARK_CAPTURE(dequePerfSortInsertDeleteOpt, dequePerfSortInsertDeleteOpt100d
 BENCHMARK_CAPTURE(dequePerfSortInsertDeleteOpt, dequePerfSortInsertDeleteOpt1000desc, /*keep_versions=*/1000ull, /*ascending=*/false);
 BENCHMARK_CAPTURE(dequePerfSortInsertDeleteOpt, dequePerfSortInsertDeleteOpt10000desc, /*keep_versions=*/10000ull, /*ascending=*/false);
 
-BENCHMARK_CAPTURE(vectorLookup, vectorLookup10desc, /*keep_versions=*/10ull, /*ascending=*/true);
-BENCHMARK_CAPTURE(vectorLookup, vectorLookup100desc, /*keep_versions=*/100ull, /*ascending=*/true);
-BENCHMARK_CAPTURE(vectorLookup, vectorLookup1000desc, /*keep_versions=*/1000ull, /*ascending=*/true);
-BENCHMARK_CAPTURE(vectorLookup, vectorLookup10000desc, /*keep_versions=*/10000ull, /*ascending=*/true);
+BENCHMARK_CAPTURE(vectorLookup, vectorLookup10asc, /*keep_versions=*/10ull, /*ascending=*/true);
+BENCHMARK_CAPTURE(vectorLookup, vectorLookup100asc, /*keep_versions=*/100ull, /*ascending=*/true);
+BENCHMARK_CAPTURE(vectorLookup, vectorLookup1000asc, /*keep_versions=*/1000ull, /*ascending=*/true);
+BENCHMARK_CAPTURE(vectorLookup, vectorLookup10000asc, /*keep_versions=*/10000ull, /*ascending=*/true);
 
-BENCHMARK_CAPTURE(dequeLookup, dequeLookup10desc, /*keep_versions=*/10ull, /*ascending=*/true);
-BENCHMARK_CAPTURE(dequeLookup, dequeLookup100desc, /*keep_versions=*/100ull, /*ascending=*/true);
-BENCHMARK_CAPTURE(dequeLookup, dequeLookup1000desc, /*keep_versions=*/1000ull, /*ascending=*/true);
-BENCHMARK_CAPTURE(dequeLookup, dequeLookup10000desc, /*keep_versions=*/10000ull, /*ascending=*/true);
+BENCHMARK_CAPTURE(dequeLookup, dequeLookup10asc, /*keep_versions=*/10ull, /*ascending=*/true);
+BENCHMARK_CAPTURE(dequeLookup, dequeLookup100asc, /*keep_versions=*/100ull, /*ascending=*/true);
+BENCHMARK_CAPTURE(dequeLookup, dequeLookup1000asc, /*keep_versions=*/1000ull, /*ascending=*/true);
+BENCHMARK_CAPTURE(dequeLookup, dequeLookup10000asc, /*keep_versions=*/10000ull, /*ascending=*/true);
 
 BENCHMARK_CAPTURE(vectorLookup, vectorLookup10desc, /*keep_versions=*/10ull, /*ascending=*/false);
 BENCHMARK_CAPTURE(vectorLookup, vectorLookup100desc, /*keep_versions=*/100ull, /*ascending=*/false);

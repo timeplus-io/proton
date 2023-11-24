@@ -85,7 +85,7 @@ struct RefCountDataBlockList
     auto begin() const { return blocks.begin(); }
     auto end() const { return blocks.end(); }
 
-    void push_back(DataBlock block)
+    void add(DataBlock && block)
     {
         updateMetrics(block);
         blocks.emplace_back(std::move(block));

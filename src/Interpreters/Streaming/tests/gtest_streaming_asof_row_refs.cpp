@@ -24,7 +24,7 @@ forEachRightBlock(DB::Streaming::CachedBlockMetrics & join_metrics, std::functio
 
         DB::ColumnWithTypeAndName column_with_type{std::move(mutable_col), type, "_tp_time"};
 
-        blocks->push_back(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
+        blocks->add(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
 
         if (callback)
             callback(blocks.get());
@@ -40,7 +40,7 @@ forEachRightBlock(DB::Streaming::CachedBlockMetrics & join_metrics, std::functio
 
         DB::ColumnWithTypeAndName column_with_type{std::move(mutable_col), type, "_tp_time"};
 
-        blocks->push_back(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
+        blocks->add(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
         if (callback)
             callback(blocks.get());
     }
@@ -55,7 +55,7 @@ forEachRightBlock(DB::Streaming::CachedBlockMetrics & join_metrics, std::functio
 
         DB::ColumnWithTypeAndName column_with_type{std::move(mutable_col), type, "_tp_time"};
 
-        blocks->push_back(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
+        blocks->add(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
         if (callback)
             callback(blocks.get());
     }

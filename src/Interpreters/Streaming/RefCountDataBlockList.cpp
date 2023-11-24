@@ -4,7 +4,6 @@
 #include <Formats/SimpleNativeWriter.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Processors/Chunk.h>
 #include <Common/VersionRevision.h>
 
 namespace DB
