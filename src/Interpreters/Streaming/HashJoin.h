@@ -137,6 +137,7 @@ public:
     bool emitChangeLog() const override { return emit_changelog; }
     bool bidirectionalHashJoin() const override { return bidirectional_hash_join; }
     bool rangeBidirectionalHashJoin() const override { return range_bidirectional_hash_join; }
+    bool requireWatermarkAlignedStreams() const override { return require_aligned_streams; }
 
     UInt64 keepVersions() const { return right_data.join_stream_desc->keep_versions; }
 
@@ -244,6 +245,9 @@ public:
         /// join blocks quickly by using joined keys
         SERDE std::unique_ptr<HashJoinMapsVariants> maps;
     };
+
+    JoinStreamDescriptionPtr leftJoinStreamDescription() const noexcept override { return left_data.join_stream_desc; }
+    JoinStreamDescriptionPtr rightJoinStreamDescription() const noexcept override { return right_data.join_stream_desc; }
 
 private:
     void checkJoinSemantic() const;
@@ -429,6 +433,7 @@ private:
     bool emit_changelog = false;
     bool bidirectional_hash_join = true;
     bool range_bidirectional_hash_join = true;
+    bool require_aligned_streams = false;
 
     /// Delta column in right-left-join
     /// `rlj` -> right-left-join

@@ -759,23 +759,8 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[
         if (parsed_special_function.value() && ParserToken(TokenType::ClosingRoundBracket).ignore(pos))
         {
             if (auto parsed_special_func = node->as<ASTFunction>())
-            {
-                WriteBufferFromOwnString ostr;
-                writeString(function_name_lowercase, ostr);
-                writeChar('(', ostr);
-                if (parsed_special_func->arguments)
-                {
-                    for (auto it = parsed_special_func->arguments->children.begin(); it != parsed_special_func->arguments->children.end(); ++it)
-                    {
-                        if (it != parsed_special_func->arguments->children.begin())
-                            writeCString(", ", ostr);
+                parsed_special_func->covered_name = function_name_lowercase;
 
-                        (*it)->appendColumnName(ostr);
-                    }
-                }
-                writeChar(')', ostr);
-                parsed_special_func->code_name = ostr.str();
-            }
             return true;
         }
         return false;

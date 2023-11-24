@@ -113,7 +113,7 @@
                             "query_id": "14163",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2) select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -322,7 +322,7 @@
                             "query_id": "14164",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2) select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -496,7 +496,7 @@
                             "query_id": "14165",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 as a left join table(test14_table2_4) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a left join table(test14_table2_4) as b on a.j = b.j2) select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -820,7 +820,7 @@
                             "query_id": "14167",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select * from t join changelog(table(test14_stream3_4), j3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2) select * from t join changelog(table(test14_stream3_4), j3) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -960,7 +960,7 @@
                             "query_id": "14168",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select * from t left join changelog(table(test14_stream3_4), j3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2) select * from t left join changelog(table(test14_stream3_4), j3) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -1112,7 +1112,7 @@
                             "query_id": "14169",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2)select * from t join changelog(table(test14_stream3_4), j3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2) select * from t join changelog(table(test14_stream3_4), j3) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -1235,7 +1235,7 @@
                             "query_id": "14170",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 as a left join table(test14_table2_4) as b on a.j = b.j2)select * from t left join changelog(table(test14_stream3_4), j3) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a left join table(test14_table2_4) as b on a.j = b.j2) select * from t left join changelog(table(test14_stream3_4), j3) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -1504,7 +1504,7 @@
                             "query_id": "14172",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2) select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -1712,7 +1712,7 @@
                             "query_id": "14173",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2) select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -1949,7 +1949,7 @@
                             "query_id": "14174",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2) select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -2151,7 +2151,7 @@
                             "query_id": "14175",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2) select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -2489,7 +2489,7 @@
                             "query_id": "14177",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2) select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -2669,7 +2669,7 @@
                             "query_id": "14178",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2) select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -2878,7 +2878,7 @@
                             "query_id": "14179",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a join table(test14_table2_4) as b on a.j = b.j2) select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -3058,7 +3058,7 @@
                             "query_id": "14180",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 as a left join table(test14_table2_4) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 as a left join table(test14_table2_4) as b on a.j = b.j2) select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -3402,7 +3402,7 @@
                             "query_id": "14182",
                             "wait": 5,
                             "terminate": "manuel",
-                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j = test14_table2_4.j2) select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",

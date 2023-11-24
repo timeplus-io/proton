@@ -86,6 +86,10 @@ public:
 
     size_t getPositionByName(const std::string & name) const;
 
+    /// proton : starts
+    std::optional<size_t> tryGetPositionByName(const std::string & name) const;
+    /// proton : ends
+
     const ColumnsWithTypeAndName & getColumnsWithTypeAndName() const;
     NamesAndTypesList getNamesAndTypesList() const;
     NamesAndTypes getNamesAndTypes() const;

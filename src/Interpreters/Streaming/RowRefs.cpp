@@ -1,7 +1,5 @@
 #include <Interpreters/Streaming/RowRefs.h>
 
-#include <Columns/IColumn.h>
-#include <Core/Block.h>
 #include <Interpreters/Streaming/joinSerder.h>
 #include <base/types.h>
 #include <Common/ColumnsHashing.h>
@@ -169,8 +167,7 @@ void AsofRowRefs<DataBlock>::insert(
 
         T key = column.getElement(row_num);
         bool ascending = (inequality == ASOFJoinInequality::Less) || (inequality == ASOFJoinInequality::LessOrEquals);
-        container->insert(Entry<T>(key, RowRefDataBlock(blocks, row_num)), ascending);
-        container->truncateTo(keep_versions, ascending);
+        container->insert(Entry<T>(key, RowRefDataBlock(blocks, row_num)), ascending, keep_versions);
     };
 
     callWithType(type, call);
@@ -664,7 +661,7 @@ template class RangeAsofRowRefs<LightChunkWithTimestamp>;
 /// For ChangelogCovertTransform
 template struct RowRefWithRefCount<LightChunk>;
 
-/// For gests
+/// For gtests
 template class AsofRowRefs<Block>;
 }
 }

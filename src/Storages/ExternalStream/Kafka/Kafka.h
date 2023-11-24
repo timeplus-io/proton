@@ -32,6 +32,7 @@ public:
 
     SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
 
+    bool produceOneMessagePerRow() const { return settings->one_message_per_row; }
     const String & brokers() const { return settings->brokers.value; }
     const String & dataFormat() const { return data_format; }
     const String & dataSchema() const { return settings->data_schema.value; }
@@ -39,6 +40,7 @@ public:
     const String & securityProtocol() const { return settings->security_protocol.value; }
     const String & username() const { return settings->username.value; }
     const String & password() const { return settings->password.value; }
+    const String & sslCaCertFile() const { return settings->ssl_ca_cert_file.value; }
     const klog::KConfParams & properties() const { return kafka_properties; }
     const ASTPtr & partitioning_expr_ast() const { return partitioning_expr; }
 

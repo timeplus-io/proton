@@ -32,6 +32,10 @@ struct LightChunk
         return res;
     }
 
+    void clear() noexcept { data.clear(); }
+
+    operator bool() const noexcept { return !data.empty(); }
+
     /// Dummy interface to make RefCountBlockList happy
     Int64 minTimestamp() const { return 0; }
     Int64 maxTimestamp() const { return 0; }
