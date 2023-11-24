@@ -59,6 +59,8 @@ public:
         size_t max_block_size,
         size_t num_streams) override;
 
+    NamesAndTypesList getVirtuals() const override;
+
     bool supportsStreamingQuery() const override { return true; }
     bool hasEvenlyDistributedRead() const override { return true; }
 
@@ -67,6 +69,8 @@ private:
     UInt64 random_seed = 0;
     UInt64 events_per_second;
     UInt64 interval_time;
+
+    NamesAndTypesList virtual_column_names_and_types;
 
 protected:
     StorageRandom(

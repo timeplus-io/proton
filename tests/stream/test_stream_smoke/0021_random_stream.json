@@ -422,14 +422,14 @@
           {
             "id": 19,
             "tags": ["create random", "unstable"],
-            "name": "set generate_eps, test eps",
-            "description": "set generate_eps, test eps",
+            "name": "set eps in query time, test eps",
+            "description": "set eps in query time, test eps",
             "steps":[
               {
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
                   {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default rand()%4) engine Random() settings eps=1000"},
-                  {"client":"python", "query_type": "table", "query_id":"2228", "wait":2, "query":"select count(1) from tumble(test22_create_random, 1s) group by window_start limit 5 settings generate_eps=10000"}
+                  {"client":"python", "query_type": "table", "query_id":"2228", "wait":2, "query":"select count(1) from tumble(test22_create_random, 1s) group by window_start limit 5 settings eps=10000"}
                 ]
               }
             ],
@@ -462,6 +462,68 @@
                 ["any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value"]
               ]}
             ]
+        },
+        {
+            "id": 21,
+            "tags": ["create random", "_tp_sn", "_tp_shard"],
+            "name": "test random stream virtual column _tp_sn, _tp_shard and default function monotonic",
+            "description": "test random stream virtual column _tp_sn, _tp_shard",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default monotonic(2), value int) engine Random() settings eps=1, shards=1"},
+                  {"client":"python", "query_type": "table", "query_id":"2229", "wait":2, "query":"select id, _tp_sn, _tp_shard from test22_create_random limit 5"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {
+                "query_id":"2229", "expected_results":[
+                    ["2", "1", "0"],
+                    ["3", "2", "0"],
+                    ["4", "3", "0"],
+                    ["5", "4", "0"],
+                    ["6", "5", "0"]
+                ]
+              }
+            ]
+          },
+          {
+            "id": 22,
+            "tags": ["monotonic test"],
+            "name": "monotonic function is stateful, so it supports checkpoint",
+            "description": "monotonic function is stateful, so it supports checkpoint",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_stream"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create stream test22_stream(id int, value int)"},
+                  {"client":"python", "query_type": "stream", "query_id":"2229", "wait":2, "terminate":"manual", "query":"subscribe to select id, value, monotonic(100) from test22_stream settings checkpoint_interval=1"},
+                  {"client":"python", "query_type": "table", "depends_on":"2229", "kill":"2229", "kill_wait":3, "wait":1, "query": "insert into test22_stream(id, value) values (1,1)"},
+                  {"client":"python", "query_type": "table", "wait":1, "query": "insert into test22_stream(id, value) values (2,2)"},
+                  {"client":"python", "query_type": "stream","query_id":"2229-1", "terminate": "manual", "query":"recover from '2229'"},
+                  {"client":"python", "query_type": "table", "wait":1, "query": "insert into test22_stream(id, value) values (3,3)"},
+                  {"client":"python", "query_type": "table", "wait":3, "query": "kill query where query_id='2229' sync"},
+                  {"client":"python", "query_type": "table", "query":"unsubscribe to '2229'"}
+
+                ]
+              }
+            ],
+            "expected_results": [
+              {
+                "query_id":"2229", "expected_results":[
+                    ["1", "1", "100"]
+                ]
+              },
+              {
+                "query_id":"2229-1", "expected_results":[
+                    ["2", "2", "101"],
+                    ["3", "3", "102"]
+                ]
+              }
+            ]
           }
+
     ]
   }
