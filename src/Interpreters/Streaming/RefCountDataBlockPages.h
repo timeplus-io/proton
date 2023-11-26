@@ -28,7 +28,7 @@ struct RefCountDataBlockPages
         metrics.total_bytes -= total_bytes;
     }
 
-    void add(DataBlock && block)
+    void pushBack(DataBlock && block)
     {
         assert(current_page);
 

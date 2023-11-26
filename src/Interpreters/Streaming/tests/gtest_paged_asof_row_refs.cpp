@@ -236,10 +236,8 @@ void commonTest(size_t keys, size_t page_size, size_t total_pages, size_t keep_v
     /// Then we can have 0 as lower bound, keys + 1 as upper bound
     for (size_t k = 1; k <= keys; k += chunk_rows)
     {
-        auto chunk = prepareChunk(chunk_rows, k);
-
         /// First add to source block pages
-        block_pages.add(std::move(chunk));
+        block_pages.pushBack(prepareChunk(chunk_rows, k));
         const auto & asof_column = block_pages.lastDataBlock().getColumns()[0];
 
         /// Index it in row refs

@@ -201,7 +201,7 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
 {
     /// std::scoped_lock lock(mutex);
 
-    source_chunks.add(std::move(input_data.chunk));
+    source_chunks.pushBack(std::move(input_data.chunk));
     assert(!input_data.chunk);
 
     /// Prepare 2 resulting chunks : 1) retracting chunk 2) transformed origin chunk

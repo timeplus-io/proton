@@ -90,7 +90,7 @@ void refCountDataBlockPages(benchmark::State & state, Args &&... args)
         DataBlockPages data_blocks(page_size, metrics);
 
         for (int64_t chunk = 0; chunk < chunks; ++chunk)
-            data_blocks.add(prepareChunk(chunk_columns, chunk_rows));
+            data_blocks.pushBack(prepareChunk(chunk_columns, chunk_rows));
 
         benchmark::ClobberMemory();
         std::cout << prepareChunk(chunk_columns, chunk_rows).allocatedBytes() << " " << data_blocks.size() << " " << metrics.string() << "\n";
@@ -114,7 +114,7 @@ void refCountDataBlockList(benchmark::State & state, Args &&... args)
         DataBlockList data_blocks(metrics);
 
         for (int64_t chunk = 0; chunk < chunks; ++chunk)
-            data_blocks.add(prepareChunk(chunk_columns, chunk_rows));
+            data_blocks.pushBack(prepareChunk(chunk_columns, chunk_rows));
 
         benchmark::ClobberMemory();
     }
