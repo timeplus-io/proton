@@ -93,6 +93,7 @@ void refCountDataBlockPages(benchmark::State & state, Args &&... args)
             data_blocks.add(prepareChunk(chunk_columns, chunk_rows));
 
         benchmark::ClobberMemory();
+        std::cout << prepareChunk(chunk_columns, chunk_rows).allocatedBytes() << " " << data_blocks.size() << " " << metrics.string() << "\n";
     }
 }
 
@@ -145,7 +146,7 @@ BENCHMARK_CAPTURE(
     /*chunk_rows=*/1,
     /*chunks*=*/100'000,
     /*page_size=*/512)
-    ->Iterations(10);
+    ->Iterations(100);
 
 BENCHMARK_CAPTURE(
     refCountDataBlockPages,
@@ -154,7 +155,7 @@ BENCHMARK_CAPTURE(
     /*chunk_rows=*/1,
     /*chunks*=*/1000'000,
     /*page_size=*/512)
-    ->Iterations(10);
+    ->Iterations(100);
 
 BENCHMARK_CAPTURE(
     refCountDataBlockPages,
@@ -163,7 +164,7 @@ BENCHMARK_CAPTURE(
     /*chunk_rows=*/1,
     /*chunks*=*/10'000'000,
     /*page_size=*/512)
-    ->Iterations(1);
+    ->Iterations(10);
 
 BENCHMARK_CAPTURE(
     refCountDataBlockPages,
@@ -172,7 +173,7 @@ BENCHMARK_CAPTURE(
     /*chunk_rows=*/1,
     /*chunks*=*/1000'000,
     /*page_size=*/1024)
-    ->Iterations(10);
+    ->Iterations(100);
 
 BENCHMARK_CAPTURE(
     refCountDataBlockPages,
@@ -181,7 +182,7 @@ BENCHMARK_CAPTURE(
     /*chunk_rows=*/1,
     /*chunks*=*/10'000'000,
     /*page_size=*/1024)
-    ->Iterations(1);
+    ->Iterations(10);
 
 BENCHMARK_CAPTURE(
     refCountDataBlockPages,

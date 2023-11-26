@@ -17,18 +17,26 @@ struct LightChunk
     LightChunk(Chunk && chunk) : data(chunk.detachColumns()) { }
     LightChunk(const Block & block) : data(block.getColumns()) { }
 
-    size_t rows() const { return data.empty() ? 0 : data[0]->size(); }
-    size_t columns() const { return data.size(); }
+    size_t rows() const noexcept { return data.empty() ? 0 : data[0]->size(); }
+    size_t columns() const noexcept { return data.size(); }
 
-    const Columns & getColumns() const { return data; }
-    Columns detachColumns() { return std::move(data); }
+    const Columns & getColumns() const noexcept { return data; }
+    Columns detachColumns() noexcept { return std::move(data); }
 
-    UInt64 allocatedBytes() const
+    UInt64 allocatedColumnBytes() const noexcept
     {
         UInt64 res = 0;
         for (const auto & column : data)
             res += column->allocatedBytes();
+        return res;
+    }
 
+    UInt64 allocatedBytes() const noexcept
+    {
+        UInt64 res = allocatedColumnBytes();
+
+        /// Add the chunk metadata size
+        res += sizeof(data) + data.size() * sizeof(ColumnPtr);
         return res;
     }
 
@@ -37,21 +45,31 @@ struct LightChunk
     operator bool() const noexcept { return !data.empty(); }
 
     /// Dummy interface to make RefCountBlockList happy
-    Int64 minTimestamp() const { return 0; }
-    Int64 maxTimestamp() const { return 0; }
+    Int64 minTimestamp() const noexcept { return 0; }
+    Int64 maxTimestamp() const noexcept { return 0; }
 };
 
-struct LightChunkWithTimestamp : public LightChunk
+struct LightChunkWithTimestamp
 {
+    LightChunk chunk;
     Int64 min_timestamp = 0;
     Int64 max_timestamp = 0;
 
     LightChunkWithTimestamp() = default;
-    LightChunkWithTimestamp(Columns && data_) : LightChunk(std::move(data_)) { }
+    LightChunkWithTimestamp(Columns && data_) : chunk(std::move(data_)) { }
     LightChunkWithTimestamp(const Block & block)
-        : LightChunk(block), min_timestamp(block.minTimestamp()), max_timestamp(block.maxTimestamp())
-    {
-    }
+        : chunk(block), min_timestamp(block.minTimestamp()), max_timestamp(block.maxTimestamp()) { }
+
+    UInt64 allocatedBytes() const { return chunk.allocatedBytes() + sizeof(min_timestamp) + sizeof(max_timestamp); }
+    size_t rows() const noexcept { return chunk.rows(); }
+    size_t columns() const noexcept { return chunk.columns(); }
+
+    const Columns & getColumns() const noexcept { return chunk.getColumns(); }
+    Columns detachColumns() noexcept { return chunk.detachColumns(); }
+
+    void clear() noexcept { chunk.clear(); }
+
+    operator bool() const noexcept { return chunk; }
 
     void setMinTimestamp(Int64 min_ts_) noexcept { min_timestamp = min_ts_; }
     void setMaxTimestamp(Int64 max_ts_) noexcept { max_timestamp = max_ts_; }

@@ -13,10 +13,7 @@ namespace DB::Streaming
 template <typename DataBlock>
 struct RefCountDataBlockPages
 {
-    RefCountDataBlockPages(size_t page_size_, CachedBlockMetrics & metrics_) : metrics(metrics_), page_size(page_size_)
-    {
-        addPage();
-    }
+    RefCountDataBlockPages(size_t page_size_, CachedBlockMetrics & metrics_) : metrics(metrics_), page_size(page_size_) { addPage(); }
 
     ~RefCountDataBlockPages()
     {
@@ -33,9 +30,10 @@ struct RefCountDataBlockPages
 
     void add(DataBlock && block)
     {
+        assert(current_page);
+
         updateMetrics(block);
 
-        auto & current_page = block_pages.back();
         if (likely(current_page->size() < page_size))
         {
             current_page->pushBack(std::move(block));
@@ -43,29 +41,27 @@ struct RefCountDataBlockPages
         else
         {
             addPage();
-
-            auto & page = block_pages.back();
-            page->pushBack(std::move(block));
+            current_page->pushBack(std::move(block));
         }
     }
 
     auto * lastPage() noexcept
     {
-        assert(!block_pages.empty());
-        return block_pages.back().get();
+        assert(current_page);
+        return current_page;
     }
 
     auto lastPageOffset() noexcept
     {
         assert(!block_pages.empty());
         assert(!block_pages.back()->empty());
-        return block_pages.back()->size() - 1;
+        return current_page->size() - 1;
     }
 
     const DataBlock & lastDataBlock() const noexcept
     {
-        assert(!block_pages.empty());
-        return block_pages.back()->lastDataBlock();
+        assert(current_page);
+        return current_page->lastDataBlock();
     }
 
     int64_t minTimestamp() const noexcept { return min_ts; }
@@ -74,7 +70,11 @@ struct RefCountDataBlockPages
     size_t pageSize() const noexcept { return page_size; }
     size_t size() const noexcept { return block_pages.size(); }
 
-    void addPage() { block_pages.emplace_back(std::make_unique<RefCountDataBlockPage<DataBlock>>(this)); }
+    ALWAYS_INLINE void addPage()
+    {
+        block_pages.emplace_back(std::make_unique<RefCountDataBlockPage<DataBlock>>(this));
+        current_page = block_pages.back().get();
+    }
 
     void erasePage(RefCountDataBlockPage<DataBlock> * page)
     {
@@ -82,6 +82,7 @@ struct RefCountDataBlockPages
         if (unlikely(block_pages.size() == 1))
         {
             assert(page == block_pages.front().get());
+            assert(page == current_page);
 
             /// If this is the last page, keep it around
             page->clear();
@@ -129,6 +130,7 @@ private:
     size_t total_bytes = 0;
     size_t page_size;
     std::deque<RefCountDataBlockPagePtr<DataBlock>> block_pages;
+    RefCountDataBlockPage<DataBlock> * current_page = nullptr;
 };
 
 }
