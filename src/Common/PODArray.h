@@ -226,6 +226,10 @@ public:
     /// This method is safe to use only for information about memory usage.
     size_t allocated_bytes() const { return c_end_of_storage - c_start + pad_right + pad_left; } /// NOLINT
 
+    /// proton : starts
+    size_t allocated_metadata_bytes() const noexcept { return sizeof(*this); }
+    /// proton : ends
+
     void clear() { c_end = c_start; }
 
     template <typename ... TAllocatorParams>

@@ -406,6 +406,24 @@ size_t ColumnAggregateFunction::allocatedBytes() const
             + (my_arena ? my_arena->size() : 0);
 }
 
+/// proton : starts
+size_t ColumnAggregateFunction::allocatedMetadataBytes() const
+{
+    size_t res = sizeof(ConstArenas) + foreign_arenas.size() * sizeof(ConstArenaPtr) + sizeof(ArenaPtr) + sizeof(func);
+
+    if (src)
+        res += src->allocatedMetadataBytes();
+
+    res += sizeof(force_data_ownership);
+    res += data.allocated_metadata_bytes();
+    res += sizeof(type_string) + type_string.size();
+    res += sizeof(version);
+    res += sizeof(keep_state);
+
+    return res;
+}
+/// proton : ends
+
 void ColumnAggregateFunction::protect()
 {
     data.protect();

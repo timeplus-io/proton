@@ -93,7 +93,17 @@ void refCountDataBlockPages(benchmark::State & state, Args &&... args)
             data_blocks.pushBack(prepareChunk(chunk_columns, chunk_rows));
 
         benchmark::ClobberMemory();
-        std::cout << prepareChunk(chunk_columns, chunk_rows).allocatedBytes() << " " << data_blocks.size() << " " << metrics.string() << "\n";
+
+        {
+            auto dummy = prepareChunk(chunk_columns, chunk_rows);
+            std::cout << fmt::format(
+                "allocated_bytes={} allocated_data_bytes={} allocated_metadata_bytes={} data_blocks={} metrics={{{}}}\n",
+                dummy.allocatedBytes(),
+                dummy.allocatedDataBytes(),
+                dummy.allocatedMetadataBytes(),
+                data_blocks.size(),
+                metrics.string());
+        }
     }
 }
 

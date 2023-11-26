@@ -241,6 +241,25 @@ size_t ColumnFunction::allocatedBytes() const
     return total_size;
 }
 
+/// proton : starts
+size_t ColumnFunction::allocatedMetadataBytes() const
+{
+    size_t total_size = sizeof(elements_size) + sizeof(function);
+    for (const auto & column : captured_columns)
+    {
+        total_size += column.column->allocatedMetadataBytes();
+        total_size += sizeof(column.type);
+        total_size += sizeof(column.name) + column.name.size();
+    }
+    total_size += sizeof(captured_columns);
+    total_size += sizeof(is_short_circuit_argument);
+    total_size += sizeof(recursively_convert_result_to_full_column_if_low_cardinality);
+    total_size += sizeof(is_function_compiled);
+
+    return total_size;
+}
+/// proton : ends
+
 void ColumnFunction::appendArguments(const ColumnsWithTypeAndName & columns)
 {
     auto args = function->getArgumentTypes().size();

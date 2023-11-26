@@ -72,6 +72,13 @@ public:
         return chars.allocated_bytes() + sizeof(n);
     }
 
+    /// proton : starts
+    size_t allocatedMetadataBytes() const override
+    {
+        return chars.allocated_metadata_bytes();
+    }
+    /// proton : ends
+
     void protect() override
     {
         chars.protect();

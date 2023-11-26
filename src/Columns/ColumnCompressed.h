@@ -45,6 +45,7 @@ public:
     size_t size() const override { return rows; }
     size_t byteSize() const override { return bytes; }
     size_t allocatedBytes() const override { return bytes; }
+    size_t allocatedMetadataBytes() const override { return sizeof(rows) + sizeof(lazy); } /// proton : starts. Newly added
 
     ColumnPtr decompress() const override
     {

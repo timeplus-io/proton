@@ -163,6 +163,7 @@ public:
     size_t byteSize() const override { return idx.getPositions()->byteSize() + getDictionary().byteSize(); }
     size_t byteSizeAt(size_t n) const override { return getDictionary().byteSizeAt(getIndexes().getUInt(n)); }
     size_t allocatedBytes() const override { return idx.getPositions()->allocatedBytes() + getDictionary().allocatedBytes(); }
+    size_t allocatedMetadataBytes() const override { return idx.allocatedMetadataBytes() + dictionary.allocatedMetadataBytes(); } /// proton : starts. Newly added
 
     void forEachSubcolumn(ColumnCallback callback) const override
     {
@@ -302,6 +303,8 @@ public:
 
         void updateWeakHash(WeakHash32 & hash, WeakHash32 & dict_hash) const;
 
+        size_t allocatedMetadataBytes() const { return positions->allocatedMetadataBytes() + sizeof(size_of_type); }  /// proton : starts. Newly added
+
     private:
         WrappedPtr positions;
         size_t size_of_type = 0;
@@ -343,6 +346,8 @@ private:
 
         /// Create new dictionary with only keys that are mentioned in positions.
         void compact(ColumnPtr & positions);
+
+        size_t allocatedMetadataBytes() const { return column_unique->allocatedMetadataBytes() + sizeof(shared); }  /// proton : starts. Newly added
 
     private:
         WrappedPtr column_unique;

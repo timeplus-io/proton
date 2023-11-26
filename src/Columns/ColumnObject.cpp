@@ -205,6 +205,18 @@ size_t ColumnObject::Subcolumn::allocatedBytes() const
     return res;
 }
 
+/// proton : starts
+size_t ColumnObject::Subcolumn::allocatedMetadataBytes() const
+{
+    size_t res = sizeof(least_common_type) + sizeof(is_nullable);
+    res += sizeof(data) + data.size() * sizeof(WrappedPtr);
+    for (const auto & part : data)
+        res += part->allocatedMetadataBytes();
+    res += sizeof(num_of_defaults_in_prefix) + sizeof(num_rows);
+    return res;
+}
+/// proton : ends
+
 void ColumnObject::Subcolumn::get(size_t n, Field & res) const
 {
     if (isFinalized())
@@ -663,6 +675,13 @@ size_t ColumnObject::allocatedBytes() const
         res += entry->data.allocatedBytes();
     return res;
 }
+
+/// proton : starts
+size_t ColumnObject::allocatedMetadataBytes() const
+{
+    return sizeof(is_nullable) + subcolumns.allocatedMetadataBytes();
+}
+/// proton : ends
 
 void ColumnObject::forEachSubcolumn(ColumnCallback callback) const
 {
