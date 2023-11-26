@@ -201,6 +201,11 @@ public:
         return data.allocated_bytes();
     }
 
+    size_t allocatedMetadataBytes() const override
+    {
+        return data.allocated_metadata_bytes();
+    }
+
     void protect() override
     {
         data.protect();

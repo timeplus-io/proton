@@ -124,7 +124,7 @@ void RowRefWithRefCount<DataBlock>::serialize(const SerializedBlocksToIndices & 
 
 template <typename DataBlock>
 void RowRefWithRefCount<DataBlock>::deserialize(
-    RefCountBlockList<DataBlock> * block_list,
+    RefCountDataBlockList<DataBlock> * block_list,
     const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
     ReadBuffer & rb)
 {
@@ -151,7 +151,7 @@ template <typename DataBlock>
 void AsofRowRefs<DataBlock>::insert(
     TypeIndex type,
     const IColumn & asof_column,
-    RefCountBlockList<DataBlock> * blocks,
+    RefCountDataBlockList<DataBlock> * blocks,
     size_t row_num,
     ASOFJoinInequality inequality,
     size_t keep_versions)
@@ -281,7 +281,7 @@ void AsofRowRefs<DataBlock>::serialize(
 template <typename DataBlock>
 void AsofRowRefs<DataBlock>::deserialize(
     TypeIndex type,
-    RefCountBlockList<DataBlock> * block_list,
+    RefCountDataBlockList<DataBlock> * block_list,
     const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
     ReadBuffer & rb)
 {
@@ -612,7 +612,7 @@ void RowRefListMultiple<DataBlock>::serialize(
 
 template <typename DataBlock>
 void RowRefListMultiple<DataBlock>::deserialize(
-    RefCountBlockList<DataBlock> * block_list,
+    RefCountDataBlockList<DataBlock> * block_list,
     const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
     ReadBuffer & rb,
     DeserializedIndicesToRowRefListMultiple<DataBlock> * deserialized_indices_to_row_ref_list_multiple)

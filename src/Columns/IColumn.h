@@ -405,6 +405,12 @@ public:
     /// Zero, if could not be determined.
     [[nodiscard]] virtual size_t allocatedBytes() const = 0;
 
+    /// proton : starts
+    /// Size of metadata which is used to hold / mgmt the column data (may be approximate)
+    /// Use for metadata overhead profiling
+    [[nodiscard]] virtual size_t allocatedMetadataBytes() const = 0;
+    /// proton : ends
+
     /// Make memory region readonly with mprotect if it is large enough.
     /// The operation is slow and performed only for debug builds.
     virtual void protect() {}

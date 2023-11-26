@@ -100,6 +100,7 @@ public:
     size_t byteSize() const override;
     size_t byteSizeAt(size_t n) const override;
     size_t allocatedBytes() const override;
+    size_t allocatedMetadataBytes() const override; /// proton : starts. Newly added
     void protect() override;
     ColumnPtr replicate(const Offsets & replicate_offsets) const override;
     void updateHashWithValue(size_t n, SipHash & hash) const override;

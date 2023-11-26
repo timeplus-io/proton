@@ -1,4 +1,4 @@
-#include <Interpreters/Streaming/AsofRowRefs.h>
+#include <Interpreters/Streaming/PagedAsofRowRefs.h>
 
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnsNumber.h>

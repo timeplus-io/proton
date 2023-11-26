@@ -141,7 +141,7 @@ void writeLightChunkWithTimestamp(const LightChunkWithTimestamp & data, const Bl
 {
     writeIntBinary(data.min_timestamp, ostr);
     writeIntBinary(data.max_timestamp, ostr);
-    writeColumns(data.data, header, client_revision, ostr);
+    writeColumns(data.chunk.data, header, client_revision, ostr);
 }
 
 template <typename DataBlock>

@@ -106,6 +106,23 @@ public:
             + (nested_null_mask ? nested_null_mask->allocatedBytes() : 0);
     }
 
+    /// proton : starts
+    size_t allocatedMetadataBytes() const override
+    {
+        size_t res = column_holder->allocatedMetadataBytes() + sizeof(is_nullable) + sizeof(size_of_value_if_fixed) + reverse_index.allocatedMetadataBytes();
+
+        if (nested_null_mask)
+            res += nested_null_mask->allocatedMetadataBytes();
+
+        if (nested_column_nullable)
+            res += nested_column_nullable->allocatedMetadataBytes();
+
+        res += sizeof(hash);
+
+        return res;
+    }
+    /// proton : ends
+
     void forEachSubcolumn(IColumn::ColumnCallback callback) const override
     {
         callback(column_holder);

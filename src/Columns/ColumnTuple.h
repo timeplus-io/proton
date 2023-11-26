@@ -95,6 +95,7 @@ public:
     size_t byteSize() const override;
     size_t byteSizeAt(size_t n) const override;
     size_t allocatedBytes() const override;
+    size_t allocatedMetadataBytes() const override; /// proton : starts. Newly added
     void protect() override;
     void forEachSubcolumn(ColumnCallback callback) const override;
     void forEachSubcolumnRecursively(RecursiveColumnCallback callback) const override;

@@ -226,8 +226,8 @@ public:
         return ColumnWithTypeAndName(std::move(columns[i]), type_name[i].type, type_name[i].qualified_name);
     }
 
-    template <bool has_defaults>
-    void appendFromBlock(const LightChunk & block, size_t row_num)
+    template <bool has_defaults, typename DataBlock>
+    void appendFromBlock(const DataBlock & block, size_t row_num)
     {
         if constexpr (has_defaults)
             applyLazyDefaults();
@@ -2288,7 +2288,7 @@ Block HashJoin::retract(const Block & result_block)
     std::scoped_lock lock(join_results->mutex);
 
     /// First, buffer the new join results
-    join_results->blocks.push_back(result_block);
+    join_results->blocks.pushBack(Block(result_block));
 
     const auto & on_exprs = table_join->getClauses();
     auto disjuncts = on_exprs.size();

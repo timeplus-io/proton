@@ -603,6 +603,14 @@ size_t ColumnSparse::allocatedBytes() const
     return values->allocatedBytes() + offsets->allocatedBytes() + sizeof(_size);
 }
 
+/// proton : starts
+size_t ColumnSparse::allocatedMetadataBytes() const
+{
+    return values->allocatedMetadataBytes() + offsets->allocatedMetadataBytes();
+}
+/// proton : ends
+
+
 void ColumnSparse::protect()
 {
     values->protect();

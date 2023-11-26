@@ -2,7 +2,7 @@
 
 #include <Interpreters/Streaming/CachedBlockMetrics.h>
 #include <Interpreters/Streaming/RangeAsofJoinContext.h>
-#include <Interpreters/Streaming/RefCountBlockList.h>
+#include <Interpreters/Streaming/RefCountDataBlockList.h>
 #include <Interpreters/Streaming/joinSerder_fwd.h>
 #include <Interpreters/Streaming/joinTuple.h>
 
@@ -25,7 +25,7 @@ namespace Streaming
 struct HashJoinMapsVariants;
 
 using JoinDataBlock = LightChunkWithTimestamp;
-using JoinDataBlockList = RefCountBlockList<JoinDataBlock>;
+using JoinDataBlockList = RefCountDataBlockList<JoinDataBlock>;
 using JoinDataBlockRawPtr = const JoinDataBlock *;
 using BlockNullmapList = std::deque<std::pair<JoinDataBlockRawPtr, ColumnPtr>>;
 
@@ -35,7 +35,7 @@ struct HashBlocks
 
     ~HashBlocks();
 
-    void addBlock(JoinDataBlock && block) { blocks.push_back(std::move(block)); }
+    void addBlock(JoinDataBlock && block) { blocks.pushBack(std::move(block)); }
 
     const JoinDataBlock & lastBlock() const { return blocks.lastBlock(); }
 

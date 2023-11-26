@@ -367,6 +367,22 @@ public:
 
     size_t allocatedBytes() const { return index ? index->getBufferSizeInBytes() : 0; }
 
+    /// proton : starts
+    size_t allocatedMetadataBytes() const
+    {
+        size_t res = sizeof(column) + sizeof(num_prefix_rows_to_skip) + sizeof(base_index);
+        res += sizeof(index);
+        if (saved_hash)
+            res += saved_hash->allocatedMetadataBytes();
+
+        if (external_saved_hash)
+            res += external_saved_hash->allocatedMetadataBytes();
+
+        res += sizeof(external_saved_hash_ptr);
+        return res;
+    }
+    /// proton: ends
+
 private:
     ColumnType * column = nullptr;
     UInt64 num_prefix_rows_to_skip; /// The number prefix tows in column which won't be sored at index.
