@@ -23,7 +23,16 @@ struct LightChunk
     const Columns & getColumns() const noexcept { return data; }
     Columns detachColumns() noexcept { return std::move(data); }
 
-    UInt64 allocatedDataBytes() const noexcept
+    /// The column data in memory
+    UInt64 byteSize() const
+    {
+        UInt64 res = 0;
+        for (const auto & column : data)
+            res += column->byteSize();
+        return res;
+    }
+
+    UInt64 allocatedDataBytes() const
     {
         UInt64 res = 0;
         for (const auto & column : data)
@@ -31,7 +40,7 @@ struct LightChunk
         return res;
     }
 
-    UInt64 allocatedMetadataBytes() const noexcept
+    UInt64 allocatedMetadataBytes() const
     {
         UInt64 res = 0;
         for (const auto & column : data)
@@ -41,7 +50,7 @@ struct LightChunk
         return res;
     }
 
-    UInt64 allocatedBytes() const noexcept { return allocatedMetadataBytes() + allocatedDataBytes(); }
+    UInt64 allocatedBytes() const { return allocatedMetadataBytes() + allocatedDataBytes(); }
 
     void clear() noexcept { data.clear(); }
 
@@ -63,6 +72,7 @@ struct LightChunkWithTimestamp
     LightChunkWithTimestamp(const Block & block)
         : chunk(block), min_timestamp(block.minTimestamp()), max_timestamp(block.maxTimestamp()) { }
 
+    UInt64 byteSize() const { return chunk.byteSize(); }
     UInt64 allocatedBytes() const { return allocatedMetadataBytes() + allocatedDataBytes(); }
     UInt64 allocatedMetadataBytes() const { return chunk.allocatedMetadataBytes() + sizeof(min_timestamp) + sizeof(max_timestamp); }
     UInt64 allocatedDataBytes() const { return chunk.allocatedDataBytes(); }

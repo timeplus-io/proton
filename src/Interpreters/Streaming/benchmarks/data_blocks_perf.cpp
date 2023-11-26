@@ -82,6 +82,26 @@ void refCountDataBlockPages(benchmark::State & state, Args &&... args)
     auto chunks = std::get<2>(args_tuple);
     auto page_size = std::get<3>(args_tuple);
 
+    {
+        auto dummy = prepareChunk(chunk_columns, chunk_rows);
+        std::cout << fmt::format(
+            "chunk_columns={} chunk_rows={} allocated_bytes={} allocated_data_bytes={} allocated_metadata_bytes={} raw_data_bytes={}\n",
+            chunk_columns,
+            chunk_rows,
+            dummy.allocatedBytes(),
+            dummy.allocatedDataBytes(),
+            dummy.allocatedMetadataBytes(),
+            dummy.byteSize());
+
+        for (const auto & col : dummy.data)
+            std::cout << fmt::format(
+                "{} allocated_bytes={} allocated_metadata_bytes={} raw_data_bytes={}\n",
+                col->getName(),
+                col->allocatedBytes(),
+                col->allocatedMetadataBytes(),
+                col->byteSize());
+    }
+
     using DataBlockPages = DB::Streaming::RefCountDataBlockPages<DB::LightChunk>;
     for (auto _ : state)
     {
@@ -96,13 +116,7 @@ void refCountDataBlockPages(benchmark::State & state, Args &&... args)
 
         {
             auto dummy = prepareChunk(chunk_columns, chunk_rows);
-            std::cout << fmt::format(
-                "allocated_bytes={} allocated_data_bytes={} allocated_metadata_bytes={} data_blocks={} metrics={{{}}}\n",
-                dummy.allocatedBytes(),
-                dummy.allocatedDataBytes(),
-                dummy.allocatedMetadataBytes(),
-                data_blocks.size(),
-                metrics.string());
+            std::cout << fmt::format("data_blocks={} metrics={{{}}}\n", data_blocks.size(), metrics.string());
         }
     }
 }
