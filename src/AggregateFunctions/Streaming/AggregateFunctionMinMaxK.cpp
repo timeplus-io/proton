@@ -1,9 +1,10 @@
-#include <AggregateFunctions/AggregateFunctionMinMaxK.h>
+#include <AggregateFunctions/Streaming/AggregateFunctionMinMaxK.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/Helpers.h>
 
+#include <Core/Settings.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDate32.h>
 #include <DataTypes/DataTypeDateTime.h>
@@ -29,15 +30,16 @@ extern const int ARGUMENT_OUT_OF_BOUND;
 extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
-
+namespace Streaming
+{
 namespace
 {
 template <bool is_min>
 AggregateFunctionPtr
-createAggregateFunctionMinMaxK(const std::string & name, const DataTypes & argument_types, const Array & params, const Settings *)
+createAggregateFunctionMinMaxK(const std::string & name, const DataTypes & argument_types, const Array & params, const Settings * settings)
 {
-    if (argument_types.size() < 1)
-        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires at least one argument.", name);
+    if (argument_types.size() < 2)
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires at least two argument.", name);
 
     UInt64 k = 10; /// default values
 
@@ -55,7 +57,9 @@ createAggregateFunctionMinMaxK(const std::string & name, const DataTypes & argum
             throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "Parameter 0 is illegal for aggregate function {}", name);
     }
 
-    return std::make_shared<AggregateFunctionMinMaxKTuple<is_min>>(k, argument_types, params);
+    /// how many more values to keep around for changelog processing to workaround retract scenarios
+    UInt64 max_size = k * settings->retract_k_multiplier.value;
+    return std::make_shared<AggregateFunctionMinMaxKTuple<is_min>>(k, max_size, argument_types, params);
 }
 
 #define DISPATCH(TYPE, M, ...) \
@@ -157,7 +161,7 @@ createAggregateFunctionMinMaxK(const std::string & name, const DataTypes & argum
         } \
     } while (0)
 
-#define BUILD_PARTIAL_COMPARER(TYPE, ...) buildValueComparer<TYPE, is_min>(__VA_ARGS__)
+#define BUILD_VALUE_COMPARER(TYPE, ...) buildValueComparer<TYPE, is_min>(__VA_ARGS__)
 #define BUILD_VALUE_GETTER(TYPE, ...) buildValueGetter<TYPE>(__VA_ARGS__)
 #define BUILD_VALUE_APPENDER(TYPE, ...) buildValueAppender<TYPE>(__VA_ARGS__)
 #define BUILD_VALUE_WRITER(TYPE, ...) buildValueWriter<TYPE>(__VA_ARGS__)
@@ -174,7 +178,7 @@ void buildValueComparer(DataTypePtr data_type, std::vector<TupleOperators::Compa
         const auto & tuple_type = assert_cast<const DataTypeTuple &>(*data_type);
         for (auto elem_type : tuple_type.getElements())
         {
-            DISPATCH(elem_type, BUILD_PARTIAL_COMPARER, elem_type, elem_comparers);
+            DISPATCH(elem_type, BUILD_VALUE_COMPARER, elem_type, elem_comparers);
         }
 
         /// build elem comparers
@@ -397,22 +401,26 @@ TupleOperators AggregateFunctionMinMaxKTuple<is_min>::buildTupleValueOperators()
     {
         const auto & arg_type = this->argument_types[col_idx];
 
-        /// Compare by first argument
-        if (col_idx == 0)
-            DISPATCH(arg_type, BUILD_PARTIAL_COMPARER, arg_type, operators.comparers);
+        /// Assume the last argument is `_tp_delta`
+        if (col_idx == this->argument_types.size() - 1)
+        {
+            assert(WhichDataType(this->argument_types[col_idx]).isInt8());
+            continue;
+        }
 
-        /// Get value from columns[col_idx] (Column)
+        /// Build operators for compare/get/append/write/read values from columns[col_idx] (Column)
+        DISPATCH(arg_type, BUILD_VALUE_COMPARER, arg_type, operators.comparers);
         DISPATCH(arg_type, BUILD_VALUE_GETTER, arg_type, col_idx, operators.getters);
         DISPATCH(arg_type, BUILD_VALUE_APPENDER, arg_type, col_idx, operators.appenders);
         DISPATCH(arg_type, BUILD_VALUE_WRITER, arg_type, operators.writers);
         DISPATCH(arg_type, BUILD_VALUE_READER, arg_type, operators.readers);
     }
 
-    assert(operators.comparers.size() == 1);
-    assert(operators.getters.size() == this->argument_types.size());
-    assert(operators.appenders.size() == this->argument_types.size());
-    assert(operators.writers.size() == this->argument_types.size());
-    assert(operators.readers.size() == this->argument_types.size());
+    assert(operators.comparers.size() == this->argument_types.size() - 1);
+    assert(operators.getters.size() == this->argument_types.size() - 1);
+    assert(operators.appenders.size() == this->argument_types.size() - 1);
+    assert(operators.writers.size() == this->argument_types.size() - 1);
+    assert(operators.readers.size() == this->argument_types.size() - 1);
 #undef BUILD_PARTIAL_COMPARE
 #undef BUILD_VALUE_GETTER
 #undef BUILD_VALUE_APPENDER
@@ -422,10 +430,10 @@ TupleOperators AggregateFunctionMinMaxKTuple<is_min>::buildTupleValueOperators()
 }
 
 template <typename TYPE>
-void appendSingleValue(DataTypePtr data_type, ColumnArray & arr_to, auto & top_k)
+void appendSingleValue(DataTypePtr data_type, ColumnArray & arr_to, auto & counted_map, UInt64 k)
 {
     ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
-    top_k.sort();
+    size_t res_count = 0;
     if constexpr (std::is_same_v<TYPE, TupleValue>)
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Expect append single value but got tuple value, it's bug");
@@ -433,18 +441,34 @@ void appendSingleValue(DataTypePtr data_type, ColumnArray & arr_to, auto & top_k
     else if constexpr (std::is_same_v<TYPE, StringRef>)
     {
         auto & col_to = arr_to.getData();
-        for (const auto & tuple_value : top_k)
+        for (const auto & [tuple_value, count] : counted_map)
         {
             const auto & string_ref = std::any_cast<const TYPE &>(tuple_value.values[0]);
-            col_to.insertData(string_ref.data, string_ref.size);
+            for (size_t i = 0; i < count; ++i)
+            {
+                if (res_count >= k)
+                    return offsets_to.push_back(col_to.size());
+
+                col_to.insertData(string_ref.data, string_ref.size);
+                ++res_count;
+            }
         }
         offsets_to.push_back(col_to.size());
     }
     else if constexpr (DB::is_decimal<TYPE>)
     {
         auto & col_to = assert_cast<ColumnDecimal<TYPE> &>(arr_to.getData());
-        for (const auto & tuple_value : top_k)
-            col_to.insertValue(std::any_cast<const TYPE &>(tuple_value.values[0]));
+        for (const auto & [tuple_value, count] : counted_map)
+        {
+            for (size_t i = 0; i < count; ++i)
+            {
+                if (res_count >= k)
+                    return offsets_to.push_back(col_to.size());
+
+                col_to.insertValue(std::any_cast<const TYPE &>(tuple_value.values[0]));
+                ++res_count;
+            }
+        }
 
         offsets_to.push_back(col_to.size());
     }
@@ -452,8 +476,17 @@ void appendSingleValue(DataTypePtr data_type, ColumnArray & arr_to, auto & top_k
     {
         assert(DB::isColumnedAsNumber(data_type) || DB::isEnum(data_type));
         auto & col_to = assert_cast<ColumnVector<TYPE> &>(arr_to.getData());
-        for (const auto & tuple_value : top_k)
-            col_to.insertValue(std::any_cast<const TYPE &>(tuple_value.values[0]));
+        for (const auto & [tuple_value, count] : counted_map)
+        {
+            for (size_t i = 0; i < count; ++i)
+            {
+                if (res_count >= k)
+                    return offsets_to.push_back(col_to.size());
+
+                col_to.insertValue(std::any_cast<const TYPE &>(tuple_value.values[0]));
+                ++res_count;
+            }
+        }
 
         offsets_to.push_back(col_to.size());
     }
@@ -463,48 +496,53 @@ template <bool is_min>
 void AggregateFunctionMinMaxKTuple<is_min>::insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const
 {
 #define APPENED_SINGLE_VALUE(TYPE, ...) appendSingleValue<TYPE>(__VA_ARGS__)
-    auto & top_k = this->data(place);
+    auto & counted_map = this->data(place);
     auto & arr_to = assert_cast<ColumnArray &>(to);
 
     /// Return Array(type) if only one argument and which isn't tuple
-    /// e.g. min_k(int, 3) -> [1, 2 ,3]
-    if (this->argument_types.size() == 1 && !isTuple(this->argument_types[0]))
+    /// e.g. min_k(int, 3, _tp_delta) -> [1, 2 ,3]
+    if (this->argument_types.size() == 2 && !isTuple(this->argument_types[0]))
     {
-        DISPATCH(this->argument_types[0], APPENED_SINGLE_VALUE, this->argument_types[0], arr_to, top_k);
-        return;
+        DISPATCH(this->argument_types[0], APPENED_SINGLE_VALUE, this->argument_types[0], arr_to, counted_map, k);
     }
     else
     {
         /// Return Array(Tuple(type))
-        /// e.g. min_k(int, 3, string) -> [(1, 'a'), (2, 'b'), (3, 'c')]
+        /// e.g. min_k(int, 3, string, _tp_delta) -> [(1, 'a'), (2, 'b'), (3, 'c')]
         auto & tuple_to = assert_cast<ColumnTuple &>(arr_to.getData());
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
-
-        top_k.sort();
-
-        for (const auto & tuple_value : top_k)
+        size_t res_count = 0;
+        for (const auto & [tuple_value, count] : counted_map)
         {
-            assert(tuple_value.values.size() == top_k.operators.appenders.size());
-            for (size_t i = 0; i < top_k.operators.appenders.size(); ++i)
-                top_k.operators.appenders[i](tuple_value.values[i], tuple_to);
+            for (size_t j = 0; j < count; ++j)
+            {
+                if (res_count >= k)
+                    return offsets_to.push_back(tuple_to.size());
+
+                assert(tuple_value.values.size() == counted_map.operators.appenders.size());
+                for (size_t i = 0; i < counted_map.operators.appenders.size(); ++i)
+                    counted_map.operators.appenders[i](tuple_value.values[i], tuple_to);
+
+                ++res_count;
+            }
         }
 
         offsets_to.push_back(tuple_to.size());
-        return;
     }
 #undef APPENED_SINGLE_VALUE
 }
 
 #undef DISPATCH
 
-void registerAggregateFunctionMinMaxK(AggregateFunctionFactory & factory)
+void registerAggregateFunctionMinMaxKRetract(AggregateFunctionFactory & factory)
 {
     AggregateFunctionProperties properties = {.returns_default_when_only_null = false, .is_order_dependent = true};
 
-    factory.registerFunction("max_k", {createAggregateFunctionMinMaxK<false>, properties});
-    factory.registerFunction("min_k", {createAggregateFunctionMinMaxK<true>, properties});
+    factory.registerFunction("__max_k_retract", {Streaming::createAggregateFunctionMinMaxK<false>, properties});
+    factory.registerFunction("__min_k_retract", {Streaming::createAggregateFunctionMinMaxK<true>, properties});
 }
 
+}
 }
 
 #pragma clang diagnostic pop
