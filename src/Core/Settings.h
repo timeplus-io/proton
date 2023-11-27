@@ -792,7 +792,8 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(Bool, enable_backfill_from_historical_store, true, "Enable backfill data from historical data store", 0) \
     M(Bool, emit_aggregated_during_backfill, true, "Enable emit intermediate aggr result during backfill historical data", 0) \
     M(Bool, include_internal_streams, false, "Show internal streams on SHOW streams query.", 0) \
-    M(UInt64, join_max_cached_bytes, 524288000, "Max cached bytes for stream to stream join", 0) \
+    M(UInt64, join_max_buffered_bytes, 524288000, "Max buffered bytes for stream to stream join", 0) \
+    M(UInt64, join_buffered_data_block_size, 0, "For streaming join, when buffered data in memory, the data block size directs to merge small data blocks to form bigger ones to improve memory efficiency. 0 means disable merging small data blocks.", 0) \
     M(Int64, max_join_range, 300, "Max join range", 0) \
     M(Bool, compact_kv_stream, true, "Control if compact a changelog kv or versioned kv stream during query", 0) \
     M(UInt64, keep_versions, 3, "Control how many versions for each key kept in memory when joining. Used in versioned_kv join", 0) \

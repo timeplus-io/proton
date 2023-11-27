@@ -187,6 +187,7 @@ public:
         assert(!right_key_column_positions.empty());
     }
 
+    size_t dataBlockSize() const noexcept { return table_join->dataBlockSize(); }
     JoinKind getKind() const { return kind; }
     JoinStrictness getStrictness() const { return strictness; }
     Kind getStreamingKind() const { return streaming_kind; }
@@ -227,7 +228,10 @@ public:
     /// For changelog emit
     struct JoinResults
     {
-        JoinResults(const Block & header_) : sample_block(header_), blocks(metrics), maps(std::make_unique<HashJoinMapsVariants>()) { }
+        JoinResults(const Block & header_)
+            : sample_block(header_), blocks(metrics), maps(std::make_unique<HashJoinMapsVariants>())
+        {
+        }
 
         String joinMetricsString(const HashJoin * join) const;
 

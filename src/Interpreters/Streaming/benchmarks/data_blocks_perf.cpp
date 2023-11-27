@@ -115,7 +115,6 @@ void refCountDataBlockPages(benchmark::State & state, Args &&... args)
         benchmark::ClobberMemory();
 
         {
-            auto dummy = prepareChunk(chunk_columns, chunk_rows);
             std::cout << fmt::format("data_blocks={} metrics={{{}}}\n", data_blocks.size(), metrics.string());
         }
     }
@@ -129,16 +128,17 @@ void refCountDataBlockList(benchmark::State & state, Args &&... args)
     auto chunk_columns = std::get<0>(args_tuple);
     auto chunk_rows = std::get<1>(args_tuple);
     auto chunks = std::get<2>(args_tuple);
+    auto data_block_size = std::get<3>(args_tuple);
 
     using DataBlockList = DB::Streaming::RefCountDataBlockList<DB::LightChunk>;
     for (auto _ : state)
     {
         DB::Streaming::CachedBlockMetrics metrics;
 
-        DataBlockList data_blocks(metrics);
+        DataBlockList data_blocks(data_block_size, metrics);
 
-        for (int64_t chunk = 0; chunk < chunks; ++chunk)
-            data_blocks.pushBack(prepareChunk(chunk_columns, chunk_rows));
+        for (int64_t chunk = 0; chunk < chunks; ++chunk) [[maybe_unused]]
+            [[maybe_unused]] auto start_row = data_blocks.pushBackOrConcat(prepareChunk(chunk_columns, chunk_rows));
 
         benchmark::ClobberMemory();
     }
@@ -296,7 +296,8 @@ BENCHMARK_CAPTURE(
     Column3ChunkRows1Chunks1000,
     /*chunk_columns=*/3,
     /*chunk_rows=*/1,
-    /*chunks*=*/1'000)
+    /*chunks=*/1'000,
+    /*data_block_size=*/0)
     ->Iterations(1000);
 
 BENCHMARK_CAPTURE(
@@ -304,7 +305,8 @@ BENCHMARK_CAPTURE(
     Column3ChunkRows1Chunks10000,
     /*chunk_columns=*/3,
     /*chunk_rows=*/1,
-    /*chunks*=*/10'000)
+    /*chunks*=*/10'000,
+    /*data_block_size=*/0)
     ->Iterations(100);
 
 BENCHMARK_CAPTURE(
@@ -312,7 +314,8 @@ BENCHMARK_CAPTURE(
     Column3ChunkRows1Chunks100000,
     /*chunk_columns=*/3,
     /*chunk_rows=*/1,
-    /*chunks*=*/100'000)
+    /*chunks*=*/100'000,
+    /*data_block_size=*/0)
     ->Iterations(10);
 
 BENCHMARK_CAPTURE(
@@ -320,7 +323,8 @@ BENCHMARK_CAPTURE(
     Column3ChunkRows1Chunks1000000,
     /*chunk_columns=*/3,
     /*chunk_rows=*/1,
-    /*chunks*=*/1000'000)
+    /*chunks*=*/1000'000,
+    /*data_block_size=*/0)
     ->Iterations(10);
 
 BENCHMARK_CAPTURE(
@@ -328,7 +332,17 @@ BENCHMARK_CAPTURE(
     Column3ChunkRows1Chunks10000000,
     /*chunk_columns=*/3,
     /*chunk_rows=*/1,
-    /*chunks*=*/10'000'000)
+    /*chunks*=*/10'000'000,
+    /*data_block_size=*/0)
+    ->Iterations(1);
+
+BENCHMARK_CAPTURE(
+    refCountDataBlockList,
+    Column3ChunkRows1Chunks10000000BS1000,
+    /*chunk_columns=*/3,
+    /*chunk_rows=*/1,
+    /*chunks*=*/10'000'000,
+    /*data_block_size=*/1000)
     ->Iterations(1);
 
 BENCHMARK_CAPTURE(
@@ -336,7 +350,8 @@ BENCHMARK_CAPTURE(
     Column3ChunkRows10Chunks1000,
     /*chunk_columns=*/3,
     /*chunk_rows=*/10,
-    /*chunks*=*/1'000)
+    /*chunks*=*/1'000,
+    /*data_block_size=*/0)
     ->Iterations(1000);
 
 BENCHMARK_CAPTURE(
@@ -344,7 +359,8 @@ BENCHMARK_CAPTURE(
     Column3ChunkRows10Chunks10000,
     /*chunk_columns=*/3,
     /*chunk_rows=*/10,
-    /*chunks*=*/10'000)
+    /*chunks*=*/10'000,
+    /*data_block_size=*/0)
     ->Iterations(100);
 
 BENCHMARK_CAPTURE(
@@ -352,7 +368,8 @@ BENCHMARK_CAPTURE(
     Column3ChunkRows10Chunks100000,
     /*chunk_columns=*/3,
     /*chunk_rows=*/10,
-    /*chunks*=*/100'000)
+    /*chunks*=*/100'000,
+    /*data_block_size=*/0)
     ->Iterations(10);
 
 BENCHMARK_CAPTURE(
@@ -360,7 +377,8 @@ BENCHMARK_CAPTURE(
     Column3ChunkRows100Chunks1000,
     /*chunk_columns=*/3,
     /*chunk_rows=*/100,
-    /*chunks*=*/1'000)
+    /*chunks*=*/1'000,
+    /*data_block_size=*/0)
     ->Iterations(1000);
 
 BENCHMARK_CAPTURE(
@@ -368,7 +386,8 @@ BENCHMARK_CAPTURE(
     Column3ChunkRows100Chunks10000,
     /*chunk_columns=*/3,
     /*chunk_rows=*/100,
-    /*chunks*=*/10'000)
+    /*chunks*=*/10'000,
+    /*data_block_size=*/0)
     ->Iterations(100);
 
 BENCHMARK_CAPTURE(
@@ -376,7 +395,8 @@ BENCHMARK_CAPTURE(
     Column3ChunkRows100Chunks100000,
     /*chunk_columns=*/3,
     /*chunk_rows=*/100,
-    /*chunks*=*/100'000)
+    /*chunks*=*/100'000,
+    /*data_block_size=*/0)
     ->Iterations(10);
 
 BENCHMARK_CAPTURE(
@@ -384,7 +404,8 @@ BENCHMARK_CAPTURE(
     Column3ChunkRows1000Chunks1000,
     /*chunk_columns=*/3,
     /*chunk_rows=*/1000,
-    /*chunks*=*/1'000)
+    /*chunks*=*/1'000,
+    /*data_block_size=*/0)
     ->Iterations(1000);
 
 BENCHMARK_CAPTURE(
@@ -392,7 +413,8 @@ BENCHMARK_CAPTURE(
     Column3ChunkRows1000Chunks10000,
     /*chunk_columns=*/3,
     /*chunk_rows=*/1000,
-    /*chunks*=*/10'000)
+    /*chunks*=*/10'000,
+    /*data_block_size=*/0)
     ->Iterations(100);
 
 BENCHMARK_CAPTURE(
@@ -400,7 +422,8 @@ BENCHMARK_CAPTURE(
     Column3ChunkRows1000Chunks100000,
     /*chunk_columns=*/3,
     /*chunk_rows=*/1000,
-    /*chunks*=*/100'000)
+    /*chunks*=*/100'000,
+    /*data_block_size=*/0)
     ->Iterations(10);
 
 BENCHMARK_MAIN();

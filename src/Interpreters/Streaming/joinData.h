@@ -31,11 +31,11 @@ using BlockNullmapList = std::deque<std::pair<JoinDataBlockRawPtr, ColumnPtr>>;
 
 struct HashBlocks
 {
-    HashBlocks(CachedBlockMetrics & metrics);
+    HashBlocks(size_t data_block_size, CachedBlockMetrics & metrics);
 
     ~HashBlocks();
 
-    void addBlock(JoinDataBlock && block) { blocks.pushBack(std::move(block)); }
+    [[nodiscard]] size_t addBlock(JoinDataBlock && block) { return blocks.pushBackOrConcat(std::move(block)); }
 
     const JoinDataBlock & lastBlock() const { return blocks.lastBlock(); }
 
@@ -61,8 +61,8 @@ SERDE struct BufferedStreamData
     BufferedStreamData(HashJoin * join_, const RangeAsofJoinContext & range_asof_join_ctx_, const String & asof_column_name_);
 
     /// Add block, assign block id and return block id
-    void addBlock(JoinDataBlock && block);
-    void addBlockWithoutLock(JoinDataBlock && block, HashBlocksPtr & target_hash_blocks);
+    [[nodiscard]] size_t addBlock(JoinDataBlock && block);
+    [[nodiscard]] size_t addBlockWithoutLock(JoinDataBlock && block, HashBlocksPtr & target_hash_blocks);
 
     struct BucketBlock
     {
@@ -143,10 +143,11 @@ SERDE struct BufferedStreamData
         current_hash_blocks = new_current;
     }
 
-    HashBlocksPtr newHashBlocks() { return std::make_shared<HashBlocks>(metrics); }
+    HashBlocksPtr newHashBlocks();
 
     void serialize(WriteBuffer & wb, SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices = nullptr) const;
-    void deserialize(ReadBuffer & rb, DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_row_ref_list_multiple = nullptr);
+    void deserialize(
+        ReadBuffer & rb, DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_row_ref_list_multiple = nullptr);
 
     NO_SERDE HashJoin * join;
 
@@ -160,7 +161,8 @@ SERDE struct BufferedStreamData
     std::atomic_int64_t current_watermark = 0;
 
     NO_SERDE Block sample_block; /// Block as it would appear in the BlockList
-    NO_SERDE std::optional<std::vector<size_t>> reserved_column_positions; /// `_tp_delta` etc column positions in sample block if they exist
+    NO_SERDE std::optional<std::vector<size_t>>
+        reserved_column_positions; /// `_tp_delta` etc column positions in sample block if they exist
 
     NO_SERDE mutable std::mutex mutex;
 

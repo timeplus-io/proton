@@ -1580,7 +1580,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                             expressions.join,
                             settings.max_block_size,
                             max_streams,
-                            settings.join_max_cached_bytes);
+                            settings.join_max_buffered_bytes);
                     }
                     else
                     {

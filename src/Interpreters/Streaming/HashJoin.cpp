@@ -652,6 +652,7 @@ size_t NO_INLINE insertFromBlockImplTypeCase(
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
     JoinDataBlockList * blocks,
+    size_t start_row,
     ConstNullMapPtr null_map,
     Arena & pool,
     std::vector<HashJoin::RefListMultipleRef *> & row_refs)
@@ -669,7 +670,7 @@ size_t NO_INLINE insertFromBlockImplTypeCase(
 
     auto key_getter = createKeyGetter < KeyGetter, is_range_asof_join || is_asof_join > (key_columns, key_sizes);
 
-    for (size_t i = 0; i < rows; ++i)
+    for (size_t i = start_row; i < rows; ++i)
     {
         if (has_null_map && (*null_map)[i])
             continue;
@@ -701,16 +702,17 @@ size_t insertFromBlockImplType(
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
     JoinDataBlockList * blocks,
+    size_t start_row,
     ConstNullMapPtr null_map,
     Arena & pool,
     std::vector<HashJoin::RefListMultipleRef *> & row_refs)
 {
     if (null_map)
         return insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(
-            join, map, rows, key_columns, key_sizes, blocks, null_map, pool, row_refs);
+            join, map, rows, key_columns, key_sizes, blocks, start_row, null_map, pool, row_refs);
     else
         return insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(
-            join, map, rows, key_columns, key_sizes, blocks, null_map, pool, row_refs);
+            join, map, rows, key_columns, key_sizes, blocks, start_row, null_map, pool, row_refs);
 }
 
 template <Strictness STRICTNESS, typename Maps>
@@ -722,6 +724,7 @@ size_t insertFromBlockImpl(
     const ColumnRawPtrs & key_columns,
     const Sizes & key_sizes,
     JoinDataBlockList * blocks,
+    size_t start_row,
     ConstNullMapPtr null_map,
     Arena & pool,
     std::vector<HashJoin::RefListMultipleRef *> & row_refs)
@@ -733,7 +736,7 @@ size_t insertFromBlockImpl(
         return insertFromBlockImplType< \
             STRICTNESS, \
             typename KeyGetterForType<HashType::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
-            join, *maps.TYPE, rows, key_columns, key_sizes, blocks, null_map, pool, row_refs); \
+            join, *maps.TYPE, rows, key_columns, key_sizes, blocks, start_row, null_map, pool, row_refs); \
         break;
         APPLY_FOR_HASH_KEY_VARIANTS(M)
 #undef M
@@ -1380,7 +1383,6 @@ void HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std:
     /// Add `block_to_save` to target stream data
     /// Note `block_to_save` may be empty for cases in which the query doesn't care other non-key columns.
     /// For example, SELECT count() FROM stream_a JOIN stream_b ON i=ii;
-    auto rows = key_columns[0]->size();
 
     JoinData * join_data;
     if constexpr (is_left_block)
@@ -1388,7 +1390,8 @@ void HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std:
     else
         join_data = &right_data;
 
-    join_data->buffered_data->addBlockWithoutLock(std::move(block_to_save), target_hash_blocks);
+    auto start_row = join_data->buffered_data->addBlockWithoutLock(std::move(block_to_save), target_hash_blocks);
+    auto rows = target_hash_blocks->blocks.lastBlock().rows();
 
     joinDispatch(
         streaming_kind,
@@ -1403,6 +1406,7 @@ void HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std:
                 key_columns,
                 key_sizes[0],
                 &target_hash_blocks->blocks,
+                start_row,
                 null_map,
                 target_hash_blocks->pool,
                 row_refs);

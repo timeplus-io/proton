@@ -8,14 +8,14 @@ namespace DB
 {
 namespace Streaming
 {
-HashBlocks::HashBlocks(CachedBlockMetrics & metrics) : blocks(metrics), maps(std::make_unique<HashJoinMapsVariants>())
+HashBlocks::HashBlocks(size_t data_block_size, CachedBlockMetrics & metrics) : blocks(data_block_size, metrics), maps(std::make_unique<HashJoinMapsVariants>())
 {
     /// FIXME, in some cases, `maps` is not needed
 }
 
 HashBlocks::~HashBlocks() = default;
 
-BufferedStreamData::BufferedStreamData(HashJoin * join_) : join(join_), current_hash_blocks(std::make_shared<HashBlocks>(metrics))
+BufferedStreamData::BufferedStreamData(HashJoin * join_) : join(join_), current_hash_blocks(std::make_shared<HashBlocks>(join->dataBlockSize(), metrics))
 {
 }
 
@@ -25,7 +25,7 @@ BufferedStreamData::BufferedStreamData(
     : join(join_)
     , range_asof_join_ctx(range_asof_join_ctx_)
     , asof_col_name(asof_column_name_)
-    , current_hash_blocks(std::make_shared<HashBlocks>(metrics))
+    , current_hash_blocks(std::make_shared<HashBlocks>(join->dataBlockSize(), metrics))
 {
     updateBucketSize();
 }
@@ -155,7 +155,7 @@ void BufferedStreamData::updateAsofJoinColumnPositionAndScale(UInt16 scale, size
 }
 
 
-void BufferedStreamData::addBlock(JoinDataBlock && block)
+size_t BufferedStreamData::addBlock(JoinDataBlock && block)
 {
     assert(current_hash_blocks);
 
@@ -163,9 +163,9 @@ void BufferedStreamData::addBlock(JoinDataBlock && block)
     return addBlockWithoutLock(std::move(block), current_hash_blocks);
 }
 
-void BufferedStreamData::addBlockWithoutLock(JoinDataBlock && block, HashBlocksPtr & target_hash_blocks)
+size_t BufferedStreamData::addBlockWithoutLock(JoinDataBlock && block, HashBlocksPtr & target_hash_blocks)
 {
-    target_hash_blocks->addBlock(std::move(block));
+    return target_hash_blocks->addBlock(std::move(block));
 }
 
 std::vector<BufferedStreamData::BucketBlock> BufferedStreamData::assignBlockToRangeBuckets(Block && block)
@@ -315,7 +315,6 @@ void BufferedStreamData::deserialize(
 {
     std::scoped_lock lock(mutex);
 
-
     range_asof_join_ctx.deserialize(rb);
 
     DB::readIntBinary(bucket_size, rb);
@@ -347,5 +346,9 @@ void BufferedStreamData::deserialize(
     metrics.deserialize(rb);
 }
 
+HashBlocksPtr BufferedStreamData::newHashBlocks()
+{
+    return std::make_shared<HashBlocks>(join->dataBlockSize(), metrics);
+}
 }
 }
