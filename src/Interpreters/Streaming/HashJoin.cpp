@@ -546,25 +546,25 @@ template <typename Map, typename KeyGetter>
 struct Inserter
 {
     static ALWAYS_INLINE void
-    insertAll(const HashJoin &, Map & map, KeyGetter & key_getter, const JoinDataBlock * stored_block, size_t i, Arena & pool)
+    insertAll(const HashJoin &, Map & map, KeyGetter & key_getter, const JoinDataBlock * stored_block, size_t original_row, size_t row, Arena & pool)
     {
-        auto emplace_result = key_getter.emplaceKey(map, i, pool);
+        auto emplace_result = key_getter.emplaceKey(map, original_row, pool);
 
         if (emplace_result.isInserted())
-            new (&emplace_result.getMapped()) typename Map::mapped_type(stored_block, i);
+            new (&emplace_result.getMapped()) typename Map::mapped_type(stored_block, row);
         else
             /// The first element of the list is stored in the value of the hash table, the rest in the pool.
-            emplace_result.getMapped().insert({stored_block, i}, pool);
+            emplace_result.getMapped().insert({stored_block, row}, pool);
     }
 
     static ALWAYS_INLINE void
-    insertOne(const HashJoin & join, Map & map, KeyGetter & key_getter, JoinDataBlockList * blocks, size_t i, Arena & pool)
+    insertOne(const HashJoin & join, Map & map, KeyGetter & key_getter, JoinDataBlockList * blocks, size_t original_row, size_t row, Arena & pool)
     {
-        auto emplace_result = key_getter.emplaceKey(map, i, pool);
+        auto emplace_result = key_getter.emplaceKey(map, original_row, pool);
 
         if (emplace_result.isInserted())
         {
-            new (&emplace_result.getMapped()) typename Map::mapped_type(blocks, i);
+            new (&emplace_result.getMapped()) typename Map::mapped_type(blocks, row);
         }
         else if (join.anyTakeLastRow())
         {
@@ -575,7 +575,7 @@ struct Inserter
 
             /// aggregates_pool->setCurrentTimestamps(window_lower_bound, window_upper_bound);
 
-            new (&emplace_result.getMapped()) typename Map::mapped_type(blocks, i);
+            new (&emplace_result.getMapped()) typename Map::mapped_type(blocks, row);
         }
     }
 
@@ -584,19 +584,20 @@ struct Inserter
         Map & map,
         KeyGetter & key_getter,
         JoinDataBlockList * blocks,
-        size_t i,
+        size_t original_row,
+        size_t row,
         Arena & pool,
         HashJoin::RefListMultipleRef * multiple_ref)
     {
         assert(!multiple_ref || (multiple_ref && multiple_ref->row_ref_list == nullptr));
 
-        auto emplace_result = key_getter.emplaceKey(map, i, pool);
+        auto emplace_result = key_getter.emplaceKey(map, original_row, pool);
         auto * mapped = &emplace_result.getMapped();
 
         if (emplace_result.isInserted())
             mapped = new (mapped) typename Map::mapped_type(std::make_unique<HashJoin::RefListMultiple>());
 
-        auto iter = (*mapped)->insert(blocks, i);
+        auto iter = (*mapped)->insert(blocks, row);
 
         if (multiple_ref)
         {
@@ -610,17 +611,18 @@ struct Inserter
         Map & map,
         KeyGetter & key_getter,
         const JoinDataBlock * stored_block,
-        size_t i,
+        size_t original_row,
+        size_t row, /// If we merge small data blocks, row and original row will be different
         Arena & pool,
         const IColumn & asof_column)
     {
-        auto emplace_result = key_getter.emplaceKey(map, i, pool);
+        auto emplace_result = key_getter.emplaceKey(map, original_row, pool);
         typename Map::mapped_type * time_series_map = &emplace_result.getMapped();
 
         TypeIndex asof_type = *join.getAsofType();
         if (emplace_result.isInserted())
             time_series_map = new (time_series_map) typename Map::mapped_type(asof_type);
-        time_series_map->insert(asof_type, asof_column, stored_block, i);
+        time_series_map->insert(asof_type, asof_column, stored_block, original_row, row);
     }
 
     static ALWAYS_INLINE void insertAsof(
@@ -628,19 +630,20 @@ struct Inserter
         Map & map,
         KeyGetter & key_getter,
         JoinDataBlockList * blocks,
-        size_t i,
+        size_t original_row,
+        size_t row,
         Arena & pool,
         const IColumn & asof_column,
         UInt64 keep_versions)
     {
-        auto emplace_result = key_getter.emplaceKey(map, i, pool);
+        auto emplace_result = key_getter.emplaceKey(map, original_row, pool);
         typename Map::mapped_type * time_series_map = &emplace_result.getMapped();
 
         TypeIndex asof_type = *join.getAsofType();
         if (emplace_result.isInserted())
             time_series_map = new (time_series_map) typename Map::mapped_type(asof_type);
 
-        time_series_map->insert(asof_type, asof_column, blocks, i, join.getAsofInequality(), keep_versions);
+        time_series_map->insert(asof_type, asof_column, blocks, original_row, row, join.getAsofInequality(), keep_versions);
     }
 };
 
@@ -676,20 +679,20 @@ size_t NO_INLINE insertFromBlockImplTypeCase(
             continue;
 
         if constexpr (is_range_asof_join)
-            Inserter<Map, KeyGetter>::insertRangeAsof(join, map, key_getter, &blocks->lastBlock(), i, pool, *asof_column);
+            Inserter<Map, KeyGetter>::insertRangeAsof(join, map, key_getter, &blocks->lastDataBlock(), i - start_row, i, pool, *asof_column);
         else if constexpr (is_asof_join)
-            Inserter<Map, KeyGetter>::insertAsof(join, map, key_getter, blocks, i, pool, *asof_column, join.keepVersions());
+            Inserter<Map, KeyGetter>::insertAsof(join, map, key_getter, blocks, i - start_row, i, pool, *asof_column, join.keepVersions());
         else if constexpr (mapped_one)
-            Inserter<Map, KeyGetter>::insertOne(join, map, key_getter, blocks, i, pool);
+            Inserter<Map, KeyGetter>::insertOne(join, map, key_getter, blocks, i - start_row, i, pool);
         else if constexpr (mapped_multiple)
         {
             if (row_refs.empty())
-                Inserter<Map, KeyGetter>::insertMultiple(join, map, key_getter, blocks, i, pool, nullptr);
+                Inserter<Map, KeyGetter>::insertMultiple(join, map, key_getter, blocks, i - start_row, i, pool, nullptr);
             else if (row_refs[i])
-                Inserter<Map, KeyGetter>::insertMultiple(join, map, key_getter, blocks, i, pool, row_refs[i]);
+                Inserter<Map, KeyGetter>::insertMultiple(join, map, key_getter, blocks, i - start_row, i, pool, row_refs[i - start_row]);
         }
         else
-            Inserter<Map, KeyGetter>::insertAll(join, map, key_getter, &blocks->lastBlock(), i, pool);
+            Inserter<Map, KeyGetter>::insertAll(join, map, key_getter, &blocks->lastDataBlock(), i - start_row, i, pool);
     }
     return map.getBufferSizeInCells();
 }
@@ -1343,8 +1346,10 @@ void HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std:
     if constexpr (!is_left_block)
         side = JoinTableSide::Right;
 
+    /// key columns are from source `block`
     ColumnRawPtrMap all_key_columns = JoinCommon::materializeColumnsInplaceMap(block, table_join->getAllNames(side));
 
+    /// We have copy of source `block` to `block_to_save` after prepare, so `block_to_save` is good to get moved to the buffered stream data
     Block block_to_save = prepareBlock<is_left_block>(block);
 
     /// FIXME, multiple disjuncts OR clause
@@ -1390,8 +1395,8 @@ void HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std:
     else
         join_data = &right_data;
 
-    auto start_row = join_data->buffered_data->addBlockWithoutLock(std::move(block_to_save), target_hash_blocks);
-    auto rows = target_hash_blocks->blocks.lastBlock().rows();
+    auto start_row = join_data->buffered_data->addOrConcatDataBlockWithoutLock(std::move(block_to_save), target_hash_blocks);
+    auto rows = target_hash_blocks->blocks.lastDataBlock().rows();
 
     joinDispatch(
         streaming_kind,
@@ -1414,7 +1419,7 @@ void HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std:
 
     if (save_nullmap)
         /// FIXME, we will need account the allocated bytes for null_map_holder / not_joined_map as well
-        target_hash_blocks->blocks_nullmaps.emplace_back(&target_hash_blocks->lastBlock(), null_map_holder);
+        target_hash_blocks->blocks_nullmaps.emplace_back(&target_hash_blocks->lastDataBlock(), null_map_holder);
 
     checkLimits();
 }
@@ -1770,7 +1775,7 @@ void HashJoin::insertRightBlock(Block right_block)
 
     /// TODO... changelog transform push down optimization is not implemented yet
     /// auto row_refs = eraseOrAppendForPartialPrimaryKeyJoin(right_block);
-    doInsertBlock<false>(std::move(right_block), right_data.buffered_data->getCurrentHashBlocksPtr(), {});
+    doInsertBlock<false>(std::move(right_block), right_data.buffered_data->getCurrentHashBlocksPtr());
 }
 
 Block HashJoin::insertLeftBlockAndJoin(Block & left_block)
@@ -1820,7 +1825,7 @@ std::vector<Block> HashJoin::insertBlockToRangeBucketsAndJoin(Block block)
     std::scoped_lock lock(left_data.buffered_data->mutex, right_data.buffered_data->mutex);
 
     /// Insert
-    auto bucket_blocks = joining_data->assignBlockToRangeBuckets(std::move(block));
+    auto bucket_blocks = joining_data->assignDataBlockToRangeBuckets(std::move(block));
     for (auto & bucket_block : bucket_blocks)
         /// Here we copy over the block since the block will be used to join which will modify the columns in-place
         doInsertBlock<is_left_block>(bucket_block.block, std::move(bucket_block.hash_blocks));

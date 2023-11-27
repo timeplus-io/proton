@@ -35,9 +35,9 @@ struct HashBlocks
 
     ~HashBlocks();
 
-    [[nodiscard]] size_t addBlock(JoinDataBlock && block) { return blocks.pushBackOrConcat(std::move(block)); }
+    [[nodiscard]] size_t addOrConcatDataBlock(JoinDataBlock && block) { return blocks.pushBackOrConcat(std::move(block)); }
 
-    const JoinDataBlock & lastBlock() const { return blocks.lastBlock(); }
+    const JoinDataBlock & lastDataBlock() const { return blocks.lastDataBlock(); }
 
     /// Buffered data
     JoinDataBlockList blocks;
@@ -61,8 +61,8 @@ SERDE struct BufferedStreamData
     BufferedStreamData(HashJoin * join_, const RangeAsofJoinContext & range_asof_join_ctx_, const String & asof_column_name_);
 
     /// Add block, assign block id and return block id
-    [[nodiscard]] size_t addBlock(JoinDataBlock && block);
-    [[nodiscard]] size_t addBlockWithoutLock(JoinDataBlock && block, HashBlocksPtr & target_hash_blocks);
+    [[nodiscard]] size_t addOrConcatDataBlock(JoinDataBlock && block);
+    [[nodiscard]] size_t addOrConcatDataBlockWithoutLock(JoinDataBlock && block, HashBlocksPtr & target_hash_blocks);
 
     struct BucketBlock
     {
@@ -76,7 +76,7 @@ SERDE struct BufferedStreamData
         Block block;
         HashBlocksPtr hash_blocks;
     };
-    std::vector<BucketBlock> assignBlockToRangeBuckets(Block && block);
+    std::vector<BucketBlock> assignDataBlockToRangeBuckets(Block && block);
 
     /// Check if [min_ts, max_ts] intersects with range bucket [bucket_start_ts, bucket_start_ts + bucket_size]
     /// The rational behind this is stream data is high temporal, we probably has a good chance to prune the

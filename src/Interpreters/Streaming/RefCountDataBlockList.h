@@ -65,14 +65,14 @@ struct RefCountDataBlockList
 
     bool empty() const { return blocks.empty(); }
 
-    auto lastBlockIter()
+    auto lastDataBlockIter()
     {
         assert(!blocks.empty());
         /// return std::prev(blocks.end());
         return --blocks.end();
     }
 
-    const DataBlock & lastBlock() const
+    const DataBlock & lastDataBlock() const
     {
         assert(!blocks.empty());
         return blocks.back().block;

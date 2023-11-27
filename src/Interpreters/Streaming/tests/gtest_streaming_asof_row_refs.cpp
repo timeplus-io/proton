@@ -108,11 +108,11 @@ void commonTest(size_t data_block_size, const std::vector<Case> & cases)
             DB::Streaming::AsofRowRefs<DB::Block> row_refs(asof_col.type->getTypeId());
 
             ret_right_blocks = forEachRightBlock(data_block_size, join_metrics, [&](auto * right_blocks, size_t start_row) {
-                auto & last_block = right_blocks->lastBlock();
+                auto & last_block = right_blocks->lastDataBlock();
                 auto & right_asof_col = last_block.getByPosition(0);
                 for (size_t i = start_row, rows = last_block.rows(); i < rows; ++i)
                     row_refs.insert(
-                        asof_col.type->getTypeId(), *right_asof_col.column, right_blocks, i, test_case.inequality, test_case.keep_versions);
+                        asof_col.type->getTypeId(), *right_asof_col.column, right_blocks, i, i, test_case.inequality, test_case.keep_versions);
             });
 
             auto result{row_refs.findAsof(asof_col.type->getTypeId(), test_case.inequality, *asof_col.column, test_case.row_num)};

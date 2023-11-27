@@ -162,7 +162,7 @@ struct RowRefWithRefCount
     RowRefWithRefCount() : blocks(nullptr), row_num(0) { }
 
     RowRefWithRefCount(RefCountDataBlockList<DataBlock> * blocks_, size_t row_num_)
-        : blocks(blocks_), block_iter(blocks_->lastBlockIter()), row_num(static_cast<SizeT>(row_num_))
+        : blocks(blocks_), block_iter(blocks_->lastDataBlockIter()), row_num(static_cast<SizeT>(row_num_))
     {
         assert(blocks_);
     }
@@ -325,6 +325,7 @@ public:
         TypeIndex type,
         const IColumn & asof_column,
         RefCountDataBlockList<DataBlock> * blocks,
+        size_t original_row_num,
         size_t row_num,
         ASOFJoinInequality inequality,
         size_t keep_versions);
@@ -381,7 +382,7 @@ public:
 
     explicit RangeAsofRowRefs(TypeIndex t);
 
-    void insert(TypeIndex type, const IColumn & asof_column, const DataBlock * block, size_t row_num);
+    void insert(TypeIndex type, const IColumn & asof_column, const DataBlock * block, size_t original_row_num, size_t row_num);
 
     /// Find a range of rows which can be joined
     std::vector<RowRefDataBlock> findRange(

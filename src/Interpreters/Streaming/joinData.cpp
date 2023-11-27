@@ -8,14 +8,16 @@ namespace DB
 {
 namespace Streaming
 {
-HashBlocks::HashBlocks(size_t data_block_size, CachedBlockMetrics & metrics) : blocks(data_block_size, metrics), maps(std::make_unique<HashJoinMapsVariants>())
+HashBlocks::HashBlocks(size_t data_block_size, CachedBlockMetrics & metrics)
+    : blocks(data_block_size, metrics), maps(std::make_unique<HashJoinMapsVariants>())
 {
     /// FIXME, in some cases, `maps` is not needed
 }
 
 HashBlocks::~HashBlocks() = default;
 
-BufferedStreamData::BufferedStreamData(HashJoin * join_) : join(join_), current_hash_blocks(std::make_shared<HashBlocks>(join->dataBlockSize(), metrics))
+BufferedStreamData::BufferedStreamData(HashJoin * join_)
+    : join(join_), current_hash_blocks(std::make_shared<HashBlocks>(join->dataBlockSize(), metrics))
 {
 }
 
@@ -155,20 +157,20 @@ void BufferedStreamData::updateAsofJoinColumnPositionAndScale(UInt16 scale, size
 }
 
 
-size_t BufferedStreamData::addBlock(JoinDataBlock && block)
+size_t BufferedStreamData::addOrConcatDataBlock(JoinDataBlock && block)
 {
     assert(current_hash_blocks);
 
     /// std::scoped_lock lock(mutex);
-    return addBlockWithoutLock(std::move(block), current_hash_blocks);
+    return addOrConcatDataBlockWithoutLock(std::move(block), current_hash_blocks);
 }
 
-size_t BufferedStreamData::addBlockWithoutLock(JoinDataBlock && block, HashBlocksPtr & target_hash_blocks)
+size_t BufferedStreamData::addOrConcatDataBlockWithoutLock(JoinDataBlock && block, HashBlocksPtr & target_hash_blocks)
 {
-    return target_hash_blocks->addBlock(std::move(block));
+    return target_hash_blocks->addOrConcatDataBlock(std::move(block));
 }
 
-std::vector<BufferedStreamData::BucketBlock> BufferedStreamData::assignBlockToRangeBuckets(Block && block)
+std::vector<BufferedStreamData::BucketBlock> BufferedStreamData::assignDataBlockToRangeBuckets(Block && block)
 {
     /// Categorize block according to range bucket, then we can prune the range bucketed blocks
     /// when `watermark` passed its time. RangeSplitter assign min/max timestamp for each split block

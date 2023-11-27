@@ -62,7 +62,7 @@ void RefCountDataBlockList<DataBlock>::deserialize(
         blocks.push_back(std::move(elem));
 
         if (deserialized_indices_with_block)
-            deserialized_indices_with_block->emplace(i, lastBlockIter());
+            deserialized_indices_with_block->emplace(i, lastDataBlockIter());
     }
 }
 
