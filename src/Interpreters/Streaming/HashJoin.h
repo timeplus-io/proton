@@ -10,6 +10,7 @@
 #include <Interpreters/TableJoin.h>
 #include <base/SerdeTag.h>
 #include <Common/ColumnUtils.h>
+#include <Common/HashMapSizes.h>
 #include <Common/HashMapsTemplate.h>
 #include <Common/HashTable/FixedHashMap.h>
 #include <Common/HashTable/HashMap.h>
@@ -217,7 +218,7 @@ public:
     using MapsRangeAsof = HashMapsTemplate<RangeAsofRowRefs<JoinDataBlock>>;
     using MapsVariant = std::variant<MapsOne, MapsAll, MapsAsof, MapsRangeAsof, MapsMultiple>;
 
-    size_t sizeOfMapsVariant(const MapsVariant & maps_variant) const;
+    HashMapSizes sizesOfMapsVariant(const MapsVariant & maps_variant) const;
     HashType getHashMethodType() const { return hash_method_type; }
 
     /// bool isUsed(size_t off) const { return used_flags.getUsedSafe(off); }
@@ -228,10 +229,7 @@ public:
     /// For changelog emit
     struct JoinResults
     {
-        JoinResults(const Block & header_)
-            : sample_block(header_), blocks(metrics), maps(std::make_unique<HashJoinMapsVariants>())
-        {
-        }
+        JoinResults(const Block & header_) : sample_block(header_), blocks(metrics), maps(std::make_unique<HashJoinMapsVariants>()) { }
 
         String joinMetricsString(const HashJoin * join) const;
 
@@ -481,7 +479,8 @@ private:
 
 struct HashJoinMapsVariants
 {
-    size_t size(const HashJoin * join) const;
+    /// \return Number of keys in the map
+    HashMapSizes sizes(const HashJoin * join) const;
     std::vector<HashJoin::MapsVariant> map_variants;
 };
 

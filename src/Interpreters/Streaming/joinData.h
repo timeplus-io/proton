@@ -14,6 +14,7 @@
 #include <Core/LightChunk.h>
 #include <base/SerdeTag.h>
 #include <Common/Arena.h>
+#include <Common/HashMapSizes.h>
 
 #include <deque>
 #include <map>
@@ -23,6 +24,7 @@ namespace DB
 namespace Streaming
 {
 struct HashJoinMapsVariants;
+class HashJoin;
 
 using JoinDataBlock = LightChunkWithTimestamp;
 using JoinDataBlockList = RefCountDataBlockList<JoinDataBlock>;
@@ -39,6 +41,8 @@ struct HashBlocks
 
     const JoinDataBlock & lastDataBlock() const { return blocks.lastDataBlock(); }
 
+    HashMapSizes hashMapSizes(const HashJoin * hash_join) const;
+
     /// Buffered data
     JoinDataBlockList blocks;
 
@@ -52,7 +56,6 @@ struct HashBlocks
 };
 using HashBlocksPtr = std::shared_ptr<HashBlocks>;
 
-class HashJoin;
 SERDE struct BufferedStreamData
 {
     explicit BufferedStreamData(HashJoin * join_);
@@ -70,6 +73,11 @@ SERDE struct BufferedStreamData
             : bucket(bucket_), block(std::move(block_)), hash_blocks(std::move(hash_blocks_))
         {
             assert(block.rows());
+        }
+
+        HashMapSizes hashMapSizes(const HashJoin * hash_join) const
+        {
+            return hash_blocks ? hash_blocks->hashMapSizes(hash_join) : HashMapSizes{};
         }
 
         size_t bucket = 0;
@@ -145,6 +153,28 @@ SERDE struct BufferedStreamData
 
     HashBlocksPtr newHashBlocks();
 
+    HashMapSizes hashMapSizes(const HashJoin * hash_join) const
+    {
+        if (!range_bucket_hash_blocks.empty())
+        {
+            HashMapSizes sizes;
+            for (const auto & hash_blocks : range_bucket_hash_blocks)
+            {
+                auto one_sizes = hash_blocks.second->hashMapSizes(join);
+                sizes.keys = one_sizes.keys;
+                sizes.buffer_size_in_bytes = one_sizes.buffer_size_in_bytes;
+                sizes.buffer_bytes_in_cells = one_sizes.buffer_bytes_in_cells;
+            }
+
+            return sizes;
+        }
+        else if (current_hash_blocks)
+        {
+            return current_hash_blocks->hashMapSizes(join);
+        }
+        return {};
+    }
+
     void serialize(WriteBuffer & wb, SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices = nullptr) const;
     void deserialize(
         ReadBuffer & rb, DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_row_ref_list_multiple = nullptr);
@@ -175,8 +205,7 @@ private:
     /// `current_hash_blocks` serves 3 purposes
     /// 1) During query plan phase, we will need it to evaluate the header
     /// 2) Workaround the `joinBlock` API interface for range join, it points the current working right blocks in the range bucket
-    /// 3) For non-range join, it points the global blocks since there is no range bucket in this case
-    /// 4) For global join, it points to the global working blocks since there is not range bucket in this case
+    /// 3) For global join, it points to the global working blocks since there is not range bucket in this case
     HashBlocksPtr current_hash_blocks;
 
     /// Only for range join

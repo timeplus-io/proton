@@ -11,10 +11,14 @@ namespace Streaming
 HashBlocks::HashBlocks(size_t data_block_size, CachedBlockMetrics & metrics)
     : blocks(data_block_size, metrics), maps(std::make_unique<HashJoinMapsVariants>())
 {
-    /// FIXME, in some cases, `maps` is not needed
 }
 
 HashBlocks::~HashBlocks() = default;
+
+HashMapSizes HashBlocks::hashMapSizes(const DB::Streaming::HashJoin * hash_join) const
+{
+    return maps->sizes(hash_join);
+}
 
 BufferedStreamData::BufferedStreamData(HashJoin * join_)
     : join(join_), current_hash_blocks(std::make_shared<HashBlocks>(join->dataBlockSize(), metrics))
@@ -239,7 +243,6 @@ String BufferedStreamData::joinMetricsString() const
     size_t total_blocks_nullmaps_cached = 0;
     size_t total_arena_bytes = 0;
     size_t total_arena_chunks = 0;
-    size_t total_keys_cached = 0;
 
     auto accumulateOneHashBlocks = [&](auto & hashed_blocks) {
         assert(hashed_blocks);
@@ -255,9 +258,6 @@ String BufferedStreamData::joinMetricsString() const
 
         total_arena_bytes += hashed_blocks->pool.size();
         total_arena_chunks += hashed_blocks->pool.numOfChunks();
-
-        if (hashed_blocks->maps)
-            total_keys_cached += hashed_blocks->maps->size(join);
     };
 
     for (const auto & [_, hashed_blocks] : range_bucket_hash_blocks)
@@ -268,8 +268,8 @@ String BufferedStreamData::joinMetricsString() const
 
     return fmt::format(
         "total_buckets={}, total_blocks_cached={}, total_blocks_bytes_cached={}, total_blocks_allocated_bytes_cached={}, "
-        "total_blocks_rows_cached={}, total_blocks_nullmaps_cached={}, total_arena_bytes={}, total_arena_chunks={}, total_keys_cached={}; "
-        "recorded_join_metrics={}, next_block_id={}",
+        "total_blocks_rows_cached={}, total_blocks_nullmaps_cached={}, total_arena_bytes={}, total_arena_chunks={}, hash_map_sizes={{{}}} "
+        "recorded_join_metrics={{{}}}, next_block_id={}",
         total_buckets,
         total_blocks_cached,
         total_blocks_bytes_cached,
@@ -278,7 +278,7 @@ String BufferedStreamData::joinMetricsString() const
         total_blocks_nullmaps_cached,
         total_arena_bytes,
         total_arena_chunks,
-        total_keys_cached,
+        hashMapSizes(join).string(),
         metrics.string(),
         block_id);
 }

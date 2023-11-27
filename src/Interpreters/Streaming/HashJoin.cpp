@@ -545,8 +545,14 @@ IColumn::Filter switchJoinColumns(const std::vector<const Maps *> & mapv, AddedC
 template <typename Map, typename KeyGetter>
 struct Inserter
 {
-    static ALWAYS_INLINE void
-    insertAll(const HashJoin &, Map & map, KeyGetter & key_getter, const JoinDataBlock * stored_block, size_t original_row, size_t row, Arena & pool)
+    static ALWAYS_INLINE void insertAll(
+        const HashJoin &,
+        Map & map,
+        KeyGetter & key_getter,
+        const JoinDataBlock * stored_block,
+        size_t original_row,
+        size_t row,
+        Arena & pool)
     {
         auto emplace_result = key_getter.emplaceKey(map, original_row, pool);
 
@@ -557,8 +563,8 @@ struct Inserter
             emplace_result.getMapped().insert({stored_block, row}, pool);
     }
 
-    static ALWAYS_INLINE void
-    insertOne(const HashJoin & join, Map & map, KeyGetter & key_getter, JoinDataBlockList * blocks, size_t original_row, size_t row, Arena & pool)
+    static ALWAYS_INLINE void insertOne(
+        const HashJoin & join, Map & map, KeyGetter & key_getter, JoinDataBlockList * blocks, size_t original_row, size_t row, Arena & pool)
     {
         auto emplace_result = key_getter.emplaceKey(map, original_row, pool);
 
@@ -679,7 +685,8 @@ size_t NO_INLINE insertFromBlockImplTypeCase(
             continue;
 
         if constexpr (is_range_asof_join)
-            Inserter<Map, KeyGetter>::insertRangeAsof(join, map, key_getter, &blocks->lastDataBlock(), i - start_row, i, pool, *asof_column);
+            Inserter<Map, KeyGetter>::insertRangeAsof(
+                join, map, key_getter, &blocks->lastDataBlock(), i - start_row, i, pool, *asof_column);
         else if constexpr (is_asof_join)
             Inserter<Map, KeyGetter>::insertAsof(join, map, key_getter, blocks, i - start_row, i, pool, *asof_column, join.keepVersions());
         else if constexpr (mapped_one)
@@ -857,12 +864,13 @@ HashJoin::HashJoin(
 
     LOG_INFO(
         logger,
-        "({}) hash type: {}, kind: {}, strictness: {}, keys : {}, right header: {}",
+        "({}) hash type: {}, kind: {}, strictness: {}, keys : {}, buffered_data_block_size={} right header: {}",
         fmt::ptr(this),
         toString(hash_method_type),
         toString(kind),
         toString(strictness),
         TableJoin::formatClauses(table_join->getClauses(), true),
+        dataBlockSize(),
         right_data.join_stream_desc->input_header.dumpStructure());
 
     if (streaming_strictness == Strictness::Range)
@@ -878,7 +886,8 @@ HashJoin::~HashJoin() noexcept
 {
     LOG_INFO(
         logger,
-        "Left stream metrics: {}, right stream metrics: {}, global join metrics: {}, retract buffer metrics: {}",
+        "Left stream metrics: {{{}}}, right stream metrics: {{{}}}, global join metrics: {{{}}}, "
+        "retract buffer metrics: {{{}}}",
         left_data.buffered_data->joinMetricsString(),
         right_data.buffered_data->joinMetricsString(),
         join_metrics.string(),
@@ -2470,13 +2479,15 @@ void HashJoin::checkJoinSemantic() const
          right_data.join_stream_desc->data_stream_semantic.toStorageSemantic()});
 }
 
-size_t HashJoin::sizeOfMapsVariant(const MapsVariant & maps_variant) const
+HashMapSizes HashJoin::sizesOfMapsVariant(const MapsVariant & maps_variant) const
 {
-    size_t size = 0;
+    HashMapSizes sizes;
     joinDispatch(streaming_kind, streaming_strictness, maps_variant, [&](auto /*kind_*/, auto /*strictness_*/, auto & maps) {
-        size = maps.getTotalRowCount();
+        sizes.keys = maps.getTotalRowCount();
+        sizes.buffer_size_in_bytes = maps.getTotalByteCountImpl();
+        sizes.buffer_bytes_in_cells = maps.getBufferSizeInCells();
     });
-    return size;
+    return sizes;
 }
 
 HashJoin::PrimaryKeyHashTable::PrimaryKeyHashTable(HashType hash_method_type_, Sizes && key_size_)
@@ -2493,7 +2504,6 @@ String HashJoin::JoinResults::joinMetricsString(const HashJoin * join) const
     size_t total_blocks_rows_cached = 0;
     size_t total_arena_bytes = 0;
     size_t total_arena_chunks = 0;
-    size_t total_keys_cached = 0;
 
     for (const auto & block : blocks)
     {
@@ -2505,29 +2515,35 @@ String HashJoin::JoinResults::joinMetricsString(const HashJoin * join) const
     total_arena_bytes += pool.size();
     total_arena_chunks += pool.numOfChunks();
 
+    HashMapSizes sizes;
     if (maps)
-        total_keys_cached += maps->size(join);
+        sizes = maps->sizes(join);
 
     return fmt::format(
         "total_blocks_cached={}, total_blocks_bytes_cached={}, total_blocks_allocated_bytes_cached={}, "
-        "total_blocks_rows_cached={}, total_arena_bytes={}, total_arena_chunks={}, total_keys_cached={}; recorded_join_metrics={}",
+        "total_blocks_rows_cached={}, total_arena_bytes={}, total_arena_chunks={}, {{{}}} recorded_join_metrics={{{}}}",
         total_blocks_cached,
         total_blocks_bytes_cached,
         total_blocks_allocated_bytes_cached,
         total_blocks_rows_cached,
         total_arena_bytes,
         total_arena_chunks,
-        total_keys_cached,
+        sizes.string(),
         metrics.string());
 }
 
-size_t HashJoinMapsVariants::size(const HashJoin * join) const
+HashMapSizes HashJoinMapsVariants::sizes(const HashJoin * join) const
 {
-    size_t total_keys = 0;
+    HashMapSizes sizes;
     for (const auto & maps : map_variants)
-        total_keys += join->sizeOfMapsVariant(maps);
+    {
+        auto one_sizes = join->sizesOfMapsVariant(maps);
+        sizes.keys += one_sizes.keys;
+        sizes.buffer_size_in_bytes += one_sizes.buffer_size_in_bytes;
+        sizes.buffer_bytes_in_cells += one_sizes.buffer_bytes_in_cells;
+    }
 
-    return total_keys;
+    return sizes;
 }
 
 void HashJoin::serialize(WriteBuffer & wb) const
