@@ -17,7 +17,7 @@ template <typename T>
 struct CountedValueArena
 {
     CountedValueArena() = default;
-    T emplace(T key) { return key; }
+    T emplace(T key) { return std::move(key); }
     void free(const T & /*key*/) { }
 };
 
@@ -49,18 +49,17 @@ template <typename T, bool maximum, typename KeyCompare = void>
 class CountedValueMap
 {
 public:
-    /// If no provide KeyCompare, we use a default compare (maxiumum - greater<T>, minimum - less<T>)
     using Compare = std::conditional_t<std::is_void_v<KeyCompare>, std::conditional_t<maximum, std::greater<T>, std::less<T>>, KeyCompare>;
 
-    /// NOTE: If the `Compare` is nothrow copy constructible, we prefer to use absl::btree_map, otherwise use std::map
+    /// NOTE: Generally we prefer to use absl::btree_map, but it requires `Compare` is nothrow copy constructible, so if not, we use std::map
     using BTreeMap = absl::btree_map<T, uint32_t, Compare>;
     using STDMap = std::map<T, uint32_t, Compare>;
     using Map = std::conditional_t<std::is_nothrow_copy_constructible<Compare>::value, BTreeMap, STDMap>;
     using size_type = typename Map::size_type;
 
     CountedValueMap() = default;
-    explicit CountedValueMap(size_type max_size_, const Compare & comp = Compare{})
-        : max_size(max_size_), m(comp), arena(std::make_unique<CountedValueArena<T>>())
+    explicit CountedValueMap(size_type max_size_, Compare && comp = Compare{})
+        : max_size(max_size_), arena(std::make_unique<CountedValueArena<T>>()), m(std::move(comp))
     {
     }
 
@@ -78,7 +77,7 @@ public:
         {
             /// At capacity, this is an optimization
             /// fast ignore elements we don't want to maintain
-            if (compare(lastValue(), v) < 0)
+            if (less(lastValue(), v))
                 return false;
         }
 
@@ -230,11 +229,11 @@ private:
         {
             /// If all values in lhs are less/greater (i.e. for minimum/maximum) than rhs
             /// we don't need any merge
-            if (compare(lastValue(), rhs.firstValue()) < 0)
+            if (less(lastValue(), rhs.firstValue()))
                 return;
 
             /// If all values in lhs are greater than rhs and rhs are at capacity as well
-            if (rhs.atCapacity() && rhs.capacity() == capacity() && compare(firstValue(), rhs.lastValue()) > 0)
+            if (rhs.atCapacity() && rhs.capacity() == capacity() && greater(firstValue(), rhs.lastValue()))
             {
                 if constexpr (copy)
                     return clearAndClone(rhs);
@@ -247,7 +246,7 @@ private:
         {
             /// If all values in lhs are greater than rhs
             /// we can clear up lhs elements and copy over elements from rhs
-            if (compare(firstValue(), rhs.lastValue()) > 0)
+            if (greater(firstValue(), rhs.lastValue()))
             {
                 if constexpr (copy)
                     return clearAndClone(rhs);
@@ -259,7 +258,7 @@ private:
         /// Loop from min to max
         for (auto src_iter = rhs.m.begin(); src_iter != rhs.m.end(); ++src_iter)
         {
-            if (atCapacity() && compare(lastValue(), src_iter->first) < 0)
+            if (atCapacity() && less(lastValue(), src_iter->first))
                 /// We reached maximum capacity and all other values from rhs will be
                 /// greater than those already in lhs. Stop merging more
                 break;
@@ -315,21 +314,16 @@ private:
         swap(rhs);
     }
 
-    int compare(const T & l, const T & r) const
-    {
-        const auto & key_comp = m.key_comp();
-        if (key_comp(l, r))
-            return -1; /// for minimum, means l < r
-        else if (key_comp(r, l))
-            return 1; /// for minimum, means l > r
-        else
-            return 0; /// for minimum, means l == r
-    }
+    /// \returns: true means l < r for minimum order
+    inline bool less(const T & l, const T & r) const { return m.key_comp()(l, r); }
+
+    /// \returns: true means l > r for minimum order
+    inline bool greater(const T & l, const T & r) const { return m.key_comp()(r, l); }
 
 private:
     size_type max_size;
-    Map m;
     std::unique_ptr<CountedValueArena<T>> arena;
+    Map m;
 };
 }
 }
