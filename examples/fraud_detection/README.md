@@ -12,5 +12,5 @@ Simply run `docker compose up` in this folder. three docker containers in the st
 
 ## Run Notebook
 
-You visit `http://localhost:8888/notebooks/work/fraud_detection.ipynb` to access the notebook. And the just follow the code in the notebook step by step.
+Visit `http://localhost:8888/notebooks/work/fraud_detection.ipynb` to access the notebook. And then just follow the code in the notebook step by step.
 
