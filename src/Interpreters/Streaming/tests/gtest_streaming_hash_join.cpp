@@ -250,7 +250,7 @@ std::shared_ptr<Streaming::HashJoin> initHashJoin(
 
     auto output_header
         = Streaming::JoinTransform::transformHeader(left_header.cloneEmpty(), std::dynamic_pointer_cast<Streaming::IHashJoin>(join));
-    join->postInit(left_header, output_header, context->getSettingsRef().join_max_cached_bytes);
+    join->postInit(left_header, output_header, context->getSettingsRef().join_max_buffered_bytes);
 
     return join;
 }
