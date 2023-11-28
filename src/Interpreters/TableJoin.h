@@ -148,8 +148,9 @@ private:
     /// If lag_interval < 0 : right stream lag behind left stream.
     Int64 lag_interval = 0;
     size_t data_block_size = 0;
-    String left_table_lag_column;
-    String right_table_lag_column;
+    String left_table_timestamp_column;
+    String right_table_timestamp_column;
+    bool required_join_alignment = false;
     /// proton : ends
 
     /// All columns which can be read from joined table. Duplicating names are qualified.
@@ -349,12 +350,14 @@ public:
     /// proton : starts
     void setDataBlockSize(size_t data_block_size_) noexcept { data_block_size = data_block_size_; }
     size_t dataBlockSize() const noexcept { return data_block_size; }
-    void addLagBehindKeys(const ASTPtr & left_table_ast, const ASTPtr & right_table_ast);
+    void addTimestampKeys(const ASTPtr & left_table_ast, const ASTPtr & right_table_ast);
+    void setRequiredJoinAlignment(bool required_join_alignment_ = true) noexcept { required_join_alignment = required_join_alignment_; }
+    bool requiredJoinAlignment() const noexcept { return required_join_alignment; }
     /// \lag_interval is milliseconds granularity
     void setLagBehindInterval(Int64 lag_interval_) { lag_interval = lag_interval_; }
     auto lagBehindInterval() const noexcept { return lag_interval; }
-    const auto & leftLagBehindColumn() const noexcept { return left_table_lag_column; }
-    const auto & rightLagBehindColumn() const noexcept { return right_table_lag_column; }
+    const auto & leftTimestampColumn() const noexcept { return left_table_timestamp_column; }
+    const auto & rightTimestampColumn() const noexcept { return right_table_timestamp_column; }
     void setTableJoin(ASTTableJoin && table_join_) { table_join = std::move(table_join_); }
     void setTablesWithColumns(const TablesWithColumns & tables_with_columns_) { tables_with_columns = tables_with_columns_; }
     const TablesWithColumns & getTablesWithColumns() const noexcept { return tables_with_columns; }

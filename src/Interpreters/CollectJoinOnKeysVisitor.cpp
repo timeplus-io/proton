@@ -90,38 +90,44 @@ void CollectJoinOnKeysMatcher::Data::asofToJoinKeys()
 void CollectJoinOnKeysMatcher::Data::addLagBehindKeys(
     const ASTPtr & left_ast, const ASTPtr & right_ast, JoinIdentifierPosPair table_pos, Int64 lag_interval)
 {
+    addAlignedWithKeys(left_ast, right_ast, table_pos);
+
+    /// left stream lag behind right stream
+    /// lag_behind(100ms, left_stream.ts, right_stream.ts)
+    analyzed_join.setLagBehindInterval(lag_interval);
+}
+
+void CollectJoinOnKeysMatcher::Data::addAlignedWithKeys(
+    const ASTPtr & left_ast, const ASTPtr & right_ast, JoinIdentifierPosPair table_pos)
+{
     if (isLeftIdentifier(table_pos.first) && isRightIdentifier(table_pos.second))
     {
-        lag_behind_left_key = left_ast->clone();
-        lag_behind_right_key = right_ast->clone();
-        /// left stream lag behind right stream
-        /// lag_behind(100ms, left_stream.ts, right_stream.ts)
-        analyzed_join.setLagBehindInterval(lag_interval);
+        timestamp_left_key = left_ast->clone();
+        timestamp_right_key = right_ast->clone();
     }
     else if (isRightIdentifier(table_pos.first) && isLeftIdentifier(table_pos.second))
     {
-        lag_behind_left_key = right_ast->clone();
-        lag_behind_right_key = left_ast->clone();
-        /// right stream lag behind left stream
-        /// lag_behind(100ms, right_stream.ts, left_stream.ts)
-        analyzed_join.setLagBehindInterval(-lag_interval);
+        timestamp_left_key = right_ast->clone();
+        timestamp_right_key = left_ast->clone();
     }
     else
     {
         throw Exception(
             ErrorCodes::INVALID_JOIN_ON_EXPRESSION,
-            "Expressions {} and {} are from the same stream but from different arguments of equal function in lag_behind() function",
+            "Expressions {} and {} are from the same stream but from different arguments of equal function in `lag_behind()` or `aligned_with()` function",
             queryToString(left_ast),
             queryToString(right_ast));
     }
+
+    analyzed_join.setRequiredJoinAlignment();
 }
 
-void CollectJoinOnKeysMatcher::Data::lagBehindASTToKeys()
+void CollectJoinOnKeysMatcher::Data::timestampASTToKeys()
 {
-    if (!lag_behind_left_key || !lag_behind_right_key)
+    if (!timestamp_left_key || !timestamp_right_key)
         throw Exception("No lag_behind(...) ON section.", ErrorCodes::INVALID_JOIN_ON_EXPRESSION);
 
-    analyzed_join.addLagBehindKeys(lag_behind_left_key, lag_behind_right_key);
+    analyzed_join.addTimestampKeys(timestamp_left_key, timestamp_right_key);
 }
 
 /// proton : ends
@@ -153,6 +159,13 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
     if (func.name == "lag_behind")
     {
         handleLagBehind(func, ast, data);
+        return;
+    }
+
+    /// `aligned_with` is not actually a join condition but interpreted as a stream modifier`
+    if (func.name == "aligned_with")
+    {
+        handleAlignedWith(func, ast, data);
         return;
     }
     /// proton : ends
@@ -705,14 +718,35 @@ void CollectJoinOnKeysMatcher::handleLagBehind(const ASTFunction & func, const A
     else
         throw Exception(ErrorCodes::SYNTAX_ERROR, "First argument of function {} shall be a time interval (examples, 1ms, 2s, 3m etc), but got '{}' instead", func.name, func.formatForErrorMessage());
 
-    if (data.lag_behind_left_key || data.lag_behind_right_key)
+    if (data.timestamp_left_key || data.timestamp_right_key)
         throw Exception(
-            ErrorCodes::INVALID_JOIN_ON_EXPRESSION, "Multiple `lag_behind()` are detected in ON section. Unexpected '{}'", queryToString(ast));
+            ErrorCodes::INVALID_JOIN_ON_EXPRESSION, "Multiple `lag_behind()` or `aligned_with()` are detected in ON section. Unexpected '{}'", queryToString(ast));
 
     auto table_numbers = getTableNumbers(left, right, data);
     data.addLagBehindKeys(left, right, table_numbers, lag_interval);
 }
 
+void CollectJoinOnKeysMatcher::handleAlignedWith(const ASTFunction & func, const ASTPtr & ast, Data & data)
+{
+    assert(func.name == "aligned_with");
+
+    if (func.arguments->children.size() != 2)
+        throw Exception(
+            ErrorCodes::SYNTAX_ERROR, "Function {} takes 2 arguments, but got '{}' instead", func.name, func.formatForErrorMessage());
+
+    /// aligned_with(col1, col2)
+    ASTPtr left = func.arguments->children.at(0);
+    ASTPtr right = func.arguments->children.at(1);
+
+    if (data.timestamp_left_key || data.timestamp_right_key)
+        throw Exception(
+            ErrorCodes::INVALID_JOIN_ON_EXPRESSION,
+            "Multiple `lag_behind()` or `aligned_with()` are detected in ON section. Unexpected '{}'",
+            queryToString(ast));
+
+    auto table_numbers = getTableNumbers(left, right, data);
+    data.addAlignedWithKeys(left, right, table_numbers);
+}
 /// proton : ends
 
 }

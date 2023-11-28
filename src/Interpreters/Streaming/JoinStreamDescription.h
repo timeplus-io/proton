@@ -21,12 +21,14 @@ struct JoinStreamDescription
         Block input_header_,
         DataStreamSemanticEx data_stream_semantic_,
         UInt64 keep_versions_,
-        Int64 latency_threshold_,
-        Int64 quiesce_threshold_ms_)
+        bool enable_join_alignment_ = false,
+        Int64 latency_threshold_ = 0,
+        Int64 quiesce_threshold_ms_ = 0)
         : table_with_columns(table_with_columns_)
         , input_header(std::move(input_header_))
         , data_stream_semantic(data_stream_semantic_)
         , keep_versions(keep_versions_)
+        , enable_join_alignment(enable_join_alignment_)
         , quiesce_threshold_ms(quiesce_threshold_ms_)
         , latency_threshold(latency_threshold_)
     {
@@ -39,11 +41,11 @@ struct JoinStreamDescription
     bool hasDeltaColumn() const noexcept { return delta_column_position.has_value(); }
     const String & deltaColumnName() const;
 
-    std::optional<size_t> lagBehindColumnPosition() const { return input_header.tryGetPositionByName(lag_column); }
+    std::optional<size_t> timestampColumnPosition() const { return input_header.tryGetPositionByName(timestamp_column); }
 
-    DataTypePtr lagBehindColumnType() const
+    DataTypePtr timestampColumnType() const
     {
-        if (auto * col = input_header.findByName(lag_column); col)
+        if (auto * col = input_header.findByName(timestamp_column); col)
             return col->type;
 
         return {};
@@ -66,12 +68,20 @@ struct JoinStreamDescription
     ///
     /// SELECT * FROM left ASOF JOIN right
     ///    ON left.k = right.k AND left.version < right.version AND
-    ///       lag_behind(left.ts, right.ts, 20)
+    ///       lag_behind(20ms, left.ts, right.ts)
+    /// SETTINGS keep_versions=16;
+    ///
+    /// OR
+    ///
+    /// SELECT * FROM left ASOF JOIN right
+    ///    ON left.k = right.k AND left.version < right.version AND
+    ///       aligned_with(left.ts, right.ts)
     /// SETTINGS keep_versions=16;
     UInt64 keep_versions;
+    bool enable_join_alignment;
     Int64 quiesce_threshold_ms;
     Int64 latency_threshold;
-    String lag_column;
+    String timestamp_column;
 
     /// Header's properties. Pre-calculated and cached. Used during join
     /// Primary key columns and version columns could be a performance enhancement

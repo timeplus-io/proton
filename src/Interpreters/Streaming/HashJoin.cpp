@@ -925,7 +925,7 @@ void HashJoin::init()
 
     /// FIXME, for now, only asof join need align watermark if join latency is not zero
     // For window join, we shall do same but probably in a different way
-    require_aligned_streams = (streaming_strictness == Strictness::Asof) && (left_data.join_stream_desc->latency_threshold != 0);
+    require_aligned_streams = left_data.join_stream_desc->enable_join_alignment;
     bidirectional_hash_join = !data_enrichment_join;
 
     /// append-only inner join append-only on ... and date_diff_within(10s)
