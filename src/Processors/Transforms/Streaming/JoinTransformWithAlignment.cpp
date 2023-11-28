@@ -28,8 +28,13 @@ JoinTransformWithAlignment::JoinTransformWithAlignment(
 
     auto left_join_stream_desc = join->leftJoinStreamDescription();
     latency_threshold = left_join_stream_desc->latency_threshold;
-    if (latency_threshold <= 0)
-        latency_threshold = 200;
+    assert(latency_threshold != 0);
+
+    /// When left stream or right stream is in quiesce, we still need to progress the join probably,
+    /// Otherwise we may stuck forever.
+    quiesce_threshold_ms = left_join_stream_desc->quiesce_threshold_ms;
+    if (quiesce_threshold_ms <= 0)
+        quiesce_threshold_ms = std::max<Int64>(latency_threshold * 2, 500);
 
     auto right_join_stream_desc = join->rightJoinStreamDescription();
 
@@ -45,13 +50,10 @@ JoinTransformWithAlignment::JoinTransformWithAlignment(
 
     assert((left_watermark_column_type && right_watermark_column_type) || (!left_watermark_column_type && !right_watermark_column_type));
 
-    /// When left stream or right stream is in quiesce, we still need to push execute the join probably
-    quiesce_threshold = std::max<Int64>(latency_threshold / 2, 500);
-
     LOG_INFO(
         log,
-        "quiesce_threshold={} lag_latency_threshold={} left_lag_column={}, right_lag_column={}",
-        quiesce_threshold,
+        "quiesce_threshold_ms={} lag_latency_threshold={} left_lag_column={}, right_lag_column={}",
+        quiesce_threshold_ms,
         latency_threshold,
         left_join_stream_desc->lag_column,
         right_join_stream_desc->lag_column);
@@ -246,6 +248,7 @@ void JoinTransformWithAlignment::work()
 
                 left_input.input_chunks.clear();
 
+                stats.quiesce_joins += right_input_in_quiesce;
                 /// Continue reading more data from left input
                 left_input.muted = false;
 
@@ -279,11 +282,12 @@ void JoinTransformWithAlignment::work()
     {
         LOG_INFO(
             log,
-            "left_watermark={} right_watermark={} left_input_muted={} right_input_muted={}",
+            "left_watermark={} right_watermark={} left_input_muted={} right_input_muted={} quiesce_joins={}",
             left_input.watermark,
             right_input.watermark,
             stats.left_input_muted,
-            stats.right_input_muted);
+            stats.right_input_muted,
+            stats.quiesce_joins);
 
         last_stats_log_ts = DB::MonotonicSeconds::now();
     }
